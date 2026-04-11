@@ -19,9 +19,9 @@ await CitadelWebApplicationBuilder.Create(args, new CitadelWebApplicationOptions
 void WithServices(WebApplicationBuilder builder)
 {
     builder.Services
+        .RegisterInfrastructureModule(builder.Configuration)
         .RegisterWebApiModule(builder.Configuration)
         .RegisterApplicationModule()
-        .RegisterInfrastructureModule()
         .AddHealthChecks();
 
     AddIOptionsFromConfiguration(builder);
@@ -43,7 +43,7 @@ async Task Configure(WebApplication app)
     }
 
     app.UseWebApiModule();
-    await app.InitializeInfrastructureAsync(); // Todo: Move this to a hosted service or similar to avoid blocking the startup process
+    await app.InitializeInfrastructureAsync(); // Todo: Move this to a hosted service, Init container or similar to avoid delaying startup process
     app.MapHealthChecks("/health", HealthCheck.GetHealthCheckOptions());
 }
 

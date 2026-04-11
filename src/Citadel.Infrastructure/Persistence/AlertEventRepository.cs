@@ -22,7 +22,7 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AcknowledgedByActorId, AcknowledgedAt, ResolvedByActorId, ResolvedAt, ResolutionNote, CreatedAt, UpdatedAt
         )
         VALUES (
-            @Id, @AlertRuleId, @Type, @Severity, @Info, @ResourceId, @ResourceName, @ResourceType, @DeduplicationKey, @OpenIncidentKey,
+            @Id, @AlertRuleId, @Type, @Severity, @Info::json, @ResourceId, @ResourceName, @ResourceType, @DeduplicationKey, @OpenIncidentKey,
             @AcknowledgedByActorId, @AcknowledgedAt, @ResolvedByActorId, @ResolvedAt, @ResolutionNote, @CreatedAt, @UpdatedAt
         )
         ON CONFLICT(OpenIncidentKey) DO UPDATE SET
@@ -36,19 +36,19 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             UpdatedAt = excluded.UpdatedAt";
         return db.ExecuteAsync(sql, new
         {
-            Id = alertEvent.Id.Format(),
-            AlertRuleId = alertEvent.AlertRuleId.Format(),
+            Id = alertEvent.Id,
+            AlertRuleId = alertEvent.AlertRuleId,
             Type = EnumFormatter<AlertType>.GetValue(alertEvent.Type),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertEvent.Severity),
             Info = JsonSerializer.Serialize(alertEvent.Info, AlertEventJsonContext.Default.AlertEventInfo),
-            ResourceId = alertEvent.ResourceId?.Format(),
+            ResourceId = alertEvent.ResourceId,
             alertEvent.ResourceName,
             ResourceType = EnumFormatter<AlertResourceType>.GetValue(alertEvent.ResourceType),
             alertEvent.DeduplicationKey,
             alertEvent.OpenIncidentKey,
-            AcknowledgedByActorId = alertEvent.AcknowledgedByActorId?.Format(),
+            AcknowledgedByActorId = alertEvent.AcknowledgedByActorId,
             alertEvent.AcknowledgedAt,
-            ResolvedByActorId = alertEvent.ResolvedByActorId?.Format(),
+            ResolvedByActorId = alertEvent.ResolvedByActorId,
             alertEvent.ResolvedAt,
             alertEvent.ResolutionNote,
             CreatedAt = alertEvent.CreatedAt,
@@ -89,7 +89,7 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         LIMIT 1;
         """;
 
-        var row = await db.QuerySingleOrDefaultAsync<AlertEventDto>(sql, new { Id = id.Format() }, transaction: tx());
+        var row = await db.QuerySingleOrDefaultAsync<AlertEventDto>(sql, new { Id = id }, transaction: tx());
         return row?.ToDomain();
     }
 
@@ -121,12 +121,12 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
         LEFT JOIN Users au ON au.ActorId = ac.Id
         LEFT JOIN Teams at ON at.ActorId = ac.Id
-        WHERE a.Id IN (SELECT value FROM json_each(@Ids));
+        WHERE a.Id = ANY(@Ids);
         """;
 
         var rows = await db.QueryAsync<AlertEventDto>(
             sql,
-            new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
+            new { Ids = ids.ToArray() },
             transaction: tx());
 
         var alertEvents = rows is ICollection<AlertEventDto> rowCollection
@@ -174,7 +174,7 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
             AND (@AlertType IS NULL OR a.Type = @AlertType)
             AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
-            AND (@UnresolvedOnly IS NULL OR @UnresolvedOnly = 0 OR a.ResolvedAt IS NULL)
+            AND (@UnresolvedOnly IS NULL OR NOT @UnresolvedOnly OR a.ResolvedAt IS NULL)
         ORDER BY a.UpdatedAt DESC, a.CreatedAt DESC
         LIMIT @PageSize OFFSET @Offset;
         """;
@@ -185,14 +185,14 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
             AND (@AlertType IS NULL OR a.Type = @AlertType)
             AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
-            AND (@UnresolvedOnly IS NULL OR @UnresolvedOnly = 0 OR a.ResolvedAt IS NULL);
+            AND (@UnresolvedOnly IS NULL OR NOT @UnresolvedOnly OR a.ResolvedAt IS NULL);
         """;
 
         var offset = (page - 1) * pageSize;
 
         var p = new
         {
-            ResourceId = resourceId?.Format(),
+            ResourceId = resourceId,
             AlertType = alertType is null ? null : EnumFormatter<AlertType>.GetValue(alertType.Value),
             ResourceType = resourceType is null ? null : EnumFormatter<AlertResourceType>.GetValue(resourceType.Value),
             UnresolvedOnly = unresolvedOnly,
@@ -251,7 +251,7 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
             AND (@AlertType IS NULL OR a.Type = @AlertType)
             AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
-            AND (@UnresolvedOnly IS NULL OR @UnresolvedOnly = 0 OR a.ResolvedAt IS NULL)
+            AND (@UnresolvedOnly IS NULL OR NOT @UnresolvedOnly OR a.ResolvedAt IS NULL)
             AND " + AuthorizationSql.PermissionResourcePredicatePrefix + "a.Id" + AuthorizationSql.ResourcePredicateSuffix + @"
         ORDER BY a.UpdatedAt DESC, a.CreatedAt DESC
         LIMIT @PageSize OFFSET @Offset;
@@ -263,17 +263,17 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
             AND (@AlertType IS NULL OR a.Type = @AlertType)
             AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
-            AND (@UnresolvedOnly IS NULL OR @UnresolvedOnly = 0 OR a.ResolvedAt IS NULL)
+            AND (@UnresolvedOnly IS NULL OR NOT @UnresolvedOnly OR a.ResolvedAt IS NULL)
             AND " + AuthorizationSql.PermissionResourcePredicatePrefix + "a.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
         var offset = (page - 1) * pageSize;
 
         var p = new
         {
-            UserId = userId.Format(),
+            UserId = userId,
             PermissionResourceType = EnumFormatter<ResourceType>.GetValue(permissionResourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action),
-            ResourceId = resourceId?.Format(),
+            ResourceId = resourceId,
             AlertType = alertType is null ? null : EnumFormatter<AlertType>.GetValue(alertType.Value),
             ResourceType = resourceType is null ? null : EnumFormatter<AlertResourceType>.GetValue(resourceType.Value),
             UnresolvedOnly = unresolvedOnly,
@@ -299,7 +299,7 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AlertRuleId = @AlertRuleId,
             Type = @Type,
             Severity = @Severity,
-            Info = @Info,
+            Info = @Info::json,
             ResourceId = @ResourceId,
             ResourceName = @ResourceName,
             ResourceType = @ResourceType,
@@ -315,19 +315,19 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
         return db.ExecuteAsync(sql, new
         {
-            Id = alertEvent.Id.Format(),
-            AlertRuleId = alertEvent.AlertRuleId.Format(),
+            Id = alertEvent.Id,
+            AlertRuleId = alertEvent.AlertRuleId,
             Type = EnumFormatter<AlertType>.GetValue(alertEvent.Type),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertEvent.Severity),
             Info = JsonSerializer.Serialize(alertEvent.Info, AlertEventJsonContext.Default.AlertEventInfo),
-            ResourceId = alertEvent.ResourceId?.Format(),
+            ResourceId = alertEvent.ResourceId,
             alertEvent.ResourceName,
             ResourceType = EnumFormatter<AlertResourceType>.GetValue(alertEvent.ResourceType),
             alertEvent.DeduplicationKey,
             alertEvent.OpenIncidentKey,
-            AcknowledgedByActorId = alertEvent.AcknowledgedByActorId?.Format(),
+            AcknowledgedByActorId = alertEvent.AcknowledgedByActorId,
             alertEvent.AcknowledgedAt,
-            ResolvedByActorId = alertEvent.ResolvedByActorId?.Format(),
+            ResolvedByActorId = alertEvent.ResolvedByActorId,
             alertEvent.ResolvedAt,
             alertEvent.ResolutionNote,
             alertEvent.UpdatedAt
@@ -342,7 +342,7 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AlertRuleId = @AlertRuleId,
             Type = @Type,
             Severity = @Severity,
-            Info = @Info,
+            Info = @Info::json,
             ResourceId = @ResourceId,
             ResourceName = @ResourceName,
             ResourceType = @ResourceType,
@@ -358,19 +358,19 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
         return db.ExecuteAsync(sql, alertEvents.Select(alertEvent => new
         {
-            Id = alertEvent.Id.Format(),
-            AlertRuleId = alertEvent.AlertRuleId.Format(),
+            Id = alertEvent.Id,
+            AlertRuleId = alertEvent.AlertRuleId,
             Type = EnumFormatter<AlertType>.GetValue(alertEvent.Type),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertEvent.Severity),
             Info = JsonSerializer.Serialize(alertEvent.Info, AlertEventJsonContext.Default.AlertEventInfo),
-            ResourceId = alertEvent.ResourceId?.Format(),
+            ResourceId = alertEvent.ResourceId,
             alertEvent.ResourceName,
             ResourceType = EnumFormatter<AlertResourceType>.GetValue(alertEvent.ResourceType),
             alertEvent.DeduplicationKey,
             alertEvent.OpenIncidentKey,
-            AcknowledgedByActorId = alertEvent.AcknowledgedByActorId?.Format(),
+            AcknowledgedByActorId = alertEvent.AcknowledgedByActorId,
             alertEvent.AcknowledgedAt,
-            ResolvedByActorId = alertEvent.ResolvedByActorId?.Format(),
+            ResolvedByActorId = alertEvent.ResolvedByActorId,
             alertEvent.ResolvedAt,
             alertEvent.ResolutionNote,
             alertEvent.UpdatedAt

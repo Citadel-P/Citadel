@@ -5,7 +5,6 @@ using Domain.Entities.Git;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 using System.Data;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -26,27 +25,27 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             INSERT INTO GitRepositories (
                 Id, Name, Description, Url, DefaultBranch, Status, GitAccountId, CreatedAt, CreatedByActorId, WebHookEnabled, WebHookSecret, OnClone, OnPull)
             VALUES (
-                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @GitAccountId, @CreatedAt, @CreatedByActorId, @WebHookEnabled, @WebHookSecret, @OnClone, @OnPull)
+                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @GitAccountId, @CreatedAt, @CreatedByActorId, @WebHookEnabled, @WebHookSecret, @OnClone::json, @OnPull::json)
         """;
 
         return db.ExecuteAsync(sql, new
         {
-            Id = gitRepository.Id.Format(),
+            Id = gitRepository.Id,
             Name = gitRepository.Name,
             Description = gitRepository.Description,
             Url = gitRepository.Url,
             DefaultBranch = gitRepository.DefaultBranch,
             Status = EnumFormatter<GitReposStatus>.GetValue(gitRepository.Status),
-            GitAccountId = gitRepository.GitAccountId?.Format(),
-            CreatedAt = gitRepository.CreatedAt.ToString(),
-            CreatedByActorId = gitRepository.CreatedByActorId.Format(),
-            WebHookEnabled = gitRepository.WebHookEnabled ? 1 : 0,
+            GitAccountId = gitRepository.GitAccountId,
+            CreatedAt = gitRepository.CreatedAt,
+            CreatedByActorId = gitRepository.CreatedByActorId,
+            WebHookEnabled = gitRepository.WebHookEnabled,
             WebHookSecret = gitRepository.WebHookSecret,
             OnClone = gitRepository.OnClone is null ? null : JsonSerializer.Serialize(gitRepository.OnClone, GitJsonContext.Default.RepoCommand),
             OnPull = gitRepository.OnPull is null ? null : JsonSerializer.Serialize(gitRepository.OnPull, GitJsonContext.Default.RepoCommand),
             ControlState = EnumFormatter<ResourceControlState>.GetValue(gitRepository.ControlState),
             ControlStartedAt = gitRepository.ControlStartedAt,
-            ControlTriggeredBy = gitRepository.ControlTriggeredBy?.Format(),
+            ControlTriggeredBy = gitRepository.ControlTriggeredBy,
             RowVersion = gitRepository.RowVersion
         }, transaction: tx());
     }
@@ -54,7 +53,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
     public async Task<GitRepository?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM GitRepositories WHERE Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -75,14 +74,14 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             WHERE r.Id = @Id LIMIT 1
             """;
             
-        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
     public async Task<IEnumerable<GitRepository>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM GitRepositories gr WHERE gr.Id IN (SELECT value FROM json_each(@Ids))";
-        var result = await db.QueryAsync<GitRepositoryDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        const string sql = "SELECT * FROM GitRepositories gr WHERE gr.Id = ANY(@Ids)";
+        var result = await db.QueryAsync<GitRepositoryDto>(sql, new { Ids = ids.ToArray(), cancellationToken }, transaction: tx());
         return result.ToDomain();
     }
 
@@ -96,7 +95,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
     public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM GitRepositories WHERE Name = @Name AND Id != @Id)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id, cancellationToken }, transaction: tx());
     }
 
     public async Task<IEnumerable<GitRepository>> GetAllAsync(CancellationToken cancellationToken)
@@ -114,7 +113,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
 
         var result = await db.QueryAsync<GitRepositoryDto>(sql, new
         {
-            UserId = userId.Format(),
+            UserId = userId,
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             cancellationToken
@@ -146,20 +145,20 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
 
         return db.ExecuteAsync(sql, new
         {
-            Id = gitRepository.Id.Format(),
+            Id = gitRepository.Id,
             Name = gitRepository.Name,
             Description = gitRepository.Description,
             Url = gitRepository.Url,
             DefaultBranch = gitRepository.DefaultBranch,
             Status = EnumFormatter<GitReposStatus>.GetValue(gitRepository.Status),
-            GitAccountId = gitRepository.GitAccountId?.Format(),
-            WebHookEnabled = gitRepository.WebHookEnabled ? 1 : 0,
+            GitAccountId = gitRepository.GitAccountId,
+            WebHookEnabled = gitRepository.WebHookEnabled,
             WebHookSecret = gitRepository.WebHookSecret,
             OnClone = gitRepository.OnClone is null ? null : JsonSerializer.Serialize(gitRepository.OnClone, GitJsonContext.Default.RepoCommand),
             OnPull = gitRepository.OnPull is null ? null : JsonSerializer.Serialize(gitRepository.OnPull, GitJsonContext.Default.RepoCommand),
             ControlState = EnumFormatter<ResourceControlState>.GetValue(gitRepository.ControlState),
             ControlStartedAt = gitRepository.ControlStartedAt,
-            ControlTriggeredBy = gitRepository.ControlTriggeredBy?.Format(),
+            ControlTriggeredBy = gitRepository.ControlTriggeredBy,
             RowVersion = gitRepository.RowVersion
         }, transaction: tx());
     }
@@ -168,14 +167,12 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
     {
         const string sql = """
             DELETE FROM GitRepositories
-            WHERE Id IN (
-                SELECT value FROM json_each(@Ids)
-            )
+            WHERE Id = ANY(@Ids)
         """;
 
         return db.ExecuteAsync(
             sql,
-            new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
+            new { Ids = ids.ToArray() },
             transaction: tx());
     }
 }

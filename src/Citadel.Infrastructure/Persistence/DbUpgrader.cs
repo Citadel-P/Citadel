@@ -1,5 +1,6 @@
 ﻿using DbUp;
 using Hosting.Common;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 using System.Reflection;
 
@@ -7,9 +8,10 @@ namespace Infrastructure.Persistence;
 
 internal static class DbUpgrader
 {
-    public static async Task Upgrade()
+    public static async Task Upgrade(IConfiguration config)
     {
-        var connectionString = Constants.ConnectionString;
+        var connectionString = config.GetConnectionString("Postgres")
+            ?? throw new InvalidOperationException("Missing Postgres connection string");
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {

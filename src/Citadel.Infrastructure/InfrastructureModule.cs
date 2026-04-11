@@ -18,7 +18,9 @@ using Infrastructure.Repositories.DbQueue;
 using Infrastructure.Repositories.Security.Grpc;
 using Infrastructure.TypeHandlers;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Refit;
 using System.Data.Common;
 
@@ -34,9 +36,9 @@ public static class InfrastructureModule
     /// <summary>
     /// Registers the infrastructure module services and configurations.
     /// </summary>
-    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services)
+    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services, IConfiguration config)
         => services
-            .AddDb()
+            .AddDb(config)
             .AddServices()
             .AddGrpcClients()
             .AddHttpClients()
@@ -46,7 +48,7 @@ public static class InfrastructureModule
     {
         if (Helpers.IsDesignTime()) return app;
 
-        await DbUpgrader.Upgrade();
+        await DbUpgrader.Upgrade(app.Configuration);
 
         return app;
     }
@@ -66,8 +68,18 @@ public static class InfrastructureModule
         return services;
     }
 
-    private static IServiceCollection AddDb(this IServiceCollection services)
+    private static IServiceCollection AddDb(this IServiceCollection services, IConfiguration config)
     {
+        var connectionString = config.GetConnectionString("Postgres")
+            ?? throw new InvalidOperationException("Missing Postgres connection string");
+
+        var builder = new NpgsqlDataSourceBuilder(connectionString);
+        if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")?.Equals("Development") == true)
+        {
+            builder.EnableParameterLogging(true);
+        }
+        services.AddSingleton(builder.Build());
+
         services
             .AddScoped<IUnitOfWork, UnitOfWork>()
             .AddScoped<DbConnection>(sp => sp.GetRequiredService<IDbConnectionFactory>().Create())

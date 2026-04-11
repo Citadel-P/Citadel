@@ -5,7 +5,6 @@ using Domain.Entities.Git;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 using System.Data;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -26,18 +25,18 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
             INSERT INTO GitAccounts (
                 Id, Name, Domain, Transport, AuthType, CreatedAt, CreatedByActorId, Configuration)
             VALUES (
-                @Id, @Name, @Domain, @Transport, @AuthType, @CreatedAt, @CreatedByActorId, @Configuration)
+                @Id, @Name, @Domain, @Transport, @AuthType, @CreatedAt, @CreatedByActorId, @Configuration::json)
         """;
 
         return db.ExecuteAsync(sql, new
         {
-            Id = gitAccount.Id.Format(),
+            Id = gitAccount.Id,
             Name = gitAccount.Name,
             Domain = gitAccount.Domain,
             Transport = EnumFormatter<GitTransport>.GetValue(gitAccount.Transport),
             AuthType = EnumFormatter<GitAuthType>.GetValue(gitAccount.AuthType),
-            CreatedAt = gitAccount.CreatedAt.ToString(),
-            CreatedByActorId = gitAccount.CreatedByActorId.Format(),
+            CreatedAt = gitAccount.CreatedAt,
+            CreatedByActorId = gitAccount.CreatedByActorId,
             Configuration = JsonSerializer.Serialize(gitAccount.Configuration, typeof(GitAuthConfiguration), GitJsonContext.Default)
         }, transaction: tx());
     }
@@ -45,14 +44,14 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
     public async Task<GitAccount?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM GitAccounts WHERE Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<GitAccountDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<GitAccountDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
     public async Task<IEnumerable<GitAccount>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM GitAccounts ga WHERE ga.Id IN (SELECT value FROM json_each(@Ids))";
-        var result = await db.QueryAsync<GitAccountDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        const string sql = "SELECT * FROM GitAccounts ga WHERE ga.Id = ANY(@Ids)";
+        var result = await db.QueryAsync<GitAccountDto>(sql, new { Ids = ids.ToArray(), cancellationToken }, transaction: tx());
         return result.ToDomain();
     }
 
@@ -66,13 +65,13 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
     public Task<bool> IsNameTakenAsync(Guid id, string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM GitAccounts WHERE Name = @Name AND Id != @Id)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id, cancellationToken }, transaction: tx());
     }
 
     public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM GitAccounts WHERE Id = @Id)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Id = id, cancellationToken }, transaction: tx());
     }
 
     public async Task<IEnumerable<GitAccount>> GetAllAsync(CancellationToken cancellationToken)
@@ -90,7 +89,7 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
 
         var result = await db.QueryAsync<GitAccountDto>(sql, new
         {
-            UserId = userId.Format(),
+            UserId = userId,
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             cancellationToken
@@ -107,13 +106,13 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
                 Domain = @Domain,
                 Transport = @Transport,
                 AuthType = @AuthType,
-                Configuration = @Configuration
+                Configuration = @Configuration::json
             WHERE Id = @Id
         """;
 
         return db.ExecuteAsync(sql, new
         {
-            Id = gitAccount.Id.Format(),
+            Id = gitAccount.Id,
             Name = gitAccount.Name,
             Domain = gitAccount.Domain,
             Transport = EnumFormatter<GitTransport>.GetValue(gitAccount.Transport),
@@ -126,14 +125,12 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
     {
         const string sql = """
             DELETE FROM GitAccounts
-            WHERE Id IN (
-                SELECT value FROM json_each(@Ids)
-            )
+            WHERE Id = ANY(@Ids)
         """;
 
         return db.ExecuteAsync(
             sql,
-            new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
+            new { Ids = ids.ToArray() },
             transaction: tx());
     }
 }

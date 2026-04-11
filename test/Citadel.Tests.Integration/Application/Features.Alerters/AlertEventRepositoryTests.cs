@@ -13,6 +13,9 @@ public sealed class AlertEventRepositoryTests(PostgresTestFixture fixture) : Int
     private Guid _platformAlertRuleId;
     private Guid _unmanagedContainerAlertRuleId;
 
+    private static DateTime TruncateToPostgresMicroseconds(DateTime value)
+        => value.AddTicks(-(value.Ticks % 10));
+
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var alertRules = await uow.AlertRules.GetAllAsync(TestContext.Current.CancellationToken);
@@ -74,7 +77,7 @@ public sealed class AlertEventRepositoryTests(PostgresTestFixture fixture) : Int
         Assert.Equal(Constants.SystemId, persisted.AcknowledgedByActorId);
         Assert.Equal(Constants.SystemId, persisted.ResolvedByActorId);
         Assert.Equal("resolved manually", persisted.ResolutionNote);
-        Assert.Equal(now, persisted.UpdatedAt);
+        Assert.Equal(TruncateToPostgresMicroseconds(now), persisted.UpdatedAt);
         Assert.Equal(0, unresolvedCount);
     }
 
@@ -148,14 +151,14 @@ public sealed class AlertEventRepositoryTests(PostgresTestFixture fixture) : Int
         var persistedAcknowledged = Assert.Single(persisted.Where(x => x.Id == first.Id));
         Assert.Equal(AlertEventStatus.Acknowledged, persistedAcknowledged.Status);
         Assert.Equal(Constants.SystemId, persistedAcknowledged.AcknowledgedByActorId);
-        Assert.Equal(now, persistedAcknowledged.UpdatedAt);
+        Assert.Equal(TruncateToPostgresMicroseconds(now), persistedAcknowledged.UpdatedAt);
 
         var persistedResolved = Assert.Single(persisted.Where(x => x.Id == second.Id));
         Assert.Equal(AlertEventStatus.Resolved, persistedResolved.Status);
         Assert.Null(persistedResolved.OpenIncidentKey);
         Assert.Equal(Constants.SystemId, persistedResolved.ResolvedByActorId);
         Assert.Equal("bulk resolved", persistedResolved.ResolutionNote);
-        Assert.Equal(now, persistedResolved.UpdatedAt);
+        Assert.Equal(TruncateToPostgresMicroseconds(now), persistedResolved.UpdatedAt);
     }
 
     private AlertEvent CreateAlertEvent(Guid resourceId, string platformName, string address)

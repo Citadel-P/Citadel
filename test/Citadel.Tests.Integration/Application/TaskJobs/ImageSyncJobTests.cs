@@ -66,7 +66,7 @@ public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
                 size: image.Size,
                 containers : image.Containers,
                 platformId: platform.Id,
-                createdAt: DateTimeOffset.FromUnixTimeSeconds(image.Created).DateTime
+                createdAt: new DateTime(DateTimeOffset.FromUnixTimeSeconds(image.Created).DateTime.Ticks, DateTimeKind.Utc)
                 ), TestContext.Current.CancellationToken);
         }
 

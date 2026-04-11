@@ -1,5 +1,4 @@
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Stacks;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text;

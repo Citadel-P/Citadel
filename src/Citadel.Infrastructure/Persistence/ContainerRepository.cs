@@ -4,7 +4,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 using System.Data;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -22,7 +21,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 Created DESC,
                 Name ASC
             """;
-        var result = await db.QueryAsync<ContainerDto>(sql, new { PlatformId = platformId.Format() }, tx());
+        var result = await db.QueryAsync<ContainerDto>(sql, new { PlatformId = platformId }, tx());
         return result?.ToDomain() ?? [];
     }
 
@@ -41,11 +40,11 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         var sql = """
             SELECT * FROM Containers c
-            WHERE Id IN (SELECT value FROM json_each(@Ids))
+            WHERE Id = ANY(@Ids)
             """;
         var result = await db.QueryAsync<ContainerDto>(sql, new 
         {
-            Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) 
+            Ids = ids.ToArray()
         }, transaction: tx());
         return result?.ToDomain() ?? [];
     }
@@ -74,7 +73,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             WHERE DeploymentId = @DeploymentId
             LIMIT 1
             """;
-        var result = await db.QuerySingleOrDefaultAsync<ContainerDto>(sql, new { DeploymentId = deploymentId.Format() }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<ContainerDto>(sql, new { DeploymentId = deploymentId }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -83,13 +82,11 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         const string sql = """
         SELECT *
         FROM Containers c
-        WHERE c.DeploymentId IN (
-            SELECT value FROM json_each(@DeploymentIds)
-        )
+        WHERE c.DeploymentId = ANY(@DeploymentIds)
         """;
 
         var result = await db.QueryAsync<ContainerDto>(sql, 
-            new { DeploymentIds = JsonSerializer.Serialize(deploymentIds, DeploymentJsonContext.Default.IEnumerableGuid) },
+            new { DeploymentIds = deploymentIds.ToArray() },
             transaction: tx()
         );
 
@@ -162,7 +159,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         ORDER BY c.Created DESC;
         """;
 
-        var result = await db.QueryAsync<ContainerWithLastStatDto>(sql, new { PlatformId = platformId.Format() }, transaction: tx());
+        var result = await db.QueryAsync<ContainerWithLastStatDto>(sql, new { PlatformId = platformId }, transaction: tx());
         return result.ToDomain();
     }
 
@@ -172,13 +169,13 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             INSERT INTO Containers (
                 Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId, deploymentId
             ) VALUES (
-                @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageId, @DeploymentId
+                @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId, @DeploymentId
             )
         """;
         return db.ExecuteAsync(sql, new 
         {
-            Id = container.Id.Format(),
-            PlatformId = container.PlatformId.Format(),
+            Id = container.Id,
+            PlatformId = container.PlatformId,
             DockerContainerId = container.DockerContainerId,
             DockerImageId = container.DockerImageId,
             Name = container.Name,
@@ -186,8 +183,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
             Stack = container.Stack,
-            ImageId = container.ImageId?.Format(),
-            DeploymentId = container.DeploymentId?.Format(),
+            ImageId = container.ImageId,
+            DeploymentId = container.DeploymentId,
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }
@@ -196,16 +193,16 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             UPDATE Containers
-            SET Name = @Name, DockerImageId = @DockerImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created, ImageId = @ImageId, DeploymentId = @DeploymentId, PlatformId = @PlatformId
+            SET Name = @Name, DockerImageId = @DockerImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports::json, Created = @Created, ImageId = @ImageId, DeploymentId = @DeploymentId, PlatformId = @PlatformId
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
         {
 
-            Id = container.Id.Format(),
-            PlatformId = container.PlatformId.Format(),
-            ImageId = container.ImageId?.Format(),
-            DeploymentId = container.DeploymentId?.Format(),
+            Id = container.Id,
+            PlatformId = container.PlatformId,
+            ImageId = container.ImageId,
+            DeploymentId = container.DeploymentId,
             Name = container.Name,
             Image = container.Image,
             DockerImageId = container.DockerImageId,
@@ -221,7 +218,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
         INSERT INTO Containers (Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId)
-        VALUES (@Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageId)
+        VALUES (@Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId)
         ON CONFLICT(Id) DO UPDATE SET
             Name = excluded.Name,
             DockerImageId = excluded.DockerImageId,
@@ -235,8 +232,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
 
         return db.ExecuteAsync(sql, containers.Select(c => new
         {
-            Id = c.Id.Format(),
-            PlatformId = c.PlatformId.Format(),
+            Id = c.Id,
+            PlatformId = c.PlatformId,
             DockerContainerId = c.DockerContainerId,
             Name = c.Name,
             DockerImageId = c.DockerImageId,
@@ -244,7 +241,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Updated = c.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(c.State),
             Stack = c.Stack,
-            ImageId = c.ImageId?.Format(),
+            ImageId = c.ImageId,
             Ports = JsonSerializer.Serialize(
                 c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding
             )
@@ -257,16 +254,14 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         UPDATE Containers
         SET State   = @State,
             Updated = @Updated
-        WHERE Id IN (
-            SELECT value FROM json_each(@Ids)
-        )
+        WHERE Id = ANY(@Ids)
         """;
 
         return db.ExecuteAsync(
             sql,
             new
             {
-                Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid),
+                Ids = ids.ToArray(),
                 State = state,
                 Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             },
@@ -298,8 +293,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             sql,
             new
             {
-                Id = id.Format(),
-                ControlTriggeredBy = controlTriggeredBy?.Format(),
+                Id = id,
+                ControlTriggeredBy = controlTriggeredBy,
                 State = EnumFormatter<ResourceControlState>.GetValue(state),
                 RowVersion = rowVersion,
                 StartedAt = startedAt
@@ -312,14 +307,12 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
         DELETE FROM Containers
-        WHERE Id IN (
-            SELECT value FROM json_each(@Ids)
-        )
+        WHERE Id = ANY(@Ids)
         """;
 
         return db.ExecuteAsync(
             sql,
-            new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
+            new { Ids = ids.ToArray() },
             transaction: tx()
         );
     }

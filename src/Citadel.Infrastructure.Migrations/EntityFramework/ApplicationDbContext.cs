@@ -2,7 +2,6 @@
 using Hosting.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -43,11 +42,12 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .AlertRuleChannelConfiguration();
 
         SeedDb(modelBuilder);
+        ToLower(modelBuilder);
     }
 
     private static void SeedDb(ModelBuilder modelBuilder)
     {
-        var seedDate = DateTime.Parse("2026-01-01");
+        var seedDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         // Actors
         var systemActorId = Constants.SystemId;
         var adminActorId = Constants.DefaultAdminId;
@@ -201,10 +201,39 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             $"{hex[..8]}-{hex[8..12]}-{hex[12..16]}-{hex[16..20]}-{hex[20..32]}",
             "D");
     }
+
+    private static void ToLower(ModelBuilder modelBuilder)
+    {
+        foreach (var entity in modelBuilder.Model.GetEntityTypes())
+        {
+            entity.SetTableName(entity.GetTableName()?.ToLowerInvariant());
+
+            foreach (var property in entity.GetProperties())
+            {
+                property.SetColumnName(property.GetColumnName()?.ToLowerInvariant());
+            }
+
+            foreach (var key in entity.GetKeys())
+                key.SetName(key.GetName()?.ToLowerInvariant());
+
+            foreach (var foreignKey in entity.GetForeignKeys())
+                foreignKey.SetConstraintName(foreignKey.GetConstraintName()?.ToLowerInvariant());
+
+            foreach (var index in entity.GetIndexes())
+                index.SetDatabaseName(index.GetDatabaseName()?.ToLowerInvariant());
+        }
+    }
 }
 
 internal static class Configuration
 {
+    private const string Text = "text";
+    private const string Json = "json";
+    private const string Integer = "integer";
+    private const string BigInt = "bigint";
+    private const string Double = "double precision";
+    private const string Timestamp = "timestamp with time zone";
+
     public static ModelBuilder ContainerConfiguration(this ModelBuilder builder)
     {
         var tableName = "Containers";
@@ -212,20 +241,20 @@ internal static class Configuration
 
         container.ToTable(tableName);
 
-        container.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        container.Property<Guid>("Id").IsRequired();
         container.HasKey("Id");
 
-        container.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        container.Property<Guid?>("DeploymentId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        container.Property<Guid?>("ImageId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        container.Property<string>("DockerContainerId").HasColumnType("TEXT").IsRequired().HasMaxLength(64);
-        container.Property<string>("DockerImageId").HasColumnType("TEXT").IsRequired();
-        container.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        container.Property<long>("Created").HasColumnType("REAL").IsRequired();
-        container.Property<string>("Updated").HasColumnType("TEXT").IsRequired();
-        container.Property<string>("State").HasColumnType("TEXT").IsRequired();
-        container.Property<string>("Stack").HasColumnType("TEXT");
-        container.Property<string>("Ports").HasColumnType("TEXT").IsRequired();
+        container.Property<Guid>("PlatformId").IsRequired();
+        container.Property<Guid?>("DeploymentId").IsRequired(false);
+        container.Property<Guid?>("ImageId").IsRequired(false);
+        container.Property<string>("DockerContainerId").HasColumnType(Text).IsRequired().HasMaxLength(64);
+        container.Property<string>("DockerImageId").HasColumnType(Text).IsRequired();
+        container.Property<string>("Name").HasColumnType(Text).IsRequired();
+        container.Property<long>("Created").HasColumnType(BigInt).IsRequired();
+        container.Property<long>("Updated").HasColumnType(BigInt).IsRequired();
+        container.Property<string>("State").HasColumnType(Text).IsRequired();
+        container.Property<string>("Stack").HasColumnType(Text);
+        container.Property<string>("Ports").HasColumnType(Json).IsRequired();
 
         container.AddReconcilableMember();
 
@@ -264,19 +293,19 @@ internal static class Configuration
 
         gitRepository.ToTable(tableName);
 
-        gitRepository.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        gitRepository.Property<Guid>("Id").IsRequired();
         gitRepository.HasKey("Id");
 
-        gitRepository.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        gitRepository.Property<string>("Description").HasColumnType("TEXT").IsRequired(false).HasMaxLength(600);
-        gitRepository.Property<string>("Url").HasColumnType("TEXT").IsRequired();
-        gitRepository.Property<string>("DefaultBranch").HasColumnType("TEXT").IsRequired();
-        gitRepository.Property<string>("Status").HasColumnType("TEXT").IsRequired();
-        gitRepository.Property<Guid?>("GitAccountId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        gitRepository.Property<bool>("WebHookEnabled").HasColumnType("INTEGER").IsRequired().HasDefaultValue(false);
-        gitRepository.Property<string>("WebHookSecret").HasColumnType("TEXT").IsRequired(false);
-        gitRepository.Property<string>("OnClone").HasColumnType("TEXT").IsRequired(false);
-        gitRepository.Property<string>("OnPull").HasColumnType("TEXT").IsRequired(false);
+        gitRepository.Property<string>("Name").HasColumnType(Text).IsRequired();
+        gitRepository.Property<string>("Description").HasColumnType(Text).IsRequired(false).HasMaxLength(600);
+        gitRepository.Property<string>("Url").HasColumnType(Text).IsRequired();
+        gitRepository.Property<string>("DefaultBranch").HasColumnType(Text).IsRequired();
+        gitRepository.Property<string>("Status").HasColumnType(Text).IsRequired();
+        gitRepository.Property<Guid?>("GitAccountId").IsRequired(false);
+        gitRepository.Property<bool>("WebHookEnabled").HasColumnType("boolean").IsRequired().HasDefaultValue(false);
+        gitRepository.Property<string>("WebHookSecret").HasColumnType(Text).IsRequired(false);
+        gitRepository.Property<string>("OnClone").HasColumnType(Text).IsRequired(false);
+        gitRepository.Property<string>("OnPull").HasColumnType(Text).IsRequired(false);
 
         gitRepository
             .AddReconcilableMember()
@@ -302,14 +331,14 @@ internal static class Configuration
 
         gitAccount.ToTable(tableName);
 
-        gitAccount.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        gitAccount.Property<Guid>("Id").IsRequired();
         gitAccount.HasKey("Id");
 
-        gitAccount.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        gitAccount.Property<string>("Domain").HasColumnType("TEXT").IsRequired();
-        gitAccount.Property<string>("Transport").HasColumnType("TEXT").IsRequired();
-        gitAccount.Property<string>("AuthType").HasColumnType("TEXT").IsRequired();
-        gitAccount.Property<string>("Configuration").HasColumnType("TEXT").IsRequired();
+        gitAccount.Property<string>("Name").HasColumnType(Text).IsRequired();
+        gitAccount.Property<string>("Domain").HasColumnType(Text).IsRequired();
+        gitAccount.Property<string>("Transport").HasColumnType(Text).IsRequired();
+        gitAccount.Property<string>("AuthType").HasColumnType(Text).IsRequired();
+        gitAccount.Property<string>("Configuration").HasColumnType(Json).IsRequired();
 
         gitAccount.AddAuditedMemebers();
 
@@ -325,21 +354,21 @@ internal static class Configuration
 
         platform.ToTable(tableName);
 
-        platform.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        platform.Property<Guid>("Id").IsRequired();
         platform.HasKey("Id");
 
-        platform.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        platform.Property<string>("Address").HasColumnType("TEXT").IsRequired();
-        platform.Property<string>("Status").HasColumnType("TEXT").IsRequired();
-        platform.Property<string>("ConnectorType").HasColumnType("TEXT").IsRequired();
-        platform.Property<int>("NetworkCount").HasColumnType("REAL").IsRequired();
-        platform.Property<int>("VolumeCount").HasColumnType("REAL").IsRequired();
-        platform.Property<int>("ImageCount").HasColumnType("REAL").IsRequired();
-        platform.Property<int>("CpuCount").HasColumnType("REAL").IsRequired();
-        platform.Property<long>("MemTotal").HasColumnType("REAL").IsRequired();
-        platform.Property<string>("AgentVersion").HasColumnType("TEXT");
-        platform.Property<string>("ServerVersion").HasColumnType("TEXT");
-        platform.Property<string>("PlatformDescriptor").IsRequired();
+        platform.Property<string>("Name").HasColumnType(Text).IsRequired();
+        platform.Property<string>("Address").HasColumnType(Text).IsRequired();
+        platform.Property<string>("Status").HasColumnType(Text).IsRequired();
+        platform.Property<string>("ConnectorType").HasColumnType(Text).IsRequired();
+        platform.Property<int>("NetworkCount").HasColumnType(Integer).IsRequired();
+        platform.Property<int>("VolumeCount").HasColumnType(Integer).IsRequired();
+        platform.Property<int>("ImageCount").HasColumnType(Integer).IsRequired();
+        platform.Property<int>("CpuCount").HasColumnType(Integer).IsRequired();
+        platform.Property<long>("MemTotal").HasColumnType(BigInt).IsRequired();
+        platform.Property<string>("AgentVersion").HasColumnType(Text);
+        platform.Property<string>("ServerVersion").HasColumnType(Text);
+        platform.Property<string>("PlatformDescriptor").HasColumnType(Json).IsRequired();
 
         platform.HasIndex("Address").IsUnique().HasDatabaseName($"IX_{tableName}_Address");
 
@@ -353,17 +382,17 @@ internal static class Configuration
 
         stat.ToTable(tableName);
 
-        stat.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        stat.Property<Guid>("Id").IsRequired();
         stat.HasKey("Id");
 
-        stat.Property<Guid>("ContainerId").HasConversion(GuidConverter).HasColumnType("TEXT").IsRequired();
-        stat.Property<long>("Created").HasColumnType("REAL").IsRequired();
-        stat.Property<double>("MemoryActive").HasColumnType("REAL");
-        stat.Property<double>("MemoryCache").HasColumnType("REAL");
-        stat.Property<double>("CpuUsage").HasColumnType("REAL");
-        stat.Property<double>("MemoryLimit").HasColumnType("REAL");
-        stat.Property<double>("RxBytes").HasColumnType("REAL");
-        stat.Property<double>("TxBytes").HasColumnType("REAL");
+        stat.Property<Guid>("ContainerId").IsRequired();
+        stat.Property<long>("Created").HasColumnType(BigInt).IsRequired();
+        stat.Property<double>("MemoryActive").HasColumnType(Double);
+        stat.Property<double>("MemoryCache").HasColumnType(Double);
+        stat.Property<double>("CpuUsage").HasColumnType(Double);
+        stat.Property<double>("MemoryLimit").HasColumnType(Double);
+        stat.Property<double>("RxBytes").HasColumnType(Double);
+        stat.Property<double>("TxBytes").HasColumnType(Double);
 
         stat
             .HasOne("Container")
@@ -384,15 +413,15 @@ internal static class Configuration
 
         stat.ToTable(tableName);
 
-        stat.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        stat.Property<Guid>("Id").IsRequired();
         stat.HasKey("Id");
 
-        stat.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        stat.Property<long>("Created").HasColumnType("REAL").IsRequired();
-        stat.Property<double>("MemoryUsage").HasColumnType("REAL").IsRequired();
-        stat.Property<double>("CpuUsage").HasColumnType("REAL").IsRequired();
-        stat.Property<double>("RxBytes").HasColumnType("REAL").IsRequired();
-        stat.Property<double>("TxBytes").HasColumnType("REAL").IsRequired();
+        stat.Property<Guid>("PlatformId").IsRequired();
+        stat.Property<long>("Created").HasColumnType(BigInt).IsRequired();
+        stat.Property<double>("MemoryUsage").HasColumnType(Double).IsRequired();
+        stat.Property<double>("CpuUsage").HasColumnType(Double).IsRequired();
+        stat.Property<double>("RxBytes").HasColumnType(Double).IsRequired();
+        stat.Property<double>("TxBytes").HasColumnType(Double).IsRequired();
 
         stat
             .HasOne("Platform")
@@ -413,14 +442,14 @@ internal static class Configuration
 
         registry.ToTable(tableName);
 
-        registry.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        registry.Property<Guid>("Id").IsRequired();
         registry.HasKey("Id");
 
-        registry.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        registry.Property<string>("Description").HasColumnType("TEXT").IsRequired(false).HasMaxLength(600);
-        registry.Property<string>("RegistryHost").HasColumnType("TEXT").IsRequired();
-        registry.Property<string>("Status").HasColumnType("TEXT").IsRequired();
-        registry.Property<string>("Configuration").HasColumnType("TEXT").IsRequired();
+        registry.Property<string>("Name").HasColumnType(Text).IsRequired();
+        registry.Property<string>("Description").HasColumnType(Text).IsRequired(false).HasMaxLength(600);
+        registry.Property<string>("RegistryHost").HasColumnType(Text).IsRequired();
+        registry.Property<string>("Status").HasColumnType(Text).IsRequired();
+        registry.Property<string>("Configuration").HasColumnType(Json).IsRequired();
 
         registry.AddAuditedMemebers();
 
@@ -436,11 +465,11 @@ internal static class Configuration
 
         refreshToken.ToTable(tableName);
 
-        refreshToken.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        refreshToken.Property<Guid>("Id").IsRequired();
         refreshToken.HasKey("Id");
 
-        refreshToken.Property<Guid>("UserId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        refreshToken.Property<string>("CreatedAt").HasColumnType("TEXT").IsRequired();
+        refreshToken.Property<Guid>("UserId").IsRequired();
+        refreshToken.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
 
         refreshToken
             .HasOne("User")
@@ -460,11 +489,11 @@ internal static class Configuration
 
         actor.ToTable(tableName);
 
-        actor.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        actor.Property<Guid>("Id").IsRequired();
         actor.HasKey("Id");
 
-        actor.Property<string>("Type").IsRequired();
-        actor.Property<bool>("IsEnabled").HasColumnType("INTEGER").HasDefaultValue(true).IsRequired();
+        actor.Property<string>("Type").HasColumnType(Text).IsRequired();
+        actor.Property<bool>("IsEnabled").HasColumnType("boolean").HasDefaultValue(true).IsRequired();
 
         return builder;
     }
@@ -476,13 +505,13 @@ internal static class Configuration
 
         user.ToTable(tableName);
 
-        user.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        user.Property<Guid>("Id").IsRequired();
         user.HasKey("Id");
 
-        user.Property<Guid>("ActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        user.Property<string>("Name").HasColumnType("TEXT").HasMaxLength(100).IsRequired();
-        user.Property<string>("Email").HasColumnType("TEXT").IsRequired(false);
-        user.Property<string>("Password").HasColumnType("TEXT").IsRequired(false);
+        user.Property<Guid>("ActorId").IsRequired();
+        user.Property<string>("Name").HasColumnType(Text).HasMaxLength(100).IsRequired();
+        user.Property<string>("Email").HasColumnType(Text).IsRequired(false);
+        user.Property<string>("Password").HasColumnType(Text).IsRequired(false);
         user.AddAuditedMemebers();
 
         user.HasIndex("Email")
@@ -505,12 +534,12 @@ internal static class Configuration
 
         team.ToTable(tableName);
 
-        team.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        team.Property<Guid>("ActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        team.Property<Guid>("Id").IsRequired();
+        team.Property<Guid>("ActorId").IsRequired();
 
         team.HasKey("Id");
 
-        team.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+        team.Property<string>("Name").HasColumnType(Text).IsRequired();
 
         team
            .HasOne("Actor")
@@ -528,8 +557,8 @@ internal static class Configuration
 
         userTeam.ToTable(tableName);
 
-        userTeam.Property<Guid>("UserId").HasColumnType("TEXT").IsRequired();
-        userTeam.Property<Guid>("TeamId").HasColumnType("TEXT").IsRequired();
+        userTeam.Property<Guid>("UserId").IsRequired();
+        userTeam.Property<Guid>("TeamId").IsRequired();
         userTeam.HasKey("UserId", "TeamId");
         userTeam
             .HasOne("User")
@@ -554,12 +583,12 @@ internal static class Configuration
 
         permission.ToTable(tableName);
         
-        permission.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        permission.Property<Guid>("Id").IsRequired();
         permission.HasKey("Id");
         
-        permission.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        permission.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
-        permission.Property<string>("ResourceAction").HasColumnType("TEXT").IsRequired();
+        permission.Property<Guid>("RoleId").IsRequired();
+        permission.Property<string>("ResourceType").HasColumnType(Text).IsRequired();
+        permission.Property<string>("ResourceAction").HasColumnType(Text).IsRequired();
 
         permission
             .HasOne("Role")
@@ -579,13 +608,13 @@ internal static class Configuration
 
         resourceAccess.ToTable(tableName);
 
-        resourceAccess.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        resourceAccess.Property<Guid>("Id").IsRequired();
         resourceAccess.HasKey("Id");
 
-        resourceAccess.Property<Guid>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        resourceAccess.Property<Guid>("ActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        resourceAccess.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
-        resourceAccess.Property<string>("Action").HasColumnType("TEXT").IsRequired();
+        resourceAccess.Property<Guid>("ResourceId").IsRequired();
+        resourceAccess.Property<Guid>("ActorId").IsRequired();
+        resourceAccess.Property<string>("ResourceType").HasColumnType(Text).IsRequired();
+        resourceAccess.Property<string>("Action").HasColumnType(Text).IsRequired();
 
         resourceAccess.HasIndex(
             "ResourceType",
@@ -611,10 +640,10 @@ internal static class Configuration
 
         role.ToTable(tableName);
 
-        role.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        role.Property<Guid>("Id").IsRequired();
         role.HasKey("Id");
 
-        role.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+        role.Property<string>("Name").HasColumnType(Text).IsRequired();
 
         return builder;
     }
@@ -626,8 +655,8 @@ internal static class Configuration
 
         actorRole.ToTable(tableName);
 
-        actorRole.Property<Guid>("ActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        actorRole.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        actorRole.Property<Guid>("ActorId").IsRequired();
+        actorRole.Property<Guid>("RoleId").IsRequired();
         actorRole.HasKey("ActorId", "RoleId");
 
         actorRole
@@ -654,20 +683,20 @@ internal static class Configuration
 
         deployment.ToTable(tableName);
 
-        deployment.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        deployment.Property<Guid>("Id").IsRequired();
         deployment.HasKey("Id");
 
-        deployment.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        deployment.Property<string>("Description").HasColumnType("TEXT").HasMaxLength(600).IsRequired(false);
-        deployment.Property<string>("Status").HasColumnType("TEXT").IsRequired();
-        deployment.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
-        deployment.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        deployment.Property<string>("Name").HasColumnType(Text).IsRequired();
+        deployment.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        deployment.Property<string>("Status").HasColumnType(Text).IsRequired();
+        deployment.Property<string>("Spec").HasColumnType(Json).IsRequired();
+        deployment.Property<Guid>("PlatformId").IsRequired();
 
-        deployment.Property<DateTime?>("AutoUpdateState_LastCheckedAt").HasColumnType("TEXT").HasDefaultValue(null).IsRequired(false);
-        deployment.Property<string>("AutoUpdateState_Status").HasColumnType("TEXT").HasDefaultValue(null);
-        deployment.Property<string>("AutoUpdateState_CurrentDigest").HasColumnType("TEXT").HasDefaultValue(null);
-        deployment.Property<string>("AutoUpdateState_RemoteDigest").HasColumnType("TEXT").HasDefaultValue(null);
-        deployment.Property<string>("AutoUpdateState_LastError").HasColumnType("TEXT").HasMaxLength(2000).HasDefaultValue(null);
+        deployment.Property<DateTime?>("AutoUpdateState_LastCheckedAt").HasColumnType(Timestamp).HasDefaultValue(null).IsRequired(false);
+        deployment.Property<string>("AutoUpdateState_Status").HasColumnType(Text).HasDefaultValue(null);
+        deployment.Property<string>("AutoUpdateState_CurrentDigest").HasColumnType(Text).HasDefaultValue(null);
+        deployment.Property<string>("AutoUpdateState_RemoteDigest").HasColumnType(Text).HasDefaultValue(null);
+        deployment.Property<string>("AutoUpdateState_LastError").HasColumnType(Text).HasMaxLength(2000).HasDefaultValue(null);
 
         deployment
             .AddReconcilableMember()
@@ -691,18 +720,18 @@ internal static class Configuration
 
         image.ToTable(tableName);
 
-        image.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        image.Property<Guid>("Id").IsRequired();
         image.HasKey("Id");
 
-        image.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        image.Property<Guid?>("RegistryId").HasColumnType("TEXT").HasConversion(GuidConverter);
-        image.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        image.Property<string>("Tags").HasColumnType("TEXT").IsRequired();
-        image.Property<string>("DockerImageId").HasColumnType("TEXT").IsRequired();
-        image.Property<string>("CreatedAt").HasColumnType("TEXT").IsRequired();
-        image.Property<string?>("UpdatedAt").HasColumnType("TEXT").HasDefaultValue(null);
-        image.Property<int>("Containers").HasColumnType("INTEGER").HasDefaultValue(0);
-        image.Property<double>("Size").HasColumnType("REAL").HasDefaultValue(0);
+        image.Property<Guid>("PlatformId").IsRequired();
+        image.Property<Guid?>("RegistryId");
+        image.Property<string>("Name").HasColumnType(Text).IsRequired();
+        image.Property<string>("Tags").HasColumnType(Json).IsRequired();
+        image.Property<string>("DockerImageId").HasColumnType(Text).IsRequired();
+        image.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+        image.Property<DateTime?>("UpdatedAt").HasColumnType(Timestamp).HasDefaultValue(null);
+        image.Property<int>("Containers").HasColumnType(Integer).HasDefaultValue(0);
+        image.Property<double>("Size").HasColumnType(Double).HasDefaultValue(0);
         image.AddReconcilableMember();
 
         image
@@ -731,16 +760,16 @@ internal static class Configuration
 
         activityEvent.ToTable(tableName);
 
-        activityEvent.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        activityEvent.Property<Guid>("Id").IsRequired();
         activityEvent.HasKey("Id");
 
-        activityEvent.Property<Guid?>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        activityEvent.Property<Guid?>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        activityEvent.Property<string>("ResourceName").HasColumnType("TEXT").IsRequired();
-        activityEvent.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
-        activityEvent.Property<string>("Status").HasColumnType("TEXT").IsRequired();
-        activityEvent.Property<string>("EventType").HasColumnType("TEXT").IsRequired();
-        activityEvent.Property<string>("Info").HasColumnType("TEXT").IsRequired();
+        activityEvent.Property<Guid?>("PlatformId").IsRequired(false);
+        activityEvent.Property<Guid?>("ResourceId").IsRequired(false);
+        activityEvent.Property<string>("ResourceName").HasColumnType(Text).IsRequired();
+        activityEvent.Property<string>("ResourceType").HasColumnType(Text).IsRequired();
+        activityEvent.Property<string>("Status").HasColumnType(Text).IsRequired();
+        activityEvent.Property<string>("EventType").HasColumnType(Text).IsRequired();
+        activityEvent.Property<string>("Info").HasColumnType(Text).IsRequired();
         activityEvent.AddAuditedMemebers();
 
         activityEvent
@@ -763,19 +792,19 @@ internal static class Configuration
         var alertRule = builder.Entity("AlertRule");
         alertRule.ToTable(tableName);
 
-        alertRule.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertRule.Property<Guid>("Id").IsRequired();
         alertRule.HasKey("Id");
 
-        alertRule.Property<string>("Type").HasColumnType("TEXT").IsRequired();
-        alertRule.Property<string>("Name").HasColumnType("TEXT").HasMaxLength(120).IsRequired();
-        alertRule.Property<string>("Description").HasColumnType("TEXT").HasMaxLength(600).IsRequired(false);
-        alertRule.Property<int?>("CooldownSeconds").HasColumnType("INTEGER").IsRequired(false);
-        alertRule.Property<string>("Status").HasColumnType("TEXT").IsRequired().HasDefaultValue("Enabled");
-        alertRule.Property<string>("LimitedTo").HasColumnType("TEXT").IsRequired();
-        alertRule.Property<string>("QuietHours").HasColumnType("TEXT").IsRequired();
-        alertRule.Property<int?>("RequiredMatches").HasColumnType("INTEGER").IsRequired(false);
-        alertRule.Property<double?>("Threshold").HasColumnType("REAL").IsRequired(false);
-        alertRule.Property<string>("Severity").HasColumnType("TEXT").IsRequired();
+        alertRule.Property<string>("Type").HasColumnType(Text).IsRequired();
+        alertRule.Property<string>("Name").HasColumnType(Text).HasMaxLength(120).IsRequired();
+        alertRule.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        alertRule.Property<int?>("CooldownSeconds").HasColumnType(Integer).IsRequired(false);
+        alertRule.Property<string>("Status").HasColumnType(Text).IsRequired().HasDefaultValue("Enabled");
+        alertRule.Property<string>("LimitedTo").HasColumnType(Json).IsRequired();
+        alertRule.Property<string>("QuietHours").HasColumnType(Json).IsRequired();
+        alertRule.Property<int?>("RequiredMatches").HasColumnType(Integer).IsRequired(false);
+        alertRule.Property<double?>("Threshold").HasColumnType(Double).IsRequired(false);
+        alertRule.Property<string>("Severity").HasColumnType(Text).IsRequired();
 
         alertRule.AddAuditedMemebers();
 
@@ -790,10 +819,10 @@ internal static class Configuration
         var alertRuleState = builder.Entity("AlertRuleState");
         alertRuleState.ToTable(tableName);
 
-        alertRuleState.Property<Guid?>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        alertRuleState.Property<Guid>("AlertRuleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        alertRuleState.Property<DateTime?>("LastTriggeredAt").HasColumnType("TEXT").HasDefaultValue(null);
-        alertRuleState.Property<int>("ConsecutiveMatches").HasColumnType("INTEGER").IsRequired().HasDefaultValue(3);
+        alertRuleState.Property<Guid?>("ResourceId").IsRequired(false);
+        alertRuleState.Property<Guid>("AlertRuleId").IsRequired();
+        alertRuleState.Property<DateTime?>("LastTriggeredAt").HasColumnType(Timestamp).HasDefaultValue(null);
+        alertRuleState.Property<int>("ConsecutiveMatches").HasColumnType(Integer).IsRequired().HasDefaultValue(3);
 
         alertRuleState.HasKey("AlertRuleId", "ResourceId");
 
@@ -813,14 +842,14 @@ internal static class Configuration
         var alertChannel = builder.Entity("AlertChannel");
         alertChannel.ToTable(tableName);
 
-        alertChannel.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertChannel.Property<Guid>("Id").IsRequired();
         alertChannel.HasKey("Id");
 
-        alertChannel.Property<string>("AlertDestination").HasColumnType("TEXT").IsRequired();
-        alertChannel.Property<string>("Url").HasColumnType("TEXT").IsRequired();
-        alertChannel.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+        alertChannel.Property<string>("AlertDestination").HasColumnType(Text).IsRequired();
+        alertChannel.Property<string>("Url").HasColumnType(Text).IsRequired();
+        alertChannel.Property<string>("Name").HasColumnType(Text).IsRequired();
 
-        alertChannel.Property<bool>("IsActive").HasColumnType("INTEGER").IsRequired().HasDefaultValue(true);
+        alertChannel.Property<bool>("IsActive").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
 
         alertChannel.AddAuditedMemebers();
         return builder;
@@ -833,14 +862,14 @@ internal static class Configuration
 
         stack.ToTable(tableName);
 
-        stack.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        stack.Property<Guid>("Id").IsRequired();
         stack.HasKey("Id");
 
-        stack.Property<Guid?>("CurrentStackReleaseId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        stack.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        stack.Property<string>("Description").HasColumnType("TEXT").HasMaxLength(600).IsRequired(false);
-        stack.Property<string>("StackSource").HasColumnType("TEXT").IsRequired();
-        stack.Property<string>("StackUpdateState").HasColumnType("TEXT").IsRequired();
+        stack.Property<Guid?>("CurrentStackReleaseId").IsRequired(false);
+        stack.Property<string>("Name").HasColumnType(Text).IsRequired();
+        stack.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        stack.Property<string>("StackSource").HasColumnType(Text).IsRequired();
+        stack.Property<string>("StackUpdateState").HasColumnType(Json).IsRequired();
 
         stack
             .AddReconcilableMember()
@@ -860,14 +889,14 @@ internal static class Configuration
 
         release.ToTable(tableName);
 
-        release.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        release.Property<Guid>("Id").IsRequired();
         release.HasKey("Id");
 
-        release.Property<Guid>("StackId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        release.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        release.Property<string>("Status").HasColumnType("TEXT").IsRequired();
-        release.Property<string>("Version").HasColumnType("TEXT").IsRequired();
-        release.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
+        release.Property<Guid>("StackId").IsRequired();
+        release.Property<Guid>("PlatformId").IsRequired();
+        release.Property<string>("Status").HasColumnType(Text).IsRequired();
+        release.Property<string>("Version").HasColumnType(Text).IsRequired();
+        release.Property<string>("Spec").HasColumnType(Json).IsRequired();
 
         release.AddAuditedMemebers();
 
@@ -895,8 +924,8 @@ internal static class Configuration
         var alertRuleChannel = builder.Entity("AlertRuleChannel");
         alertRuleChannel.ToTable(tableName);
 
-        alertRuleChannel.Property<Guid>("AlertRuleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        alertRuleChannel.Property<Guid>("AlertChannelId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertRuleChannel.Property<Guid>("AlertRuleId").IsRequired();
+        alertRuleChannel.Property<Guid>("AlertChannelId").IsRequired();
         alertRuleChannel.HasKey("AlertRuleId", "AlertChannelId");
 
         alertRuleChannel
@@ -922,25 +951,25 @@ internal static class Configuration
         var alertEvent = builder.Entity("AlertEvent");
         alertEvent.ToTable(tableName);
 
-        alertEvent.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertEvent.Property<Guid>("Id").IsRequired();
         alertEvent.HasKey("Id");
 
-        alertEvent.Property<Guid?>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        alertEvent.Property<Guid>("AlertRuleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        alertEvent.Property<string>("Type").HasColumnType("TEXT").IsRequired();
-        alertEvent.Property<string>("Severity").HasColumnType("TEXT").IsRequired();
-        alertEvent.Property<string>("Info").HasColumnType("TEXT").IsRequired();
-        alertEvent.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
-        alertEvent.Property<string>("DeduplicationKey").HasColumnType("TEXT").IsRequired();
-        alertEvent.Property<string>("OpenIncidentKey").HasColumnType("TEXT").IsRequired(false);
-        alertEvent.Property<Guid?>("AcknowledgedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        alertEvent.Property<DateTime?>("AcknowledgedAt").HasColumnType("TEXT").IsRequired(false);
-        alertEvent.Property<Guid?>("ResolvedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        alertEvent.Property<DateTime?>("ResolvedAt").HasColumnType("TEXT").IsRequired(false);
-        alertEvent.Property<string>("ResolutionNote").HasColumnType("TEXT").IsRequired(false);
-        alertEvent.Property<string>("ResourceName").HasColumnType("TEXT").IsRequired();
-        alertEvent.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
-        alertEvent.Property<DateTime>("UpdatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        alertEvent.Property<Guid?>("ResourceId").IsRequired(false);
+        alertEvent.Property<Guid>("AlertRuleId").IsRequired();
+        alertEvent.Property<string>("Type").HasColumnType(Text).IsRequired();
+        alertEvent.Property<string>("Severity").HasColumnType(Text).IsRequired();
+        alertEvent.Property<string>("Info").HasColumnType(Json).IsRequired();
+        alertEvent.Property<string>("ResourceType").HasColumnType(Text).IsRequired();
+        alertEvent.Property<string>("DeduplicationKey").HasColumnType(Text).IsRequired();
+        alertEvent.Property<string>("OpenIncidentKey").HasColumnType(Text).IsRequired(false);
+        alertEvent.Property<Guid?>("AcknowledgedByActorId").IsRequired(false);
+        alertEvent.Property<DateTime?>("AcknowledgedAt").HasColumnType(Timestamp).IsRequired(false);
+        alertEvent.Property<Guid?>("ResolvedByActorId").IsRequired(false);
+        alertEvent.Property<DateTime?>("ResolvedAt").HasColumnType(Timestamp).IsRequired(false);
+        alertEvent.Property<string>("ResolutionNote").HasColumnType(Text).IsRequired(false);
+        alertEvent.Property<string>("ResourceName").HasColumnType(Text).IsRequired();
+        alertEvent.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        alertEvent.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
         alertEvent
             .HasOne("AlertRule")
@@ -958,10 +987,10 @@ internal static class Configuration
 
     private static EntityTypeBuilder AddReconcilableMember(this EntityTypeBuilder builder)
     {
-        builder.Property<long>("RowVersion").HasColumnType("INTEGER").HasDefaultValue(0);
-        builder.Property<long?>("ControlStartedAt").HasColumnType("INTEGER").HasDefaultValue(null);
-        builder.Property<Guid?>("ControlTriggeredBy").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        builder.Property<string>("ControlState").HasColumnType("TEXT").HasMaxLength(64).HasDefaultValue(ResourceControlState.Idle);
+        builder.Property<long>("RowVersion").HasColumnType(BigInt).HasDefaultValue(0L);
+        builder.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
+        builder.Property<Guid?>("ControlTriggeredBy").IsRequired(false);
+        builder.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).HasDefaultValue(ResourceControlState.Idle.ToString());
 
         builder
             .HasOne("Actor")
@@ -974,8 +1003,8 @@ internal static class Configuration
 
     private static EntityTypeBuilder AddAuditedMemebers(this EntityTypeBuilder builder)
     {
-        builder.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
-        builder.Property<Guid>("CreatedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        builder.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        builder.Property<Guid>("CreatedByActorId").IsRequired();
 
         builder
             .HasOne("Actor")
@@ -985,9 +1014,4 @@ internal static class Configuration
 
         return builder;
     }
-
-    private static readonly ValueConverter<Guid, string> GuidConverter = new(
-       g => g.ToString("D").ToLowerInvariant(),
-       s => Guid.Parse(s)
-    );    
 }

@@ -4,7 +4,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 
 namespace Infrastructure.Persistence;
 
@@ -23,11 +22,11 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
               AVG(S.RxBytes) AS RxBytes,
               AVG(S.TxBytes) AS TxBytes
             FROM ContainerStats S
-            INNER JOIN Containers C on C.Id = S.ContainerId 
+            INNER JOIN Containers C ON C.Id = S.ContainerId 
             WHERE C.DockerContainerId LIKE @DockerContainerIdPrefix || '%'
               AND S.Created > @Last24h
-            GROUP BY strftime('%Y-%m-%d %H:%M', datetime(S.Created, 'unixepoch'))
-            ORDER BY S.Created
+            GROUP BY (S.Created / 60)
+            ORDER BY MIN(S.Created)
             """;
       
         var last24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeSeconds();
@@ -64,8 +63,8 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
         foreach (var stat in stats)
         {
             valueRows.Add($"(@Id{i}, @ContainerId{i}, @Created{i}, @MemoryActive{i}, @MemoryCache{i}, @CpuUsage{i}, @MemoryLimit{i}, @RxBytes{i}, @TxBytes{i})");
-            parameters.Add($"Id{i}", stat.Id.Format());
-            parameters.Add($"ContainerId{i}", stat.ContainerId.Format());
+            parameters.Add($"Id{i}", stat.Id);
+            parameters.Add($"ContainerId{i}", stat.ContainerId);
             parameters.Add($"Created{i}", stat.Created);
             parameters.Add($"MemoryActive{i}", stat.MemoryActive);
             parameters.Add($"MemoryCache{i}", stat.MemoryCache);

@@ -16,10 +16,6 @@
   </PropertyGroup>
 
 	<ItemGroup>
-		<None Include="..\..\Dockerfile.dev" Link="Dockerfile.dev" />
-	</ItemGroup>
-
-	<ItemGroup>
 	  <PackageReference Include="Microsoft.Extensions.ApiDescription.Server">
 	    <PrivateAssets>all</PrivateAssets>
 	    <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

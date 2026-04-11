@@ -387,6 +387,10 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
 
         // Assert
         Assert.True(response.IsSuccessStatusCode);
+
+        // Give work queue time to process UpdateDeploymentStatusWorkItem
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var deployment = await uow.Deployments.GetAsync(_deploymentId, TestContext.Current.CancellationToken);

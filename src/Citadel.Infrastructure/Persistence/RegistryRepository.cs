@@ -5,7 +5,6 @@ using Domain.Entities.Registries;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 using System.Data;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -26,17 +25,17 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             INSERT INTO Registries (
                 Id, Name, Description, RegistryHost, Status, CreatedAt, CreatedByActorId, Configuration)
             VALUES (
-                @Id, @Name, @Description, @RegistryHost, @Status, @CreatedAt, @CreatedByActorId, @Configuration)
+                @Id, @Name, @Description, @RegistryHost, @Status, @CreatedAt, @CreatedByActorId, @Configuration::json)
         """;
 
         return db.ExecuteAsync(sql, new
         {
-            Id = registry.Id.Format(),
+            Id = registry.Id,
             Name = registry.Name,
             Description = registry.Description,
             RegistryHost = registry.RegistryHost, 
-            CreatedAt = registry.CreatedAt.ToString(), 
-            CreatedByActorId = registry.CreatedByActorId.Format(),
+            CreatedAt = registry.CreatedAt, 
+            CreatedByActorId = registry.CreatedByActorId,
             Status = EnumFormatter<RegistryStatus>.GetValue(registry.Status),
             Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfiguration),
         }, transaction: tx());
@@ -45,14 +44,15 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     public async Task<Registry?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Registries WHERE Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
     public async Task<IEnumerable<Registry>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Registries r WHERE r.Id IN (SELECT value FROM json_each(@Ids))";
-        var result = await db.QueryAsync<RegistryDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        const string sql = "SELECT * FROM Registries r WHERE r.Id = ANY(@Ids)";
+        var idArray = ids as Guid[] ?? [.. ids];
+        var result = await db.QueryAsync<RegistryDto>(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
         return result.ToDomain();
     }
 
@@ -66,7 +66,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Registries WHERE Name=@Name AND Id != @Id)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id, cancellationToken }, transaction: tx());
     }
 
     public async Task<IEnumerable<Registry>> GetAllAsync(CancellationToken cancellationToken)
@@ -84,7 +84,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
         var result = await db.QueryAsync<RegistryDto>(sql, new
         {
-            UserId = userId.Format(),
+            UserId = userId,
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             cancellationToken
@@ -97,12 +97,12 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     {
         const string sql = """
             UPDATE Registries
-            SET Name = @Name, Description = @Description, Status = @Status, RegistryHost = @RegistryHost, Configuration = @Configuration
+            SET Name = @Name, Description = @Description, Status = @Status, RegistryHost = @RegistryHost, Configuration = @Configuration::json
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
         {
-            Id = registry.Id.Format(),
+            Id = registry.Id,
             Name = registry.Name,
             Description = registry.Description,
             RegistryHost = registry.RegistryHost,
@@ -113,16 +113,11 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = """
-        DELETE FROM Registries
-        WHERE Id IN (
-            SELECT value FROM json_each(@Ids)
-        )
-        """;
+        const string sql = "DELETE FROM Registries WHERE Id = ANY(@Ids)";
 
         return db.ExecuteAsync(
             sql,
-            new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
+            new { Ids = ids.ToArray(), cancellationToken },
             transaction: tx()
         );
     }

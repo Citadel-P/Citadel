@@ -30,7 +30,7 @@ public class LoginCommandTests(PostgresTestFixture fixture) : IntegrationTestBas
     {
         var userAuth = """
         {
-          "emailOrName": "Admin",
+          "emailOrName": "admin",
           "password": "admin123"
         }
         """;

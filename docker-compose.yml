@@ -3,6 +3,8 @@ services:
     image: ghcr.io/citadel-p/citadel:${CITADEL_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
+    environment:
+      ConnectionStrings__Postgres: "Host=${PG_HOST};Database=${PG_DATABASE};Username=${PG_USER};Password=${PG_PASSWORD}"
     depends_on:
       - postgres
     volumes:

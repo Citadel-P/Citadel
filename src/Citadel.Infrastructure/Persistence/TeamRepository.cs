@@ -1,5 +1,4 @@
 ﻿using Dapper;
-using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
@@ -8,7 +7,6 @@ using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
-using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
@@ -17,8 +15,8 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 {
     public async Task<Team?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Teams WHERE Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<TeamDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        const string sql = "SELECT * FROM Teams WHERE Id = @Id";
+        var result = await db.QuerySingleOrDefaultAsync<TeamDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -43,7 +41,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
             LIMIT 1
             """;
 
-        var result = await db.QuerySingleOrDefaultAsync<TeamWithActorDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<TeamWithActorDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDetails();
     }
 
@@ -88,7 +86,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
         var offset = (page - 1) * pageSize;
         var parameters = new
         {
-            UserId = userId.Format(),
+            UserId = userId,
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             PageSize = pageSize,
@@ -104,15 +102,16 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<IEnumerable<Team>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Teams WHERE Id IN (SELECT value FROM json_each(@Ids)) ORDER BY Name ASC";
-        var result = await db.QueryAsync<TeamDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        const string sql = "SELECT * FROM Teams WHERE Id = ANY(@Ids) ORDER BY Name ASC";
+        var idArray = ids as Guid[] ?? [.. ids];
+        var result = await db.QueryAsync<TeamDto>(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
         return result.ToDomain();
     }
 
     public async Task<bool> GetConflictsAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Teams WHERE Name = @Name AND (@ExcludeId IS NULL OR Id != @ExcludeId)) AS NameExists";
-        var result = await db.QuerySingleAsync<TeamConflictCheckDto>(sql, new { Name = name, ExcludeId = excludeId?.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleAsync<TeamConflictCheckDto>(sql, new { Name = name, ExcludeId = excludeId, cancellationToken }, transaction: tx());
         return result.NameExists;
     }
 
@@ -134,14 +133,14 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 tt.Name,
                 tt.ActorId,
                 tt.IsEnabled,
-                CASE WHEN tt.Id IS NULL OR @Name IS NULL OR @Name = tt.Name THEN 0
+                CASE WHEN tt.Id IS NULL OR @Name IS NULL OR @Name = tt.Name THEN false
                      ELSE EXISTS (SELECT 1 FROM Teams WHERE Name = @Name AND Id != @Id)
                 END AS NameExists
             FROM (SELECT 1) seed
             LEFT JOIN TargetTeam tt ON 1 = 1
             """;
 
-        var result = await db.QuerySingleAsync<TeamUpdateStateDto>(sql, new { Id = id.Format(), Name = name, cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleAsync<TeamUpdateStateDto>(sql, new { Id = id, Name = name, cancellationToken }, transaction: tx());
         var team = result.Id.HasValue && result.ActorId.HasValue && result.Name is not null
             ? Team.FromPersistence(result.Id.Value, result.Name, result.ActorId.Value)
             : null;
@@ -152,31 +151,32 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Teams WHERE Name = @Name AND (@ExcludeId IS NULL OR Id != @ExcludeId))";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, ExcludeId = excludeId?.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, ExcludeId = excludeId, cancellationToken }, transaction: tx());
     }
 
     public Task<int> AddAsync(Team team, CancellationToken cancellationToken)
     {
         const string sql = "INSERT INTO Teams (Id, Name, ActorId) VALUES (@Id, @Name, @ActorId)";
-        return db.ExecuteAsync(sql, new { Id = team.Id.Format(), team.Name, ActorId = team.ActorId.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteAsync(sql, new { Id = team.Id, team.Name, ActorId = team.ActorId, cancellationToken }, transaction: tx());
     }
 
     public Task<int> UpdateAsync(Team team, CancellationToken cancellationToken)
     {
         const string sql = "UPDATE Teams SET Name = @Name WHERE Id = @Id";
-        return db.ExecuteAsync(sql, new { Id = team.Id.Format(), team.Name, cancellationToken }, transaction: tx());
+        return db.ExecuteAsync(sql, new { Id = team.Id, team.Name, cancellationToken }, transaction: tx());
     }
 
     public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = "DELETE FROM Teams WHERE Id IN (SELECT value FROM json_each(@Ids))";
-        return db.ExecuteAsync(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        const string sql = "DELETE FROM Teams WHERE Id = ANY(@Ids)";
+        var idArray = ids as Guid[] ?? [.. ids];
+        return db.ExecuteAsync(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
     }
 
     public Task<IEnumerable<Guid>> GetUserIdsAsync(Guid teamId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT UserId FROM UsersTeams WHERE TeamId = @TeamId";
-        return db.QueryAsync<Guid>(sql, new { TeamId = teamId.Format(), cancellationToken }, transaction: tx());
+        return db.QueryAsync<Guid>(sql, new { TeamId = teamId, cancellationToken }, transaction: tx());
     }
 
     public async Task<(TeamDetails? Team, bool UserExists, bool HasMember)> GetMemberAssignmentStateAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
@@ -214,7 +214,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
             LEFT JOIN TargetTeam tt ON 1 = 1
             """;
 
-        var result = await db.QuerySingleAsync<TeamMemberAssignmentStateDto>(sql, new { TeamId = teamId.Format(), UserId = userId.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleAsync<TeamMemberAssignmentStateDto>(sql, new { TeamId = teamId, UserId = userId, cancellationToken }, transaction: tx());
         var team = result.Id.HasValue && result.ActorId.HasValue && result.IsEnabled.HasValue && result.Name is not null
             ? new TeamDetails(result.Id.Value, result.Name, result.ActorId.Value, result.IsEnabled.Value)
             : null;
@@ -225,25 +225,25 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public Task<int> AddMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
     {
         const string sql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
-        return db.ExecuteAsync(sql, new { UserId = userId.Format(), TeamId = teamId.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteAsync(sql, new { UserId = userId, TeamId = teamId, cancellationToken }, transaction: tx());
     }
 
     public Task<int> RemoveMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
     {
         const string sql = "DELETE FROM UsersTeams WHERE TeamId = @TeamId AND UserId = @UserId";
-        return db.ExecuteAsync(sql, new { TeamId = teamId.Format(), UserId = userId.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteAsync(sql, new { TeamId = teamId, UserId = userId, cancellationToken }, transaction: tx());
     }
 
     public async Task<int> ReplaceMembersAsync(Guid teamId, IEnumerable<Guid> userIds, CancellationToken cancellationToken)
     {
         const string deleteSql = "DELETE FROM UsersTeams WHERE TeamId = @TeamId";
-        await db.ExecuteAsync(deleteSql, new { TeamId = teamId.Format(), cancellationToken }, transaction: tx());
+        await db.ExecuteAsync(deleteSql, new { TeamId = teamId, cancellationToken }, transaction: tx());
 
         var rows = 0;
         foreach (var userId in userIds)
         {
             const string insertSql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
-            rows += await db.ExecuteAsync(insertSql, new { UserId = userId.Format(), TeamId = teamId.Format(), cancellationToken }, transaction: tx());
+            rows += await db.ExecuteAsync(insertSql, new { UserId = userId, TeamId = teamId, cancellationToken }, transaction: tx());
         }
 
         return rows;
