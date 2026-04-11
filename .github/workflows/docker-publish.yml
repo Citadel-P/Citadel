@@ -45,12 +45,20 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0
-      - name: Restore dependencies Citadel.sln
-        run: dotnet restore Citadel.sln
-      - name: Build
-        run: dotnet build Citadel.sln --no-restore -c Release
+      - name: Restore application and test projects
+        run: |
+          dotnet restore src/Citadel.WebApi/Citadel.WebApi.csproj
+          dotnet restore test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj
+          dotnet restore test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj
+      - name: Build application and test projects
+        run: |
+          dotnet build src/Citadel.WebApi/Citadel.WebApi.csproj --no-restore -c Release
+          dotnet build test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-restore -c Release
+          dotnet build test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-restore -c Release
       - name: Test
-        run: dotnet test Citadel.sln --no-restore --no-build -c Release --verbosity normal
+        run: |
+          dotnet test test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release --verbosity normal
+          dotnet test test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release --verbosity normal
         
       - name: Install cosign
         if: github.event_name != 'pull_request'
