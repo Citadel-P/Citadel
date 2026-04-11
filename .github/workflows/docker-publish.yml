@@ -46,7 +46,7 @@ jobs:
         with:
           dotnet-version: 10.0
       - name: Restore dependencies Citadel.sln
-        run: dotnet restore 
+        run: dotnet restore Citadel.sln
       - name: Build
         run: dotnet build Citadel.sln --no-restore -c Release
       - name: Test
