@@ -1,7 +1,9 @@
 ﻿using Application.Services.Abstractions;
+using Hosting.Common;
 using Hosting.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
@@ -21,6 +23,12 @@ internal static class WebApiModule
 {
     public static IServiceCollection RegisterWebApiModule(this IServiceCollection services, IConfiguration configuration)
     {
+        Directory.CreateDirectory(Constants.DataProtectionKeysPath);
+
+        services
+            .AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(Constants.DataProtectionKeysPath));
+
         services
             .AddOpenApi(options =>
             {
@@ -38,7 +46,7 @@ internal static class WebApiModule
             .AddJwtBearer(options =>
             {
                 var key = (string.IsNullOrEmpty(configuration["Jwt:Key"])
-                                        ? Hosting.Common.Helpers.GetJwtSecretFromFile()
+                                        ? Helpers.GetJwtSecretFromFile()
                                         : configuration["Jwt:Key"]) 
                                         ?? throw new ArgumentNullException("Jwt:Key is missing from configuration");
                 options.TokenValidationParameters = new TokenValidationParameters()

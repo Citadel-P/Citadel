@@ -28,7 +28,7 @@ void WithServices(WebApplicationBuilder builder)
 }
 
 // Configures the HTTP request pipeline.
-async Task Configure(WebApplication app)
+async void Configure(WebApplication app)
 {
     // var pubKey = Helpers.GetOrCreatePublicKey();
     if (app.Configuration.GetValue<bool>("EnableSwagger"))
@@ -43,7 +43,6 @@ async Task Configure(WebApplication app)
     }
 
     app.UseWebApiModule();
-    await app.InitializeInfrastructureAsync(); // Todo: Move this to a hosted service, Init container or similar to avoid delaying startup process
     app.MapHealthChecks("/health", HealthCheck.GetHealthCheckOptions());
 }
 

@@ -101,6 +101,7 @@ internal sealed class PersistPlatformStatsWorkItem(
     {
         var now = DateTime.UtcNow;
         var platformSnapshots = new List<PlatformAlertSnapshot>();
+        var filteredBuffer = new Dictionary<Guid, List<PlatformStatsResult>>();
 
         foreach (var (platformId, stats) in buffer)
         {
@@ -109,6 +110,8 @@ internal sealed class PersistPlatformStatsWorkItem(
 
             var last = stats.LastOrDefault();
             if (last == null) continue;
+
+            filteredBuffer[platformId] = stats;
 
             foreach (var stat in stats)
             {
@@ -147,7 +150,7 @@ internal sealed class PersistPlatformStatsWorkItem(
         // Bulk Insert Historical Stats
         try
         {
-            var mapped = buffer.Map();
+            var mapped = filteredBuffer.Map();
             if (mapped.Count != 0)
             {
                 await uow.PlatformStats.BulkInsertAsync(mapped, cancellationToken);

@@ -17,7 +17,6 @@ using Infrastructure.Repositories;
 using Infrastructure.Repositories.DbQueue;
 using Infrastructure.Repositories.Security.Grpc;
 using Infrastructure.TypeHandlers;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -26,31 +25,24 @@ using System.Data.Common;
 
 namespace Infrastructure;
 
-/// <summary>
-/// Provides methods to register infrastructure services and configurations.
-/// </summary>
 public static class InfrastructureModule
 {
     private static readonly RefitSettings refitSettings = new() { ContentSerializer = new STJSourceGeneratorSerializer() };
 
-    /// <summary>
-    /// Registers the infrastructure module services and configurations.
-    /// </summary>
     public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services, IConfiguration config)
-        => services
+    {
+        if (!Helpers.IsDesignTime())
+        {
+            // Todo: Move this to a hosted service, Init container or similar to avoid delaying startup process
+            DbUpgrader.Upgrade(config).GetAwaiter().GetResult();
+        }
+
+        return services
             .AddDb(config)
             .AddServices()
             .AddGrpcClients()
             .AddHttpClients()
             .RegisterDockerClient();
-
-    public static async Task<WebApplication> InitializeInfrastructureAsync(this WebApplication app)
-    {
-        if (Helpers.IsDesignTime()) return app;
-
-        await DbUpgrader.Upgrade(app.Configuration);
-
-        return app;
     }
 
     private static IServiceCollection AddGrpcClients(this IServiceCollection services)
