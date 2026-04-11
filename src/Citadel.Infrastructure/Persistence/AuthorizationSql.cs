@@ -8,7 +8,7 @@ internal static class AuthorizationSql
             FROM Users
             JOIN Actors userActor ON userActor.Id = Users.ActorId
             WHERE Users.Id = @UserId
-              AND userActor.IsEnabled = 1
+              AND userActor.IsEnabled
 
             UNION
 
@@ -17,7 +17,7 @@ internal static class AuthorizationSql
             JOIN UsersTeams ut ON ut.TeamId = t.Id
             JOIN Actors teamActor ON teamActor.Id = t.ActorId
             WHERE ut.UserId = @UserId
-              AND teamActor.IsEnabled = 1
+              AND teamActor.IsEnabled
         )
         """;
 
@@ -26,7 +26,7 @@ internal static class AuthorizationSql
             SELECT 1 AS HasAccess
             FROM ActorRoles ar
             JOIN Permissions p ON p.RoleId = ar.RoleId
-            JOIN ActorScope s ON s.ActorId = ar.ActorId
+            JOIN ActorScope actorScope ON actorScope.ActorId = ar.ActorId
             WHERE p.ResourceType = @ResourceType
               AND p.ResourceAction = @Action
             LIMIT 1
@@ -38,7 +38,7 @@ internal static class AuthorizationSql
             SELECT 1 AS HasAccess
             FROM ActorRoles ar
             JOIN Permissions p ON p.RoleId = ar.RoleId
-            JOIN ActorScope s ON s.ActorId = ar.ActorId
+            JOIN ActorScope actorScope ON actorScope.ActorId = ar.ActorId
             WHERE p.ResourceType = @PermissionResourceType
               AND p.ResourceAction = @Action
             LIMIT 1
@@ -51,7 +51,7 @@ internal static class AuthorizationSql
             OR EXISTS (
                 SELECT 1
                 FROM ResourceAccesses ra
-                JOIN ActorScope s ON s.ActorId = ra.ActorId
+                JOIN ActorScope actorScope ON actorScope.ActorId = ra.ActorId
                 WHERE ra.ResourceType = @ResourceType
                   AND ra.Action = @Action
                   AND ra.ResourceId = 
@@ -63,7 +63,7 @@ internal static class AuthorizationSql
             OR EXISTS (
                 SELECT 1
                 FROM ResourceAccesses ra
-                JOIN ActorScope s ON s.ActorId = ra.ActorId
+                JOIN ActorScope actorScope ON actorScope.ActorId = ra.ActorId
                 WHERE ra.ResourceType = @PermissionResourceType
                   AND ra.Action = @Action
                   AND ra.ResourceId = 

@@ -7,7 +7,6 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Platforms;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
@@ -16,15 +15,15 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 {
     public async Task<Platform?> GetByIdAsync(Guid platformId, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Platforms WHERE Id = @PlatformId LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<PlatformDto>(sql, new { PlatformId = platformId.Format() }, transaction: tx());
+        const string sql = "SELECT * FROM Platforms WHERE Id = @PlatformId";
+        var result = await db.QuerySingleOrDefaultAsync<PlatformDto>(sql, new { PlatformId = platformId }, transaction: tx());
 
         return result?.ToDomain();
     }
 
     public async Task<Platform?> GetByNameAsync(string name, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Platforms WHERE Name = @Name LIMIT 1";
+        const string sql = "SELECT * FROM Platforms WHERE Name = @Name";
         var result = await db.QuerySingleOrDefaultAsync<PlatformDto>(sql, new { Name = name }, transaction: tx());
 
         return result?.ToDomain();
@@ -38,7 +37,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             WHERE Name = @Name AND Id != @Id
             LIMIT 1
         """;
-        return db.ExecuteScalarAsync<int?>(sql, new { Id = excludePlatformId.Format(), Name = name }, transaction: tx());
+        return db.ExecuteScalarAsync<int?>(sql, new { Id = excludePlatformId, Name = name }, transaction: tx());
     }
 
     public Task<bool> NameOrAddressExistsAsync(string name, string address, CancellationToken cancellationToken)
@@ -56,7 +55,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             LIMIT 1
         """;
 
-        var result = await db.QuerySingleOrDefaultAsync<PlatformConnectionInfoDto>(sql, new { PlatformId = platformId.Format() }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<PlatformConnectionInfoDto>(sql, new { PlatformId = platformId }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -73,11 +72,11 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             INSERT INTO Platforms (
                 Id, Name, Address, NetworkCount, VolumeCount,  ImageCount, CpuCount, MemTotal, ServerVersion, AgentVersion, Status, ConnectorType, PlatformDescriptor)
             VALUES (
-                @Id, @Name, @Address, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor)
+                @Id, @Name, @Address, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor::json)
         """;
         return db.ExecuteAsync(sql, new
         {
-            Id = platform.Id.Format(),
+            Id = platform.Id,
             Name = platform.Name,
             Address = platform.Address,
             NetworkCount = platform.NetworkCount,
@@ -96,7 +95,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     public Task<int> DeleteAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = "DELETE FROM Platforms WHERE Id = @PlatformId";
-        return db.ExecuteAsync(sql, new { PlatformId = platformId.Format() }, transaction: tx());
+        return db.ExecuteAsync(sql, new { PlatformId = platformId }, transaction: tx());
     }
 
     public Task<int> UpdateAsync(Platform platform, CancellationToken cancellationToken)
@@ -112,7 +111,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 MemTotal = @MemTotal,
                 ServerVersion = @ServerVersion,
                 AgentVersion = @AgentVersion,
-                PlatformDescriptor = @PlatformDescriptor,
+                PlatformDescriptor = @PlatformDescriptor::json,
                 Status = @Status
             WHERE Id = @Id
          """;
@@ -130,7 +129,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             platform.AgentVersion,
             PlatformDescriptor = JsonSerializer.Serialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor),
             Status = EnumFormatter<PlatformStatus>.GetValue(platform.Status),
-            Id = platform.Id.Format()
+            Id = platform.Id
         }, transaction: tx());
     }
 
@@ -155,7 +154,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             LIMIT 1;
         """;
 
-        var result = await db.QuerySingleOrDefaultAsync<PlatformWithSingleStatDto>(sql, new { Id = platformId.Format() }, tx());
+        var result = await db.QuerySingleOrDefaultAsync<PlatformWithSingleStatDto>(sql, new { Id = platformId }, tx());
         return result?.ToDomain();
     }
 

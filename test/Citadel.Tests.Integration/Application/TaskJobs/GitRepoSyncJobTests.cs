@@ -13,7 +13,7 @@ using System.Threading.Channels;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class GitRepoSyncJobTests : IntegrationTestBase
+public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IGitCliRepository> _gitCliRepositoryMock = new();
     private readonly Mock<IRepoCacheManager> _repoCacheManagerMock = new();

@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Domain.Contracts.Interfaces;
+﻿using System.Text;
 
 namespace Tests.Integration.Application.Features.Containers;
 
-public class DeleteContainersTests : IntegrationTestBase
+public class DeleteContainersTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Delete_Container_WithInvalidParams_ReturnsBadRequest()

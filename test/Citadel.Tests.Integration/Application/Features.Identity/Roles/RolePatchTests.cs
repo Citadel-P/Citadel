@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Roles;
 
-public class RolePatchTests : IntegrationTestBase
+public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid roleId;
 

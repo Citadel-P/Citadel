@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Teams;
 
-public class TeamPatchTests : IntegrationTestBase
+public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Patch_Team_Should_Update_IsEnabled()

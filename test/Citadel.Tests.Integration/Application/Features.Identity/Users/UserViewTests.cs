@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Users;
 
-public class UserViewTests : IntegrationTestBase
+public class UserViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task List_Users_Should_Return_Paged_Users_For_Admin()

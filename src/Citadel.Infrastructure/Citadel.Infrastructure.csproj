@@ -3,18 +3,17 @@
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
 	<RootNamespace>Infrastructure</RootNamespace>
-	<Dapper_SqlSyntax>SQLite</Dapper_SqlSyntax>
+	<Dapper_SqlSyntax>PostgreSQL</Dapper_SqlSyntax>
     <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Dapper.AOT</InterceptorsPreviewNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
 	<PackageReference Include="Dapper" />
 	<PackageReference Include="Dapper.AOT" />
+	<PackageReference Include="dbup-postgresql" />
 	<PackageReference Include="FluentMigrator" />
 	<PackageReference Include="Refit" />
 	<PackageReference Include="Refit.HttpClientFactory" />
-	<PackageReference Include="dbup-sqlite" />
-	<PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
 	<PackageReference Include="Grpc.AspNetCore" />
   </ItemGroup>

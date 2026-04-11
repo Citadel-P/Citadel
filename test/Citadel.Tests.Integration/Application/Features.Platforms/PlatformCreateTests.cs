@@ -5,7 +5,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
 using Domain.Entities.Platforms;
 using Hosting.Common;
 using LightResults;
@@ -15,7 +14,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
-public class PlatformCreateTests : IntegrationTestBase
+public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> platformFactoryMock = new();
     private readonly Mock<IConnectorFactory<IContainerConnector>> containerFactoryMock = new();

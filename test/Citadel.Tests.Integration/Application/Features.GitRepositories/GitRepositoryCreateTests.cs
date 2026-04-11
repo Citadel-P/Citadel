@@ -11,7 +11,7 @@ using System.Threading.Channels;
 
 namespace Tests.Integration.Application.Features.GitRepositories;
 
-public class GitRepositoryCreateTests : IntegrationTestBase
+public class GitRepositoryCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     protected override void ConfigureTestServices(IServiceCollection services)
     {

@@ -1,14 +1,12 @@
 ﻿using Application.Services;
-using DbUp;
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
-using Infrastructure;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data;
+using Npgsql;
 using System.Data.Common;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -16,52 +14,64 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration;
 
-public abstract class IntegrationTestBase : IAsyncLifetime
+
+[Collection("Postgres")]
+public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncLifetime
 {
     protected sealed record AuthorizationSubject(Guid UserId, Guid ActorId, Guid? TeamId = null, Guid? TeamActorId = null);
     protected sealed record ResourceGrant(ResourceType ResourceType, Guid ResourceId, ResourceAction Action);
 
+    private sealed class TestDbConnectionFactory(NpgsqlDataSource dataSource) : IDbConnectionFactory
+    {
+        public DbConnection Create() => dataSource.CreateConnection();
+    }
+
     protected static readonly Guid OperatorRoleId = Guid.Parse("30000000-0000-0000-0000-000000000002");
     protected static readonly Guid ViewerRoleId = Guid.Parse("30000000-0000-0000-0000-000000000003");
 
-    private SqliteConnection keepAliveConnection = default!;
-    private WebApplicationFactory<Program> factory = default!;
-    private readonly string connectionString = $"Data Source={Guid.NewGuid()};Mode=Memory;Cache=Shared";
-
     protected HttpClient Client = default!;
+    protected string ConnectionString = default!;
     protected IServiceProvider Services = default!;
+    protected WebApplicationFactory<Program> Factory = default!;
 
     public async ValueTask InitializeAsync()
     {
-        keepAliveConnection = new SqliteConnection(connectionString);
-        await keepAliveConnection.OpenAsync();
+        ConnectionString = await fixture.CreateDatabaseFromTemplateAsync();
 
-        RunMigrations(keepAliveConnection);
-
-        factory = new WebApplicationFactory<Program>()
+        Factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("IntegrationTests");
 
-                builder.ConfigureServices(async services =>
+                builder.ConfigureAppConfiguration((_, config) =>
                 {
-                    ReplaceTestServices(services);
+                    config.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:Postgres"] = ConnectionString
+                    });
+                });
+
+                builder.ConfigureServices(services =>
+                {
+                    services.ReplaceService<NpgsqlDataSource>(_ =>
+                    {
+                        var builder = new NpgsqlDataSourceBuilder(ConnectionString);
+                        return builder.Build();
+                    });
+                    services.ReplaceService<IDbConnectionFactory>(sp =>
+                        new TestDbConnectionFactory(sp.GetRequiredService<NpgsqlDataSource>()));
+                    services.ReplaceService<IPlatformContainerCache>(new PlatformContainerCache());
                     ConfigureTestServices(services);
-
-                    var sp = services.BuildServiceProvider();
-                    Services = sp;
-
-                    await using var scope = sp.CreateAsyncScope();
-                    await SeedDbAsync(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
                 });
             });
 
-        Client = factory.CreateClient();
-        Services = factory.Services;
+        Services = Factory.Services;
+        Client = Factory.CreateClient();
+        await SeedDbAsync(Factory.Services.GetRequiredService<IUnitOfWork>());
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateJwtToken());
     }
 
-    protected HttpMessageHandler CreateServerHandler() => factory.Server.CreateHandler();
+    protected HttpMessageHandler CreateServerHandler() => Factory.Server.CreateHandler();
 
     protected virtual void ConfigureTestServices(IServiceCollection services) { }
 
@@ -112,13 +122,14 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         await using var scope = Services.CreateAsyncScope();
         var connectionFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
         await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
 
         await ExecuteNonQueryAsync(connection, transaction,
             "INSERT INTO Actors (Id, Type) VALUES (@Id, @Type);",
             new Dictionary<string, object?>
             {
-                ["@Id"] = actorId.ToString(),
+                ["@Id"] = actorId,
                 ["@Type"] = "User"
             });
 
@@ -126,13 +137,13 @@ public abstract class IntegrationTestBase : IAsyncLifetime
             "INSERT INTO Users (Id, ActorId, Name, Email, Password, CreatedAt, CreatedByActorId) VALUES (@Id, @ActorId, @Name, @Email, @Password, @CreatedAt, @CreatedByActorId);",
             new Dictionary<string, object?>
             {
-                ["@Id"] = userId.ToString(),
-                ["@ActorId"] = actorId.ToString(),
+                ["@Id"] = userId,
+                ["@ActorId"] = actorId,
                 ["@Name"] = "Test user",
                 ["@Email"] = email,
                 ["@Password"] = null,
                 ["@CreatedAt"] = now,
-                ["@CreatedByActorId"] = Constants.SystemId.ToString()
+                ["@CreatedByActorId"] = Constants.SystemId
             });
 
         if (directRoleId.HasValue)
@@ -141,8 +152,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                 "INSERT INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId);",
                 new Dictionary<string, object?>
                 {
-                    ["@ActorId"] = actorId.ToString(),
-                    ["@RoleId"] = directRoleId.Value.ToString()
+                    ["@ActorId"] = actorId,
+                    ["@RoleId"] = directRoleId.Value
                 });
         }
 
@@ -155,7 +166,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                 "INSERT INTO Actors (Id, Type) VALUES (@Id, @Type);",
                 new Dictionary<string, object?>
                 {
-                    ["@Id"] = teamActorId.Value.ToString(),
+                    ["@Id"] = teamActorId.Value,
                     ["@Type"] = "Team"
                 });
 
@@ -163,8 +174,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                 "INSERT INTO Teams (Id, ActorId, Name) VALUES (@Id, @ActorId, @Name);",
                 new Dictionary<string, object?>
                 {
-                    ["@Id"] = teamId.Value.ToString(),
-                    ["@ActorId"] = teamActorId.Value.ToString(),
+                    ["@Id"] = teamId.Value,
+                    ["@ActorId"] = teamActorId.Value,
                     ["@Name"] = $"team-{teamId.Value:N}"
                 });
 
@@ -172,8 +183,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                 "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId);",
                 new Dictionary<string, object?>
                 {
-                    ["@UserId"] = userId.ToString(),
-                    ["@TeamId"] = teamId.Value.ToString()
+                    ["@UserId"] = userId,
+                    ["@TeamId"] = teamId.Value
                 });
 
             if (teamRoleId.HasValue)
@@ -182,8 +193,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                     "INSERT INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId);",
                     new Dictionary<string, object?>
                     {
-                        ["@ActorId"] = teamActorId.Value.ToString(),
-                        ["@RoleId"] = teamRoleId.Value.ToString()
+                        ["@ActorId"] = teamActorId.Value,
+                        ["@RoleId"] = teamRoleId.Value
                     });
             }
         }
@@ -196,9 +207,9 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                     "INSERT INTO ResourceAccesses (Id, ResourceId, ActorId, ResourceType, Action) VALUES (@Id, @ResourceId, @ActorId, @ResourceType, @Action);",
                     new Dictionary<string, object?>
                     {
-                        ["@Id"] = Guid.CreateVersion7().ToString(),
-                        ["@ResourceId"] = grant.ResourceId.ToString(),
-                        ["@ActorId"] = actorId.ToString(),
+                        ["@Id"] = Guid.CreateVersion7(),
+                        ["@ResourceId"] = grant.ResourceId,
+                        ["@ActorId"] = actorId,
                         ["@ResourceType"] = grant.ResourceType.ToString(),
                         ["@Action"] = grant.Action.ToString()
                     });
@@ -211,18 +222,21 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     }
 
     private static async Task ExecuteNonQueryAsync(
-        SqliteConnection connection,
+        DbConnection connection,
         DbTransaction transaction,
         string commandText,
         IReadOnlyDictionary<string, object?> parameters)
     {
         await using var command = connection.CreateCommand();
-        command.Transaction = (SqliteTransaction)transaction;
+        command.Transaction = transaction;
         command.CommandText = commandText;
 
         foreach (var parameter in parameters)
         {
-            command.Parameters.AddWithValue(parameter.Key, parameter.Value ?? DBNull.Value);
+            var dbParameter = command.CreateParameter();
+            dbParameter.ParameterName = parameter.Key;
+            dbParameter.Value = parameter.Value ?? DBNull.Value;
+            command.Parameters.Add(dbParameter);
         }
 
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
@@ -233,46 +247,27 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         await using var scope = Services.CreateAsyncScope();
         var connectionFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
         await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
 
         await ExecuteNonQueryAsync(
-            (SqliteConnection)connection,
+            connection,
             transaction,
             "UPDATE Actors SET IsEnabled = @IsEnabled WHERE Id = @Id;",
             new Dictionary<string, object?>
             {
-                ["@Id"] = actorId.ToString(),
-                ["@IsEnabled"] = isEnabled ? 1 : 0
+                ["@Id"] = actorId,
+                ["@IsEnabled"] = isEnabled
             });
 
         await transaction.CommitAsync(TestContext.Current.CancellationToken);
     }
 
-    private void ReplaceTestServices(IServiceCollection services)
-    {
-        services.ReplaceService<IPlatformContainerCache>(new PlatformContainerCache());
-        services.ReplaceService<IDbConnectionFactory>(new SqliteConnectionFactory(connectionString));
-    }
-
-    private static void RunMigrations(IDbConnection dbConnection)
-    {
-        var upgrader = DeployChanges.To
-            .SqliteDatabase(dbConnection.ConnectionString)
-            .WithScriptsAndCodeEmbeddedInAssembly(typeof(InfrastructureModule).Assembly)
-            .LogToConsole()
-            .Build();
-
-        var result = upgrader.PerformUpgrade();
-        if (!result.Successful)
-        {
-            throw new Exception($"Failed to upgrade in-memory test database: {result.Error.Message}", result.Error);
-        }
-    }
-
     public async ValueTask DisposeAsync()
     {
-        GC.SuppressFinalize(this);
-        await factory.DisposeAsync();
-        await keepAliveConnection.DisposeAsync();
+        Client?.Dispose();
+        if (Factory != null) await Factory.DisposeAsync();
+
+        NpgsqlConnection.ClearAllPools();
     }
 }

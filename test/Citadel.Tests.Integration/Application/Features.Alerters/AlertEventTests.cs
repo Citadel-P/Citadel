@@ -13,7 +13,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Alerters;
 
-public sealed class AlertEventTests : IntegrationTestBase
+public sealed class AlertEventTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IAlertEventStreamManager> _alertEventStreamManager = new();
     private readonly Guid _resourceId = Guid.Parse("11111111-1111-1111-1111-111111111111");

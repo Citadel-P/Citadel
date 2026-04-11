@@ -1,6 +1,5 @@
 ﻿using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +8,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Deployments;
 
-public class DeploymentDeleteTests : IntegrationTestBase
+public class DeploymentDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid deploymentId;
 

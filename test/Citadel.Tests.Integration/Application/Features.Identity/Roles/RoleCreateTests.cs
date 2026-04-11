@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Roles;
 
-public class RoleCreateTests : IntegrationTestBase
+public class RoleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Create_Role_ReturnsSuccess()

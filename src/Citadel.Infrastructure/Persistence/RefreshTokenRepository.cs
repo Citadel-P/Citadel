@@ -5,7 +5,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using Infrastructure.Persistence.Dtos;
-using Infrastructure.TypeHandlers;
 
 namespace Infrastructure.Persistence;
 
@@ -16,9 +15,9 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
         const string sql = "INSERT INTO RefreshTokens (Id, UserId, CreatedAt) VALUES (@Id, @UserId, @CreatedAt)";
         var parameters = new
         {
-            Id = refreshToken.Id.Format(),
-            UserId = refreshToken.UserId.Format(),
-            CreatedAt =refreshToken.CreatedAt.ToString(),
+            Id = refreshToken.Id,
+            UserId = refreshToken.UserId,
+            CreatedAt = refreshToken.CreatedAt,
         };
         return db.ExecuteAsync(sql, parameters, tx());
     }
@@ -26,7 +25,7 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
     public Task<int> CountAsync(Guid userId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT COUNT(*) FROM RefreshTokens WHERE UserId = @UserId";
-        return db.ExecuteScalarAsync<int>(sql, new { UserId = userId.Format() }, tx());
+        return db.ExecuteScalarAsync<int>(sql, new { UserId = userId }, tx());
     }
 
     public async Task<UserAuthInfo?> GetUserAuthInfoByRefreshTokenIdAsync(Guid id, CancellationToken cancellationToken)
@@ -41,7 +40,7 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
                 FROM Token
                 JOIN Users ON Users.Id = Token.UserId
                 JOIN Actors userActor ON userActor.Id = Users.ActorId
-                WHERE userActor.IsEnabled = 1
+                WHERE userActor.IsEnabled
             ),
             ActorScope AS (
                 SELECT TargetUser.ActorId
@@ -54,7 +53,7 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
                 JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
                 JOIN Teams ON Teams.Id = UsersTeams.TeamId
                 JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
-                WHERE teamActor.IsEnabled = 1
+                WHERE teamActor.IsEnabled
             )
             SELECT 
                 TargetUser.Id, 
@@ -76,7 +75,7 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
             """;
 
         var result = await db.QueryAsync<UserAuthInfoDto>(sql,
-            new { Id = id.Format() },
+            new { Id = id },
             transaction: tx());
 
         return result
@@ -105,21 +104,21 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
         const string sql = 
             """
             DELETE FROM RefreshTokens
-            WHERE Id IN (
+            WHERE Id = ANY(ARRAY(
                 SELECT Id
                 FROM RefreshTokens
                 WHERE UserId = @UserId
                 ORDER BY CreatedAt ASC
                 LIMIT @Limit
-            )
+            ))
             """;
 
-        return db.ExecuteAsync(sql, new { UserId = userId.Format(), Limit = tokensToRemoveCount }, transaction: tx());
+        return db.ExecuteAsync(sql, new { UserId = userId, Limit = tokensToRemoveCount }, transaction: tx());
     }
 
     public Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "DELETE FROM RefreshTokens WHERE Id = @Id";
-        return db.ExecuteAsync(sql, new { Id = id.Format() }, tx());
+        return db.ExecuteAsync(sql, new { Id = id }, tx());
     }
 }

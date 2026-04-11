@@ -5,7 +5,6 @@ using Domain.Entities.Stacks;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 using System.Data;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -95,14 +94,14 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
     public async Task<Stack?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = BaseSelect + " " + "WHERE s.Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<StackDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<StackDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
     public async Task<Stack?> GetInfoAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = InfoSelect + " " + "WHERE s.Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<StackDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<StackDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -123,12 +122,12 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
     public async Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
     {
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + InfoSelect + " WHERE "
-            + AuthorizationSql.ResourcePredicatePrefix + "s.Id" + AuthorizationSql.ResourcePredicateSuffix
-            + " ORDER BY s.CreatedAt DESC, s.Name ASC";
+                        + AuthorizationSql.ResourcePredicatePrefix + "s.Id" + AuthorizationSql.ResourcePredicateSuffix
+                        + " ORDER BY s.CreatedAt DESC, s.Name ASC";
 
         var result = await db.QueryAsync<StackDto>(sql, new
         {
-            UserId = userId.Format(),
+            UserId = userId,
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             cancellationToken
@@ -139,15 +138,16 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
     public async Task<IEnumerable<Stack>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = InfoSelect + " " + "WHERE s.Id IN (SELECT value FROM json_each(@Ids)) ORDER BY s.CreatedAt DESC, s.Name ASC";
-        var result = await db.QueryAsync<StackDto>(sql, new { Ids = JsonSerializer.Serialize(ids, StackJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        const string sql = InfoSelect + " " + "WHERE s.Id = ANY(@Ids) ORDER BY s.CreatedAt DESC, s.Name ASC";
+        var idArray = ids as Guid[] ?? [.. ids];
+        var result = await db.QueryAsync<StackDto>(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
         return result.ToDomain();
     }
 
     public async Task<IEnumerable<StackRelease>> GetReleasesByStackIdAsync(Guid stackId, CancellationToken cancellationToken)
     {
         const string sql = ReleaseBaseSelect + " " + "WHERE sr.StackId = @StackId ORDER BY sr.CreatedAt DESC, sr.Version DESC";
-        var result = await db.QueryAsync<StackReleaseDto>(sql, new { StackId = stackId.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QueryAsync<StackReleaseDto>(sql, new { StackId = stackId, cancellationToken }, transaction: tx());
         return result.ToDomain();
     }
 
@@ -160,7 +160,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
     public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Stacks WHERE Name = @Name AND Id != @Id)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id, cancellationToken }, transaction: tx());
     }
 
     public Task<int> AddAsync(Stack stack, CancellationToken cancellationToken)
@@ -170,7 +170,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 Id, CurrentStackReleaseId, Name, Description, StackSource, StackUpdateState,
                 CreatedAt, CreatedByActorId, ControlState, ControlStartedAt, RowVersion, ControlTriggeredBy
             ) VALUES (
-                @Id, @CurrentStackReleaseId, @Name, @Description, @StackSource, @StackUpdateState,
+                @Id, @CurrentStackReleaseId, @Name, @Description, @StackSource, @StackUpdateState::json,
                 @CreatedAt, @CreatedByActorId, @ControlState, @ControlStartedAt, @RowVersion, @ControlTriggeredBy
             )
         """;
@@ -179,7 +179,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             INSERT INTO StackReleases (
                 Id, StackId, PlatformId, Status, Version, Spec, CreatedAt, CreatedByActorId
             ) VALUES (
-                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec, @ReleaseCreatedAt, @ReleaseCreatedByActorId
+                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
             )
         """;
 
@@ -187,26 +187,26 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
         return db.ExecuteAsync(stackSql + ";\n" + stackReleaseSql, new
         {
-            Id = stack.Id.Format(),
-            CurrentStackReleaseId = stack.CurrentStackReleaseId.Format(),
+            Id = stack.Id,
+            CurrentStackReleaseId = stack.CurrentStackReleaseId,
             Name = stack.Name,
             Description = stack.Description,
             StackSource = EnumFormatter<StackSource>.GetValue(stack.StackSource),
             StackUpdateState = JsonSerializer.Serialize(stack.StackUpdateState, StackJsonContext.Default.StackUpdateState),
-            CreatedAt = stack.CreatedAt.ToString(),
-            CreatedByActorId = stack.CreatedByActorId.Format(),
+            CreatedAt = stack.CreatedAt,
+            CreatedByActorId = stack.CreatedByActorId,
             ControlState = EnumFormatter<ResourceControlState>.GetValue(stack.ControlState),
             ControlStartedAt = stack.ControlStartedAt,
             RowVersion = stack.RowVersion,
-            ControlTriggeredBy = stack.ControlTriggeredBy?.Format(),
-            ReleaseId = currentStackRelease.Id.Format(),
-            ReleaseStackId = currentStackRelease.StackId.Format(),
-            ReleasePlatformId = currentStackRelease.PlatformId.Format(),
-            ReleaseStatus = currentStackRelease.Status.ToString(),
+            ControlTriggeredBy = stack.ControlTriggeredBy,
+            ReleaseId = currentStackRelease.Id,
+            ReleaseStackId = currentStackRelease.StackId,
+            ReleasePlatformId = currentStackRelease.PlatformId,
+            ReleaseStatus = EnumFormatter<StackReleaseStatus>.GetValue(currentStackRelease.Status),
             ReleaseVersion = currentStackRelease.Version,
             ReleaseSpec = JsonSerializer.Serialize(currentStackRelease.Spec, StackJsonContext.Default.StackSpec),
-            ReleaseCreatedAt = currentStackRelease.CreatedAt.ToString(),
-            ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId.Format()
+            ReleaseCreatedAt = currentStackRelease.CreatedAt,
+            ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId
         }, transaction: tx());
     }
 
@@ -218,7 +218,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 Description = @Description,
                 CurrentStackReleaseId = @CurrentStackReleaseId,
                 StackSource = @StackSource,
-                StackUpdateState = @StackUpdateState
+                StackUpdateState = @StackUpdateState::json
             WHERE Id = @Id
         """;
 
@@ -226,7 +226,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             INSERT INTO StackReleases (
                 Id, StackId, PlatformId, Status, Version, Spec, CreatedAt, CreatedByActorId
             )
-            SELECT @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec, @ReleaseCreatedAt, @ReleaseCreatedByActorId
+            SELECT @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
             WHERE NOT EXISTS (SELECT 1 FROM StackReleases WHERE Id = @ReleaseId)
         """;
 
@@ -234,35 +234,31 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
         return db.ExecuteAsync(stackSql + ";\n" + stackReleaseSql, new
         {
-            Id = stack.Id.Format(),
+            Id = stack.Id,
             Name = stack.Name,
             Description = stack.Description,
-            CurrentStackReleaseId = stack.CurrentStackReleaseId.Format(),
+            CurrentStackReleaseId = stack.CurrentStackReleaseId,
             StackSource = EnumFormatter<StackSource>.GetValue(stack.StackSource),
             StackUpdateState = JsonSerializer.Serialize(stack.StackUpdateState, StackJsonContext.Default.StackUpdateState),
-            ReleaseId = currentStackRelease.Id.Format(),
-            ReleaseStackId = currentStackRelease.StackId.Format(),
-            ReleasePlatformId = currentStackRelease.PlatformId.Format(),
-            ReleaseStatus = currentStackRelease.Status.ToString(),
+            ReleaseId = currentStackRelease.Id,
+            ReleaseStackId = currentStackRelease.StackId,
+            ReleasePlatformId = currentStackRelease.PlatformId,
+            ReleaseStatus = EnumFormatter<StackReleaseStatus>.GetValue(currentStackRelease.Status),
             ReleaseVersion = currentStackRelease.Version,
             ReleaseSpec = JsonSerializer.Serialize(currentStackRelease.Spec, StackJsonContext.Default.StackSpec),
-            ReleaseCreatedAt = currentStackRelease.CreatedAt.ToString(),
-            ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId.Format()
+            ReleaseCreatedAt = currentStackRelease.CreatedAt,
+            ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId
         }, transaction: tx());
     }
 
     public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = """
-        DELETE FROM Stacks
-        WHERE Id IN (
-            SELECT value FROM json_each(@Ids)
-        )
-        """;
+        const string sql = "DELETE FROM Stacks WHERE Id = ANY(@Ids)";
+        var idArray = ids as Guid[] ?? [.. ids];
 
         return db.ExecuteAsync(
             sql,
-            new { Ids = JsonSerializer.Serialize(ids, StackJsonContext.Default.IEnumerableGuid) },
+            new { Ids = idArray, cancellationToken },
             transaction: tx());
     }
 }

@@ -4,7 +4,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 
 namespace Infrastructure.Persistence;
 
@@ -21,13 +20,14 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
                 AVG(RxBytes) AS RxBytes,
                 AVG(TxBytes) AS TxBytes
             FROM PlatformStats
-            WHERE PlatformId = @PlatformId AND Created > @Last24h
-            GROUP BY strftime('%Y-%m-%d %H:%M', datetime(Created, 'unixepoch'))
-            ORDER BY Created
+            WHERE PlatformId = @PlatformId 
+              AND Created > @Last24h
+            GROUP BY (Created / 60)
+            ORDER BY (Created / 60)
         """;
         
         var last24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeSeconds();
-        var result = await db.QueryAsync<PlatformStatDto>(sql, new { PlatformId = platformId.Format(), Last24h = last24h }, transaction: tx());
+        var result = await db.QueryAsync<PlatformStatDto>(sql, new { PlatformId = platformId, Last24h = last24h }, transaction: tx());
         
         return result.ToDomain();
     }
@@ -46,8 +46,8 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
         foreach (var stat in stats)
         {
             valueRows.Add($"(@Id{i}, @PlatformId{i}, @Created{i}, @CpuUsage{i}, @MemoryUsage{i}, @RxBytes{i}, @TxBytes{i})");
-            parameters.Add($"Id{i}", stat.Id.Format());
-            parameters.Add($"PlatformId{i}", stat.PlatformId?.Format());
+            parameters.Add($"Id{i}", stat.Id);
+            parameters.Add($"PlatformId{i}", stat.PlatformId);
             parameters.Add($"Created{i}", stat.Created);
             parameters.Add($"CpuUsage{i}", stat.CpuUsage);
             parameters.Add($"MemoryUsage{i}", stat.MemoryUsage);

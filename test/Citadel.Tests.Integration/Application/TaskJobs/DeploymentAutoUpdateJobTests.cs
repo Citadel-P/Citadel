@@ -14,7 +14,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class DeploymentAutoUpdateJobTests : IntegrationTestBase
+public class DeploymentAutoUpdateJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<IApplyDeploymentService> _applyDeploymentService = new();

@@ -7,7 +7,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Containers;
 
-public class GetContainerTests : IntegrationTestBase
+public class GetContainerTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     readonly string containerId = "42ccd07956a6";
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -15,7 +15,7 @@ public class GetContainerTests : IntegrationTestBase
         var platform = Fakes.GetDummyPlatform();
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
 
-        var image = new Image("image-01", ["sha256:abcd1234"], "image0123", 1000, 1, platform.Id, new DateTime(1768686293));
+        var image = new Image("image-01", ["sha256:abcd1234"], "image0123", 1000, 1, platform.Id, new DateTime(1768686293, DateTimeKind.Utc));
         await uow.Images.AddOrUpdateAsync(image, TestContext.Current.CancellationToken);
 
         var deployment = new Deployment("deployment-01", Constants.DefaultAdminId, platform.Id);
@@ -25,6 +25,7 @@ public class GetContainerTests : IntegrationTestBase
         await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
 
         await uow.CommitAsync(TestContext.Current.CancellationToken);
+
     }
 
     [Fact]

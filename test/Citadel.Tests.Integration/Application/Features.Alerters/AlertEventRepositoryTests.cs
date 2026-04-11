@@ -6,12 +6,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Alerters;
 
-public sealed class AlertEventRepositoryTests : IntegrationTestBase
+public sealed class AlertEventRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Guid _firstResourceId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private readonly Guid _secondResourceId = Guid.Parse("55555555-5555-5555-5555-555555555555");
     private Guid _platformAlertRuleId;
     private Guid _unmanagedContainerAlertRuleId;
+
+    private static DateTime TruncateToPostgresMicroseconds(DateTime value)
+        => value.AddTicks(-(value.Ticks % 10));
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
@@ -74,7 +77,7 @@ public sealed class AlertEventRepositoryTests : IntegrationTestBase
         Assert.Equal(Constants.SystemId, persisted.AcknowledgedByActorId);
         Assert.Equal(Constants.SystemId, persisted.ResolvedByActorId);
         Assert.Equal("resolved manually", persisted.ResolutionNote);
-        Assert.Equal(now, persisted.UpdatedAt);
+        Assert.Equal(TruncateToPostgresMicroseconds(now), persisted.UpdatedAt);
         Assert.Equal(0, unresolvedCount);
     }
 
@@ -148,14 +151,14 @@ public sealed class AlertEventRepositoryTests : IntegrationTestBase
         var persistedAcknowledged = Assert.Single(persisted.Where(x => x.Id == first.Id));
         Assert.Equal(AlertEventStatus.Acknowledged, persistedAcknowledged.Status);
         Assert.Equal(Constants.SystemId, persistedAcknowledged.AcknowledgedByActorId);
-        Assert.Equal(now, persistedAcknowledged.UpdatedAt);
+        Assert.Equal(TruncateToPostgresMicroseconds(now), persistedAcknowledged.UpdatedAt);
 
         var persistedResolved = Assert.Single(persisted.Where(x => x.Id == second.Id));
         Assert.Equal(AlertEventStatus.Resolved, persistedResolved.Status);
         Assert.Null(persistedResolved.OpenIncidentKey);
         Assert.Equal(Constants.SystemId, persistedResolved.ResolvedByActorId);
         Assert.Equal("bulk resolved", persistedResolved.ResolutionNote);
-        Assert.Equal(now, persistedResolved.UpdatedAt);
+        Assert.Equal(TruncateToPostgresMicroseconds(now), persistedResolved.UpdatedAt);
     }
 
     private AlertEvent CreateAlertEvent(Guid resourceId, string platformName, string address)

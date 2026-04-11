@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Teams;
 
-public class TeamCreateTests : IntegrationTestBase
+public class TeamCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Create_Team_ReturnsSuccess()

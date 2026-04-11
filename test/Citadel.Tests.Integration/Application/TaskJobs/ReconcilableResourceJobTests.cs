@@ -16,7 +16,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class ReconcilableResourceJobTests : IntegrationTestBase
+public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IDeploymentStreamManager> streamManagerMock = new();
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();

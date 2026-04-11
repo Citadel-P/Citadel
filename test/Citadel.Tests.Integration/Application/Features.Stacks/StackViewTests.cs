@@ -1,5 +1,4 @@
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Stacks;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text;
@@ -8,7 +7,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Stacks;
 
-public class StackViewTests : IntegrationTestBase
+public class StackViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid? platformId;
 

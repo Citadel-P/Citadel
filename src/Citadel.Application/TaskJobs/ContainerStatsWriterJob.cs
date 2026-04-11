@@ -14,6 +14,7 @@ internal sealed class ContainerStatsWriterJob(
     IOptions<JobConfiguration> options,
     INotificationQueue notificationQueue,
     ChannelReader<ContainersStatBatch> reader,
+    IPlatformContainerCache platformContainerCache,
     IContainerStreamManager containersStreamManager,
     ILogger<ContainerStatsWriterJob> logger) : BackgroundService
 {
@@ -79,7 +80,7 @@ internal sealed class ContainerStatsWriterJob(
 
         try
         {
-            await dbQueue.EnqueueAsync(new ContainerStatsBatchWorkItem(dataToFlush, logger), ct);
+            await dbQueue.EnqueueAsync(new ContainerStatsBatchWorkItem(dataToFlush, platformContainerCache, logger), ct);
         }
         catch (Exception ex)
         {
@@ -90,6 +91,7 @@ internal sealed class ContainerStatsWriterJob(
 
 internal sealed class ContainerStatsBatchWorkItem(
     IReadOnlyDictionary<Guid, List<ContainerStat>> batch,
+    IPlatformContainerCache platformContainerCache,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken token)
@@ -97,10 +99,46 @@ internal sealed class ContainerStatsBatchWorkItem(
         try
         {
             // Flatten the dictionary into a single list for bulk insert
-            var flatList = batch.Values.SelectMany(x => x).ToList();
-            if (flatList.Count == 0) return;
+            var filteredList = new List<ContainerStat>();
+            var droppedCount = 0;
 
-            await uow.ContainerStats.BulkInsertAsync(flatList, token);
+            foreach (var (platformId, stats) in batch)
+            {
+                if (!platformContainerCache.TryGetContainers(platformId, out var containers))
+                {
+                    droppedCount += stats.Count;
+                    continue;
+                }
+
+                var containerIds = new HashSet<Guid>();
+                foreach (var containerId in containers.Values)
+                {
+                    containerIds.Add(containerId);
+                }
+
+                foreach (var stat in stats)
+                {
+                    if (containerIds.Contains(stat.ContainerId))
+                    {
+                        filteredList.Add(stat);
+                    }
+                    else
+                    {
+                        droppedCount++;
+                    }
+                }
+            }
+
+            if (filteredList.Count == 0) return;
+
+            if (droppedCount > 0)
+            {
+                logger.LogWarning(
+                    "Dropped {Count} container stats because their containers were no longer present in the platform cache when the batch was flushed.",
+                    droppedCount);
+            }
+
+            await uow.ContainerStats.BulkInsertAsync(filteredList, token);
             await uow.CommitAsync(token);
         }
         catch (Exception ex)

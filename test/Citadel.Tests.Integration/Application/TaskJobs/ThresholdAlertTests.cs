@@ -20,7 +20,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class ThresholdAlertTests: IntegrationTestBase
+public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> _platformFactoryMock = new();
     private readonly Mock<IOptions<JobConfiguration>> _configMock = new();
@@ -58,7 +58,9 @@ public class ThresholdAlertTests: IntegrationTestBase
     {
         var platform = Fakes.GetDummyPlatform();
         _alertRuleId = (await uow.AlertRules.GetAllAsync(TestContext.Current.CancellationToken))
-            .Where(s => s.Type == AlertType.PlatformCpuHigh).First().Id;
+            .Single(s => s.Type == AlertType.PlatformCpuHigh
+                && s.Severity == AlertSeverity.Critical
+                && s.Threshold == 90).Id;
 
         var alertRuleState = new AlertRuleState(
             alertRuleId: _alertRuleId,
@@ -586,10 +588,20 @@ public class ThresholdAlertTests: IntegrationTestBase
 
         await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
 
-        // CPU=92 exceeds only the Warning threshold (90), not Critical (95)
+        Guid warningRuleId;
         await using (var scope = Services.CreateAsyncScope())
         {
-            var context = BuildCpuContext([92, 92, 92]);
+            var s_db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            warningRuleId = (await s_db.AlertRules.GetAllAsync(TestContext.Current.CancellationToken))
+                .Single(s => s.Type == AlertType.PlatformCpuHigh
+                    && s.Severity == AlertSeverity.Warning
+                    && s.Threshold == 80).Id;
+        }
+
+        // CPU=82 exceeds only the Warning threshold (80), not the Critical thresholds (90, 95)
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var context = BuildCpuContext([82, 82, 82]);
             await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
         }
 
@@ -600,8 +612,8 @@ public class ThresholdAlertTests: IntegrationTestBase
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Single(alertEvents.Items);
-        Assert.Equal(AlertSeverity.Critical, alertEvents.Items.First().Severity);
-        Assert.Equal(_alertRuleId, alertEvents.Items.First().AlertRuleId);
+        Assert.Equal(AlertSeverity.Warning, alertEvents.Items.First().Severity);
+        Assert.Equal(warningRuleId, alertEvents.Items.First().AlertRuleId);
     }
 
     private async Task<Guid> AddSecondCpuHighRuleAsync(

@@ -31,7 +31,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
                 r.Threshold, 
                 r.CreatedByActorId, 
                 r.CreatedAt,
-                COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+                COALESCE(json_agg(arc.AlertChannelId) FILTER (WHERE arc.AlertChannelId IS NOT NULL), '[]'::json)::text AS ChannelIds
             FROM AlertRules r
             LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
             WHERE r.Id = @Id
@@ -39,7 +39,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             LIMIT 1
             """;
 
-        var id = alertRuleId.Format();
+        var id = alertRuleId;
 
         var dto = await db.QuerySingleOrDefaultAsync<AlertRuleDto>(
             sql,
@@ -69,14 +69,14 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             r.Threshold, 
             r.CreatedByActorId, 
             r.CreatedAt,
-            COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+            COALESCE(json_agg(arc.AlertChannelId) FILTER (WHERE arc.AlertChannelId IS NOT NULL), '[]'::json)::text AS ChannelIds
         FROM AlertRules r
         LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
-            WHERE r.Id IN (SELECT value FROM json_each(@Ids))
+            WHERE r.Id = ANY(@Ids)
             GROUP BY r.Id
            
     """;
-        var result = await db.QueryAsync<AlertRuleDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        var result = await db.QueryAsync<AlertRuleDto>(sql, new { Ids = ids.ToArray(), cancellationToken }, transaction: tx());
         return result.ToDomain();
     }
 
@@ -87,10 +87,10 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             Id, Name, Description, Type, CooldownSeconds, Status, Severity, LimitedTo, QuietHours, RequiredMatches, Threshold, CreatedByActorId, CreatedAt
         )
         VALUES (
-            @Id, @Name, @Description, @Type, @CooldownSeconds, @Status, @Severity, @LimitedTo, @QuietHours, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
+            @Id, @Name, @Description, @Type, @CooldownSeconds, @Status, @Severity, @LimitedTo::json, @QuietHours::json, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
         )";
 
-        var ruleId = alertRule.Id.Format();
+        var ruleId = alertRule.Id;
         var rows = await db.ExecuteAsync(ruleSql, new
         {
             Id = ruleId,
@@ -104,7 +104,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertRule.Severity),
             QuietHours = JsonSerializer.Serialize(alertRule.QuietHours, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleQuietHour),
             LimitedTo = JsonSerializer.Serialize(alertRule.LimitedTo, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleLimitedTo),
-            CreatedByActorId = alertRule.CreatedByActorId.Format(),
+            CreatedByActorId = alertRule.CreatedByActorId,
             CreatedAt = alertRule.CreatedAt
         },
         transaction: tx());
@@ -127,12 +127,12 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 
         return db.ExecuteAsync(sql, new
         {
-            Id = alertChannel.Id.Format(),
+            Id = alertChannel.Id,
             Name = alertChannel.Name,
             AlertDestination = EnumFormatter<AlertDestination>.GetValue(alertChannel.AlertDestination),
             Url = alertChannel.Url,
             IsActive = alertChannel.IsActive,
-            CreatedByActorId = alertChannel.CreatedByActorId.Format(),
+            CreatedByActorId = alertChannel.CreatedByActorId,
             CreatedAt = alertChannel.CreatedAt,
         }, transaction: tx());
     }
@@ -152,11 +152,11 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         ";
         return db.ExecuteAsync(sql, new
         {
-            AlertRuleId = alertRuleState.AlertRuleId.Format(),
-            ResourceId = alertRuleState.ResourceId.Format(),
+            AlertRuleId = alertRuleState.AlertRuleId,
+            ResourceId = alertRuleState.ResourceId,
             ConsecutiveMatches = alertRuleState.ConsecutiveMatches,
             LastTriggeredAt = alertRuleState.LastTriggeredAt,
-            CreatedByActorId = alertRuleState.CreatedByActorId.Format(),
+            CreatedByActorId = alertRuleState.CreatedByActorId,
             CreatedAt = alertRuleState.CreatedAt
         },
         transaction: tx());
@@ -179,7 +179,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
                 r.Threshold, 
                 r.CreatedByActorId, 
                 r.CreatedAt,
-                COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+                COALESCE(json_agg(arc.AlertChannelId) FILTER (WHERE arc.AlertChannelId IS NOT NULL), '[]'::json)::text AS ChannelIds
             FROM AlertRules r
             LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
             GROUP BY r.Id
@@ -212,7 +212,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
                 r.Threshold, 
                 r.CreatedByActorId, 
                 r.CreatedAt,
-                COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+                COALESCE(json_agg(arc.AlertChannelId) FILTER (WHERE arc.AlertChannelId IS NOT NULL), '[]'::json)::text AS ChannelIds
             FROM AlertRules r
             LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
             WHERE " + AuthorizationSql.ResourcePredicatePrefix + "r.Id" + AuthorizationSql.ResourcePredicateSuffix + @"
@@ -221,7 +221,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 
         var rows = await db.QueryAsync<AlertRuleDto>(sql, new
         {
-            UserId = userId.Format(),
+            UserId = userId,
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             cancellationToken
@@ -249,7 +249,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
                 r.Threshold,
                 r.CreatedByActorId,
                 r.CreatedAt,
-                COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+                COALESCE(json_agg(arc.AlertChannelId) FILTER (WHERE arc.AlertChannelId IS NOT NULL), '[]'::json)::text AS ChannelIds
             FROM (
                 SELECT *
                 FROM AlertRules
@@ -291,7 +291,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         LIMIT 1
         """;
 
-        var dto = await db.QuerySingleOrDefaultAsync<AlertChannelDto>(sql, new { Id = channelId.Format() }, transaction: tx());
+        var dto = await db.QuerySingleOrDefaultAsync<AlertChannelDto>(sql, new { Id = channelId }, transaction: tx());
         return dto?.ToDomain();
     }
 
@@ -344,7 +344,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 
         var rows = await db.QueryAsync<AlertChannelDto>(sql, new
         {
-            UserId = userId.Format(),
+            UserId = userId,
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             cancellationToken
@@ -372,8 +372,8 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             sql,
             new
             {
-                AlertRuleId = alertRuleId.Format(),
-                ResourceId = resourceId.Format()
+                AlertRuleId = alertRuleId,
+                ResourceId = resourceId
             },
             transaction: tx());
 
@@ -391,15 +391,15 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             CooldownSeconds = @CooldownSeconds,
             Status = @Status,
             Severity = @Severity,
-            LimitedTo = @LimitedTo,
-            QuietHours = @QuietHours,
+            LimitedTo = @LimitedTo::json,
+            QuietHours = @QuietHours::json,
             RequiredMatches = @RequiredMatches,
             Threshold = @Threshold
         WHERE Id = @Id";
 
         const string unlinkChannelsSql = @"DELETE FROM AlertRuleChannels WHERE AlertRuleId = @AlertRuleId";
 
-        var ruleId = alertRule.Id.Format();
+        var ruleId = alertRule.Id;
         var rows = await db.ExecuteAsync(ruleSql, new
         {
             Id = ruleId,
@@ -437,7 +437,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 
         return db.ExecuteAsync(sql, new
         {
-            Id = channel.Id.Format(),
+            Id = channel.Id,
             Name = channel.Name,
             AlertDestination = EnumFormatter<AlertDestination>.GetValue(channel.AlertDestination),
             Url = channel.Url,
@@ -447,25 +447,23 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 
     public async Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string unlinkSql = @"DELETE FROM AlertRuleChannels WHERE AlertRuleId IN (SELECT value FROM json_each(@Ids))";
-        const string deleteStatesSql = @"DELETE FROM AlertRuleStates WHERE AlertRuleId IN (SELECT value FROM json_each(@Ids))";
-        const string deleteSql = @"DELETE FROM AlertRules WHERE Id IN (SELECT value FROM json_each(@Ids))";
+        const string unlinkSql = @"DELETE FROM AlertRuleChannels WHERE AlertRuleId = ANY(@Ids)";
+        const string deleteStatesSql = @"DELETE FROM AlertRuleStates WHERE AlertRuleId = ANY(@Ids)";
+        const string deleteSql = @"DELETE FROM AlertRules WHERE Id = ANY(@Ids)";
 
-        var idsJson = JsonSerializer.Serialize(ids.Select(id => id), DeploymentJsonContext.Default.IEnumerableGuid);
-
-        await db.ExecuteAsync(unlinkSql, new { Ids = idsJson }, transaction: tx());
-        await db.ExecuteAsync(deleteStatesSql, new { Ids = idsJson }, transaction: tx());
-        return await db.ExecuteAsync(deleteSql, new { Ids = idsJson }, transaction: tx());
+        await db.ExecuteAsync(unlinkSql, new { Ids = ids.ToArray() }, transaction: tx());
+        await db.ExecuteAsync(deleteStatesSql, new { Ids = ids.ToArray() }, transaction: tx());
+        return await db.ExecuteAsync(deleteSql, new { Ids = ids.ToArray() }, transaction: tx());
     }
 
     public Task<int> RemoveChannelsRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = @"DELETE FROM AlertChannels WHERE Id IN (SELECT value FROM json_each(@Ids))";
-        var idsJson = JsonSerializer.Serialize(ids.Select(id => id), DeploymentJsonContext.Default.IEnumerableGuid);
-        return db.ExecuteAsync(sql, new { Ids = idsJson }, transaction: tx());
+        const string sql = @"DELETE FROM AlertChannels WHERE Id = ANY(@Ids)";
+        var idsArray = ids.ToArray();
+        return db.ExecuteAsync(sql, new { Ids = idsArray }, transaction: tx());
     }
 
-    private Task<int> LinkChannelsAsync(string alertRuleId, IEnumerable<Guid> channelIds)
+    private Task<int> LinkChannelsAsync(Guid alertRuleId, IEnumerable<Guid> channelIds)
     {
         const string linkSql = @"
         INSERT INTO AlertRuleChannels (AlertRuleId, AlertChannelId)
@@ -475,7 +473,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return db.ExecuteAsync(linkSql, channelIds.Select(channelId => new
         {
             AlertRuleId = alertRuleId,
-            AlertChannelId = channelId.Format()
+            AlertChannelId = channelId
         }), transaction: tx());
     }
 }

@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.GitAccounts;
 
-public class GitAccountCreateTests : IntegrationTestBase
+public class GitAccountCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Create_BasicGitAccount_ReturnsSuccess()

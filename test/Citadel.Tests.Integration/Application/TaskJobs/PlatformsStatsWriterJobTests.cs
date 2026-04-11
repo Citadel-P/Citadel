@@ -16,7 +16,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class PlatformsStatsWriterJobTests : IntegrationTestBase
+public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> _platformFactoryMock = new();
     private readonly Mock<IOptions<JobConfiguration>> _configMock = new();

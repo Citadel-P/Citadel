@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Users;
 
-public class UserDeleteTests : IntegrationTestBase
+public class UserDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Delete_User_Should_Remove_User()

@@ -1,11 +1,11 @@
 ﻿using Dapper;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
-using Domain;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 using System.Data;
+using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
 
@@ -16,8 +16,8 @@ internal sealed class ActorRepository(IDbConnection db, Func<IDbTransaction> tx)
         const string sql = "INSERT INTO Actors (Id, Type, IsEnabled) VALUES (@Id, @Type, @IsEnabled)";
         return db.ExecuteAsync(sql, new
         {
-            Id = actor.Id.Format(),
-            Type = actor.Type.ToString(),
+            Id = actor.Id,
+            Type = EnumFormatter<ActorType>.GetValue(actor.Type),
             actor.IsEnabled,
             cancellationToken
         }, transaction: tx());
@@ -37,13 +37,13 @@ internal sealed class ActorRepository(IDbConnection db, Func<IDbTransaction> tx)
             WHERE Actors.Id = @Id
             LIMIT 1
             """;
-        var result = await db.QuerySingleOrDefaultAsync<ActorDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<ActorDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
     public Task<int> UpdateAsync(Actor actor, CancellationToken cancellationToken)
     {
         const string sql = "UPDATE Actors SET IsEnabled = @IsEnabled WHERE Id = @Id";
-        return db.ExecuteAsync(sql, new { Id = actor.Id.Format(), IsEnabled = actor.IsEnabled, cancellationToken }, transaction: tx());
+        return db.ExecuteAsync(sql, new { Id = actor.Id, IsEnabled = actor.IsEnabled, cancellationToken }, transaction: tx());
     }
 }

@@ -5,7 +5,6 @@ using Domain.Entities.Activities;
 using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
-using Infrastructure.TypeHandlers;
 using System.Data;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -21,19 +20,19 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
             Id, PlatformId, ResourceId, ResourceName, ResourceType, EventType, Info, CreatedByActorId, Status, CreatedAt
         )
         VALUES (
-            @Id, @PlatformId, @ResourceId, @ResourceName, @ResourceType, @EventType, @Info, @CreatedByActorId, @Status, @CreatedAt
+            @Id, @PlatformId, @ResourceId, @ResourceName, @ResourceType, @EventType, @Info::json, @CreatedByActorId, @Status, @CreatedAt
         )";
         return db.ExecuteAsync(sql, new
         {
-            Id = activityEvent.Id.Format(),
-            PlatformId = activityEvent.PlatformId != null ? activityEvent.PlatformId.Value.Format() : null,
-            ResourceId = activityEvent.ResourceId != null ? activityEvent.ResourceId.Value.Format() : null,
+            Id = activityEvent.Id,
+            PlatformId = activityEvent.PlatformId != null ? activityEvent.PlatformId : null,
+            ResourceId = activityEvent.ResourceId != null ? activityEvent.ResourceId : null,
             ResourceName = activityEvent.ResourceName,
             EventType = EnumFormatter<ActivityEventType>.GetValue(activityEvent.EventType),
             ResourceType = EnumFormatter<ActivityResourceType>.GetValue(activityEvent.ResourceType),
             Status = EnumFormatter<ActivityStatus>.GetValue(activityEvent.Status),
             Info = JsonSerializer.Serialize(activityEvent.Info, EventInfoJsonContext.Default.ActivityEventInfo),
-            CreatedByActorId = activityEvent.CreatedByActorId.Format(),
+            CreatedByActorId = activityEvent.CreatedByActorId,
             CreatedAt = activityEvent.CreatedAt
         },
         transaction: tx());
@@ -55,7 +54,7 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
             WHERE a.Id = @Id
             LIMIT 1;
         """;
-        var result = await db.QuerySingleOrDefaultAsync<ActivityEventDto>(sql, new { Id = id.Format() }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<ActivityEventDto>(sql, new { Id = id }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -105,7 +104,7 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
 
         var p = new
         {
-            ResourceId = resourceId?.Format(),
+            ResourceId = resourceId,
             ResourceType = resourceType is null ? null : EnumFormatter<ActivityResourceType>.GetValue(resourceType.Value),
             EventType = eventType is null ? null : EnumFormatter<ActivityEventType>.GetValue(eventType.Value),
             PageSize = pageSize,
@@ -127,7 +126,8 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
 
     public async Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken)
     {
-        var p = new { CreatedBefore = createdBeforeEpochSeconds };
+        var createdBefore = DateTimeOffset.FromUnixTimeSeconds(createdBeforeEpochSeconds).UtcDateTime;
+        var p = new { CreatedBefore = createdBefore };
 
         var countstats = "SELECT COUNT(*) from  ActivityEvents WHERE CreatedAt < @CreatedBefore";
         var totalCount = await db.QuerySingleAsync<int>(countstats, p, transaction: tx());

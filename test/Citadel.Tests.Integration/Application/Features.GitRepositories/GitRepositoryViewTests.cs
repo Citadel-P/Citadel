@@ -1,6 +1,5 @@
 using Application.TaskJobs;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -11,7 +10,7 @@ using System.Threading.Channels;
 
 namespace Tests.Integration.Application.Features.GitRepositories;
 
-public class GitRepositoryViewTests : IntegrationTestBase
+public class GitRepositoryViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     protected override void ConfigureTestServices(IServiceCollection services)
     {

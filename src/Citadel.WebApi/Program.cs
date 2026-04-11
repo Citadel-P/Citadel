@@ -19,16 +19,16 @@ await CitadelWebApplicationBuilder.Create(args, new CitadelWebApplicationOptions
 void WithServices(WebApplicationBuilder builder)
 {
     builder.Services
+        .RegisterInfrastructureModule(builder.Configuration)
         .RegisterWebApiModule(builder.Configuration)
         .RegisterApplicationModule()
-        .RegisterInfrastructureModule(builder.Environment)
         .AddHealthChecks();
 
-    AddIOptionsFromConfiguration(builder.Services, builder.Configuration);
+    AddIOptionsFromConfiguration(builder);
 }
 
 // Configures the HTTP request pipeline.
-void Configure(WebApplication app)
+async void Configure(WebApplication app)
 {
     // var pubKey = Helpers.GetOrCreatePublicKey();
     if (app.Configuration.GetValue<bool>("EnableSwagger"))
@@ -56,9 +56,8 @@ void AdditionalJsonOptions(JsonOptions options)
     Citadel.GeneratedConverters.SafeEnumConverters.Register(options.SerializerOptions);
 }
 
-static IServiceCollection AddIOptionsFromConfiguration(IServiceCollection services, IConfiguration configuration)
+static void AddIOptionsFromConfiguration(WebApplicationBuilder builder)
 {
-    services.Configure<JwtConfiguration>(configuration.GetSection("Jwt"));
-    services.Configure<JobConfiguration>(configuration.GetSection("JobConfiguration"));
-    return services;
+    builder.Services.AddOptions<JwtConfiguration>().BindConfiguration("Jwt").ValidateOnStart();
+    builder.Services.AddOptions<JobConfiguration>().BindConfiguration("JobConfiguration").ValidateOnStart();
 }

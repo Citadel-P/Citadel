@@ -1,5 +1,4 @@
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Alerts;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Json;
@@ -7,7 +6,7 @@ using System.Text.Json;
 
 namespace Tests.Integration.Application.Features.Alerters;
 
-public class AlertRuleViewTests : IntegrationTestBase
+public class AlertRuleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task List_AlertRules_Should_Return_Only_Rules_User_Is_Permitted_To_View()

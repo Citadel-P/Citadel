@@ -2,7 +2,6 @@
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +11,7 @@ using Moq;
 
 namespace Tests.Integration.Application.Features.GitRepositories;
 
-public class GitRepositoryDeleteTests : IntegrationTestBase
+public class GitRepositoryDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IRepoCacheManager> _repoCacheManagerMock = new();
     private Guid gitRepositoryId;

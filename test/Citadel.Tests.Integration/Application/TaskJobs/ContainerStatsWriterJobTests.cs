@@ -4,6 +4,7 @@ using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Entities;
 using Infrastructure.Repositories.DbQueue;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,12 +12,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Moq;
+using System.Collections.Immutable;
 using System.Threading.Channels;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class ContainerStatsWriterJobTests : IntegrationTestBase
+public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IContainerStreamManager> _containerStreamManagerMock = new();
     private readonly Channel<ContainersStatBatch> _channel = Channel.CreateUnbounded<ContainersStatBatch>();
@@ -65,6 +67,18 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         await uow.CommitAsync(TestContext.Current.CancellationToken);
         _platformId = platform.Id;
         _containerId = container.Id;
+
+        var cache = Services.GetRequiredService<IPlatformContainerCache>();
+        cache.ReplacePlatformContainers(
+            platform.Id,
+            new PlatformCacheEntry(
+                Id: platform.Id,
+                Address: platform.Address,
+                ConnectorType: platform.ConnectorType,
+                Containers: new Dictionary<string, Guid>
+                {
+                    [container.DockerContainerId] = container.Id
+                }.ToImmutableDictionary()));
     }
 
     [Fact]

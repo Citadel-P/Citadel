@@ -16,6 +16,7 @@
 - Do not modify the validation pipeline when fixing tests in this codebase; prefer updating tests to match handler behavior instead.
 - Follow the established resource update pattern by splitting updates into Patch, PatchMetadata, and Rename operations, and mirror that pattern consistently in tests.
 - Prefer hoisting shared ActorScope CTEs once per query; avoid `OR EXISTS` in authorized repository queries when a `UNION`-based authorization set is cleaner and more scalable. Prefer `JOINs` over `IN (SELECT ...)` for actor-scope authorization checks.
+- When handling stale container stats batches, prefer using `IPlatformContainerCache` to validate container existence instead of querying the database again.
 
 ## Caching Guidelines
 - For permission caching, cache only global checks where `resourceId` is null; do not cache resource-level permission checks. Prefer sliding expiration for the global permission cache.

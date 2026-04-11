@@ -18,7 +18,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class ImageSyncJobTests : IntegrationTestBase
+public class ImageSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IConnectorFactory<IImageConnector>> imageFactoryMock = new();
     private readonly Mock<IImageConnector> imageConnector = new();
@@ -66,7 +66,7 @@ public class ImageSyncJobTests : IntegrationTestBase
                 size: image.Size,
                 containers : image.Containers,
                 platformId: platform.Id,
-                createdAt: DateTimeOffset.FromUnixTimeSeconds(image.Created).DateTime
+                createdAt: new DateTime(DateTimeOffset.FromUnixTimeSeconds(image.Created).DateTime.Ticks, DateTimeKind.Utc)
                 ), TestContext.Current.CancellationToken);
         }
 

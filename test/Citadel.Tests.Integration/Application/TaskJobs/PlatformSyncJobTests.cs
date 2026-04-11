@@ -18,7 +18,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class PlatformSyncJobTests : IntegrationTestBase
+public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> connectorMock = new();
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();

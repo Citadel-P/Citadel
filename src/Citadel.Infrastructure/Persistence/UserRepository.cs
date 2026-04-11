@@ -8,7 +8,6 @@ using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
-using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
@@ -17,8 +16,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 {
     public async Task<User?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Users WHERE Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<UserDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        const string sql = "SELECT * FROM Users WHERE Id = @Id";
+        var result = await db.QuerySingleOrDefaultAsync<UserDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -78,7 +77,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         var offset = (page - 1) * pageSize;
         var parameters = new
         {
-            UserId = userId.Format(),
+            UserId = userId,
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             PageSize = pageSize,
@@ -94,8 +93,9 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<IEnumerable<User>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Users WHERE Id IN (SELECT value FROM json_each(@Ids)) ORDER BY Name ASC";
-        var result = await db.QueryAsync<UserDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        const string sql = "SELECT * FROM Users WHERE Id = ANY(@Ids) ORDER BY Name ASC";
+        var idArray = ids as Guid[] ?? [.. ids];
+        var result = await db.QueryAsync<UserDto>(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
         return result.ToDomain();
     }
 
@@ -107,7 +107,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 EXISTS (SELECT 1 FROM Users WHERE Email = @Email AND (@ExcludeId IS NULL OR Id != @ExcludeId)) AS EmailExists
             """;
 
-        var result = await db.QuerySingleAsync<UserConflictCheckDto>(sql, new { Name = name, Email = email, ExcludeId = excludeId?.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleAsync<UserConflictCheckDto>(sql, new { Name = name, Email = email, ExcludeId = excludeId, cancellationToken }, transaction: tx());
         return (result.NameExists, result.EmailExists);
     }
 
@@ -137,17 +137,17 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 tu.IsEnabled,
                 tu.CreatedAt,
                 tu.CreatedByActorId,
-                CASE WHEN tu.Id IS NULL OR @Name IS NULL OR @Name = tu.Name THEN 0
+                CASE WHEN tu.Id IS NULL OR @Name IS NULL OR @Name = tu.Name THEN false
                      ELSE EXISTS (SELECT 1 FROM Users WHERE Name = @Name AND Id != @Id)
                 END AS NameExists,
-                CASE WHEN tu.Id IS NULL OR @Email IS NULL OR @Email = tu.Email THEN 0
+                CASE WHEN tu.Id IS NULL OR @Email IS NULL OR @Email = tu.Email THEN false
                      ELSE EXISTS (SELECT 1 FROM Users WHERE Email = @Email AND Id != @Id)
                 END AS EmailExists
             FROM (SELECT 1) seed
             LEFT JOIN TargetUser tu ON 1 = 1
             """;
 
-        var result = await db.QuerySingleAsync<UserUpdateStateDto>(sql, new { Id = id.Format(), Name = name, Email = email, cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleAsync<UserUpdateStateDto>(sql, new { Id = id, Name = name, Email = email, cancellationToken }, transaction: tx());
         var user = result.Id.HasValue && result.ActorId.HasValue && result.CreatedAt.HasValue && result.CreatedByActorId.HasValue && result.Name is not null && result.Email is not null && result.Password is not null
             ? User.FromPersistence(result.Id.Value, result.Name, result.Email, result.Password, result.ActorId.Value, result.CreatedByActorId.Value, result.CreatedAt.Value)
             : null;
@@ -158,13 +158,13 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Users WHERE Name = @Name AND (@ExcludeId IS NULL OR Id != @ExcludeId))";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, ExcludeId = excludeId?.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, ExcludeId = excludeId, cancellationToken }, transaction: tx());
     }
 
     public Task<bool> ExistsByEmailAsync(string email, Guid? excludeId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Users WHERE Email = @Email AND (@ExcludeId IS NULL OR Id != @ExcludeId))";
-        return db.ExecuteScalarAsync<bool>(sql, new { Email = email, ExcludeId = excludeId?.Format(), cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Email = email, ExcludeId = excludeId, cancellationToken }, transaction: tx());
     }
 
     public Task<int> AddAsync(User user, CancellationToken cancellationToken)
@@ -172,13 +172,13 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         const string sql = "INSERT INTO Users (Id, Name, Email, Password, ActorId, CreatedAt, CreatedByActorId) VALUES (@Id, @Name, @Email, @Password, @ActorId, @CreatedAt, @CreatedByActorId)";
         return db.ExecuteAsync(sql, new
         {
-            Id = user.Id.Format(),
+            Id = user.Id,
             user.Name,
             user.Email,
             user.Password,
-            ActorId = user.ActorId.Format(),
+            ActorId = user.ActorId,
             user.CreatedAt,
-            CreatedByActorId = user.CreatedByActorId.Format(),
+            CreatedByActorId = user.CreatedByActorId,
             cancellationToken
         }, transaction: tx());
     }
@@ -186,31 +186,32 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     public Task<int> UpdateAsync(User user, CancellationToken cancellationToken)
     {
         const string sql = "UPDATE Users SET Name = @Name, Email = @Email, Password = @Password WHERE Id = @Id";
-        return db.ExecuteAsync(sql, new { Id = user.Id.Format(), user.Name, user.Email, user.Password, cancellationToken }, transaction: tx());
+        return db.ExecuteAsync(sql, new { Id = user.Id, user.Name, user.Email, user.Password, cancellationToken }, transaction: tx());
     }
 
     public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = "DELETE FROM Users WHERE Id IN (SELECT value FROM json_each(@Ids))";
-        return db.ExecuteAsync(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        const string sql = "DELETE FROM Users WHERE Id = ANY(@Ids)";
+        var idArray = ids as Guid[] ?? [.. ids];
+        return db.ExecuteAsync(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
     }
 
     public Task<IEnumerable<Guid>> GetTeamIdsAsync(Guid userId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT TeamId FROM UsersTeams WHERE UserId = @UserId";
-        return db.QueryAsync<Guid>(sql, new { UserId = userId.Format(), cancellationToken }, transaction: tx());
+        return db.QueryAsync<Guid>(sql, new { UserId = userId, cancellationToken }, transaction: tx());
     }
 
     public async Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken)
     {
         const string deleteSql = "DELETE FROM UsersTeams WHERE UserId = @UserId";
-        await db.ExecuteAsync(deleteSql, new { UserId = userId.Format(), cancellationToken }, transaction: tx());
+        await db.ExecuteAsync(deleteSql, new { UserId = userId, cancellationToken }, transaction: tx());
 
         var rows = 0;
         foreach (var teamId in teamIds)
         {
             const string insertSql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
-            rows += await db.ExecuteAsync(insertSql, new { UserId = userId.Format(), TeamId = teamId.Format(), cancellationToken }, transaction: tx());
+            rows += await db.ExecuteAsync(insertSql, new { UserId = userId, TeamId = teamId, cancellationToken }, transaction: tx());
         }
 
         return rows;
@@ -224,7 +225,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 FROM Users 
                 JOIN Actors userActor ON userActor.Id = Users.ActorId
                 WHERE Users.Id = @UserId
-                  AND userActor.IsEnabled = 1
+                  AND userActor.IsEnabled
 
                 UNION
 
@@ -234,7 +235,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 JOIN UsersTeams ut ON ut.TeamId = t.Id
                 JOIN Actors teamActor ON teamActor.Id = t.ActorId
                 WHERE ut.UserId = @UserId
-                  AND teamActor.IsEnabled = 1
+                  AND teamActor.IsEnabled
             ),
             GlobalAccess AS (
                 SELECT 1
@@ -264,8 +265,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
         return await db.ExecuteScalarAsync<bool>(sql, new
         {
-            UserId = userId.Format(),
-            ResourceId = resourceId?.Format(),
+            UserId = userId,
+            ResourceId = resourceId,
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action)
         });
@@ -280,7 +281,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 FROM Users
                 JOIN Actors userActor ON userActor.Id = Users.ActorId
                 WHERE (Users.Email = @EmailOrName OR Users.Name = @EmailOrName)
-                  AND userActor.IsEnabled = 1
+                  AND userActor.IsEnabled
                 LIMIT 1
             ),
             ActorScope AS (
@@ -294,7 +295,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
                 JOIN Teams ON Teams.Id = UsersTeams.TeamId
                 JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
-                WHERE teamActor.IsEnabled = 1
+                WHERE teamActor.IsEnabled
             )
             SELECT 
                 TargetUser.Id, 
