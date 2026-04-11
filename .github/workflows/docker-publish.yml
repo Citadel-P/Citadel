@@ -45,12 +45,20 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0
-      - name: Restore dependencies
-        run: dotnet restore 
-      - name: Build
-        run: dotnet build --no-restore -c Release
+      - name: Restore application and test projects
+        run: |
+          dotnet restore src/Citadel.WebApi/Citadel.WebApi.csproj
+          dotnet restore test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj
+          dotnet restore test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj
+      - name: Build application and test projects
+        run: |
+          dotnet build src/Citadel.WebApi/Citadel.WebApi.csproj --no-restore -c Release
+          dotnet build test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-restore -c Release
+          dotnet build test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-restore -c Release
       - name: Test
-        run: dotnet test --verbosity normal
+        run: |
+          dotnet test test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release --verbosity normal
+          dotnet test test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release --verbosity normal
         
       - name: Install cosign
         if: github.event_name != 'pull_request'
@@ -102,9 +110,10 @@ jobs:
       # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         id: build-and-push
-        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
+        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09
         with:
           context: .
+          file: src/Citadel.WebApi/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
