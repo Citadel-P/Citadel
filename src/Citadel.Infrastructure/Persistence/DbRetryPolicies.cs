@@ -4,7 +4,6 @@ using Polly.Retry;
 
 namespace Infrastructure.Persistence;
 
-/// </summary>
 internal static class DbRetryPolicies
 {
     // PostgreSQL Error Codes: https://www.postgresql.org/docs/current/errcodes-appendix.html

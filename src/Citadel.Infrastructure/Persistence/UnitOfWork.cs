@@ -123,7 +123,14 @@ internal class UnitOfWork : IUnitOfWork
         {
             if (connection.State == ConnectionState.Open)
             {
-                await ((DbTransaction)transaction).RollbackAsync();
+                if (transaction is DbTransaction dbTransaction)
+                {
+                    await dbTransaction.RollbackAsync();
+                }
+                else
+                {
+                    transaction.Rollback();
+                }
             }
         }
         catch (Exception ex)
