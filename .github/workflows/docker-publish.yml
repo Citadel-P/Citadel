@@ -45,12 +45,12 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0
-      - name: Restore dependencies
+      - name: Restore dependencies Citadel.sln
         run: dotnet restore 
       - name: Build
-        run: dotnet build --no-restore -c Release
+        run: dotnet build Citadel.sln --no-restore -c Release
       - name: Test
-        run: dotnet test --verbosity normal
+        run: dotnet test Citadel.sln --verbosity normal
         
       - name: Install cosign
         if: github.event_name != 'pull_request'
