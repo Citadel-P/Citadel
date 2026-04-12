@@ -1,5 +1,5 @@
 services:
-  citadel:
+  citadel-server:
     build:
       context: .
       dockerfile: src/Citadel.WebApi/Dockerfile
