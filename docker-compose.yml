@@ -1,5 +1,5 @@
 services:
-  citadel:
+  citadel-server:
     image: ghcr.io/citadel-p/citadel:${CITADEL_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
@@ -26,4 +26,5 @@ services:
 
 volumes:
   citadel_data:
+    name: citadel_data
   postgres_data:
