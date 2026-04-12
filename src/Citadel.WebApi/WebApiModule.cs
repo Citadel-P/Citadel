@@ -1,5 +1,7 @@
-﻿using Application.Services.Abstractions;
+﻿using Application.Configs;
+using Application.Services.Abstractions;
 using Hosting.Common;
+using Hosting.Common.Extensions;
 using Hosting.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -12,6 +14,7 @@ using Nerdbank.MessagePack;
 using Nerdbank.MessagePack.SignalR;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using WebApi.Hubs;
 using WebApi.Middlewares;
 using WebApi.Routes;
@@ -38,6 +41,7 @@ internal static class WebApiModule
                 options.AddOperationTransformer<AddCookieOperationTransformer>();
                 options.AddOperationTransformer<ProduceCookieOperationTransformer>();
                 options.AddOperationTransformer<ExampleOperationTransformer>();
+                options.AddOperationTransformer<RateLimitOperationTransformer>();
             })
             .AddCors();
 
@@ -143,6 +147,76 @@ internal static class WebApiModule
         {
             converters.Add(converter);
         }
+    }
+
+    internal static WebApplicationBuilder AddCitadelRateLimiter(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            {
+                var actorId = context.User.Identity?.IsAuthenticated == true ? context.User?.GetActorId() : null;
+                var ip = context.Connection.RemoteIpAddress?.ToString();
+
+                var key = actorId is not null
+                    ? $"actor:{actorId}"
+                    : ip is not null ? $"ip:{ip}" : "ip:unknown";
+
+                return RateLimitPartition.GetSlidingWindowLimiter(
+                    partitionKey: key,
+                    factory: _ => new SlidingWindowRateLimiterOptions
+                    {
+                        PermitLimit = 120,
+                        Window = TimeSpan.FromMinutes(1),
+                        SegmentsPerWindow = 6,
+                        QueueLimit = 10,
+                        AutoReplenishment = true
+                    });
+            });
+
+            options.AddPolicy("strict-auth", context =>
+            {
+                var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: $"auth:{ip}",
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 6,
+                        Window = TimeSpan.FromSeconds(30),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    });
+            });
+
+            options.OnRejected = async (context, token) =>
+            {
+                var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retry)
+                    ? retry.TotalSeconds
+                    : (double?)null;
+
+                if (retryAfter is not null)
+                    context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.Value).ToString();
+
+                var details = retryAfter is not null
+                    ? $"Rate limit exceeded. Try again in {Math.Ceiling(retryAfter.Value)} seconds."
+                    : "Rate limit exceeded. Try again later.";
+
+                await Helpers.WriteResponse(
+                    context.HttpContext, 
+                    new Exception(details), 
+                    StatusCodes.Status429TooManyRequests, 
+                    "Too many requests");
+            };
+        });
+
+        return builder;
+    }
+
+    internal static void AddIOptionsFromConfiguration(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddOptions<JwtConfiguration>().BindConfiguration("Jwt").ValidateOnStart();
+        builder.Services.AddOptions<JobConfiguration>().BindConfiguration("JobConfiguration").ValidateOnStart();
     }
 }
 

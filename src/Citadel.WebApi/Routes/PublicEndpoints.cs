@@ -396,6 +396,8 @@ public static class PublicEndpoints
             .ProduceCookie(Constants.RefreshToken)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("strict-auth")
             .WithName("login");
 
         auth.MapPost("logout", Authentication.Logout)
