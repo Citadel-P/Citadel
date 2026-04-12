@@ -26,5 +26,4 @@ services:
 
 volumes:
   citadel_data:
-    name: citadel_data
   postgres_data:
