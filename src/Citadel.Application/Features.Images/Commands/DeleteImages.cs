@@ -84,14 +84,21 @@ internal sealed class DeleteImagesHandler(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var failedUpdates = new List<Image>();
 
+        var failedUpdates = new List<Image>();
+        var imageIdsToDelete = new List<Guid>();
         foreach (var id in ids)
         {
             var existing = await uow.Images.GetByDockerImageIdAsync(id, platformId, ct);
             if (existing == null) continue;
             failedUpdates.Add(existing);
-            await uow.Images.DeleteAsync([existing.Id], ct);
+            imageIdsToDelete.Add(existing.Id);
+        }
+
+        if (imageIdsToDelete.Count > 0)
+        {
+            await uow.Images.DeleteAsync(imageIdsToDelete, ct);
+            await uow.CommitAsync(ct);
         }
 
         return failedUpdates;

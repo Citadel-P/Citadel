@@ -1,5 +1,3 @@
-ARG FRONTEND_IMAGE=citadel-frontend-assets
-
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS build
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 WORKDIR /src
