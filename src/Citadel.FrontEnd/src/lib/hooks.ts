@@ -29,6 +29,7 @@ import { ApplyDeploymentInput, ProblemDetails, PullImageInput } from '@/api/gene
 import { useAuthContext } from '@/features/auth/auth-context';
 
 const EMPTY_ARGS = Object.freeze({});
+type EmptyArgs = Record<string, never>;
 
 export function useRead<
   TResource extends KnownResourceName,
@@ -37,7 +38,7 @@ export function useRead<
   resource: TResource,
   args?: UseReadArgs<TResource>,
   options?: Omit<
-    UseQueryOptions<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | {}]>,
+    UseQueryOptions<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | EmptyArgs]>,
     'queryKey' | 'queryFn'
   >,
 ): UseQueryResult<TResult, Error> {
@@ -50,7 +51,7 @@ export function useRead<
 
   const isEnabled = !!apiClient && resDef.requiredParams.every((p) => (args as any)?.[p] != null);
 
-  return useQuery<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | {}]>({
+  return useQuery<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | EmptyArgs]>({
     queryKey,
     enabled: options?.enabled ?? isEnabled,
     queryFn: async ({ signal }) => {
@@ -351,11 +352,11 @@ const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: str
   const { accessToken } = useAuthContext();
 
   const mutationFn = async (param: PulledStreamProps & Cancellable) => {
-    if (!apiClient?.baseUrl) {
-      throw new Error('API client base URL is not defined');
-    }
+    const normalizedBaseUrl = (apiClient?.baseUrl ?? '').replace(/\/+$/, '');
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const requestUrl = `${normalizedBaseUrl}${normalizedEndpoint}`;
 
-    const response = await fetch(`${apiClient.baseUrl}/${endpoint}`, {
+    const response = await fetch(requestUrl, {
       method: 'POST',
       credentials: 'include',
       signal: param.signal,
@@ -367,7 +368,8 @@ const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: str
     });
 
     if (!response.ok) {
-      throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
+      const responseText = await response.text().catch(() => '');
+      throw new Error(responseText || `Network response was not ok: ${response.status} ${response.statusText}`);
     }
 
     const reader = response.body?.getReader();
@@ -444,6 +446,8 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   endpoint,
   request,
   successMessage,
+  errorMessageDefault,
+  getError,
 }: UseStreamProgressOptions<TRequest, TItem>): StreamProgressState {
   const [history, setHistory] = useState<string[]>([]);
   const [activeItems, setActiveItems] = useState<Map<string, string>>(new Map());
@@ -454,98 +458,114 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const startRef = useRef<number | null>(null);
 
-  const handleChunkReceived = useCallback((chunk: string) => {
-    bufferRef.current += chunk;
-    let braceCount = 0;
-    let startIndex = -1;
-    const newHistory: string[] = [];
-    const updatedActive = new Map<string, string>();
-    let processedIndex = 0;
+  const handleChunkReceived = useCallback(
+    (chunk: string) => {
+      bufferRef.current += chunk;
+      let braceCount = 0;
+      let startIndex = -1;
+      const newHistory: string[] = [];
+      const updatedActive = new Map<string, string>();
+      let processedIndex = 0;
 
-    for (let i = 0; i < bufferRef.current.length; i++) {
-      const char = bufferRef.current[i];
-      if (char === '{') {
-        if (braceCount === 0) startIndex = i;
-        braceCount++;
-      } else if (char === '}') {
-        braceCount--;
-        if (braceCount === 0 && startIndex !== -1) {
-          const rawObject = bufferRef.current.substring(startIndex, i + 1);
-          processedIndex = i + 1;
+      for (let i = 0; i < bufferRef.current.length; i++) {
+        const char = bufferRef.current[i];
+        if (char === '{') {
+          if (braceCount === 0) startIndex = i;
+          braceCount++;
+        } else if (char === '}') {
+          braceCount--;
+          if (braceCount === 0 && startIndex !== -1) {
+            const rawObject = bufferRef.current.substring(startIndex, i + 1);
+            processedIndex = i + 1;
 
-          try {
-            const item = JSON.parse(rawObject);
-            const { id, status, progress, errorMessage, progressMessage } = item;
+            try {
+              const item = JSON.parse(rawObject) as TItem & {
+                id?: string;
+                status?: string;
+                progress?: {
+                  current?: number;
+                  total?: number;
+                  units?: string;
+                };
+                progressMessage?: string;
+              };
+              const { id, status, progress, progressMessage } = item;
+              const errorMessage = getError?.(item);
 
-            if (errorMessage) {
-              newHistory.push(errorMessage);
-              setInternalError(errorMessage);
-              continue;
-            }
-
-            // 2. Handle simple log messages
-            if (progressMessage) {
-              newHistory.push(progressMessage.trim());
-              continue;
-            }
-
-            // 3. Handle Docker/Progress items
-            if (id) {
-              const lowerStatus = (status || '').toLowerCase();
-
-              // Define what constitutes an "Active" item vs a "Log" item
-              const isProgressing =
-                lowerStatus.includes('downloading') ||
-                lowerStatus.includes('extracting') ||
-                lowerStatus.includes('pushing');
-              const isFinished =
-                lowerStatus.includes('complete') ||
-                lowerStatus.includes('pull complete') ||
-                lowerStatus.includes('exists');
-
-              // Build the display line
-              let line = `${id}: ${status}`;
-              if (progress && progress.total > 0) {
-                line += `${getProgressBar(progress.current, progress.total)} ${formatBytes(progress.current)}/${formatBytes(progress.total)}`;
-              } else if (progress && progress.current > 0) {
-                line += ` ${progress.current}${progress.units || ''}`;
+              if (errorMessage) {
+                newHistory.push(errorMessage);
+                setInternalError(errorMessage);
+                continue;
               }
 
-              if (isFinished) {
-                // If it's done, move to history and remove from active map
-                newHistory.push(line);
-                setActiveItems((prev) => {
-                  const next = new Map(prev);
-                  next.delete(id);
-                  return next;
-                });
-              } else if (isProgressing) {
-                updatedActive.set(id, line);
-              } else {
-                newHistory.push(line);
+              // 2. Handle simple log messages
+              if (progressMessage) {
+                newHistory.push(progressMessage.trim());
+                continue;
               }
-            } else if (status) {
-              newHistory.push(status);
+
+              // 3. Handle Docker/Progress items
+              if (id) {
+                const lowerStatus = (status || '').toLowerCase();
+                const progressCurrent = progress?.current ?? 0;
+                const progressTotal = progress?.total ?? 0;
+                const progressUnits = progress?.units ?? '';
+
+                // Define what constitutes an "Active" item vs a "Log" item
+                const isProgressing =
+                  lowerStatus.includes('downloading') ||
+                  lowerStatus.includes('extracting') ||
+                  lowerStatus.includes('pushing');
+                const isFinished =
+                  lowerStatus.includes('complete') ||
+                  lowerStatus.includes('pull complete') ||
+                  lowerStatus.includes('exists');
+
+                // Build the display line
+                let line = `${id}: ${status}`;
+                if (progressTotal > 0) {
+                  line += `${getProgressBar(progressCurrent, progressTotal)} ${formatBytes(progressCurrent)}/${formatBytes(progressTotal)}`;
+                } else if (progressCurrent > 0) {
+                  line += ` ${progressCurrent}${progressUnits}`;
+                }
+
+                if (isFinished) {
+                  // If it's done, move to history and remove from active map
+                  newHistory.push(line);
+                  setActiveItems((prev) => {
+                    const next = new Map(prev);
+                    next.delete(id);
+                    return next;
+                  });
+                } else if (isProgressing) {
+                  updatedActive.set(id, line);
+                } else {
+                  newHistory.push(line);
+                }
+              } else if (status) {
+                newHistory.push(status);
+              }
+            } catch {
+              // If parse fails, we just skip this object
             }
-          } catch {
-            // If parse fails, we just skip this object
+            startIndex = -1;
           }
-          startIndex = -1;
         }
       }
-    }
 
-    bufferRef.current = bufferRef.current.slice(processedIndex);
+      bufferRef.current = bufferRef.current.slice(processedIndex);
 
-    if (newHistory.length > 0) setHistory((prev) => [...prev, ...newHistory]);
-    if (updatedActive.size > 0) {
-      setActiveItems((prev) => {
-        const next = new Map(prev);
-        updatedActive.forEach((val, key) => next.set(key, val));
-        return next;
-      });
-    }
-  }, []);
+      if (newHistory.length > 0) setHistory((prev) => [...prev, ...newHistory]);
+      if (updatedActive.size > 0) {
+        setActiveItems((prev) => {
+          const next = new Map(prev);
+          updatedActive.forEach((val, key) => next.set(key, val));
+          return next;
+        });
+      }
+    },
+    [getError],
+  );
 
   const { isPending, isSuccess, error: streamError, mutate } = usePulledStream(handleChunkReceived, endpoint);
 
@@ -553,8 +573,11 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
     const activeLines = Array.from(activeItems.values());
     const combined = [...history, ...activeLines];
     if (combined.length === 0 && isPending) return 'Connecting to registry...';
+    if (combined.length === 0 && (internalError || streamError)) {
+      return internalError || (streamError as Error | null)?.message || errorMessageDefault;
+    }
     return combined.join('\n');
-  }, [history, activeItems, isPending]);
+  }, [history, activeItems, isPending, internalError, streamError, errorMessageDefault]);
 
   useEffect(() => {
     const controller = new AbortController();

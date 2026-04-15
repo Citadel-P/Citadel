@@ -27,7 +27,6 @@ public sealed record DeleteImages(Guid PlatformId, string[] Ids, bool Force = fa
 }
 
 internal sealed class DeleteImagesHandler(
-    IUnitOfWork unitOfWork,
     IServiceScopeFactory scopeFactory,
     INotificationQueue notificationQueue,
     IDockerDaemonStreamManager dockerDaemonHub,
@@ -61,23 +60,41 @@ internal sealed class DeleteImagesHandler(
             .DeleteImageAsync(args, cancellationToken: cancellationToken);
 
         var failedUpdates = new List<Image>();
-        // Handle the case where the image is not on the platform but still in db
-        if (result.IsFailure(out var errorResult) && errorResult is NotFoundError)
+        if (result.IsFailure(out var errorResult))
         {
-            // Todo: bulk delete
-            foreach (var id in command.Ids)
+            var action = "update";
+            // Handle the case where the image is not on the platform but still in db - no sync
+            if (errorResult is NotFoundError)
             {
-                var existing = await unitOfWork.Images.GetByDockerImageIdAsync(id, command.PlatformId, cancellationToken);
-                if (existing == null) continue;
-                failedUpdates.Add(existing);
-                await unitOfWork.Images.DeleteAsync([existing.Id], cancellationToken);
+                action = "delete";
+                failedUpdates.AddRange(await DeleteImages(command.Ids, command.PlatformId, cancellationToken));
             }
-            await unitOfWork.CommitAsync(cancellationToken);
+            else
+            {
+                failedUpdates.AddRange(await RollbackProcessingAsync(command.Ids, command.PlatformId, cancellationToken));
+            }
 
-            await NotifyProcessingAsync(failedUpdates, "delete", cancellationToken);
+            await NotifyProcessingAsync(failedUpdates, action, cancellationToken);
         }
 
         return result;
+    }
+
+    private async Task<IEnumerable<Image>> DeleteImages(IEnumerable<string> ids, Guid platformId, CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var failedUpdates = new List<Image>();
+
+        foreach (var id in ids)
+        {
+            var existing = await uow.Images.GetByDockerImageIdAsync(id, platformId, ct);
+            if (existing == null) continue;
+            failedUpdates.Add(existing);
+            await uow.Images.DeleteAsync([existing.Id], ct);
+        }
+
+        return failedUpdates;
     }
 
     public async Task<List<Image>> MarkProcessingAsync(string[] ids, Guid platformId, CancellationToken ct)
@@ -108,6 +125,37 @@ internal sealed class DeleteImagesHandler(
 
         await uow.CommitAsync(ct);
         return updated;
+    }
+
+    public async Task<IEnumerable<Image>> RollbackProcessingAsync(IEnumerable<string> ids, Guid platformId, CancellationToken ct)
+    {
+        var failedUpdates = new List<Image>();
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        foreach (var id in ids)
+        {
+            var image = await uow.Images.GetByDockerImageIdAsync(id, platformId, ct);
+            if (image == null) continue;
+
+            image.ReleaseProcessing();
+
+            var affected = await uow.Images.UpdateProcessingAsync(
+                image.Id,
+                image.ControlState,
+                image.ControlStartedAt,
+                image.RowVersion,
+                checkRowVersion: true,
+                ct);
+
+            if (affected != 0)
+            {
+                failedUpdates.Add(image);
+            }
+        }
+
+        await uow.CommitAsync(ct);
+        return failedUpdates;
     }
 
     public async Task NotifyProcessingAsync(IEnumerable<Image> images, string action, CancellationToken ct)

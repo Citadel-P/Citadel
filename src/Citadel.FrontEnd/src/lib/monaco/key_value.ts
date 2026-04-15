@@ -50,7 +50,7 @@ const key_value_language = {
 
     yaml_comments: [[/#.*$/, 'comment']],
 
-    yaml_keys: [[/([^\s\[\]{},"']+)(\s*)(:)/, ['key', '', 'delimiter']]],
+    yaml_keys: [[/([^\s[\]{},"']+)(\s*)(:)/, ['key', '', 'delimiter']]],
 
     yaml_numbers: [
       [/\b\d+\.\d*\b/, 'number.float'],

@@ -4,9 +4,10 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      ConnectionStrings__Postgres: "Host=${PG_HOST};Database=${PG_DATABASE};Username=${PG_USER};Password=${PG_PASSWORD}"
+      ConnectionStrings__Postgres: "Host=postgres;Database=citadel_db;Username=admin;Password=admin"
     depends_on:
-      - postgres
+      postgres:
+          condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - citadel_data:/app/data
@@ -16,13 +17,17 @@ services:
 
   postgres:
     image: postgres:alpine
-    restart: unless-stopped
+    restart: "no"
     environment:
       POSTGRES_USER: ${PG_USER}
       POSTGRES_PASSWORD: ${PG_PASSWORD}
       POSTGRES_DB: ${PG_DATABASE}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DATABASE}"]
+        interval: 5s
+        retries: 5
 
 volumes:
   citadel_data:

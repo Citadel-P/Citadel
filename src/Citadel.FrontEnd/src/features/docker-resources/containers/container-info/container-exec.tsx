@@ -134,7 +134,7 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
       term.dispose();
       termRef.current = null;
     };
-  }, [containerId, disabled]);
+  }, [containerId, disabled, groupId, theme.mode]);
 
   useEffect(() => {
     if (!disabled) return;

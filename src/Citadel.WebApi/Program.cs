@@ -49,6 +49,7 @@ public partial class Program
 
             app.UseWebApiModule();
             app.MapHealthChecks("/health", HealthCheck.GetHealthCheckOptions());
+            app.MapFallbackToFile("index.html");
         }
 
         void AdditionalJsonOptions(JsonOptions options)
