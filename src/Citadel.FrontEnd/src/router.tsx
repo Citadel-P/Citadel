@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation, BrowserRouter, Routes, Route } from 'react-router';
-import Layout from '@/layout/Layout';
+import Layout from '@/layout/layout';
 import NotFound from '@/pages/not-found';
 import { useAuthContext } from './features/auth/auth-context';
 import Loader from './components/ui/loader';
