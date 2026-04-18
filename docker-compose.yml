@@ -1,12 +1,13 @@
 services:
-  citadel-server:
+  server:
     image: ghcr.io/citadel-p/citadel:${CITADEL_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
     environment:
-      ConnectionStrings__Postgres: "Host=${PG_HOST};Database=${PG_DATABASE};Username=${PG_USER};Password=${PG_PASSWORD}"
+      ConnectionStrings__Postgres: "Host=pg_db;Database=citadel_db;Username=admin;Password=admin"
     depends_on:
-      - postgres
+      pg_db:
+          condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - citadel_data:/app/data
@@ -14,7 +15,7 @@ services:
       - "8000:8000" # API
       - "8001:8001" # Grpc
 
-  postgres:
+  pg_db:
     image: postgres:alpine
     restart: unless-stopped
     environment:
@@ -23,6 +24,10 @@ services:
       POSTGRES_DB: ${PG_DATABASE}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DATABASE}"]
+        interval: 5s
+        retries: 5
 
 volumes:
   citadel_data:

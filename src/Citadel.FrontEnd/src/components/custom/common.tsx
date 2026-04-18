@@ -434,11 +434,6 @@ export const UpdateStatusIcon = ({ updateStatus }: { updateStatus: AutoUpdateSta
   return <Icon width={14} height={14} className={className} />;
 };
 
-const convert = new Convert({
-  newline: false,
-  escapeXML: true,
-});
-
 export interface LogEntry {
   timestamp?: string;
   message: string;
@@ -516,6 +511,19 @@ export const LogViewer = ({
     });
   }, [logs]);
 
+  const renderedLogs = useMemo(() => {
+    const convert = new Convert({
+      newline: false,
+      escapeXML: true,
+      stream: true,
+    });
+
+    return normalizedLogs.map((log) => ({
+      ...log,
+      html: convert.toHtml(log.message),
+    }));
+  }, [normalizedLogs]);
+
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
@@ -558,8 +566,8 @@ export const LogViewer = ({
           'p-4 max-h-[600px] rounded-sm text-xs inline-block w-full overflow-auto bg-transparent',
           className,
         )}>
-        {normalizedLogs.length > 0 ? (
-          normalizedLogs.map((log, index) => (
+        {renderedLogs.length > 0 ? (
+          renderedLogs.map((log, index) => (
             <div
               key={index}
               className={cn(
@@ -571,7 +579,7 @@ export const LogViewer = ({
                   {log.timestamp.includes('T') ? log.timestamp.split('T')[1].slice(0, 8) : log.timestamp}
                 </span>
               )}
-              <span dangerouslySetInnerHTML={{ __html: convert.toHtml(log.message) }} />
+              <span dangerouslySetInnerHTML={{ __html: log.html }} />
             </div>
           ))
         ) : (

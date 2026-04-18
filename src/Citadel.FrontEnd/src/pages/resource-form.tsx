@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Pencil, Plus, Save, X } from 'lucide-react';
 
@@ -199,6 +199,13 @@ const EditableTitle = ({
   onSave: (v: string) => void;
 }) => {
   const edit = useInlineEdit(value);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (edit.editing) {
+      inputRef.current?.focus();
+    }
+  }, [edit.editing]);
 
   if (!edit.editing)
     return (
@@ -230,7 +237,7 @@ const EditableTitle = ({
       onSave={() => edit.commit(onSave)}
       onCancel={edit.cancel}>
       <FieldInput
-        autoFocus
+        ref={inputRef}
         value={edit.value}
         onChange={edit.setValue}
         placeholder="Name"

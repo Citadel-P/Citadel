@@ -475,7 +475,7 @@ function useImagePullProgress(params: PullImageParams) {
 
   const request: PullImageInput = useMemo(
     () => ({
-      registryId: params.registryId ?? registryFilter?.item?.name ?? '',
+      registryId: params.registryId ?? registryFilter?.item?.id ?? '',
       platformId: currentPlatform?.id ?? '',
       imageTag: params.imageTag,
     }),

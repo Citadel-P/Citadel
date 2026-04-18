@@ -42,6 +42,7 @@ public sealed class Image(
     {
         ControlState = ResourceControlState.Idle;
         ControlStartedAt = null;
+        ControlTriggeredBy = null;
     }
 
     public void PartialUpdate(
