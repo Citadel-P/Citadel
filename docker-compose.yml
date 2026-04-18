@@ -1,12 +1,12 @@
 services:
-  citadel-server:
+  server:
     image: ghcr.io/citadel-p/citadel:${CITADEL_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Database=citadel_db;Username=admin;Password=admin"
+      ConnectionStrings__Postgres: "Host=pg_db;Database=citadel_db;Username=admin;Password=admin"
     depends_on:
-      postgres:
+      pg_db:
           condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -15,9 +15,9 @@ services:
       - "8000:8000" # API
       - "8001:8001" # Grpc
 
-  postgres:
+  pg_db:
     image: postgres:alpine
-    restart: "no"
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${PG_USER}
       POSTGRES_PASSWORD: ${PG_PASSWORD}

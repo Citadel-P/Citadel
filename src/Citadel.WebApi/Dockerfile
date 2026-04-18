@@ -1,3 +1,17 @@
+# .NET Debug Stage (Kept for Visual Studio compatibility)
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS vs.build
+RUN apk add --no-cache clang lld musl-dev libc6-compat
+WORKDIR /src
+
+# Build FrontEnd Assets
+FROM node:24-alpine AS frontend-build
+WORKDIR /src/Citadel.FrontEnd
+COPY ["src/Citadel.FrontEnd/package.json", "src/Citadel.FrontEnd/package-lock.json", "./"]
+RUN npm ci
+COPY ["src/Citadel.FrontEnd/", "./"]
+RUN npm run build:prod
+
+# Build and publish the application
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS build
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 WORKDIR /src
@@ -30,7 +44,7 @@ RUN dotnet publish Citadel.WebApi.csproj -c Release -o /app/publish \
     -r linux-musl-x64 --self-contained true /p:StripSymbols=true \
     && rm /app/publish/*.dbg
 
-COPY --from=citadel-frontend-assets /dist /app/publish/wwwroot
+COPY --from=frontend-build /src/Citadel.FrontEnd/dist /app/publish/wwwroot
 
 # Final
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine

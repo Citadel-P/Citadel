@@ -1,5 +1,5 @@
 services:
-  citadel-server:
+  server:
     image: citadel.dev
     build:
       context: .
@@ -7,6 +7,6 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
 
-  postgres:
+  pg_db:
     ports:
       - "5432:5432" # Allows to use local DB tools during dev
