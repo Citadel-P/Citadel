@@ -1,6 +1,8 @@
 using Domain;
+using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using Infrastructure.Persistence.Dtos;
+using Microsoft.AspNetCore.Http.HttpResults;
 using System.Text.Json;
 
 namespace Infrastructure.Persistence.Mappers;
@@ -37,6 +39,18 @@ internal static class GitRepositoryMappers
             controlStartedAt: dto.ControlStartedAt,
             controlTriggeredBy: dto.ControlTriggeredBy,
             rowVersion: dto.RowVersion,
+            latestActivityEvent: string.IsNullOrEmpty(dto.ActivityEvent_ActivityEventInfo) ? null : ActivityEvent.FromPersistence(
+                id: dto.ActivityEvent_Id.Value,
+                platformId: Guid.CreateVersion7(),
+                resourceId: Guid.CreateVersion7(),
+                resourceName: "N/A",
+                createdAt: dto.ActivityEvent_CreatedAt.Value,
+                createdByActorId: Guid.CreateVersion7(),
+                resourceType: ActivityResourceType.GitRepository,
+                info: JsonSerializer.Deserialize(dto.ActivityEvent_ActivityEventInfo, EventInfoJsonContext.Default.ActivityEventInfo),
+                status: Enum.Parse<ActivityStatus>(dto.ActivityEvent_Status),
+                eventType: Enum.Parse<ActivityEventType>(dto.ActivityEvent_EventType)
+                ),
             gitAccount: !hasLinkedAccount ? null : GitAccount.FromPersistence(
                 id: dto.GitAccountId.Value,
                 name: dto.GitAccount_Name!,

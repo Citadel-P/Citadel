@@ -6,10 +6,12 @@ import { useState } from 'react';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useDeploymentGroup } from './hooks/useDeploymentGroup';
 import {
+  ActivityStatus,
   AutoUpdateStatus,
   ContainerStateStatus,
   DeploymentStatus,
   DeploymentView,
+  LatestActivityView,
   ResourceControlState,
   UpdateBehavior,
 } from '@/api/generated/api.types';
@@ -24,7 +26,10 @@ import Loader from '@/components/ui/loader';
 import { ContainerExec } from '@/features/docker-resources/containers/container-info/container-exec';
 import { ContainerStats } from '@/features/docker-resources/containers/container-info/container-stats';
 import { ActivitiesTab } from '@/features/activities';
-import { ArrowRight, ArrowUpCircle, X } from 'lucide-react';
+import { ArrowRight, ArrowUpCircle, Box, X } from 'lucide-react';
+import { AlertMessage } from '@/components/custom/alert-message';
+import { ActivityAlertZone } from '@/components/custom/task-sheet';
+import { truncate } from '@/lib/truncate';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -47,7 +52,7 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       },
     },
     SubHeader: ({ resource }: { resource: DeploymentView }) => {
-      return <DeploymentUpdateNotice deployment={resource} />;
+      return <DeploymentSubHeader latestActivity={resource.latestActivityView ?? null} deployment={resource} />;
     },
     Tabs: [
       {
@@ -76,6 +81,44 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       return { item: deployment, isLoading };
     },
   },
+};
+
+const DeploymentSubHeader = ({
+  deployment,
+  latestActivity,
+}: {
+  deployment: DeploymentView;
+  latestActivity: LatestActivityView | null;
+}) => {
+  return (
+    <>
+      <DeploymentLatestActivity latestActivity={latestActivity} />
+      <DeploymentUpdateNotice deployment={deployment} />
+    </>
+  );
+};
+
+const DeploymentLatestActivity = ({ latestActivity }: { latestActivity: LatestActivityView | null }) => {
+  console.log(latestActivity)
+  if (latestActivity?.status === ActivityStatus.Success && latestActivity.info) {
+    const containerId = (latestActivity.info as any).result.containerIds[0];
+    return (
+      <AlertMessage date={latestActivity?.createdAt} type={'success'}>
+        <div className="flex flex-wrap gap-2 items-center ">
+          Deployment running container <Box width={13} height={13} />
+          {truncate(containerId, 12, 'right', true)}
+        </div>
+      </AlertMessage>
+    );
+  }
+  return (
+    <ActivityAlertZone
+      info={latestActivity?.info as any}
+      activity={latestActivity as any}
+      title="Error"
+      date={latestActivity?.createdAt}
+    />
+  );
 };
 
 const DeploymentUpdateNotice = ({ deployment }: { deployment: DeploymentView }) => {

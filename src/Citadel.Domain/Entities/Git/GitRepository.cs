@@ -1,4 +1,6 @@
-﻿namespace Domain.Entities.Git;
+﻿using Domain.Entities.Activities;
+
+namespace Domain.Entities.Git;
 
 /// <summary>
 /// Source of Truth for the entire GitOps pipeline
@@ -41,6 +43,8 @@ public class GitRepository(
     public long RowVersion { get; private set; }
     #endregion
 
+    public ActivityEvent? LatestActivityEvent { get; private set; } = null;
+
     // Helper for the RepoCache path
     public string GetCachePath()
     {
@@ -68,7 +72,8 @@ public class GitRepository(
         ResourceControlState? resourceControlState = null,
         long? controlStartedAt = null,
         Guid? controlTriggeredBy = null,
-        long? rowVersion = null)
+        long? rowVersion = null,
+        ActivityEvent? latestActivityEvent = null)
     {
         if (name is not null) 
             Name = name;
@@ -105,6 +110,9 @@ public class GitRepository(
 
         if (status is not null)
             Status = status.Value;
+
+        if (latestActivityEvent is not null)
+            LatestActivityEvent = latestActivityEvent;
     }
 
     public void UpdateSource(string url, Guid? gitAccountId)
@@ -147,7 +155,8 @@ public class GitRepository(
         long? controlStartedAt = null,
         Guid? controlTriggeredBy = null,
         long rowVersion = 0,
-        GitAccount? gitAccount = null)
+        GitAccount? gitAccount = null,
+        ActivityEvent? latestActivityEvent = null)
     {
         return new GitRepository(name, description, url, defaultBranch, gitAccountId, createdByActorId)
         {
@@ -162,7 +171,8 @@ public class GitRepository(
             ControlState = controlState,
             ControlStartedAt = controlStartedAt,
             ControlTriggeredBy = controlTriggeredBy,
-            RowVersion = rowVersion
+            RowVersion = rowVersion,
+            LatestActivityEvent = latestActivityEvent,
         };
     }
 

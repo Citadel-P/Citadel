@@ -13,18 +13,15 @@ export const useGitRepoGroup = (id: string | undefined) => {
     setGitRepo(data.data);
   }, [data]);
   const handleDeploymentInfoUpdated = useCallback((repo: GitRepositoryView) => {
+    const info = (repo.latestActivityView?.info as any)[1]; // SignalR poly mapping
+    info.$type = (repo.latestActivityView?.info as any)[0];
+
     setGitRepo((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        name: repo.name,
-        status: repo.status,
-        description: repo.description,
-        url: repo.url,
-        defaultBranch: repo.defaultBranch,
-        webHookEnabled: repo.webHookEnabled,
-        webHookSecret: repo.webHookSecret,
-        controlState: repo.controlState
+        ...repo,
+        latestActivityView: repo.latestActivityView ? { ...repo.latestActivityView, info } : null,
       };
     });
   }, []);

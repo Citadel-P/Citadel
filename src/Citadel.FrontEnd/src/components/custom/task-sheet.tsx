@@ -320,18 +320,24 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   ),
 };
 
-function ActivityAlertZone({
+export function ActivityAlertZone({
   info,
   activity,
+  title,
+  date,
 }: {
   info: ActivityEventInfoGitRepoPulled | ActivityEventInfoGitRepoCloned | ActivityEventInfoDeploymentApplied;
   activity: ActivityView;
+  title?: string;
+  date?: any
 }) {
   if (!(activity.status === ActivityStatus.Failure || activity.status === ActivityStatus.Warning)) return;
   return (
     <AlertMessage
+      title={title}
+      date={date}
       type={activity.status === ActivityStatus.Failure ? 'error' : 'warning'}
-      children={info.result.message}
+      children={info.result?.message}
     />
   );
 }

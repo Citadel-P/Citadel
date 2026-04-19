@@ -22,4 +22,9 @@ internal sealed record GitRepositoryDto(
     string? GitAccount_Domain,
     string? GitAccount_Transport,
     string? GitAccount_AuthType,
-    string? GitAccount_Configuration);
+    string? GitAccount_Configuration,
+    Guid? ActivityEvent_Id,
+    string? ActivityEvent_Status,
+    string? ActivityEvent_EventType,
+    string? ActivityEvent_ActivityEventInfo,
+    DateTime? ActivityEvent_CreatedAt);

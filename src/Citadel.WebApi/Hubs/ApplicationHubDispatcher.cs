@@ -116,14 +116,14 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     #region Deployments
     public Task SendDeploymentInfo(Deployment deployment, string action)
     {
+        var map = DeploymentView.Map(deployment);
         hubContext.Clients
             .Group(WellKnownSignalRGroups.DeploymentGroup(deployment.Id))
-            .SendAsync("DeploymentInfoUpdated", DeploymentView.Map(deployment), action);
+            .SendAsync("DeploymentInfoUpdated", map, action);
 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.DeploymentsGroup)
-            .SendAsync("DeploymentInfoUpdated", DeploymentView.Map(deployment), action);
-
+            .SendAsync("DeploymentInfoUpdated", map, action);
         return Task.CompletedTask;
     }
 
@@ -175,13 +175,14 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     #region GitRepo
     public Task SendGitRepoInfo(GitRepository repository, string action = "update")
     {
+        var map = GitRepositoryView.Map(repository);
         hubContext.Clients
            .Group(WellKnownSignalRGroups.GitRepoGroup(repository.Id))
-           .SendAsync("GitRepositoryInfoUpdated", GitRepositoryView.Map(repository), action);
+           .SendAsync("GitRepositoryInfoUpdated", map, action);
 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.GitRepositoriesGroup)
-            .SendAsync("GitRepositoryInfoUpdated", GitRepositoryView.Map(repository), action);
+            .SendAsync("GitRepositoryInfoUpdated", map, action);
 
         return Task.CompletedTask;
     }

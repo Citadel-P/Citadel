@@ -52,7 +52,27 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
 
     public async Task<GitRepository?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM GitRepositories WHERE Id = @Id LIMIT 1";
+        const string sql = """
+            SELECT 
+                g.*,
+                ei.Info AS ActivityEvent_ActivityEventInfo,
+                ei.EventType AS ActivityEvent_EventType,
+                ei.Status AS ActivityEvent_Status,
+                ei.Id AS ActivityEvent_Id,
+                ei.CreatedAt AS ActivityEvent_CreatedAt
+            FROM GitRepositories g
+            LEFT JOIN LATERAL (
+                SELECT e.Id, e.EventType, e.Status, e.Info, e.CreatedAt
+                FROM ActivityEvents e
+                WHERE e.ResourceId = g.Id 
+                  AND e.ResourceType = 'GitRepository'
+                  AND e.EventType NOT IN ('GitRepoUpdated', 'GitRepoRenamed')
+                ORDER BY e.CreatedAt DESC
+                LIMIT 1
+            ) ei ON TRUE
+            WHERE g.Id = @Id LIMIT 1
+            
+            """;
         var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
@@ -60,7 +80,6 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
     public async Task<GitRepository?> GetWithAccountAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = """
-            
             SELECT 
                 r.*,
                 a.Name AS GitAccount_Name,
@@ -70,8 +89,9 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
                 a.Configuration AS GitAccount_Configuration
             FROM GitRepositories r 
             LEFT JOIN GitAccounts a
-            ON r.GitAccountId = a.Id
-            WHERE r.Id = @Id LIMIT 1
+                ON r.GitAccountId = a.Id
+            WHERE r.Id = @Id
+            LIMIT 1
             """;
             
         var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id, cancellationToken }, transaction: tx());

@@ -131,8 +131,8 @@ internal sealed class GitRepoSyncSuccessWorkItem(
         await uow.CommitAsync(cancellationToken);
 
         // Notify clients
+        repo.PartialUpdate(latestActivityEvent: activity);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, cancellationToken)), cancellationToken);
-
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);
     }
 }
@@ -149,8 +149,6 @@ internal sealed class GitRepoSyncFailedWorkItem(
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
-        logger.LogError(errorMessage);
-
         // Update repo status
         repo.ReleaseProcessing(GitReposStatus.Degraded);
         await uow.GitRepositories.UpdateAsync(repo, cancellationToken);
@@ -176,8 +174,8 @@ internal sealed class GitRepoSyncFailedWorkItem(
         await uow.CommitAsync(cancellationToken);
 
         // Notify clients
+        repo.PartialUpdate(latestActivityEvent: activity);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, cancellationToken)), cancellationToken);
-
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);
     }
 }

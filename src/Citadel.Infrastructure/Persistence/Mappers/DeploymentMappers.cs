@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Domain.Entities;
+using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Infrastructure.Persistence.Dtos;
@@ -26,6 +27,18 @@ internal static class DeploymentMappers
             status: Enum.Parse<DeploymentStatus>(dto.Status),
             controlState: Enum.Parse<ResourceControlState>(dto.ControlState),
             controlTriggeredBy: dto.ControlTriggeredBy,
+            latestActivityEvent: string.IsNullOrEmpty(dto.ActivityEvent_ActivityEventInfo) ? null : ActivityEvent.FromPersistence(
+                id: dto.ActivityEvent_Id.Value,
+                platformId: Guid.CreateVersion7(),
+                resourceId: Guid.CreateVersion7(),
+                resourceName: "N/A",
+                createdAt: dto.ActivityEvent_CreatedAt.Value,
+                createdByActorId: Guid.CreateVersion7(),
+                resourceType: ActivityResourceType.Deployment,
+                info: JsonSerializer.Deserialize(dto.ActivityEvent_ActivityEventInfo, EventInfoJsonContext.Default.ActivityEventInfo),
+                status: Enum.Parse<ActivityStatus>(dto.ActivityEvent_Status),
+                eventType: Enum.Parse<ActivityEventType>(dto.ActivityEvent_EventType)
+                ),
             autoUpdateState: new AutoUpdateState(
                 LastCheckedAt: dto.AutoUpdateState_LastCheckedAt,
                 Status: Enum.Parse<AutoUpdateStatus>(dto.AutoUpdateState_Status),

@@ -53,9 +53,24 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             SELECT 
                 d.*,
                 c.Id AS Container_ContainerId,
-                c.DockerContainerId AS Container_DockerContainerId
+                c.DockerContainerId AS Container_DockerContainerId,
+                ei.Info AS ActivityEvent_ActivityEventInfo,
+                ei.EventType AS ActivityEvent_EventType,
+                ei.Status AS ActivityEvent_Status,
+                ei.Id AS ActivityEvent_Id,
+                ei.CreatedAt AS ActivityEvent_CreatedAt
                 FROM Deployments d
-            LEFT JOIN Containers c ON c.DeploymentId = d.Id
+            LEFT JOIN Containers c 
+                ON c.DeploymentId = d.Id
+            LEFT JOIN LATERAL (
+                SELECT e.Id, e.EventType, e.Status, e.Info, e.CreatedAt
+                FROM ActivityEvents e
+                WHERE e.ResourceId = d.Id 
+                  AND e.ResourceType = 'Deployment'
+                  AND e.EventType NOT IN ('DeploymentUpdated', 'DeploymentRenamed')
+                ORDER BY e.CreatedAt DESC
+                LIMIT 1
+            ) ei ON TRUE
             WHERE d.Id = @Id LIMIT 1
             """;
             

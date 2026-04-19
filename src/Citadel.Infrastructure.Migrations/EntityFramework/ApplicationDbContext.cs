@@ -783,6 +783,14 @@ internal static class Configuration
         activityEvent.HasIndex("EventType").HasDatabaseName($"IX_{tableName}_EventType");
         activityEvent.HasIndex("Status").HasDatabaseName($"IX_{tableName}_Status");
 
+        var latest = builder.Entity("LatestActivityEvent");
+        latest.HasNoKey();
+        latest.Property<Guid?>("ResourceId").HasColumnType("uuid").HasColumnName("resourceid");
+        latest.Property<string>("ResourceType").HasColumnType(Text).HasColumnName("resourcetype");
+        latest.Property<string>("Info").HasColumnType(Text).HasColumnName("info");
+        latest.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone").HasColumnName("createdat");
+        latest.ToView("LatestActivityEvents");
+
         return builder;
     }
 

@@ -1,10 +1,12 @@
-import { InfoIcon, Check, TriangleAlert, AlertCircle, X } from 'lucide-react';
+import { InfoIcon, Check, TriangleAlert, AlertCircle, X, Clock } from 'lucide-react';
 import { JSX, ReactNode, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { fromNow } from '@/lib/dayjs.helper';
 
 interface AlertMessageProps {
   title?: string;
   children?: string | ReactNode;
+  date?: Date | number;
   type: 'success' | 'info' | 'warning' | 'error';
   dismissible?: boolean;
   onDismiss?: () => void;
@@ -18,6 +20,7 @@ export const AlertMessage = ({
   dismissible,
   onDismiss,
   className,
+  date,
 }: AlertMessageProps): JSX.Element | null => {
   const [dismissed, setDismissed] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -98,14 +101,23 @@ export const AlertMessage = ({
         </div>
       </div>
 
-      {dismissible && (
-        <button
-          onClick={handleDismiss}
-          className={cn('shrink-0 rounded-md p-1 text-muted-foreground transition-colors', closeClass)}
-          aria-label="Dismiss">
-          <X className="h-4 w-4" />
-        </button>
-      )}
+      <div className="flex items-center gap-2 shrink-0 ml-2">
+        {date && (
+          <div className="flex flex-wrap gap-2 items-center text-muted-foreground">
+            <Clock width={13} height={13} />
+            <span className='text-xs'>{fromNow(date)}</span>
+          </div>
+        )}
+
+        {dismissible && (
+          <button
+            onClick={handleDismiss}
+            className={cn('shrink-0 rounded-md p-1 text-muted-foreground transition-colors', closeClass)}
+            aria-label="Dismiss">
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     </div>
   );
 };

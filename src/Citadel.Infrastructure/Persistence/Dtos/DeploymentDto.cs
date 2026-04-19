@@ -25,5 +25,10 @@ internal sealed record DeploymentDto(
     Guid? Image_Id = null,
     Guid? Container_ContainerId = null,
     string? Container_DockerContainerId = null,
-    string? Container_DockerImageId = null
+    string? Container_DockerImageId = null,
+    Guid? ActivityEvent_Id = null,
+    string? ActivityEvent_Status = null,
+    string? ActivityEvent_EventType = null,
+    string? ActivityEvent_ActivityEventInfo = null,
+    DateTime? ActivityEvent_CreatedAt = null
     );

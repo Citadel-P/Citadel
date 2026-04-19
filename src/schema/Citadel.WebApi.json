@@ -16872,6 +16872,16 @@
               "null",
               "string"
             ]
+          },
+          "latestActivityView": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LatestActivityView"
+              }
+            ]
           }
         }
       },
@@ -17993,7 +18003,8 @@
           "onClone",
           "onPull",
           "createdAt",
-          "controlState"
+          "controlState",
+          "latestActivityView"
         ],
         "type": "object",
         "properties": {
@@ -18067,6 +18078,16 @@
           },
           "controlState": {
             "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "latestActivityView": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LatestActivityView"
+              }
+            ]
           }
         }
       },
@@ -19194,6 +19215,38 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "LatestActivityView": {
+        "required": [
+          "id",
+          "resourceType",
+          "eventType",
+          "status",
+          "info",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ActivityResourceType"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/ActivityEventType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityStatus"
+          },
+          "info": {
+            "$ref": "#/components/schemas/ActivityEventInfo"
+          },
+          "createdAt": {
+            "format": "date-time"
           }
         }
       },

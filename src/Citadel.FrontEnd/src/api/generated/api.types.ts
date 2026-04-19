@@ -1446,6 +1446,7 @@ export interface DeploymentView {
   containerId?: null | string;
   dockerContainerId?: null | string;
   dockerImageId?: null | string;
+  latestActivityView?: null | LatestActivityView;
 }
 
 export interface DeploymentsView {
@@ -1745,6 +1746,7 @@ export interface GitRepositoryView {
   /** @format date-time */
   createdAt: any;
   controlState: ResourceControlState;
+  latestActivityView: null | LatestActivityView;
 }
 
 export interface GraphDriverDataInfo {
@@ -2057,6 +2059,17 @@ export interface IpamSubnetConfiguration {
   subnet: null | string;
   ipRange: null | string;
   gateway: null | string;
+}
+
+export interface LatestActivityView {
+  /** @format uuid */
+  id: string;
+  resourceType: ActivityResourceType;
+  eventType: ActivityEventType;
+  status: ActivityStatus;
+  info: ActivityEventInfo;
+  /** @format date-time */
+  createdAt: any;
 }
 
 export interface LifeCycleSpec {
@@ -3303,6 +3316,7 @@ export class Api<
      * @response `200` `RefreshTokenResponse` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     refreshToken: (params: RequestParams = {}) =>
@@ -3326,6 +3340,7 @@ export class Api<
      * @response `200` `LoginResponse` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     login: (data: LoginRequest, params: RequestParams = {}) =>
@@ -3354,6 +3369,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     logout: (params: RequestParams = {}) =>
@@ -3377,6 +3393,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getActor: (id: string, params: RequestParams = {}) =>
@@ -3401,6 +3418,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     patchActorEnabled: (
@@ -3430,6 +3448,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listUsers: (
@@ -3471,6 +3490,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createUser: (data: CreateUserInput, params: RequestParams = {}) =>
@@ -3497,6 +3517,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteUsers: (data: DeleteUsersInput, params: RequestParams = {}) =>
@@ -3522,6 +3543,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getUser: (id: string, params: RequestParams = {}) =>
@@ -3547,6 +3569,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateUser: (
@@ -3578,6 +3601,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     addUserRole: (
@@ -3608,6 +3632,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     removeUserRole: (id: string, roleId: string, params: RequestParams = {}) =>
@@ -3633,6 +3658,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameUser: (data: RenameResource, params: RequestParams = {}) =>
@@ -3658,6 +3684,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listTeams: (
@@ -3699,6 +3726,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createTeam: (data: CreateTeamInput, params: RequestParams = {}) =>
@@ -3725,6 +3753,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteTeams: (data: DeleteTeamsInput, params: RequestParams = {}) =>
@@ -3750,6 +3779,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getTeam: (id: string, params: RequestParams = {}) =>
@@ -3774,6 +3804,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateTeam: (
@@ -3805,6 +3836,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     addTeamRole: (
@@ -3835,6 +3867,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     removeTeamRole: (id: string, roleId: string, params: RequestParams = {}) =>
@@ -3860,6 +3893,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     addTeamMember: (
@@ -3890,6 +3924,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     removeTeamMember: (
@@ -3919,6 +3954,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameTeam: (data: RenameResource, params: RequestParams = {}) =>
@@ -3944,6 +3980,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listRoles: (params: RequestParams = {}) =>
@@ -3968,6 +4005,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createRole: (data: RoleInput, params: RequestParams = {}) =>
@@ -3994,6 +4032,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteRoles: (data: DeleteRolesInput, params: RequestParams = {}) =>
@@ -4019,6 +4058,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getRole: (id: string, params: RequestParams = {}) =>
@@ -4043,6 +4083,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateRolePermissions: (
@@ -4074,6 +4115,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameRole: (data: RenameResource, params: RequestParams = {}) =>
@@ -4100,6 +4142,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getContainer: (id: string, params: RequestParams = {}) =>
@@ -4127,6 +4170,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getContainerInfo: (id: string, params: RequestParams = {}) =>
@@ -4154,6 +4198,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getContainerStats: (id: string, params: RequestParams = {}) =>
@@ -4181,6 +4226,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     inspectContainer: (id: string, params: RequestParams = {}) =>
@@ -4208,6 +4254,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     startContainers: (data: string[], params: RequestParams = {}) =>
@@ -4233,6 +4280,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     stopContainers: (data: string[], params: RequestParams = {}) =>
@@ -4258,6 +4306,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     pauseContainers: (data: string[], params: RequestParams = {}) =>
@@ -4283,6 +4332,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     restartContainers: (data: string[], params: RequestParams = {}) =>
@@ -4308,6 +4358,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     unpauseContainers: (data: string[], params: RequestParams = {}) =>
@@ -4333,6 +4384,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteContainers: (
@@ -4361,6 +4413,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listPlatforms: (params: RequestParams = {}) =>
@@ -4388,6 +4441,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createPlatform: (data: PlatformInput, params: RequestParams = {}) =>
@@ -4416,6 +4470,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deletePlatforms: (data: DeletePlatformsInput, params: RequestParams = {}) =>
@@ -4441,6 +4496,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getPlatfom: (id: string, params: RequestParams = {}) =>
@@ -4468,6 +4524,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updatePlatform: (
@@ -4500,6 +4557,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listContainers: (id: string, params: RequestParams = {}) =>
@@ -4526,6 +4584,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listRegistries: (
@@ -4559,6 +4618,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createRegistry: (data: CreateRegistryInput, params: RequestParams = {}) =>
@@ -4587,6 +4647,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteRegistries: (
@@ -4615,6 +4676,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getRegistry: (id: string, params: RequestParams = {}) =>
@@ -4642,6 +4704,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateRegistry: (
@@ -4674,6 +4737,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getRegistryConfig: (id: string, params: RequestParams = {}) =>
@@ -4702,6 +4766,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateRegistryMetadata: (
@@ -4735,6 +4800,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameRegistry: (data: RenameResource, params: RequestParams = {}) =>
@@ -4762,6 +4828,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listGitAccounts: (params: RequestParams = {}) =>
@@ -4789,6 +4856,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createGitAccount: (data: GitAccountInput, params: RequestParams = {}) =>
@@ -4818,6 +4886,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteGitAccounts: (
@@ -4846,6 +4915,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitAccount: (id: string, params: RequestParams = {}) =>
@@ -4874,6 +4944,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateGitAccount: (
@@ -4907,6 +4978,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitAccountConfig: (id: string, params: RequestParams = {}) =>
@@ -4933,6 +5005,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listGitRepositories: (params: RequestParams = {}) =>
@@ -4961,6 +5034,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createGitRepository: (
@@ -4993,6 +5067,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteGitRepositories: (
@@ -5021,6 +5096,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitRepository: (id: string, params: RequestParams = {}) =>
@@ -5049,6 +5125,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateGitRepository: (
@@ -5082,6 +5159,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitRepositoryConfig: (id: string, params: RequestParams = {}) =>
@@ -5109,6 +5187,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateGitRepositoryMetadata: (
@@ -5143,6 +5222,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameGitRepository: (data: RenameResource, params: RequestParams = {}) =>
@@ -5171,6 +5251,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listImages: (platformId: string, params: RequestParams = {}) =>
@@ -5194,6 +5275,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getExternalRepositories: (
@@ -5223,6 +5305,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGhcrPackageVersions: (
@@ -5253,6 +5336,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getDockerHubRepositories: (
@@ -5282,6 +5366,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getDockerHubRepositoryTags: (
@@ -5313,6 +5398,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     inspectImage: (
@@ -5344,6 +5430,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getExposedPorts: (
@@ -5374,6 +5461,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     pullImage: (data: PullImageInput, params: RequestParams = {}) =>
@@ -5403,6 +5491,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteImages: (data: DeleteImagesRequest, params: RequestParams = {}) =>
@@ -5432,6 +5521,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listNetworks: (
@@ -5468,6 +5558,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     inspectNetwork: (
@@ -5499,6 +5590,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createNetwork: (data: CreateNetworkInput, params: RequestParams = {}) =>
@@ -5528,6 +5620,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteNetworks: (data: DeleteNetworksInput, params: RequestParams = {}) =>
@@ -5553,6 +5646,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listVolumes: (
@@ -5586,6 +5680,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     inspectVolume: (
@@ -5617,6 +5712,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createVolume: (data: CreateVolumeInput, params: RequestParams = {}) =>
@@ -5646,6 +5742,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteVolumes: (data: DeleteVolumesInput, params: RequestParams = {}) =>
@@ -5671,6 +5768,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listDeployments: (params: RequestParams = {}) =>
@@ -5698,6 +5796,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createDeployment: (
@@ -5730,6 +5829,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteDeployments: (data: string[], params: RequestParams = {}) =>
@@ -5755,6 +5855,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getDeployment: (deploymentId: string, params: RequestParams = {}) =>
@@ -5782,6 +5883,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getDeploymentConfig: (deploymentId: string, params: RequestParams = {}) =>
@@ -5809,6 +5911,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameDeployment: (data: RenameResource, params: RequestParams = {}) =>
@@ -5839,6 +5942,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateDeployment: (
@@ -5873,6 +5977,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateDeploymentMetadata: (
@@ -5905,6 +6010,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     applyDeployment: (data: ApplyDeploymentInput, params: RequestParams = {}) =>
@@ -5934,6 +6040,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     resumeDeployments: (data: string[], params: RequestParams = {}) =>
@@ -5959,6 +6066,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     pauseDeployments: (data: string[], params: RequestParams = {}) =>
@@ -5984,6 +6092,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     restartDeployments: (data: string[], params: RequestParams = {}) =>
@@ -6009,6 +6118,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     stopDeployments: (data: string[], params: RequestParams = {}) =>
@@ -6034,6 +6144,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     startDeployments: (data: string[], params: RequestParams = {}) =>
@@ -6059,6 +6170,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listStacks: (params: RequestParams = {}) =>
@@ -6084,6 +6196,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createStack: (data: CreateStackInput, params: RequestParams = {}) =>
@@ -6110,6 +6223,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteStacks: (data: string[], params: RequestParams = {}) =>
@@ -6135,6 +6249,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getStack: (stackId: string, params: RequestParams = {}) =>
@@ -6159,6 +6274,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getStackConfig: (stackId: string, params: RequestParams = {}) =>
@@ -6186,6 +6302,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listStackReleases: (stackId: string, params: RequestParams = {}) =>
@@ -6214,6 +6331,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameStack: (data: RenameResource, params: RequestParams = {}) =>
@@ -6241,6 +6359,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateStack: (
@@ -6272,6 +6391,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateStackMetadata: (
@@ -6301,6 +6421,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getActivity: (id: string, params: RequestParams = {}) =>
@@ -6326,6 +6447,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listActivities: (
@@ -6374,6 +6496,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAlertEvent: (id: string, params: RequestParams = {}) =>
@@ -6400,6 +6523,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listAlertEvents: (
@@ -6447,6 +6571,7 @@ export class Api<
      * @response `200` `UnresolvedAlertsCountView` OK
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getUnresolvedAlertEventsCount: (params: RequestParams = {}) =>
@@ -6471,6 +6596,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     acknowledgeAlertEvents: (
@@ -6499,6 +6625,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     resolveAlertEvents: (
@@ -6527,6 +6654,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAlertRule: (id: string, params: RequestParams = {}) =>
@@ -6554,6 +6682,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateAlertRule: (
@@ -6587,6 +6716,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAlertRuleConfig: (id: string, params: RequestParams = {}) =>
@@ -6613,6 +6743,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listAlertRules: (params: RequestParams = {}) =>
@@ -6640,6 +6771,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createAlertRule: (data: CreateAlertRuleInput, params: RequestParams = {}) =>
@@ -6669,6 +6801,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteAlertRules: (
@@ -6697,6 +6830,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameAlertRule: (data: RenameResource, params: RequestParams = {}) =>
@@ -6726,6 +6860,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateAlertRuleMetadata: (
@@ -6759,6 +6894,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAlertChannel: (id: string, params: RequestParams = {}) =>
@@ -6786,6 +6922,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     updateAlertChannel: (
@@ -6817,6 +6954,7 @@ export class Api<
      * @response `200` `AlertChannelsView` OK
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listAlertChannels: (params: RequestParams = {}) =>
@@ -6841,6 +6979,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createAlertChannel: (data: AlertChannelInput, params: RequestParams = {}) =>
@@ -6870,6 +7009,7 @@ export class Api<
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteAlertChannels: (
@@ -6897,6 +7037,7 @@ export class Api<
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     verifyAlertChannel: (

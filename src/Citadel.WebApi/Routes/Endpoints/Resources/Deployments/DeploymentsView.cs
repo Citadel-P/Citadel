@@ -1,6 +1,7 @@
 ﻿
 using Domain;
 using Domain.Entities.Deployments;
+using WebApi.Routes.Endpoints.Resources.Activities;
 namespace WebApi.Routes.Endpoints.Resources.Deployments;
 
 public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments)
@@ -27,7 +28,8 @@ public sealed record DeploymentView(
     Guid? ImageId = null,
     Guid? ContainerId = null,
     string? DockerContainerId = null,
-    string? DockerImageId = null
+    string? DockerImageId = null,
+    LatestActivityView? LatestActivityView = null
     )
 {
     internal static DeploymentView Map(Deployment deployment) => new(
@@ -47,7 +49,8 @@ public sealed record DeploymentView(
         ImageId: deployment.Image?.Id,
         ContainerId: deployment.Container?.Id,
         DockerContainerId: deployment.Container?.DockerContainerId,
-        DockerImageId: deployment.Container?.DockerImageId ?? deployment.Image?.DockerImageId
+        DockerImageId: deployment.Container?.DockerImageId ?? deployment.Image?.DockerImageId,
+        LatestActivityView: deployment.LatestActivityEvent?.Map()
         );
 }
 

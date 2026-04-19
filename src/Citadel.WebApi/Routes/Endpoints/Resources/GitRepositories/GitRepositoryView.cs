@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Entities.Git;
+using WebApi.Routes.Endpoints.Resources.Activities;
 
 namespace WebApi.Routes.Endpoints.Resources.GitRepositories;
 
@@ -17,7 +18,8 @@ public sealed record GitRepositoryView(
     RepoCommand? OnClone,
     RepoCommand? OnPull,
     DateTime CreatedAt,
-    ResourceControlState ControlState)
+    ResourceControlState ControlState,
+    LatestActivityView? LatestActivityView)
 {
     internal static GitRepositoryView Map(GitRepository gitRepository) => new(
         gitRepository.Id,
@@ -33,7 +35,8 @@ public sealed record GitRepositoryView(
         gitRepository.OnClone,
         gitRepository.OnPull,
         gitRepository.CreatedAt,
-        gitRepository.ControlState);
+        gitRepository.ControlState,
+        gitRepository.LatestActivityEvent?.Map());
 }
 
 

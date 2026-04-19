@@ -1,4 +1,5 @@
-﻿using Domain.Entities.Platforms;
+﻿using Domain.Entities.Activities;
+using Domain.Entities.Platforms;
 
 namespace Domain.Entities.Deployments;
 
@@ -35,6 +36,7 @@ public sealed class Deployment(
     public Platform? Platform { get; private set; } = null;
     public Image? Image { get; private set; } = null;
     public Container? Container { get; private set; } = null;
+    public ActivityEvent? LatestActivityEvent { get; private set; } = null;
 
     public void MarkProcessing(Guid controlTriggeredBy)
     {
@@ -68,7 +70,8 @@ public sealed class Deployment(
         DeploymentSpec? spec = null,
         Platform? platform = null,
         Image? image = null,
-        Container? container = null)
+        Container? container = null,
+        ActivityEvent? latestActivityEvent = null)
     {
         return new Deployment(name, createdByActorId, platformId, spec, description)
         {
@@ -82,7 +85,8 @@ public sealed class Deployment(
             ControlState = controlState,
             AutoUpdateState = autoUpdateState,
             ControlStartedAt = controlStartedAt,
-            ControlTriggeredBy = controlTriggeredBy
+            ControlTriggeredBy = controlTriggeredBy,
+            LatestActivityEvent = latestActivityEvent
         };
     }
 
