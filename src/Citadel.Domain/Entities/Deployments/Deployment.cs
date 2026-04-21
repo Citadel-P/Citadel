@@ -115,6 +115,11 @@ public sealed class Deployment(
         if (autoUpdateState != null) AutoUpdateState = autoUpdateState;
     }
 
+    public void AssignActivityEvent(ActivityEvent activityEvent)
+    {
+        LatestActivityEvent = activityEvent;
+    }
+
     public static DeploymentStatus ToDeploymentStatus(ContainerStateStatus status)
     {
         return status switch

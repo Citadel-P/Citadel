@@ -26,10 +26,9 @@ import Loader from '@/components/ui/loader';
 import { ContainerExec } from '@/features/docker-resources/containers/container-info/container-exec';
 import { ContainerStats } from '@/features/docker-resources/containers/container-info/container-stats';
 import { ActivitiesTab } from '@/features/activities';
-import { ArrowRight, ArrowUpCircle, Box, X } from 'lucide-react';
+import { ArrowRight, ArrowUpCircle, X } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ActivityAlertZone } from '@/components/custom/task-sheet';
-import { truncate } from '@/lib/truncate';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -99,15 +98,14 @@ const DeploymentSubHeader = ({
 };
 
 const DeploymentLatestActivity = ({ latestActivity }: { latestActivity: LatestActivityView | null }) => {
-  console.log(latestActivity)
-  if (latestActivity?.status === ActivityStatus.Success && latestActivity.info) {
-    const containerId = (latestActivity.info as any).result.containerIds[0];
+  if (!latestActivity) return;
+  if (latestActivity?.status === ActivityStatus.Success) {
+    return;
+  }
+  if (latestActivity?.info.$type === 'DeploymentDegraded') {
     return (
-      <AlertMessage date={latestActivity?.createdAt} type={'success'}>
-        <div className="flex flex-wrap gap-2 items-center ">
-          Deployment running container <Box width={13} height={13} />
-          {truncate(containerId, 12, 'right', true)}
-        </div>
+      <AlertMessage date={latestActivity?.createdAt} type={'warning'}>
+        <div className="flex flex-wrap gap-2 items-center ">{latestActivity?.info.reason}</div>
       </AlertMessage>
     );
   }

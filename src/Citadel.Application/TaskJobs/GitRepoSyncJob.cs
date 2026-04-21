@@ -48,7 +48,6 @@ internal class GitRepoSyncJob(
                             gitRepoStreamManager,
                             notificationQueue,
                             activityHub, 
-                            logger,
                             GitOperation.Authenticate,
                             repo, 
                             error.Message), stoppingToken);
@@ -62,7 +61,6 @@ internal class GitRepoSyncJob(
                                 gitRepoStreamManager,
                                 notificationQueue,
                                 activityHub,
-                                logger,
                                 syncResult.Operation,
                                 repo,
                                 syncResult.Error ?? "Unknown error"), stoppingToken);
@@ -131,7 +129,7 @@ internal sealed class GitRepoSyncSuccessWorkItem(
         await uow.CommitAsync(cancellationToken);
 
         // Notify clients
-        repo.PartialUpdate(latestActivityEvent: activity);
+        repo.AssignActivityEvent(activity);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, cancellationToken)), cancellationToken);
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);
     }
@@ -141,7 +139,6 @@ internal sealed class GitRepoSyncFailedWorkItem(
     IGitRepositoryStreamManager streamManager,
     INotificationQueue notificationQueue,
     IActivityStreamManager activityHub,
-    ILogger<GitRepoSyncJob> logger,
     GitOperation gitOperation,
     GitRepository repo,
     string errorMessage
@@ -174,7 +171,7 @@ internal sealed class GitRepoSyncFailedWorkItem(
         await uow.CommitAsync(cancellationToken);
 
         // Notify clients
-        repo.PartialUpdate(latestActivityEvent: activity);
+        repo.AssignActivityEvent(activity);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, cancellationToken)), cancellationToken);
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);
     }

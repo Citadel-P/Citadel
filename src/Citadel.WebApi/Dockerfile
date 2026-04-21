@@ -1,6 +1,13 @@
 # .NET Debug Stage (Kept for Visual Studio compatibility)
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS vs.build
 RUN apk add --no-cache clang lld musl-dev libc6-compat
+COPY src/Citadel.Contracts/install-deps.sh .
+COPY install-server-deps.sh .
+
+RUN chmod +x install-deps.sh install-server-deps.sh \
+    && ./install-deps.sh \
+    && ./install-server-deps.sh
+
 WORKDIR /src
 
 # Build FrontEnd Assets

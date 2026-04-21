@@ -301,11 +301,13 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
                             );
 
             await uow.ActivityEventRepository.AddAsync(activity, ct);
+            deployment.AssignActivityEvent(activity);
         }
 
         await uow.CommitAsync(ct);
 
         // Push notifications
+        
         var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
         await notificationQueue.EnqueueAsync(deploymentWorkItem, ct);
 
@@ -361,6 +363,7 @@ internal sealed class DeploymentSucceededWorkItem(
         await uow.CommitAsync(ct);
 
         // Push notifications
+        deployment.AssignActivityEvent(activity);
         var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
         await notificationQueue.EnqueueAsync(deploymentWorkItem, ct);
 

@@ -72,8 +72,7 @@ public class GitRepository(
         ResourceControlState? resourceControlState = null,
         long? controlStartedAt = null,
         Guid? controlTriggeredBy = null,
-        long? rowVersion = null,
-        ActivityEvent? latestActivityEvent = null)
+        long? rowVersion = null)
     {
         if (name is not null) 
             Name = name;
@@ -110,9 +109,11 @@ public class GitRepository(
 
         if (status is not null)
             Status = status.Value;
+    }
 
-        if (latestActivityEvent is not null)
-            LatestActivityEvent = latestActivityEvent;
+    public void AssignActivityEvent(ActivityEvent activityEvent)
+    {
+        LatestActivityEvent = activityEvent;
     }
 
     public void UpdateSource(string url, Guid? gitAccountId)

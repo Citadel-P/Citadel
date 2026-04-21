@@ -13,8 +13,8 @@ export const useDeploymentGroup = (deploymentId: string) => {
     setDeployment(data.data);
   }, [data]);
   const handleDeploymentInfoUpdated = useCallback((deployment: DeploymentView) => {
-    const info = (deployment.latestActivityView?.info as any)[1]; // SignalR poly mapping
-    info.$type = (deployment.latestActivityView?.info as any)[0];
+    const info = (deployment?.latestActivityView?.info as any)?.[1]; // SignalR poly mapping
+    if (info) info.$type = (deployment?.latestActivityView?.info as any)?.[0];
 
     setDeployment((prev) => {
       if (!prev) return prev;
