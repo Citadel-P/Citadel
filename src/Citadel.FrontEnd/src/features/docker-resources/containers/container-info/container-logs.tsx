@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
+import { useCallback, useState, useRef, useEffect, memo } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { LogViewer } from '@/components/custom/common';
@@ -7,7 +7,7 @@ import { normalizeDockerId } from '@/lib/utils';
 const MAX_LOGS = 5000;
 const decoder = new TextDecoder('utf-8');
 
-export const ContainerLogs = ({ containerId }: { containerId: string | undefined }) => {
+export const ContainerLogs = memo(({ containerId }: { containerId: string | undefined }) => {
   const nid = normalizeDockerId(containerId);
   const { containerLogs: logs, clearLogs } = useContainerLogGroup(nid);
 
@@ -25,47 +25,98 @@ export const ContainerLogs = ({ containerId }: { containerId: string | undefined
       />
     </div>
   );
-};
+});
+ContainerLogs.displayName = 'ContainerLogs';
+
+interface LogEntry {
+  timestamp: string;
+  message: string;
+}
 
 const useContainerLogGroup = (containerId?: string) => {
-  // We use a Map to ensure uniqueness by Timestamp
-  // Key: Timestamp string, Value: Log message
-  const [logsMap, setLogsMap] = useState<Map<string, string>>(new Map());
-  const processRef = useRef<(rawText: string) => void>(() => {});
+  // Mutable refs hold the real data; React only knows about "version".
+  const logsMapRef = useRef<Map<string, string>>(new Map());
+  const logsArrayRef = useRef<LogEntry[]>([]);
+  const bufferRef = useRef<string[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [_, setVersion] = useState(0);
 
+  // Reset everything when the container changes.
   useEffect(() => {
-    setLogsMap(new Map());
+    logsMapRef.current = new Map();
+    logsArrayRef.current = [];
+    bufferRef.current = [];
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    setVersion((v) => v + 1);
   }, [containerId]);
 
-  processRef.current = (rawText: string) => {
-    setLogsMap((prev) => {
-      const next = new Map(prev);
-      const lines = rawText.split('\n').filter(Boolean);
+  // Flush buffered raw text into the Map, trim to MAX_LOGS, sort, and bump version.
+  const flush = useCallback(() => {
+    flushTimerRef.current = null;
+    const batch = bufferRef.current.splice(0, bufferRef.current.length);
+    if (batch.length === 0) return;
 
-      lines.forEach((line) => {
+    const next = new Map(logsMapRef.current);
+
+    for (const rawText of batch) {
+      for (const line of rawText.split('\n')) {
+        if (!line) continue;
         const firstSpaceIndex = line.indexOf(' ');
         if (firstSpaceIndex !== -1) {
           const timestamp = line.substring(0, firstSpaceIndex);
           const message = line.substring(firstSpaceIndex + 1);
           next.set(timestamp, message);
         } else {
-          // Fallback for lines without standard Docker timestamps
-          next.set(`${new Date().getTime()}-${Math.random()}`, line);
+          next.set(`${Date.now()}-${Math.random()}`, line);
         }
-      });
-
-      if (next.size > MAX_LOGS) {
-        const entries = Array.from(next.entries()).slice(-MAX_LOGS);
-        return new Map(entries);
       }
-      return next;
-    });
-  };
+    }
 
-  const handleLogs = useCallback((data: ArrayBuffer) => {
-    const text = decoder.decode(new Uint8Array(data));
-    processRef.current(text);
+    if (next.size > MAX_LOGS) {
+      const entries = Array.from(next.entries()).slice(-MAX_LOGS);
+      logsMapRef.current = new Map(entries);
+    } else {
+      logsMapRef.current = next;
+    }
+
+    // Build sorted array once, outside React render phase.
+    const arr = new Array<LogEntry>(logsMapRef.current.size);
+    let i = 0;
+    for (const [ts, msg] of logsMapRef.current) {
+      arr[i++] = { timestamp: ts, message: msg };
+    }
+    arr.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    logsArrayRef.current = arr;
+
+    setVersion((v) => v + 1);
   }, []);
+
+  // Incoming SignalR data -> buffer-> schedule flush (max once per 50 ms).
+  const handleLogs = useCallback(
+    (data: ArrayBuffer) => {
+      const text = decoder.decode(new Uint8Array(data));
+      bufferRef.current.push(text);
+      if (!flushTimerRef.current) {
+        flushTimerRef.current = setTimeout(flush, 50);
+      }
+    },
+    [flush],
+  );
+
+  const startLogs = useCallback(
+    async (hub: HubConnection) => {
+      if (!containerId) return;
+      try {
+        await hub.invoke('StartContainerLogs', containerId);
+      } catch (error) {
+        console.error('Failed to start container logs stream', error);
+      }
+    },
+    [containerId],
+  );
 
   const setupEventListeners = useCallback(
     (hub: HubConnection) => {
@@ -87,21 +138,21 @@ const useContainerLogGroup = (containerId?: string) => {
     groupName: `container-log:${containerId}`,
     setupEventListeners,
     removeEventListeners,
+    onJoinedGroup: startLogs,
     skip: !containerId,
   });
 
-  const clearLogs = useCallback(() => setLogsMap(new Map()), []);
+  const clearLogs = useCallback(() => {
+    logsMapRef.current = new Map();
+    logsArrayRef.current = [];
+    bufferRef.current = [];
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    setVersion((v) => v + 1);
+  }, []);
 
-  const containerLogs = useMemo(
-    () =>
-      Array.from(logsMap.entries())
-        .map(([ts, msg]) => ({
-          timestamp: ts,
-          message: msg,
-        }))
-        .sort((a, b) => a.timestamp.localeCompare(b.timestamp)), // Ensure chronological order
-    [logsMap],
-  );
-
-  return { containerLogs, clearLogs };
+  // Return the ref array directly. Because "version" changed, consumers re-render with the latest data.
+  return { containerLogs: logsArrayRef.current, clearLogs };
 };

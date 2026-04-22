@@ -8,33 +8,48 @@ using System.Threading.Channels;
 
 namespace Application.Services.SignalR;
 
+internal interface IContainerLogStreamManager : IStreamGroupManager
+{
+    void StartContainerLogs(string containerId);
+}
+
 internal sealed class ContainerLogStreamManager(
     IApplicationHubDispatcher dispatcher,
     ILogger<ContainerLogStreamManager> logger,
     IPlatformContainerCache platformContainerCache,
     IContainerEventBroadcaster containerEventBroadcaster,
     IConnectorFactory<IContainerConnector> connectorFactory)
-    : BaseStreamManager<LogStreamContext>, IStreamGroupManager
+    : BaseStreamManager<LogStreamContext>, IContainerLogStreamManager
 {
+    public void StartContainerLogs(string containerId)
+    {
+        if (string.IsNullOrWhiteSpace(containerId))
+            return;
+
+        var normalized = NormalizeDockerId(containerId);
+        var groupId = $"container-log:{normalized}";
+
+        var context = streams.GetOrAdd(groupId, _ => new LogStreamContext());
+
+        // Start stream orchestration explicitly. Do not treat Start as a subscriber
+        // registration. Start should only start the producer/consumer and watcher.
+        if (!context.TryStart())
+            return;
+
+        context.StreamTask = StreamLogsAsync(context, normalized);
+        context.EventWatcherTask ??= WatchContainerEvents(context, normalized);
+    }
+
     protected override void OnSubscriberAdded(string groupId, string connectionId)
     {
         if (!streams.TryGetValue(groupId, out var context))
             return;
-
-        var containerId = GetNormalizedIdFromGroup(groupId.AsSpan());
-        if (string.IsNullOrEmpty(containerId))
-        {
-            logger.LogError("Invalid group ID format: {GroupId}", groupId);
-            return;
-        }
 
         var recentLogs = context.GetBufferedLogsAsBytes();
         if (recentLogs.Length > 0)
         {
             _ = SendBufferedLogsSafe(connectionId, recentLogs);
         }
-
-        OnFirstSubscriber(context, containerId);
     }
 
     private async Task SendBufferedLogsSafe(string connectionId, byte[] data)
@@ -47,17 +62,6 @@ internal sealed class ContainerLogStreamManager(
         {
             logger.LogWarning(ex, "Failed to send buffered logs to {Conn}", connectionId);
         }
-    }
-
-    private void OnFirstSubscriber(LogStreamContext context, string containerId)
-    {
-        // Start poll/broadcast if not started
-        if (context.TryStart())
-        {
-            _ = StreamLogsAsync(context, containerId);
-        }
-        // Start event watcher only once; use dedicated token
-        context.EventWatcherTask ??= WatchContainerEvents(context, containerId);
     }
 
     private async Task StreamLogsAsync(LogStreamContext ctx, string containerId)
@@ -80,8 +84,22 @@ internal sealed class ContainerLogStreamManager(
             {
                 ctx.AddToBuffer(data.Span);
                 ctx.AddToBuffer("\n"u8);
-                // Just drop it in the pipe and keep reading
-                channel.Writer.TryWrite(data.ToArray());
+
+                var rented = ArrayPool<byte>.Shared.Rent(data.Length);
+
+                try
+                {
+                    data.Span.CopyTo(rented);
+                    var pooled = new PooledBuffer(rented, data.Length);
+
+                    // backpressure
+                    await channel.Writer.WriteAsync(pooled, token);
+                }
+                catch
+                {
+                    ArrayPool<byte>.Shared.Return(rented);
+                    throw;
+                }
             }
         }
         catch (OperationCanceledException) { }
@@ -96,28 +114,54 @@ internal sealed class ContainerLogStreamManager(
     }
 
     private async Task BroadcastBatchesAsync(
-        ChannelReader<byte[]> reader,
-        string containerId,
-        CancellationToken token)
+    ChannelReader<PooledBuffer> reader,
+    string containerId,
+    CancellationToken token)
     {
-        var buffer = new ArrayBufferWriter<byte>(16 * 1024);
+        const int BatchSize = 16 * 1024;
+        byte[] batch = ArrayPool<byte>.Shared.Rent(BatchSize);
+        int offset = 0;
 
         try
         {
             while (await reader.WaitToReadAsync(token))
             {
-                await Task.Delay(200, token);
-
-                while (reader.TryRead(out var line))
+                while (reader.TryRead(out var item))
                 {
-                    buffer.Write(line);
-                    buffer.Write("\n"u8);
+                    var len = item.Length;
+
+                    if (len > BatchSize)
+                    {
+                        await dispatcher.SendContainerLogs(
+                            containerId,
+                            item.Buffer.AsMemory(0, len));
+
+                        item.Dispose();
+                        continue;
+                    }
+
+                    if (offset + len > BatchSize)
+                    {
+                        await dispatcher.SendContainerLogs(
+                            containerId,
+                            batch.AsMemory(0, offset));
+
+                        offset = 0;
+                    }
+
+                    item.Buffer.AsSpan(0, len).CopyTo(batch.AsSpan(offset));
+                    offset += len;
+
+                    batch[offset++] = (byte)'\n';
+
+                    item.Dispose();
                 }
 
-                if (buffer.WrittenCount > 0)
+                // flush remaining
+                if (offset > 0)
                 {
-                    await dispatcher.SendContainerLogs(containerId, buffer.WrittenSpan.ToArray());
-                    buffer.Clear();
+                    await dispatcher.SendContainerLogs(containerId, batch.AsMemory(0, offset));
+                    offset = 0;
                 }
             }
         }
@@ -125,6 +169,10 @@ internal sealed class ContainerLogStreamManager(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error while broadcasting logs for {ContainerId}", containerId);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(batch);
         }
     }
 

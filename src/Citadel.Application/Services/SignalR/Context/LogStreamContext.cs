@@ -6,7 +6,14 @@ namespace Application.Services.SignalR.Context;
 
 internal sealed class LogStreamContext : StreamContext, IDisposable
 {
-    public Channel<byte[]> LogChannel { get; set; } = Channel.CreateUnbounded<byte[]>();
+    private static BoundedChannelOptions DefaultChannelOptions() => new(1024)
+    {
+        FullMode = BoundedChannelFullMode.Wait,
+        SingleReader = true,
+        SingleWriter = false
+    };
+
+    public Channel<PooledBuffer> LogChannel { get; set; } = Channel.CreateBounded<PooledBuffer>(DefaultChannelOptions());
     public CancellationTokenSource Cancellation { get; private set; } = new();
     public CancellationTokenSource WatcherCts { get; private set; } = new();
 
@@ -48,7 +55,7 @@ internal sealed class LogStreamContext : StreamContext, IDisposable
 
         var oldChannel = LogChannel;
         oldChannel.Writer.TryComplete();
-        LogChannel = Channel.CreateUnbounded<byte[]>();
+        LogChannel = Channel.CreateBounded<PooledBuffer>(DefaultChannelOptions());
 
         var t = StreamTask;
         StreamTask = null;
@@ -110,18 +117,26 @@ internal sealed class PooledLogBuffer : IDisposable
 
     public void AddLog(ReadOnlySpan<byte> logBytes)
     {
+        if (logBytes.IsEmpty) return;
+
         using (@lock.EnterScope())
         {
-            foreach (var b in logBytes)
-            {
-                buffer[writeIndex] = b;
-                writeIndex++;
-                if (writeIndex == capacity)
-                    writeIndex = 0;
+            int bytesToWrite = Math.Min(logBytes.Length, capacity);
+            ReadOnlySpan<byte> source = logBytes[^bytesToWrite..];
 
-                if (lengthUsed < capacity)
-                    lengthUsed++;
+            int spaceAtEnd = capacity - writeIndex;
+            if (source.Length <= spaceAtEnd)
+            {
+                source.CopyTo(buffer.AsSpan(writeIndex));
             }
+            else
+            {
+                source[..spaceAtEnd].CopyTo(buffer.AsSpan(writeIndex));
+                source[spaceAtEnd..].CopyTo(buffer.AsSpan(0));
+            }
+
+            writeIndex = (writeIndex + source.Length) % capacity;
+            lengthUsed = Math.Min(lengthUsed + source.Length, capacity);
         }
     }
 
@@ -246,5 +261,20 @@ internal sealed class RingBuffer<T>
             head = 0;
             count = 0;
         }
+    }
+}
+
+internal sealed class PooledBuffer(byte[] buffer, int length) : IDisposable
+{
+    public byte[] Buffer { get; } = buffer;
+    public int Length { get; } = length;
+
+    public ReadOnlySpan<byte> Span => Buffer.AsSpan(0, Length);
+
+    public ReadOnlyMemory<byte> Memory => Buffer.AsMemory(0, Length);
+
+    public void Dispose()
+    {
+        ArrayPool<byte>.Shared.Return(Buffer);
     }
 }

@@ -83,6 +83,9 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         else return new ImagesView([]);
     }
 
+    public async Task StartContainerLogs(string containerId)
+       => await mediator.Send(new StartContainerLogs(containerId), Context.ConnectionAborted);
+
     public async Task StartExecProcess(string groupId, string shell)
         => await mediator.Send(new StartContainerShellSession(groupId, shell), Context.ConnectionAborted);
     

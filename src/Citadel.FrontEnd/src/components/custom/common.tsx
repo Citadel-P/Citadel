@@ -1,4 +1,4 @@
-import { useMemo, useState, useLayoutEffect, useRef, useCallback, useEffect } from 'react';
+import { useMemo, useState, useLayoutEffect, useRef, useCallback, useEffect, useDeferredValue, memo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -477,118 +477,191 @@ export const QuickAction = ({ label, icon, active, disabled, side = 'left', onCl
   </TooltipProvider>
 );
 
-export const LogViewer = ({
-  logs,
-  autoScroll = true,
-  className,
-  showTimestamps: initialShowTimestamps = false,
-  wrapLines: initialWrapLines = true,
-  timeStamps: enableTimestamps = false,
-  allowWrap = false,
-  onClear,
-}: LogViewerProps) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const [showTimestamps, setShowTimestamps] = useLocalStorage('log-viewer-show-timestamps', initialShowTimestamps);
-  const [wrapLines, setWrapLines] = useLocalStorage('log-viewer-wrap-lines', initialWrapLines);
+const ansiConverter = new Convert({
+  newline: false,
+  escapeXML: true,
+  stream: true,
+});
 
-  const normalizedLogs = useMemo((): LogEntry[] => {
-    if (!logs) return [];
-
-    // Handle single string (e.g., from a simple text fetch)
-    if (typeof logs === 'string') {
-      return logs.split('\n').map((line) => ({ message: line }));
-    }
-
-    // Handle array
-    return logs.map((log) => {
-      // If it's already an object {timestamp, message}, keep it
-      if (typeof log === 'object' && log !== null) {
-        return log;
-      }
-      // If it's an array of strings (e.g., Deploy Progress)
-      return { message: log };
-    });
-  }, [logs]);
-
-  const renderedLogs = useMemo(() => {
-    const convert = new Convert({
-      newline: false,
-      escapeXML: true,
-      stream: true,
-    });
-
-    return normalizedLogs.map((log) => ({
-      ...log,
-      html: convert.toHtml(log.message),
-    }));
-  }, [normalizedLogs]);
-
-  const handleScroll = () => {
-    if (!scrollRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    setIsAtBottom(scrollHeight - scrollTop <= clientHeight + 50);
-  };
-
-  useLayoutEffect(() => {
-    if (autoScroll && isAtBottom && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [normalizedLogs, autoScroll, isAtBottom, wrapLines, showTimestamps]);
-
-  return (
-    <div className="relative flex flex-col h-full border rounded-md overflow-hidden">
-      {(enableTimestamps || allowWrap || onClear) && (
-        <div className="absolute top-2 right-2 flex flex-col gap-2 z-10">
-          {enableTimestamps && (
-            <QuickAction
-              label="Timestamps"
-              icon={<Timer className="h-3.5 w-3.5" />}
-              active={showTimestamps}
-              onClick={() => setShowTimestamps(!showTimestamps)}
-            />
-          )}
-          {allowWrap && (
-            <QuickAction
-              label="Wrap Lines"
-              icon={<WrapText className="h-3.5 w-3.5" />}
-              active={wrapLines}
-              onClick={() => setWrapLines(!wrapLines)}
-            />
-          )}
-          {onClear && <QuickAction label="Clear Console" icon={<Eraser className="h-3.5 w-3.5" />} onClick={onClear} />}
-        </div>
-      )}
+// Memoised row so React skips it when only scroll position changes.
+const LogRow = memo(
+  ({
+    log,
+    showTimestamps,
+    wrapLines,
+  }: {
+    log: LogEntry & { html: string };
+    showTimestamps: boolean;
+    wrapLines: boolean;
+  }) => {
+    return (
       <div
-        ref={scrollRef}
-        onScroll={handleScroll}
         className={cn(
-          'p-4 max-h-[600px] rounded-sm text-xs inline-block w-full overflow-auto bg-transparent',
-          className,
+          'flex gap-2 min-h-[1.2rem]',
+          wrapLines ? 'whitespace-pre-wrap break-all' : 'whitespace-pre',
         )}>
-        {renderedLogs.length > 0 ? (
-          renderedLogs.map((log, index) => (
-            <div
-              key={index}
-              className={cn(
-                'flex gap-2 min-h-[1.2rem]',
-                wrapLines ? 'whitespace-pre-wrap break-all' : 'whitespace-pre',
-              )}>
-              {showTimestamps && log.timestamp && (
-                <span className="text-foreground/30 shrink-0 select-none tabular-nums">
-                  {log.timestamp.includes('T') ? log.timestamp.split('T')[1].slice(0, 8) : log.timestamp}
-                </span>
-              )}
-              <span dangerouslySetInnerHTML={{ __html: log.html }} />
-            </div>
-          ))
-        ) : (
-          <div className="text-zinc-600 italic">No logs available...</div>
+        {showTimestamps && log.timestamp && (
+          <span className="text-foreground/30 shrink-0 select-none tabular-nums">
+            {log.timestamp.includes('T') ? log.timestamp.split('T')[1].slice(0, 8) : log.timestamp}
+          </span>
         )}
+        <span dangerouslySetInnerHTML={{ __html: log.html }} />
       </div>
-    </div>
-  );
-};
+    );
+  },
+);
+LogRow.displayName = 'LogRow';
+
+// Simple virtual-list constants.
+const ITEM_HEIGHT = 20; // px — matches min-h-[1.2rem] + text-xs
+const VIEWPORT_HEIGHT = 600; // px — matches max-h-[600px]
+const OVERSCAN = 10;
+
+export const LogViewer = memo(
+  ({
+    logs,
+    autoScroll = true,
+    className,
+    showTimestamps: initialShowTimestamps = false,
+    wrapLines: initialWrapLines = true,
+    timeStamps: enableTimestamps = false,
+    allowWrap = false,
+    onClear,
+  }: LogViewerProps) => {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [isAtBottom, setIsAtBottom] = useState(true);
+    const [showTimestamps, setShowTimestamps] = useLocalStorage(
+      'log-viewer-show-timestamps',
+      initialShowTimestamps,
+    );
+    const [wrapLines, setWrapLines] = useLocalStorage('log-viewer-wrap-lines', initialWrapLines);
+    const [scrollTop, setScrollTop] = useState(0);
+
+    // Defer heavy log updates so toggles / scroll stay responsive.
+    const deferredLogs = useDeferredValue(logs);
+    const ansiCacheRef = useRef<Map<string, string>>(new Map());
+    const prevLenRef = useRef(0);
+
+    const normalizedLogs = useMemo((): LogEntry[] => {
+      if (!deferredLogs) return [];
+      if (typeof deferredLogs === 'string') {
+        return deferredLogs.split('\n').map((line) => ({ message: line }));
+      }
+      return deferredLogs.map((log) => {
+        if (typeof log === 'object' && log !== null) return log as LogEntry;
+        return { message: log as string };
+      });
+    }, [deferredLogs]);
+
+    // Convert ANSI once per unique message, then cache.
+    const renderedLogs = useMemo(() => {
+      // Clear stale cache when logs are explicitly cleared.
+      if (normalizedLogs.length === 0 && prevLenRef.current > 0) {
+        ansiCacheRef.current.clear();
+      }
+      prevLenRef.current = normalizedLogs.length;
+
+      return normalizedLogs.map((log) => {
+        let html = ansiCacheRef.current.get(log.message);
+        if (html === undefined) {
+          html = ansiConverter.toHtml(log.message);
+          ansiCacheRef.current.set(log.message, html);
+        }
+        return { ...log, html };
+      });
+    }, [normalizedLogs]);
+
+    // Virtual window.
+    const virtual = useMemo(() => {
+      const totalHeight = renderedLogs.length * ITEM_HEIGHT;
+      const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN);
+      const end = Math.min(
+        renderedLogs.length,
+        Math.ceil((scrollTop + VIEWPORT_HEIGHT) / ITEM_HEIGHT) + OVERSCAN,
+      );
+      return {
+        totalHeight,
+        start,
+        end,
+        paddingTop: start * ITEM_HEIGHT,
+        paddingBottom: (renderedLogs.length - end) * ITEM_HEIGHT,
+        items: renderedLogs.slice(start, end),
+      };
+    }, [renderedLogs, scrollTop]);
+
+    const handleScroll = useCallback(() => {
+      if (!scrollRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      setScrollTop(scrollTop);
+      setIsAtBottom(scrollHeight - scrollTop <= clientHeight + 50);
+    }, []);
+
+    useLayoutEffect(() => {
+      if (autoScroll && isAtBottom && scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    }, [renderedLogs.length, autoScroll, isAtBottom, wrapLines, showTimestamps]);
+
+    return (
+      <div className="relative flex flex-col h-full border rounded-md overflow-hidden">
+        {(enableTimestamps || allowWrap || onClear) && (
+          <div className="absolute top-2 right-2 flex flex-col gap-2 z-10">
+            {enableTimestamps && (
+              <QuickAction
+                label="Timestamps"
+                icon={<Timer className="h-3.5 w-3.5" />}
+                active={showTimestamps}
+                onClick={() => setShowTimestamps(!showTimestamps)}
+              />
+            )}
+            {allowWrap && (
+              <QuickAction
+                label="Wrap Lines"
+                icon={<WrapText className="h-3.5 w-3.5" />}
+                active={wrapLines}
+                onClick={() => setWrapLines(!wrapLines)}
+              />
+            )}
+            {onClear && (
+              <QuickAction
+                label="Clear Console"
+                icon={<Eraser className="h-3.5 w-3.5" />}
+                onClick={onClear}
+              />
+            )}
+          </div>
+        )}
+
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className={cn(
+            'p-4 max-h-[600px] rounded-sm text-xs inline-block w-full overflow-auto bg-transparent',
+            className,
+          )}>
+          {renderedLogs.length > 0 ? (
+            <>
+              {/* Top spacer */}
+              <div style={{ height: virtual.paddingTop }} aria-hidden />
+              {virtual.items.map((log, idx) => (
+                <LogRow
+                  key={virtual.start + idx}
+                  log={log}
+                  showTimestamps={showTimestamps}
+                  wrapLines={wrapLines}
+                />
+              ))}
+              {/* Bottom spacer */}
+              <div style={{ height: virtual.paddingBottom }} aria-hidden />
+            </>
+          ) : (
+            <div className="text-zinc-600 italic">No logs available...</div>
+          )}
+        </div>
+      </div>
+    );
+  },
+);
 
 export const MemoryUsageCell = ({
   state,

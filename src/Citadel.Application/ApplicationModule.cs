@@ -97,6 +97,7 @@ public static class ApplicationModule
             .AddSingleton<IContainerStreamManager>(s => s.GetRequiredService<ContainerStreamManager>())
             .AddSingleton<IDeploymentStreamManager>(s => s.GetRequiredService<DeploymentStreamManager>())
             .AddSingleton<IDockerDaemonStreamManager>(s => s.GetRequiredService<DockerDaemonStreamManager>())
+            .AddSingleton<IContainerLogStreamManager>(s => s.GetRequiredService<ContainerLogStreamManager>())
             .AddSingleton<IGitRepositoryStreamManager>(s => s.GetRequiredService<GitRepositoryStreamManager>());
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)

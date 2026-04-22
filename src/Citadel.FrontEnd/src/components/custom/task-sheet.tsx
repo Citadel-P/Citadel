@@ -1,4 +1,4 @@
-import { ReactNode, useMemo } from 'react';
+import { memo, ReactNode, useCallback, useMemo } from 'react';
 import { Calendar, Check, CheckCheck, Clock, LoaderCircle, NotepadText } from 'lucide-react';
 import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -329,7 +329,7 @@ export function ActivityAlertZone({
   info: ActivityEventInfoGitRepoPulled | ActivityEventInfoGitRepoCloned | ActivityEventInfoDeploymentApplied;
   activity: ActivityView;
   title?: string;
-  date?: any
+  date?: any;
 }) {
   if (!(activity.status === ActivityStatus.Failure || activity.status === ActivityStatus.Warning)) return;
   return (
@@ -447,8 +447,15 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   alertEvent: AlertEventTaskRenderer,
 };
 
-export function TaskSheet({ type }: { type: ResourceType }) {
+export const TaskSheet = memo(function TaskSheet({ type }: { type: ResourceType }) {
   const { state, close } = useTaskSheet(type);
+
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) close();
+    },
+    [close],
+  );
 
   if (!state.open || !state.task) return null;
 
@@ -456,7 +463,7 @@ export function TaskSheet({ type }: { type: ResourceType }) {
   const Renderer = taskRenderers[state.task.kind];
 
   return (
-    <Sheet open={state.open} onOpenChange={(open) => (!open ? close() : undefined)}>
+    <Sheet open={state.open} onOpenChange={handleOpenChange}>
       <SheetContent
         onOpenAutoFocus={(e) => {
           e.preventDefault();
@@ -471,7 +478,7 @@ export function TaskSheet({ type }: { type: ResourceType }) {
       </SheetContent>
     </Sheet>
   );
-}
+});
 
 export default TaskSheet;
 
@@ -479,13 +486,17 @@ function useImagePullProgress(params: PullImageParams) {
   const { currentPlatform } = useAppContext();
   const [registryFilter] = useResourceFilter<{ item: RegistryView }>('Registry');
 
+  const registryId = params.registryId ?? registryFilter?.item?.id ?? '';
+  const platformId = currentPlatform?.id ?? '';
+  const imageTag = params.imageTag;
+
   const request: PullImageInput = useMemo(
     () => ({
-      registryId: params.registryId ?? registryFilter?.item?.id ?? '',
-      platformId: currentPlatform?.id ?? '',
-      imageTag: params.imageTag,
+      registryId,
+      platformId,
+      imageTag,
     }),
-    [currentPlatform, registryFilter, params],
+    [registryId, platformId, imageTag],
   );
 
   return useStreamProgress<PullImageInput, PullImageStreamItem>({
@@ -498,13 +509,9 @@ function useImagePullProgress(params: PullImageParams) {
 }
 
 function useApplyDeploymentProgress(params: DeployParams) {
-  const request: ApplyDeploymentInput = useMemo(
-    () => ({
-      id: params.id,
-      recreate: params.recreate,
-    }),
-    [params],
-  );
+  const { id, recreate } = params;
+
+  const request: ApplyDeploymentInput = useMemo(() => ({ id, recreate }), [id, recreate]);
 
   return useStreamProgress<ApplyDeploymentInput, DeploymentStreamItem>({
     endpoint: 'api/v1/deployments/apply',
