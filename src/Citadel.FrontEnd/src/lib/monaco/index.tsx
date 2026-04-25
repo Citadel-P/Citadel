@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DiffEditor, Editor, Monaco, type OnMount } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
-import * as prettier from 'prettier/standalone';
-import * as pluginTypescript from 'prettier/plugins/typescript';
-import * as pluginEsTree from 'prettier/plugins/estree';
-import * as pluginYaml from 'prettier/plugins/yaml';
 
 import { useLayoutContext } from '@/lib/context/layout-context';
 import { useLocalStorage, useWindowDimensions } from '../hooks';
@@ -33,6 +29,33 @@ export type SupportedLanguage =
 
 type DiffFormat = 'json' | 'yaml';
 type DiffLayout = 'side-by-side' | 'inline';
+
+let prettierLoader:
+  | Promise<{
+      formatWithCursor: (source: string, options: any) => Promise<{ formatted: string; cursorOffset: number }>;
+      pluginTypescript: any;
+      pluginEsTree: any;
+      pluginYaml: any;
+    }>
+  | null = null;
+
+const loadPrettierFormatter = () => {
+  if (!prettierLoader) {
+    prettierLoader = Promise.all([
+      import('prettier/standalone'),
+      import('prettier/plugins/typescript'),
+      import('prettier/plugins/estree'),
+      import('prettier/plugins/yaml'),
+    ]).then(([prettier, pluginTypescript, pluginEsTree, pluginYaml]) => ({
+      formatWithCursor: prettier.formatWithCursor,
+      pluginTypescript: pluginTypescript.default,
+      pluginEsTree: pluginEsTree.default,
+      pluginYaml: pluginYaml.default,
+    }));
+  }
+
+  return prettierLoader;
+};
 // --- Helper: Serialization ---
 
 const useDynamicHeight = (
@@ -60,8 +83,9 @@ const useEditorFormatting = (editor: monaco.editor.IStandaloneCodeEditor | null,
     const isSupported = ['yaml', 'typescript', 'javascript', 'json'].includes(language);
     if (!isSupported) return;
 
-    // Register Command: Alt + Shift + F
-    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, async () => {
+    let active = true;
+
+    const formatCurrentDocument = async () => {
       const model = editor.getModel();
       if (!model) return;
 
@@ -70,7 +94,9 @@ const useEditorFormatting = (editor: monaco.editor.IStandaloneCodeEditor | null,
       const currentOffset = cursorPosition ? model.getOffsetAt(cursorPosition) : 0;
 
       try {
-        const { formatted, cursorOffset } = await prettier.formatWithCursor(currentText, {
+        const { formatWithCursor, pluginTypescript, pluginEsTree, pluginYaml } = await loadPrettierFormatter();
+
+        const { formatted, cursorOffset } = await formatWithCursor(currentText, {
           cursorOffset: currentOffset,
           parser: language === 'yaml' ? 'yaml' : 'typescript',
           plugins: language === 'yaml' ? [pluginYaml] : [pluginTypescript, pluginEsTree],
@@ -78,14 +104,28 @@ const useEditorFormatting = (editor: monaco.editor.IStandaloneCodeEditor | null,
           tabWidth: 2,
         } as any);
 
+        if (!active) return;
+
         editor.setValue(formatted);
         editor.setPosition(model.getPositionAt(cursorOffset));
       } catch (error) {
         console.warn('Prettier formatting failed', error);
       }
+    };
+
+    const actionDisposable = editor.addAction({
+      id: `citadel.format.${language}`,
+      label: 'Format Document',
+      keybindings: [monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.KeyF],
+      run: async () => {
+        await formatCurrentDocument();
+      },
     });
 
-    return () => {};
+    return () => {
+      active = false;
+      actionDisposable.dispose();
+    };
   }, [editor, language]);
 };
 
@@ -146,25 +186,46 @@ export const MonacoEditor = ({
   // Handle Escape key to blur
   useEffect(() => {
     if (!editorInstance) return;
-    const domNode = editorInstance.getDomNode();
+    const keydownDisposable = editorInstance.onKeyDown((event) => {
+      if (event.keyCode !== monaco.KeyCode.Escape) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
       }
-    };
+    });
 
-    domNode?.addEventListener('keydown', handleKeyDown);
-    return () => domNode?.removeEventListener('keydown', handleKeyDown);
+    return () => keydownDisposable.dispose();
   }, [editorInstance]);
 
   const handleMount: OnMount = (editor) => {
     setEditorInstance(editor);
   };
 
-  const getPath = (fname?: string) => fname?.split('/').pop();
+  const editorPath = useMemo(() => filename?.split('/').pop(), [filename]);
+  const handleEditorChange = useCallback((nextValue: string | undefined) => onValueChange?.(nextValue ?? ''), [onValueChange]);
+  const editorOptions = useMemo<monaco.editor.IStandaloneEditorConstructionOptions>(
+    () => ({
+      minimap: { enabled: minimap },
+      scrollBeyondLastLine: false,
+      folding: folding,
+      links: true,
+      automaticLayout: true,
+      occurrencesHighlight: 'singleFile',
+      renderValidationDecorations: 'on',
+      renderLineHighlightOnlyWhenFocus: true,
+      readOnly,
+      tabSize: 2,
+      detectIndentation: true,
+      quickSuggestions: true,
+      padding: { top: 15 },
+      fontSize: fontSize,
+      lineHeight: 20,
+      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+      fontLigatures: true,
+      letterSpacing: 0.5,
+    }),
+    [folding, fontSize, minimap, readOnly],
+  );
 
   return (
     <div className={cn('mx-2 my-1 w-full relative min-w-0', className)} style={{ height: `${containerHeight}px` }}>
@@ -175,32 +236,13 @@ export const MonacoEditor = ({
           language={language}
           value={value}
           theme={currentTheme}
-          path={getPath(filename)}
+          path={editorPath}
           height="100%"
           width="100%"
           beforeMount={handleBeforeMount}
-          onChange={(v) => onValueChange?.(v ?? '')}
+          onChange={handleEditorChange}
           onMount={handleMount}
-          options={{
-            minimap: { enabled: minimap },
-            scrollBeyondLastLine: false,
-            folding: folding,
-            links: true,
-            automaticLayout: true,
-            occurrencesHighlight: 'singleFile',
-            renderValidationDecorations: 'on',
-            renderLineHighlightOnlyWhenFocus: true,
-            readOnly,
-            tabSize: 2,
-            detectIndentation: true,
-            quickSuggestions: true,
-            padding: { top: 15 },
-            fontSize: fontSize,
-            lineHeight: 20,
-            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            fontLigatures: true,
-            letterSpacing: 0.5,
-          }}
+          options={editorOptions}
         />
       </div>
     </div>
@@ -395,8 +437,6 @@ export function MonacoDiff({
         language={format}
         beforeMount={handleBeforeMount}
         theme={currentTheme}
-        keepCurrentModifiedModel
-        keepCurrentOriginalModel
         options={{
           automaticLayout: true,
           renderSideBySide: layout === 'side-by-side',
