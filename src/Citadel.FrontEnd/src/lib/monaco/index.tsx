@@ -1,10 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DiffEditor, Editor, Monaco, type OnMount } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
-import * as prettier from 'prettier/standalone';
-import * as pluginTypescript from 'prettier/plugins/typescript';
-import * as pluginEsTree from 'prettier/plugins/estree';
-import * as pluginYaml from 'prettier/plugins/yaml';
 
 import { useLayoutContext } from '@/lib/context/layout-context';
 import { useLocalStorage, useWindowDimensions } from '../hooks';
@@ -33,6 +29,31 @@ export type SupportedLanguage =
 
 type DiffFormat = 'json' | 'yaml';
 type DiffLayout = 'side-by-side' | 'inline';
+
+let prettierLoader: Promise<{
+  formatWithCursor: (source: string, options: any) => Promise<{ formatted: string; cursorOffset: number }>;
+  pluginTypescript: any;
+  pluginEsTree: any;
+  pluginYaml: any;
+}> | null = null;
+
+const loadPrettierFormatter = () => {
+  if (!prettierLoader) {
+    prettierLoader = Promise.all([
+      import('prettier/standalone'),
+      import('prettier/plugins/typescript'),
+      import('prettier/plugins/estree'),
+      import('prettier/plugins/yaml'),
+    ]).then(([prettier, pluginTypescript, pluginEsTree, pluginYaml]) => ({
+      formatWithCursor: prettier.formatWithCursor,
+      pluginTypescript: pluginTypescript.default,
+      pluginEsTree: pluginEsTree.default,
+      pluginYaml: pluginYaml.default,
+    }));
+  }
+
+  return prettierLoader;
+};
 // --- Helper: Serialization ---
 
 const useDynamicHeight = (
@@ -43,7 +64,7 @@ const useDynamicHeight = (
   const { height: windowHeight } = useWindowDimensions();
 
   return useMemo(() => {
-    const lines = content?.split(/\r\n|\r|\n/).length ?? 0;
+    const lines = countLines(content ?? '');
     const requiredHeight = lines * LINE_HEIGHT_PX + CONTAINER_PADDING_PX;
 
     const screenLimit = windowHeight > 0 ? Math.floor(windowHeight * 0.5) : maxHeight;
@@ -60,8 +81,9 @@ const useEditorFormatting = (editor: monaco.editor.IStandaloneCodeEditor | null,
     const isSupported = ['yaml', 'typescript', 'javascript', 'json'].includes(language);
     if (!isSupported) return;
 
-    // Register Command: Alt + Shift + F
-    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, async () => {
+    let active = true;
+
+    const formatCurrentDocument = async () => {
       const model = editor.getModel();
       if (!model) return;
 
@@ -70,7 +92,9 @@ const useEditorFormatting = (editor: monaco.editor.IStandaloneCodeEditor | null,
       const currentOffset = cursorPosition ? model.getOffsetAt(cursorPosition) : 0;
 
       try {
-        const { formatted, cursorOffset } = await prettier.formatWithCursor(currentText, {
+        const { formatWithCursor, pluginTypescript, pluginEsTree, pluginYaml } = await loadPrettierFormatter();
+
+        const { formatted, cursorOffset } = await formatWithCursor(currentText, {
           cursorOffset: currentOffset,
           parser: language === 'yaml' ? 'yaml' : 'typescript',
           plugins: language === 'yaml' ? [pluginYaml] : [pluginTypescript, pluginEsTree],
@@ -78,14 +102,32 @@ const useEditorFormatting = (editor: monaco.editor.IStandaloneCodeEditor | null,
           tabWidth: 2,
         } as any);
 
-        editor.setValue(formatted);
+        if (!active) return;
+
+        editor.pushUndoStop();
+        editor.executeEdits('citadel.format', [
+          { range: model.getFullModelRange(), text: formatted, forceMoveMarkers: true },
+        ]);
+        editor.pushUndoStop();
         editor.setPosition(model.getPositionAt(cursorOffset));
       } catch (error) {
         console.warn('Prettier formatting failed', error);
       }
+    };
+
+    const actionDisposable = editor.addAction({
+      id: `citadel.format.${language}`,
+      label: 'Format Document',
+      keybindings: [monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.KeyF],
+      run: async () => {
+        await formatCurrentDocument();
+      },
     });
 
-    return () => {};
+    return () => {
+      active = false;
+      actionDisposable.dispose();
+    };
   }, [editor, language]);
 };
 
@@ -146,28 +188,61 @@ export const MonacoEditor = ({
   // Handle Escape key to blur
   useEffect(() => {
     if (!editorInstance) return;
-    const domNode = editorInstance.getDomNode();
+    const keydownDisposable = editorInstance.onKeyDown((event) => {
+      if (event.keyCode !== monaco.KeyCode.Escape) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
       }
-    };
+    });
 
-    domNode?.addEventListener('keydown', handleKeyDown);
-    return () => domNode?.removeEventListener('keydown', handleKeyDown);
+    return () => keydownDisposable.dispose();
   }, [editorInstance]);
 
-  const handleMount: OnMount = (editor) => {
-    setEditorInstance(editor);
-  };
+  useEffect(() => {
+    return () => {
+      if (editorInstance) {
+        editorInstance.dispose();
+      }
+    };
+  }, [editorInstance]);
 
-  const getPath = (fname?: string) => fname?.split('/').pop();
+  const handleMount: OnMount = useCallback((editor) => {
+    setEditorInstance(editor);
+  }, []);
+
+  const editorPath = useMemo(() => filename?.split('/').pop(), [filename]);
+  const handleEditorChange = useCallback(
+    (nextValue: string | undefined) => onValueChange?.(nextValue ?? ''),
+    [onValueChange],
+  );
+  const editorOptions = useMemo<monaco.editor.IStandaloneEditorConstructionOptions>(
+    () => ({
+      minimap: { enabled: minimap },
+      scrollBeyondLastLine: false,
+      folding: folding,
+      links: true,
+      automaticLayout: true,
+      occurrencesHighlight: 'singleFile',
+      renderValidationDecorations: 'on',
+      renderLineHighlightOnlyWhenFocus: true,
+      readOnly,
+      tabSize: 2,
+      detectIndentation: true,
+      quickSuggestions: true,
+      padding: { top: 15 },
+      fontSize: fontSize,
+      lineHeight: 20,
+      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+      fontLigatures: true,
+      letterSpacing: 0.5,
+    }),
+    [folding, fontSize, minimap, readOnly],
+  );
+  const containerStyle = useMemo(() => ({ height: `${containerHeight}px` }), [containerHeight]);
 
   return (
-    <div className={cn('mx-2 my-1 w-full relative min-w-0', className)} style={{ height: `${containerHeight}px` }}>
+    <div className={cn('mx-2 my-1 w-full relative min-w-0', className)} style={containerStyle}>
       <div className="flex flex-col gap-2 absolute inset-0">
         <span className="text-sm font-medium text-foreground">{title}</span>
 
@@ -175,32 +250,13 @@ export const MonacoEditor = ({
           language={language}
           value={value}
           theme={currentTheme}
-          path={getPath(filename)}
+          path={editorPath}
           height="100%"
           width="100%"
           beforeMount={handleBeforeMount}
-          onChange={(v) => onValueChange?.(v ?? '')}
+          onChange={handleEditorChange}
           onMount={handleMount}
-          options={{
-            minimap: { enabled: minimap },
-            scrollBeyondLastLine: false,
-            folding: folding,
-            links: true,
-            automaticLayout: true,
-            occurrencesHighlight: 'singleFile',
-            renderValidationDecorations: 'on',
-            renderLineHighlightOnlyWhenFocus: true,
-            readOnly,
-            tabSize: 2,
-            detectIndentation: true,
-            quickSuggestions: true,
-            padding: { top: 15 },
-            fontSize: fontSize,
-            lineHeight: 20,
-            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            fontLigatures: true,
-            letterSpacing: 0.5,
-          }}
+          options={editorOptions}
         />
       </div>
     </div>
@@ -220,9 +276,7 @@ export const MonacoToArrayEditor = ({ value, language, helperText, onChange }: M
   const generateDisplayContent = useCallback(
     (val: string[] | undefined) => {
       const valueString = (val || []).join('\n');
-
       if (!cleanHelper) return valueString;
-
       return valueString ? `${cleanHelper}\n${valueString}` : cleanHelper;
     },
     [cleanHelper],
@@ -235,20 +289,36 @@ export const MonacoToArrayEditor = ({ value, language, helperText, onChange }: M
       .filter((line) => line.length > 0 && !line.startsWith('#'));
   };
 
-  const [raw, setRaw] = useState(() => generateDisplayContent(value));
+  const [raw, setRaw] = useState(() => {
+    const initial = generateDisplayContent(value);
+    return initial;
+  });
+  const rawRef = useRef(raw);
+  const prevArrayValueRef = useRef<string[] | undefined>(value);
 
   useEffect(() => {
+    rawRef.current = raw;
+  }, [raw]);
+
+  useEffect(() => {
+    const prev = prevArrayValueRef.current || [];
+    const next = value || [];
+
+    const prevNorm = (prev || []).join('\n');
+    const nextNorm = (next || []).join('\n');
+
+    prevArrayValueRef.current = value;
+
+    if (prevNorm === nextNorm) return;
+
     const expected = generateDisplayContent(value);
+    const currentData = textToArray(rawRef.current).join('\n');
 
-    if (raw !== expected) {
-      const currentData = textToArray(raw).join('\n');
-      const expectedData = (value || []).join('\n');
-
-      if (currentData !== expectedData || !raw.startsWith(cleanHelper ?? '# key = value')) {
-        setRaw(expected);
-      }
+    if (currentData !== nextNorm) {
+      rawRef.current = expected;
+      setRaw(expected);
     }
-  }, [value, cleanHelper, raw, generateDisplayContent]);
+  }, [value, cleanHelper, generateDisplayContent]);
 
   return (
     <MonacoEditor
@@ -256,6 +326,7 @@ export const MonacoToArrayEditor = ({ value, language, helperText, onChange }: M
       value={raw}
       onValueChange={(text) => {
         const currentText = text || '';
+        rawRef.current = currentText;
         setRaw(currentText);
         onChange(textToArray(currentText));
       }}
@@ -277,6 +348,7 @@ export const MonacoToDictionaryEditor = ({
   onChange,
 }: MonacoToDictionaryEditorProps) => {
   const cleanHelper = helperText?.trim();
+  const rawRef = useRef('');
 
   const generateDisplayContent = useCallback(
     (val: Record<string, string | null> | undefined) => {
@@ -309,20 +381,57 @@ export const MonacoToDictionaryEditor = ({
     return result;
   };
 
-  const [raw, setRaw] = useState(() => generateDisplayContent(value));
+  const [raw, setRaw] = useState(() => {
+    const initial = generateDisplayContent(value);
+    rawRef.current = initial;
+    return initial;
+  });
 
+  const prevValueRef = useRef<Record<string, string | null> | undefined>(value);
+  const dictionaryEquals = (left: Record<string, string>, right: Record<string, string>) => {
+    const leftEntries = Object.entries(left);
+    const rightEntries = Object.entries(right);
+    if (leftEntries.length !== rightEntries.length) return false;
+
+    for (const [key, leftValue] of leftEntries) {
+      if (!Object.prototype.hasOwnProperty.call(right, key)) return false;
+      if (right[key] !== leftValue) return false;
+    }
+    return true;
+  };
+
+  // Sync from props only when the prop value is semantically different
   useEffect(() => {
+    const prev = prevValueRef.current || {};
+    const next = value || {};
+
+    const normalise = (obj: Record<string, any>) =>
+      Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== null && v !== undefined));
+
+    const prevNorm = normalise(prev as Record<string, any>);
+    const nextNorm = normalise(next as Record<string, any>);
+
+    const valueChangedExternally = !dictionaryEquals(
+      prevNorm as Record<string, string>,
+      nextNorm as Record<string, string>,
+    );
+
+    prevValueRef.current = value;
+
+    if (!valueChangedExternally) return;
+
     const expected = generateDisplayContent(value);
+    const currentRaw = rawRef.current;
+    const currentData = textToDictionary(currentRaw);
 
-    const currentData = textToDictionary(raw);
-    const expectedData = Object.fromEntries(Object.entries(value || {}).filter(([_, v]) => v !== null));
+    const expectedData = nextNorm as Record<string, string>;
+    const isDataDifferent = !dictionaryEquals(currentData, expectedData);
 
-    const isDataDifferent = JSON.stringify(currentData) !== JSON.stringify(expectedData);
-
-    if (isDataDifferent || (cleanHelper && !raw.startsWith(cleanHelper))) {
+    if (isDataDifferent) {
+      rawRef.current = expected;
       setRaw(expected);
     }
-  }, [value, cleanHelper, raw, generateDisplayContent]);
+  }, [value, cleanHelper, generateDisplayContent]);
 
   return (
     <MonacoEditor
@@ -330,19 +439,19 @@ export const MonacoToDictionaryEditor = ({
       value={raw}
       onValueChange={(text) => {
         const currentText = text || '';
+        rawRef.current = currentText;
         setRaw(currentText);
 
         const newDict: Record<string, string | null> = textToDictionary(currentText);
 
         if (value) {
-          Object.keys(value).forEach((oldKey) => {
+          for (const oldKey of Object.keys(value)) {
+            const wasNotNull = value[oldKey] !== null && value[oldKey] !== undefined;
             const isMissing = !Object.prototype.hasOwnProperty.call(newDict, oldKey);
-            const wasNotNull = value[oldKey] !== null;
-
-            if (isMissing && wasNotNull) {
+            if (wasNotNull && isMissing) {
               newDict[oldKey] = undefined as any;
             }
-          });
+          }
         }
 
         onChange(newDict as any);
@@ -363,6 +472,8 @@ export function MonacoDiff({
   title?: string;
 }) {
   const [editor, setEditor] = useState<monaco.editor.IStandaloneDiffEditor | null>(null);
+  const layoutFrameRef = useRef<number | null>(null);
+  const mountFrameRef = useRef<number | null>(null);
   const [layout, setLayout] = useLocalStorage<DiffLayout>('monaco-diff-layout', 'side-by-side');
   const { currentTheme, handleBeforeMount } = useThemeEditor();
 
@@ -380,10 +491,34 @@ export function MonacoDiff({
 
     const container = editor.getContainerDomNode();
     const height = clamp(maxLineCount * 18 + 40, DEFAULT_MIN_HEIGHT, DEFAULT_MAX_HEIGHT);
+    if (layoutFrameRef.current !== null) {
+      cancelAnimationFrame(layoutFrameRef.current);
+    }
+    layoutFrameRef.current = requestAnimationFrame(() => {
+      container.style.height = `${height}px`;
+      editor.layout();
+      layoutFrameRef.current = null;
+    });
 
-    container.style.height = `${height}px`;
-    editor.layout();
+    return () => {
+      if (layoutFrameRef.current !== null) {
+        cancelAnimationFrame(layoutFrameRef.current);
+        layoutFrameRef.current = null;
+      }
+      container.style.height = '';
+    };
   }, [editor, maxLineCount]);
+
+  useEffect(() => {
+    return () => {
+      if (mountFrameRef.current !== null) {
+        cancelAnimationFrame(mountFrameRef.current);
+      }
+      if (layoutFrameRef.current !== null) {
+        cancelAnimationFrame(layoutFrameRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="flex flex-col gap-2 w-full min-w-0">
@@ -395,8 +530,6 @@ export function MonacoDiff({
         language={format}
         beforeMount={handleBeforeMount}
         theme={currentTheme}
-        keepCurrentModifiedModel
-        keepCurrentOriginalModel
         options={{
           automaticLayout: true,
           renderSideBySide: layout === 'side-by-side',
@@ -407,7 +540,14 @@ export function MonacoDiff({
         }}
         onMount={(instance) => {
           setEditor(instance);
-          requestAnimationFrame(() => instance.layout());
+          if (mountFrameRef.current !== null) {
+            cancelAnimationFrame(mountFrameRef.current);
+          }
+          mountFrameRef.current = requestAnimationFrame(() => {
+            if (!instance.getContainerDomNode().isConnected) return;
+            instance.layout();
+            mountFrameRef.current = null;
+          });
         }}
       />
     </div>

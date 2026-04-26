@@ -1123,15 +1123,16 @@ export function FormShell<T>({
 }
 function areValuesEqual(a: any, b: any): boolean {
   if (a === b) return true;
-
   const isEmptyA =
     a === undefined ||
     a === null ||
+    (typeof a === 'string' && a.trim().length === 0) ||
     (Array.isArray(a) && a.length === 0) ||
     (isObject(a) && Object.keys(a).length === 0);
   const isEmptyB =
     b === undefined ||
     b === null ||
+    (typeof b === 'string' && b.trim().length === 0) ||
     (Array.isArray(b) && b.length === 0) ||
     (isObject(b) && Object.keys(b).length === 0);
   if (isEmptyA && isEmptyB) return true;
