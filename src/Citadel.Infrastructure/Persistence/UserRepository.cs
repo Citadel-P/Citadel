@@ -28,9 +28,15 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return result.ToDomain();
     }
 
-    public async Task<PagedResult<UserDetails>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<PagedResult<UserDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
-        const string selectSql = """
+        name = string.IsNullOrWhiteSpace(name) ? null : name;
+
+        const string baseWhere = """
+        WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
+        """;
+
+        const string selectSql = $"""
             SELECT
                 u.Id,
                 u.Name,
@@ -42,19 +48,36 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 u.CreatedByActorId
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
+            {baseWhere}
             ORDER BY u.Name ASC
             LIMIT @PageSize OFFSET @Offset
             """;
-        const string countSql = "SELECT COUNT(*) FROM Users";
+
+            const string countSql = $"""
+            SELECT COUNT(*)
+            FROM Users u
+            JOIN Actors a ON a.Id = u.ActorId
+            {baseWhere}
+        """;
 
         var offset = (page - 1) * pageSize;
-        var totalCount = await db.QuerySingleAsync<int>(countSql, transaction: tx());
-        var rows = await db.QueryAsync<UserWithActorDto>(selectSql, new { PageSize = pageSize, Offset = offset, cancellationToken }, transaction: tx());
+
+        var totalCount = await db.QuerySingleAsync<int>(
+            new CommandDefinition(countSql,
+                new { Name = name },
+                transaction: tx(),
+                cancellationToken: cancellationToken));
+
+        var rows = await db.QueryAsync<UserWithActorDto>(
+            new CommandDefinition(selectSql,
+                new { PageSize = pageSize, Offset = offset, Name = name },
+                transaction: tx(),
+                cancellationToken: cancellationToken));
 
         return new PagedResult<UserDetails>(rows.ToDetails(), totalCount, page, pageSize);
     }
 
-    public async Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
         const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
             SELECT
@@ -68,10 +91,10 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 u.CreatedByActorId
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
-            WHERE
+            WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
         """ + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY u.Name ASC LIMIT @PageSize OFFSET @Offset;";
 
-        const string countSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT COUNT(*) FROM Users u WHERE "
+        const string countSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT COUNT(*) FROM Users u WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%') "
             + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
         var offset = (page - 1) * pageSize;
@@ -82,6 +105,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             PageSize = pageSize,
             Offset = offset,
+            Name = name,
             cancellationToken
         };
 

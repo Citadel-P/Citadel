@@ -19,6 +19,7 @@ import { AlertRuleFormComponents } from './alerters/alert-rules/form';
 import { AlertEventComponents } from './alerters/alert-events';
 import { GitRepoComponents } from './git-repos';
 import { GitRepoFormComponents } from './git-repos/form';
+import { AccessComponents } from './access';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -35,6 +36,7 @@ export const ResourceComponents: {
   AlertRule: AlertRuleComponents,
   Alert: AlertEventComponents,
   GitRepository: GitRepoComponents,
+  Access: AccessComponents,
 };
 
 export const ResourceFormComponents: {
@@ -55,6 +57,7 @@ export const ResourceFormComponents: {
   Stack: undefined,
   GitRepository: GitRepoFormComponents,
   GitAccount: undefined,
+  Access: undefined,
 };
 
 export const DockerResourceInfoComponents: {

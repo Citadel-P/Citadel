@@ -453,6 +453,13 @@
         "operationId": "listUsers",
         "parameters": [
           {
+            "name": "Name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Page",
             "in": "query",
             "schema": {
@@ -1288,6 +1295,13 @@
         "summary": "Get all teams",
         "operationId": "listTeams",
         "parameters": [
+          {
+            "name": "Name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "Page",
             "in": "query",

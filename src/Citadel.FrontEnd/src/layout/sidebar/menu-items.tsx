@@ -1,6 +1,6 @@
 import {
   Layers,
-  Users,
+  UserKey,
   Cable,
   Rocket,
   Server,
@@ -103,9 +103,9 @@ const MenuItems: IMenuItem[] = [
             route: '/variables',
           },
           {
-            icon: <Users className="w-3.5 h-3.5" />,
-            label: 'Users',
-            route: '/users',
+            icon: <UserKey className="w-3.5 h-3.5" />,
+            label: 'Access',
+            route: '/access',
           },
         ],
       },

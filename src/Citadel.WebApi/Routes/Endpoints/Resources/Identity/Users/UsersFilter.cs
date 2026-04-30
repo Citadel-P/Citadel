@@ -3,9 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Routes.Endpoints.Resources.Identity.Users;
 
-public sealed record UsersFilter([FromQuery] int Page = 1, [FromQuery] int PageSize = 50)
+public sealed record UsersFilter(
+    [FromQuery] string Name = null,
+    [FromQuery] int Page = 1, 
+    [FromQuery] int PageSize = 50
+    )
 {
-    internal GetUsers ToQuery() => new(Page, PageSize);
+    internal GetUsers ToQuery() => new(Page, PageSize, Name);
 
     public static ValueTask<UsersFilter> BindAsync(HttpContext context)
     {
@@ -16,7 +20,8 @@ public sealed record UsersFilter([FromQuery] int Page = 1, [FromQuery] int PageS
         var pageSize = query.TryGetValue("pageSize", out var pageSizeStr) && int.TryParse(pageSizeStr, out var parsedPageSize)
             ? parsedPageSize
             : 50;
+        var name = query.TryGetValue("name", out var nameStr) ? nameStr.ToString() : null;
 
-        return ValueTask.FromResult(new UsersFilter(page, pageSize));
+        return ValueTask.FromResult(new UsersFilter(name, page, pageSize));
     }
 }

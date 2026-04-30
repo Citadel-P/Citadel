@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { Checkbox } from '@/components/ui/checkbox';
 import SortableCell from '@/components/custom/sortable-cell';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { AlertEventStatusCell, PagedDataTable, SeverityStatusCell, TargetCell } from '@/components/custom/common';
@@ -8,6 +7,7 @@ import { AlertEventView, PagedResultViewOfAlertEventView } from '@/api/generated
 import { useAlertEventQuery, useSelectedResources, useTaskSheet } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { fromNow } from '@/lib/dayjs.helper';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const EMPTY_ROWS: AlertEventView[] = [];
 

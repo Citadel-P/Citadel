@@ -3453,6 +3453,7 @@ export class Api<
      */
     listUsers: (
       query?: {
+        Name?: string;
         /**
          * @format int32
          * @default 1
@@ -3689,6 +3690,7 @@ export class Api<
      */
     listTeams: (
       query?: {
+        Name?: string;
         /**
          * @format int32
          * @default 1

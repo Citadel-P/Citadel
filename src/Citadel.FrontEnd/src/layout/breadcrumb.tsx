@@ -48,7 +48,7 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
         continue;
       }
 
-      // Platform ID → use platform name
+      // Platform ID -> use platform name
       if (segment === platformId) {
         result.push({
           title: currentPlatform?.name ?? 'Platform',

@@ -45,29 +45,35 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return result?.ToDetails();
     }
 
-    public async Task<PagedResult<TeamDetails>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<PagedResult<TeamDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
         const string selectSql = """
-            SELECT
-                t.Id,
-                t.Name,
-                t.ActorId,
-                a.IsEnabled
-            FROM Teams t
-            JOIN Actors a ON a.Id = t.ActorId
-            ORDER BY t.Name ASC
-            LIMIT @PageSize OFFSET @Offset
-            """;
-        const string countSql = "SELECT COUNT(*) FROM Teams";
+        SELECT
+            t.Id,
+            t.Name,
+            t.ActorId,
+            a.IsEnabled
+        FROM Teams t
+        JOIN Actors a ON a.Id = t.ActorId
+        WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%')
+        ORDER BY t.Name ASC
+        LIMIT @PageSize OFFSET @Offset
+        """;
+        const string countSql = """
+        SELECT COUNT(*)
+        FROM Teams t
+        JOIN Actors a ON a.Id = t.ActorId
+        WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%')
+        """;
 
         var offset = (page - 1) * pageSize;
-        var totalCount = await db.QuerySingleAsync<int>(countSql, transaction: tx());
-        var rows = await db.QueryAsync<TeamWithActorDto>(selectSql, new { PageSize = pageSize, Offset = offset, cancellationToken }, transaction: tx());
+        var totalCount = await db.QuerySingleAsync<int>(countSql, new { Name = name }, transaction: tx());
+        var rows = await db.QueryAsync<TeamWithActorDto>(selectSql, new { PageSize = pageSize, Offset = offset, Name = name, cancellationToken }, transaction: tx());
 
         return new PagedResult<TeamDetails>(rows.ToDetails(), totalCount, page, pageSize);
     }
 
-    public async Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
         const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
             SELECT
@@ -77,10 +83,10 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 a.IsEnabled
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
-            WHERE
+            WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%') AND
         """ + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY t.Name ASC LIMIT @PageSize OFFSET @Offset;";
 
-        const string countSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT COUNT(*) FROM Teams t WHERE "
+        const string countSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT COUNT(*) FROM Teams t WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%') AND"
             + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
         var offset = (page - 1) * pageSize;
@@ -91,6 +97,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
             Action = EnumFormatter<ResourceAction>.GetValue(action),
             PageSize = pageSize,
             Offset = offset,
+            Name = name,
             cancellationToken
         };
 

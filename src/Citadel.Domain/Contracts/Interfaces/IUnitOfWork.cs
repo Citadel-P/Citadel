@@ -52,8 +52,8 @@ public interface IUserRepository
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
     Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken);
-    Task<PagedResult<UserDetails>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken);
-    Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PagedResult<UserDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken);
+    Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken);
     Task<IEnumerable<User>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<(bool NameExists, bool EmailExists)> GetConflictsAsync(string name, string email, Guid? excludeId, CancellationToken cancellationToken);
     Task<(User? User, bool IsEnabled, bool NameExists, bool EmailExists)> GetUserUpdateStateAsync(Guid id, string? name, string? email, CancellationToken cancellationToken);
@@ -187,8 +187,8 @@ public interface ITeamRepository
     Task<Team?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<TeamDetails?> GetDetailsAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Team>> GetAllAsync(CancellationToken cancellationToken);
-    Task<PagedResult<TeamDetails>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken);
-    Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PagedResult<TeamDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken);
+    Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken);
     Task<IEnumerable<Team>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> GetConflictsAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
     Task<(Team? Team, bool IsEnabled, bool NameExists)> GetTeamUpdateStateAsync(Guid id, string? name, CancellationToken cancellationToken);

@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Routes.Endpoints.Resources.Identity.Teams;
 
-public sealed record TeamsFilter([FromQuery] int Page = 1, [FromQuery] int PageSize = 50)
+public sealed record TeamsFilter([FromQuery] string Name = null, [FromQuery] int Page = 1, [FromQuery] int PageSize = 50)
 {
-    internal GetTeams ToQuery() => new(Page, PageSize);
+    internal GetTeams ToQuery() => new(Name, Page, PageSize);
 
     public static ValueTask<TeamsFilter> BindAsync(HttpContext context)
     {
@@ -16,7 +16,8 @@ public sealed record TeamsFilter([FromQuery] int Page = 1, [FromQuery] int PageS
         var pageSize = query.TryGetValue("pageSize", out var pageSizeStr) && int.TryParse(pageSizeStr, out var parsedPageSize)
             ? parsedPageSize
             : 50;
+        var name = query.TryGetValue("name", out var nameStr) ? nameStr.ToString() : null;
 
-        return ValueTask.FromResult(new TeamsFilter(page, pageSize));
+        return ValueTask.FromResult(new TeamsFilter(name, page, pageSize));
     }
 }

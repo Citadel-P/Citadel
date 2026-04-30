@@ -133,6 +133,7 @@ export const useResourceParamType = (): ResourceType => {
   if (type === 'activities') return 'Activity';
   if (type === 'alert-rules') return 'AlertRule';
   if (type === 'git-repos') return 'GitRepository';
+  if (type === 'access') return 'Access';
 
   return type ? ((type[0].toUpperCase() + type.slice(1, -1)) as ResourceType) : 'Platform';
 };

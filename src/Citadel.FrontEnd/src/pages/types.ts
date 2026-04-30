@@ -9,7 +9,7 @@ export interface RequiredComponents<T = any> {
   SubHeader?: React.FC;
 
   /** Icon displayed in the page header */
-  Icon: React.ReactElement;
+  Icon?: React.ReactElement;
 
   /** Dropdown actions for table rows */
   DropdownActions?: {
@@ -26,6 +26,9 @@ export interface RequiredComponents<T = any> {
     isLoading: boolean;
     isFiltered?: boolean;
   }>;
+
+  /** Tabs configuration if any */
+  Tabs?: TabElement<T>[];
 
   /** Data hook for the resource */
   useData?: (platformId: string) => ResourceDataHookResult<T>;
@@ -84,13 +87,32 @@ export interface ResourceDataHookResult<T> {
   isLoading: boolean;
 }
 
+export interface TabHeaderOptions {
+  /** Optional left-side action buttons that appear next to the tab header */
+  showSearch?: boolean;
+  /** Placeholder text for the per-tab search field */
+  searchPlaceholder?: string;
+  /** Optional per-tab search callback */
+  onSearch?: (query: string) => void;
+  /** Whether to show an Add button in the tab header (right area) */
+  showAdd?: boolean;
+  /** Override text for the per-tab Add button */
+  addButtonTitle?: string;
+  /** Override URL for the per-tab Add button */
+  addButtonUrl?: string;
+  /** Additional custom header items (buttons, dropdowns, etc.). */
+  Extra?: React.FC;
+}
+
 export interface TabElement<T> {
   /** Tab label shown in the UI */
   label: string;
   /** Wether this tab is disabled */
   disabled?(resource: T): boolean;
   /** Component(s) for this tab */
-  Content: React.FC<{ resource: T; metadataChanged?: boolean }>;
+  Content: React.FC<{ resource: T; metadataChanged?: boolean } | any>;
+  /** Per-tab header configuration for the tab header right area */
+  Header?: TabHeaderOptions;
 }
 
 interface ResourceInfoHookResult<T> {
