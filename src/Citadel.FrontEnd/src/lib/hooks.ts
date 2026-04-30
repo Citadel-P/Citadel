@@ -24,7 +24,7 @@ import {
 } from '@/api/types';
 import { useGetValidationErrors, getValidationErrors } from '@/hooks/useGetValidationErrors';
 import { toast } from 'sonner';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useLocation } from 'react-router';
 import { ApplyDeploymentInput, ProblemDetails, PullImageInput } from '@/api/generated/api.types';
 import { useAuthContext } from '@/features/auth/auth-context';
 
@@ -128,7 +128,9 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
 }
 
 export const useResourceParamType = (): ResourceType => {
-  const type = useParams().type;
+  const params = useParams();
+  const firstSegment = useLocation().pathname.split('/').filter(Boolean)[0];
+  const type = params.type ?? firstSegment;
   if (type === 'registries') return 'Registry';
   if (type === 'activities') return 'Activity';
   if (type === 'alert-rules') return 'AlertRule';

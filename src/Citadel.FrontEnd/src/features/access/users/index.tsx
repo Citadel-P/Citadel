@@ -8,10 +8,20 @@ import { useMemo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { fromNow } from '@/lib/dayjs.helper';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-
+import { StateIndicator } from '@/components/custom/state-indicator';
+import { RequiredFormComponents } from '@/pages/types';
 
 export const Users = () => {
   return <div>Users</div>;
+};
+
+export const UserFormComponents: RequiredFormComponents = {
+  AddForm: {
+    Header: {
+      title: 'User',
+    },
+    Content: () => <></>,
+  },
 };
 
 const EMPTY_ROWS: UserView[] = [];
@@ -33,16 +43,16 @@ export const ActivitiesTable = ({
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
-      <PagedDataTable
-        columns={cols}
-        data={pagedResult?.items ?? EMPTY_ROWS}
-        isLoading={isLoading}
-        query={query}
-        setQuery={setQuery}
-        totalCount={pagedResult?.totalCount}
-        onSelectionChange={setSelectedResources}
-      />
-    );
+    <PagedDataTable
+      columns={cols}
+      data={pagedResult?.items ?? EMPTY_ROWS}
+      isLoading={isLoading}
+      query={query}
+      setQuery={setQuery}
+      totalCount={pagedResult?.totalCount}
+      onSelectionChange={setSelectedResources}
+    />
+  );
 };
 
 const columns = (
@@ -70,12 +80,12 @@ const columns = (
     enableSorting: false,
     enableHiding: false,
   },
-  
+
   {
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-    cell: ({ row }) => <AlertEventStatusCell status={row.original.isEnabled} />,
-    sortingFn: (rowA, rowB) => rowA.original.isEnabled.localeCompare(rowB.original.isEnabled),
+    cell: ({ row }) => <StateIndicator value={row.original.isEnabled} enableLabel />,
+    sortingFn: (rowA, rowB) => Number(rowA.original.isEnabled) - Number(rowB.original.isEnabled),
   },
   {
     accessorKey: 'createdAt',
@@ -88,5 +98,3 @@ const columns = (
     cell: ({ row }) => <RowActionMenu resource={row.original as any} actions={actions as any} />,
   },
 ];
-
-

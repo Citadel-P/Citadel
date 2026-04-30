@@ -1,10 +1,10 @@
-import { RequiredComponents } from '@/pages/types';
+import { TabbedResourceComponents } from '@/pages/types';
 import { Users } from './users';
 import { Teams } from './teams';
 import { Roles } from './roles';
 import { UserKey } from 'lucide-react';
 
-export const AccessComponents: RequiredComponents = {
+export const AccessComponents: TabbedResourceComponents = {
   Icon: <UserKey className="h-4 w-4" />,
   header: {
     subtitle: 'Manage users, teams, and their access.',
@@ -14,6 +14,7 @@ export const AccessComponents: RequiredComponents = {
   Tabs: [
     {
       label: 'Users',
+      slug: 'users',
       Content: () => {
         return <Users />;
       },
@@ -21,11 +22,12 @@ export const AccessComponents: RequiredComponents = {
         showAdd: true,
         showSearch: true,
         addButtonTitle: 'Add User',
-        addButtonUrl: './add-user',
+        addButtonUrl: '/users/add',
       },
     },
     {
       label: 'Teams',
+      slug: 'teams',
       Content: () => {
         return <Teams />;
       },
@@ -33,11 +35,12 @@ export const AccessComponents: RequiredComponents = {
         showAdd: true,
         showSearch: true,
         addButtonTitle: 'Add Team',
-        addButtonUrl: './add-team',
+        addButtonUrl: '/teams/add',
       },
     },
     {
       label: 'Roles',
+      slug: 'roles',
       Content: () => {
         return <Roles />;
       },
@@ -45,7 +48,7 @@ export const AccessComponents: RequiredComponents = {
         showAdd: true,
         showSearch: false,
         addButtonTitle: 'Add Role',
-        addButtonUrl: './add-role',
+        addButtonUrl: '/roles/add',
       },
     },
   ],
