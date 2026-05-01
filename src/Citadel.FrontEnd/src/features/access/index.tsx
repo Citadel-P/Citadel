@@ -3,6 +3,9 @@ import { Users } from './users';
 import { Teams } from './teams';
 import { Roles } from './roles';
 import { UserKey } from 'lucide-react';
+import { useUsersList } from './users/hooks/useUsersList';
+import { ActionBar } from '@/components/custom/action-bar';
+import { UserDropdownActions, UserGroupActions } from './users/actions';
 
 export const AccessComponents: TabbedResourceComponents = {
   Icon: <UserKey className="h-4 w-4" />,
@@ -15,27 +18,45 @@ export const AccessComponents: TabbedResourceComponents = {
     {
       label: 'Users',
       slug: 'users',
-      Content: () => {
-        return <Users />;
+      Content: ({ items, isLoading, actions }) => {
+        return <Users items={items} isLoading={isLoading} actions={actions} />;
       },
       Header: {
         showAdd: true,
-        showSearch: true,
+        showSearch: false,
         addButtonTitle: 'Add User',
-        addButtonUrl: '/users/add',
+        addButtonUrl: '/access/users/add',
+      },
+      DropdownActions: UserDropdownActions,
+      GroupActions: ({ items }) => {
+        return <ActionBar type="User" items={items} actions={Object.values(UserGroupActions)} />;
+      },
+      useData: () => {
+        const { pagedUsers, isLoading } = useUsersList();
+        return {
+          items: pagedUsers as any,
+          isLoading,
+        };
       },
     },
     {
       label: 'Teams',
       slug: 'teams',
-      Content: () => {
-        return <Teams />;
+      Content: ({ items, isLoading, actions }) => {
+        return <Teams items={items} isLoading={isLoading} actions={actions}/>;
       },
       Header: {
         showAdd: true,
-        showSearch: true,
+        showSearch: false,
         addButtonTitle: 'Add Team',
-        addButtonUrl: '/teams/add',
+        addButtonUrl: '/access/teams/add',
+      },
+      useData: () => {
+        const { pagedUsers, isLoading } = useUsersList();
+        return {
+          items: pagedUsers as any,
+          isLoading,
+        };
       },
     },
     {
@@ -48,7 +69,7 @@ export const AccessComponents: TabbedResourceComponents = {
         showAdd: true,
         showSearch: false,
         addButtonTitle: 'Add Role',
-        addButtonUrl: '/roles/add',
+        addButtonUrl: '/access/roles/add',
       },
     },
   ],

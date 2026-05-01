@@ -62,17 +62,9 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
         var offset = (page - 1) * pageSize;
 
-        var totalCount = await db.QuerySingleAsync<int>(
-            new CommandDefinition(countSql,
-                new { Name = name },
-                transaction: tx(),
-                cancellationToken: cancellationToken));
+        var totalCount = await db.QuerySingleAsync<int>(countSql, new { Name = name }, transaction: tx());
 
-        var rows = await db.QueryAsync<UserWithActorDto>(
-            new CommandDefinition(selectSql,
-                new { PageSize = pageSize, Offset = offset, Name = name },
-                transaction: tx(),
-                cancellationToken: cancellationToken));
+        var rows = await db.QueryAsync<UserWithActorDto>(selectSql, new { PageSize = pageSize, Offset = offset, Name = name }, transaction: tx());
 
         return new PagedResult<UserDetails>(rows.ToDetails(), totalCount, page, pageSize);
     }

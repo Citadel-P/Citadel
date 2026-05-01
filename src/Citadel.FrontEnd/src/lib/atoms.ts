@@ -14,9 +14,11 @@ const inlineSubHeaderAtom = atomFamily((_: ResourceType) => atom<boolean>(false)
 
 export type PagingKey = ResourceType | string;
 
+export type UserQueryState = { userName: string | undefined; page: number; pageSize: number };
 export type ActivityQueryState = ActivityFiltersState & { page: number; pageSize: number };
 export type AlertEventQueryState = AlertEventFiltersState & { page: number; pageSize: number };
 
+const userQueryAtom = atom<UserQueryState>({ userName: '', page: 1, pageSize: 50 });
 const activityQueryAtom = atom<ActivityQueryState>({
   resourceType: 'All',
   eventType: 'All',
@@ -51,6 +53,39 @@ export function useActivityQuery() {
         return Number.isFinite(n) && n > 0 ? n : key === 'page' ? 1 : 50;
       }
       if (key === 'resourceId') {
+        return raw ?? undefined;
+      }
+      return (raw ?? 'All') as any;
+    },
+  });
+
+  const setQuery = useCallback(
+    (patch: Partial<ActivityQueryState>) => {
+      setState((prev) => ({ ...prev, ...patch }));
+    },
+    [setState],
+  );
+
+  return [state, setQuery] as const;
+}
+
+export function useUserQuery() {
+  const [state, setState] = useAtomUrlSync<UserQueryState>({
+    atom: userQueryAtom,
+    params: ['userName', 'page', 'pageSize'],
+    defaults: { userName: undefined, page: 1, pageSize: 50 },
+    serialize: (v, key) => {
+      if (key === 'userName') {
+        return v ? String(v) : null;
+      }
+      return null;
+    },
+    deserialize: (raw, key) => {
+      if (key === 'page' || key === 'pageSize') {
+        const n = Number(raw);
+        return Number.isFinite(n) && n > 0 ? n : key === 'page' ? 1 : 50;
+      }
+      if (key === 'userName') {
         return raw ?? undefined;
       }
       return (raw ?? 'All') as any;

@@ -1,5 +1,5 @@
 type ResourceContentProps<T = any> = {
-  items: any[];
+  items: any;
   actions: Record<string, DropdownActionComponent<T>>;
   isLoading: boolean;
   isFiltered?: boolean;
@@ -124,10 +124,18 @@ export interface TabElement<T> {
   slug?: string;
   /** Wether this tab is disabled */
   disabled?(resource: T): boolean;
-  /** Component(s) for this tab */
-  Content: React.FC<{ resource: T; metadataChanged?: boolean } | any>;
+  /** Comtent for this tab */
+  Content: React.FC<ResourceContentProps<T>>;
   /** Per-tab header configuration for the tab header right area */
   Header?: TabHeaderOptions;
+  /** Dropdown actions for table rows */
+  DropdownActions?: {
+    [action: string]: DropdownActionComponent<T>;
+  };
+  /** Group actions for the action bar */
+  GroupActions?: React.FC<{ items: any[] }>;
+  /** Data hook for the resource */
+  useData?: () => ResourceDataHookResult<T>;
 }
 
 interface ResourceInfoHookResult<T> {

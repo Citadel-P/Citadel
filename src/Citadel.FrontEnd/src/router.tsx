@@ -33,8 +33,11 @@ export const Router = () => {
               </Route>
 
               <Route path=":type" element={<Resources />} />
+              <Route path=":type/:tab" element={<Resources />} />
               <Route path=":type/add" element={<ResourceForm mode="add" />} />
+              <Route path=":type/:tab/add" element={<ResourceForm mode="add" />} />
               <Route path=":type/edit/:id" element={<ResourceForm mode="edit" />} />
+              <Route path=":type/:tab/edit/:id" element={<ResourceForm mode="edit" />} />
 
               <Route path="*" element={<NotFound />} />
             </Route>
