@@ -11,7 +11,7 @@ import { DockerResourceInfoComponents } from '@/features';
 import { ResourceTabs } from '@/components/custom/resource-tabs';
 
 const ResourceDockerInfoPage = () => {
-  const type = useResourceParamType()!;
+  const { type } = useResourceParamType()!;
 
   const Components = DockerResourceInfoComponents[type as DockerResourceType];
   if (!Components) return <NotFound />;

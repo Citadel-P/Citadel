@@ -14,6 +14,17 @@ import { truncate } from '@/lib/truncate';
 import { capitalize } from '@/lib/utils';
 import { ReversePluralResourceMap } from '@/api/types';
 
+const titleizeSegment = (segment: string) =>
+  segment
+    .split('-')
+    .map((s) => capitalize(s))
+    .join(' ');
+
+const singularizeSegment = (segment: string) => {
+  const title = titleizeSegment(segment);
+  return title.endsWith('ies') ? `${title.slice(0, -3)}y` : title.endsWith('s') ? title.slice(0, -1) : title;
+};
+
 export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -68,7 +79,8 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
       // /platforms/:id/:type/add
       // /:type/add or /:type/edit
       if (segment === 'add' || segment === 'edit') {
-        const typeStr = type ?? 'Resource';
+        const previousSegment = segments[i - 1];
+        const typeStr = previousSegment && previousSegment !== type ? previousSegment : (type ?? previousSegment ?? 'Resource');
         const formattedType = typeStr
           .split('-')
           .map((s) => capitalize(s))
@@ -76,6 +88,9 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
         const resourceKey = formattedType as keyof typeof ReversePluralResourceMap;
         let mapped = ReversePluralResourceMap[resourceKey] ?? formattedType;
         mapped = mapped.replace(/([A-Z])/g, ' $1').trim() as any;
+        if (previousSegment && previousSegment !== type) {
+          mapped = singularizeSegment(previousSegment) as any;
+        }
         result.push({ title: `${capitalize(segment)} ${mapped}`, link: pathAcc });
         continue;
       }
@@ -88,16 +103,12 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
 
       // Resource type (containers, networks, images, volumes…)
       if (segment === type) {
-        const title = segment
-          .split('-')
-          .map((s) => capitalize(s))
-          .join(' ');
-        result.push({ title, link: pathAcc });
+        result.push({ title: titleizeSegment(segment), link: pathAcc });
         continue;
       }
 
       // Fallback
-      result.push({ title: segment, link: pathAcc });
+      result.push({ title: titleizeSegment(segment), link: pathAcc });
     }
 
     // Last breadcrumb is active -> no link

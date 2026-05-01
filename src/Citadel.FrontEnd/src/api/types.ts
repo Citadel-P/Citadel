@@ -22,7 +22,9 @@ export type ResourceType =
   | 'GitRepository'
   | 'GitAccount'
   | 'Access'
-  | 'User';
+  | 'User'
+  | 'Team'
+  | 'Role';
 export const PluralResourceMap = {
   Network: 'Networks',
   Volume: 'Volumes',
@@ -40,6 +42,8 @@ export const PluralResourceMap = {
   GitAccount: 'GitAccounts',
   Access: 'Access',
   User: 'Users',
+  Team: 'Teams',
+  Role: 'Roles',
 } as const satisfies Record<ResourceType, string>;
 
 export type AnyFn = (...args: any[]) => Promise<any>;

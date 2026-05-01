@@ -19,11 +19,11 @@ import TaskSheet from '@/components/custom/task-sheet';
 import { PatchResourceMetadata } from '@/api/generated/api.types';
 
 export const ResourceForm = ({ mode }: { mode: 'add' | 'edit' }) => {
-  const type = useResourceParamType();
+  const { type, tab } = useResourceParamType();
   if (!type) return <NotFound />;
 
   return (
-    <PageShell mode={mode}>{mode === 'add' ? <AddFormPage type={type} /> : <EditFormPage type={type} />}</PageShell>
+    <PageShell mode={mode}>{mode === 'add' ? <AddFormPage type={tab ?? type} /> : <EditFormPage type={tab ?? type} />}</PageShell>
   );
 };
 

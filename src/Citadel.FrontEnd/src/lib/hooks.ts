@@ -17,8 +17,10 @@ import {
   ApiFn,
   Cancellable,
   KnownResourceName,
+  PluralResourceMap,
   ResourceResponse,
   ResourceType,
+  ReversePluralResourceMap,
   UseMutateVariables,
   UseReadArgs,
 } from '@/api/types';
@@ -127,15 +129,35 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
   };
 }
 
-export const useResourceParamType = (): ResourceType => {
-  const type = useParams().type;
-  if (type === 'registries') return 'Registry';
-  if (type === 'activities') return 'Activity';
-  if (type === 'alert-rules') return 'AlertRule';
-  if (type === 'git-repos') return 'GitRepository';
-  if (type === 'access') return 'Access';
+export const useResourceParamType = (): { type: ResourceType; tab?: ResourceType } => {
+  const { type, tab } = useParams();
 
-  return type ? ((type[0].toUpperCase() + type.slice(1, -1)) as ResourceType) : 'Platform';
+  const matchPlural = (value?: string) =>
+    value ? Object.values(PluralResourceMap).find((plural) => plural.toLowerCase() === value.toLowerCase()) : undefined;
+
+  if (tab) {
+    const tabPlural = matchPlural(tab);
+    const typePlural = matchPlural(type);
+    if (tabPlural && typePlural) {
+      return {
+        type: ReversePluralResourceMap[typePlural] as ResourceType,
+        tab: ReversePluralResourceMap[tabPlural] as ResourceType,
+      };
+    }
+  }
+
+  if (type === 'registries') return { type: 'Registry' };
+  if (type === 'activities') return { type: 'Activity' };
+  if (type === 'alert-rules') return { type: 'AlertRule' };
+  if (type === 'git-repos') return { type: 'GitRepository' };
+  if (type === 'access') return { type: 'Access' };
+
+  const typePlural = matchPlural(type);
+  if (typePlural) {
+    return { type: ReversePluralResourceMap[typePlural] as ResourceType };
+  }
+
+  return { type: type as ResourceType };
 };
 
 export function useLocalStorage<T>(key: string, initialValue: T) {

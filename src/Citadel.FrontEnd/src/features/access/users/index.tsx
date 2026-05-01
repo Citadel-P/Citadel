@@ -1,48 +1,65 @@
 import { PagedResultViewOfUserView, UserView } from '@/api/generated/api.types';
 import { PagedDataTable } from '@/components/custom/common';
 import SortableCell from '@/components/custom/sortable-cell';
-import { useSelectedResources } from '@/lib/atoms';
-import { ActionData } from '@/pages/types';
+import { useSelectedResources, useUserQuery } from '@/lib/atoms';
+import { ActionData, DropdownActionComponent } from '@/pages/types';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { fromNow } from '@/lib/dayjs.helper';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { StateIndicator } from '@/components/custom/state-indicator';
+import { RequiredFormComponents } from '@/pages/types';
+import { Link } from 'react-router';
 
+export const Users = ({
+  items,
+  actions,
+  isLoading,
+}: {
+  items: PagedResultViewOfUserView;
+  actions: Record<string, DropdownActionComponent>;
+  isLoading: boolean;
+}) => <UsersTable pagedResult={items} isLoading={isLoading} actions={actions} />;
 
-export const Users = () => {
-  return <div>Users</div>;
+export const UserFormComponents: RequiredFormComponents = {
+  AddForm: {
+    Header: {
+      title: 'User',
+    },
+    Content: () => <></>,
+  },
 };
 
 const EMPTY_ROWS: UserView[] = [];
 
-export const ActivitiesTable = ({
+export const UsersTable = ({
   pagedResult,
   actions,
   isLoading,
 }: {
-  pagedResult: PagedResultViewOfUserView;
+  pagedResult: PagedResultViewOfUserView | undefined;
   isLoading: boolean;
   actions: Record<
     string,
     React.FC<{ resource: UserView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const [query, setQuery] = useAlertEventQuery();
+  const [query, setQuery] = useUserQuery();
   const [_, setSelectedResources] = useSelectedResources<UserView>('User');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
-      <PagedDataTable
-        columns={cols}
-        data={pagedResult?.items ?? EMPTY_ROWS}
-        isLoading={isLoading}
-        query={query}
-        setQuery={setQuery}
-        totalCount={pagedResult?.totalCount}
-        onSelectionChange={setSelectedResources}
-      />
-    );
+    <PagedDataTable
+      columns={cols}
+      data={pagedResult?.items ?? EMPTY_ROWS}
+      isLoading={isLoading}
+      query={query}
+      setQuery={setQuery}
+      totalCount={pagedResult?.totalCount}
+      onSelectionChange={setSelectedResources}
+    />
+  );
 };
 
 const columns = (
@@ -64,18 +81,23 @@ const columns = (
       <Checkbox
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select alert event"
+        aria-label="Select user"
       />
     ),
     enableSorting: false,
     enableHiding: false,
   },
-  
   {
-    accessorKey: 'status',
-    header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-    cell: ({ row }) => <AlertEventStatusCell status={row.original.isEnabled} />,
-    sortingFn: (rowA, rowB) => rowA.original.isEnabled.localeCompare(rowB.original.isEnabled),
+    accessorKey: 'name',
+    header: ({ column }) => <SortableCell cellName="Name" column={column} />,
+    cell: ({ row }) => <UserNameRow user={row.original} />,
+    sortingFn: (rowA, rowB) => String(rowA.original.name).localeCompare(String(rowB.original.name)),
+  },
+  {
+    accessorKey: 'email',
+    header: ({ column }) => <SortableCell cellName="Email" column={column} />,
+    cell: ({ row }) => <>{row.original.email}</>,
+    sortingFn: (rowA, rowB) => String(rowA.original.email).localeCompare(String(rowB.original.email)),
   },
   {
     accessorKey: 'createdAt',
@@ -85,8 +107,17 @@ const columns = (
   },
   {
     id: 'actions',
-    cell: ({ row }) => <RowActionMenu resource={row.original as any} actions={actions as any} />,
+    cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
   },
 ];
 
-
+const UserNameRow = ({ user }: { user: UserView }) => {
+  return (
+    <div className="flex items-center gap-1">
+      <StateIndicator enableLabel={user.isEnabled} value={user.isEnabled} />
+      <Link to={`../access/users/edit/${user.id}`} className="hover:underline">
+        {user.name}
+      </Link>
+    </div>
+  );
+};

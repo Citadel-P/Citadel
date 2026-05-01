@@ -1,7 +1,11 @@
-/**
- * Defines the components needed to render a page.
- */
-export interface RequiredComponents<T = any> {
+type ResourceContentProps<T = any> = {
+  items: any;
+  actions: Record<string, DropdownActionComponent<T>>;
+  isLoading: boolean;
+  isFiltered?: boolean;
+};
+
+interface BaseResourceComponents<T = any> {
   /** Optional configuration for header */
   header?: HeaderOptions;
 
@@ -19,23 +23,32 @@ export interface RequiredComponents<T = any> {
   /** Group actions for the action bar */
   GroupActions?: React.FC<{ items: any[] }>;
 
-  /** The main content component */
-  Content?: React.FC<{
-    items: any[];
-    actions: Record<string, DropdownActionComponent<T>>;
-    isLoading: boolean;
-    isFiltered?: boolean;
-  }>;
-
-  /** Tabs configuration if any */
-  Tabs?: TabElement<T>[];
-
   /** Data hook for the resource */
   useData?: (platformId: string) => ResourceDataHookResult<T>;
 
   /** Optional helper to filter items by search term */
   filterItems?: (items: T[], search: string) => T[];
 }
+
+/**
+ * Defines the components needed to render a regular resource page.
+ */
+export interface RegularResourceComponents<T = any> extends BaseResourceComponents<T> {
+  /** The main content component */
+  Content: React.FC<ResourceContentProps<T>>;
+  Tabs?: never;
+}
+
+/**
+ * Defines the components needed to render a tabbed resource page.
+ */
+export interface TabbedResourceComponents<T = any> extends BaseResourceComponents<T> {
+  /** Tabs configuration */
+  Tabs: TabElement<T>[];
+  Content?: never;
+}
+
+export type RequiredComponents<T = any> = RegularResourceComponents<T> | TabbedResourceComponents<T>;
 
 /**
  * Encapsulates the logic and UI for the resource mutation page (Create/Edit)
@@ -49,7 +62,7 @@ export interface RequiredFormComponents<T = any> {
     Content?: React.FC;
   };
 
-  EditForm: {
+  EditForm?: {
     Header: {
       canEditTitle?: boolean;
       canEditDescription?: boolean;
@@ -107,12 +120,22 @@ export interface TabHeaderOptions {
 export interface TabElement<T> {
   /** Tab label shown in the UI */
   label: string;
+  /** Optional route segment used when a tab is represented in the URL */
+  slug?: string;
   /** Wether this tab is disabled */
   disabled?(resource: T): boolean;
-  /** Component(s) for this tab */
-  Content: React.FC<{ resource: T; metadataChanged?: boolean } | any>;
+  /** Comtent for this tab */
+  Content: React.FC<ResourceContentProps<T>>;
   /** Per-tab header configuration for the tab header right area */
   Header?: TabHeaderOptions;
+  /** Dropdown actions for table rows */
+  DropdownActions?: {
+    [action: string]: DropdownActionComponent<T>;
+  };
+  /** Group actions for the action bar */
+  GroupActions?: React.FC<{ items: any[] }>;
+  /** Data hook for the resource */
+  useData?: () => ResourceDataHookResult<T>;
 }
 
 interface ResourceInfoHookResult<T> {
