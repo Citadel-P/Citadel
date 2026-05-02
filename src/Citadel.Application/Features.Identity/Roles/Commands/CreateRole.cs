@@ -1,4 +1,5 @@
 using Application.Features.Identity.Roles;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Role;
 using Domain.Entities.Identity;
@@ -42,10 +43,10 @@ internal sealed class CreateRoleHandler(IUnitOfWork unitOfWork) : ICommandHandle
         if (exists)
             return Result.Failure<RoleDetails>(new ConflictError("Name already exists"));
 
-        var role = Role.Create(command.Name, command.Permissions);
+        var role = Role.Create(command.Name, RoleType.Custom, command.Permissions);
         await unitOfWork.Roles.AddAsync(role, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return new RoleDetails(role.Id, role.Name, command.Permissions);
+        return new RoleDetails(role.Id, role.Name, role.RoleType, command.Permissions);
     }
 }

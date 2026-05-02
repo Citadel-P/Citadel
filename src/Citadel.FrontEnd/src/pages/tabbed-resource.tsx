@@ -6,10 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSelectedResources } from '@/lib/atoms';
 import { useLocalStorage } from '@/lib/hooks';
 import { Plus } from 'lucide-react';
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ResourceHeader } from './resource-header';
-import { TabbedResourceComponents } from './types';
+import { TabElement, TabbedResourceComponents } from './types';
 
 type TabbedResourceViewProps<T = any> = {
   Components: TabbedResourceComponents<T>;
@@ -41,14 +41,6 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
       : undefined;
 
   const activeTab = routeTab ?? tabs.find((t) => t.label === storedTab) ?? tabs[0];
-
-  // Data 
-  const { items = [], isLoading = false } = activeTab.useData?.() ?? {};
-
-  const filtered = useMemo(
-    () => (Components.filterItems ? Components.filterItems(items, search) : items),
-    [items, search, Components],
-  );
 
   useEffect(() => {
     return () => setSelected([]);
@@ -138,25 +130,37 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
             {/* Content */}
             {tabs.map((t) => (
               <TabsContent key={t.label} value={t.label}>
-                <t.Content
-                  items={filtered}
-                  actions={t.DropdownActions ?? Components.DropdownActions ?? {}}
-                  isLoading={isLoading}
-                  isFiltered={!!search.trim()}
-                />
+                <TabContentWrapper key={t.label} tab={t} Components={Components} search={search} />
               </TabsContent>
             ))}
           </Tabs>
         </div>
       </div>
 
-      {(activeTab.GroupActions ?? Components.GroupActions) &&
-        (() => {
-          const GA = activeTab.GroupActions ?? Components.GroupActions!;
-          return <GA items={items} />;
-        })()}
-
       <TaskSheet type={type} />
     </div>
+  );
+};
+
+type TabContentWrapperProps<T> = {
+  tab: TabElement<T>;
+  Components: TabbedResourceComponents<T>;
+  search: string;
+};
+
+const TabContentWrapper = <T,>({ tab, Components, search }: TabContentWrapperProps<T>) => {
+  const { items = [], isLoading = false } = tab.useData?.() ?? {};
+  const filtered = Components.filterItems ? Components.filterItems(items, search) : items;
+  const GroupActions = tab.GroupActions ?? Components.GroupActions;
+  return (
+    <>
+      <tab.Content
+        items={filtered}
+        actions={tab.DropdownActions ?? Components.DropdownActions ?? {}}
+        isLoading={isLoading}
+        isFiltered={!!search.trim()}
+      />
+      {GroupActions && <GroupActions items={items} />}
+    </>
   );
 };

@@ -14,6 +14,28 @@ namespace Infrastructure.Persistence;
 
 internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) : IUserRepository
 {
+    private const string UserAggregateCtes = """
+        UserTeams AS (
+            SELECT ut.UserId, ARRAY_AGG(DISTINCT t.Name ORDER BY t.Name) AS Teams
+            FROM UsersTeams ut
+            JOIN Teams t ON t.Id = ut.TeamId
+            GROUP BY ut.UserId
+        ),
+        UserRoles AS (
+            SELECT ar.ActorId, ARRAY_AGG(DISTINCT r.Name ORDER BY r.Name) AS Roles
+            FROM ActorRoles ar
+            JOIN Roles r ON r.Id = ar.RoleId
+            GROUP BY ar.ActorId
+        )
+        """;
+
+    private const string UserAggregateJoins = """
+
+        LEFT JOIN UserTeams teams ON teams.UserId = u.Id
+        LEFT JOIN UserRoles roles ON roles.ActorId = u.ActorId
+
+        """;
+
     public async Task<User?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Users WHERE Id = @Id";
@@ -32,32 +54,31 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     {
         name = string.IsNullOrWhiteSpace(name) ? null : name;
 
-        const string baseWhere = """
-        WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
-        """;
 
-        const string selectSql = $"""
+        const string selectSql = "WITH " + UserAggregateCtes + " " + """
             SELECT
                 u.Id,
                 u.Name,
                 u.Email,
-                u.Password,
                 u.ActorId,
                 a.IsEnabled,
                 u.CreatedAt,
-                u.CreatedByActorId
+                u.CreatedByActorId,
+                COALESCE(teams.Teams, ARRAY[]::text[]) AS Teams,
+                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
-            {baseWhere}
+            """ + UserAggregateJoins + """
+            WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
             ORDER BY u.Name ASC
             LIMIT @PageSize OFFSET @Offset
             """;
 
-            const string countSql = $"""
+        const string countSql = """
             SELECT COUNT(*)
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
-            {baseWhere}
+            WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
         """;
 
         var offset = (page - 1) * pageSize;
@@ -71,18 +92,20 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
-        const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
+        const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + ", " + UserAggregateCtes + " " + """
             SELECT
                 u.Id,
                 u.Name,
                 u.Email,
-                u.Password,
                 u.ActorId,
                 a.IsEnabled,
                 u.CreatedAt,
-                u.CreatedByActorId
+                u.CreatedByActorId,
+                COALESCE(teams.Teams, ARRAY[]::text[]) AS Teams,
+                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
+            """ + UserAggregateJoins + """
             WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
         """ + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY u.Name ASC LIMIT @PageSize OFFSET @Offset;";
 
@@ -332,9 +355,9 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             LEFT JOIN Permissions ON Roles.Id = Permissions.RoleId
             """;
 
-            var result = await db.QueryAsync<UserAuthInfoDto>(sql,
-            new { EmailOrName = emailOrName },
-            transaction: tx());
+        var result = await db.QueryAsync<UserAuthInfoDto>(sql,
+        new { EmailOrName = emailOrName },
+        transaction: tx());
 
         return result
         .GroupBy(r => new { r.Id, r.Name, r.Email, r.ActorId, r.Password })

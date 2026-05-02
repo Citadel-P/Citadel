@@ -21,6 +21,6 @@ internal sealed class GetAllRolesHandler(IUnitOfWork unitOfWork, IHttpContextAcc
             ? await unitOfWork.Roles.GetAuthorizedAsync(user.GetUserId(), ResourceType.Role, ResourceAction.View, cancellationToken)
             : await unitOfWork.Roles.GetAllAsync(cancellationToken);
 
-        return Result.Success(roles.Select(role => new RoleDetails(role.Id, role.Name, role.Permissions)));
+        return Result.Success(roles.Select(role => new RoleDetails(role.Id, role.Name, role.RoleType, role.Permissions)));
     }
 }

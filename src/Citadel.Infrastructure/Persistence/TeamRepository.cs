@@ -13,6 +13,34 @@ namespace Infrastructure.Persistence;
 
 internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) : ITeamRepository
 {
+    private const string TeamAggregateCtes = """
+        TeamMembers AS (
+            SELECT ut.TeamId, COUNT(*)::int AS TotalMembers
+            FROM UsersTeams ut
+            GROUP BY ut.TeamId
+        ),
+        TeamRoles AS (
+            SELECT ar.ActorId, ARRAY_AGG(DISTINCT r.Name ORDER BY r.Name) AS Roles
+            FROM ActorRoles ar
+            JOIN Roles r ON r.Id = ar.RoleId
+            GROUP BY ar.ActorId
+        )
+        """;
+
+    private const string TeamAggregateJoins = """
+
+        LEFT JOIN TeamMembers members ON members.TeamId = t.Id
+        LEFT JOIN TeamRoles roles ON roles.ActorId = t.ActorId
+
+        """;
+
+    private const string TargetTeamAggregateJoins = """
+
+        LEFT JOIN TeamMembers members ON members.TeamId = tt.Id
+        LEFT JOIN TeamRoles roles ON roles.ActorId = tt.ActorId
+
+        """;
+
     public async Task<Team?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Teams WHERE Id = @Id";
@@ -29,14 +57,17 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<TeamDetails?> GetDetailsAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = """
+        const string sql = "WITH " + TeamAggregateCtes + " " + """
             SELECT
                 t.Id,
                 t.Name,
                 t.ActorId,
-                a.IsEnabled
+                a.IsEnabled,
+                COALESCE(members.TotalMembers, 0) AS TotalMembers,
+                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
+            """ + TeamAggregateJoins + """
             WHERE t.Id = @Id
             LIMIT 1
             """;
@@ -47,14 +78,17 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<PagedResult<TeamDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
-        const string selectSql = """
+        const string selectSql = "WITH " + TeamAggregateCtes + " " + """
         SELECT
             t.Id,
             t.Name,
             t.ActorId,
-            a.IsEnabled
+            a.IsEnabled,
+            COALESCE(members.TotalMembers, 0) AS TotalMembers,
+            COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
         FROM Teams t
         JOIN Actors a ON a.Id = t.ActorId
+        """ + TeamAggregateJoins + """
         WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%')
         ORDER BY t.Name ASC
         LIMIT @PageSize OFFSET @Offset
@@ -75,14 +109,17 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
-        const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
+        const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + ", " + TeamAggregateCtes + " " + """
             SELECT
                 t.Id,
                 t.Name,
                 t.ActorId,
-                a.IsEnabled
+                a.IsEnabled,
+                COALESCE(members.TotalMembers, 0) AS TotalMembers,
+                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
+            """ + TeamAggregateJoins + """
             WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%') AND
         """ + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY t.Name ASC LIMIT @PageSize OFFSET @Offset;";
 
@@ -188,8 +225,8 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<(TeamDetails? Team, bool UserExists, bool HasMember)> GetMemberAssignmentStateAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            WITH TargetTeam AS (
+        const string sql = "WITH " + """
+            TargetTeam AS (
                 SELECT
                     t.Id,
                     t.Name,
@@ -210,20 +247,23 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 WHERE ut.TeamId = @TeamId
                   AND ut.UserId = @UserId
             )
+            """ + ", " + TeamAggregateCtes + " " + """
             SELECT
                 tt.Id,
                 tt.Name,
                 tt.ActorId,
                 tt.IsEnabled,
+                COALESCE(members.TotalMembers, 0) AS TotalMembers,
+                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles,
                 EXISTS (SELECT 1 FROM TargetUser) AS UserExists,
                 EXISTS (SELECT 1 FROM ExistingMember) AS HasMember
             FROM (SELECT 1) seed
             LEFT JOIN TargetTeam tt ON 1 = 1
-            """;
+            """ + TargetTeamAggregateJoins;
 
         var result = await db.QuerySingleAsync<TeamMemberAssignmentStateDto>(sql, new { TeamId = teamId, UserId = userId, cancellationToken }, transaction: tx());
         var team = result.Id.HasValue && result.ActorId.HasValue && result.IsEnabled.HasValue && result.Name is not null
-            ? new TeamDetails(result.Id.Value, result.Name, result.ActorId.Value, result.IsEnabled.Value)
+            ? new TeamDetails(result.Id.Value, result.Name, result.ActorId.Value, result.IsEnabled.Value, result.TotalMembers, result.Roles)
             : null;
 
         return (team, result.UserExists, result.HasMember);

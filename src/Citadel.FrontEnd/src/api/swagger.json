@@ -21158,7 +21158,18 @@
           }
         }
       },
-      "ResourceAction": { },
+      "ResourceAction": {
+        "enum": [
+          "View",
+          "Create",
+          "Update",
+          "Delete",
+          "Apply",
+          "Pull",
+          "Exec",
+          "Log"
+        ]
+      },
       "ResourceControlState": {
         "enum": [
           "Idle",
@@ -21192,7 +21203,21 @@
           }
         }
       },
-      "ResourceType": { },
+      "ResourceType": {
+        "enum": [
+          "User",
+          "Team",
+          "Role",
+          "Platform",
+          "Deployment",
+          "Stack",
+          "GitRepository",
+          "GitAccount",
+          "Registry",
+          "Alert",
+          "AlertChannel"
+        ]
+      },
       "RestartPolicy": {
         "required": [
           "name",
@@ -21235,10 +21260,17 @@
           }
         }
       },
+      "RoleType": {
+        "enum": [
+          "System",
+          "Custom"
+        ]
+      },
       "RoleView": {
         "required": [
           "id",
           "name",
+          "roleType",
           "permissions"
         ],
         "type": "object",
@@ -21249,6 +21281,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "roleType": {
+            "$ref": "#/components/schemas/RoleType"
           },
           "permissions": {
             "type": "array",
@@ -21782,7 +21817,9 @@
           "id",
           "name",
           "actorId",
-          "isEnabled"
+          "isEnabled",
+          "totalMembers",
+          "roles"
         ],
         "type": "object",
         "properties": {
@@ -21799,6 +21836,20 @@
           },
           "isEnabled": {
             "type": "boolean"
+          },
+          "totalMembers": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -21958,6 +22009,24 @@
           "createdByActorId": {
             "type": "string",
             "format": "uuid"
+          },
+          "teams": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "roles": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

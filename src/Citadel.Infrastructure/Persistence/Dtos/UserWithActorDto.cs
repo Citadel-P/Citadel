@@ -8,4 +8,6 @@ internal sealed record UserWithActorDto(
     Guid ActorId,
     bool IsEnabled,
     DateTime CreatedAt,
-    Guid CreatedByActorId);
+    Guid CreatedByActorId,
+    IEnumerable<string> Teams,
+    IEnumerable<string> Roles);

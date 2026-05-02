@@ -6,7 +6,6 @@ import { ActionData, DropdownActionComponent } from '@/pages/types';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { fromNow } from '@/lib/dayjs.helper';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredFormComponents } from '@/pages/types';
@@ -100,10 +99,14 @@ const columns = (
     sortingFn: (rowA, rowB) => String(rowA.original.email).localeCompare(String(rowB.original.email)),
   },
   {
-    accessorKey: 'createdAt',
-    header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{fromNow(row.original.createdAt)}</span>,
-    sortingFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
+    accessorKey: 'teams',
+    header: ({ column }) => <SortableCell cellName="Teams" column={column} />,
+    cell: ({ row }) => <span className="text-[13px]">{row.original.teams?.join(',')}</span>,
+  },
+   {
+    accessorKey: 'roles',
+    header: ({ column }) => <SortableCell cellName="Roles" column={column} />,
+    cell: ({ row }) => <span className="text-[13px]">{row.original.roles?.join(',')}</span>,
   },
   {
     id: 'actions',

@@ -1,4 +1,5 @@
 using System.Text;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using Hosting.Common;
@@ -12,7 +13,7 @@ public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        var role = Role.Create("OriginalRole");
+        var role = Role.Create("OriginalRole", RoleType.Custom);
         role.SetPermissions([Permission.Create(role.Id, ResourceType.Registry, ResourceAction.View)]);
         await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
@@ -116,4 +117,52 @@ public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         Assert.Equal("RenamedRole", role?.Name);
     }
 
+    [Fact]
+    public async Task Patch_System_Role_Permissions_Should_Return_Conflict()
+    {
+        var systemRoleId = await CreateRoleAsync("system-patch", RoleType.System);
+        var patchJson = """
+        {
+          "permissions": [
+            {
+              "resourceType": "Role",
+              "resourceAction": "Update"
+            }
+          ]
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/roles/{systemRoleId}/permissions", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Rename_System_Role_Should_Return_Conflict()
+    {
+        var systemRoleId = await CreateRoleAsync("system-rename", RoleType.System);
+        var renameJson = $$"""
+        {
+          "id": "{{systemRoleId}}",
+          "name": "RenamedSystemRole"
+        }
+        """;
+        var content = new StringContent(renameJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/roles/rename", content, TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    private async Task<Guid> CreateRoleAsync(string name, RoleType roleType)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var role = Role.Create(name, roleType);
+        role.SetPermissions([Permission.Create(role.Id, ResourceType.Registry, ResourceAction.View)]);
+        await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+        return role.Id;
+    }
 }

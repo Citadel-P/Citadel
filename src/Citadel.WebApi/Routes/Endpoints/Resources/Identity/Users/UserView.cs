@@ -9,7 +9,10 @@ public sealed record UserView(
     Guid ActorId,
     bool IsEnabled,
     DateTime CreatedAt,
-    Guid CreatedByActorId)
+    Guid CreatedByActorId,
+    IEnumerable<string>? Teams = null,
+    IEnumerable<string>? Roles = null
+    )
 {
     internal static UserView Map(UserDetails user) => new(
         user.Id,
@@ -18,5 +21,7 @@ public sealed record UserView(
         user.ActorId,
         user.IsEnabled,
         user.CreatedAt,
-        user.CreatedByActorId);
+        user.CreatedByActorId,
+        user.Teams,
+        user.Roles);
 }

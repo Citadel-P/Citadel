@@ -602,3 +602,9 @@ public enum GitOperation
     Clone,
     Pull
 }
+
+public enum RoleType
+{
+    System,
+    Custom
+}

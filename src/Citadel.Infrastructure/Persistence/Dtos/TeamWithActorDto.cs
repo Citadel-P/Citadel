@@ -4,4 +4,6 @@ internal sealed record TeamWithActorDto(
     Guid Id,
     string Name,
     Guid ActorId,
-    bool IsEnabled);
+    bool IsEnabled,
+    int TotalMembers,
+    IEnumerable<string> Roles);

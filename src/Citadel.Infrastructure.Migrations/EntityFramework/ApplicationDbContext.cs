@@ -91,9 +91,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
 
         // Roles
         modelBuilder.Entity("Role").HasData(
-            new { Id = adminRoleId, Name = "Admin" },
-            new { Id = operatorRoleId, Name = "Operator" },
-            new { Id = viewerRoleId, Name = "Viewer" }
+            new { Id = adminRoleId, Name = "Admin", RoleType = RoleType.System.ToString() },
+            new { Id = operatorRoleId, Name = "Operator", RoleType = RoleType.System.ToString() },
+            new { Id = viewerRoleId, Name = "Viewer", RoleType = RoleType.System.ToString() }
         );
 
         // ActorRoles
@@ -118,7 +118,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                     Id = CreatePermissionSeedId(adminRoleId, resource, action),
                     RoleId = adminRoleId,
                     ResourceType = resource.ToString(),
-                    ResourceAction = action.ToString()
+                    ResourceAction = action.ToString(),
+                    RoleType = RoleType.System.ToString()
                 });
 
                 // Viewer -> only View
@@ -129,11 +130,12 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                         Id = CreatePermissionSeedId(viewerRoleId, resource, action),
                         RoleId = viewerRoleId,
                         ResourceType = resource.ToString(),
-                        ResourceAction = action.ToString()
+                        ResourceAction = action.ToString(),
+                        RoleType = RoleType.System.ToString()
                     });
                 }
 
-                // Operator -> most except Delete (example policy)
+                // Operator -> most except Delete
                 if (action != ResourceAction.Delete)
                 {
                     permissions.Add(new
@@ -141,7 +143,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                         Id = CreatePermissionSeedId(operatorRoleId, resource, action),
                         RoleId = operatorRoleId,
                         ResourceType = resource.ToString(),
-                        ResourceAction = action.ToString()
+                        ResourceAction = action.ToString(),
+                        RoleType = RoleType.System.ToString()
                     });
                 }
             }
@@ -644,6 +647,7 @@ internal static class Configuration
         role.HasKey("Id");
 
         role.Property<string>("Name").HasColumnType(Text).IsRequired();
+        role.Property<string>("RoleType").HasColumnType(Text).IsRequired();
 
         return builder;
     }

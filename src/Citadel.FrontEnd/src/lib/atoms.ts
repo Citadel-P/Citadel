@@ -14,11 +14,13 @@ const inlineSubHeaderAtom = atomFamily((_: ResourceType) => atom<boolean>(false)
 
 export type PagingKey = ResourceType | string;
 
-export type UserQueryState = { userName: string | undefined; page: number; pageSize: number };
+export type UserQueryState = { userName: string | undefined } & { page: number; pageSize: number };
+export type TeamQueryState = { teamName: string | undefined } & { page: number; pageSize: number };
 export type ActivityQueryState = ActivityFiltersState & { page: number; pageSize: number };
 export type AlertEventQueryState = AlertEventFiltersState & { page: number; pageSize: number };
 
 const userQueryAtom = atom<UserQueryState>({ userName: '', page: 1, pageSize: 50 });
+const teamQueryAtom = atom<TeamQueryState>({ teamName: '', page: 1, pageSize: 50 });
 const activityQueryAtom = atom<ActivityQueryState>({
   resourceType: 'All',
   eventType: 'All',
@@ -93,7 +95,40 @@ export function useUserQuery() {
   });
 
   const setQuery = useCallback(
-    (patch: Partial<ActivityQueryState>) => {
+    (patch: Partial<UserQueryState>) => {
+      setState((prev) => ({ ...prev, ...patch }));
+    },
+    [setState],
+  );
+
+  return [state, setQuery] as const;
+}
+
+export function useTeamQuery() {
+  const [state, setState] = useAtomUrlSync<TeamQueryState>({
+    atom: teamQueryAtom,
+    params: ['teamName', 'page', 'pageSize'],
+    defaults: { teamName: undefined, page: 1, pageSize: 50 },
+    serialize: (v, key) => {
+      if (key === 'teamName') {
+        return v ? String(v) : null;
+      }
+      return null;
+    },
+    deserialize: (raw, key) => {
+      if (key === 'page' || key === 'pageSize') {
+        const n = Number(raw);
+        return Number.isFinite(n) && n > 0 ? n : key === 'page' ? 1 : 50;
+      }
+      if (key === 'teamName') {
+        return raw ?? undefined;
+      }
+      return (raw ?? 'All') as any;
+    },
+  });
+
+  const setQuery = useCallback(
+    (patch: Partial<TeamQueryState>) => {
       setState((prev) => ({ ...prev, ...patch }));
     },
     [setState],

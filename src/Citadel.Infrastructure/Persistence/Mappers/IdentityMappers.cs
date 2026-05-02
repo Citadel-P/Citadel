@@ -13,13 +13,13 @@ internal static class IdentityMappers
         => dtos.Select(ToDomain);
 
     internal static UserDetails ToDetails(this UserWithActorDto dto)
-        => new(dto.Id, dto.Name, dto.Email, dto.ActorId, dto.IsEnabled, dto.CreatedAt, dto.CreatedByActorId);
+        => new(dto.Id, dto.Name, dto.Email, dto.ActorId, dto.IsEnabled, dto.CreatedAt, dto.CreatedByActorId, dto.Teams, dto.Roles);
 
     internal static IEnumerable<UserDetails> ToDetails(this IEnumerable<UserWithActorDto> dtos)
         => dtos.Select(ToDetails);
 
     internal static TeamDetails ToDetails(this TeamWithActorDto dto)
-        => new(dto.Id, dto.Name, dto.ActorId, dto.IsEnabled);
+        => new(dto.Id, dto.Name, dto.ActorId, dto.IsEnabled, dto.TotalMembers, dto.Roles);
 
     internal static IEnumerable<TeamDetails> ToDetails(this IEnumerable<TeamWithActorDto> dtos)
         => dtos.Select(ToDetails);
@@ -31,7 +31,7 @@ internal static class IdentityMappers
         => dtos.Select(ToDomain);
 
     internal static Role ToDomain(this RoleDto dto)
-        => Role.FromPersistence(dto.Id, dto.Name);
+        => Role.FromPersistence(dto.Id, dto.Name, Enum.Parse<Domain.RoleType>(dto.RoleType));
 
     internal static IEnumerable<Role> ToDomain(this IEnumerable<RoleDto> dtos)
         => dtos.Select(ToDomain);
@@ -41,10 +41,11 @@ internal static class IdentityMappers
 
     internal static IEnumerable<Role> ToDomain(this IEnumerable<RolePermissionDto> dtos)
         => dtos
-            .GroupBy(x => new { x.Id, x.Name })
+            .GroupBy(x => new { x.Id, x.Name, x.RoleType })
             .Select(group => Role.FromPersistence(
                 group.Key.Id,
                 group.Key.Name,
+                Enum.Parse<Domain.RoleType>(group.Key.RoleType),
                 group.Where(x => x.PermissionId.HasValue && x.ResourceType is not null && x.ResourceAction is not null)
                     .Select(x => Permission.Create(
                         group.Key.Id,

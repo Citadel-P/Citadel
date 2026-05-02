@@ -34,10 +34,13 @@ internal sealed class RenameRoleHandler(IUnitOfWork unitOfWork) : ICommandHandle
         if (exists)
             return Result.Failure<RoleDetails>(new ConflictError("Name already exists"));
 
-        role.Rename(command.Name);
+        var renameResult = role.Rename(command.Name);
+        if (renameResult.IsFailure(out var error))
+            return Result.Failure<RoleDetails>(error);
+
         await unitOfWork.Roles.RenameAsync(role, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return new RoleDetails(role.Id, role.Name, role.Permissions);
+        return new RoleDetails(role.Id, role.Name, role.RoleType, role.Permissions);
     }
 }

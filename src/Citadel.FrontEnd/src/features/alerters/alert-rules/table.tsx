@@ -91,7 +91,6 @@ const columns = (
       accessorKey: 'channels',
       header: ({ column }) => <SortableCell cellName="Channels" column={column} />,
       cell: ({ row }) => <ChannelsCell rule={row.original} />,
-      sortingFn: (rowA: any, rowB: any): number => rowA.original?.threshold?.localeCompare(rowB.original?.threshold),
     },
     {
       id: 'actions',

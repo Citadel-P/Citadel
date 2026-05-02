@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260410190201_migration0001")]
+    [Migration("20260502144828_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -20,7 +20,7 @@ namespace Infrastructure.Migrations.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -1125,6 +1125,29 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("images", (string)null);
                 });
 
+            modelBuilder.Entity("LatestActivityEvent", b =>
+                {
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<string>("Info")
+                        .HasColumnType("text")
+                        .HasColumnName("info");
+
+                    b.Property<Guid?>("ResourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resourceid");
+
+                    b.Property<string>("ResourceType")
+                        .HasColumnType("text")
+                        .HasColumnName("resourcetype");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("LatestActivityEvents", (string)null);
+                });
+
             modelBuilder.Entity("Permission", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1255,6 +1278,20 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("c9ef58ef-d39e-eec5-7e23-dba79f2a1823"),
+                            ResourceAction = "Log",
+                            ResourceType = "User",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("92694036-978b-d38d-81ed-8d28aeed9bd2"),
+                            ResourceAction = "Log",
+                            ResourceType = "User",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
                             Id = new Guid("8487254d-0383-5b91-fa5f-816cfdc29054"),
                             ResourceAction = "View",
                             ResourceType = "Team",
@@ -1348,6 +1385,20 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("0430e179-4cf1-193b-c54d-5d014203921b"),
                             ResourceAction = "Exec",
+                            ResourceType = "Team",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("11689210-d56f-4df8-9887-3338512e781d"),
+                            ResourceAction = "Log",
+                            ResourceType = "Team",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("c4d01170-4f17-919d-9e91-210805644c7e"),
+                            ResourceAction = "Log",
                             ResourceType = "Team",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
@@ -1451,6 +1502,20 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("153c4670-ec3e-4037-6fd6-dd83bf29d3af"),
+                            ResourceAction = "Log",
+                            ResourceType = "Role",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("7862a71c-6493-24a1-84ca-dd2a630cc55a"),
+                            ResourceAction = "Log",
+                            ResourceType = "Role",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
                             Id = new Guid("6deaa9b4-66e6-22bb-3f49-62584ccd9e1f"),
                             ResourceAction = "View",
                             ResourceType = "Platform",
@@ -1544,6 +1609,20 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("9982a665-f493-ce5f-9fd7-cd355f1ce257"),
                             ResourceAction = "Exec",
+                            ResourceType = "Platform",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("a9d333db-b006-8e96-192d-2c8444e2837d"),
+                            ResourceAction = "Log",
+                            ResourceType = "Platform",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("37023893-2218-6946-8caa-bbc8a7ad77a1"),
+                            ResourceAction = "Log",
                             ResourceType = "Platform",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
@@ -1647,6 +1726,20 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("f3e95d8a-2b63-3cb3-51ca-c5329b5b823e"),
+                            ResourceAction = "Log",
+                            ResourceType = "Deployment",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("29b878e1-64b3-eee4-d8d9-7a7fb015c14c"),
+                            ResourceAction = "Log",
+                            ResourceType = "Deployment",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
                             Id = new Guid("117176b6-ca23-e53d-d996-83affab7ed48"),
                             ResourceAction = "View",
                             ResourceType = "Stack",
@@ -1740,6 +1833,20 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("b4101c57-b3f6-724d-8f9e-20b96ff470d3"),
                             ResourceAction = "Exec",
+                            ResourceType = "Stack",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("36667c46-31d9-3c62-1375-459c4daba3ed"),
+                            ResourceAction = "Log",
+                            ResourceType = "Stack",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("9d3d40da-3f88-d22a-e596-adcb5e101a71"),
+                            ResourceAction = "Log",
                             ResourceType = "Stack",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
@@ -1843,6 +1950,20 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("8a0a4849-d9de-a63a-4e34-d25e431f6324"),
+                            ResourceAction = "Log",
+                            ResourceType = "GitRepository",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("bc2f22f1-0c5b-29f7-00e6-61f5fed77470"),
+                            ResourceAction = "Log",
+                            ResourceType = "GitRepository",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
                             Id = new Guid("7ccb3b9e-a09a-d3c9-82ed-3f71646d2576"),
                             ResourceAction = "View",
                             ResourceType = "GitAccount",
@@ -1936,6 +2057,20 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("2ab50947-b044-4b44-6683-6fa76d3dd8e5"),
                             ResourceAction = "Exec",
+                            ResourceType = "GitAccount",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("2941a68e-0eb8-2ba5-0d80-8ecf0dd21df8"),
+                            ResourceAction = "Log",
+                            ResourceType = "GitAccount",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a826cc2c-86ce-d61e-def2-e1ffa9bd5e89"),
+                            ResourceAction = "Log",
                             ResourceType = "GitAccount",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
@@ -2039,6 +2174,20 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("5b860b42-6a54-df7f-b375-2e1d1f47a563"),
+                            ResourceAction = "Log",
+                            ResourceType = "Registry",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("7defaa75-0f73-24b3-e32e-842bc1ec9885"),
+                            ResourceAction = "Log",
+                            ResourceType = "Registry",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
                             Id = new Guid("ec427e29-a8ed-8604-59cc-7eda3268fc30"),
                             ResourceAction = "View",
                             ResourceType = "Alert",
@@ -2137,6 +2286,20 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("3c380043-2b56-a61a-6855-8a8d1a50d9f1"),
+                            ResourceAction = "Log",
+                            ResourceType = "Alert",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("5ffa0070-42f0-4b37-efe5-4b0a394a1782"),
+                            ResourceAction = "Log",
+                            ResourceType = "Alert",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
                             Id = new Guid("d868c269-b60f-2be0-2451-9b81b3c95674"),
                             ResourceAction = "View",
                             ResourceType = "AlertChannel",
@@ -2230,6 +2393,20 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("529f7f68-9ab0-a2f2-15af-a284b4d71ab6"),
                             ResourceAction = "Exec",
+                            ResourceType = "AlertChannel",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("ee63f887-67f1-a9f7-8028-31394316e680"),
+                            ResourceAction = "Log",
+                            ResourceType = "AlertChannel",
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("5cd694be-92f2-0857-3c43-3fde801e6173"),
+                            ResourceAction = "Log",
                             ResourceType = "AlertChannel",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         });
@@ -2491,6 +2668,11 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<string>("RoleType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("roletype");
+
                     b.HasKey("Id")
                         .HasName("pk_roles");
 
@@ -2500,17 +2682,20 @@ namespace Infrastructure.Migrations.Migrations
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000001"),
-                            Name = "Admin"
+                            Name = "Admin",
+                            RoleType = "System"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000002"),
-                            Name = "Operator"
+                            Name = "Operator",
+                            RoleType = "System"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000003"),
-                            Name = "Viewer"
+                            Name = "Viewer",
+                            RoleType = "System"
                         });
                 });
 

@@ -56,9 +56,12 @@ internal sealed class PatchRolePermissionsHandler(IUnitOfWork unitOfWork) : ICom
         var patched = command.Patch.ApplyTo(current, RoleJsonContext.Default.PatchRolePermissionsModel);
         var permissions = patched.Permissions.Select(x => x.ToDomain(role.Id));
 
+        var setPermissionsResult = role.SetPermissions(permissions);
+        if (setPermissionsResult.IsFailure(out var error))
+            return Result.Failure<RoleDetails>(error);
+
         await unitOfWork.Roles.ReplacePermissionsAsync(role.Id, permissions, cancellationToken);
-        role.SetPermissions(permissions);
         await unitOfWork.CommitAsync(cancellationToken);
-        return new RoleDetails(role.Id, role.Name, role.Permissions);
+        return new RoleDetails(role.Id, role.Name, role.RoleType, role.Permissions);
     }
 }

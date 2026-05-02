@@ -62,9 +62,39 @@ export enum ScheduleType {
   Weekly = "Weekly",
 }
 
+export enum RoleType {
+  System = "System",
+  Custom = "Custom",
+}
+
+export enum ResourceType {
+  User = "User",
+  Team = "Team",
+  Role = "Role",
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  GitRepository = "GitRepository",
+  GitAccount = "GitAccount",
+  Registry = "Registry",
+  Alert = "Alert",
+  AlertChannel = "AlertChannel",
+}
+
 export enum ResourceControlState {
   Idle = "Idle",
   Processing = "Processing",
+}
+
+export enum ResourceAction {
+  View = "View",
+  Create = "Create",
+  Update = "Update",
+  Delete = "Delete",
+  Apply = "Apply",
+  Pull = "Pull",
+  Exec = "Exec",
+  Log = "Log",
 }
 
 export enum RegistryType {
@@ -2678,8 +2708,6 @@ export interface ResolveAlertEventsInput {
   resolutionNote: null | string;
 }
 
-export type ResourceAction = any;
-
 export interface ResourceSpec {
   /**
    * @format float
@@ -2692,8 +2720,6 @@ export interface ResourceSpec {
    */
   memoryLimit: null | number | string;
 }
-
-export type ResourceType = any;
 
 export interface RestartPolicy {
   name: null | string;
@@ -2713,6 +2739,7 @@ export interface RoleView {
   /** @format uuid */
   id: string;
   name: string;
+  roleType: RoleType;
   permissions: PermissionView[];
 }
 
@@ -2853,6 +2880,12 @@ export interface TeamView {
   /** @format uuid */
   actorId: string;
   isEnabled: boolean;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  totalMembers: number | string;
+  roles: string[];
 }
 
 export interface TeamsView {
@@ -2908,6 +2941,8 @@ export interface UserView {
   createdAt: any;
   /** @format uuid */
   createdByActorId: string;
+  teams?: null | any[];
+  roles?: null | any[];
 }
 
 export interface UsersView {

@@ -6,6 +6,9 @@ import { UserKey } from 'lucide-react';
 import { useUsersList } from './users/hooks/useUsersList';
 import { ActionBar } from '@/components/custom/action-bar';
 import { UserDropdownActions, UserGroupActions } from './users/actions';
+import { useTeamsList } from './teams/hooks/useTeamsList';
+import { TeamDropdownActions, TeamGroupActions } from './teams/actions';
+import { useRead } from '@/lib/hooks';
 
 export const AccessComponents: TabbedResourceComponents = {
   Icon: <UserKey className="h-4 w-4" />,
@@ -42,8 +45,12 @@ export const AccessComponents: TabbedResourceComponents = {
     {
       label: 'Teams',
       slug: 'teams',
+      DropdownActions: TeamDropdownActions,
+      GroupActions: ({ items }) => {
+        return <ActionBar type="Team" items={items} actions={Object.values(TeamGroupActions)} />;
+      },
       Content: ({ items, isLoading, actions }) => {
-        return <Teams items={items} isLoading={isLoading} actions={actions}/>;
+        return <Teams items={items} isLoading={isLoading} actions={actions} />;
       },
       Header: {
         showAdd: true,
@@ -52,7 +59,7 @@ export const AccessComponents: TabbedResourceComponents = {
         addButtonUrl: '/access/teams/add',
       },
       useData: () => {
-        const { pagedUsers, isLoading } = useUsersList();
+        const { pagedUsers, isLoading } = useTeamsList();
         return {
           items: pagedUsers as any,
           isLoading,
@@ -62,14 +69,21 @@ export const AccessComponents: TabbedResourceComponents = {
     {
       label: 'Roles',
       slug: 'roles',
-      Content: () => {
-        return <Roles />;
+      Content: ({ items, isLoading }) => {
+        return <Roles items={items} isLoading={isLoading} />;
       },
       Header: {
         showAdd: true,
         showSearch: false,
         addButtonTitle: 'Add Role',
         addButtonUrl: '/access/roles/add',
+      },
+      useData: () => {
+        const { data, isLoading } = useRead('listRoles');
+        return {
+          items: data?.data.roles as any,
+          isLoading,
+        };
       },
     },
   ],

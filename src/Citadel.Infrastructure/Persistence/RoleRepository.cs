@@ -1,4 +1,5 @@
 using Dapper;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using Hosting.Common;
@@ -18,6 +19,7 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
             SELECT
                 r.Id,
                 r.Name,
+                r.RoleType,
                 p.Id AS PermissionId,
                 p.ResourceType,
                 p.ResourceAction
@@ -36,6 +38,7 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
             SELECT
                 r.Id,
                 r.Name,
+                r.RoleType,
                 p.Id AS PermissionId,
                 p.ResourceType,
                 p.ResourceAction
@@ -53,6 +56,7 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
             SELECT
                 r.Id,
                 r.Name,
+                r.RoleType,
                 p.Id AS PermissionId,
                 p.ResourceType,
                 p.ResourceAction
@@ -78,6 +82,7 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
             SELECT
                 r.Id,
                 r.Name,
+                r.RoleType,
                 p.Id AS PermissionId,
                 p.ResourceType,
                 p.ResourceAction
@@ -99,10 +104,11 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<int> AddAsync(Role role, CancellationToken cancellationToken)
     {
-        var sql = new StringBuilder("INSERT INTO Roles (Id, Name) VALUES (@Id, @Name);");
+        var sql = new StringBuilder("INSERT INTO Roles (Id, Name, RoleType) VALUES (@Id, @Name, @RoleType);");
         var parameters = new DynamicParameters();
         parameters.Add("Id", role.Id);
         parameters.Add("Name", role.Name);
+        parameters.Add("RoleType", EnumFormatter<RoleType>.GetValue(role.RoleType));
 
         using var enumerator = role.Permissions.GetEnumerator();
         if (enumerator.MoveNext())
@@ -119,8 +125,8 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 sql.Append($"(@PermissionId{index}, @PermissionRoleId{index}, @ResourceType{index}, @ResourceAction{index})");
                 parameters.Add($"PermissionId{index}", permission.Id);
                 parameters.Add($"PermissionRoleId{index}", role.Id);
-                parameters.Add($"ResourceType{index}", EnumFormatter<Hosting.Common.ResourceType>.GetValue(permission.ResourceType));
-                parameters.Add($"ResourceAction{index}", EnumFormatter<Hosting.Common.ResourceAction>.GetValue(permission.ResourceAction));
+                parameters.Add($"ResourceType{index}", EnumFormatter<ResourceType>.GetValue(permission.ResourceType));
+                parameters.Add($"ResourceAction{index}", EnumFormatter<ResourceAction>.GetValue(permission.ResourceAction));
                 index++;
             }
             while (enumerator.MoveNext());

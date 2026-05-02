@@ -1,6 +1,7 @@
 ﻿{
   id: Guid_1,
   name: OriginalRole,
+  roleType: Custom,
   permissions: [
     {
       resourceType: Role,

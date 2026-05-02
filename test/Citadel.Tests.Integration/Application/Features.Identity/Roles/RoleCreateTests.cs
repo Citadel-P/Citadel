@@ -1,4 +1,5 @@
 using System.Text;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using Hosting.Common;
@@ -91,7 +92,7 @@ public class RoleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         await using (var scope = Services.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var role = Role.Create("RoleNew", [Permission.Create(Guid.Empty, ResourceType.Registry, ResourceAction.View)]);
+            var role = Role.Create("RoleNew", RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, ResourceAction.View)]);
             await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }

@@ -1,4 +1,5 @@
 using System.Text;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using Hosting.Common;
@@ -12,7 +13,7 @@ public class RoleDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase(
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        var role = Role.Create("delete-me");
+        var role = Role.Create("delete-me", RoleType.Custom);
         role.SetPermissions([Permission.Create(role.Id, ResourceType.Role, ResourceAction.View)]);
         await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
@@ -62,5 +63,36 @@ public class RoleDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_System_Role_ReturnsConflict()
+    {
+        var systemRole = await CreateRoleAsync("system-delete", RoleType.System);
+        var content = $$"""
+        {
+            "ids": ["{{systemRole}}"]
+        }
+        """;
+
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/roles")
+        {
+            Content = new StringContent(content, Encoding.UTF8, "application/json")
+        };
+
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    private async Task<Guid> CreateRoleAsync(string name, RoleType roleType)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var role = Role.Create(name, roleType);
+        role.SetPermissions([Permission.Create(role.Id, ResourceType.Role, ResourceAction.View)]);
+        await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+        return role.Id;
     }
 }

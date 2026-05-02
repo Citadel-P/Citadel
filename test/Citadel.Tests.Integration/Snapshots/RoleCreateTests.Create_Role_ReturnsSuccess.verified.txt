@@ -1,6 +1,7 @@
 ﻿{
   id: Guid_1,
   name: Role-New,
+  roleType: Custom,
   permissions: [
     {
       resourceType: Registry,

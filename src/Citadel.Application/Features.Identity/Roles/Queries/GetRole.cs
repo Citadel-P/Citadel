@@ -19,6 +19,6 @@ internal sealed class GetRoleHandler(IUnitOfWork unitOfWork) : IQueryHandler<Get
         if (role is null)
             return Result.Failure<RoleDetails>(new NotFoundError($"Role with ID {query.Id} does not exist"));
 
-        return Result.Success(new RoleDetails(role.Id, role.Name, role.Permissions));
+        return Result.Success(new RoleDetails(role.Id, role.Name, role.RoleType, role.Permissions));
     }
 }

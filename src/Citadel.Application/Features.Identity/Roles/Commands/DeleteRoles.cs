@@ -18,6 +18,9 @@ internal sealed class DeleteRolesHandler(IUnitOfWork unitOfWork) : ICommandHandl
         if (roles is null || !roles.Any())
             return Result.Failure(new NotFoundError("No roles found matching the provided IDs."));
 
+        if (roles.Any(role => role.RoleType == Domain.RoleType.System))
+            return Result.Failure(new ConflictError("System roles cannot be deleted."));
+
         await unitOfWork.Roles.RemoveRangeAsync(command.Ids, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         return Result.Success();

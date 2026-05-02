@@ -7,4 +7,6 @@ public sealed record UserDetails(
     Guid ActorId,
     bool IsEnabled,
     DateTime CreatedAt,
-    Guid CreatedByActorId);
+    Guid CreatedByActorId,
+    IEnumerable<string>? Teams = null,
+    IEnumerable<string>? Roles = null);

@@ -146,6 +146,7 @@ export const useResourceParamType = (): { type: ResourceType; tab?: ResourceType
     }
   }
 
+  if (type === 'platforms' || type === undefined) return { type: 'Platform' };
   if (type === 'registries') return { type: 'Registry' };
   if (type === 'activities') return { type: 'Activity' };
   if (type === 'alert-rules') return { type: 'AlertRule' };

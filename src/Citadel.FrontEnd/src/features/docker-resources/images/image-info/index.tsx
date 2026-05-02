@@ -58,7 +58,7 @@ const InspectImageWrapper = ({ resource }: { resource: InspectImageView }) => {
         </Section>
       )}
 
-      <Section title="Containers from this image" Icon={Layers}>
+      <Section title={`Layers (${resource.layers?.length ?? 0})`} Icon={Layers}>
         <ImageLayerTable image={resource} />
       </Section>
 

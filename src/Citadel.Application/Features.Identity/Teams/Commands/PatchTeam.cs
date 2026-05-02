@@ -53,6 +53,6 @@ internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork) : ICommandHandler
         await unitOfWork.Actors.UpdateAsync(actor, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return new TeamDetails(team.Id, team.Name, team.ActorId, actor.IsEnabled);
+        return new TeamDetails(team.Id, team.Name, team.ActorId, actor.IsEnabled, team.TotalMembers, team.Roles);
     }
 }
