@@ -13,7 +13,7 @@ interface BaseResourceComponents<T = any> {
   SubHeader?: React.FC;
 
   /** Icon displayed in the page header */
-  Icon?: React.ReactElement;
+  Icon?: React.ComponentType<{ className?: string }>;
 
   /** Dropdown actions for table rows */
   DropdownActions?: {

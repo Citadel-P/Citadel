@@ -7,7 +7,7 @@ import NetworkForm from './form';
 import { useNetworksGroup } from './hooks/useNetworksGroup';
 
 export const NetworkComponents: RequiredComponents = {
-  Icon: <Network className="h-4 w-4" />,
+  Icon: Network,
   Content: ({ items, actions, isLoading }) => {
     return <NetworksTable items={items} actions={actions} isLoading={isLoading} />;
   },

@@ -11,7 +11,7 @@ import TaskSheet from '@/components/custom/task-sheet';
 import { Link } from 'react-router';
 
 export const ActivityComponents: RequiredComponents = {
-  Icon: <Activity className="h-4 w-4" />,
+  Icon: Activity,
   Content: ({ items, isLoading }) => {
     return (
       <ActivitiesTable pagedResult={items as any} isLoading={isLoading} displayTarget={true} displayPagging={true} />

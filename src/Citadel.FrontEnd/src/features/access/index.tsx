@@ -11,7 +11,7 @@ import { TeamDropdownActions, TeamGroupActions } from './teams/actions';
 import { useRead } from '@/lib/hooks';
 
 export const AccessComponents: TabbedResourceComponents = {
-  Icon: <UserKey className="h-4 w-4" />,
+  Icon: UserKey,
   header: {
     subtitle: 'Manage users, teams, and their access.',
     showSearch: false,

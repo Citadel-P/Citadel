@@ -68,17 +68,17 @@ export enum RoleType {
 }
 
 export enum ResourceType {
-  User = "User",
-  Team = "Team",
-  Role = "Role",
   Platform = "Platform",
   Deployment = "Deployment",
   Stack = "Stack",
+  Registry = "Registry",
   GitRepository = "GitRepository",
   GitAccount = "GitAccount",
-  Registry = "Registry",
   Alert = "Alert",
   AlertChannel = "AlertChannel",
+  User = "User",
+  Team = "Team",
+  Role = "Role",
 }
 
 export enum ResourceControlState {
@@ -4162,6 +4162,25 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Roles
+     * @name GetPermissionMatrix
+     * @summary Get the permission matrix (all valid resource/action combinations)
+     * @request GET:/api/v1/roles/permissions/matrix
+     * @response `200` `Record<string,(string)[]>` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getPermissionMatrix: (params: RequestParams = {}) =>
+      this.request<Record<string, string[]>, ProblemDetails>({
+        path: `/api/v1/roles/permissions/matrix`,
+        method: "GET",
         format: "json",
         ...params,
       }),

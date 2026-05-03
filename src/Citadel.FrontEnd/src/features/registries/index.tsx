@@ -6,7 +6,7 @@ import { RegistryDropdownActions, RegistryGroupActions } from './actions';
 import { RegistriesTable } from './table';
 
 export const RegistryComponents: RequiredComponents = {
-  Icon: <Cable className="h-4 w-4" />,
+  Icon: Cable,
   Content: ({ items, actions, isLoading }) => {
     return <RegistriesTable items={items} actions={actions} isLoading={isLoading} />;
   },

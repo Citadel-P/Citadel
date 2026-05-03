@@ -13,6 +13,7 @@ using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
+using Hosting.Common.Attributes;
 
 namespace WebApi.Routes;
 

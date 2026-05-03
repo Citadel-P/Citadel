@@ -7,7 +7,7 @@ import { useVolumesGroup } from './hooks/useVolumesGroup';
 import VolumeForm from './form';
 
 export const VolumeComponents: RequiredComponents = {
-  Icon: <HardDrive className="h-4 w-4" />,
+  Icon: HardDrive,
   Content: ({ items, actions, isLoading }) => {
     return <VolumesTable items={items} actions={actions} isLoading={isLoading} />;
   },

@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
 export const AlertEventComponents: RequiredComponents = {
-  Icon: <TriangleAlert className="h-4 w-4" />,
+  Icon: TriangleAlert,
   header: {
     title: 'Alert Events',
     subtitle: 'View past alerts and track their status and resolution.',

@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System.Security.Cryptography;

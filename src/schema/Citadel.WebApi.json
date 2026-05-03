@@ -21252,17 +21252,17 @@
       },
       "ResourceType": {
         "enum": [
-          "User",
-          "Team",
-          "Role",
           "Platform",
           "Deployment",
           "Stack",
+          "Registry",
           "GitRepository",
           "GitAccount",
-          "Registry",
           "Alert",
-          "AlertChannel"
+          "AlertChannel",
+          "User",
+          "Team",
+          "Role"
         ]
       },
       "RestartPolicy": {

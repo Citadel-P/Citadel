@@ -5,7 +5,7 @@ import { Platforms } from './platforms';
 import { PlatformDropdownActions } from './actions';
 
 export const PlatformComponents: RequiredComponents = {
-  Icon: <Server className="h-4 w-4" />,
+  Icon: Server,
   header: {
     subtitle: 'Connect platforms for real-time monitoring, alerts, and container workloads.',
     showSearch: true,

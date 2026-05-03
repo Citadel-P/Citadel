@@ -2920,6 +2920,53 @@
         ]
       }
     },
+    "/api/v1/roles/permissions/matrix": {
+      "get": {
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Get the permission matrix (all valid resource/action combinations)",
+        "operationId": "getPermissionMatrix",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/containers/{id}": {
       "get": {
         "tags": [
@@ -21205,17 +21252,17 @@
       },
       "ResourceType": {
         "enum": [
-          "User",
-          "Team",
-          "Role",
           "Platform",
           "Deployment",
           "Stack",
+          "Registry",
           "GitRepository",
           "GitAccount",
-          "Registry",
           "Alert",
-          "AlertChannel"
+          "AlertChannel",
+          "User",
+          "Team",
+          "Role"
         ]
       },
       "RestartPolicy": {

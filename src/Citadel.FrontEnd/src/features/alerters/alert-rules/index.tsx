@@ -339,7 +339,7 @@ function AlertNotificationChannels() {
 }
 
 export const AlertRuleComponents: RequiredComponents = {
-  Icon: <Megaphone className="h-4 w-4" />,
+  Icon: Megaphone,
   Content: ({ items, actions, isLoading }) => (
     <div className="flex flex-col gap-6">
       <AlertRulesTable items={items} actions={actions} isLoading={isLoading} />

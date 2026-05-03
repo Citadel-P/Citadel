@@ -1,18 +1,13 @@
-import {
-  Layers,
-  UserKey,
-  Cable,
-  Rocket,
-  Server,
-  GitBranch,
-  ChevronsLeftRightEllipsis,
-  Settings,
-  Megaphone,
-  TriangleAlert,
-  Activity,
-} from 'lucide-react';
+import { Layers, Rocket, ChevronsLeftRightEllipsis, Settings, Activity } from 'lucide-react';
 import { JSX } from 'react';
 import DockerIcon from '@/assets/docker.min.svg';
+import { AccessComponents } from '@/features/access';
+import { AlertEventComponents } from '@/features/alerters/alert-events';
+import { AlertRuleComponents } from '@/features/alerters/alert-rules';
+import { DeploymentComponents } from '@/features/deployments';
+import { GitRepoComponents } from '@/features/git-repos';
+import { PlatformComponents } from '@/features/platforms';
+import { RegistryComponents } from '@/features/registries';
 interface IMenuItem {
   group: string;
   separator?: boolean;
@@ -29,13 +24,18 @@ interface ISubMenuItem {
   children?: ISubMenuItem[];
 }
 
+const renderIcon = (Icon?: React.ComponentType<{ className?: string }>, className = 'w-3.5 h-3.5') => {
+  if (!Icon) return <></>;
+  return <Icon className={className} />;
+};
+
 const MenuItems: IMenuItem[] = [
   {
     group: 'Infrastructure',
     separator: false,
     items: [
       {
-        icon: <Server width={14} height={14} />,
+        icon: renderIcon(PlatformComponents.Icon),
         label: 'Platforms',
         route: '/',
       },
@@ -46,7 +46,7 @@ const MenuItems: IMenuItem[] = [
     separator: false,
     items: [
       {
-        icon: <Rocket width={14} height={14} />,
+        icon: renderIcon(DeploymentComponents.Icon),
         label: 'Deployments',
         route: '/deployments',
       },
@@ -62,12 +62,12 @@ const MenuItems: IMenuItem[] = [
     separator: false,
     items: [
       {
-        icon: <Cable className="w-3.5 h-3.5" />,
+        icon: renderIcon(RegistryComponents.Icon),
         label: 'Registries',
         route: '/registries',
       },
       {
-        icon: <GitBranch className="w-3.5 h-3.5" />,
+        icon: renderIcon(GitRepoComponents.Icon),
         label: 'Repositories',
         route: '/git-repos',
       },
@@ -78,7 +78,7 @@ const MenuItems: IMenuItem[] = [
     separator: false,
     items: [
       {
-        icon: <TriangleAlert width={14} height={14} />,
+        icon: renderIcon(AlertEventComponents.Icon),
         label: 'Alerts',
         route: '/alerts',
       },
@@ -93,7 +93,7 @@ const MenuItems: IMenuItem[] = [
         route: '/settings',
         children: [
           {
-            icon: <Megaphone className="w-3.5 h-3.5" />,
+            icon: renderIcon(AlertRuleComponents.Icon),
             label: 'Alert Rules',
             route: '/alert-rules',
           },
@@ -103,7 +103,7 @@ const MenuItems: IMenuItem[] = [
             route: '/variables',
           },
           {
-            icon: <UserKey className="w-3.5 h-3.5" />,
+            icon: renderIcon(AccessComponents.Icon),
             label: 'Access',
             route: '/access',
           },

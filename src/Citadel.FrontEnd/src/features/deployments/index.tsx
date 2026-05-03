@@ -6,7 +6,7 @@ import { DeploymentsTable } from './table';
 import { useDeploymentsGroup } from './hooks/useDeploymentsGroup';
 
 export const DeploymentComponents: RequiredComponents = {
-  Icon: <Rocket className="h-4 w-4" />,
+  Icon: Rocket,
   header: {
     subtitle: 'Run and manage containers on your servers.',
     showSearch: true,

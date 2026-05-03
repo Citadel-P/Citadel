@@ -445,7 +445,7 @@ function GitAccountsSection() {
 }
 
 export const GitRepoComponents: RequiredComponents = {
-  Icon: <GitBranch className="h-4 w-4" />,
+  Icon: GitBranch,
   Content: ({ items, actions, isLoading }) => (
     <div className="flex flex-col gap-6">
       <GitReposTable items={items} actions={actions} isLoading={isLoading} />

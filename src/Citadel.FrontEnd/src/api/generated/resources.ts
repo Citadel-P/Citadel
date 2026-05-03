@@ -30,6 +30,7 @@ export const resources = {
   getRole: { method: "GET", key: "getRole", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   updateRolePermissions: { method: "PATCH", key: "updateRolePermissions", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   renameRole: { method: "POST", key: "renameRole", params: ["data","params"], requiredParams: [], queryParams: [] },
+  getPermissionMatrix: { method: "GET", key: "getPermissionMatrix", params: ["params"], requiredParams: [], queryParams: [] },
   getContainer: { method: "GET", key: "getContainer", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   getContainerInfo: { method: "GET", key: "getContainerInfo", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   getContainerStats: { method: "GET", key: "getContainerStats", params: ["id","params"], requiredParams: ["id"], queryParams: [] },

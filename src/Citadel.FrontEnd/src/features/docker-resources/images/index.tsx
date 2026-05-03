@@ -7,7 +7,7 @@ import { ImageDropdownActions, ImageGroupActions } from './actions';
 import PullImageForm, { PullButton } from './pull-image';
 
 export const ImageComponents: RequiredComponents = {
-  Icon: <HardDrive className="h-4 w-4" />,
+  Icon: HardDrive,
   Content: ImagesTable,
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { imagesInfo, isLoading } = useImagesGroup(platformId);
