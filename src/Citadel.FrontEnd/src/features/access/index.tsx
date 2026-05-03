@@ -1,7 +1,7 @@
 import { TabbedResourceComponents } from '@/pages/types';
 import { Users } from './users';
 import { Teams } from './teams';
-import { Roles } from './roles';
+import { Roles, AddRoleButton } from './roles';
 import { UserKey } from 'lucide-react';
 import { useUsersList } from './users/hooks/useUsersList';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -73,10 +73,8 @@ export const AccessComponents: TabbedResourceComponents = {
         return <Roles items={items} isLoading={isLoading} />;
       },
       Header: {
-        showAdd: true,
         showSearch: false,
-        addButtonTitle: 'Add Role',
-        addButtonUrl: '/access/roles/add',
+        Extra: AddRoleButton,
       },
       useData: () => {
         const { data, isLoading } = useRead('listRoles');

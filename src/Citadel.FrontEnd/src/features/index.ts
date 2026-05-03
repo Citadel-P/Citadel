@@ -22,7 +22,6 @@ import { GitRepoFormComponents } from './git-repos/form';
 import { AccessComponents } from './access';
 import { UserFormComponents } from './access/users';
 import { TeamFormComponents } from './access/teams';
-import { RoleFormComponents } from './access/roles';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -66,7 +65,7 @@ export const ResourceFormComponents: {
   Access: undefined,
   User: UserFormComponents,
   Team: TeamFormComponents,
-  Role: RoleFormComponents,
+  Role: undefined,
 };
 
 export const DockerResourceInfoComponents: {
