@@ -41,7 +41,7 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContain
   Tabs: [
     {
       label: 'Logs',
-      Content: ({ resource }) => <ContainerLogs containerId={resource?.id} />,
+      Content: ({ resource }) => <ContainerLogs containerId={resource?.id} source="Container" />,
     },
     {
       label: 'Inspect',
@@ -51,7 +51,7 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContain
       label: 'Terminal',
       disabled: (resource: DockerContainerView) => resource.state !== ContainerStateStatus.Running,
       Content: ({ resource }) => (
-        <ContainerExec containerId={resource?.id} disabled={resource.state !== ContainerStateStatus.Running} />
+        <ContainerExec containerId={resource?.id} disabled={resource.state !== ContainerStateStatus.Running} target="Container" />
       ),
     },
     {

@@ -3,13 +3,14 @@ import { HubConnection } from '@microsoft/signalr';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { LogViewer } from '@/components/custom/common';
 import { normalizeDockerId } from '@/lib/utils';
+import { LogTarget } from '@/api/types';
 
 const MAX_LOGS = 5000;
 const decoder = new TextDecoder('utf-8');
 
-export const ContainerLogs = memo(({ containerId }: { containerId: string | undefined }) => {
+export const ContainerLogs = memo(({ containerId, source }: { containerId: string | undefined; source: LogTarget }) => {
   const nid = normalizeDockerId(containerId);
-  const { containerLogs: logs, clearLogs } = useContainerLogGroup(nid);
+  const { containerLogs: logs, clearLogs } = useContainerLogGroup(nid, source);
 
   return (
     <div className="flex flex-col gap-3">
@@ -33,7 +34,7 @@ interface LogEntry {
   message: string;
 }
 
-const useContainerLogGroup = (containerId?: string) => {
+const useContainerLogGroup = (containerId?: string, source?: LogTarget) => {
   // Mutable refs hold the real data; React only knows about "version".
   const logsMapRef = useRef<Map<string, string>>(new Map());
   const logsArrayRef = useRef<LogEntry[]>([]);
@@ -110,12 +111,12 @@ const useContainerLogGroup = (containerId?: string) => {
     async (hub: HubConnection) => {
       if (!containerId) return;
       try {
-        await hub.invoke('StartContainerLogs', containerId);
+        await hub.invoke('StartContainerLogs', containerId, source ?? 'Container');
       } catch (error) {
         console.error('Failed to start container logs stream', error);
       }
     },
-    [containerId],
+    [containerId, source],
   );
 
   const setupEventListeners = useCallback(

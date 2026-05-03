@@ -35,7 +35,7 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
   Tabs: [
     {
       label: 'Inspect',
-      Content: ({ resource }) => <InspectImageWrapper resource={resource} />,
+      Content: ({ resource }: { resource: InspectImageView }) => <InspectImageWrapper resource={resource} />,
     },
   ],
 

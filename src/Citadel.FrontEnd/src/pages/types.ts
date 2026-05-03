@@ -72,7 +72,7 @@ export interface RequiredFormComponents<T = any> {
     /** Optional subheader */
     SubHeader?: React.FC<{ resource: T }>;
     /** Tabs configuration */
-    Tabs: TabElement<T>[];
+    Tabs: ResourceTabElement<T>[];
     /** Main Data hook for this workload */
     useData: (id: string) => { item?: RequiredFormFields; isLoading: boolean };
   };
@@ -90,7 +90,7 @@ export interface RequiredDockerInfoComponents<T = any> {
   /** Optional subheader */
   SubHeader?: React.FC<{ resource: T }>;
   /** Tabs configuration for tabbed resources */
-  Tabs: TabElement<T>[];
+  Tabs: ResourceTabElement<T>[];
   /** Data hook for this resource */
   useData: (platformId: string, resourceId: string) => ResourceInfoHookResult<T>;
 }
@@ -136,6 +136,22 @@ export interface TabElement<T> {
   GroupActions?: React.FC<{ items: any[] }>;
   /** Data hook for the resource */
   useData?: () => ResourceDataHookResult<T>;
+}
+
+export type ResourceTabContentProps<T> = {
+  resource: T;
+  metadataChanged?: boolean;
+};
+
+export interface ResourceTabElement<T> {
+  /** Tab label shown in the UI */
+  label: string;
+  /** Optional route segment used when a tab is represented in the URL */
+  slug?: string;
+  /** Wether this tab is disabled */
+  disabled?(resource: T): boolean;
+  /** Content for tabs rendered from a single resource context */
+  Content: React.FC<ResourceTabContentProps<T>>;
 }
 
 interface ResourceInfoHookResult<T> {

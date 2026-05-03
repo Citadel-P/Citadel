@@ -212,13 +212,13 @@ const RuntimeTabs = ({ containerInfo, disabled }: { containerInfo: DockerContain
         </TabsTrigger>
       </TabsList>
       <TabsContent value="logs" className="w-full mt-2">
-        <ContainerLogs key={nid} containerId={nid} />
+        <ContainerLogs key={nid} containerId={nid} source="Deployment" />
       </TabsContent>
       <TabsContent value="inspect" className="w-full mt-2">
         <ContainerInspect key={nid} containerId={nid} />
       </TabsContent>
       <TabsContent value="terminal" className="w-full mt-2">
-        <ContainerExec key={nid} containerId={nid} disabled={disabled} />
+        <ContainerExec key={nid} containerId={nid} disabled={disabled} target="Deployment" />
       </TabsContent>
       <TabsContent value="stats" className="w-full mt-2">
         <ContainerStats key={nid} resource={containerInfo} />

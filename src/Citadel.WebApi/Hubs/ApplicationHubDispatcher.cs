@@ -10,7 +10,6 @@ using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 using Microsoft.AspNetCore.SignalR;
-using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;

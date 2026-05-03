@@ -1,7 +1,9 @@
 ﻿using Application.Features.Containers.Commands;
+using Application.Features.Deployments.Commands;
 using Application.Features.Images.Queries;
 using Application.Features.Platforms.Queries;
 using Application.Services.SignalR;
+using Domain;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -83,17 +85,37 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         else return new ImagesView([]);
     }
 
-    public async Task StartContainerLogs(string containerId)
-       => await mediator.Send(new StartContainerLogs(containerId), Context.ConnectionAborted);
+    public async Task StartContainerLogs(string containerId, LogTarget target)
+    {
+        if (target == LogTarget.Container)
+            await mediator.Send(new StartContainerLogs(containerId), Context.ConnectionAborted);
+        else
+            await mediator.Send(new StartDeploymentLogs(containerId), Context.ConnectionAborted);
+    }
 
-    public async Task StartExecProcess(string groupId, string shell)
-        => await mediator.Send(new StartContainerShellSession(groupId, shell), Context.ConnectionAborted);
-    
-    public async Task ResizeExec(string groupId, int cols, int rows) 
-        => await mediator.Send(new ResizeContainerExecSession(groupId, cols, rows), Context.ConnectionAborted);
+    public async Task StartExecProcess(string groupId, string shell, ExecTarget target)
+    {
+        if (target == ExecTarget.Container)
+            await mediator.Send(new StartContainerShellSession(groupId, shell), Context.ConnectionAborted);
+        else
+            await mediator.Send(new StartDeploymentShellSession(groupId, shell), Context.ConnectionAborted);
+    }
 
-    public async Task SendExecInput(string groupId, byte[] data)
-        => await mediator.Send(new SendContainerExecInput(groupId, data), Context.ConnectionAborted);
+    public async Task ResizeExec(string groupId, int cols, int rows, ExecTarget target) 
+    {
+        if (target == ExecTarget.Container)
+            await mediator.Send(new ResizeContainerExecSession(groupId, cols, rows), Context.ConnectionAborted);
+        else
+            await mediator.Send(new ResizeDeploymentExecSession(groupId, cols, rows), Context.ConnectionAborted);
+    }
+
+    public async Task SendExecInput(string groupId, byte[] data, ExecTarget target)
+    {
+        if (target == ExecTarget.Container)
+            await mediator.Send(new SendContainerExecInput(groupId, data), Context.ConnectionAborted);
+        else
+            await mediator.Send(new SendDeploymentExecInput(groupId, data), Context.ConnectionAborted);
+    }
 
     #endregion
 }

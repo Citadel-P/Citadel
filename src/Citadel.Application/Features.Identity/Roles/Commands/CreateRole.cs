@@ -31,6 +31,9 @@ public sealed record CreateRole(string Name, IEnumerable<Permission> Permissions
         {
             RuleFor(x => x.ResourceType).IsInEnum();
             RuleFor(x => x.ResourceAction).IsInEnum();
+            RuleFor(x => x)
+                .Must(p => PermissionMatrix.IsAllowed(p.ResourceType, p.ResourceAction))
+                .WithMessage(p => $"Invalid permission: [{p.ResourceType}]-[{p.ResourceAction}] is not an allowed combination.");
         }
     }
 }

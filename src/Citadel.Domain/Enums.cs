@@ -608,3 +608,17 @@ public enum RoleType
     System,
     Custom
 }
+
+public enum LogTarget
+{
+    Container,
+    Deployment,
+    Stack
+}
+
+public enum ExecTarget
+{
+    Container,
+    Deployment,
+    Stack
+}

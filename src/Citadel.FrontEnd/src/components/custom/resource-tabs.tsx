@@ -1,7 +1,7 @@
 import { useLocalStorage, useStickySentinel } from '@/lib/hooks';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { cn } from '@/lib/utils';
-import { RequiredFormFields, TabElement } from '@/pages/types';
+import { RequiredFormFields, ResourceTabElement } from '@/pages/types';
 import { useSegmentTitle } from '@/lib/atoms';
 import { useEffect } from 'react';
 
@@ -13,7 +13,7 @@ export const ResourceTabs = ({
 }: {
   localKey: string;
   resource: RequiredFormFields;
-  tabs: TabElement<any>[];
+  tabs: ResourceTabElement<any>[];
   metadataChanged?: boolean;
 }) => {
   const [_, setSegmentTitle] = useSegmentTitle();
@@ -37,7 +37,11 @@ export const ResourceTabs = ({
         )}>
         <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>
           {tabs.map((tab) => (
-            <TabsTrigger key={tab.label} value={tab.label} className="text-xs" disabled={tab.disabled?.(resource) ?? false}>
+            <TabsTrigger
+              key={tab.label}
+              value={tab.label}
+              className="text-xs"
+              disabled={tab.disabled?.(resource) ?? false}>
               {tab.label}
             </TabsTrigger>
           ))}

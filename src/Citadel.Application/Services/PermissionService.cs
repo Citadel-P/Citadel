@@ -23,6 +23,10 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
     
     public Task<bool> HasPermissionAsync(Guid userId, ResourceType resourceType, ResourceAction action, Guid? resourceId, CancellationToken ct)
     {
+        if (!PermissionMatrix.IsAllowed(resourceType, action))
+            throw new InvalidOperationException(
+                $"Invalid runtime permission check: [{resourceType}]-[{action}] is not an allowed combination.");
+
         // Per resource permissions are not cached, as they are expected to be less common and more dynamic.
         if (resourceId is not null)
         {

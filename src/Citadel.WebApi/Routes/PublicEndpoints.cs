@@ -309,6 +309,16 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteRoles");
+
+        roles.MapGet("/permissions/matrix", () =>
+            TypedResults.Ok(
+                PermissionMatrix.GetAll()
+                    .ToDictionary(
+                        kvp => kvp.Key.ToString(),
+                        kvp => kvp.Value.Select(a => a.ToString()).ToArray())))
+            .WithSummary("Get the permission matrix (all valid resource/action combinations)")
+            .WithName("getPermissionMatrix")
+            .AllowAnonymous();
     }
 
     private static void MapGitRepositoryEndpoints(RouteGroupBuilder gitRepositories)

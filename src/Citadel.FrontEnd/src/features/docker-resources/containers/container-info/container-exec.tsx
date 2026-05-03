@@ -10,17 +10,19 @@ import '@xterm/xterm/css/xterm.css';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Power, PowerOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ExecTarget } from '@/api/types';
 
 const SHELLS = [
   { label: 'bash', value: 'bash' },
   { label: 'sh', value: 'sh' },
 ];
 
-export const ContainerExec = ({ containerId, disabled }: { containerId?: string; disabled?: boolean }) => {
+export const ContainerExec = ({ containerId, disabled, target }: { containerId?: string; disabled?: boolean; target: ExecTarget }) => {
   const nid = normalizeDockerId(containerId);
   const { terminalRef, isLoading, isConnected, shell, setShell, toggleConnection } = useContainerExecTerminal(
     nid,
     disabled,
+    target,
   );
 
   return (
@@ -71,7 +73,7 @@ const THEMES = {
   dark: { background: '#151b25', foreground: '#f6f8fa', cursor: '#ffffff', selectionBackground: '#6e778a' },
 };
 
-export const useContainerExecTerminal = (containerId?: string, disabled?: boolean) => {
+export const useContainerExecTerminal = (containerId?: string, disabled?: boolean, target?: ExecTarget) => {
   const { theme } = useLayoutContext();
   const [shell, setShell] = useState<'bash' | 'sh'>('bash');
   const [isActive, setIsActive] = useState(false);
@@ -109,7 +111,7 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
     const onDataDisposable = term.onData((data) => {
       if (execStartedRef.current && hubRef.current?.state === HubConnectionState.Connected && groupId) {
         const bytes = new TextEncoder().encode(data);
-        hubRef.current.invoke('SendExecInput', groupId, bytes).catch(console.error);
+        hubRef.current.invoke('SendExecInput', groupId, bytes, target ?? 'Container').catch(console.error);
       }
     });
 
@@ -122,7 +124,7 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
         groupId &&
         termRef.current
       ) {
-        hubRef.current.invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows).catch(console.error);
+        hubRef.current.invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows, target ?? 'Container').catch(console.error);
       }
     });
 
@@ -134,7 +136,7 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
       term.dispose();
       termRef.current = null;
     };
-  }, [containerId, disabled, groupId, theme.mode]);
+  }, [containerId, disabled, groupId, theme.mode, target]);
 
   useEffect(() => {
     if (!disabled) return;
@@ -171,11 +173,11 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
       if (!groupId) return;
 
       try {
-        await hub.invoke('StartExecProcess', groupId, shell);
+        await hub.invoke('StartExecProcess', groupId, shell, target ?? 'Container');
         execStartedRef.current = true;
 
         if (termRef.current) {
-          await hub.invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows);
+          await hub.invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows, target ?? 'Container');
         }
       } catch {
         termRef.current?.writeln('\r\n\x1b[31m[failed to start process]\x1b[0m');

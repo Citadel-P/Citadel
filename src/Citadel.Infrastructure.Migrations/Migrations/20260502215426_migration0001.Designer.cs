@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260502144828_migration0001")]
+    [Migration("20260502215426_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -1236,62 +1236,6 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("ddcb3cb1-e44f-0ab8-9e1e-698ed0352dc6"),
-                            ResourceAction = "Apply",
-                            ResourceType = "User",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("eef93be9-d327-6cfe-3bc9-5c5290f4b686"),
-                            ResourceAction = "Apply",
-                            ResourceType = "User",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("f482aa00-8a5a-30da-4d1b-f0dfe770bcb3"),
-                            ResourceAction = "Pull",
-                            ResourceType = "User",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("8722b0da-7d07-7c14-0f9c-161e0c39a751"),
-                            ResourceAction = "Pull",
-                            ResourceType = "User",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("87d03608-e55e-6aed-7bb4-2a505eea1474"),
-                            ResourceAction = "Exec",
-                            ResourceType = "User",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("92d404fe-a143-fba2-03cf-16479135fa81"),
-                            ResourceAction = "Exec",
-                            ResourceType = "User",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("c9ef58ef-d39e-eec5-7e23-dba79f2a1823"),
-                            ResourceAction = "Log",
-                            ResourceType = "User",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("92694036-978b-d38d-81ed-8d28aeed9bd2"),
-                            ResourceAction = "Log",
-                            ResourceType = "User",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
                             Id = new Guid("8487254d-0383-5b91-fa5f-816cfdc29054"),
                             ResourceAction = "View",
                             ResourceType = "Team",
@@ -1345,62 +1289,6 @@ namespace Infrastructure.Migrations.Migrations
                             ResourceAction = "Delete",
                             ResourceType = "Team",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("ab32d40c-3859-6377-1634-a84b67e820dc"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Team",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("f8833b18-d702-70b1-f75a-33f732e5ac29"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Team",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("cbcc1ffb-e622-9159-df1e-d0d05e50385c"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Team",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("62d97329-3b51-37c0-abe7-aba92734e97e"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Team",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("3b12173b-62c2-740b-72bd-9727e893e58b"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Team",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("0430e179-4cf1-193b-c54d-5d014203921b"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Team",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("11689210-d56f-4df8-9887-3338512e781d"),
-                            ResourceAction = "Log",
-                            ResourceType = "Team",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("c4d01170-4f17-919d-9e91-210805644c7e"),
-                            ResourceAction = "Log",
-                            ResourceType = "Team",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
                         new
                         {
@@ -1460,62 +1348,6 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("0edd69d5-bb37-653c-9b25-5ff32a2b8243"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Role",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("15923c89-875e-7d0b-b80b-96af1f0cd1f2"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Role",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("ab3dfa51-423f-716d-a623-760c9f72f791"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Role",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("3a14f868-33fb-3a2e-92e1-5579da6962ce"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Role",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("9a7b1e84-3fd5-f750-2948-4a824aa66c82"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Role",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("b503cc9e-5d58-8682-b509-5b5275d9ae5f"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Role",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("153c4670-ec3e-4037-6fd6-dd83bf29d3af"),
-                            ResourceAction = "Log",
-                            ResourceType = "Role",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("7862a71c-6493-24a1-84ca-dd2a630cc55a"),
-                            ResourceAction = "Log",
-                            ResourceType = "Role",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
                             Id = new Guid("6deaa9b4-66e6-22bb-3f49-62584ccd9e1f"),
                             ResourceAction = "View",
                             ResourceType = "Platform",
@@ -1569,20 +1401,6 @@ namespace Infrastructure.Migrations.Migrations
                             ResourceAction = "Delete",
                             ResourceType = "Platform",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("47c763f4-71e9-2992-3223-8ab97876b727"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Platform",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("6ed1c4e3-9d28-23d8-2939-6a414aa0f53d"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Platform",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
                         new
                         {
@@ -1698,15 +1516,15 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("62e8e1fe-c911-e1b9-cc70-7efff6e08327"),
-                            ResourceAction = "Pull",
+                            Id = new Guid("f3e95d8a-2b63-3cb3-51ca-c5329b5b823e"),
+                            ResourceAction = "Log",
                             ResourceType = "Deployment",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001")
                         },
                         new
                         {
-                            Id = new Guid("18255099-e963-802b-21a3-d115440e9322"),
-                            ResourceAction = "Pull",
+                            Id = new Guid("29b878e1-64b3-eee4-d8d9-7a7fb015c14c"),
+                            ResourceAction = "Log",
                             ResourceType = "Deployment",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
@@ -1721,20 +1539,6 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("9fbad9ed-4795-61d8-e05b-748d2ee8aa30"),
                             ResourceAction = "Exec",
-                            ResourceType = "Deployment",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("f3e95d8a-2b63-3cb3-51ca-c5329b5b823e"),
-                            ResourceAction = "Log",
-                            ResourceType = "Deployment",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("29b878e1-64b3-eee4-d8d9-7a7fb015c14c"),
-                            ResourceAction = "Log",
                             ResourceType = "Deployment",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
@@ -1810,34 +1614,6 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("40aadb71-124b-7c1b-44b9-f507a69ade11"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Stack",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("f12e902b-29c0-d404-41ef-6c7731211a70"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Stack",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("d41f9d7b-5371-c322-3049-cb166f19e83c"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Stack",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("b4101c57-b3f6-724d-8f9e-20b96ff470d3"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Stack",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
                             Id = new Guid("36667c46-31d9-3c62-1375-459c4daba3ed"),
                             ResourceAction = "Log",
                             ResourceType = "Stack",
@@ -1908,62 +1684,6 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("0eda225f-cb5b-1bb0-9525-be92b14fc322"),
-                            ResourceAction = "Apply",
-                            ResourceType = "GitRepository",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("1f00afd4-a4d1-94cd-3a94-44d420eef066"),
-                            ResourceAction = "Apply",
-                            ResourceType = "GitRepository",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("58e018b1-ba4c-56bb-c56c-b9473688127b"),
-                            ResourceAction = "Pull",
-                            ResourceType = "GitRepository",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("258c5870-adb0-f28f-bed2-5c993e5d11da"),
-                            ResourceAction = "Pull",
-                            ResourceType = "GitRepository",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("88a68bf5-8366-4d1a-f0fe-48225bc865bd"),
-                            ResourceAction = "Exec",
-                            ResourceType = "GitRepository",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("eaf65f71-81b1-b50f-041e-6f1471125bea"),
-                            ResourceAction = "Exec",
-                            ResourceType = "GitRepository",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("8a0a4849-d9de-a63a-4e34-d25e431f6324"),
-                            ResourceAction = "Log",
-                            ResourceType = "GitRepository",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("bc2f22f1-0c5b-29f7-00e6-61f5fed77470"),
-                            ResourceAction = "Log",
-                            ResourceType = "GitRepository",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
                             Id = new Guid("7ccb3b9e-a09a-d3c9-82ed-3f71646d2576"),
                             ResourceAction = "View",
                             ResourceType = "GitAccount",
@@ -2017,62 +1737,6 @@ namespace Infrastructure.Migrations.Migrations
                             ResourceAction = "Delete",
                             ResourceType = "GitAccount",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("d5ba4edc-5278-a21e-613d-91350e52bce7"),
-                            ResourceAction = "Apply",
-                            ResourceType = "GitAccount",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("783ca30a-d153-8f1b-27db-c3e722f7f34d"),
-                            ResourceAction = "Apply",
-                            ResourceType = "GitAccount",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("6395043d-510b-dc85-f19d-2a57463f4e8f"),
-                            ResourceAction = "Pull",
-                            ResourceType = "GitAccount",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("4fa196f3-a9e5-7716-b1dd-aa574061e1f7"),
-                            ResourceAction = "Pull",
-                            ResourceType = "GitAccount",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("b19a2bbe-e59f-b092-4f40-20282533b1db"),
-                            ResourceAction = "Exec",
-                            ResourceType = "GitAccount",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("2ab50947-b044-4b44-6683-6fa76d3dd8e5"),
-                            ResourceAction = "Exec",
-                            ResourceType = "GitAccount",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("2941a68e-0eb8-2ba5-0d80-8ecf0dd21df8"),
-                            ResourceAction = "Log",
-                            ResourceType = "GitAccount",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("a826cc2c-86ce-d61e-def2-e1ffa9bd5e89"),
-                            ResourceAction = "Log",
-                            ResourceType = "GitAccount",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
                         new
                         {
@@ -2132,62 +1796,6 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("12bbcf07-7237-3afb-65f7-1fc8e2de4939"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Registry",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("0dd6ded1-5ef7-c1b5-a36a-d0de73459d8a"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Registry",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("961c1641-93aa-54ca-9b00-6608da3ae4c8"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Registry",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("acab0152-cf67-d16c-fe1e-c579972ad2df"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Registry",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("ef3b1688-1b7b-f6c2-c4a2-169538d71970"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Registry",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("b70ec2d0-198c-893d-9b83-f51cd8d4e5fd"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Registry",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("5b860b42-6a54-df7f-b375-2e1d1f47a563"),
-                            ResourceAction = "Log",
-                            ResourceType = "Registry",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("7defaa75-0f73-24b3-e32e-842bc1ec9885"),
-                            ResourceAction = "Log",
-                            ResourceType = "Registry",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
                             Id = new Guid("ec427e29-a8ed-8604-59cc-7eda3268fc30"),
                             ResourceAction = "View",
                             ResourceType = "Alert",
@@ -2244,62 +1852,6 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("26bb8bc9-e526-dfd5-c3cc-2ebc0fb9837b"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Alert",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("18b8b740-528c-6366-9902-ebf6a025d063"),
-                            ResourceAction = "Apply",
-                            ResourceType = "Alert",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("ea5f48d2-2719-0a78-dcb4-2efd447e674f"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Alert",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("f9af8f42-cf9c-21a8-43ba-793b4dd1bd3f"),
-                            ResourceAction = "Pull",
-                            ResourceType = "Alert",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("41da5515-1e2d-bb3a-dd26-f13eb17fb81d"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Alert",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("17aefc62-767d-6e40-0a30-82d8cf360dec"),
-                            ResourceAction = "Exec",
-                            ResourceType = "Alert",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("3c380043-2b56-a61a-6855-8a8d1a50d9f1"),
-                            ResourceAction = "Log",
-                            ResourceType = "Alert",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("5ffa0070-42f0-4b37-efe5-4b0a394a1782"),
-                            ResourceAction = "Log",
-                            ResourceType = "Alert",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
                             Id = new Guid("d868c269-b60f-2be0-2451-9b81b3c95674"),
                             ResourceAction = "View",
                             ResourceType = "AlertChannel",
@@ -2353,62 +1905,6 @@ namespace Infrastructure.Migrations.Migrations
                             ResourceAction = "Delete",
                             ResourceType = "AlertChannel",
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("19357866-b0f7-4c0b-fb01-c3a6556d1e5f"),
-                            ResourceAction = "Apply",
-                            ResourceType = "AlertChannel",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("55228106-7ae9-6748-5a33-73e253ad940d"),
-                            ResourceAction = "Apply",
-                            ResourceType = "AlertChannel",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("613e9000-da2c-b4e7-9e02-b4bef349f0f7"),
-                            ResourceAction = "Pull",
-                            ResourceType = "AlertChannel",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("df77eb4e-7860-5319-431e-481bfe08baeb"),
-                            ResourceAction = "Pull",
-                            ResourceType = "AlertChannel",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("65540197-9169-5e94-9ad1-112ffe006a6d"),
-                            ResourceAction = "Exec",
-                            ResourceType = "AlertChannel",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("529f7f68-9ab0-a2f2-15af-a284b4d71ab6"),
-                            ResourceAction = "Exec",
-                            ResourceType = "AlertChannel",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            Id = new Guid("ee63f887-67f1-a9f7-8028-31394316e680"),
-                            ResourceAction = "Log",
-                            ResourceType = "AlertChannel",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("5cd694be-92f2-0857-3c43-3fde801e6173"),
-                            ResourceAction = "Log",
-                            ResourceType = "AlertChannel",
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002")
                         });
                 });
 

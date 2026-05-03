@@ -105,14 +105,14 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             new { ActorId = teamActorId, RoleId = operatorRoleId }
         );
 
-        // Permissions
+        // Permissions — only valid combinations from the matrix are seeded
         var permissions = new List<object>();
 
-        foreach (var resource in Enum.GetValues<ResourceType>())
+        foreach (var (resource, actions) in PermissionMatrix.GetAll())
         {
-            foreach (var action in Enum.GetValues<ResourceAction>())
+            foreach (var action in actions)
             {
-                // Admin -> everything
+                // Admin -> everything in the matrix
                 permissions.Add(new
                 {
                     Id = CreatePermissionSeedId(adminRoleId, resource, action),
@@ -135,7 +135,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                     });
                 }
 
-                // Operator -> most except Delete
+                // Operator -> everything except Delete
                 if (action != ResourceAction.Delete)
                 {
                     permissions.Add(new
