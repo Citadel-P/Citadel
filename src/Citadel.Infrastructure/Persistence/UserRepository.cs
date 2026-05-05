@@ -130,6 +130,41 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return new PagedResult<UserDetails>(rows.ToDetails(), totalCount, page, pageSize);
     }
 
+    public Task<IEnumerable<UserSearchItem>> SearchAsync(string query, int limit, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT Id, Name, Email
+            FROM Users
+            WHERE Name ILIKE '%' || @Query || '%'
+               OR Email ILIKE '%' || @Query || '%'
+            ORDER BY Name ASC
+            LIMIT @Limit
+            """;
+
+        return db.QueryAsync<UserSearchItem>(sql, new { Query = query, Limit = limit, cancellationToken }, transaction: tx());
+    }
+
+    public Task<IEnumerable<UserSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, string query, int limit, CancellationToken cancellationToken)
+    {
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
+            SELECT u.Id, u.Name, u.Email
+            FROM Users u
+            WHERE (u.Name ILIKE '%' || @Query || '%' OR u.Email ILIKE '%' || @Query || '%') AND
+        """ + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY u.Name ASC LIMIT @Limit;";
+
+        var parameters = new
+        {
+            UserId = userId,
+            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
+            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            Query = query,
+            Limit = limit,
+            cancellationToken
+        };
+
+        return db.QueryAsync<UserSearchItem>(sql, parameters, transaction: tx());
+    }
+
     public async Task<IEnumerable<User>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Users WHERE Id = ANY(@Ids) ORDER BY Name ASC";
@@ -246,14 +281,17 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         const string deleteSql = "DELETE FROM UsersTeams WHERE UserId = @UserId";
         await db.ExecuteAsync(deleteSql, new { UserId = userId, cancellationToken }, transaction: tx());
 
-        var rows = 0;
-        foreach (var teamId in teamIds)
-        {
-            const string insertSql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
-            rows += await db.ExecuteAsync(insertSql, new { UserId = userId, TeamId = teamId, cancellationToken }, transaction: tx());
-        }
+        var teamIdArray = teamIds as Guid[] ?? [.. teamIds];
+        if (teamIdArray.Length == 0)
+            return 0;
 
-        return rows;
+        const string insertSql = """
+            INSERT INTO UsersTeams (UserId, TeamId)
+            SELECT @UserId, teamId
+            FROM unnest(@TeamIds::uuid[]) AS teamId
+            """;
+
+        return await db.ExecuteAsync(insertSql, new { UserId = userId, TeamIds = teamIdArray, cancellationToken }, transaction: tx());
     }
 
     public async Task<bool> HasPermissionAsync(Guid userId, ResourceType resourceType, ResourceAction action, Guid? resourceId, CancellationToken ct)

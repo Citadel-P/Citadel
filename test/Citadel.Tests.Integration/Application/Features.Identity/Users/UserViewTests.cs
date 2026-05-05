@@ -31,6 +31,26 @@ public class UserViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
     }
 
     [Fact]
+    public async Task Search_Users_Should_Return_Matches_By_Name_Or_Email()
+    {
+        var first = await SeedUserAsync("admin-search", "admin-search@example.org");
+        var second = await SeedUserAsync("adtest-search", "someone@ad-mail.local");
+        var nonMatch = await SeedUserAsync("ops-search", "ops-search@example.org");
+
+        var response = await Client.GetAsync("/api/v1/users/search?query=ad&limit=10", TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement;
+        Assert.Contains(items.EnumerateArray(), x => x.GetProperty("id").GetGuid() == first.UserId);
+        Assert.Contains(items.EnumerateArray(), x => x.GetProperty("id").GetGuid() == second.UserId);
+        Assert.DoesNotContain(items.EnumerateArray(), x => x.GetProperty("id").GetGuid() == nonMatch.UserId);
+    }
+
+    [Fact]
     public async Task Get_User_Should_Return_User_For_Admin()
     {
         var seeded = await SeedUserAsync("user-view", "user-view@citadel.local", isEnabled: false);

@@ -147,6 +147,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listUsers");
 
+        users.MapGet("/search", Users.Search)
+            .WithSummary("Search users for assignment")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("searchUsers");
+
         users.MapGet("{id}", Users.Get)
             .WithSummary("Get user by ID")
             .ProducesValidationProblem()
@@ -189,6 +196,23 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("removeUserRole");
+
+        users.MapPost("{id}/resource-accesses", Users.AddResourceAccess)
+            .WithSummary("Add resource access override for a user")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("addUserResourceAccess");
+
+        users.MapDelete("{id}/resource-accesses", Users.RemoveResourceAccess)
+            .WithSummary("Remove resource access override for a user")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("removeUserResourceAccess");
 
         users.MapPost("/rename", Users.Rename)
             .WithSummary("Rename a user")
@@ -1168,6 +1192,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listTeams");
 
+        teams.MapGet("/search", Teams.Search)
+            .WithSummary("Search teams for assignment")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("searchTeams");
+
         teams.MapGet("{id}", Teams.Get)
             .WithSummary("Get team by ID")
             .ProducesValidationProblem()
@@ -1226,6 +1257,23 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("removeTeamMember");
+
+        teams.MapPost("{id}/resource-accesses", Teams.AddResourceAccess)
+            .WithSummary("Add resource access override for a team")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("addTeamResourceAccess");
+
+        teams.MapDelete("{id}/resource-accesses", Teams.RemoveResourceAccess)
+            .WithSummary("Remove resource access override for a team")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("removeTeamResourceAccess");
 
         teams.MapPost("/rename", Teams.Rename)
             .WithSummary("Rename a team")

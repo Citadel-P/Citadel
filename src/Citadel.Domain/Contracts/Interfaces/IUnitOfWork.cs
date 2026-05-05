@@ -20,6 +20,7 @@ public interface IUnitOfWork : IAsyncDisposable
     ITeamRepository Teams { get; }
     IRoleRepository Roles { get; }
     IActorRepository Actors { get; }
+    IResourceAccessRepository ResourceAccesses { get; }
     IImageRepository Images { get; }
     IPlatformRepository Platforms { get; }
     IRegistryRepository Registries { get; }
@@ -46,6 +47,13 @@ public interface IActorRepository
     Task<int> UpdateAsync(Actor actor, CancellationToken cancellationToken);
 }
 
+public interface IResourceAccessRepository
+{
+    Task<int> AddAsync(ResourceAccess resourceAccess, CancellationToken cancellationToken);
+    Task<int> RemoveAsync(Guid actorId, ResourceType resourceType, Guid resourceId, ResourceAction action, CancellationToken cancellationToken);
+    Task<int> ReplaceAsync(Guid actorId, IEnumerable<ResourceAccess> resourceAccesses, CancellationToken cancellationToken);
+}
+
 public interface IUserRepository 
 {
     Task<bool> HasPermissionAsync(Guid userId, ResourceType resourceType, ResourceAction action, Guid? resourceId, CancellationToken ct);
@@ -54,6 +62,8 @@ public interface IUserRepository
     Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken);
     Task<PagedResult<UserDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken);
     Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken);
+    Task<IEnumerable<UserSearchItem>> SearchAsync(string query, int limit, CancellationToken cancellationToken);
+    Task<IEnumerable<UserSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, string query, int limit, CancellationToken cancellationToken);
     Task<IEnumerable<User>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<(bool NameExists, bool EmailExists)> GetConflictsAsync(string name, string email, Guid? excludeId, CancellationToken cancellationToken);
     Task<(User? User, bool IsEnabled, bool NameExists, bool EmailExists)> GetUserUpdateStateAsync(Guid id, string? name, string? email, CancellationToken cancellationToken);
@@ -189,6 +199,8 @@ public interface ITeamRepository
     Task<IEnumerable<Team>> GetAllAsync(CancellationToken cancellationToken);
     Task<PagedResult<TeamDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken);
     Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken);
+    Task<IEnumerable<TeamSearchItem>> SearchAsync(string query, int limit, CancellationToken cancellationToken);
+    Task<IEnumerable<TeamSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, string query, int limit, CancellationToken cancellationToken);
     Task<IEnumerable<Team>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> GetConflictsAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
     Task<(Team? Team, bool IsEnabled, bool NameExists)> GetTeamUpdateStateAsync(Guid id, string? name, CancellationToken cancellationToken);

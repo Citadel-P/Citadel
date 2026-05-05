@@ -586,9 +586,23 @@ export interface AddTeamMemberInput {
   userId: string;
 }
 
+export interface AddTeamResourceAccessInput {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  action: ResourceAction;
+}
+
 export interface AddTeamRoleInput {
   /** @format uuid */
   roleId: string;
+}
+
+export interface AddUserResourceAccessInput {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  action: ResourceAction;
 }
 
 export interface AddUserRoleInput {
@@ -1279,12 +1293,20 @@ export interface CreateStackInput {
 
 export interface CreateTeamInput {
   name: string;
+  userIds?: null | any[];
+  roleIds?: null | any[];
+  resourceAccesses?: null | any[];
 }
 
 export interface CreateUserInput {
   name: string;
   email: string;
   password: string;
+  /** @default true */
+  isEnabled?: boolean;
+  teamIds?: null | any[];
+  roleIds?: null | any[];
+  resourceAccesses?: null | any[];
 }
 
 export interface CreateVolumeInput {
@@ -2332,12 +2354,18 @@ export interface PatchStackInput {
 
 export interface PatchTeamInput {
   isEnabled: null | boolean;
+  userIds: null | any[];
+  roleIds: null | any[];
+  resourceAccesses: null | any[];
 }
 
 export interface PatchUserInput {
   email: null | string;
   password: null | string;
   isEnabled: null | boolean;
+  teamIds: null | any[];
+  roleIds: null | any[];
+  resourceAccesses: null | any[];
 }
 
 export interface PermissionInput {
@@ -2686,6 +2714,20 @@ export interface RegistryView {
   isDefault?: boolean;
 }
 
+export interface RemoveTeamResourceAccessInput {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  action: ResourceAction;
+}
+
+export interface RemoveUserResourceAccessInput {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  action: ResourceAction;
+}
+
 export interface RenameResource {
   /** @format uuid */
   id: string;
@@ -2873,6 +2915,19 @@ export interface SwarmPeer {
   addr: null | string;
 }
 
+export interface TeamResourceAccessInput {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  action: ResourceAction;
+}
+
+export interface TeamSearchItemView {
+  /** @format uuid */
+  id: string;
+  name: string;
+}
+
 export interface TeamView {
   /** @format uuid */
   id: string;
@@ -2927,6 +2982,20 @@ export interface UnresolvedAlertsCountView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   count: number | string;
+}
+
+export interface UserResourceAccessInput {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  action: ResourceAction;
+}
+
+export interface UserSearchItemView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  email: string;
 }
 
 export interface UserView {
@@ -3570,6 +3639,45 @@ export class Api<
      * No description
      *
      * @tags Users
+     * @name SearchUsers
+     * @summary Search users for assignment
+     * @request GET:/api/v1/users/search
+     * @secure
+     * @response `200` `(UserSearchItemView)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    searchUsers: (
+      query?: {
+        Query?: string;
+        /**
+         * @format int32
+         * @default 20
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        Limit?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        UserSearchItemView[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/users/search`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
      * @name GetUser
      * @summary Get user by ID
      * @request GET:/api/v1/users/{id}
@@ -3676,6 +3784,69 @@ export class Api<
         path: `/api/v1/users/${id}/roles/${roleId}`,
         method: "DELETE",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name AddUserResourceAccess
+     * @summary Add resource access override for a user
+     * @request POST:/api/v1/users/{id}/resource-accesses
+     * @secure
+     * @response `200` `UserView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    addUserResourceAccess: (
+      id: string,
+      data: AddUserResourceAccessInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users/${id}/resource-accesses`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name RemoveUserResourceAccess
+     * @summary Remove resource access override for a user
+     * @request DELETE:/api/v1/users/{id}/resource-accesses
+     * @secure
+     * @response `200` `UserView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    removeUserResourceAccess: (
+      id: string,
+      data: RemoveUserResourceAccessInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users/${id}/resource-accesses`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -3800,6 +3971,45 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name SearchTeams
+     * @summary Search teams for assignment
+     * @request GET:/api/v1/teams/search
+     * @secure
+     * @response `200` `(TeamSearchItemView)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    searchTeams: (
+      query?: {
+        Query?: string;
+        /**
+         * @format int32
+         * @default 20
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        Limit?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        TeamSearchItemView[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/teams/search`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
         ...params,
       }),
 
@@ -3973,6 +4183,69 @@ export class Api<
         path: `/api/v1/teams/${id}/members/${userId}`,
         method: "DELETE",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name AddTeamResourceAccess
+     * @summary Add resource access override for a team
+     * @request POST:/api/v1/teams/{id}/resource-accesses
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    addTeamResourceAccess: (
+      id: string,
+      data: AddTeamResourceAccessInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams/${id}/resource-accesses`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name RemoveTeamResourceAccess
+     * @summary Remove resource access override for a team
+     * @request DELETE:/api/v1/teams/{id}/resource-accesses
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    removeTeamResourceAccess: (
+      id: string,
+      data: RemoveTeamResourceAccessInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams/${id}/resource-accesses`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),

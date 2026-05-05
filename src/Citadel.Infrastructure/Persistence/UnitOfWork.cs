@@ -21,6 +21,7 @@ internal class UnitOfWork : IUnitOfWork
         Teams = new Lazy<ITeamRepository>(() => new TeamRepository(connection, GetTransaction));
         Roles = new Lazy<IRoleRepository>(() => new RoleRepository(connection, GetTransaction));
         Actors = new Lazy<IActorRepository>(() => new ActorRepository(connection, GetTransaction));
+        ResourceAccesses = new Lazy<IResourceAccessRepository>(() => new ResourceAccessRepository(connection, GetTransaction));
         Images = new Lazy<IImageRepository>(() => new ImageRepository(connection, GetTransaction));
         Stacks = new Lazy<IStackRepository>(() => new StackRepository(connection, GetTransaction));
         Platforms = new Lazy<IPlatformRepository>(() => new PlatformRepository(connection, GetTransaction));
@@ -42,6 +43,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IRoleRepository> Roles { get; }
     private Lazy<IImageRepository> Images { get; }
     private Lazy<IActorRepository> Actors { get; }
+    private Lazy<IResourceAccessRepository> ResourceAccesses { get; }
     private Lazy<IStackRepository> Stacks { get; }
     private Lazy<IPlatformRepository> Platforms { get; }
     private Lazy<IRegistryRepository> Registries { get; }
@@ -61,6 +63,7 @@ internal class UnitOfWork : IUnitOfWork
     IRoleRepository IUnitOfWork.Roles => Roles.Value;
     IImageRepository IUnitOfWork.Images => Images.Value;
     IActorRepository IUnitOfWork.Actors => Actors.Value;
+    IResourceAccessRepository IUnitOfWork.ResourceAccesses => ResourceAccesses.Value;
     IStackRepository IUnitOfWork.Stacks => Stacks.Value;
     IPlatformRepository IUnitOfWork.Platforms => Platforms.Value;
     IRegistryRepository IUnitOfWork.Registries => Registries.Value;

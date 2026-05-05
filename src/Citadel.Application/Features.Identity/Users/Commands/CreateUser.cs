@@ -14,7 +14,14 @@ using Microsoft.AspNetCore.Http;
 namespace Application.Features.Identity.Users.Commands;
 
 [RequirePermission(ResourceType.User, ResourceAction.Create)]
-public sealed record CreateUser(string Name, string Email, string Password) : ICommand<Result<UserDetails>>
+public sealed record CreateUser(
+    string Name,
+    string Email,
+    string Password,
+    bool IsEnabled = true,
+    IEnumerable<Guid>? TeamIds = null,
+    IEnumerable<Guid>? RoleIds = null,
+    IEnumerable<UserResourceAccessModel>? ResourceAccesses = null) : ICommand<Result<UserDetails>>
 {
     internal sealed class Validator : AbstractValidator<CreateUser>
     {
@@ -23,6 +30,13 @@ public sealed record CreateUser(string Name, string Email, string Password) : IC
             RuleFor(x => x.Name).ValidNameIdentifier();
             RuleFor(x => x.Email).NotEmpty().EmailAddress();
             RuleFor(x => x.Password).NotNull().MinimumLength(6).MaximumLength(128);
+
+            RuleForEach(x => x.TeamIds).NotEmpty();
+            RuleForEach(x => x.RoleIds).NotEmpty();
+
+            RuleForEach(x => x.ResourceAccesses)
+                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.Action))
+                .WithMessage("Invalid permission combination in resource accesses.");
         }
     }
 }
@@ -41,11 +55,47 @@ internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IHttpContextAcce
         if (conflicts.EmailExists)
             return Result.Failure<UserDetails>(new ConflictError("Email already exists"));
 
-        var userActor = Actor.Create(ActorType.User, new ActorMetadata(command.Name));
+        var userActor = Actor.Create(ActorType.User, new ActorMetadata(command.Name), command.IsEnabled);
         var user = new User(command.Name, command.Email, command.Password, userActor.Id, actorId);
 
         await unitOfWork.Actors.AddAsync(userActor, cancellationToken);
         await unitOfWork.Users.AddAsync(user, cancellationToken);
+
+        var teamIds = command.TeamIds?.Distinct().ToArray() ?? [];
+        var roleIds = command.RoleIds?.Distinct().ToArray() ?? [];
+        var resourceAccesses = command.ResourceAccesses?.Distinct().ToArray() ?? [];
+
+        if (teamIds.Length > 0)
+        {
+            var teams = await unitOfWork.Teams.GetAllAsync(teamIds, cancellationToken) ?? [];
+            var existingTeamIds = teams.Select(x => x.Id).ToHashSet();
+            var missingTeamId = teamIds.FirstOrDefault(x => !existingTeamIds.Contains(x));
+            if (missingTeamId != Guid.Empty)
+                return Result.Failure<UserDetails>(new NotFoundError($"Team with ID {missingTeamId} does not exist"));
+
+            await unitOfWork.Users.ReplaceTeamsAsync(user.Id, teamIds, cancellationToken);
+        }
+
+        if (roleIds.Length > 0)
+        {
+            var roles = await unitOfWork.Roles.GetAllAsync(roleIds, cancellationToken) ?? [];
+            var existingRoleIds = roles.Select(x => x.Id).ToHashSet();
+            var missingRoleId = roleIds.FirstOrDefault(x => !existingRoleIds.Contains(x));
+            if (missingRoleId != Guid.Empty)
+                return Result.Failure<UserDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
+
+            await unitOfWork.Roles.ReplaceActorRolesAsync(user.ActorId, roleIds, cancellationToken);
+        }
+
+        if (resourceAccesses.Length > 0)
+        {
+            var accessRows = resourceAccesses
+                .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, user.ActorId, x.Action))
+                .ToArray();
+
+            await unitOfWork.ResourceAccesses.ReplaceAsync(user.ActorId, accessRows, cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         return new UserDetails(user.Id, user.Name, user.Email, user.ActorId, userActor.IsEnabled, user.CreatedAt, user.CreatedByActorId);

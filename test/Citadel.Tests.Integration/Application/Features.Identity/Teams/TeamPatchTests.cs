@@ -1,9 +1,12 @@
 using System.Text;
+using System.Text.Json;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Deployments;
 using Domain.Entities.Identity;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Identity.Teams;
 
@@ -139,6 +142,270 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         var userIds = await verificationUow.Teams.GetUserIdsAsync(seeded.TeamId, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(user.UserId, userIds);
+    }
+
+    [Fact]
+    public async Task Add_Team_Resource_Access_Should_Allow_Team_Member_To_View_Only_Granted_Deployment()
+    {
+        var deploymentId = await SeedDeploymentAsync("deployment-visible-by-team-access");
+        await SeedDeploymentAsync("deployment-hidden-by-team-access");
+
+        var seededTeam = await SeedTeamAsync("team-resource-access-add");
+        var teamUser = await SeedUserAsync("team-resource-access-user", "team-resource-access-user@citadel.local");
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Teams.AddMemberAsync(seededTeam.TeamId, teamUser.UserId, TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var payload = $$"""
+        {
+          "resourceType": "Deployment",
+          "resourceId": "{{deploymentId}}",
+          "action": "View"
+        }
+        """;
+
+        var addResponse = await Client.PostAsync(
+            $"/api/v1/teams/{seededTeam.TeamId}/resource-accesses",
+            new StringContent(payload, Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+        addResponse.EnsureSuccessStatusCode();
+
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(teamUser.UserId, teamUser.ActorId));
+
+        var listResponse = await Client.GetAsync("/api/v1/deployments", TestContext.Current.CancellationToken);
+        listResponse.EnsureSuccessStatusCode();
+
+        using var doc = await JsonDocument.ParseAsync(
+            await listResponse.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var deployments = doc.RootElement.GetProperty("deployments");
+        Assert.Equal(1, deployments.GetArrayLength());
+        Assert.Equal(deploymentId, deployments[0].GetProperty("id").GetGuid());
+    }
+
+    [Fact]
+    public async Task Remove_Team_Resource_Access_Should_Revoke_Team_Member_Deployment_View()
+    {
+        var deploymentId = await SeedDeploymentAsync("deployment-revoked-team-access");
+
+        var seededTeam = await SeedTeamAsync("team-resource-access-remove");
+        var teamUser = await SeedUserAsync("team-resource-access-user-remove", "team-resource-access-user-remove@citadel.local");
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Teams.AddMemberAsync(seededTeam.TeamId, teamUser.UserId, TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var payload = $$"""
+        {
+          "resourceType": "Deployment",
+          "resourceId": "{{deploymentId}}",
+          "action": "View"
+        }
+        """;
+
+        var addResponse = await Client.PostAsync(
+            $"/api/v1/teams/{seededTeam.TeamId}/resource-accesses",
+            new StringContent(payload, Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+        addResponse.EnsureSuccessStatusCode();
+
+        var removeRequest = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/teams/{seededTeam.TeamId}/resource-accesses")
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json")
+        };
+
+        var removeResponse = await Client.SendAsync(removeRequest, TestContext.Current.CancellationToken);
+        removeResponse.EnsureSuccessStatusCode();
+
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(teamUser.UserId, teamUser.ActorId));
+
+        var listResponse = await Client.GetAsync("/api/v1/deployments", TestContext.Current.CancellationToken);
+        listResponse.EnsureSuccessStatusCode();
+
+        using var doc = await JsonDocument.ParseAsync(
+            await listResponse.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var deployments = doc.RootElement.GetProperty("deployments");
+        Assert.Equal(0, deployments.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Patch_Team_Should_Replace_Users_Roles_And_Resource_Accesses()
+    {
+        var seededTeam = await SeedTeamAsync("team-patch-assignments");
+
+        var oldUser = await SeedUserAsync("team-patch-old-user", "team-patch-old-user@citadel.local");
+        var newUser = await SeedUserAsync("team-patch-new-user", "team-patch-new-user@citadel.local");
+        var oldRoleId = await SeedRoleAsync("team-patch-old-role");
+        var newRoleId = await SeedRoleAsync("team-patch-new-role");
+        var oldDeploymentId = await SeedDeploymentAsync("deployment-old-team-patch");
+        var newDeploymentId = await SeedDeploymentAsync("deployment-new-team-patch");
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Teams.ReplaceMembersAsync(seededTeam.TeamId, [oldUser.UserId], TestContext.Current.CancellationToken);
+            await uow.Roles.ReplaceActorRolesAsync(seededTeam.ActorId, [oldRoleId], TestContext.Current.CancellationToken);
+            await uow.ResourceAccesses.ReplaceAsync(
+                seededTeam.ActorId,
+                [ResourceAccess.Create(ResourceType.Deployment, oldDeploymentId, seededTeam.ActorId, ResourceAction.View)],
+                TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var patchJson = $$"""
+        {
+          "userIds": ["{{newUser.UserId}}"],
+          "roleIds": ["{{newRoleId}}"],
+          "resourceAccesses": [
+            {
+              "resourceType": "Deployment",
+              "resourceId": "{{newDeploymentId}}",
+              "action": "View"
+            }
+          ]
+        }
+        """;
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/teams/{seededTeam.TeamId}",
+            new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json"),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var verificationScope = Services.CreateAsyncScope();
+        var uowVerify = verificationScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var memberIds = (await uowVerify.Teams.GetUserIdsAsync(seededTeam.TeamId, TestContext.Current.CancellationToken)).ToArray();
+        var roleIds = (await uowVerify.Roles.GetActorRoleIdsAsync(seededTeam.ActorId, TestContext.Current.CancellationToken)).ToArray();
+
+        Assert.Single(memberIds);
+        Assert.Contains(newUser.UserId, memberIds);
+        Assert.DoesNotContain(oldUser.UserId, memberIds);
+
+        Assert.Single(roleIds);
+        Assert.Contains(newRoleId, roleIds);
+        Assert.DoesNotContain(oldRoleId, roleIds);
+
+        var canOldUserViewNewDeployment = await uowVerify.Users.HasPermissionAsync(
+            oldUser.UserId,
+            ResourceType.Deployment,
+            ResourceAction.View,
+            newDeploymentId,
+            TestContext.Current.CancellationToken);
+
+        var canNewUserViewNewDeployment = await uowVerify.Users.HasPermissionAsync(
+            newUser.UserId,
+            ResourceType.Deployment,
+            ResourceAction.View,
+            newDeploymentId,
+            TestContext.Current.CancellationToken);
+
+        var canNewUserViewOldDeployment = await uowVerify.Users.HasPermissionAsync(
+            newUser.UserId,
+            ResourceType.Deployment,
+            ResourceAction.View,
+            oldDeploymentId,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(canOldUserViewNewDeployment);
+        Assert.True(canNewUserViewNewDeployment);
+        Assert.False(canNewUserViewOldDeployment);
+    }
+
+    [Fact]
+    public async Task Patch_Team_With_Empty_Assignment_Collections_Should_Clear_Users_Roles_And_Resource_Accesses()
+    {
+        var seededTeam = await SeedTeamAsync("team-patch-clear-assignments");
+        var member = await SeedUserAsync("team-patch-clear-user", "team-patch-clear-user@citadel.local");
+        var roleId = await SeedRoleAsync("team-patch-clear-role");
+        var deploymentId = await SeedDeploymentAsync("deployment-clear-team-patch");
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.Teams.ReplaceMembersAsync(seededTeam.TeamId, [member.UserId], TestContext.Current.CancellationToken);
+            await uow.Roles.ReplaceActorRolesAsync(seededTeam.ActorId, [roleId], TestContext.Current.CancellationToken);
+            await uow.ResourceAccesses.ReplaceAsync(
+                seededTeam.ActorId,
+                [ResourceAccess.Create(ResourceType.Deployment, deploymentId, seededTeam.ActorId, ResourceAction.View)],
+                TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var patchJson = """
+        {
+          "userIds": [],
+          "roleIds": [],
+          "resourceAccesses": []
+        }
+        """;
+
+        var response = await Client.PatchAsync(
+            $"/api/v1/teams/{seededTeam.TeamId}",
+            new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json"),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var verificationScope = Services.CreateAsyncScope();
+        var uowVerify = verificationScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var memberIds = (await uowVerify.Teams.GetUserIdsAsync(seededTeam.TeamId, TestContext.Current.CancellationToken)).ToArray();
+        var roleIds = (await uowVerify.Roles.GetActorRoleIdsAsync(seededTeam.ActorId, TestContext.Current.CancellationToken)).ToArray();
+
+        Assert.Empty(memberIds);
+        Assert.Empty(roleIds);
+
+        var hasAccess = await uowVerify.Users.HasPermissionAsync(
+            member.UserId,
+            ResourceType.Deployment,
+            ResourceAction.View,
+            deploymentId,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(hasAccess);
+    }
+
+    private async Task<Guid> SeedRoleAsync(string name)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var role = Role.Create(name, RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, ResourceAction.View)]);
+
+        await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        return role.Id;
+    }
+
+    private async Task<Guid> SeedDeploymentAsync(string name)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = Fakes.GetDummyPlatform();
+        platform.PartialUpdate(address: $"https://{Guid.CreateVersion7():N}.address");
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+
+        var deployment = new Deployment(name, Constants.SystemId, platform.Id);
+        await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        return deployment.Id;
     }
 
     private async Task<(Guid TeamId, Guid ActorId)> SeedTeamAsync(string name, bool isEnabled = true)

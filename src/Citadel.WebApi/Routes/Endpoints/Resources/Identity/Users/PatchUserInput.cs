@@ -4,7 +4,13 @@ using System.Text.Json;
 
 namespace WebApi.Routes.Endpoints.Resources.Identity.Users;
 
-public sealed record PatchUserInput(string? Email, string? Password, bool? IsEnabled);
+public sealed record PatchUserInput(
+    string? Email,
+    string? Password,
+    bool? IsEnabled,
+    IEnumerable<Guid>? TeamIds,
+    IEnumerable<Guid>? RoleIds,
+    IEnumerable<UserResourceAccessInput>? ResourceAccesses);
 
 public sealed class PatchUserInputPatchDocument : JsonMergePatchDocument<PatchUserInput>
 {

@@ -144,6 +144,40 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return new PagedResult<TeamDetails>(rows.ToDetails(), totalCount, page, pageSize);
     }
 
+    public Task<IEnumerable<TeamSearchItem>> SearchAsync(string query, int limit, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT Id, Name
+            FROM Teams
+            WHERE Name ILIKE '%' || @Query || '%'
+            ORDER BY Name ASC
+            LIMIT @Limit
+            """;
+
+        return db.QueryAsync<TeamSearchItem>(sql, new { Query = query, Limit = limit, cancellationToken }, transaction: tx());
+    }
+
+    public Task<IEnumerable<TeamSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, string query, int limit, CancellationToken cancellationToken)
+    {
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
+            SELECT t.Id, t.Name
+            FROM Teams t
+            WHERE t.Name ILIKE '%' || @Query || '%' AND
+        """ + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY t.Name ASC LIMIT @Limit;";
+
+        var parameters = new
+        {
+            UserId = userId,
+            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
+            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            Query = query,
+            Limit = limit,
+            cancellationToken
+        };
+
+        return db.QueryAsync<TeamSearchItem>(sql, parameters, transaction: tx());
+    }
+
     public async Task<IEnumerable<Team>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Teams WHERE Id = ANY(@Ids) ORDER BY Name ASC";

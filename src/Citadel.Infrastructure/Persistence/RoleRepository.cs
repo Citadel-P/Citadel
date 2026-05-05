@@ -180,14 +180,17 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
         const string deleteSql = "DELETE FROM ActorRoles WHERE ActorId = @ActorId";
         await db.ExecuteAsync(deleteSql, new { ActorId = actorId, cancellationToken }, transaction: tx());
 
-        var rows = 0;
-        foreach (var roleId in roleIds)
-        {
-            const string insertSql = "INSERT INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId)";
-            rows += await db.ExecuteAsync(insertSql, new { ActorId = actorId, RoleId = roleId, cancellationToken }, transaction: tx());
-        }
+        var roleIdArray = roleIds as Guid[] ?? [.. roleIds];
+        if (roleIdArray.Length == 0)
+            return 0;
 
-        return rows;
+        const string insertSql = """
+            INSERT INTO ActorRoles (ActorId, RoleId)
+            SELECT @ActorId, roleId
+            FROM unnest(@RoleIds::uuid[]) AS roleId
+            """;
+
+        return await db.ExecuteAsync(insertSql, new { ActorId = actorId, RoleIds = roleIdArray, cancellationToken }, transaction: tx());
     }
 
     public async Task<int> ReplacePermissionsAsync(Guid roleId, IEnumerable<Permission> permissions, CancellationToken cancellationToken)

@@ -20,7 +20,7 @@ import { AlertEventComponents } from './alerters/alert-events';
 import { GitRepoComponents } from './git-repos';
 import { GitRepoFormComponents } from './git-repos/form';
 import { AccessComponents } from './access';
-import { UserFormComponents } from './access/users';
+import { UserFormComponents } from './access/users/form';
 import { TeamFormComponents } from './access/teams';
 
 export const ResourceComponents: {

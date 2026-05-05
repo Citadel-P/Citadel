@@ -73,7 +73,8 @@ public static class ApplicationModule
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>()
             .AddSingleton<IDelayWithJitterService, DelayWithJitterService>()
             .AddScoped<IPermissionService, PermissionService>()
-            .AddScoped<IActorRoleService, ActorRoleService>();
+            .AddScoped<IActorRoleService, ActorRoleService>()
+            .AddScoped<IActorResourceAccessService, ActorResourceAccessService>();
 
     private static IServiceCollection AddSignalRServices(this IServiceCollection services) =>
         services

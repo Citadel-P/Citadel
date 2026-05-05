@@ -26,6 +26,12 @@ public static class Users
         return EndpointHandlers.HandleResult(result, UsersView.Map);
     }
 
+    public static async Task<Results<Ok<IEnumerable<UserSearchItemView>>, ProblemHttpResult>> Search(IMediator mediator, [AsParameters] UserSearchFilter filter, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(filter.ToQuery(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, items => items.Select(UserSearchItemView.Map));
+    }
+
     public static async Task<Results<Ok<UserView>, ProblemHttpResult>> Get(IMediator mediator, [FromRoute][Description("User ID")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetUser(id), cancellationToken);
@@ -48,6 +54,18 @@ public static class Users
     public static async Task<Results<Ok<UserView>, ProblemHttpResult>> RemoveRole(IMediator mediator, [FromRoute][Description("User ID")] Guid id, [FromRoute][Description("Role ID")] Guid roleId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new RemoveUserRole(id, roleId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, UserView.Map);
+    }
+
+    public static async Task<Results<Ok<UserView>, ProblemHttpResult>> AddResourceAccess(IMediator mediator, [FromRoute][Description("User ID")] Guid id, [FromBody] AddUserResourceAccessInput input, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(input.ToCommand(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, UserView.Map);
+    }
+
+    public static async Task<Results<Ok<UserView>, ProblemHttpResult>> RemoveResourceAccess(IMediator mediator, [FromRoute][Description("User ID")] Guid id, [FromBody] RemoveUserResourceAccessInput input, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(input.ToCommand(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, UserView.Map);
     }
 

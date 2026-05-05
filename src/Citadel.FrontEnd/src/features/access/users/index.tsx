@@ -8,7 +8,6 @@ import { useMemo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { RequiredFormComponents } from '@/pages/types';
 import { Link } from 'react-router';
 
 export const Users = ({
@@ -20,15 +19,6 @@ export const Users = ({
   actions: Record<string, DropdownActionComponent>;
   isLoading: boolean;
 }) => <UsersTable pagedResult={items} isLoading={isLoading} actions={actions} />;
-
-export const UserFormComponents: RequiredFormComponents = {
-  AddForm: {
-    Header: {
-      title: 'User',
-    },
-    Content: () => <></>,
-  },
-};
 
 const EMPTY_ROWS: UserView[] = [];
 
@@ -103,7 +93,7 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Teams" column={column} />,
     cell: ({ row }) => <span className="text-[13px]">{row.original.teams?.join(',')}</span>,
   },
-   {
+  {
     accessorKey: 'roles',
     header: ({ column }) => <SortableCell cellName="Roles" column={column} />,
     cell: ({ row }) => <span className="text-[13px]">{row.original.roles?.join(',')}</span>,

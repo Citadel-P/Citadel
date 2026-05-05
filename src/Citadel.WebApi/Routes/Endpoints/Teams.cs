@@ -26,6 +26,12 @@ public static class Teams
         return EndpointHandlers.HandleResult(result, TeamsView.Map);
     }
 
+    public static async Task<Results<Ok<IEnumerable<TeamSearchItemView>>, ProblemHttpResult>> Search(IMediator mediator, [AsParameters] TeamSearchFilter filter, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(filter.ToQuery(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, items => items.Select(TeamSearchItemView.Map));
+    }
+
     public static async Task<Results<Ok<TeamView>, ProblemHttpResult>> Get(IMediator mediator, [FromRoute][Description("Team ID")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetTeam(id), cancellationToken);
@@ -60,6 +66,18 @@ public static class Teams
     public static async Task<Results<Ok<TeamView>, ProblemHttpResult>> RemoveMember(IMediator mediator, [FromRoute][Description("Team ID")] Guid id, [FromRoute][Description("User ID")] Guid userId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new RemoveTeamMember(id, userId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, TeamView.Map);
+    }
+
+    public static async Task<Results<Ok<TeamView>, ProblemHttpResult>> AddResourceAccess(IMediator mediator, [FromRoute][Description("Team ID")] Guid id, [FromBody] AddTeamResourceAccessInput input, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(input.ToCommand(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, TeamView.Map);
+    }
+
+    public static async Task<Results<Ok<TeamView>, ProblemHttpResult>> RemoveResourceAccess(IMediator mediator, [FromRoute][Description("Team ID")] Guid id, [FromBody] RemoveTeamResourceAccessInput input, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(input.ToCommand(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, TeamView.Map);
     }
 

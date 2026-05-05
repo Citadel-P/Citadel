@@ -1,4 +1,7 @@
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Identity;
+using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 
@@ -8,6 +11,12 @@ public interface IActorRoleService
 {
     Task<Result> AssignRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken);
     Task<Result> RemoveRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken);
+}
+
+public interface IActorResourceAccessService
+{
+    Task<Result> AddResourceAccessAsync(Guid actorId, ResourceType resourceType, Guid resourceId, ResourceAction action, CancellationToken cancellationToken);
+    Task<Result> RemoveResourceAccessAsync(Guid actorId, ResourceType resourceType, Guid resourceId, ResourceAction action, CancellationToken cancellationToken);
 }
 
 internal sealed class ActorRoleService(IUnitOfWork unitOfWork) : IActorRoleService
@@ -35,6 +44,44 @@ internal sealed class ActorRoleService(IUnitOfWork unitOfWork) : IActorRoleServi
         var rows = await unitOfWork.Roles.RemoveActorRoleAsync(actorId, roleId, cancellationToken);
         if (rows == 0)
             return Result.Failure(new NotFoundError("The role is not assigned to the actor"));
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        return Result.Success();
+    }
+}
+
+internal sealed class ActorResourceAccessService(IUnitOfWork unitOfWork) : IActorResourceAccessService
+{
+    public async Task<Result> AddResourceAccessAsync(Guid actorId, ResourceType resourceType, Guid resourceId, ResourceAction action, CancellationToken cancellationToken)
+    {
+        if (!PermissionMatrix.IsAllowed(resourceType, action))
+            return Result.Failure(new ConflictError($"Invalid permission: [{resourceType}]-[{action}] is not an allowed combination."));
+
+        var actor = await unitOfWork.Actors.GetById(actorId, cancellationToken);
+        if (actor is null)
+            return Result.Failure(new NotFoundError("The provided actor does not exist"));
+
+        var resourceAccess = ResourceAccess.Create(resourceType, resourceId, actorId, action);
+        var rows = await unitOfWork.ResourceAccesses.AddAsync(resourceAccess, cancellationToken);
+        if (rows == 0)
+            return Result.Failure(new ConflictError("The resource access is already assigned to the actor"));
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        return Result.Success();
+    }
+
+    public async Task<Result> RemoveResourceAccessAsync(Guid actorId, ResourceType resourceType, Guid resourceId, ResourceAction action, CancellationToken cancellationToken)
+    {
+        if (!PermissionMatrix.IsAllowed(resourceType, action))
+            return Result.Failure(new ConflictError($"Invalid permission: [{resourceType}]-[{action}] is not an allowed combination."));
+
+        var actor = await unitOfWork.Actors.GetById(actorId, cancellationToken);
+        if (actor is null)
+            return Result.Failure(new NotFoundError("The provided actor does not exist"));
+
+        var rows = await unitOfWork.ResourceAccesses.RemoveAsync(actorId, resourceType, resourceId, action, cancellationToken);
+        if (rows == 0)
+            return Result.Failure(new NotFoundError("The resource access is not assigned to the actor"));
 
         await unitOfWork.CommitAsync(cancellationToken);
         return Result.Success();

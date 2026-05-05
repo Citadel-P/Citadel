@@ -12,13 +12,22 @@ using Mediator;
 namespace Application.Features.Identity.Teams.Commands;
 
 [RequirePermission(ResourceType.Team, ResourceAction.Create)]
-public sealed record CreateTeam(string Name) : ICommand<Result<TeamDetails>>
+public sealed record CreateTeam(
+    string Name,
+    IEnumerable<Guid>? UserIds = null,
+    IEnumerable<Guid>? RoleIds = null,
+    IEnumerable<TeamResourceAccessModel>? ResourceAccesses = null) : ICommand<Result<TeamDetails>>
 {
     internal sealed class Validator : AbstractValidator<CreateTeam>
     {
         public Validator()
         {
             RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier();
+            RuleForEach(x => x.UserIds).NotEmpty();
+            RuleForEach(x => x.RoleIds).NotEmpty();
+            RuleForEach(x => x.ResourceAccesses)
+                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.Action))
+                .WithMessage("Invalid permission combination in resource accesses.");
         }
     }
 }
@@ -36,6 +45,42 @@ internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork) : ICommandHandle
 
         await unitOfWork.Actors.AddAsync(actor, cancellationToken);
         await unitOfWork.Teams.AddAsync(team, cancellationToken);
+
+        var userIds = command.UserIds?.Distinct().ToArray() ?? [];
+        var roleIds = command.RoleIds?.Distinct().ToArray() ?? [];
+        var resourceAccesses = command.ResourceAccesses?.Distinct().ToArray() ?? [];
+
+        if (userIds.Length > 0)
+        {
+            var users = await unitOfWork.Users.GetAllAsync(userIds, cancellationToken) ?? [];
+            var existingUserIds = users.Select(x => x.Id).ToHashSet();
+            var missingUserId = userIds.FirstOrDefault(x => !existingUserIds.Contains(x));
+            if (missingUserId != Guid.Empty)
+                return Result.Failure<TeamDetails>(new NotFoundError($"User with ID {missingUserId} does not exist"));
+
+            await unitOfWork.Teams.ReplaceMembersAsync(team.Id, userIds, cancellationToken);
+        }
+
+        if (roleIds.Length > 0)
+        {
+            var roles = await unitOfWork.Roles.GetAllAsync(roleIds, cancellationToken) ?? [];
+            var existingRoleIds = roles.Select(x => x.Id).ToHashSet();
+            var missingRoleId = roleIds.FirstOrDefault(x => !existingRoleIds.Contains(x));
+            if (missingRoleId != Guid.Empty)
+                return Result.Failure<TeamDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
+
+            await unitOfWork.Roles.ReplaceActorRolesAsync(team.ActorId, roleIds, cancellationToken);
+        }
+
+        if (resourceAccesses.Length > 0)
+        {
+            var accessRows = resourceAccesses
+                .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, team.ActorId, x.Action))
+                .ToArray();
+
+            await unitOfWork.ResourceAccesses.ReplaceAsync(team.ActorId, accessRows, cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         return new TeamDetails(team.Id, team.Name, team.ActorId, actor.IsEnabled);

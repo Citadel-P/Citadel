@@ -30,6 +30,26 @@ public class TeamViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
     }
 
     [Fact]
+    public async Task Search_Teams_Should_Return_Matches_By_Name()
+    {
+        var first = await SeedTeamAsync("admin-team-search");
+        var second = await SeedTeamAsync("adtest-team-search");
+        var nonMatch = await SeedTeamAsync("ops-team-search");
+
+        var response = await Client.GetAsync("/api/v1/teams/search?query=ad&limit=10", TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement;
+        Assert.Contains(items.EnumerateArray(), x => x.GetProperty("id").GetGuid() == first.TeamId);
+        Assert.Contains(items.EnumerateArray(), x => x.GetProperty("id").GetGuid() == second.TeamId);
+        Assert.DoesNotContain(items.EnumerateArray(), x => x.GetProperty("id").GetGuid() == nonMatch.TeamId);
+    }
+
+    [Fact]
     public async Task Get_Team_Should_Return_Team_For_Admin()
     {
         var seeded = await SeedTeamAsync("team-view", isEnabled: false);

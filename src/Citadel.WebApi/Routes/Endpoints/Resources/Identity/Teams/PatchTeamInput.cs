@@ -4,7 +4,11 @@ using System.Text.Json;
 
 namespace WebApi.Routes.Endpoints.Resources.Identity.Teams;
 
-public sealed record PatchTeamInput(bool? IsEnabled);
+public sealed record PatchTeamInput(
+    bool? IsEnabled,
+    IEnumerable<Guid>? UserIds,
+    IEnumerable<Guid>? RoleIds,
+    IEnumerable<TeamResourceAccessInput>? ResourceAccesses);
 
 public sealed class PatchTeamInputPatchDocument : JsonMergePatchDocument<PatchTeamInput>
 {
