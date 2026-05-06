@@ -16,6 +16,7 @@ WORKDIR /src/Citadel.FrontEnd
 COPY ["src/Citadel.FrontEnd/package.json", "src/Citadel.FrontEnd/package-lock.json", "./"]
 RUN npm ci
 COPY ["src/Citadel.FrontEnd/", "./"]
+ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build:prod
 
 # Build and publish the application
