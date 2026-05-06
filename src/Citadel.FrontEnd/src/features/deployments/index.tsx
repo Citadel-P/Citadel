@@ -1,12 +1,12 @@
-import { Rocket } from 'lucide-react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { DeploymentDropdownActions, DeploymentGroupActions } from './actions';
 import { DeploymentsTable } from './table';
 import { useDeploymentsGroup } from './hooks/useDeploymentsGroup';
+import { CitadelIcons } from '@/lib/icons';
 
 export const DeploymentComponents: RequiredComponents = {
-  Icon: Rocket,
+  Icon: CitadelIcons.Deployment,
   header: {
     subtitle: 'Run and manage containers on your servers.',
     showSearch: true,

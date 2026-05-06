@@ -67,7 +67,8 @@ interface MultiSelectGroup {
 }
 
 interface MultiSelectProps
-  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'animationConfig'>,
+  extends
+    Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'animationConfig'>,
     VariantProps<typeof multiSelectVariants> {
   options: MultiSelectOption[] | MultiSelectGroup[];
 
@@ -92,6 +93,12 @@ interface MultiSelectProps
   hideSelectAll?: boolean;
 
   searchable?: boolean;
+
+  searchValue?: string;
+
+  onSearchValueChange?: (value: string) => void;
+
+  disableLocalSearchFilter?: boolean;
 
   emptyIndicator?: React.ReactNode;
 
@@ -162,6 +169,9 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
       className,
       hideSelectAll = false,
       searchable = true,
+      searchValue: controlledSearchValue,
+      onSearchValueChange,
+      disableLocalSearchFilter = false,
       emptyIndicator,
       autoSize = false,
       singleLine = false,
@@ -180,12 +190,13 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
     const [selectedValues, setSelectedValues] = React.useState<string[]>(defaultValue);
     const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
     const [isAnimating, setIsAnimating] = React.useState(false);
-    const [searchValue, setSearchValue] = React.useState('');
+    const [uncontrolledSearchValue, setUncontrolledSearchValue] = React.useState('');
 
     const [politeMessage, setPoliteMessage] = React.useState('');
     const [assertiveMessage, setAssertiveMessage] = React.useState('');
     const prevSelectedCount = React.useRef(selectedValues.length);
     const prevIsOpen = React.useRef(isPopoverOpen);
+    const searchValue = controlledSearchValue ?? uncontrolledSearchValue;
     const prevSearchValue = React.useRef(searchValue);
 
     const announce = React.useCallback((message: string, priority: 'polite' | 'assertive' = 'polite') => {
@@ -218,6 +229,16 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
       const sortedB = [...b].sort();
       return sortedA.every((val, index) => val === sortedB[index]);
     }, []);
+
+    const setSearchValue = React.useCallback(
+      (value: string) => {
+        if (controlledSearchValue === undefined) {
+          setUncontrolledSearchValue(value);
+        }
+        onSearchValueChange?.(value);
+      },
+      [controlledSearchValue, onSearchValueChange],
+    );
 
     const resetToDefault = React.useCallback(() => {
       setSelectedValues(defaultValue);
@@ -404,7 +425,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
     );
 
     const filteredOptions = React.useMemo(() => {
-      if (!searchable || !searchValue) return options;
+      if (!searchable || !searchValue || disableLocalSearchFilter) return options;
       if (options.length === 0) return [];
       if (isGroupedOptions(options)) {
         return options
@@ -423,7 +444,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
           option.label.toLowerCase().includes(searchValue.toLowerCase()) ||
           option.value.toLowerCase().includes(searchValue.toLowerCase()),
       );
-    }, [options, searchValue, searchable, isGroupedOptions]);
+    }, [options, searchValue, searchable, disableLocalSearchFilter, isGroupedOptions]);
 
     const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Enter') {

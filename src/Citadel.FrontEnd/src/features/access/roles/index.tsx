@@ -14,16 +14,12 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertRuleComponents } from '@/features/alerters/alert-rules';
-import { DeploymentComponents } from '@/features/deployments';
-import { GitRepoComponents } from '@/features/git-repos';
-import { PlatformComponents } from '@/features/platforms';
-import { RegistryComponents } from '@/features/registries';
 import { useLocalStorage, useMutate, useRead } from '@/lib/hooks';
-import { Shield, Lock, Layers, KeyRound, Rss, User, Users, Plus, Loader2, Trash } from 'lucide-react';
+import { Lock, Plus, Loader2, Trash } from 'lucide-react';
 import { useState } from 'react';
 import { atom, useAtom } from 'jotai';
 import { useQueryClient } from '@tanstack/react-query';
+import { CitadelIcons } from '@/lib/icons';
 
 type PermissionMatrix = Record<string, string[]>;
 
@@ -42,20 +38,20 @@ export const AddRoleButton = () => {
 };
 
 export const RESOURCE_ICONS: Record<ResourceType, ResourceIcon> = {
-  Platform: PlatformComponents.Icon ?? Shield,
-  Deployment: DeploymentComponents.Icon ?? Layers,
-  Stack: Layers,
+  Platform: CitadelIcons.Platform,
+  Deployment: CitadelIcons.Deployment,
+  Stack: CitadelIcons.Stack,
 
-  Registry: RegistryComponents.Icon ?? Rss,
-  GitRepository: GitRepoComponents.Icon ?? KeyRound,
-  GitAccount: KeyRound,
+  Registry: CitadelIcons.Registry,
+  GitRepository: CitadelIcons.GitRepository,
+  GitAccount: CitadelIcons.GitAccount,
 
-  Alert: AlertRuleComponents.Icon ?? Rss,
-  AlertChannel: Rss,
+  Alert: CitadelIcons.Alert,
+  AlertChannel: CitadelIcons.AlertChannel,
 
-  User: User,
-  Team: Users,
-  Role: Shield,
+  User: CitadelIcons.User,
+  Team: CitadelIcons.Team,
+  Role: CitadelIcons.Role,
 };
 export const Roles = ({ items, isLoading }: { items: RoleView[]; isLoading: boolean }) => {
   const roles = items ?? [];
@@ -106,7 +102,7 @@ export const Roles = ({ items, isLoading }: { items: RoleView[]; isLoading: bool
                     : 'hover:bg-accent/40 border-l-transparent'
                 }`}>
                 <div className="flex items-center gap-3">
-                  <Shield className="w-4 h-4 text-muted-foreground" />
+                  <CitadelIcons.Role className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm font-medium">{role.name}</span>
                 </div>
                 {role.roleType === RoleType.System ? (
@@ -136,7 +132,7 @@ export const Roles = ({ items, isLoading }: { items: RoleView[]; isLoading: bool
           <RoleDetail role={selectedRole} permissionMatrix={permissionMatrix.data?.data ?? EMPTY_MATRIX} />
         ) : (
           <div className="flex-1 flex items-center justify-center flex-col gap-3 text-muted-foreground p-8">
-            <Shield className="w-10 h-10 text-muted-foreground/30" />
+            <CitadelIcons.Role className="w-10 h-10 text-muted-foreground/30" />
             <p className="text-sm">Select a role to view its permissions</p>
           </div>
         )}

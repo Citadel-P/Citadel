@@ -24,7 +24,8 @@ export type ResourceType =
   | 'Access'
   | 'User'
   | 'Team'
-  | 'Role';
+  | 'Role'
+  | 'Variable';
 export const PluralResourceMap = {
   Network: 'Networks',
   Volume: 'Volumes',
@@ -44,6 +45,7 @@ export const PluralResourceMap = {
   User: 'Users',
   Team: 'Teams',
   Role: 'Roles',
+  Variable: 'Variables',
 } as const satisfies Record<ResourceType, string>;
 
 export type AnyFn = (...args: any[]) => Promise<any>;

@@ -2,16 +2,16 @@ import { TabbedResourceComponents } from '@/pages/types';
 import { Users } from './users';
 import { Teams } from './teams';
 import { Roles, AddRoleButton } from './roles';
-import { UserKey } from 'lucide-react';
 import { useUsersList } from './users/hooks/useUsersList';
 import { ActionBar } from '@/components/custom/action-bar';
 import { UserDropdownActions, UserGroupActions } from './users/actions';
 import { useTeamsList } from './teams/hooks/useTeamsList';
 import { TeamDropdownActions, TeamGroupActions } from './teams/actions';
 import { useRead } from '@/lib/hooks';
+import { CitadelIcons } from '@/lib/icons';
 
 export const AccessComponents: TabbedResourceComponents = {
-  Icon: UserKey,
+  Icon: CitadelIcons.Access,
   header: {
     subtitle: 'Manage users, teams, and their access.',
     showSearch: false,

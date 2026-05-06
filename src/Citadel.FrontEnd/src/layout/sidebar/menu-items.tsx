@@ -1,13 +1,7 @@
-import { Layers, ChevronsLeftRightEllipsis, Settings, Activity } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { JSX } from 'react';
 import DockerIcon from '@/assets/docker.min.svg';
-import { AccessComponents } from '@/features/access';
-import { AlertEventComponents } from '@/features/alerters/alert-events';
-import { AlertRuleComponents } from '@/features/alerters/alert-rules';
-import { DeploymentComponents } from '@/features/deployments';
-import { GitRepoComponents } from '@/features/git-repos';
-import { PlatformComponents } from '@/features/platforms';
-import { RegistryComponents } from '@/features/registries';
+import { CitadelIcons } from '@/lib/icons';
 interface IMenuItem {
   group: string;
   separator?: boolean;
@@ -35,7 +29,7 @@ const MenuItems: IMenuItem[] = [
     separator: false,
     items: [
       {
-        icon: renderIcon(PlatformComponents.Icon),
+        icon: renderIcon(CitadelIcons.Platform),
         label: 'Platforms',
         route: '/',
       },
@@ -46,12 +40,12 @@ const MenuItems: IMenuItem[] = [
     separator: false,
     items: [
       {
-        icon: renderIcon(DeploymentComponents.Icon),
+        icon: renderIcon(CitadelIcons.Deployment),
         label: 'Deployments',
         route: '/deployments',
       },
       {
-        icon: <Layers width={14} height={14} />,
+        icon: renderIcon(CitadelIcons.Stack),
         label: 'Stacks',
         route: '/stacks',
       },
@@ -62,12 +56,12 @@ const MenuItems: IMenuItem[] = [
     separator: false,
     items: [
       {
-        icon: renderIcon(RegistryComponents.Icon),
+        icon: renderIcon(CitadelIcons.Registry),
         label: 'Registries',
         route: '/registries',
       },
       {
-        icon: renderIcon(GitRepoComponents.Icon),
+        icon: renderIcon(CitadelIcons.GitRepository),
         label: 'Repositories',
         route: '/git-repos',
       },
@@ -78,12 +72,12 @@ const MenuItems: IMenuItem[] = [
     separator: false,
     items: [
       {
-        icon: renderIcon(AlertEventComponents.Icon),
+        icon: renderIcon(CitadelIcons.Alert),
         label: 'Alerts',
         route: '/alerts',
       },
       {
-        icon: <Activity width={14} height={14} />,
+        icon: renderIcon(CitadelIcons.Activity),
         label: 'Activities',
         route: '/activities',
       },
@@ -93,17 +87,17 @@ const MenuItems: IMenuItem[] = [
         route: '/settings',
         children: [
           {
-            icon: renderIcon(AlertRuleComponents.Icon),
+            icon: renderIcon(CitadelIcons.AlertRule),
             label: 'Alert Rules',
             route: '/alert-rules',
           },
           {
-            icon: <ChevronsLeftRightEllipsis className="w-3.5 h-3.5" />,
+            icon: renderIcon(CitadelIcons.Variable),
             label: 'Variables',
             route: '/variables',
           },
           {
-            icon: renderIcon(AccessComponents.Icon),
+            icon: renderIcon(CitadelIcons.Access),
             label: 'Access',
             route: '/access',
           },

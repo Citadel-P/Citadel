@@ -1,4 +1,4 @@
-import { Activity, Cable, GitBranch, Layers, Megaphone, MoveUpRight, Rocket, Server, SquareStack } from 'lucide-react';
+import { Activity, MoveUpRight, SquareStack } from 'lucide-react';
 import { useMemo } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useActivitiesGroup } from './hooks/useActivitiesGroup';
@@ -9,6 +9,7 @@ import { FilterBar, filterFieldClassName, ResourceSelectorField, SelectField } f
 import { ResourceType } from '@/api/types';
 import TaskSheet from '@/components/custom/task-sheet';
 import { Link } from 'react-router';
+import { CitadelIcons } from '@/lib/icons';
 
 export const ActivityComponents: RequiredComponents = {
   Icon: Activity,
@@ -44,12 +45,12 @@ function SearchSection() {
 
   const resourceOptions = useMemo(() => {
     const icons: Record<string, any> = {
-      [ActivityResourceType.Deployment]: Rocket,
-      [ActivityResourceType.Registry]: Cable,
-      [ActivityResourceType.Platform]: Server,
-      [ActivityResourceType.Stack]: Layers,
-      [ActivityResourceType.AlertRule]: Megaphone,
-      [ActivityResourceType.GitRepository]: GitBranch,
+      [ActivityResourceType.Deployment]: CitadelIcons.Deployment,
+      [ActivityResourceType.Registry]: CitadelIcons.Registry,
+      [ActivityResourceType.Platform]: CitadelIcons.Platform,
+      [ActivityResourceType.Stack]: CitadelIcons.Stack,
+      [ActivityResourceType.AlertRule]: CitadelIcons.Alert,
+      [ActivityResourceType.GitRepository]: CitadelIcons.GitRepository,
     };
 
     return Object.values(ActivityResourceType).map((t) => ({

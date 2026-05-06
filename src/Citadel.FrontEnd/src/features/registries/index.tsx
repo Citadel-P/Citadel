@@ -1,12 +1,12 @@
-import { Cable } from 'lucide-react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { RegistryDropdownActions, RegistryGroupActions } from './actions';
 import { RegistriesTable } from './table';
+import { CitadelIcons } from '@/lib/icons';
 
 export const RegistryComponents: RequiredComponents = {
-  Icon: Cable,
+  Icon: CitadelIcons.Registry,
   Content: ({ items, actions, isLoading }) => {
     return <RegistriesTable items={items} actions={actions} isLoading={isLoading} />;
   },

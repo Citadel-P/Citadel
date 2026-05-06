@@ -10,7 +10,7 @@ import {
   type FieldItemConfig,
 } from '@/components/custom/form-builder';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Input } from '@/components/ui/input';
+import { useTeamsList } from '@/features/access/teams/hooks/useTeamsList';
 import { Constants } from '@/lib/constants';
 import { useState, useMemo } from 'react';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
@@ -22,18 +22,24 @@ type UserInput = CreateUserInput | PatchUserInput;
 const TeamMultiSelectField = ({ value, onChange }: { value: string[] | null; onChange: (ids: string[]) => void }) => {
   const [teamSearch, setTeamSearch] = useState('');
   const debouncedSearch = useDebounce(teamSearch, 300);
-  const { data, isLoading } = useRead('searchTeams', { query: { Query: debouncedSearch, Limit: 20 } });
-  const options = useMemo(() => (data?.data ?? []).map((t) => ({ label: t.name, value: t.id })), [data]);
+  const { pagedUsers, isLoading } = useTeamsList(debouncedSearch || undefined, 20);
+  const options = useMemo(
+    () => (pagedUsers?.items ?? []).map((team) => ({ label: team.name, value: team.id })),
+    [pagedUsers],
+  );
 
   return (
-    <div className="flex flex-col gap-2 max-w-100">
-      <Input placeholder="Search teams..." value={teamSearch} onChange={(e) => setTeamSearch(e.target.value)} />
+    <div className="max-w-100">
       <MultiSelect
         options={options}
         defaultValue={(value ?? []).map(String)}
         onValueChange={onChange}
-        placeholder={isLoading ? 'Searching...' : 'Select teams...'}
-        searchable={false}
+        placeholder={isLoading ? 'Loading teams...' : 'Select teams...'}
+        searchable
+        searchValue={teamSearch}
+        onSearchValueChange={setTeamSearch}
+        disableLocalSearchFilter
+        emptyIndicator={isLoading ? 'Searching teams...' : 'No teams found.'}
         maxCount={5}
         animation={0}
         resetOnDefaultValueChange={false}
@@ -83,9 +89,10 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
         title: '',
         items: [
           defineGroupField<UserInput>({
-            id: 'credentials',
-            label: 'Credentials',
-            description: 'Basic account information for this user.',
+            id: 'general',
+            label: 'General',
+            title: 'General',
+            description: 'Basic identity and account state.',
             items: [
               ...(mode === 'add'
                 ? [
@@ -115,42 +122,6 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
                   />
                 ),
               }),
-              ...(mode === 'add'
-                ? [
-                    defineField<UserInput, 'password'>({
-                      key: 'password',
-                      label: 'Password',
-                      required: true,
-                      render: (value, set) => (
-                        <FieldInput type="password" value={value ?? ''} onChange={(v) => set({ password: v })} />
-                      ),
-                    }),
-                    {
-                      kind: 'field' as const,
-                      field: {
-                        key: 'confirmPassword' as any,
-                        label: 'Confirm Password',
-                        required: true,
-                        validate: () => null,
-                        render: (_value: any, _set: FieldChange<UserInput>) => {
-                          const pwd = (update as Partial<CreateUserInput>).password ?? '';
-                          const mismatch = confirmPassword.length > 0 && confirmPassword !== pwd;
-                          return (
-                            <div className="flex flex-col gap-1">
-                              <FieldInput
-                                type="password"
-                                value={confirmPassword}
-                                onChange={setConfirmPassword}
-                                placeholder="Repeat password"
-                              />
-                              {mismatch && <p className="text-xs text-destructive">Passwords do not match</p>}
-                            </div>
-                          );
-                        },
-                      },
-                    } as FieldItemConfig<UserInput>,
-                  ]
-                : []),
               defineField({
                 key: 'isEnabled',
                 label: 'Enabled',
@@ -162,41 +133,93 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
             ],
           }),
           defineGroupField<UserInput>({
-            id: 'roles',
-            label: 'Roles',
-            description: 'Assign roles to this user.',
+            id: 'security',
+            label: 'Security',
             items: [
-              defineField<UserInput, 'roleIds'>({
-                key: 'roleIds',
-                label: 'Roles',
+              defineField<UserInput, 'password'>({
+                key: 'password',
+                label: 'Password',
+                required: true,
                 render: (value, set) => (
-                  <MultiSelect
-                    options={roleOptions}
-                    defaultValue={(value ?? []).map(String)}
-                    onValueChange={(vals) => set({ roleIds: vals })}
-                    placeholder={rolesLoading ? 'Loading...' : 'Select roles...'}
-                    disabled={rolesLoading}
-                    maxCount={5}
-                    animation={0}
-                    resetOnDefaultValueChange={true}
-                  />
+                  <FieldInput type="password" value={value ?? ''} onChange={(v) => set({ password: v })} />
                 ),
               }),
+              {
+                kind: 'field' as const,
+                field: {
+                  key: 'confirmPassword' as any,
+                  label: 'Confirm Password',
+                  required: true,
+                  validate: () => null,
+                  render: (_value: any, _set: FieldChange<UserInput>) => {
+                    const pwd = (update as Partial<CreateUserInput>).password ?? '';
+                    const mismatch = confirmPassword.length > 0 && confirmPassword !== pwd;
+                    return (
+                      <div className="flex flex-col gap-1">
+                        <FieldInput
+                          type="password"
+                          value={confirmPassword}
+                          onChange={setConfirmPassword}
+                          placeholder="Repeat password"
+                        />
+                        {mismatch && <p className="text-xs text-destructive">Passwords do not match</p>}
+                      </div>
+                    );
+                  },
+                },
+              } as FieldItemConfig<UserInput>,
             ],
           }),
           defineGroupField<UserInput>({
             id: 'teams',
             label: 'Teams',
-            description: 'Add this user to teams.',
             items: [
               defineField<UserInput, 'teamIds'>({
                 key: 'teamIds',
                 label: 'Teams',
+                description: 'Add this user to teams. Users inherit all roles assigned to their teams.',
                 render: (value, set) => (
                   <TeamMultiSelectField value={value ?? []} onChange={(ids) => set({ teamIds: ids })} />
                 ),
               }),
             ],
+          }),
+          defineGroupField<UserInput>({
+            id: 'roles',
+            label: 'Roles',
+            items: [
+              defineField<UserInput, 'roleIds'>({
+                key: 'roleIds',
+                label: 'Roles',
+                description: 'Assign roles directly to this user to define what they can access and manage.',
+                render: (value, set) => (
+                  <div className="max-w-100">
+                    <MultiSelect
+                      options={roleOptions}
+                      defaultValue={(value ?? []).map(String)}
+                      onValueChange={(vals) => set({ roleIds: vals })}
+                      placeholder={rolesLoading ? 'Loading...' : 'Select roles...'}
+                      disabled={rolesLoading}
+                      maxCount={5}
+                      animation={0}
+                      resetOnDefaultValueChange={true}
+                    />
+                  </div>
+                ),
+              }),
+            ],
+          }),
+        ],
+      }),
+      Advanced: defineSection<UserInput>({
+        title: 'Advanced',
+        items: [
+          defineField({
+            key: 'resourceAccesses',
+            label: 'Overrides',
+            description:
+              'Grant this user direct access to specific resources outside of their team and role assignments.',
+            render: (value, set) => <>todo</>,
           }),
         ],
       }),

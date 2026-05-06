@@ -1,4 +1,4 @@
-import { Megaphone, Plus, Rss, LoaderCircle, Trash2 } from 'lucide-react';
+import { Plus, Rss, LoaderCircle, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
@@ -21,6 +21,7 @@ import { ActionBar } from '@/components/custom/action-bar';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { FieldInput, FieldSwitch, ItemSelector } from '@/components/custom/form-builder';
+import { CitadelIcons } from '@/lib/icons';
 
 const EMPTY_CHANNEL: AlertChannelInput = {
   name: '',
@@ -140,7 +141,7 @@ function ChannelCard({
       tabIndex={0}
       onClick={onEdit}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onEdit()}
-      className="group relative bg-background rounded-xl border border-muted p-4 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-[140px]">
+      className="group relative bg-background rounded-xl border border-muted p-4 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-35">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div
@@ -249,14 +250,14 @@ function AlertNotificationChannels() {
 
         <button
           onClick={openAdd}
-          className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600 h-[140px]">
+          className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600 h-35">
           <Plus className="h-5 w-5" />
           <span className="text-sm font-medium">Connect New Channel</span>
         </button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[550px]" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-137.5" onInteractOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit' : 'Add'} Notification Channel</DialogTitle>
             <DialogDescription>
@@ -339,11 +340,11 @@ function AlertNotificationChannels() {
 }
 
 export const AlertRuleComponents: RequiredComponents = {
-  Icon: Megaphone,
+  Icon: CitadelIcons.AlertRule,
   Content: ({ items, actions, isLoading }) => (
     <div className="flex flex-col gap-6">
       <AlertRulesTable items={items} actions={actions} isLoading={isLoading} />
-      <Separator className="border-b-1 border-dashed" />
+      <Separator className="border-b border-dashed" />
       <AlertNotificationChannels />
     </div>
   ),

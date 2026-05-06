@@ -1,4 +1,4 @@
-import { TriangleAlert, Rocket, Server, Layers, SquareStack } from 'lucide-react';
+import { SquareStack } from 'lucide-react';
 import { useMemo } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -10,9 +10,10 @@ import { useAlertEventQuery } from '@/lib/atoms';
 import { FilterBar, filterFieldClassName, ResourceSelectorField, SelectField } from '@/components/custom/common';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { CitadelIcons } from '@/lib/icons';
 
 export const AlertEventComponents: RequiredComponents = {
-  Icon: TriangleAlert,
+  Icon: CitadelIcons.Alert,
   header: {
     title: 'Alert Events',
     subtitle: 'View past alerts and track their status and resolution.',
@@ -56,9 +57,9 @@ function SearchSection() {
 
   const resourceOptions = useMemo(() => {
     const icons: Record<AlertResourceType, any> = {
-      [AlertResourceType.Deployment]: Rocket,
-      [AlertResourceType.Platform]: Server,
-      [AlertResourceType.Stack]: Layers,
+      [AlertResourceType.Deployment]: CitadelIcons.Deployment,
+      [AlertResourceType.Platform]: CitadelIcons.Platform,
+      [AlertResourceType.Stack]: CitadelIcons.Stack,
     };
 
     return Object.values(AlertResourceType).map((value) => ({

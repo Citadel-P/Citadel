@@ -1,11 +1,11 @@
-import { Server } from 'lucide-react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { usePlatformsGroup } from './hooks/usePlatformsGroup';
 import { Platforms } from './platforms';
 import { PlatformDropdownActions } from './actions';
+import { CitadelIcons } from '@/lib/icons';
 
 export const PlatformComponents: RequiredComponents = {
-  Icon: Server,
+  Icon: CitadelIcons.Platform,
   header: {
     subtitle: 'Connect platforms for real-time monitoring, alerts, and container workloads.',
     showSearch: true,
