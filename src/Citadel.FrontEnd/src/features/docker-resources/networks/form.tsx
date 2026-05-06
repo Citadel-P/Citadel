@@ -14,9 +14,21 @@ import {
   FieldInput,
   FieldSwitch,
 } from '@/components/custom/form-builder';
-import { KeyValuePairInput } from '@/components/custom/key-value-pair-input';
+import { KeyValuePairInput, KVPair } from '@/components/custom/key-value-pair-input';
 
 import { CreateNetworkInput, IPAMConfigInput } from '@/api/generated/api.types';
+
+type CreateNetworkFormInput = Omit<
+  CreateNetworkInput,
+  'platformId' | 'scope' | 'configOnly' | 'labels' | 'options' | 'ipam'
+> & {
+  labels: KVPair[];
+  options: KVPair[];
+  ipam: {
+    driver: string;
+    config: Partial<IPAMConfigInput>[];
+  };
+};
 
 const DRIVER_OPTIONS = [
   { value: 'bridge', label: 'Bridge' },
@@ -38,7 +50,8 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
   const { currentPlatform } = useAppContext();
   const { mutateAsync, isPending } = useMutate('createNetwork');
 
-  const defaultValues = {
+  const defaultValues: CreateNetworkFormInput = {
+    name: '',
     driver: 'bridge',
     enableIPv4: true,
     enableIPv6: false,
@@ -49,18 +62,18 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
     options: [],
     ipam: {
       driver: 'default',
-      config: [{}, {}] as IPAMConfigInput[],
+      config: [{}, {}],
     },
-  } as CreateNetworkInput;
+  };
 
-  const [update, setUpdate] = useState<Partial<CreateNetworkInput>>(defaultValues);
+  const [update, setUpdate] = useState<Partial<CreateNetworkFormInput>>(defaultValues);
   const original = defaultValues;
 
   const merged = useMemo(() => {
-    return { ...original, ...update, ipam: { ...original.ipam, ...update.ipam } } as CreateNetworkInput;
+    return { ...original, ...update, ipam: { ...original.ipam, ...update.ipam } } as CreateNetworkFormInput;
   }, [original, update]);
 
-  const onSave = async (formValues: CreateNetworkInput) => {
+  const onSave = async (formValues: CreateNetworkFormInput) => {
     if (!formValues.enableIPv4 && !formValues.enableIPv6) {
       toast.error('At least one of IPv4 or IPv6 must be enabled.');
       return;
@@ -77,6 +90,8 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
     const payload: CreateNetworkInput = {
       ...formValues,
       platformId: currentPlatform?.id ?? '',
+      scope: 'local',
+      configOnly: false,
       labels: labelsObj,
       options: optionsObj,
       ipam: {
@@ -94,7 +109,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
   };
 
   const schema = {
-    basic: defineSection<CreateNetworkInput>({
+    basic: defineSection<CreateNetworkFormInput>({
       title: 'Basic Configuration',
       items: [
         defineField({
@@ -133,11 +148,10 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
         }),
       ],
     }),
-    // TODO: fix the typing issue due to openapi v3.1 generated code: https://github.com/acacode/swagger-typescript-api/issues/1536
-    advanced: defineSection<CreateNetworkInput>({
+    advanced: defineSection<CreateNetworkFormInput>({
       title: 'Advanced (Optional)',
       items: [
-        defineGroupField({
+        defineGroupField<CreateNetworkFormInput>({
           id: 'ipv4',
           label: 'IPv4 Configuration',
           items: [
@@ -152,7 +166,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
 
             ...(merged.enableIPv4
               ? [
-                  defineField({
+                  defineField<CreateNetworkFormInput, any>({
                     key: 'ipam.config.0.subnet',
                     label: 'IPv4 Subnet',
                     validate: (v) =>
@@ -164,7 +178,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                         onChange={(v) =>
                           set((prev) => ({
                             ipam: {
-                              ...prev.ipam,
+                              driver: prev.ipam?.driver ?? 'default',
                               config: Object.assign([], prev.ipam?.config, {
                                 0: { ...prev.ipam?.config?.[0], subnet: v },
                               }),
@@ -174,7 +188,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                       />
                     ),
                   }),
-                  defineField({
+                  defineField<CreateNetworkFormInput, any>({
                     key: 'ipam.config.0.gateway',
                     label: 'IPv4 Gateway',
                     validate: (v) =>
@@ -186,7 +200,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                         onChange={(v) =>
                           set((prev) => ({
                             ipam: {
-                              ...prev.ipam,
+                              driver: prev.ipam?.driver ?? 'default',
                               config: Object.assign([], prev.ipam?.config, {
                                 0: { ...prev.ipam?.config?.[0], gateway: v },
                               }),
@@ -196,7 +210,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                       />
                     ),
                   }),
-                  defineField({
+                  defineField<CreateNetworkFormInput, any>({
                     key: 'ipam.config.0.ipRange',
                     label: 'IPv4 Range',
                     validate: (v) =>
@@ -208,7 +222,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                         onChange={(v) =>
                           set((prev) => ({
                             ipam: {
-                              ...prev.ipam,
+                              driver: prev.ipam?.driver ?? 'default',
                               config: Object.assign([], prev.ipam?.config, {
                                 0: { ...prev.ipam?.config?.[0], ipRange: v },
                               }),
@@ -223,7 +237,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
           ],
         }),
 
-        defineGroupField({
+        defineGroupField<CreateNetworkFormInput>({
           id: 'ipv6',
           label: 'IPv6 Configuration',
           items: [
@@ -237,7 +251,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
             }),
             ...(merged.enableIPv6
               ? [
-                  defineField({
+                  defineField<CreateNetworkFormInput, any>({
                     key: 'ipam.config.1.subnet',
                     label: 'IPv6 Subnet',
                     validate: (v) =>
@@ -249,7 +263,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                         onChange={(v) =>
                           set((prev) => ({
                             ipam: {
-                              ...prev.ipam,
+                              driver: prev.ipam?.driver ?? 'default',
                               config: Object.assign([], prev.ipam?.config, {
                                 1: { ...prev.ipam?.config?.[1], subnet: v },
                               }),
@@ -259,7 +273,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                       />
                     ),
                   }),
-                  defineField({
+                  defineField<CreateNetworkFormInput, any>({
                     key: 'ipam.config.1.gateway',
                     label: 'IPv6 Gateway',
 
@@ -271,7 +285,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                         onChange={(v) =>
                           set((prev) => ({
                             ipam: {
-                              ...prev.ipam,
+                              driver: prev.ipam?.driver ?? 'default',
                               config: Object.assign([], prev.ipam?.config, {
                                 1: { ...prev.ipam?.config?.[1], gateway: v },
                               }),
@@ -281,7 +295,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                       />
                     ),
                   }),
-                  defineField({
+                  defineField<CreateNetworkFormInput, any>({
                     key: 'ipam.config.1.ipRange',
                     label: 'IPv6 Range',
                     validate: (v) =>
@@ -293,7 +307,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
                         onChange={(v) =>
                           set((prev) => ({
                             ipam: {
-                              ...prev.ipam,
+                              driver: prev.ipam?.driver ?? 'default',
                               config: Object.assign([], prev.ipam?.config, {
                                 1: { ...prev.ipam?.config?.[1], ipRange: v },
                               }),

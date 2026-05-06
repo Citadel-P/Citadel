@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef, Fragment } from 'react';
+import { useCallback, useEffect, useState, useRef, Fragment, useMemo } from 'react';
 import { useLayoutContext } from '@/lib/context/layout-context';
 import { ISubMenuItem, MenuItems, DockerPlatformMenu, IMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
@@ -61,25 +61,26 @@ export const SidebarMenu = () => {
     addedPlatformIdsRef.current = ids;
   }, [menuItems]);
 
-  // Update active state
-  useEffect(() => {
-    const updateItems = (items: ISubMenuItem[]): ISubMenuItem[] =>
-      items.map((item) => ({
-        ...item,
-        active: isRouteActive(item.route ?? ''),
-        expanded: item.children
-          ? item.expanded || item.children.some((c) => c.active)
-          : isRouteActive(item.route ?? ''),
-        children: item.children ? updateItems(item.children) : undefined,
-      }));
+  const displayedMenuItems = useMemo(() => {
+    const withRouteState = (items: ISubMenuItem[]): ISubMenuItem[] =>
+      items.map((item) => {
+        const children = item.children ? withRouteState(item.children) : undefined;
+        const hasActiveChild = children ? children.some((c) => c.active) : false;
+        const isActive = isRouteActive(item.route ?? '');
 
-    setMenuItems((prev) =>
-      prev.map((menu) => ({
-        ...menu,
-        items: updateItems(menu.items),
-      })),
-    );
-  }, [location, isRouteActive]);
+        return {
+          ...item,
+          active: isActive,
+          expanded: item.children ? (item.expanded ?? hasActiveChild) : isActive,
+          children,
+        };
+      });
+
+    return menuItems.map((menu) => ({
+      ...menu,
+      items: withRouteState(menu.items),
+    }));
+  }, [menuItems, isRouteActive]);
 
   useEffect(() => {
     if (currentPlatform?.id) {
@@ -88,10 +89,13 @@ export const SidebarMenu = () => {
   }, [currentPlatform, addPlatformToMenu]);
 
   const toggleMenu = (menu: ISubMenuItem) => {
+    const targetLabel = menu.label;
+    const targetRoute = menu.route;
+
     const update = (items: ISubMenuItem[]): ISubMenuItem[] =>
       items.map((i) => ({
         ...i,
-        expanded: i === menu ? !i.expanded : i.expanded,
+        expanded: i.label === targetLabel && i.route === targetRoute ? !i.expanded : i.expanded,
         children: i.children ? update(i.children) : undefined,
       }));
 
@@ -108,7 +112,7 @@ export const SidebarMenu = () => {
 
   return (
     <Fragment>
-      {menuItems.map((menu, i) => (
+      {displayedMenuItems.map((menu, i) => (
         <div className="pt-4" key={menu.group || i}>
           {!sidebarMinimized && (
             <div className="mx-1 mb-2 flex items-center justify-between">

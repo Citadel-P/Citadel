@@ -23,7 +23,7 @@ import {
   PortMappingField,
   ItemSelector,
 } from '@/components/custom/form-builder';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useParams } from 'react-router';
@@ -160,24 +160,27 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
     platformId: currentPlatformId,
     imageId: (currentImage as DeploymentImageInfoLocalImage)?.imageId,
   });
+  const lastAppliedServerPortsRef = useRef<string[] | null>(null);
 
   useEffect(() => {
-    const shouldFetch =
+    const shouldAutoFill =
       imageInfoIsSuccess && data?.data?.ports !== undefined && currentImage?.$type === ImageSource.local;
 
-    if (!shouldFetch) return;
+    if (!shouldAutoFill) return;
 
-    const currentPorts = update.spec?.ports ?? original.spec?.ports ?? [];
     const serverPorts = data.data.ports ?? [];
-
-    if (currentPorts.length > 0 && JSON.stringify(currentPorts) !== JSON.stringify(serverPorts)) {
+    const userPorts = update.spec?.ports;
+    const lastApplied = lastAppliedServerPortsRef.current;
+    if (userPorts !== undefined && lastApplied && JSON.stringify(userPorts) !== JSON.stringify(lastApplied)) {
       return;
     }
 
-    if (JSON.stringify(currentPorts) === JSON.stringify(serverPorts)) {
+    // No update needed if server ports match what we already applied
+    if (lastApplied && JSON.stringify(serverPorts) === JSON.stringify(lastApplied)) {
       return;
     }
 
+    lastAppliedServerPortsRef.current = serverPorts;
     setUpdate(
       (prev) =>
         ({
@@ -364,7 +367,8 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                         type="Image"
                         selected={val}
                         platformId={currentPlatformId}
-                        onSelect={(v: ImageView | undefined) =>
+                        onSelect={(v: ImageView | undefined) => {
+                          lastAppliedServerPortsRef.current = null;
                           set((prev) => ({
                             spec: {
                               ...prev.spec!,
@@ -375,8 +379,8 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                               } satisfies DeploymentImageInfoLocalImage,
                               ports: [],
                             },
-                          }))
-                        }
+                          }));
+                        }}
                         placeholder="Select Image"
                       />
                     ),

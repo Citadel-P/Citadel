@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { NetworksView } from '@/api/generated/api.types';
 import { useDockerDaemonGroup, NetworkEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRead } from '@/lib/hooks';
@@ -6,6 +6,14 @@ import { useRead } from '@/lib/hooks';
 export const useNetworksGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listNetworks', { platformId });
   const [networks, setNetworks] = useState<NetworksView | undefined>();
+  const lastDataRef = useRef<NetworksView | undefined>(data?.data);
+
+  useEffect(() => {
+    if (data?.data && data.data !== lastDataRef.current) {
+      lastDataRef.current = data.data;
+      setNetworks(data.data);
+    }
+  }, [data?.data]);
 
   const onNetworkEvent = useCallback((event: NetworkEvent) => {
     setNetworks((prev) => {
@@ -42,12 +50,6 @@ export const useNetworksGroup = (platformId?: string) => {
   }, []);
 
   useDockerDaemonGroup(platformId, { onNetworkEvent });
-
-  useEffect(() => {
-    if (data?.data) {
-      setNetworks(data.data);
-    }
-  }, [data]);
 
   return { networks, isLoading };
 };

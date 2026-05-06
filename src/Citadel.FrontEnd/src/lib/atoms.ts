@@ -2,7 +2,7 @@ import { ResourceType } from '@/api/types';
 import { atom, PrimitiveAtom, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 import { TaskSpec, TaskSheetState } from '@/components/custom/task-sheet';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { ActivityEventType, ActivityResourceType, AlertResourceType, AlertType } from '@/api/generated/api.types';
 
@@ -246,23 +246,14 @@ function useAtomUrlSync<T extends Record<string, any>>(config: UrlSyncConfig<T>)
   const [state, setState] = useAtom(atom);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const deserializeRef = useRef(deserialize);
-  deserializeRef.current = deserialize;
-  const paramsRef = useRef(params);
-  paramsRef.current = params;
-  const serializeRef = useRef(serialize);
-  serializeRef.current = serialize;
-  const defaultsRef = useRef(defaults);
-  defaultsRef.current = defaults;
-
   useEffect(() => {
     setState((prev) => {
       const next: Partial<T> = {};
       let hasChanged = false;
 
-      for (const key of paramsRef.current) {
+      for (const key of params) {
         const raw = searchParams.get(String(key));
-        const value = deserializeRef.current(raw, key);
+        const value = deserialize(raw, key);
         if (value !== prev[key]) {
           next[key] = value as any;
           hasChanged = true;
@@ -271,7 +262,7 @@ function useAtomUrlSync<T extends Record<string, any>>(config: UrlSyncConfig<T>)
 
       return hasChanged ? { ...prev, ...next } : prev;
     });
-  }, [searchParams, setState]);
+  }, [searchParams, setState, params, deserialize]);
 
   const setSyncedState = useCallback(
     (nextValOrUpdater: T | ((prev: T) => T)) => {
@@ -280,9 +271,9 @@ function useAtomUrlSync<T extends Record<string, any>>(config: UrlSyncConfig<T>)
           typeof nextValOrUpdater === 'function' ? (nextValOrUpdater as any)(prev) : { ...prev, ...nextValOrUpdater };
 
         const nextParams = new URLSearchParams(window.location.search);
-        paramsRef.current.forEach((key) => {
-          const serialized = serializeRef.current(next[key], key);
-          if (serialized === null || next[key] === defaultsRef.current[key]) {
+        params.forEach((key) => {
+          const serialized = serialize(next[key], key);
+          if (serialized === null || next[key] === defaults[key]) {
             nextParams.delete(String(key));
           } else {
             nextParams.set(String(key), serialized);
@@ -296,7 +287,7 @@ function useAtomUrlSync<T extends Record<string, any>>(config: UrlSyncConfig<T>)
         return next;
       });
     },
-    [setSearchParams, setState],
+    [setSearchParams, setState, params, serialize, defaults],
   );
 
   return [state, setSyncedState] as const;

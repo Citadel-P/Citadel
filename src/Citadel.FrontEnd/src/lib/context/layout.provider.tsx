@@ -11,10 +11,15 @@ const getInitialTheme = (): ITheme => {
   return { color: 'blue', mode: 'light' };
 };
 
+// 👇 Now accounts for screen width when no stored preference exists
 const getInitialSidebarMinimized = (): boolean => {
   if (typeof window !== 'undefined') {
     const stored = window.localStorage.getItem('sidebarStatus');
-    if (stored) return (JSON.parse(stored) as { minimized: boolean }).minimized;
+    if (stored) {
+      return (JSON.parse(stored) as { minimized: boolean }).minimized;
+    }
+    // No stored preference – respect current screen size
+    return window.innerWidth < 1024;
   }
   return false;
 };
@@ -26,18 +31,14 @@ export const LayoutProvider: React.FC<{ children?: React.ReactNode }> = ({ child
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 1024) {
+      if (window.innerWidth < 1024 && !sidebarMinimized) {
         setSidebarMinimized(true);
       }
     };
 
     window.addEventListener('resize', handleResize);
-    if (window.innerWidth < 1024) {
-      setSidebarMinimized(true);
-    }
-
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [sidebarMinimized]);
 
   useIsoLayoutEffect(() => {
     const html = document.documentElement;

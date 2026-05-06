@@ -19,30 +19,11 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   const tokenRef = useRef<string | undefined>(accessToken);
+  const prevTokenRef = useRef<string | undefined>(accessToken);
   const isCanceledRef = useRef(false);
-  const readyResolveRef = useRef<() => void | null>(null);
+  const readyResolveRef = useRef<(() => void) | null>(null);
   const readyPromiseRef = useRef<Promise<void> | null>(null);
   const groupStates = useRef<Map<string, GroupState>>(new Map());
-
-  // ensure accessTokenFactory reads latest token
-  useEffect(() => {
-    tokenRef.current = accessToken;
-    // if token changed while we have a running connection, rebuild it so the server will accept it
-    // (only if you require new token to be active immediately)
-    // you can also decide to not rebuild here and rely on token expiry + reconnect
-    // For now, rebuild to be safe:
-    rebuildConnection();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken]);
-
-  const ensureReadyPromise = () => {
-    if (!readyPromiseRef.current) {
-      readyPromiseRef.current = new Promise<void>((resolve) => {
-        readyResolveRef.current = resolve;
-      });
-    }
-    return readyPromiseRef.current;
-  };
 
   const buildConnection = useCallback(() => {
     isCanceledRef.current = false;
@@ -73,18 +54,16 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
     });
     conn.onclose(() => {
       setConnectionState(HubConnectionState.Disconnected);
-      // Optional: clear activeGroups.current here if groups should reset on disconnect
     });
 
     readyPromiseRef.current = null;
-    ensureReadyPromise();
 
     (async () => {
       try {
         await startConnectionWithRetry(conn, isCanceledRef);
         if (isCanceledRef.current) {
           await conn.stop().catch(() => {});
-          setConnection(null); // explicit cleanup on cancel
+          setConnection(null);
           return;
         }
         setConnection(conn);
@@ -94,61 +73,73 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
         console.error('[SignalR] final connection failure', err);
         await conn.stop().catch(() => {});
         setConnectionState(conn.state ?? HubConnectionState.Disconnected);
-        setConnection(null); // ensure cleanup on failure
+        setConnection(null);
       }
     })();
 
     return conn;
   }, [baseUrl]);
 
-  // start once on mount
-  useEffect(() => {
-    buildConnection();
-    return () => {
-      isCanceledRef.current = true;
-      // stop existing connection
-      connection?.stop().catch(console.error);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once
-
-  // rebuild helper
   const rebuildConnection = useCallback(() => {
     isCanceledRef.current = true;
-    // stop current connection first
     connection
       ?.stop()
       .catch(console.error)
       .finally(() => {
         setConnection(null);
-        // reset cancel flag and start new connection
         isCanceledRef.current = false;
         buildConnection();
       });
   }, [connection, buildConnection]);
 
-  // wait until connection is ready (connected)
+  // Sync token ref (always OK to do in effect)
+  useEffect(() => {
+    tokenRef.current = accessToken;
+  }, [accessToken]);
+
+  // Rebuild connection only when the token actually changes
+  useEffect(() => {
+    if (accessToken === prevTokenRef.current) return;
+    prevTokenRef.current = accessToken;
+
+    rebuildConnection();
+  }, [accessToken, rebuildConnection]);
+
+  const ensureReadyPromise = () => {
+    if (!readyPromiseRef.current) {
+      readyPromiseRef.current = new Promise<void>((resolve) => {
+        readyResolveRef.current = resolve;
+      });
+    }
+    return readyPromiseRef.current;
+  };
+
+  // Initial connect on mount
+  useEffect(() => {
+    buildConnection();
+    return () => {
+      isCanceledRef.current = true;
+      connection?.stop().catch(console.error);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // OK to omit buildConnection here – only run once
+
   const ensureConnectionReady = useCallback(async () => {
     if (connection && connection.state === HubConnectionState.Connected) return connection;
-    // wait for the readyPromise
     await ensureReadyPromise();
-    // after it resolves, set connection may have changed
     if (connection && connection.state === HubConnectionState.Connected) return connection;
-    // otherwise try to return whatever is in state
     if (connection) return connection;
     throw new Error('SignalR connection not available');
   }, [connection]);
 
-  // joinGroup: registers handlers (setup) before sending JoinGroup to avoid race
   const joinGroup = useCallback(
     async (groupName: string, setup?: (hub: HubConnection) => void) => {
       if (!groupName) return;
 
       const state = groupStates.current.get(groupName);
-      if (state === 'joining' || state === 'joined') return; // already in process or done
+      if (state === 'joining' || state === 'joined') return;
 
       groupStates.current.set(groupName, 'joining');
-
       await ensureConnectionReady();
       const conn = connection!;
 
@@ -163,7 +154,7 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
         groupStates.current.set(groupName, 'joined');
       } catch (err) {
         console.error('JoinGroup failed:', err);
-        groupStates.current.delete(groupName); // allow retry
+        groupStates.current.delete(groupName);
       }
     },
     [connection, ensureConnectionReady],
@@ -174,7 +165,7 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
       if (!groupName) return;
 
       const state = groupStates.current.get(groupName);
-      if (!state) return; // nothing to leave
+      if (!state) return;
 
       groupStates.current.delete(groupName);
 

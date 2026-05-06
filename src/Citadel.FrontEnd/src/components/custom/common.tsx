@@ -1,4 +1,4 @@
-import { useMemo, useState, useLayoutEffect, useRef, useCallback, useEffect, useDeferredValue, memo } from 'react';
+import { useMemo, useState, useLayoutEffect, useRef, useCallback, useDeferredValue, memo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -35,7 +35,6 @@ import {
 import { cn, filterBySplit, normalizeDockerId, toFixedNumber } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
-import { useResourceFilter } from '@/lib/atoms';
 import Convert from 'ansi-to-html';
 import { Badge } from '../ui/badge';
 import { ContentCard } from './content-card';
@@ -97,19 +96,17 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   const { ref: triggerRef, width: contentWidth, measure } = useMeasuredWidth(400);
 
   const resourceName = PluralResourceMap[type];
-  const [filter, setFilter] = useResourceFilter<{ item: T }>(type);
 
   const read = useRead(`list${resourceName}` as any, { platformId });
   const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
   const selectedItem =
-    filter?.item ?? (typeof selected === 'string' ? items.find((i) => i.id === selected) : selected) ?? undefined;
+    typeof selected === 'string'
+      ? items.find((i) => i.id === selected || (i as unknown as { dockerImageId?: string }).dockerImageId === selected)
+      : selected;
 
   const filtered = filterBySplit(items, search, (i) => i.name).sort((a, b) => a.name.localeCompare(b.name));
-  useEffect(() => {
-    setFilter(null);
-  }, [selected]);
+
   const handleSelect = (item: T | undefined) => {
-    setFilter(item ? { item } : null);
     onSelect?.(item);
     setOpen(false);
   };
@@ -495,11 +492,7 @@ const LogRow = memo(
     wrapLines: boolean;
   }) => {
     return (
-      <div
-        className={cn(
-          'flex gap-2 min-h-[1.2rem]',
-          wrapLines ? 'whitespace-pre-wrap break-all' : 'whitespace-pre',
-        )}>
+      <div className={cn('flex gap-2 min-h-[1.2rem]', wrapLines ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}>
         {showTimestamps && log.timestamp && (
           <span className="text-foreground/30 shrink-0 select-none tabular-nums">
             {log.timestamp.includes('T') ? log.timestamp.split('T')[1].slice(0, 8) : log.timestamp}
@@ -530,10 +523,7 @@ export const LogViewer = memo(
   }: LogViewerProps) => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isAtBottom, setIsAtBottom] = useState(true);
-    const [showTimestamps, setShowTimestamps] = useLocalStorage(
-      'log-viewer-show-timestamps',
-      initialShowTimestamps,
-    );
+    const [showTimestamps, setShowTimestamps] = useLocalStorage('log-viewer-show-timestamps', initialShowTimestamps);
     const [wrapLines, setWrapLines] = useLocalStorage('log-viewer-wrap-lines', initialWrapLines);
     const [scrollTop, setScrollTop] = useState(0);
 
@@ -575,10 +565,7 @@ export const LogViewer = memo(
     const virtual = useMemo(() => {
       const totalHeight = renderedLogs.length * ITEM_HEIGHT;
       const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN);
-      const end = Math.min(
-        renderedLogs.length,
-        Math.ceil((scrollTop + VIEWPORT_HEIGHT) / ITEM_HEIGHT) + OVERSCAN,
-      );
+      const end = Math.min(renderedLogs.length, Math.ceil((scrollTop + VIEWPORT_HEIGHT) / ITEM_HEIGHT) + OVERSCAN);
       return {
         totalHeight,
         start,
@@ -623,11 +610,7 @@ export const LogViewer = memo(
               />
             )}
             {onClear && (
-              <QuickAction
-                label="Clear Console"
-                icon={<Eraser className="h-3.5 w-3.5" />}
-                onClick={onClear}
-              />
+              <QuickAction label="Clear Console" icon={<Eraser className="h-3.5 w-3.5" />} onClick={onClear} />
             )}
           </div>
         )}
@@ -644,12 +627,7 @@ export const LogViewer = memo(
               {/* Top spacer */}
               <div style={{ height: virtual.paddingTop }} aria-hidden />
               {virtual.items.map((log, idx) => (
-                <LogRow
-                  key={virtual.start + idx}
-                  log={log}
-                  showTimestamps={showTimestamps}
-                  wrapLines={wrapLines}
-                />
+                <LogRow key={virtual.start + idx} log={log} showTimestamps={showTimestamps} wrapLines={wrapLines} />
               ))}
               {/* Bottom spacer */}
               <div style={{ height: virtual.paddingBottom }} aria-hidden />

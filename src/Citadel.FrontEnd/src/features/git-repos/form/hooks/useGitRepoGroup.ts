@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { GitRepositoryView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
@@ -7,14 +7,18 @@ import { useRead } from '@/lib/hooks';
 export const useGitRepoGroup = (id: string | undefined) => {
   const { data, isLoading } = useRead('getGitRepository', { id });
   const [gitRepo, setGitRepo] = useState<GitRepositoryView | undefined>(data?.data);
+  const lastDataRef = useRef<GitRepositoryView | undefined>(data?.data);
 
   useEffect(() => {
-    if (!data) return;
-    setGitRepo(data.data);
-  }, [data]);
+    if (data?.data && data.data !== lastDataRef.current) {
+      lastDataRef.current = data.data;
+      setGitRepo(data.data);
+    }
+  }, [data?.data]);
+
   const handleDeploymentInfoUpdated = useCallback((repo: GitRepositoryView) => {
-    const info = (repo.latestActivityView?.info as any)[1]; // SignalR poly mapping
-    info.$type = (repo.latestActivityView?.info as any)[0];
+    const info = (repo.latestActivityView?.info as any)?.[1]; // SignalR poly mapping
+    if (info) info.$type = (repo.latestActivityView?.info as any)?.[0];
 
     setGitRepo((prev) => {
       if (!prev) return prev;

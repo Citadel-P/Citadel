@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { VolumesView } from '@/api/generated/api.types';
 import { useDockerDaemonGroup, VolumeEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRead } from '@/lib/hooks';
@@ -7,12 +7,20 @@ export const useVolumesGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listVolumes', { platformId });
   const [volumes, setVolumes] = useState<VolumesView | undefined>();
 
+  const lastDataRef = useRef<VolumesView | undefined>(data?.data);
+
+  useEffect(() => {
+    if (data?.data && data.data !== lastDataRef.current) {
+      lastDataRef.current = data.data;
+      setVolumes(data.data);
+    }
+  }, [data?.data]);
+
   const onVolumeEvent = useCallback((event: VolumeEvent) => {
     setVolumes((prev) => {
       if (!prev?.volumes) return prev;
 
       const { volume, eventType, actorId } = event;
-
       const existingIndex = prev.volumes.findIndex((v) => v.id === actorId);
 
       switch (eventType) {
@@ -43,12 +51,6 @@ export const useVolumesGroup = (platformId?: string) => {
   }, []);
 
   useDockerDaemonGroup(platformId, { onVolumeEvent });
-
-  useEffect(() => {
-    if (data?.data) {
-      setVolumes(data.data);
-    }
-  }, [data]);
 
   return { volumes, isLoading };
 };

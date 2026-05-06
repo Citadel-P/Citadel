@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { GitRepositoryView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
@@ -7,11 +7,14 @@ import { useRead } from '@/lib/hooks';
 export const useGitReposGroup = () => {
   const { data, isLoading } = useRead('listGitRepositories');
   const [gitRepos, setGitRepos] = useState<GitRepositoryView[] | undefined>();
+  const lastFetchedRef = useRef<GitRepositoryView[] | undefined>(data?.data?.gitRepositories);
 
   useEffect(() => {
-    if (!data) return;
-    setGitRepos(data.data.gitRepositories);
-  }, [data]);
+    if (data?.data?.gitRepositories && data.data.gitRepositories !== lastFetchedRef.current) {
+      lastFetchedRef.current = data.data.gitRepositories;
+      setGitRepos(data.data.gitRepositories);
+    }
+  }, [data?.data?.gitRepositories]);
 
   const handleGitRepoInfoUpdated = useCallback((repo: GitRepositoryView, action: string) => {
     setGitRepos((prev) => {

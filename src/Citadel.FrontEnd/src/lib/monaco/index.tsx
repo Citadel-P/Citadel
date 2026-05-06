@@ -348,7 +348,7 @@ export const MonacoToDictionaryEditor = ({
   onChange,
 }: MonacoToDictionaryEditorProps) => {
   const cleanHelper = helperText?.trim();
-  const rawRef = useRef('');
+  const rawRef = useRef<string>('');
 
   const generateDisplayContent = useCallback(
     (val: Record<string, string | null> | undefined) => {
@@ -381,11 +381,11 @@ export const MonacoToDictionaryEditor = ({
     return result;
   };
 
-  const [raw, setRaw] = useState(() => {
-    const initial = generateDisplayContent(value);
-    rawRef.current = initial;
-    return initial;
-  });
+  const [raw, setRaw] = useState(() => generateDisplayContent(value));
+
+  useEffect(() => {
+    rawRef.current = raw;
+  }, [raw]);
 
   const prevValueRef = useRef<Record<string, string | null> | undefined>(value);
   const dictionaryEquals = (left: Record<string, string>, right: Record<string, string>) => {
@@ -439,6 +439,7 @@ export const MonacoToDictionaryEditor = ({
       value={raw}
       onValueChange={(text) => {
         const currentText = text || '';
+        // Event handler — ref writes are allowed here
         rawRef.current = currentText;
         setRaw(currentText);
 

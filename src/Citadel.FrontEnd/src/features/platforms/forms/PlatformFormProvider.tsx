@@ -77,7 +77,7 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
   } = useMutate('updatePlatform');
 
   const [currentProvider, setCurrentProvider] = useState<string>(PlatformType.Docker);
-  const [platform, setPlatform] = useState<PlatformView | undefined>(undefined);
+  const [platform, _] = useState<PlatformView | undefined>(undefined);
   let providers = [...defaultProviders];
   let formTitle = 'Create platform';
   let saveButtonTitle = 'Add platform';
@@ -92,24 +92,24 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
   }
   useEffect(() => {
     if (mode === 'edit' && data?.data) {
-      setCurrentProvider(data?.data.type);
-      setPlatform(data?.data);
+      //setCurrentProvider(data?.data.type);
+      //setPlatform(data?.data);
     }
   }, [data, mode]);
 
   useEffect(() => {
     if (createIsSuccess && createData?.data) {
       toast.success(`The ${createData?.data.name} platform has been added`);
-      setPlatform(createData?.data);
-      navigate('/platforms');
+      // setPlatform(createData?.data);
+      // navigate('/platforms');
     }
   }, [createIsSuccess, createData, navigate]);
 
   useEffect(() => {
     if (patchIsSuccess && patchData?.data) {
       toast.success(`The ${patchData?.data.name} platform has been updated successfully`);
-      setPlatform(patchData?.data);
-      navigate('/platforms');
+      // setPlatform(patchData?.data);
+      // navigate('/platforms');
     }
   }, [patchIsSuccess, patchData, navigate]);
 
