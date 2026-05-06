@@ -53,7 +53,7 @@ const StatusCell = ({
   const statusSnapshot = useMemo(() => {
     if (state === ContainerStateStatus.Created) return undefined;
 
-    const baseDate = state === ContainerStateStatus.Running ? new Date(startedAt) : new Date(finishedAt ?? Date.now());
+    const baseDate = state === ContainerStateStatus.Running ? new Date(startedAt) : new Date(finishedAt!);
 
     return fromNow(baseDate);
   }, [state, startedAt, finishedAt]);

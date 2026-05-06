@@ -86,7 +86,7 @@ const key_value_language = {
 };
 
 export const registerKeyValue = (monaco: Monaco) => {
-  if (monaco.languages.getLanguages().some((l) => l.id === 'key_value')) {
+  if (monaco.languages.getLanguages().some((l: any) => l.id === 'key_value')) {
     return;
   }
 

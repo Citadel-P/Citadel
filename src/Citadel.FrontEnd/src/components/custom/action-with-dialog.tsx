@@ -31,7 +31,7 @@ export const ActionButton = forwardRef<
       size={size}
       variant={variant || 'secondary'}
       className={cn(
-        'flex flex-1 shrink-0 items-center justify-between gap-2 rounded-sm text-xs max-w-[190px]',
+        'flex flex-1 shrink-0 items-center justify-between gap-2 rounded-sm text-xs max-w-47.5',
         className,
       )}
       onClick={onClick}
@@ -254,7 +254,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
           <DialogTitle>Group Execute - {title}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4 my-4 whitespace-nowrap overflow-x-auto">
-          <ul className="p-4 bg-accent text-sm list-disc list-inside max-h-[300px] overflow-y-auto">
+          <ul className="p-4 bg-accent text-sm list-disc list-inside max-h-75 overflow-y-auto">
             {selected.map((resource, i) => (
               <li key={i}>{resource.name}</li>
             ))}

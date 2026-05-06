@@ -21,7 +21,7 @@ import { PlatformComponents } from '@/features/platforms';
 import { RegistryComponents } from '@/features/registries';
 import { useLocalStorage, useMutate, useRead } from '@/lib/hooks';
 import { Shield, Lock, Layers, KeyRound, Rss, User, Users, Plus, Loader2, Trash } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { atom, useAtom } from 'jotai';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -79,7 +79,7 @@ export const Roles = ({ items, isLoading }: { items: RoleView[]; isLoading: bool
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-4 min-h-[400px]">
+    <div className="flex flex-col md:flex-row gap-4 min-h-100">
       <div className="w-full md:w-1/3 flex flex-col border border-border rounded-md overflow-hidden">
         <div className="p-3 border-b border-border bg-accent/60 font-medium text-sm">Roles</div>
         <div className="flex-1 overflow-auto divide-y divide-border">
@@ -89,10 +89,18 @@ export const Roles = ({ items, isLoading }: { items: RoleView[]; isLoading: bool
             <div className="p-4 text-center text-muted-foreground text-sm">No roles found</div>
           ) : (
             roles.map((role) => (
-              <button
+              <div
                 key={role.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedRoleId(role.id)}
-                className={`group w-full text-left px-4 py-3 flex items-center justify-between transition-colors border-l-4 ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedRoleId(role.id);
+                  }
+                }}
+                className={`group w-full text-left px-4 py-3 flex items-center justify-between transition-colors border-l-4 cursor-pointer ${
                   selectedRoleId === role.id
                     ? 'bg-primary/5 border-l-primary'
                     : 'hover:bg-accent/40 border-l-transparent'
@@ -117,7 +125,7 @@ export const Roles = ({ items, isLoading }: { items: RoleView[]; isLoading: bool
                     targetClassName="!h-7 !w-7 !min-w-7 !max-w-7 !flex-none !p-0 justify-center gap-0 opacity-0 group-hover:opacity-100 [&>span]:hidden"
                   />
                 )}
-              </button>
+              </div>
             ))
           )}
         </div>
@@ -231,15 +239,11 @@ const CreateRoleDialog = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['listRoles'] });
       onOpenChange(false);
+      setRoleName('');
+      setSelectedByResource({});
     },
   });
   const [selectedByResource, setSelectedByResource] = useState<Record<string, string[]>>({});
-
-  useEffect(() => {
-    if (!open) return;
-    setRoleName('');
-    setSelectedByResource({});
-  }, [open]);
 
   const handleResourceChange = (resource: string, values: string[]) => {
     setSelectedByResource((prev) => ({ ...prev, [resource]: values }));
@@ -258,7 +262,7 @@ const CreateRoleDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[900px] max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-225 max-h-[85vh] flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle>Add Role</DialogTitle>
           <DialogDescription>Enter a role name and assign permissions by resource.</DialogDescription>
@@ -326,7 +330,7 @@ const PermissionsMatrixTable = ({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[220px]">Resource</TableHead>
+            <TableHead className="w-55">Resource</TableHead>
             <TableHead>Permissions</TableHead>
           </TableRow>
         </TableHeader>

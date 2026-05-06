@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Pencil, Plus, Save, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { ResourceFormComponents } from '@/features';
 import { useMutate, useResourceParamType } from '@/lib/hooks';
@@ -23,7 +24,9 @@ export const ResourceForm = ({ mode }: { mode: 'add' | 'edit' }) => {
   if (!type) return <NotFound />;
 
   return (
-    <PageShell mode={mode}>{mode === 'add' ? <AddFormPage type={tab ?? type} /> : <EditFormPage type={tab ?? type} />}</PageShell>
+    <PageShell mode={mode}>
+      {mode === 'add' ? <AddFormPage type={tab ?? type} /> : <EditFormPage type={tab ?? type} />}
+    </PageShell>
   );
 };
 
@@ -48,65 +51,72 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
   const Components = ResourceFormComponents[type]?.EditForm;
   const formData = Components?.useData?.(id!);
 
-  const item = formData?.item;
-  const isLoading = formData?.isLoading;
+  const { item, isLoading } = formData ?? {};
 
-  const [resource, setResource] = useState<RequiredFormFields | null>(() => item || null);
+  if (isLoading || !item) return <Loader />;
+
+  return (
+    <EditFormContent
+      key={id}
+      id={id!}
+      item={item}
+      updateMetadata={updateMetadata}
+      renameResource={renameResource}
+      Components={Components}
+      type={type}
+    />
+  );
+};
+
+const EditFormContent = ({
+  id,
+  item,
+  updateMetadata,
+  renameResource,
+  Components,
+  type,
+}: {
+  id: string;
+  item: RequiredFormFields;
+  updateMetadata: (variables: { id: string; data: Partial<PatchResourceMetadata> }) => Promise<any>;
+  renameResource: (variables: { id: string; name: string }) => Promise<any>;
+  Components: any;
+  type: ResourceType;
+}) => {
+  const queryClient = useQueryClient();
   const [metadatChanged, setMetaDataChanged] = useState(false);
 
   const tabs = Components?.Tabs ?? [];
   const Header = Components?.Header;
   const localKey = `${type}-workload-${id}.active-tab`;
 
-  useEffect(() => {
-    if (item) {
-      setResource(item);
-    }
-  }, [item]);
-
-  if (!type) return <NotFound />;
-  if (!tabs.length) return <NotFound />;
-  if (!Header) return <span>Workload header is required</span>;
+  const invalidateRelatedQueries = () => queryClient.invalidateQueries();
 
   const handleUpdateMetadata = async (patch: Partial<PatchResourceMetadata>) => {
-    if (!resource) return;
-    const previous = resource;
-    setResource({ ...resource, ...patch });
-    try {
-      await updateMetadata({ id, data: patch });
-      setMetaDataChanged(true);
-    } catch {
-      setResource(previous);
-    }
+    await updateMetadata({ id, data: patch });
+    await invalidateRelatedQueries();
+    setMetaDataChanged(true);
   };
 
   const handleRenameResource = async (name: string) => {
-    if (!resource) return;
-    const previous = resource;
-    setResource({ ...resource, ...{ name } });
-    try {
-      await renameResource({ id, name });
-      setMetaDataChanged(true);
-    } catch {
-      setResource(previous);
-    }
+    await renameResource({ id, name });
+    await invalidateRelatedQueries();
+    setMetaDataChanged(true);
   };
-
-  if (isLoading || !resource) return <Loader />;
 
   return (
     <>
       <EditHeader
         canEditTitle={Header.canEditTitle}
         canEditDescription={Header.canEditDescription}
-        item={resource}
+        item={item}
         Indicator={Header.Indicator}
         Actions={Header.ActionButtons}
         onRename={(name) => handleRenameResource(name)}
         onChangeDescription={(description) => handleUpdateMetadata({ description })}
       />
-      {Components.SubHeader && <Components.SubHeader resource={resource} />}
-      <ResourceTabs localKey={localKey} resource={resource} tabs={tabs} metadataChanged={metadatChanged} />
+      {Components.SubHeader && <Components.SubHeader resource={item} />}
+      <ResourceTabs localKey={localKey} resource={item} tabs={tabs} metadataChanged={metadatChanged} />
       <TaskSheet type={type} />
     </>
   );
@@ -168,25 +178,29 @@ const EditHeader = <T extends RequiredFormFields>({
 
 const useInlineEdit = (initial: string) => {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(initial);
+  const [draft, setDraft] = useState(initial);
 
-  useEffect(() => {
-    if (!editing) setValue(initial);
-  }, [initial, editing]);
+  const value = editing ? draft : initial;
 
-  const isDirty = value.trim() !== initial.trim();
+  const isDirty = draft.trim() !== initial.trim();
 
-  const start = () => setEditing(true);
+  const start = () => {
+    setDraft(initial);
+    setEditing(true);
+  };
+
   const cancel = () => {
-    setValue(initial);
-    setEditing(false);
-  };
-  const commit = async (onSave?: (v: string) => void) => {
-    if (isDirty) onSave?.(value);
     setEditing(false);
   };
 
-  return { value, setValue, editing, isDirty, start, cancel, commit };
+  const commit = async (onSave?: (v: string) => void) => {
+    if (isDirty) {
+      onSave?.(draft);
+    }
+    setEditing(false);
+  };
+
+  return { value, setValue: setDraft, editing, isDirty, start, cancel, commit };
 };
 
 const EditableTitle = ({
@@ -245,7 +259,7 @@ const EditableTitle = ({
           if (e.key === 'Enter') edit.commit(onSave);
           if (e.key === 'Escape') edit.cancel();
         }}
-        className="h-[30px] text-md font-bold bg-transparent"
+        className="h-7.5 text-md font-bold bg-transparent"
       />
     </InlineEditActions>
   );

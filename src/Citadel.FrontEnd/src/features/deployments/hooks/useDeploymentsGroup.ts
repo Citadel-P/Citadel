@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { DeploymentView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
@@ -7,10 +7,15 @@ import { useRead } from '@/lib/hooks';
 export const useDeploymentsGroup = () => {
   const { data, isLoading } = useRead('listDeployments');
   const [deployments, setDeployments] = useState<DeploymentView[] | undefined>();
+  const lastFetchedRef = useRef<DeploymentView[]>([]);
 
   useEffect(() => {
     if (!data) return;
-    setDeployments(data.data.deployments);
+    const newBase = data.data.deployments;
+    if (newBase !== lastFetchedRef.current) {
+      lastFetchedRef.current = newBase;
+      setDeployments(newBase);
+    }
   }, [data]);
 
   const handleDeploymentInfoUpdated = useCallback((deployment: DeploymentView, action: string) => {

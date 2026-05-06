@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityView, PagedResultViewOfActivityView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useActivityQuery } from '@/lib/atoms';
@@ -23,30 +23,31 @@ export const useActivitiesGroup = (
     },
   });
 
-  const [pagedActivities, setPagedActivities] = useState<PagedResultViewOfActivityView | undefined>();
+  const [liveActivities, setLiveActivities] = useState<ActivityView[]>([]);
 
-  useEffect(() => {
-    if (!data) return;
-    const nextPaged = data.data.pagedResult;
-    setPagedActivities(nextPaged);
-  }, [data]);
+  const pagedActivities = useMemo<PagedResultViewOfActivityView | undefined>(() => {
+    const base = data?.data?.pagedResult;
+    if (!base) return undefined;
+
+    if (liveActivities.length === 0) return base;
+
+    const pageSize = Number(base.pageSize) || base.items?.length || 1;
+    const baseItems = base.items || [];
+    const liveIds = new Set(baseItems.map((item) => item.id));
+
+    const mergedItems = [...liveActivities.filter((act) => !liveIds.has(act.id)), ...baseItems].slice(0, pageSize);
+
+    return {
+      ...base,
+      items: mergedItems,
+      totalCount: Number(base.totalCount) + liveActivities.filter((act) => !liveIds.has(act.id)).length,
+    };
+  }, [data, liveActivities]);
 
   const handleActivityEventReceived = useCallback((activity: ActivityView) => {
-    setPagedActivities((prev) => {
-      if (!prev) return prev;
-
-      const alreadyExists = prev.items?.some((item) => item.id === activity.id);
-      if (alreadyExists) return prev;
-
-      const pageSize = Number(prev.pageSize ?? 0) || prev.items.length || 1;
-      const nextItems = [activity, ...prev.items].slice(0, pageSize);
-      const nextTotalCount = Number(prev.totalCount ?? 0) + 1;
-
-      return {
-        ...prev,
-        items: nextItems,
-        totalCount: nextTotalCount,
-      };
+    setLiveActivities((prev) => {
+      if (prev.some((item) => item.id === activity.id)) return prev;
+      return [activity, ...prev];
     });
   }, []);
 

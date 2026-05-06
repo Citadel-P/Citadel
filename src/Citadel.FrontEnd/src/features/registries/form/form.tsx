@@ -66,7 +66,7 @@ const RegistryTypeSelector = ({ value, onChange, disabled }: any) => {
 
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className="w-full max-w-[400px]">
+      <SelectTrigger className="w-full max-w-100">
         <SelectValue>
           {selected ? (
             <div className="flex items-center gap-2">

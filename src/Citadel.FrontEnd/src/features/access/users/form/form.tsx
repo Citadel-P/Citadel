@@ -26,7 +26,7 @@ const TeamMultiSelectField = ({ value, onChange }: { value: string[] | null; onC
   const options = useMemo(() => (data?.data ?? []).map((t) => ({ label: t.name, value: t.id })), [data]);
 
   return (
-    <div className="flex flex-col gap-2 max-w-[400px]">
+    <div className="flex flex-col gap-2 max-w-100">
       <Input placeholder="Search teams..." value={teamSearch} onChange={(e) => setTeamSearch(e.target.value)} />
       <MultiSelect
         options={options}
@@ -116,7 +116,7 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
                 ),
               }),
               ...(mode === 'add'
-                ? shad[
+                ? [
                     defineField<UserInput, 'password'>({
                       key: 'password',
                       label: 'Password',

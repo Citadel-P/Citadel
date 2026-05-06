@@ -1,7 +1,6 @@
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { UserForm } from './form';
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { useRead } from '@/lib/hooks';
 
 export const UserFormComponents: RequiredFormComponents = {

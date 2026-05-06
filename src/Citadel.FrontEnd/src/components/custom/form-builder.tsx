@@ -157,7 +157,7 @@ function FieldShell({ label, required, description, edited, error, touched, chil
       </div>
 
       <div className="relative">
-        {edited && <span className="absolute -top-0 right-1 text-[10px] text-primary bg-background px-1">Edited</span>}
+        {edited && <span className="absolute top-0 right-1 text-[10px] text-primary bg-background px-1">Edited</span>}
         {children}
       </div>
 
@@ -224,7 +224,7 @@ export const FieldInput = ({
       }
     }}
     placeholder={placeholder}
-    className={cn('max-w-[400px] max-h-[36px]', className)}
+    className={cn('max-w-100 max-h-9', className)}
   />
 );
 
@@ -287,7 +287,7 @@ export const FieldSlider = ({
   const current = typeof value === 'number' ? value : min;
 
   return (
-    <div className="flex items-center gap-4 max-w-[400px]">
+    <div className="flex items-center gap-4 max-w-100">
       <Slider
         min={min}
         max={max}
@@ -325,7 +325,7 @@ export function PortMappingField({
           return (
             <div
               key={idx}
-              className="flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-[400px] max-h-[36px]">
+              className="flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-100 max-h-9">
               <div className="flex flex-1 w-full">
                 <Input
                   placeholder="Host port"
@@ -345,7 +345,7 @@ export function PortMappingField({
                   }}
                 />
 
-                <span className="flex z-10 items-center justify-center w-[80px] shadow-xs flex-shrink-0 bg-accent/60 border-r rounded-r-sm border-y border-border text-xs">
+                <span className="flex z-10 items-center justify-center w-20 shadow-xs shrink-0 bg-accent/60 border-r rounded-r-sm border-y border-border text-xs">
                   :{containerPort}
                 </span>
               </div>
@@ -379,11 +379,11 @@ export function InputGroupField({
       <div className="space-y-2 flex flex-col gap-2">
         <div
           className={cn(
-            'flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-[400px] max-h-[36px]',
+            'flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-100 max-h-9',
             className,
           )}>
           <div className="flex flex-1 w-full">
-            <span className="flex z-10 items-center justify-center w-[80px] shadow-xs flex-shrink-0 bg-accent/60 border-l rounded-l-sm border-y border-border text-xs">
+            <span className="flex z-10 items-center justify-center w-20 shadow-xs shrink-0 bg-accent/60 border-l rounded-l-sm border-y border-border text-xs">
               {prefixPlaceholder}
             </span>
             <Input
@@ -429,7 +429,7 @@ export function ItemSelector({
   const selected = normalized[finalValue];
   return (
     <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className={cn('w-full max-w-[400px]', className)}>
+      <SelectTrigger className={cn('w-full max-w-100', className)}>
         <SelectValue placeholder="Select a value...">
           {selected && (
             <div className="flex items-center gap-2">
@@ -798,7 +798,7 @@ export function FormShell<T>({
       <div className="flex gap-6">
         {/* Sidebar (xl and up) */}
         <aside className="hidden xl:block relative pr-6 border-r">
-          <div className="sticky top-26 hidden xl:flex flex-col gap-8 w-[140px] h-fit pb-24">
+          <div className="sticky top-26 hidden xl:flex flex-col gap-8 w-35 h-fit pb-24">
             {title && <p className="text-sm font-semibold text-muted-foreground mb-2">{title}</p>}
 
             {sections.map((sectionKey) => {
@@ -1110,7 +1110,7 @@ export function FormShell<T>({
           onOpenAutoFocus={(e) => {
             e.preventDefault();
           }}
-          className="w-full max-w-[1100px] sm:max-w-[1100px]">
+          className="w-full max-w-275 sm:max-w-275">
           <DialogHeader>
             <DialogTitle>Configuration changes</DialogTitle>
           </DialogHeader>

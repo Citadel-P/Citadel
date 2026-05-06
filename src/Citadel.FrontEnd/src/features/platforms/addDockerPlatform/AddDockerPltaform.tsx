@@ -18,7 +18,7 @@ const AddDockerPlatform = () => {
       <div className=" rounded-lg border-border bg-background p-4 relative">
         <ol className="relative border-s border-border ml-1">
           <li className="mb-10 ms-6">
-            <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -start-2.5 ring-4 ring-background text-xs text-primary-foreground">
+            <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -inset-s-2.5 ring-4 ring-background text-xs text-primary-foreground">
               1
             </span>
             <h2 className="text-sm mb-2 font-semibold text-foreground">
@@ -27,7 +27,7 @@ const AddDockerPlatform = () => {
             <DockerAgentInstallCmd />
           </li>
           <li className="mb-10 ms-6">
-            <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -start-2.5 ring-4 ring-background text-xs text-primary-foreground">
+            <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -inset-s-2.5 ring-4 ring-background text-xs text-primary-foreground">
               2
             </span>
             <h2 className="text-sm font-semibold text-foreground">Connect</h2>

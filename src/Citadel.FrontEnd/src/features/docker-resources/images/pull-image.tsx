@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Download, Minus, Plus } from 'lucide-react';
-import { useInlineSubHeader, useResourceFilter, useTaskSheet } from '@/lib/atoms';
-import { useEffect, useState } from 'react';
+import { useInlineSubHeader, useTaskSheet } from '@/lib/atoms';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { RegistryView } from '@/api/generated/api.types';
@@ -27,15 +27,11 @@ export default function PullImageForm() {
   const [image, setImage] = useState('');
   const [registry, setRegistry] = useState<RegistryView | undefined>();
 
-  const [resourceFilter] = useResourceFilter<{ item: RegistryView }>('Registry');
+  const handleRegistrySelect = (newRegistry: RegistryView | undefined) => {
+    setRegistry(newRegistry);
+  };
 
-  useEffect(() => {
-    if (resourceFilter?.item) {
-      setRegistry(resourceFilter.item);
-    }
-  }, [resourceFilter]);
-
-  const submit = (e?: React.FormEvent) => {
+  const submit = (e?: React.SubmitEvent) => {
     e?.preventDefault();
     if (!image || !registry) return;
 
@@ -71,7 +67,7 @@ export default function PullImageForm() {
                 <ResourceSelectorField
                   type={'Registry'}
                   selected={registry}
-                  onSelect={setRegistry}
+                  onSelect={handleRegistrySelect}
                   placeholder="Select Registry"
                   className="text-sm"
                 />
@@ -83,7 +79,7 @@ export default function PullImageForm() {
                   placeholder="e.g. nginx:latest or my-app:1.0"
                   value={image}
                   onChange={(e) => setImage(e.target.value)}
-                  className="text-sm w-full max-w-[400px]"
+                  className="text-sm w-full max-w-100"
                 />
               </div>
 

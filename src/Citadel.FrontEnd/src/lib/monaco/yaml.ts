@@ -187,7 +187,7 @@ export const registerYaml = (monaco: Monaco) => {
     ],
   };
 
-  const isRegistered = monaco.languages.getLanguages().some((l) => l.id === 'yaml');
+  const isRegistered = monaco.languages.getLanguages().some((l: any) => l.id === 'yaml');
 
   if (!isRegistered) {
     monaco.languages.register({ id: 'yaml', aliases: ['yml'] });

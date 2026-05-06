@@ -118,7 +118,7 @@ export const DockerPlatform = ({
           </StatSection>
 
           {/* CPU + Memory */}
-          <div className="flex w-full flex-col gap-3 border-t border-border/60 pt-4 lg:w-[260px] lg:shrink-0 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+          <div className="flex w-full flex-col gap-3 border-t border-border/60 pt-4 lg:w-65 lg:shrink-0 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
             <UsageBar
               icon={Cpu}
               label="CPU"

@@ -25,7 +25,7 @@ createRoot(document.getElementById('root')!).render(
 );
 
 // Load monaco once Citadel is started
-export function AppInitializer() {
+function AppInitializer() {
   useEffect(() => {
     preloadMonaco();
   }, []);

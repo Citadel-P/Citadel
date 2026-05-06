@@ -21,7 +21,7 @@ import {
   FieldSlider,
   ItemSelector,
 } from '@/components/custom/form-builder';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useMutate, useSaveResource } from '@/lib/hooks';
 import { useParams } from 'react-router';
 import { MultiResourceSelectorField, SelectField } from '@/components/custom/common';
@@ -73,7 +73,14 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
 
   const original = useMemo(() => (resource ?? {}) as AlertRuleInput, [resource]);
 
-  const merged = useMemo(() => ({ ...original, ...update }), [original, update]);
+  const merged = useMemo(
+    () => ({
+      ...original,
+      ...update,
+      limitedTo: update.limitedTo ?? original.limitedTo ?? [],
+    }),
+    [original, update],
+  );
   const showThresholdFields = merged.type === AlertType.PlatformCpuHigh || merged.type === AlertType.PlatformRamHigh;
 
   const noCooldownTypes: AlertType[] = [
@@ -91,10 +98,6 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
     if (merged.type.includes('Stack')) return 'Stack';
     return 'Platform';
   }, [merged.type]);
-
-  useEffect(() => {
-    update.limitedTo = original.limitedTo ?? [];
-  }, [resourceFromAlertType, original, update]);
 
   const schema = useMemo(
     () => ({
@@ -555,7 +558,7 @@ const QuietHoursField = ({ quietHours, onChange }: QuietHoursFieldProps) => {
 
   return (
     <div className="space-y-3">
-      <Button variant="outline" className="w-full max-w-[400px] flex flex-row gap-2" onClick={handleDialogOpen}>
+      <Button variant="outline" className="w-full max-w-100 flex flex-row gap-2" onClick={handleDialogOpen}>
         <Plus className="h-3 w-3" /> Add Window
       </Button>
       {quietHours.length > 0 && (
@@ -565,7 +568,7 @@ const QuietHoursField = ({ quietHours, onChange }: QuietHoursFieldProps) => {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="sm:max-w-[680px]">
+        <DialogContent className="sm:max-w-170">
           <DialogHeader>
             <DialogTitle>{editIndex === null ? 'Add Maintenance Window' : 'Edit Maintenance Window'}</DialogTitle>
             <DialogDescription>
@@ -722,7 +725,7 @@ const QuietHoursTable = ({
         cell: ({ row }) => {
           const description = row.original.quietHour.description ?? '-';
           return (
-            <div className="max-w-[250px]">
+            <div className="max-w-62.5">
               <span className="block truncate" title={description}>
                 {description}
               </span>

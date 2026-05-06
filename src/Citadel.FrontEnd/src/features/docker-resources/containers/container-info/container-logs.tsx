@@ -34,27 +34,30 @@ interface LogEntry {
   message: string;
 }
 
-const useContainerLogGroup = (containerId?: string, source?: LogTarget) => {
-  // Mutable refs hold the real data; React only knows about "version".
+export const useContainerLogGroup = (containerId?: string, source?: LogTarget) => {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+
   const logsMapRef = useRef<Map<string, string>>(new Map());
-  const logsArrayRef = useRef<LogEntry[]>([]);
   const bufferRef = useRef<string[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [_, setVersion] = useState(0);
+  const prevContainerIdRef = useRef<string | undefined>(containerId);
 
-  // Reset everything when the container changes.
+  // Safe reset when the container ID actually changes
   useEffect(() => {
-    logsMapRef.current = new Map();
-    logsArrayRef.current = [];
-    bufferRef.current = [];
-    if (flushTimerRef.current) {
-      clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = null;
+    if (containerId !== prevContainerIdRef.current) {
+      prevContainerIdRef.current = containerId;
+
+      logsMapRef.current = new Map();
+      bufferRef.current = [];
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+
+      setLogs([]);
     }
-    setVersion((v) => v + 1);
   }, [containerId]);
 
-  // Flush buffered raw text into the Map, trim to MAX_LOGS, sort, and bump version.
   const flush = useCallback(() => {
     flushTimerRef.current = null;
     const batch = bufferRef.current.splice(0, bufferRef.current.length);
@@ -71,11 +74,13 @@ const useContainerLogGroup = (containerId?: string, source?: LogTarget) => {
           const message = line.substring(firstSpaceIndex + 1);
           next.set(timestamp, message);
         } else {
+          // Fallback for malformed lines
           next.set(`${Date.now()}-${Math.random()}`, line);
         }
       }
     }
 
+    // Trim to MAX_LOGS
     if (next.size > MAX_LOGS) {
       const entries = Array.from(next.entries()).slice(-MAX_LOGS);
       logsMapRef.current = new Map(entries);
@@ -83,19 +88,18 @@ const useContainerLogGroup = (containerId?: string, source?: LogTarget) => {
       logsMapRef.current = next;
     }
 
-    // Build sorted array once, outside React render phase.
+    // Build sorted array
     const arr = new Array<LogEntry>(logsMapRef.current.size);
     let i = 0;
     for (const [ts, msg] of logsMapRef.current) {
       arr[i++] = { timestamp: ts, message: msg };
     }
     arr.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-    logsArrayRef.current = arr;
 
-    setVersion((v) => v + 1);
+    setLogs(arr);
   }, []);
 
-  // Incoming SignalR data -> buffer-> schedule flush (max once per 50 ms).
+  // max 50ms batching
   const handleLogs = useCallback(
     (data: ArrayBuffer) => {
       const text = decoder.decode(new Uint8Array(data));
@@ -145,15 +149,13 @@ const useContainerLogGroup = (containerId?: string, source?: LogTarget) => {
 
   const clearLogs = useCallback(() => {
     logsMapRef.current = new Map();
-    logsArrayRef.current = [];
     bufferRef.current = [];
     if (flushTimerRef.current) {
       clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     }
-    setVersion((v) => v + 1);
+    setLogs([]);
   }, []);
 
-  // Return the ref array directly. Because "version" changed, consumers re-render with the latest data.
-  return { containerLogs: logsArrayRef.current, clearLogs };
+  return { containerLogs: logs, clearLogs };
 };

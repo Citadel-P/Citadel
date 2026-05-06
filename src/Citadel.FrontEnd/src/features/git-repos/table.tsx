@@ -47,7 +47,7 @@ const columns = (
     accessorKey: 'url',
     header: ({ column }) => <SortableCell cellName="URL" column={column} />,
     cell: ({ row }) => (
-      <span className="text-[13px] text-muted-foreground truncate max-w-[300px] block">{row.original.url}</span>
+      <span className="text-[13px] text-muted-foreground truncate max-w-75 block">{row.original.url}</span>
     ),
     sortingFn: (rowA, rowB) => rowA.original.url.localeCompare(rowB.original.url),
   },

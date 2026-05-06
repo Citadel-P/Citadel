@@ -21,7 +21,7 @@ const ContainerInspect = ({ containerId }: { containerId: string | undefined }) 
         value={code}
         language="json"
         filename={`inspect-${containerId?.slice(0, 8)}.json`}
-        className="my-0 mx-0 min-h-[600px]"
+        className="my-0 mx-0 min-h-150"
         readOnly={true}
         folding={true}
       />

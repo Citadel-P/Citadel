@@ -68,15 +68,15 @@ function TaskStreamLayout({ title, refName, type, state }: TaskStreamLayoutProps
         <SheetDescription>
           <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="inline-flex flex-row gap-2 items-center">
-              {status === 'pending' && <LoaderCircle className="h-4 w-4 animate-spin" />}
+              {status === 'pending' && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
               <span className={status === 'error' ? 'text-destructive' : status === 'success' ? 'text-success' : ''}>
-                {Icon}
+                <Icon className="w-3.5 h-3.5" />
               </span>
               <span>{refName}</span>
             </span>
 
             <span className="inline-flex flex-row gap-2 items-center">
-              <Clock className="w-4 h-4" />
+              <Clock className="w-3.5 h-3.5" />
               <span>{elapsedLabel} seconds</span>
             </span>
           </span>
@@ -182,7 +182,7 @@ function TaskAlertEventLayout({ alertEventId }: { alertEventId: string }) {
         <MonacoEditor
           value={serializeData(data!.data.info)}
           filename={`alert-event-info-${event.id}.json`}
-          className="my-0 mx-0 min-h-[220px]"
+          className="my-0 mx-0 min-h-55"
           title="Info"
           readOnly
           folding
@@ -197,7 +197,7 @@ function SpecViewer({ spec, title, resourceId }: { spec: unknown; title: string;
     <MonacoEditor
       value={serializeData(spec)}
       filename={`inspect-${resourceId}.yaml`}
-      className="my-0 mx-0 min-h-[200px]"
+      className="my-0 mx-0 min-h-55"
       title={title}
       readOnly
       folding
@@ -469,7 +469,7 @@ export const TaskSheet = memo(function TaskSheet({ type }: { type: ResourceType 
           e.preventDefault();
         }}
         side={side}
-        className={`mx-auto w-[1200px] max-w-[100vw] ${side === 'top' ? 'rounded-b-md' : 'rounded-t-md'}`}>
+        className={`mx-auto w-300 max-w-[100vw] ${side === 'top' ? 'rounded-b-md' : 'rounded-t-md'}`}>
         {Renderer ? (
           <Renderer payload={state.task.payload} type={type} />
         ) : (

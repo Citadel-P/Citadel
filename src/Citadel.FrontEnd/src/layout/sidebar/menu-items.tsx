@@ -1,4 +1,4 @@
-import { Layers, Rocket, ChevronsLeftRightEllipsis, Settings, Activity } from 'lucide-react';
+import { Layers, ChevronsLeftRightEllipsis, Settings, Activity } from 'lucide-react';
 import { JSX } from 'react';
 import DockerIcon from '@/assets/docker.min.svg';
 import { AccessComponents } from '@/features/access';

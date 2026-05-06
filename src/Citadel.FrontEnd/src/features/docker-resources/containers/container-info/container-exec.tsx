@@ -17,7 +17,15 @@ const SHELLS = [
   { label: 'sh', value: 'sh' },
 ];
 
-export const ContainerExec = ({ containerId, disabled, target }: { containerId?: string; disabled?: boolean; target: ExecTarget }) => {
+export const ContainerExec = ({
+  containerId,
+  disabled,
+  target,
+}: {
+  containerId?: string;
+  disabled?: boolean;
+  target: ExecTarget;
+}) => {
   const nid = normalizeDockerId(containerId);
   const { terminalRef, isLoading, isConnected, shell, setShell, toggleConnection } = useContainerExecTerminal(
     nid,
@@ -30,7 +38,7 @@ export const ContainerExec = ({ containerId, disabled, target }: { containerId?:
       <div className="flex items-center justify-between bg-secondary/20 p-2 rounded-t-md ">
         <div className="flex flex-row gap-4">
           <Select onValueChange={(e) => setShell(e as 'bash' | 'sh')} value={shell} disabled={isConnected || isLoading}>
-            <SelectTrigger className="w-full min-w-32 max-h-[32px] bg-background rounded-sm shadow-xs">
+            <SelectTrigger className="w-full min-w-32 max-h-8 bg-background rounded-sm shadow-xs">
               <SelectValue placeholder="Select a shell" />
             </SelectTrigger>
             <SelectContent className="bg-background">
@@ -47,7 +55,7 @@ export const ContainerExec = ({ containerId, disabled, target }: { containerId?:
           <Button
             disabled={isLoading}
             variant="outline"
-            className="rounded-sm h-[32px] shadow-xs text-sm font-normal"
+            className="rounded-sm h-8 shadow-xs text-sm font-normal"
             onClick={toggleConnection}>
             {isConnected ? (
               <span className="flex items-center gap-2">
@@ -124,7 +132,9 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
         groupId &&
         termRef.current
       ) {
-        hubRef.current.invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows, target ?? 'Container').catch(console.error);
+        hubRef.current
+          .invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows, target ?? 'Container')
+          .catch(console.error);
       }
     });
 
@@ -183,7 +193,7 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
         termRef.current?.writeln('\r\n\x1b[31m[failed to start process]\x1b[0m');
       }
     },
-    [groupId, shell],
+    [groupId, shell, target],
   );
 
   const { isLoading, isConnected } = useSignalRGroup({

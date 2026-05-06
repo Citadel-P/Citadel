@@ -130,7 +130,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
           aria-expanded={open}
           data-placeholder={selectedItem ? undefined : ''}
           className={cn(
-            'flex justify-between gap-2 w-full max-w-[400px] font-normal data-[placeholder]:text-muted-foreground text-sm bg-background hover:bg-background shadow-xs border',
+            'flex justify-between gap-2 w-full max-w-100 font-normal data-placeholder:text-muted-foreground text-sm bg-background hover:bg-background shadow-xs border',
             className,
           )}>
           {defaultDisplay(selectedItem) ?? placeholder}
@@ -140,7 +140,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
 
       <PopoverContent
         align={align}
-        className="w-full max-w-[400px] p-0 bg-background"
+        className="w-full max-w-100 p-0 bg-background"
         style={contentWidth ? { width: `${contentWidth}px` } : undefined}>
         <Command shouldFilter={false} defaultValue={selectedItem?.name ?? '__none__'}>
           <CommandInput placeholder={`Search ${PluralResourceMap[type]}`} value={search} onValueChange={setSearch} />
@@ -279,7 +279,7 @@ export const KeyPairEntries = ({ items }: { items: Record<string, string> | unde
         <Badge key={key} variant="secondary" className="flex gap-1">
           <span className="text-muted-foreground">{key}</span>
           <span className="text-muted-foreground">=</span>
-          <span title={value} className="font-medium text-nowrap max-w-[200px] overflow-hidden text-ellipsis">
+          <span title={value} className="font-medium text-nowrap max-w-50 overflow-hidden text-ellipsis">
             {value}
           </span>
         </Badge>
@@ -636,7 +636,7 @@ export const LogViewer = memo(
           ref={scrollRef}
           onScroll={handleScroll}
           className={cn(
-            'p-4 max-h-[600px] rounded-sm text-xs inline-block w-full overflow-auto bg-transparent',
+            'p-4 max-h-150 rounded-sm text-xs inline-block w-full overflow-auto bg-transparent',
             className,
           )}>
           {renderedLogs.length > 0 ? (
@@ -989,7 +989,7 @@ export function SelectField({
   className?: string;
 }) {
   return (
-    <div className={cn('min-w-[200px]', className)}>
+    <div className={cn('min-w-50', className)}>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger className="w-full bg-background">
           <SelectValue placeholder={placeholder} />

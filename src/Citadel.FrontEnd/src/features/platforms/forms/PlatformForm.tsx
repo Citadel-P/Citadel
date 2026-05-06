@@ -17,7 +17,7 @@ const PlatformForm = () => {
         </div>
         <ol className="relative border-s border-border ml-1">
           <li className="mb-10 ms-6">
-            <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -start-2.5 ring-4 ring-background text-xs text-primary-foreground">
+            <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -inset-s-2.5 ring-4 ring-background text-xs text-primary-foreground">
               1
             </span>
             <h2 className="text-sm mb-2 font-semibold text-foreground">Choose the platform type</h2>
@@ -29,7 +29,7 @@ const PlatformForm = () => {
               {providers.map((provider) => (
                 <Label
                   key={provider.id}
-                  className={`${provider.disabled ? 'cursor-not-allowed bg-foreground/2' : 'hover:bg-accent/50 hover:cursor-pointer'} flex-grow flex-1 flex items-start gap-3 rounded-lg border p-4 has-[[data-state=checked]]:border-primary/50 has-[[data-state=checked]]:bg-primary/10 `}>
+                  className={`${provider.disabled ? 'cursor-not-allowed bg-foreground/2' : 'hover:bg-accent/50 hover:cursor-pointer'} grow flex-1 flex items-start gap-3 rounded-lg border p-4 has-[[data-state=checked]]:border-primary/50 has-[[data-state=checked]]:bg-primary/10 `}>
                   <RadioGroupItem
                     value={provider.id}
                     id={provider.name}
@@ -45,7 +45,7 @@ const PlatformForm = () => {
             </RadioGroup>
           </li>
           <li className="mb-10 ms-6">
-            <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -start-2.5 ring-4 ring-background text-xs text-primary-foreground">
+            <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -inset-s-2.5 ring-4 ring-background text-xs text-primary-foreground">
               2
             </span>
             <h2 className="text-sm font-semibold text-foreground">Configure</h2>

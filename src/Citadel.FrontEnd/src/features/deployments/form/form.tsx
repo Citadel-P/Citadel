@@ -320,7 +320,7 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                                 }))
                               }
                               placeholder="Select Registry"
-                              className="sm:min-w-[400px]"
+                              className="sm:min-w-100"
                             />
                           );
                         },

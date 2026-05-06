@@ -321,13 +321,164 @@ export enum ActivityEventType {
   GitRepoCloned = "GitRepoCloned",
 }
 
-export interface AcknowledgeAlertEventsInput {
-  ids: string[];
-}
+export type StackUpdateState = BaseStackUpdateState &
+  (
+    | BaseStackUpdateStateTypeMapping<
+        "Git",
+        StackUpdateStateGitStackUpdateState
+      >
+    | BaseStackUpdateStateTypeMapping<
+        "Manual",
+        StackUpdateStateManualStackUpdateState
+      >
+  );
 
-export interface ActivitiesView {
-  pagedResult: PagedResultViewOfActivityView;
-}
+export type StackSpec = BaseStackSpec &
+  (
+    | BaseStackSpecTypeMapping<"Manual", StackSpecManualStack>
+    | BaseStackSpecTypeMapping<"Git", StackSpecGitStack>
+  );
+
+export type RegistryConfiguration = BaseRegistryConfiguration &
+  (
+    | BaseRegistryConfigurationTypeMapping<
+        "AWS",
+        RegistryConfigurationAWSRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "Azure",
+        RegistryConfigurationAzureRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "Gitlab",
+        RegistryConfigurationGitlabRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "DockerHub",
+        RegistryConfigurationDockerHubRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "GitHub",
+        RegistryConfigurationGitHubRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "Custom",
+        RegistryConfigurationCustomRegistry
+      >
+  );
+
+export type PlatformDescriptor = BasePlatformDescriptor &
+  (
+    | BasePlatformDescriptorTypeMapping<
+        "Docker",
+        PlatformDescriptorDockerPlatformDescriptor
+      >
+    | BasePlatformDescriptorTypeMapping<
+        "DockerSwarm",
+        PlatformDescriptorDockerSwarmPlatformDescriptor
+      >
+    | BasePlatformDescriptorTypeMapping<
+        "Kubernetes",
+        PlatformDescriptorKubernetesPlatformDescriptor
+      >
+  );
+
+export type IImageRepository = BaseIImageRepository &
+  (
+    | BaseIImageRepositoryTypeMapping<
+        "GitHub",
+        IImageRepositoryGitHubPackageResponse
+      >
+    | BaseIImageRepositoryTypeMapping<
+        "DockerHub",
+        IImageRepositoryDockerHubRepositoryResponse
+      >
+  );
+
+export type GitAuthConfiguration = BaseGitAuthConfiguration &
+  (
+    | BaseGitAuthConfigurationTypeMapping<
+        "Basic",
+        GitAuthConfigurationBasicAuth
+      >
+    | BaseGitAuthConfigurationTypeMapping<
+        "Token",
+        GitAuthConfigurationTokenAuth
+      >
+    | BaseGitAuthConfigurationTypeMapping<
+        "SshKey",
+        GitAuthConfigurationSshKeyAuth
+      >
+  );
+
+export type DeploymentImageInfo = BaseDeploymentImageInfo &
+  (
+    | BaseDeploymentImageInfoTypeMapping<"Local", DeploymentImageInfoLocalImage>
+    | BaseDeploymentImageInfoTypeMapping<
+        "External",
+        DeploymentImageInfoExternalImage
+      >
+  );
+
+export type AlertRuleQuietHour = BaseAlertRuleQuietHour &
+  (
+    | BaseAlertRuleQuietHourTypeMapping<
+        "Daily",
+        AlertRuleQuietHourDailyQuietHour
+      >
+    | BaseAlertRuleQuietHourTypeMapping<
+        "Weekly",
+        AlertRuleQuietHourWeeklyQuietHour
+      >
+  );
+
+export type AlertEventInfo = BaseAlertEventInfo &
+  (
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformCpuHigh",
+        AlertEventInfoPlatformCpuHighAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformRamHigh",
+        AlertEventInfoPlatformRamHighAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformUnreachable",
+        AlertEventInfoPlatformUnreachableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "UnmanagedContainerCreated",
+        AlertEventInfoUnmanagedContainerCreatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformVersionMismatch",
+        AlertEventInfoPlatformVersionMismatchAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "DeploymentImageUpdateAvailable",
+        AlertEventInfoDeploymentImageUpdateAvailableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "DeploymentAutoUpdated",
+        AlertEventInfoDeploymentAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "DeploymentAutoDeployFailed",
+        AlertEventInfoDeploymentAutoDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackImageUpdateAvailable",
+        AlertEventInfoStackImageUpdateAvailableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackAutoUpdated",
+        AlertEventInfoStackAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackAutoDeployFailed",
+        AlertEventInfoStackDeployFailedAlertInfo
+      >
+  );
 
 export type ActivityEventInfo = BaseActivityEventInfo &
   (
@@ -424,6 +575,14 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoGitRepoPulled
       >
   );
+
+export interface AcknowledgeAlertEventsInput {
+  ids: string[];
+}
+
+export interface ActivitiesView {
+  pagedResult: PagedResultViewOfActivityView;
+}
 
 export interface ActivityEventInfoAlertRuleCreated {
   $type?: "AlertRuleCreated";
@@ -634,54 +793,6 @@ export interface AlertChannelsView {
   channels: AlertChannelView[];
 }
 
-export type AlertEventInfo = BaseAlertEventInfo &
-  (
-    | BaseAlertEventInfoTypeMapping<
-        "PlatformCpuHigh",
-        AlertEventInfoPlatformCpuHighAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "PlatformRamHigh",
-        AlertEventInfoPlatformRamHighAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "PlatformUnreachable",
-        AlertEventInfoPlatformUnreachableAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "UnmanagedContainerCreated",
-        AlertEventInfoUnmanagedContainerCreatedAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "PlatformVersionMismatch",
-        AlertEventInfoPlatformVersionMismatchAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "DeploymentImageUpdateAvailable",
-        AlertEventInfoDeploymentImageUpdateAvailableAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "DeploymentAutoUpdated",
-        AlertEventInfoDeploymentAutoUpdatedAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "DeploymentAutoDeployFailed",
-        AlertEventInfoDeploymentAutoDeployFailedAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "StackImageUpdateAvailable",
-        AlertEventInfoStackImageUpdateAvailableAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "StackAutoUpdated",
-        AlertEventInfoStackAutoUpdatedAlertInfo
-      >
-    | BaseAlertEventInfoTypeMapping<
-        "StackAutoDeployFailed",
-        AlertEventInfoStackDeployFailedAlertInfo
-      >
-  );
-
 export interface AlertEventInfoDeploymentAutoDeployFailedAlertInfo {
   $type?: "DeploymentAutoDeployFailed";
   deploymentName: string;
@@ -848,18 +959,6 @@ export interface AlertRuleLimitedTo {
   resourceId: string;
 }
 
-export type AlertRuleQuietHour = BaseAlertRuleQuietHour &
-  (
-    | BaseAlertRuleQuietHourTypeMapping<
-        "Daily",
-        AlertRuleQuietHourDailyQuietHour
-      >
-    | BaseAlertRuleQuietHourTypeMapping<
-        "Weekly",
-        AlertRuleQuietHourWeeklyQuietHour
-      >
-  );
-
 export interface AlertRuleQuietHourDailyQuietHour {
   $type?: "Daily";
   name: string;
@@ -1003,14 +1102,14 @@ export interface ContainerConfiguration {
   attachStdin: null | boolean;
   attachStdout: null | boolean;
   attachStderr: null | boolean;
-  exposedPorts: null | any[];
+  exposedPorts: null | string[];
   tty: null | boolean;
   openStdin: null | boolean;
   stdinOnce: null | boolean;
   env: string[];
   cmd: string[];
   image: null | string;
-  volumes: null | any[];
+  volumes: null | string[];
   workingDir: null | string;
   entrypoint: string[];
   networkDisabled: null | boolean;
@@ -1084,9 +1183,9 @@ export interface ContainerInspectView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   sizeRootFs: null | number | string;
-  args: null | any[];
+  args: null | string[];
   execIDs: string[];
-  mounts: null | any[];
+  mounts: null | MountPointInfo[];
   hostConfig: null | HostConfiguration;
   graphDriver: null | GraphDriverDataInfo;
   config: null | ContainerConfiguration;
@@ -1226,9 +1325,9 @@ export interface CreateAlertRuleInput {
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   threshold?: null | number | string;
-  channelIds?: null | any[];
-  limitedTo?: null | any[];
-  quietHours?: null | any[];
+  channelIds?: null | string[];
+  limitedTo?: null | AlertRuleLimitedTo[];
+  quietHours?: null | AlertRuleQuietHour[];
 }
 
 export interface CreateDeploymentInput {
@@ -1266,8 +1365,8 @@ export interface CreateNetworkInput {
   configOnly: null | boolean;
   ipam?: null | IPAMInput;
   configFrom?: null | ConfigFromInput;
-  labels?: null | object;
-  options?: null | object;
+  labels?: null | Record<string, string>;
+  options?: null | Record<string, string>;
 }
 
 export interface CreateNetworkView {
@@ -1293,9 +1392,9 @@ export interface CreateStackInput {
 
 export interface CreateTeamInput {
   name: string;
-  userIds?: null | any[];
-  roleIds?: null | any[];
-  resourceAccesses?: null | any[];
+  userIds?: null | string[];
+  roleIds?: null | string[];
+  resourceAccesses?: null | TeamResourceAccessInput[];
 }
 
 export interface CreateUserInput {
@@ -1304,9 +1403,9 @@ export interface CreateUserInput {
   password: string;
   /** @default true */
   isEnabled?: boolean;
-  teamIds?: null | any[];
-  roleIds?: null | any[];
-  resourceAccesses?: null | any[];
+  teamIds?: null | string[];
+  roleIds?: null | string[];
+  resourceAccesses?: null | UserResourceAccessInput[];
 }
 
 export interface CreateVolumeInput {
@@ -1314,8 +1413,8 @@ export interface CreateVolumeInput {
   platformId: string;
   name: string;
   driver: string;
-  labels?: null | object;
-  options?: null | object;
+  labels?: null | Record<string, string>;
+  options?: null | Record<string, string>;
 }
 
 export interface DeleteAlertChannelsInput {
@@ -1414,15 +1513,6 @@ export interface DeploymentConfigView {
   spec: DeploymentSpec;
 }
 
-export type DeploymentImageInfo = BaseDeploymentImageInfo &
-  (
-    | BaseDeploymentImageInfoTypeMapping<"Local", DeploymentImageInfoLocalImage>
-    | BaseDeploymentImageInfoTypeMapping<
-        "External",
-        DeploymentImageInfoExternalImage
-      >
-  );
-
 export interface DeploymentImageInfoExternalImage {
   $type?: "External";
   /** @format uuid */
@@ -1437,7 +1527,7 @@ export interface DeploymentImageInfoLocalImage {
 }
 
 export interface DeploymentResultSnapshot {
-  containerIds?: null | any[];
+  containerIds?: null | string[];
   message?: null | string;
 }
 
@@ -1456,12 +1546,12 @@ export interface DeploymentSpec {
   updateBehavior: UpdateBehavior;
   lifeCycleSpec?: null | LifeCycleSpec;
   resourceSpec?: null | ResourceSpec;
-  labels?: null | object;
-  ports?: null | any[];
-  envVars?: null | any[];
-  volumes?: null | any[];
-  networks?: null | any[];
-  command?: null | any[];
+  labels?: null | Record<string, string>;
+  ports?: null | string[];
+  envVars?: null | string[];
+  volumes?: null | string[];
+  networks?: null | string[];
+  command?: null | string[];
 }
 
 export interface DeploymentStreamItem {
@@ -1688,22 +1778,6 @@ export interface GitAccountsView {
   gitAccounts: GitAccountView[];
 }
 
-export type GitAuthConfiguration = BaseGitAuthConfiguration &
-  (
-    | BaseGitAuthConfigurationTypeMapping<
-        "Basic",
-        GitAuthConfigurationBasicAuth
-      >
-    | BaseGitAuthConfigurationTypeMapping<
-        "Token",
-        GitAuthConfigurationTokenAuth
-      >
-    | BaseGitAuthConfigurationTypeMapping<
-        "SshKey",
-        GitAuthConfigurationSshKeyAuth
-      >
-  );
-
 export interface GitAuthConfigurationBasicAuth {
   $type?: "Basic";
   username: string;
@@ -1738,7 +1812,7 @@ export interface GitHubCrPackageVersion {
 }
 
 export interface GitHubCrPackageVersionContainerMetadata {
-  tags: null | any[];
+  tags: null | string[];
 }
 
 export interface GitHubCrPackageVersionMetadata {
@@ -1956,18 +2030,6 @@ export interface HttpValidationProblemDetails {
   errors?: Record<string, string[]>;
 }
 
-export type IImageRepository = BaseIImageRepository &
-  (
-    | BaseIImageRepositoryTypeMapping<
-        "GitHub",
-        IImageRepositoryGitHubPackageResponse
-      >
-    | BaseIImageRepositoryTypeMapping<
-        "DockerHub",
-        IImageRepositoryDockerHubRepositoryResponse
-      >
-  );
-
 export interface IImageRepositoryDockerHubRepositoryResponse {
   $type?: "DockerHub";
   name?: string;
@@ -2000,8 +2062,8 @@ export interface IPAMConfigInput {
 
 export interface IPAMInput {
   driver: string;
-  config?: null | any[];
-  options?: null | object;
+  config?: null | IPAMConfigInput[];
+  options?: null | Record<string, string>;
 }
 
 export interface ImagePullError {
@@ -2309,9 +2371,9 @@ export interface PatchAlertRuleInput {
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   threshold?: null | number | string;
-  channelIds?: null | any[];
-  limitedTo?: null | any[];
-  quietHours?: null | any[];
+  channelIds?: null | string[];
+  limitedTo?: null | AlertRuleLimitedTo[];
+  quietHours?: null | AlertRuleQuietHour[];
 }
 
 export interface PatchDeploymentInput {
@@ -2354,18 +2416,18 @@ export interface PatchStackInput {
 
 export interface PatchTeamInput {
   isEnabled: null | boolean;
-  userIds: null | any[];
-  roleIds: null | any[];
-  resourceAccesses: null | any[];
+  userIds: null | string[];
+  roleIds: null | string[];
+  resourceAccesses: null | TeamResourceAccessInput[];
 }
 
 export interface PatchUserInput {
   email: null | string;
   password: null | string;
   isEnabled: null | boolean;
-  teamIds: null | any[];
-  roleIds: null | any[];
-  resourceAccesses: null | any[];
+  teamIds: null | string[];
+  roleIds: null | string[];
+  resourceAccesses: null | UserResourceAccessInput[];
 }
 
 export interface PermissionInput {
@@ -2377,22 +2439,6 @@ export interface PermissionView {
   resourceType: ResourceType;
   resourceAction: ResourceAction;
 }
-
-export type PlatformDescriptor = BasePlatformDescriptor &
-  (
-    | BasePlatformDescriptorTypeMapping<
-        "Docker",
-        PlatformDescriptorDockerPlatformDescriptor
-      >
-    | BasePlatformDescriptorTypeMapping<
-        "DockerSwarm",
-        PlatformDescriptorDockerSwarmPlatformDescriptor
-      >
-    | BasePlatformDescriptorTypeMapping<
-        "Kubernetes",
-        PlatformDescriptorKubernetesPlatformDescriptor
-      >
-  );
 
 export interface PlatformDescriptorDockerPlatformDescriptor {
   $type?: "Docker";
@@ -2441,7 +2487,7 @@ export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
    */
   managers: number | string;
   error?: null | string;
-  remoteManagers?: null | any[];
+  remoteManagers?: null | SwarmPeer[];
   daemonId: string;
   /**
    * @format int64
@@ -2548,7 +2594,7 @@ export interface PlatformView {
   type: PlatformType;
   status: PlatformStatus;
   connectorType: PlatformConnectorType;
-  stats: null | any[];
+  stats: null | PlatformStatView[];
   platformDescriptor: null | PlatformDescriptor;
 }
 
@@ -2617,34 +2663,6 @@ export interface RegistryConfigView {
   description: string;
   configuration: null | RegistryConfiguration;
 }
-
-export type RegistryConfiguration = BaseRegistryConfiguration &
-  (
-    | BaseRegistryConfigurationTypeMapping<
-        "AWS",
-        RegistryConfigurationAWSRegistry
-      >
-    | BaseRegistryConfigurationTypeMapping<
-        "Azure",
-        RegistryConfigurationAzureRegistry
-      >
-    | BaseRegistryConfigurationTypeMapping<
-        "Gitlab",
-        RegistryConfigurationGitlabRegistry
-      >
-    | BaseRegistryConfigurationTypeMapping<
-        "DockerHub",
-        RegistryConfigurationDockerHubRegistry
-      >
-    | BaseRegistryConfigurationTypeMapping<
-        "GitHub",
-        RegistryConfigurationGitHubRegistry
-      >
-    | BaseRegistryConfigurationTypeMapping<
-        "Custom",
-        RegistryConfigurationCustomRegistry
-      >
-  );
 
 export interface RegistryConfigurationAWSRegistry {
   $type?: "AWS";
@@ -2823,12 +2841,6 @@ export interface StackReleasesView {
   releases: StackReleaseView[];
 }
 
-export type StackSpec = BaseStackSpec &
-  (
-    | BaseStackSpecTypeMapping<"Manual", StackSpecManualStack>
-    | BaseStackSpecTypeMapping<"Git", StackSpecGitStack>
-  );
-
 export interface StackSpecGitStack {
   $type?: "Git";
   /** @format uuid */
@@ -2840,12 +2852,12 @@ export interface StackSpecGitStack {
   /** @default false */
   webHookForceDeploy?: null | boolean;
   webHookSecret?: null | string;
-  composePaths?: null | any[];
-  additionalEnvFileFromRepo?: null | any[];
+  composePaths?: null | string[];
+  additionalEnvFileFromRepo?: null | string[];
   projectName?: null | string;
-  preDeploy?: null | any[];
-  postDeploy?: null | any[];
-  envVars?: null | any[];
+  preDeploy?: null | string[];
+  postDeploy?: null | string[];
+  envVars?: null | string[];
   envFilePath?: null | string;
 }
 
@@ -2854,23 +2866,11 @@ export interface StackSpecManualStack {
   composeFile: string;
   updateBehavior: StackUpdateBehavior;
   projectName?: null | string;
-  preDeploy?: null | any[];
-  postDeploy?: null | any[];
-  envVars?: null | any[];
+  preDeploy?: null | string[];
+  postDeploy?: null | string[];
+  envVars?: null | string[];
   envFilePath?: null | string;
 }
-
-export type StackUpdateState = BaseStackUpdateState &
-  (
-    | BaseStackUpdateStateTypeMapping<
-        "Git",
-        StackUpdateStateGitStackUpdateState
-      >
-    | BaseStackUpdateStateTypeMapping<
-        "Manual",
-        StackUpdateStateManualStackUpdateState
-      >
-  );
 
 export interface StackUpdateStateGitStackUpdateState {
   $type?: "Git";
@@ -3010,8 +3010,8 @@ export interface UserView {
   createdAt: any;
   /** @format uuid */
   createdByActorId: string;
-  teams?: null | any[];
-  roles?: null | any[];
+  teams?: null | string[];
+  roles?: null | string[];
 }
 
 export interface UsersView {
@@ -3093,51 +3093,9 @@ export interface VolumesView {
   volumes: DockerVolumeResult[];
 }
 
-type BaseActivityEventInfo = object;
+type BaseStackUpdateState = object;
 
-type BaseActivityEventInfoTypeMapping<Key, Type> = {
-  $type: Key;
-} & Type;
-
-type BaseAlertEventInfo = object;
-
-type BaseAlertEventInfoTypeMapping<Key, Type> = {
-  $type: Key;
-} & Type;
-
-type BaseAlertRuleQuietHour = object;
-
-type BaseAlertRuleQuietHourTypeMapping<Key, Type> = {
-  $type: Key;
-} & Type;
-
-type BaseDeploymentImageInfo = object;
-
-type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
-  $type: Key;
-} & Type;
-
-type BaseGitAuthConfiguration = object;
-
-type BaseGitAuthConfigurationTypeMapping<Key, Type> = {
-  $type: Key;
-} & Type;
-
-type BaseIImageRepository = object;
-
-type BaseIImageRepositoryTypeMapping<Key, Type> = {
-  $type: Key;
-} & Type;
-
-type BasePlatformDescriptor = object;
-
-type BasePlatformDescriptorTypeMapping<Key, Type> = {
-  $type: Key;
-} & Type;
-
-type BaseRegistryConfiguration = object;
-
-type BaseRegistryConfigurationTypeMapping<Key, Type> = {
+type BaseStackUpdateStateTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -3147,9 +3105,51 @@ type BaseStackSpecTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
-type BaseStackUpdateState = object;
+type BaseRegistryConfiguration = object;
 
-type BaseStackUpdateStateTypeMapping<Key, Type> = {
+type BaseRegistryConfigurationTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BasePlatformDescriptor = object;
+
+type BasePlatformDescriptorTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseIImageRepository = object;
+
+type BaseIImageRepositoryTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseGitAuthConfiguration = object;
+
+type BaseGitAuthConfigurationTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseDeploymentImageInfo = object;
+
+type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseAlertRuleQuietHour = object;
+
+type BaseAlertRuleQuietHourTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseAlertEventInfo = object;
+
+type BaseAlertEventInfoTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseActivityEventInfo = object;
+
+type BaseActivityEventInfoTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -3274,8 +3274,12 @@ export class HttpClient<SecurityDataType = unknown> {
       input !== null && typeof input !== "string"
         ? JSON.stringify(input)
         : input,
-    [ContentType.FormData]: (input: any) =>
-      Object.keys(input || {}).reduce((formData, key) => {
+    [ContentType.FormData]: (input: any) => {
+      if (input instanceof FormData) {
+        return input;
+      }
+
+      return Object.keys(input || {}).reduce((formData, key) => {
         const property = input[key];
         formData.append(
           key,
@@ -3286,7 +3290,8 @@ export class HttpClient<SecurityDataType = unknown> {
               : `${property}`,
         );
         return formData;
-      }, new FormData()),
+      }, new FormData());
+    },
     [ContentType.UrlEncoded]: (input: any) => this.toQueryString(input),
   };
 
@@ -3372,13 +3377,14 @@ export class HttpClient<SecurityDataType = unknown> {
             : payloadFormatter(body),
       },
     ).then(async (response) => {
-      const r = response.clone() as HttpResponse<T, E>;
+      const r = response as HttpResponse<T, E>;
       r.data = null as unknown as T;
       r.error = null as unknown as E;
 
+      const responseToParse = responseFormat ? response.clone() : response;
       const data = !responseFormat
         ? r
-        : await response[responseFormat]()
+        : await responseToParse[responseFormat]()
             .then((data) => {
               if (r.ok) {
                 r.data = data;

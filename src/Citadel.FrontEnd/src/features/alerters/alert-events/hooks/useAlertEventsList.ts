@@ -1,15 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AlertEventStatus, AlertEventView, PagedResultViewOfAlertEventView } from '@/api/generated/api.types';
+import { useMemo } from 'react';
+import { AlertEventStatus, AlertEventView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useAlertEventQuery } from '@/lib/atoms';
 import { ResourceType } from '@/api/types';
 import { useAppContext } from '@/lib/context/app-context';
 
-export const useAlertEventsList = (
-  resourceId?: string | undefined,
-  resourceType?: ResourceType | undefined,
-  pageSize?: number | undefined,
-) => {
+export const useAlertEventsList = (resourceId?: string, resourceType?: ResourceType, pageSize?: number) => {
   const [query] = useAlertEventQuery();
   const { liveAlertEvents, receivedAlertEventIds } = useAppContext();
 
@@ -24,17 +20,13 @@ export const useAlertEventsList = (
     },
   });
 
-  const [serverPagedAlertEvents, setServerPagedAlertEvents] = useState<PagedResultViewOfAlertEventView | undefined>();
-
-  useEffect(() => {
-    if (!data) return;
-    setServerPagedAlertEvents(data.data.pagedResult);
-  }, [data]);
+  const serverPagedAlertEvents = data?.data?.pagedResult;
 
   const pagedAlertEvents = useMemo(() => {
     if (!serverPagedAlertEvents) return undefined;
 
     const pageSizeValue = Number(serverPagedAlertEvents.pageSize ?? 0) || serverPagedAlertEvents.items.length || 1;
+
     const seen = new Set<string>();
 
     const matchesFilters = (alertEvent: AlertEventView) => {
@@ -51,20 +43,20 @@ export const useAlertEventsList = (
 
     const receivedItems = receivedAlertEventIds
       .map((id) => liveAlertEvents[id])
-      .filter((alertEvent): alertEvent is AlertEventView => !!alertEvent)
+      .filter((a): a is AlertEventView => !!a)
       .filter(matchesFilters)
-      .filter((alertEvent) => {
-        if (seen.has(alertEvent.id)) return false;
-        seen.add(alertEvent.id);
+      .filter((a) => {
+        if (seen.has(a.id)) return false;
+        seen.add(a.id);
         return true;
       });
 
     const baseItems = (serverPagedAlertEvents.items ?? [])
       .map((item) => liveAlertEvents[item.id] ?? item)
       .filter(matchesFilters)
-      .filter((alertEvent) => {
-        if (seen.has(alertEvent.id)) return false;
-        seen.add(alertEvent.id);
+      .filter((a) => {
+        if (seen.has(a.id)) return false;
+        seen.add(a.id);
         return true;
       });
 
@@ -74,7 +66,7 @@ export const useAlertEventsList = (
     }).length;
 
     const addedReceivedItems = receivedItems.filter(
-      (alertEvent) => !(serverPagedAlertEvents.items ?? []).some((item) => item.id === alertEvent.id),
+      (a) => !(serverPagedAlertEvents.items ?? []).some((item) => item.id === a.id),
     ).length;
 
     return {

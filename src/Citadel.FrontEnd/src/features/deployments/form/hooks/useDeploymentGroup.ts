@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { DeploymentView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
@@ -6,34 +6,34 @@ import { useRead } from '@/lib/hooks';
 
 export const useDeploymentGroup = (deploymentId: string) => {
   const { data, isLoading } = useRead('getDeployment', { deploymentId });
-  const [deployment, setDeployment] = useState<DeploymentView | undefined>();
+  const [deploymentUpdate, setDeploymentUpdate] = useState<Partial<DeploymentView> | null>(null);
 
-  useEffect(() => {
-    if (!data) return;
-    setDeployment(data.data);
-  }, [data]);
+  const deployment = useMemo(() => {
+    if (!data?.data) return undefined;
+    if (!deploymentUpdate) return data.data;
+    return { ...data.data, ...deploymentUpdate };
+  }, [data, deploymentUpdate]);
+
   const handleDeploymentInfoUpdated = useCallback((deployment: DeploymentView) => {
-    const info = (deployment?.latestActivityView?.info as any)?.[1]; // SignalR poly mapping
-    if (info) info.$type = (deployment?.latestActivityView?.info as any)?.[0];
+    const info = (deployment?.latestActivityView?.info as any)?.[1];
+    if (info) {
+      info.$type = (deployment?.latestActivityView?.info as any)?.[0];
+    }
 
-    setDeployment((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        name: deployment.name,
-        status: deployment.status,
-        description: deployment.description,
-        dockerContainerId: deployment.dockerContainerId,
-        containerId: deployment.containerId,
-        controlState: deployment.controlState,
-        autoUpdateState: deployment.autoUpdateState,
-        platformStatus: deployment.platformStatus,
-        platformName: deployment.platformName,
-        imageName: deployment.imageName,
-        imageId: deployment.imageId,
-        dockerImageId: deployment.dockerImageId,
-        latestActivityView: deployment.latestActivityView ? { ...deployment.latestActivityView, info } : null,
-      };
+    setDeploymentUpdate({
+      name: deployment.name,
+      status: deployment.status,
+      description: deployment.description,
+      dockerContainerId: deployment.dockerContainerId,
+      containerId: deployment.containerId,
+      controlState: deployment.controlState,
+      autoUpdateState: deployment.autoUpdateState,
+      platformStatus: deployment.platformStatus,
+      platformName: deployment.platformName,
+      imageName: deployment.imageName,
+      imageId: deployment.imageId,
+      dockerImageId: deployment.dockerImageId,
+      latestActivityView: deployment.latestActivityView ? { ...deployment.latestActivityView, info } : null,
     });
   }, []);
 

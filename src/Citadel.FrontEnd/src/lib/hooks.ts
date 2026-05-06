@@ -1,6 +1,5 @@
 import { resources } from '@/api/generated/resources';
 import {
-  MutationFunction,
   useMutation,
   UseMutationOptions,
   UseMutationResult,
@@ -86,7 +85,7 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
   const mutation = useMutation<ResourceResponse<TResource>, Error, TVariables>({
     mutationKey: [resource],
     ...options,
-    mutationFn: ((variables: TVariables) => {
+    mutationFn: (variables: TVariables) => {
       const v: any = variables;
       const paramNames = resDef.params ?? [];
       const requiredParamNames = resDef.requiredParams ?? [];
@@ -115,8 +114,8 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
         }
       }
 
-      return fn(...args);
-    }) as MutationFunction<ResourceResponse<TResource>, TVariables>,
+      return fn(...args) as Promise<ResourceResponse<TResource>>;
+    },
   });
 
   const validationErrors = useGetValidationErrors(mutation.error);
@@ -232,12 +231,6 @@ export function useStickySentinel(topOffsetPx: number = 0) {
   const sentinelRef = useCallback((el: HTMLDivElement | null) => {
     setNode(el);
   }, []);
-
-  useLayoutEffect(() => {
-    if (!node) return;
-    const rect = node.getBoundingClientRect();
-    setIsStuck(rect.top <= topOffsetPx);
-  }, [topOffsetPx, node]);
 
   useEffect(() => {
     if (!node) return;
@@ -371,7 +364,7 @@ export const useWindowDimensions = () => {
 
 type PulledStreamProps = PullImageInput | ApplyDeploymentInput;
 
-const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: string) => {
+const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: string, onMutate?: () => void) => {
   const { apiClient } = useApiClientContext();
   const { accessToken } = useAuthContext();
 
@@ -422,7 +415,7 @@ const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: str
     }
   };
 
-  const { mutate, isPending, isSuccess, error } = useMutation({ mutationFn });
+  const { mutate, isPending, isSuccess, error } = useMutation({ mutationFn, onMutate });
 
   const validationErrors = useGetValidationErrors(error);
 
@@ -591,7 +584,17 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
     [getError],
   );
 
-  const { isPending, isSuccess, error: streamError, mutate } = usePulledStream(handleChunkReceived, endpoint);
+  const resetTimer = useCallback(() => {
+    startRef.current = null;
+    setElapsedMs(0);
+  }, []);
+
+  const {
+    isPending,
+    isSuccess,
+    error: streamError,
+    mutate,
+  } = usePulledStream(handleChunkReceived, endpoint, resetTimer);
 
   const text = useMemo(() => {
     const activeLines = Array.from(activeItems.values());
@@ -606,11 +609,9 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   useEffect(() => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
-
     startRef.current = null;
-    setElapsedMs(0);
-
     mutate({ ...request, signal: controller.signal });
+
     return () => {
       controller.abort();
     };

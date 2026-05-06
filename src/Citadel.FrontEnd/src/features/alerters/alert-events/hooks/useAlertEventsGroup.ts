@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { AlertEventView, UnresolvedAlertsCountView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
@@ -6,16 +6,17 @@ import { HubConnection } from '@microsoft/signalr';
 
 export function useAlertEventsGroup() {
   const { data } = useRead('getUnresolvedAlertEventsCount');
-  const [unresolvedAlertCount, setUnresolvedAlertCount] = useState(0);
+
+  const [liveUnresolvedAlertCount, setLiveUnresolvedAlertCount] = useState<number | null>(null);
   const [liveAlertEvents, setLiveAlertEvents] = useState<Record<string, AlertEventView>>({});
   const [receivedAlertEventIds, setReceivedAlertEventIds] = useState<string[]>([]);
 
-  useEffect(() => {
+  const unresolvedAlertCount = useMemo(() => {
+    if (liveUnresolvedAlertCount !== null) return liveUnresolvedAlertCount;
+
     const initialCount = Number(data?.data?.count ?? 0);
-    if (!Number.isNaN(initialCount)) {
-      setUnresolvedAlertCount(initialCount);
-    }
-  }, [data]);
+    return Number.isNaN(initialCount) ? 0 : initialCount;
+  }, [data, liveUnresolvedAlertCount]);
 
   const handleAlertEventReceived = useCallback((alertEvent: AlertEventView) => {
     setLiveAlertEvents((prev) => ({ ...prev, [alertEvent.id]: alertEvent }));
@@ -35,7 +36,7 @@ export function useAlertEventsGroup() {
   }, []);
 
   const handleUnresolvedAlertCount = useCallback((unresolvedCounts: UnresolvedAlertsCountView) => {
-    setUnresolvedAlertCount(Number(unresolvedCounts.count ?? 0));
+    setLiveUnresolvedAlertCount(Number(unresolvedCounts.count ?? 0));
   }, []);
 
   const setupEventListeners = useCallback(

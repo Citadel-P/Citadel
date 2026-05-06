@@ -43,7 +43,7 @@ const GitAccountSelector = ({
       value={value ?? '__none__'}
       onValueChange={(v) => onChange(v === '__none__' ? null : v)}
       disabled={disabled}>
-      <SelectTrigger className="w-full max-w-[400px]">
+      <SelectTrigger className="w-full max-w-100">
         <SelectValue placeholder="Select a Git account (optional)">
           {value ? (accounts.find((a) => a.id === value)?.name ?? 'Unknown') : 'No account'}
         </SelectValue>

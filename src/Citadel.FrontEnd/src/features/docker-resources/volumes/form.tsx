@@ -77,7 +77,7 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
                 }))
               }
               value={value}>
-              <SelectTrigger className="w-full max-w-[400px]">
+              <SelectTrigger className="w-full max-w-100">
                 <SelectValue placeholder="Select driver type" />
               </SelectTrigger>
 

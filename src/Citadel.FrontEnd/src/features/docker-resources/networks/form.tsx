@@ -118,7 +118,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
           required: true,
           render: (value, set) => (
             <Select onValueChange={(v) => set({ driver: v })} value={value}>
-              <SelectTrigger className="w-full max-w-[400px]">
+              <SelectTrigger className="w-full max-w-100">
                 <SelectValue placeholder="Select driver" />
               </SelectTrigger>
               <SelectContent className="bg-background">

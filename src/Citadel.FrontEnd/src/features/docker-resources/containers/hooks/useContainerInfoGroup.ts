@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
@@ -8,21 +8,22 @@ import { PlatformStatus, ProblemDetails } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 
 export const useContainerInfoGroup = (containerId?: string, platformId?: string) => {
-  const [error, setError] = useState<{ error: ProblemDetails } | undefined>(undefined);
   const nid = normalizeDockerId(containerId);
   const { currentPlatform } = useAppContext();
   const [containerInfo, setContainerInfo] = useState<DockerContainerView | undefined>();
-  useEffect(() => {
+
+  const error = useMemo(() => {
     if (currentPlatform?.status === PlatformStatus.Offline) {
-      setError({
+      return {
         error: {
           detail: 'Platform is disconnected or unavailable.',
           status: 404,
           title: 'Not Found',
-        },
-      });
+        } as ProblemDetails,
+      };
     }
-  }, [currentPlatform]);
+    return undefined;
+  }, [currentPlatform?.status]);
 
   const onContainerEvent = useCallback(
     (event: ContainerEvent) => {
@@ -78,5 +79,5 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
     skip: !nid,
   });
 
-  return { containerInfo, isLoading, error: error };
+  return { containerInfo, isLoading, error };
 };

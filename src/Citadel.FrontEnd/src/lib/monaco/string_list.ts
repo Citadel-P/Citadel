@@ -49,7 +49,7 @@ const string_list_language = {
 };
 
 export const registerStringList = (monaco: Monaco) => {
-  if (monaco.languages.getLanguages().some((l) => l.id === 'string_list')) {
+  if (monaco.languages.getLanguages().some((l: any) => l.id === 'string_list')) {
     return;
   }
 
