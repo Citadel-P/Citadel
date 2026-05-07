@@ -69,6 +69,7 @@ export interface RequiredFormComponents<T = any> {
       Indicator: React.FC<{ resource: T }>;
       ActionButtons: React.FC<{ resource: T }>;
     };
+    skipMetadataUpdate?: boolean;
     /** Optional subheader */
     SubHeader?: React.FC<{ resource: T }>;
     /** Tabs configuration */

@@ -1,4 +1,4 @@
-import { PatchUserInput, CreateUserInput } from '@/api/generated/api.types';
+import { PatchUserInput, CreateUserInput, UserResourceAccessInput } from '@/api/generated/api.types';
 import {
   FormShell,
   defineField,
@@ -11,6 +11,7 @@ import {
 } from '@/components/custom/form-builder';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { useTeamsList } from '@/features/access/teams/hooks/useTeamsList';
+import { ResourceOverridesField } from '@/features/access/overrides/resource-overrides-field';
 import { Constants } from '@/lib/constants';
 import { useState, useMemo } from 'react';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
@@ -113,6 +114,11 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
                 key: 'email',
                 label: 'Email',
                 required: true,
+                validate: (value) => {
+                  const email = String(value ?? '').trim();
+                  if (!email) return 'Required';
+                  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? null : 'Invalid email address';
+                },
                 render: (value, set) => (
                   <FieldInput
                     type="email"
@@ -140,6 +146,11 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
                 key: 'password',
                 label: 'Password',
                 required: true,
+                validate: (value) => {
+                  const password = String(value ?? '');
+                  if (!password) return 'Required';
+                  return password.length < 6 ? 'Password must be at least 6 characters long' : null;
+                },
                 render: (value, set) => (
                   <FieldInput type="password" value={value ?? ''} onChange={(v) => set({ password: v })} />
                 ),
@@ -149,8 +160,11 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
                 field: {
                   key: 'confirmPassword' as any,
                   label: 'Confirm Password',
-                  required: true,
-                  validate: () => null,
+                  validate: () => {
+                    const pwd = (update as Partial<CreateUserInput>).password ?? '';
+                    if (confirmPassword.length === 0) return 'Required';
+                    return confirmPassword !== pwd ? 'Passwords do not match' : null;
+                  },
                   render: (_value: any, _set: FieldChange<UserInput>) => {
                     const pwd = (update as Partial<CreateUserInput>).password ?? '';
                     const mismatch = confirmPassword.length > 0 && confirmPassword !== pwd;
@@ -219,7 +233,12 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
             label: 'Overrides',
             description:
               'Grant this user direct access to specific resources outside of their team and role assignments.',
-            render: (value, set) => <>todo</>,
+            render: (value, set) => (
+              <ResourceOverridesField
+                value={(value as UserResourceAccessInput[] | null) ?? []}
+                onChange={(next) => set({ resourceAccesses: next })}
+              />
+            ),
           }),
         ],
       }),

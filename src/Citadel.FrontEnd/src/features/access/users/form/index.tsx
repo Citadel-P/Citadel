@@ -11,10 +11,12 @@ export const UserFormComponents: RequiredFormComponents = {
     Content: () => <UserForm mode="add" />,
   },
   EditForm: {
+    skipMetadataUpdate: true,
     Header: {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
         return <StateIndicator value={resource.status as any} />;
       },
+      ActionButtons: () => null,
     },
     Tabs: [
       {

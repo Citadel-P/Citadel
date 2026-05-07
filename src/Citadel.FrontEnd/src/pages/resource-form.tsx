@@ -23,9 +23,16 @@ export const ResourceForm = ({ mode }: { mode: 'add' | 'edit' }) => {
   const { type, tab } = useResourceParamType();
   if (!type) return <NotFound />;
 
+  const resolvedType = tab ?? type;
+  const formComponents = ResourceFormComponents[resolvedType];
+
   return (
     <PageShell mode={mode}>
-      {mode === 'add' ? <AddFormPage type={tab ?? type} /> : <EditFormPage type={tab ?? type} />}
+      {mode === 'add' ? (
+        <AddFormPage type={resolvedType} />
+      ) : (
+        <EditFormPage type={resolvedType} skipMetadataUpdate={formComponents?.EditForm?.skipMetadataUpdate} />
+      )}
     </PageShell>
   );
 };
@@ -43,9 +50,8 @@ const AddFormPage = ({ type }: { type: ResourceType }) => {
   );
 };
 
-const EditFormPage = ({ type }: { type: ResourceType }) => {
+const EditFormPage = ({ type, skipMetadataUpdate = false }: { type: ResourceType; skipMetadataUpdate?: boolean }) => {
   const { id } = useParams();
-  const { mutateAsync: updateMetadata } = useMutate(`update${type}Metadata` as any);
   const { mutateAsync: renameResource } = useMutate(`rename${type}` as any);
 
   const Components = ResourceFormComponents[type]?.EditForm;
@@ -55,9 +61,28 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
 
   if (isLoading || !item) return <Loader />;
 
+  const Content = skipMetadataUpdate ? EditFormContent : EditFormPageWithMetadata;
+
+  return <Content key={id} id={id!} item={item} renameResource={renameResource} Components={Components} type={type} />;
+};
+
+const EditFormPageWithMetadata = ({
+  id,
+  item,
+  renameResource,
+  Components,
+  type,
+}: {
+  id: string;
+  item: RequiredFormFields;
+  renameResource: (variables: { id: string; name: string }) => Promise<any>;
+  Components: any;
+  type: ResourceType;
+}) => {
+  const { mutateAsync: updateMetadata } = useMutate(`update${type}Metadata` as any);
+
   return (
     <EditFormContent
-      key={id}
       id={id!}
       item={item}
       updateMetadata={updateMetadata}
@@ -78,7 +103,7 @@ const EditFormContent = ({
 }: {
   id: string;
   item: RequiredFormFields;
-  updateMetadata: (variables: { id: string; data: Partial<PatchResourceMetadata> }) => Promise<any>;
+  updateMetadata?: (variables: { id: string; data: Partial<PatchResourceMetadata> }) => Promise<any>;
   renameResource: (variables: { id: string; name: string }) => Promise<any>;
   Components: any;
   type: ResourceType;
@@ -93,6 +118,7 @@ const EditFormContent = ({
   const invalidateRelatedQueries = () => queryClient.invalidateQueries();
 
   const handleUpdateMetadata = async (patch: Partial<PatchResourceMetadata>) => {
+    if (!updateMetadata) return;
     await updateMetadata({ id, data: patch });
     await invalidateRelatedQueries();
     setMetaDataChanged(true);
@@ -113,7 +139,7 @@ const EditFormContent = ({
         Indicator={Header.Indicator}
         Actions={Header.ActionButtons}
         onRename={(name) => handleRenameResource(name)}
-        onChangeDescription={(description) => handleUpdateMetadata({ description })}
+        onChangeDescription={updateMetadata ? (description) => handleUpdateMetadata({ description }) : undefined}
       />
       {Components.SubHeader && <Components.SubHeader resource={item} />}
       <ResourceTabs localKey={localKey} resource={item} tabs={tabs} metadataChanged={metadatChanged} />
@@ -146,7 +172,7 @@ type EditHeaderProps<T> = {
   Indicator: React.ComponentType<{ resource: T }>;
   Actions: React.ComponentType<{ resource: T }>;
   onRename: (name: string) => void;
-  onChangeDescription: (description: string) => void;
+  onChangeDescription?: (description: string) => void;
 };
 
 const EditHeader = <T extends RequiredFormFields>({
