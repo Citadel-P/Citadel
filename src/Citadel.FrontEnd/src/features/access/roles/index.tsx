@@ -1,4 +1,13 @@
-import { RoleView, RoleType, ResourceType, ResourceAction, PermissionInput } from '@/api/generated/api.types';
+import {
+  RoleView,
+  RoleType,
+  ResourceType,
+  PermissionLevel,
+  SpecificPermission,
+  PermissionInput,
+  PermissionView,
+  PermissionMatrixViewItem,
+} from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
 import { Button } from '@/components/ui/button';
@@ -13,17 +22,27 @@ import {
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useLocalStorage, useMutate, useRead } from '@/lib/hooks';
-import { Lock, Plus, Loader2, Trash } from 'lucide-react';
-import { useState } from 'react';
+import { Lock, Plus, Loader2, Trash, BoxIcon } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { atom, useAtom } from 'jotai';
 import { useQueryClient } from '@tanstack/react-query';
 import { CitadelIcons } from '@/lib/icons';
 
-type PermissionMatrix = Record<string, string[]>;
+type PermissionMatrix = Record<string, PermissionMatrixViewItem>;
+
+type ResourcePermissionState = {
+  permissionLevel: PermissionLevel | null;
+  specificPermissions: SpecificPermission[];
+};
+
+type SelectedPermissions = Record<string, ResourcePermissionState>;
 
 const EMPTY_MATRIX: PermissionMatrix = {};
+const PERMISSION_LEVELS: PermissionLevel[] = [PermissionLevel.Read, PermissionLevel.Write, PermissionLevel.Execute];
+
 type ResourceIcon = React.ComponentType<{ className?: string }>;
 
 const createRoleOpenAtom = atom(false);
@@ -41,18 +60,52 @@ export const RESOURCE_ICONS: Record<ResourceType, ResourceIcon> = {
   Platform: CitadelIcons.Platform,
   Deployment: CitadelIcons.Deployment,
   Stack: CitadelIcons.Stack,
-
+  Image: BoxIcon,
   Registry: CitadelIcons.Registry,
   GitRepository: CitadelIcons.GitRepository,
   GitAccount: CitadelIcons.GitAccount,
-
   Alert: CitadelIcons.Alert,
   AlertChannel: CitadelIcons.AlertChannel,
-
   User: CitadelIcons.User,
   Team: CitadelIcons.Team,
   Role: CitadelIcons.Role,
 };
+
+const buildPermissionsFromView = (permissions: PermissionView[]): SelectedPermissions => {
+  const result: SelectedPermissions = {};
+  for (const perm of permissions) {
+    result[perm.resourceType] = {
+      permissionLevel: perm.permissionLevel,
+      specificPermissions: perm.specificPermissions ?? [],
+    };
+  }
+  return result;
+};
+
+const buildPermissionInputs = (selected: SelectedPermissions): PermissionInput[] =>
+  Object.entries(selected)
+    .filter(([, state]) => state.permissionLevel)
+    .map(([resourceType, state]) => ({
+      resourceType: resourceType as ResourceType,
+      permissionLevel: state.permissionLevel!,
+      specificPermissions: state.specificPermissions.length > 0 ? state.specificPermissions : null,
+    }));
+
+const updatePermissionState = (
+  selected: SelectedPermissions,
+  resource: string,
+  permissionLevel: PermissionLevel | null,
+  specificPermissions: SpecificPermission[],
+): SelectedPermissions => {
+  const nextSelected = { ...selected };
+  if (permissionLevel) {
+    nextSelected[resource] = { permissionLevel, specificPermissions };
+  } else {
+    delete nextSelected[resource];
+  }
+  return nextSelected;
+};
+
 export const Roles = ({ items, isLoading }: { items: RoleView[]; isLoading: boolean }) => {
   const roles = items ?? [];
   const queryClient = useQueryClient();
@@ -154,33 +207,16 @@ const RoleDetail = ({ role, permissionMatrix }: { role: RoleView; permissionMatr
       queryClient.invalidateQueries({ queryKey: ['listRoles'] });
     },
   });
-  const permissions = role.permissions ?? [];
+  const permissions = useMemo(() => (role.permissions ?? []) as PermissionView[], [role.permissions]);
+  const selectedPermissions = useMemo(() => buildPermissionsFromView(permissions), [permissions]);
 
-  const selectedByResource = permissions.reduce<Record<string, string[]>>((acc, p) => {
-    const key = String(p.resourceType);
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(String(p.resourceAction));
-    return acc;
-  }, {});
-
-  const handleChange = (resource: string, values: string[]) => {
-    const nextSelectedByResource = {
-      ...selectedByResource,
-      [resource]: values,
-    };
-
-    const nextPermissions: PermissionInput[] = Object.entries(nextSelectedByResource).flatMap(
-      ([resourceType, resourceActions]) =>
-        resourceActions.map((resourceAction) => ({
-          resourceType: resourceType as ResourceType,
-          resourceAction: resourceAction as ResourceAction,
-        })),
-    );
-
-    updatePermissions({
-      id: role.id,
-      data: { permissions: nextPermissions },
-    });
+  const handleChange = (
+    resource: string,
+    permissionLevel: PermissionLevel | null,
+    specificPermissions: SpecificPermission[],
+  ) => {
+    const nextSelected = updatePermissionState(selectedPermissions, resource, permissionLevel, specificPermissions);
+    updatePermissions({ id: role.id, data: { permissions: buildPermissionInputs(nextSelected) } });
   };
 
   return (
@@ -211,8 +247,8 @@ const RoleDetail = ({ role, permissionMatrix }: { role: RoleView; permissionMatr
         <h6 className="font-medium mb-4">Permissions Matrix</h6>
         <PermissionsMatrixTable
           permissionMatrix={permissionMatrix}
-          selectedByResource={selectedByResource}
-          onResourceChange={handleChange}
+          selectedPermissions={selectedPermissions}
+          onPermissionChange={handleChange}
           disabled={role.roleType === RoleType.System}
         />
       </div>
@@ -236,23 +272,21 @@ const CreateRoleDialog = ({
       queryClient.invalidateQueries({ queryKey: ['listRoles'] });
       onOpenChange(false);
       setRoleName('');
-      setSelectedByResource({});
+      setSelectedPermissions({});
     },
   });
-  const [selectedByResource, setSelectedByResource] = useState<Record<string, string[]>>({});
+  const [selectedPermissions, setSelectedPermissions] = useState<SelectedPermissions>({});
 
-  const handleResourceChange = (resource: string, values: string[]) => {
-    setSelectedByResource((prev) => ({ ...prev, [resource]: values }));
+  const handlePermissionChange = (
+    resource: string,
+    permissionLevel: PermissionLevel | null,
+    specificPermissions: SpecificPermission[],
+  ) => {
+    setSelectedPermissions((prev) => updatePermissionState(prev, resource, permissionLevel, specificPermissions));
   };
 
   const handleCreate = () => {
-    const permissions: PermissionInput[] = Object.entries(selectedByResource).flatMap(([resourceType, actions]) =>
-      actions.map((resourceAction) => ({
-        resourceType: resourceType as ResourceType,
-        resourceAction: resourceAction as ResourceAction,
-      })),
-    );
-
+    const permissions = buildPermissionInputs(selectedPermissions);
     mutate({ name: roleName, permissions });
   };
 
@@ -282,8 +316,8 @@ const CreateRoleDialog = ({
             <div className="overflow-y-auto flex-1">
               <PermissionsMatrixTable
                 permissionMatrix={permissionMatrix}
-                selectedByResource={selectedByResource}
-                onResourceChange={handleResourceChange}
+                selectedPermissions={selectedPermissions}
+                onPermissionChange={handlePermissionChange}
               />
             </div>
           </div>
@@ -304,21 +338,19 @@ const CreateRoleDialog = ({
 
 const PermissionsMatrixTable = ({
   permissionMatrix,
-  selectedByResource,
-  onResourceChange,
+  selectedPermissions,
+  onPermissionChange,
   disabled,
 }: {
   permissionMatrix: PermissionMatrix;
-  selectedByResource: Record<string, string[]>;
-  onResourceChange: (resource: string, values: string[]) => void;
+  selectedPermissions: SelectedPermissions;
+  onPermissionChange: (
+    resource: string,
+    permissionLevel: PermissionLevel | null,
+    specificPermissions: SpecificPermission[],
+  ) => void;
   disabled?: boolean;
 }) => {
-  const buildOptions = (actions: string[]) =>
-    actions.map((a) => ({
-      label: a,
-      value: a,
-    }));
-
   const orderedResources = (Object.keys(RESOURCE_ICONS) as ResourceType[]).filter((r) => permissionMatrix[r]);
 
   return (
@@ -326,42 +358,124 @@ const PermissionsMatrixTable = ({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-55">Resource</TableHead>
-            <TableHead>Permissions</TableHead>
+            <TableHead className="w-48">Resource</TableHead>
+            <TableHead className="w-32">Level</TableHead>
+            <TableHead className="flex-1">Specific</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {orderedResources.map((resource) => {
-            const actions = permissionMatrix[resource];
+            const matrixData = permissionMatrix[resource];
             const Icon = RESOURCE_ICONS[resource];
+            const currentState = selectedPermissions[resource];
 
             return (
-              <TableRow key={resource}>
-                <TableCell className="font-normal text-sm">
-                  <div className="flex items-center gap-3">
-                    <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>{resource}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="max-w-xl">
-                    <MultiSelect
-                      options={buildOptions(actions)}
-                      defaultValue={selectedByResource[resource] ?? []}
-                      onValueChange={(vals) => onResourceChange(resource, vals)}
-                      placeholder={`Select ${resource} permissions`}
-                      maxCount={4}
-                      resetOnDefaultValueChange={true}
-                      animation={0}
-                      disabled={disabled}
-                    />
-                  </div>
-                </TableCell>
-              </TableRow>
+              <PermissionMatrixRow
+                key={resource}
+                resource={resource}
+                icon={Icon}
+                matrixData={matrixData}
+                currentState={currentState}
+                onPermissionChange={onPermissionChange}
+                disabled={disabled}
+              />
             );
           })}
         </TableBody>
       </Table>
     </ContentCard>
+  );
+};
+
+const PermissionMatrixRow = ({
+  resource,
+  icon: Icon,
+  matrixData,
+  currentState,
+  onPermissionChange,
+  disabled,
+}: {
+  resource: ResourceType;
+  icon: ResourceIcon;
+  matrixData: PermissionMatrixViewItem;
+  currentState?: ResourcePermissionState;
+  onPermissionChange: (
+    resource: string,
+    permissionLevel: PermissionLevel | null,
+    specificPermissions: SpecificPermission[],
+  ) => void;
+  disabled?: boolean;
+}) => {
+  const currentLevel = currentState?.permissionLevel ?? null;
+  const currentSpecific = currentState?.specificPermissions ?? [];
+
+  const maxLevelIndex = useMemo(
+    () => PERMISSION_LEVELS.indexOf(matrixData.maximumLevel as PermissionLevel),
+    [matrixData.maximumLevel],
+  );
+  const availableLevels = useMemo(() => PERMISSION_LEVELS.filter((_, i) => i <= maxLevelIndex), [maxLevelIndex]);
+
+  const availableSpecific = useMemo(() => {
+    if (!currentLevel) return [];
+    const currentLevelIndex = PERMISSION_LEVELS.indexOf(currentLevel);
+    return Object.entries(matrixData.specificPermissions)
+      .filter(([, minLevel]) => PERMISSION_LEVELS.indexOf(minLevel as PermissionLevel) <= currentLevelIndex)
+      .map(([perm]) => perm as SpecificPermission);
+  }, [currentLevel, matrixData.specificPermissions]);
+
+  const handlePermissionChange = (level?: string, values?: string[]) => {
+    if (level !== undefined) {
+      const permLevel = level && level !== 'NONE' ? (level as PermissionLevel) : null;
+      const levelIndex = permLevel ? PERMISSION_LEVELS.indexOf(permLevel) : -1;
+      const filtered = permLevel
+        ? currentSpecific.filter(
+            (s) => PERMISSION_LEVELS.indexOf(matrixData.specificPermissions[s] as PermissionLevel) <= levelIndex,
+          )
+        : [];
+      onPermissionChange(resource, permLevel, filtered);
+    } else if (values !== undefined) {
+      onPermissionChange(resource, currentLevel, values as SpecificPermission[]);
+    }
+  };
+
+  return (
+    <TableRow>
+      <TableCell className="font-normal text-sm">
+        <div className="flex items-center gap-3">
+          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          <span>{resource}</span>
+        </div>
+      </TableCell>
+      <TableCell>
+        <Select value={currentLevel ?? 'NONE'} onValueChange={(v) => handlePermissionChange(v)} disabled={disabled}>
+          <SelectTrigger className={currentLevel === null ? 'w-full text-muted-foreground/90' : 'w-full'}>
+            <SelectValue placeholder="Select level" />
+          </SelectTrigger>
+          <SelectContent className="text-xs bg-background">
+            <SelectItem value="NONE">None</SelectItem>
+            {availableLevels.map((level) => (
+              <SelectItem key={level} value={level}>
+                {level}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell>
+        {currentLevel && availableSpecific.length > 0 ? (
+          <MultiSelect
+            options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
+            defaultValue={currentSpecific}
+            onValueChange={(v) => handlePermissionChange(undefined, v)}
+            placeholder="Select capabilities"
+            maxCount={4}
+            animation={0}
+            disabled={disabled}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">{currentLevel ? 'No capabilities' : '—'}</p>
+        )}
+      </TableCell>
+    </TableRow>
   );
 };

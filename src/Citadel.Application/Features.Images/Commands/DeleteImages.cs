@@ -13,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Features.Images.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute)]
 public sealed record DeleteImages(Guid PlatformId, string[] Ids, bool Force = false, bool NoPrune = false) : ICommand<Result<DeleteImageResult>>
 {
     internal class Validator : AbstractValidator<DeleteImages>

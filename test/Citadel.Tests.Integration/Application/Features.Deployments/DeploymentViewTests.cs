@@ -109,7 +109,7 @@ public class DeploymentViewTests(PostgresTestFixture fixture) : IntegrationTestB
         await CreateDeploymentAsync("deployment-hidden");
 
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Deployment, visibleDeploymentId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.Deployment, visibleDeploymentId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",

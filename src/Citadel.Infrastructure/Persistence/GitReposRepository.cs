@@ -125,7 +125,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<GitRepository>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    public async Task<IEnumerable<GitRepository>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
     {
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT * FROM GitRepositories gr WHERE "
             + AuthorizationSql.ResourcePredicatePrefix + "gr.Id" + AuthorizationSql.ResourcePredicateSuffix
@@ -134,8 +134,9 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
         var result = await db.QueryAsync<GitRepositoryDto>(sql, new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel),
+            SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
 

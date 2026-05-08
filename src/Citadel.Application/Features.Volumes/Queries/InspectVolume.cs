@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.Volumes.Queries;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.View)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Result<DockerVolumeResult>>
 {
     internal class Validator : AbstractValidator<InspectVolume>

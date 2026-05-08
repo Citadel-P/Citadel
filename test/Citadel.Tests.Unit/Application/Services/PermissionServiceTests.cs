@@ -13,7 +13,7 @@ public class PermissionServiceTests
     {
         var users = new Mock<IUserRepository>();
         users
-            .Setup(x => x.HasPermissionAsync(It.IsAny<Guid>(), ResourceType.Deployment, ResourceAction.View, null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.HasPermissionAsync(It.IsAny<Guid>(), ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var uow = new Mock<IUnitOfWork>();
@@ -23,12 +23,12 @@ public class PermissionServiceTests
         var service = new PermissionService(uow.Object, memoryCache);
         var userId = Guid.NewGuid();
 
-        var first = await service.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.View, null, CancellationToken.None);
-        var second = await service.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.View, null, CancellationToken.None);
+        var first = await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, CancellationToken.None);
+        var second = await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, CancellationToken.None);
 
         Assert.True(first);
         Assert.True(second);
-        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.View, null, It.IsAny<CancellationToken>()), Times.Once);
+        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public class PermissionServiceTests
     {
         var users = new Mock<IUserRepository>();
         users
-            .Setup(x => x.HasPermissionAsync(It.IsAny<Guid>(), ResourceType.Deployment, ResourceAction.View, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.HasPermissionAsync(It.IsAny<Guid>(), ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var uow = new Mock<IUnitOfWork>();
@@ -47,18 +47,18 @@ public class PermissionServiceTests
         var userId = Guid.NewGuid();
         var resourceId = Guid.NewGuid();
 
-        await service.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.View, resourceId, CancellationToken.None);
-        await service.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.View, resourceId, CancellationToken.None);
+        await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, resourceId, CancellationToken.None);
+        await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, resourceId, CancellationToken.None);
 
-        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.View, resourceId, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, resourceId, It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]
-    public async Task HasPermissionAsync_Should_NotReuseGlobalCache_ForDifferentAction()
+    public async Task HasPermissionAsync_Should_NotReuseGlobalCache_ForDifferentPermissionShape()
     {
         var users = new Mock<IUserRepository>();
         users
-            .Setup(x => x.HasPermissionAsync(It.IsAny<Guid>(), ResourceType.Deployment, It.IsAny<ResourceAction>(), null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.HasPermissionAsync(It.IsAny<Guid>(), ResourceType.Deployment, It.IsAny<PermissionLevel>(), It.IsAny<SpecificPermission>(), null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var uow = new Mock<IUnitOfWork>();
@@ -68,10 +68,10 @@ public class PermissionServiceTests
         var service = new PermissionService(uow.Object, memoryCache);
         var userId = Guid.NewGuid();
 
-        await service.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.View, null, CancellationToken.None);
-        await service.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.Update, null, CancellationToken.None);
+        await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, CancellationToken.None);
+        await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Execute, SpecificPermission.Apply, null, CancellationToken.None);
 
-        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.View, null, It.IsAny<CancellationToken>()), Times.Once);
-        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, ResourceAction.Update, null, It.IsAny<CancellationToken>()), Times.Once);
+        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, It.IsAny<CancellationToken>()), Times.Once);
+        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Execute, SpecificPermission.Apply, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

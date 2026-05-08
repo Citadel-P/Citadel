@@ -11,7 +11,7 @@ using Hosting.Common;
 
 namespace Application.Features.Platforms.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute)]
 public sealed record DeletePlatforms(IEnumerable<Guid> Ids) : ICommand<Result>
 {
     internal sealed class Validator : AbstractValidator<DeletePlatforms>

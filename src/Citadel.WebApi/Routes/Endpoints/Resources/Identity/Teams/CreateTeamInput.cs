@@ -4,9 +4,13 @@ using Hosting.Common;
 
 namespace WebApi.Routes.Endpoints.Resources.Identity.Teams;
 
-public sealed record TeamResourceAccessInput(ResourceType ResourceType, Guid ResourceId, ResourceAction Action)
+public sealed record TeamResourceAccessInput(
+    ResourceType ResourceType,
+    Guid ResourceId,
+    PermissionLevel PermissionLevel,
+    IEnumerable<SpecificPermission>? SpecificPermissions)
 {
-    internal TeamResourceAccessModel ToModel() => new(ResourceType, ResourceId, Action);
+    internal TeamResourceAccessModel ToModel() => new(ResourceType, ResourceId, PermissionLevel, SpecificPermissions);
 }
 
 public sealed record CreateTeamInput(

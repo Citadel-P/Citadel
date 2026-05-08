@@ -6,7 +6,7 @@ using Mediator;
 
 namespace Application.Features.Containers.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Exec)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute, SpecificPermission.Terminal)]
 public sealed record SendContainerExecInput(string GroupId, byte[] Data) : ICommand<Result>;
 
 internal sealed class SendContainerExecInputHandler(IExecSessionManager execSessionManager)

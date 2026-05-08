@@ -8,7 +8,7 @@ using Hosting.Common;
 
 namespace Application.Features.Platforms.Queries;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.View)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record class GetContainers(Guid PlatformId) : IQuery<Result<IEnumerable<Container>>>
 {
     internal class Validator : AbstractValidator<GetContainers>

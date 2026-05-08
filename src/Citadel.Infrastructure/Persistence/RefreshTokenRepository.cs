@@ -5,6 +5,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using Infrastructure.Persistence.Dtos;
+using Infrastructure.Persistence.Mappers;
 
 namespace Infrastructure.Persistence;
 
@@ -62,11 +63,9 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
                 TargetUser.ActorId,
                 '' AS Password,
                 Roles.Name as RoleName, 
-                CASE
-                    WHEN Permissions.ResourceType IS NOT NULL AND Permissions.ResourceAction IS NOT NULL
-                    THEN Permissions.ResourceType || '_' || Permissions.ResourceAction
-                    ELSE NULL
-                END AS PermissionName
+                Permissions.ResourceType::integer AS PermissionResourceType,
+                Permissions.PermissionLevel::integer AS PermissionLevel,
+                Permissions.SpecificPermissions::integer AS SpecificPermissions
             FROM TargetUser
             LEFT JOIN ActorScope ON 1 = 1
             LEFT JOIN ActorRoles ON ActorRoles.ActorId = ActorScope.ActorId
@@ -88,13 +87,6 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
                 null,
                 [.. g.Where(r => !string.IsNullOrWhiteSpace(r.RoleName))
                     .Select(r => r.RoleName!)
-                    .Distinct()],
-                [.. g.Where(r => !string.IsNullOrWhiteSpace(r.PermissionName))
-                    .Select(r => Enum.TryParse<AppPermission>(r.PermissionName, out var permission)
-                        ? permission
-                        : (AppPermission?)null)
-                    .Where(permission => permission.HasValue)
-                    .Select(permission => permission!.Value)
                     .Distinct()]
             )).FirstOrDefault();
     }

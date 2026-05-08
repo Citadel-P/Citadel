@@ -15,7 +15,7 @@ public class AlertRuleViewTests(PostgresTestFixture fixture) : IntegrationTestBa
         await CreateAlertRuleAsync("rule-hidden");
 
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Alert, visibleRuleId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.Alert, visibleRuleId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",

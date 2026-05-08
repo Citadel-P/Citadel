@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.Alerters.Queries;
 
-[RequirePermission(ResourceType.Alert, ResourceAction.View)]
+[RequirePermission(ResourceType.Alert, PermissionLevel.Read)]
 public sealed record GetAlertEvent(Guid Id) : IQuery<Result<AlertEvent>>;
 
 internal sealed class GetAlertEventHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetAlertEvent, Result<AlertEvent>>

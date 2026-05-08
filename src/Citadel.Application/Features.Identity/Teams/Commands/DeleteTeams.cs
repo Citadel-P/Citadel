@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Teams.Commands;
 
-[RequirePermission(ResourceType.Team, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Team, PermissionLevel.Execute)]
 public sealed record DeleteTeams(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteTeamsHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteTeams, Result>

@@ -1,9 +1,9 @@
 using Dapper;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using Hosting.Common;
 using System.Data;
-using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
 
@@ -12,9 +12,9 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
     public Task<int> AddAsync(ResourceAccess resourceAccess, CancellationToken cancellationToken)
     {
         const string sql = """
-            INSERT INTO ResourceAccesses (Id, ResourceId, ActorId, ResourceType, Action)
-            VALUES (@Id, @ResourceId, @ActorId, @ResourceType, @Action)
-            ON CONFLICT (ResourceType, ResourceId, ActorId, Action) DO NOTHING
+            INSERT INTO ResourceAccesses (Id, ResourceId, ActorId, ResourceType, PermissionLevel, SpecificPermissions)
+            VALUES (@Id, @ResourceId, @ActorId, @ResourceType, @PermissionLevel, @SpecificPermissions)
+            ON CONFLICT (ResourceType, ResourceId, ActorId) DO NOTHING
             """;
 
         return db.ExecuteAsync(sql, new
@@ -22,28 +22,37 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
             resourceAccess.Id,
             resourceAccess.ResourceId,
             resourceAccess.ActorId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceAccess.ResourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(resourceAccess.Action),
+            ResourceType = (int)resourceAccess.ResourceType,
+            PermissionLevel = (int)resourceAccess.PermissionLevel,
+            SpecificPermissions = Permission.ToSpecificPermissionsMask(resourceAccess.SpecificPermissions),
             cancellationToken,
         }, transaction: tx());
     }
 
-    public Task<int> RemoveAsync(Guid actorId, ResourceType resourceType, Guid resourceId, ResourceAction action, CancellationToken cancellationToken)
+    public Task<int> RemoveAsync(
+        Guid actorId,
+        ResourceType resourceType,
+        Guid resourceId,
+        PermissionLevel permissionLevel,
+        IEnumerable<SpecificPermission>? specificPermissions,
+        CancellationToken cancellationToken)
     {
         const string sql = """
             DELETE FROM ResourceAccesses
             WHERE ActorId = @ActorId
               AND ResourceType = @ResourceType
               AND ResourceId = @ResourceId
-              AND Action = @Action
+              AND PermissionLevel = @PermissionLevel
+              AND SpecificPermissions = @SpecificPermissions
             """;
 
         return db.ExecuteAsync(sql, new
         {
             ActorId = actorId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
+            ResourceType = (int)resourceType,
             ResourceId = resourceId,
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            PermissionLevel = (int)permissionLevel,
+            SpecificPermissions = Permission.ToSpecificPermissionsMask(specificPermissions),
             cancellationToken,
         }, transaction: tx());
     }
@@ -59,15 +68,16 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
 
         var ids = rowsToInsert.Select(x => x.Id).ToArray();
         var resourceIds = rowsToInsert.Select(x => x.ResourceId).ToArray();
-        var resourceTypes = rowsToInsert.Select(x => EnumFormatter<ResourceType>.GetValue(x.ResourceType)).ToArray();
-        var actions = rowsToInsert.Select(x => EnumFormatter<ResourceAction>.GetValue(x.Action)).ToArray();
+        var resourceTypes = rowsToInsert.Select(x => (int)x.ResourceType).ToArray();
+        var permissionLevels = rowsToInsert.Select(x => (int)x.PermissionLevel).ToArray();
+        var specificPermissions = rowsToInsert.Select(x => Permission.ToSpecificPermissionsMask(x.SpecificPermissions)).ToArray();
 
         const string insertSql = """
-            INSERT INTO ResourceAccesses (Id, ResourceId, ActorId, ResourceType, Action)
-            SELECT src.Id, src.ResourceId, @ActorId, src.ResourceType, src.Action
-            FROM unnest(@Ids::uuid[], @ResourceIds::uuid[], @ResourceTypes::text[], @Actions::text[])
-                AS src(Id, ResourceId, ResourceType, Action)
-            ON CONFLICT (ResourceType, ResourceId, ActorId, Action) DO NOTHING
+            INSERT INTO ResourceAccesses (Id, ResourceId, ActorId, ResourceType, PermissionLevel, SpecificPermissions)
+            SELECT src.Id, src.ResourceId, @ActorId, src.ResourceType, src.PermissionLevel, src.SpecificPermissions
+            FROM unnest(@Ids::uuid[], @ResourceIds::uuid[], @ResourceTypes::integer[], @PermissionLevels::integer[], @SpecificPermissions::integer[])
+                AS src(Id, ResourceId, ResourceType, PermissionLevel, SpecificPermissions)
+            ON CONFLICT (ResourceType, ResourceId, ActorId) DO NOTHING
             """;
 
         return await db.ExecuteAsync(insertSql, new
@@ -76,7 +86,8 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
             Ids = ids,
             ResourceIds = resourceIds,
             ResourceTypes = resourceTypes,
-            Actions = actions,
+            PermissionLevels = permissionLevels,
+            SpecificPermissions = specificPermissions,
             cancellationToken,
         }, transaction: tx());
     }

@@ -6,10 +6,13 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Npgsql;
 using System.Data.Common;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Text.Json;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration;
@@ -19,7 +22,7 @@ namespace Tests.Integration;
 public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncLifetime
 {
     protected sealed record AuthorizationSubject(Guid UserId, Guid ActorId, Guid? TeamId = null, Guid? TeamActorId = null);
-    protected sealed record ResourceGrant(ResourceType ResourceType, Guid ResourceId, ResourceAction Action);
+    protected sealed record ResourceGrant(ResourceType ResourceType, Guid ResourceId, PermissionLevel PermissionLevel, SpecificPermission SpecificPermission = SpecificPermission.None);
 
     private sealed class TestDbConnectionFactory(NpgsqlDataSource dataSource) : IDbConnectionFactory
     {
@@ -53,6 +56,7 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
 
                 builder.ConfigureServices(services =>
                 {
+                    services.RemoveAll<IHostedService>();
                     services.ReplaceService<NpgsqlDataSource>(_ =>
                     {
                         var builder = new NpgsqlDataSourceBuilder(ConnectionString);
@@ -204,14 +208,18 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
             foreach (var grant in resourceGrants)
             {
                 await ExecuteNonQueryAsync(connection, transaction,
-                    "INSERT INTO ResourceAccesses (Id, ResourceId, ActorId, ResourceType, Action) VALUES (@Id, @ResourceId, @ActorId, @ResourceType, @Action);",
+                    "INSERT INTO ResourceAccesses (Id, ResourceId, ActorId, ResourceType, PermissionLevel, SpecificPermissions) VALUES (@Id, @ResourceId, @ActorId, @ResourceType, @PermissionLevel, @SpecificPermissions);",
                     new Dictionary<string, object?>
                     {
                         ["@Id"] = Guid.CreateVersion7(),
                         ["@ResourceId"] = grant.ResourceId,
                         ["@ActorId"] = actorId,
-                        ["@ResourceType"] = grant.ResourceType.ToString(),
-                        ["@Action"] = grant.Action.ToString()
+                        ["@ResourceType"] = (int)grant.ResourceType,
+                        ["@PermissionLevel"] = (int)grant.PermissionLevel,
+                        ["@SpecificPermissions"] = Domain.Entities.Identity.Permission.ToSpecificPermissionsMask(
+                            grant.SpecificPermission == SpecificPermission.None
+                                ? Array.Empty<SpecificPermission>()
+                                : new[] { grant.SpecificPermission })
                     });
             }
         }

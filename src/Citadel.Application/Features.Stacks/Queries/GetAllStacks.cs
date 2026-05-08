@@ -16,7 +16,7 @@ internal sealed class GetAllStacksHandler(IUnitOfWork unitOfWork, IHttpContextAc
     {
         var user = httpContextAccessor.HttpContext?.User;
         var stacks = user is not null && !user.IsAdmin()
-            ? await unitOfWork.Stacks.GetAuthorizedInfoAsync(user.GetUserId(), ResourceType.Stack, ResourceAction.View, cancellationToken)
+            ? await unitOfWork.Stacks.GetAuthorizedInfoAsync(user.GetUserId(), ResourceType.Stack, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
             : await unitOfWork.Stacks.GetInfoAsync(cancellationToken);
 
         return Result.Success(stacks);

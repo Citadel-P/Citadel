@@ -6,7 +6,7 @@ using Mediator;
 
 namespace Application.Features.Containers.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Exec)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute, SpecificPermission.Terminal)]
 public sealed record StartContainerShellSession(string GroupId, string Shell) : ICommand<Result>;
 
 

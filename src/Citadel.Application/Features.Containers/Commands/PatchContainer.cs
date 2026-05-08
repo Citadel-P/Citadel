@@ -15,7 +15,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Containers.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Update)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Write)]
 public sealed record PatchContainer(string[] ContainerIds, ContainerAction Action) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<PatchContainer>

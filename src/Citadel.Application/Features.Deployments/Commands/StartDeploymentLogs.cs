@@ -6,7 +6,7 @@ using Mediator;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(ResourceType.Deployment, ResourceAction.Log)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.Logs)]
 public sealed record StartDeploymentLogs(string ContainerId) : ICommand<Result>;
 
 internal sealed class StartContainerLogsHandler(IContainerLogStreamManager containerLogStreamManager)

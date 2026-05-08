@@ -8,7 +8,7 @@ using Hosting.Common;
 
 namespace Application.Features.Alerters.Queries;
 
-[RequirePermission(ResourceType.Alert, ResourceAction.View)]
+[RequirePermission(ResourceType.Alert, PermissionLevel.Read)]
 public record GetAlertRule(Guid Id) : IQuery<Result<AlertRule>>;
 
 internal sealed class GetAlertRuleHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetAlertRule, Result<AlertRule>>

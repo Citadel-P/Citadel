@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.GitAccounts.Commands;
 
-[RequirePermission(ResourceType.GitAccount, ResourceAction.Delete)]
+[RequirePermission(ResourceType.GitAccount, PermissionLevel.Execute)]
 public sealed record DeleteGitAccounts(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteGitAccountsHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteGitAccounts, Result>

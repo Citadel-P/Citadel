@@ -13,7 +13,7 @@ using Mediator;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(ResourceType.Deployment, ResourceAction.Update)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Write)]
 public sealed record PatchDeploymentMetadata(Guid Id, JsonMergePatchDocument<Deployment> Patch) : ICommand<Result<Deployment>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchDeploymentMetadata, Deployment>

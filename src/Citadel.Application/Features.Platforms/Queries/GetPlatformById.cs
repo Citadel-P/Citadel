@@ -10,7 +10,7 @@ using Hosting.Common;
 namespace Application.Features.Platforms.Queries;
 
 
-[RequirePermission(ResourceType.Platform, ResourceAction.View)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record GetPlatformById(Guid Id) : IQuery<Result<Platform>>
 {
     internal class Validator : AbstractValidator<GetPlatformById>

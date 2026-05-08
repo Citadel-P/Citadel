@@ -56,7 +56,7 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
             {
               "resourceType": "Deployment",
               "resourceId": "{{deploymentVisible}}",
-              "action": "View"
+              "permissionLevel": "Read"
             }
           ]
         }
@@ -82,21 +82,24 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var canViewVisible = await uow.Users.HasPermissionAsync(
             user.Id,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             deploymentVisible,
             TestContext.Current.CancellationToken);
 
         var canViewHidden = await uow.Users.HasPermissionAsync(
             user.Id,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             deploymentHidden,
             TestContext.Current.CancellationToken);
 
         var hasGlobalView = await uow.Users.HasPermissionAsync(
             user.Id,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             null,
             TestContext.Current.CancellationToken);
 
@@ -173,7 +176,7 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
     {
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var role = Role.Create(name, RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, ResourceAction.View)]);
+        var role = Role.Create(name, RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, PermissionLevel.Read)]);
 
         await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);

@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Teams.Commands;
 
-[RequirePermission(ResourceType.Team, ResourceAction.Update)]
+[RequirePermission(ResourceType.Team, PermissionLevel.Write)]
 public sealed record RenameTeam(Guid Id, string Name) : ICommand<Result<TeamDetails>>
 {
     internal sealed class Validator : AbstractValidator<RenameTeam>

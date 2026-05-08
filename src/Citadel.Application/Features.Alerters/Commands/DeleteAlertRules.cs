@@ -18,7 +18,7 @@ namespace Application.Features.Alerters.Commands;
 
 public sealed record DeleteAlertRules(IEnumerable<Guid> Ids) : ICommand<Result>;
 
-[RequirePermission(ResourceType.Alert, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Alert, PermissionLevel.Execute)]
 internal sealed class DeleteAlertRulesHandler(
     IUnitOfWork unitOfWork,
     AlertRuleCache alertRuleCache,

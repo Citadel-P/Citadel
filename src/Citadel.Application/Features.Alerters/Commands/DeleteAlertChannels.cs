@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.Alerters.Commands;
 
-[RequirePermission(ResourceType.AlertChannel, ResourceAction.Delete)]
+[RequirePermission(ResourceType.AlertChannel, PermissionLevel.Execute)]
 public sealed record DeleteAlertChannels(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteAlertChannelsHandler(

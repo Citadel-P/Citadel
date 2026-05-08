@@ -18,7 +18,7 @@ using Hosting.Common;
 
 namespace Application.Features.Alerters.Commands;
 
-[RequirePermission(ResourceType.Alert, ResourceAction.Create)]
+[RequirePermission(ResourceType.Alert, PermissionLevel.Write)]
 public sealed record CreateAlertRule(
     string? Name,
     string? Description,

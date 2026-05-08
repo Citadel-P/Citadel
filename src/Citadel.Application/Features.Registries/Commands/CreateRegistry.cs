@@ -18,7 +18,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Registries.Commands;
 
-[RequirePermission(ResourceType.Registry, ResourceAction.Create)]
+[RequirePermission(ResourceType.Registry, PermissionLevel.Write)]
 public sealed record CreateRegistry(
     string Name, 
     string RegistryHost,

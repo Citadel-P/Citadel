@@ -116,7 +116,7 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         {
           "resourceType": "Deployment",
           "resourceId": "{{deploymentId}}",
-          "action": "View"
+          "permissionLevel": "Read"
         }
         """;
 
@@ -151,7 +151,7 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         {
           "resourceType": "Deployment",
           "resourceId": "{{deploymentId}}",
-          "action": "View"
+          "permissionLevel": "Read"
         }
         """;
 
@@ -203,7 +203,7 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             await uow.Roles.ReplaceActorRolesAsync(seeded.ActorId, [oldRoleId], TestContext.Current.CancellationToken);
             await uow.ResourceAccesses.ReplaceAsync(
                 seeded.ActorId,
-                [ResourceAccess.Create(ResourceType.Deployment, oldDeploymentId, seeded.ActorId, ResourceAction.View)],
+                [ResourceAccess.Create(ResourceType.Deployment, oldDeploymentId, seeded.ActorId, PermissionLevel.Read)],
                 TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
@@ -216,7 +216,7 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             {
               "resourceType": "Deployment",
               "resourceId": "{{newDeploymentId}}",
-              "action": "View"
+              "permissionLevel": "Read"
             }
           ]
         }
@@ -246,14 +246,16 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         var hasOldAccess = await verificationUow.Users.HasPermissionAsync(
             seeded.UserId,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             oldDeploymentId,
             TestContext.Current.CancellationToken);
 
         var hasNewAccess = await verificationUow.Users.HasPermissionAsync(
             seeded.UserId,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             newDeploymentId,
             TestContext.Current.CancellationToken);
 
@@ -277,7 +279,7 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             await uow.Roles.ReplaceActorRolesAsync(seeded.ActorId, [roleId], TestContext.Current.CancellationToken);
             await uow.ResourceAccesses.ReplaceAsync(
                 seeded.ActorId,
-                [ResourceAccess.Create(ResourceType.Deployment, deploymentId, seeded.ActorId, ResourceAction.View)],
+                [ResourceAccess.Create(ResourceType.Deployment, deploymentId, seeded.ActorId, PermissionLevel.Read)],
                 TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
@@ -309,7 +311,8 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         var hasAccess = await verificationUow.Users.HasPermissionAsync(
             seeded.UserId,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             deploymentId,
             TestContext.Current.CancellationToken);
 
@@ -334,7 +337,7 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
     {
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var role = Role.Create(name, RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, ResourceAction.View)]);
+        var role = Role.Create(name, RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, PermissionLevel.Read)]);
 
         await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);

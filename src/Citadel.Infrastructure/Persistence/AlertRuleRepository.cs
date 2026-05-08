@@ -195,7 +195,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return rows.ToDomain();
     }
 
-    public async Task<IEnumerable<AlertRule>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    public async Task<IEnumerable<AlertRule>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
     {
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + @"
             SELECT 
@@ -219,11 +219,13 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             GROUP BY r.Id
             ";
 
+        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
         var rows = await db.QueryAsync<AlertRuleDto>(sql, new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
 
@@ -306,47 +308,21 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return rows?.Select(r => r.ToDomain()) ?? [];
     }
 
-    public async Task<IEnumerable<AlertChannel>> GetAuthorizedChannelsAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    public async Task<IEnumerable<AlertChannel>> GetAuthorizedChannelsAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
     {
-        const string sql = """
-            WITH ActorScope AS (
-                SELECT ActorId
-                FROM Users
-                WHERE Id = @UserId
-
-                UNION
-
-                SELECT t.ActorId
-                FROM Teams t
-                JOIN UsersTeams ut ON ut.TeamId = t.Id
-                WHERE ut.UserId = @UserId
-            )
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
             SELECT Id, Name, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
             FROM AlertChannels channel
-            WHERE EXISTS (
-                SELECT 1
-                FROM ActorRoles ar
-                JOIN Permissions p ON p.RoleId = ar.RoleId
-                WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND p.ResourceType = @ResourceType
-                  AND p.ResourceAction = @Action
-            )
+            WHERE
+        """ + AuthorizationSql.ResourcePredicatePrefix + "channel.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
-            OR EXISTS (
-                SELECT 1
-                FROM ResourceAccesses ra
-                WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND ra.ResourceType = @ResourceType
-                  AND ra.ResourceId = channel.Id
-                  AND ra.Action = @Action
-            )
-            """;
-
+        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
         var rows = await db.QueryAsync<AlertChannelDto>(sql, new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
 

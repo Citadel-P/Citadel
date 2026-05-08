@@ -15,7 +15,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Update)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Write)]
 public sealed record PatchPlatform(Guid Id, JsonMergePatchDocument<Platform> Patch) : ICommand<Result<Platform>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchPlatform, Platform>

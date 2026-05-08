@@ -81,7 +81,7 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<GitAccount>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    public async Task<IEnumerable<GitAccount>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
     {
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT * FROM GitAccounts ga WHERE "
             + AuthorizationSql.ResourcePredicatePrefix + "ga.Id" + AuthorizationSql.ResourcePredicateSuffix
@@ -90,8 +90,9 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
         var result = await db.QueryAsync<GitAccountDto>(sql, new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel),
+            SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
 

@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Teams.Queries;
 
-[RequirePermission(ResourceType.Team, ResourceAction.View)]
+[RequirePermission(ResourceType.Team, PermissionLevel.Read)]
 public sealed record GetTeams(string? Name = null, int Page = 1, int PageSize = 50) : IQuery<Result<PagedResult<TeamDetails>>>
 {
     internal sealed class Validator : AbstractValidator<GetTeams>
@@ -31,7 +31,7 @@ internal sealed class GetTeamsHandler(IUnitOfWork unitOfWork, IHttpContextAccess
     {
         var user = httpContextAccessor.HttpContext?.User;
         var pagedTeams = user is not null && !user.IsAdmin()
-            ? await unitOfWork.Teams.GetAuthorizedPagedAsync(user.GetUserId(), ResourceType.Team, ResourceAction.View, query.Page, query.PageSize, query.Name, cancellationToken)
+            ? await unitOfWork.Teams.GetAuthorizedPagedAsync(user.GetUserId(), ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, query.Page, query.PageSize, query.Name, cancellationToken)
             : await unitOfWork.Teams.GetPagedAsync(query.Page, query.PageSize, query.Name, cancellationToken);
 
         return Result.Success(pagedTeams);

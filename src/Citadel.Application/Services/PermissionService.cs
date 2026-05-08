@@ -22,26 +22,32 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
             cancellationToken
         );
     
-    public Task<bool> HasPermissionAsync(Guid userId, ResourceType resourceType, ResourceAction action, Guid? resourceId, CancellationToken ct)
+    public Task<bool> HasPermissionAsync(
+        Guid userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        Guid? resourceId,
+        CancellationToken ct)
     {
-        if (!PermissionMatrix.IsAllowed(resourceType, action))
+        if (!PermissionMatrix.IsAllowed(resourceType, permissionLevel, specificPermission == SpecificPermission.None ? null : [specificPermission]))
             throw new InvalidOperationException(
-                $"Invalid runtime permission check: [{resourceType}]-[{action}] is not an allowed combination.");
+                $"Invalid runtime permission check: [{resourceType}]-[{permissionLevel}] with specific [{specificPermission}] is not an allowed combination.");
 
         // Per resource permissions are not cached, as they are expected to be less common and more dynamic.
         if (resourceId is not null)
         {
-            return uow.Users.HasPermissionAsync(userId, resourceType, action, resourceId, ct);
+            return uow.Users.HasPermissionAsync(userId, resourceType, permissionLevel, specificPermission, resourceId, ct);
         }
 
         // For global permissions (eg list deployments), we cache the result to reduce database load and improve performance. 
-        var cacheKey = new PermissionCacheKey(userId, resourceType, action);
+        var cacheKey = new PermissionCacheKey(userId, resourceType, permissionLevel, specificPermission);
         return memoryCache.GetOrCreateAsync(cacheKey, async entry =>
         {
             entry.SlidingExpiration = PermissionCacheTtl;
-            return await uow.Users.HasPermissionAsync(userId, resourceType, action, null, ct);
+            return await uow.Users.HasPermissionAsync(userId, resourceType, permissionLevel, specificPermission, null, ct);
         })!;
     }
 
-    private readonly record struct PermissionCacheKey(Guid UserId, ResourceType ResourceType, ResourceAction Action);
+    private readonly record struct PermissionCacheKey(Guid UserId, ResourceType ResourceType, PermissionLevel PermissionLevel, SpecificPermission SpecificPermission);
 }

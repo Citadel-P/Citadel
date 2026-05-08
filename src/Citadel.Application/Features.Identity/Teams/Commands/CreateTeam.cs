@@ -11,7 +11,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Teams.Commands;
 
-[RequirePermission(ResourceType.Team, ResourceAction.Create)]
+[RequirePermission(ResourceType.Team, PermissionLevel.Write)]
 public sealed record CreateTeam(
     string Name,
     IEnumerable<Guid>? UserIds = null,
@@ -26,7 +26,7 @@ public sealed record CreateTeam(
             RuleForEach(x => x.UserIds).NotEmpty();
             RuleForEach(x => x.RoleIds).NotEmpty();
             RuleForEach(x => x.ResourceAccesses)
-                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.Action))
+                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.PermissionLevel, x.SpecificPermissions))
                 .WithMessage("Invalid permission combination in resource accesses.");
         }
     }
@@ -75,7 +75,7 @@ internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork) : ICommandHandle
         if (resourceAccesses.Length > 0)
         {
             var accessRows = resourceAccesses
-                .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, team.ActorId, x.Action))
+                .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, team.ActorId, x.PermissionLevel, x.SpecificPermissions))
                 .ToArray();
 
             await unitOfWork.ResourceAccesses.ReplaceAsync(team.ActorId, accessRows, cancellationToken);

@@ -186,7 +186,7 @@ public class RegistryPatchTests(PostgresTestFixture fixture) : IntegrationTestBa
             .Returns(Task.FromResult<(bool, string?)>((true, null)));
 
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Registry, registryId, ResourceAction.Update)]);
+            resourceGrants: [new ResourceGrant(ResourceType.Registry, registryId, PermissionLevel.Write)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",
@@ -220,7 +220,7 @@ public class RegistryPatchTests(PostgresTestFixture fixture) : IntegrationTestBa
     public async Task Patch_Registry_Metadata_Should_Succeed_When_User_Has_Registry_Resource_Access()
     {
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Registry, registryId, ResourceAction.Update)]);
+            resourceGrants: [new ResourceGrant(ResourceType.Registry, registryId, PermissionLevel.Write)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",

@@ -33,7 +33,7 @@ public class RegistryViewTests(PostgresTestFixture fixture) : IntegrationTestBas
         await CreateRegistryAsync("r-hidden");
 
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Registry, visibleRegistryId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.Registry, visibleRegistryId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",

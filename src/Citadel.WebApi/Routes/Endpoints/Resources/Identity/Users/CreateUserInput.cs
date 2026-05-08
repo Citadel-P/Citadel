@@ -4,9 +4,13 @@ using Hosting.Common;
 
 namespace WebApi.Routes.Endpoints.Resources.Identity.Users;
 
-public sealed record UserResourceAccessInput(ResourceType ResourceType, Guid ResourceId, ResourceAction Action)
+public sealed record UserResourceAccessInput(
+    ResourceType ResourceType,
+    Guid ResourceId,
+    PermissionLevel PermissionLevel,
+    IEnumerable<SpecificPermission>? SpecificPermissions)
 {
-    internal UserResourceAccessModel ToModel() => new(ResourceType, ResourceId, Action);
+    internal UserResourceAccessModel ToModel() => new(ResourceType, ResourceId, PermissionLevel, SpecificPermissions);
 }
 
 public sealed record CreateUserInput(

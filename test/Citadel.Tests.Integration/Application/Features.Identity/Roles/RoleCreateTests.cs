@@ -18,11 +18,13 @@ public class RoleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
           "permissions": [
             {
               "resourceType": "Registry",
-              "resourceAction": "View"
+              "permissionLevel": "Read",
+              "specificPermissions": []
             },
             {
               "resourceType": "Role",
-              "resourceAction": "Update"
+              "permissionLevel": "Write",
+              "specificPermissions": []
             }
           ]
         }
@@ -39,8 +41,8 @@ public class RoleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var role = (await uow.Roles.GetAllAsync(TestContext.Current.CancellationToken)).Single(x => x.Name == "Role-New");
 
         Assert.Equal(2, role.Permissions.Count());
-        Assert.Contains(role.Permissions, x => x.ResourceType == ResourceType.Registry && x.ResourceAction == ResourceAction.View);
-        Assert.Contains(role.Permissions, x => x.ResourceType == ResourceType.Role && x.ResourceAction == ResourceAction.Update);
+        Assert.Contains(role.Permissions, x => x.ResourceType == ResourceType.Registry && x.PermissionLevel == PermissionLevel.Read);
+        Assert.Contains(role.Permissions, x => x.ResourceType == ResourceType.Role && x.PermissionLevel == PermissionLevel.Write);
         await VerifyJson(responseBody);
     }
 
@@ -53,7 +55,8 @@ public class RoleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
           "permissions": [
             {
               "resourceType": "Registry",
-              "resourceAction": "View"
+              "permissionLevel": "Read",
+              "specificPermissions": []
             }
           ]
         }
@@ -74,7 +77,8 @@ public class RoleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
           "permissions": [
             {
               "resourceType": "Registry",
-              "resourceAction": "Nope"
+              "permissionLevel": "Nope",
+              "specificPermissions": []
             }
           ]
         }
@@ -92,7 +96,7 @@ public class RoleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         await using (var scope = Services.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var role = Role.Create("RoleNew", RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, ResourceAction.View)]);
+            var role = Role.Create("RoleNew", RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, PermissionLevel.Read)]);
             await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
@@ -103,7 +107,8 @@ public class RoleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
           "permissions": [
             {
               "resourceType": "Role",
-              "resourceAction": "View"
+              "permissionLevel": "Read",
+              "specificPermissions": []
             }
           ]
         }

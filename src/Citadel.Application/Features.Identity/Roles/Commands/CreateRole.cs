@@ -1,4 +1,3 @@
-using Application.Features.Identity.Roles;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Role;
@@ -12,8 +11,8 @@ using Mediator;
 
 namespace Application.Features.Identity.Roles.Commands;
 
-[RequirePermission(ResourceType.Role, ResourceAction.Create)]
-public sealed record CreateRole(string Name, IEnumerable<Permission> Permissions) : ICommand<Result<RoleDetails>>
+[RequirePermission(ResourceType.Role, PermissionLevel.Write)]
+public sealed record CreateRole(string Name, IEnumerable<PatchPermissionModel> Permissions) : ICommand<Result<RoleDetails>>
 {
     internal sealed class Validator : AbstractValidator<CreateRole>
     {
@@ -25,15 +24,16 @@ public sealed record CreateRole(string Name, IEnumerable<Permission> Permissions
         }
     }
 
-    internal sealed class PermissionValidator : AbstractValidator<Permission>
+    internal sealed class PermissionValidator : AbstractValidator<PatchPermissionModel>
     {
         public PermissionValidator()
         {
             RuleFor(x => x.ResourceType).IsInEnum();
-            RuleFor(x => x.ResourceAction).IsInEnum();
+            RuleFor(x => x.PermissionLevel).IsInEnum();
+            RuleForEach(x => x.SpecificPermissions).IsInEnum();
             RuleFor(x => x)
-                .Must(p => PermissionMatrix.IsAllowed(p.ResourceType, p.ResourceAction))
-                .WithMessage(p => $"Invalid permission: [{p.ResourceType}]-[{p.ResourceAction}] is not an allowed combination.");
+                .Must(p => PermissionMatrix.IsAllowed(p.ResourceType, p.PermissionLevel, p.SpecificPermissions))
+                .WithMessage(p => $"Invalid permission: [{p.ResourceType}]-[{p.PermissionLevel}] with specifics [{string.Join(", ", p.SpecificPermissions)}] is not an allowed combination.");
         }
     }
 }
@@ -46,10 +46,11 @@ internal sealed class CreateRoleHandler(IUnitOfWork unitOfWork) : ICommandHandle
         if (exists)
             return Result.Failure<RoleDetails>(new ConflictError("Name already exists"));
 
-        var role = Role.Create(command.Name, RoleType.Custom, command.Permissions);
+        var permissions = command.Permissions.Select(x => x.ToDomain(Guid.Empty)).ToArray();
+        var role = Role.Create(command.Name, RoleType.Custom, permissions);
         await unitOfWork.Roles.AddAsync(role, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return new RoleDetails(role.Id, role.Name, role.RoleType, command.Permissions);
+        return new RoleDetails(role.Id, role.Name, role.RoleType, permissions);
     }
 }

@@ -57,6 +57,14 @@ export enum StackReleaseStatus {
   Stopped = "Stopped",
 }
 
+export enum SpecificPermission {
+  None = "None",
+  Apply = "Apply",
+  Logs = "Logs",
+  Terminal = "Terminal",
+  Pull = "Pull",
+}
+
 export enum ScheduleType {
   Daily = "Daily",
   Weekly = "Weekly",
@@ -71,6 +79,7 @@ export enum ResourceType {
   Platform = "Platform",
   Deployment = "Deployment",
   Stack = "Stack",
+  Image = "Image",
   Registry = "Registry",
   GitRepository = "GitRepository",
   GitAccount = "GitAccount",
@@ -84,17 +93,6 @@ export enum ResourceType {
 export enum ResourceControlState {
   Idle = "Idle",
   Processing = "Processing",
-}
-
-export enum ResourceAction {
-  View = "View",
-  Create = "Create",
-  Update = "Update",
-  Delete = "Delete",
-  Apply = "Apply",
-  Pull = "Pull",
-  Exec = "Exec",
-  Log = "Log",
 }
 
 export enum RegistryType {
@@ -127,6 +125,12 @@ export enum PlatformConnectorType {
   Unknown = "Unknown",
   Local = "Local",
   Agent = "Agent",
+}
+
+export enum PermissionLevel {
+  Read = "Read",
+  Write = "Write",
+  Execute = "Execute",
 }
 
 export enum GitTransport {
@@ -749,7 +753,8 @@ export interface AddTeamResourceAccessInput {
   resourceType: ResourceType;
   /** @format uuid */
   resourceId: string;
-  action: ResourceAction;
+  permissionLevel: PermissionLevel;
+  specificPermissions: null | SpecificPermission[];
 }
 
 export interface AddTeamRoleInput {
@@ -761,7 +766,8 @@ export interface AddUserResourceAccessInput {
   resourceType: ResourceType;
   /** @format uuid */
   resourceId: string;
-  action: ResourceAction;
+  permissionLevel: PermissionLevel;
+  specificPermissions: null | SpecificPermission[];
 }
 
 export interface AddUserRoleInput {
@@ -2432,12 +2438,19 @@ export interface PatchUserInput {
 
 export interface PermissionInput {
   resourceType: ResourceType;
-  resourceAction: ResourceAction;
+  permissionLevel: PermissionLevel;
+  specificPermissions: null | SpecificPermission[];
+}
+
+export interface PermissionMatrixViewItem {
+  maximumLevel: string;
+  specificPermissions: Record<string, string>;
 }
 
 export interface PermissionView {
   resourceType: ResourceType;
-  resourceAction: ResourceAction;
+  permissionLevel: PermissionLevel;
+  specificPermissions: SpecificPermission[];
 }
 
 export interface PlatformDescriptorDockerPlatformDescriptor {
@@ -2736,14 +2749,16 @@ export interface RemoveTeamResourceAccessInput {
   resourceType: ResourceType;
   /** @format uuid */
   resourceId: string;
-  action: ResourceAction;
+  permissionLevel: PermissionLevel;
+  specificPermissions: null | SpecificPermission[];
 }
 
 export interface RemoveUserResourceAccessInput {
   resourceType: ResourceType;
   /** @format uuid */
   resourceId: string;
-  action: ResourceAction;
+  permissionLevel: PermissionLevel;
+  specificPermissions: null | SpecificPermission[];
 }
 
 export interface RenameResource {
@@ -2919,7 +2934,8 @@ export interface TeamResourceAccessInput {
   resourceType: ResourceType;
   /** @format uuid */
   resourceId: string;
-  action: ResourceAction;
+  permissionLevel: PermissionLevel;
+  specificPermissions: null | SpecificPermission[];
 }
 
 export interface TeamSearchItemView {
@@ -2988,7 +3004,8 @@ export interface UserResourceAccessInput {
   resourceType: ResourceType;
   /** @format uuid */
   resourceId: string;
-  action: ResourceAction;
+  permissionLevel: PermissionLevel;
+  specificPermissions: null | SpecificPermission[];
 }
 
 export interface UserSearchItemView {
@@ -4450,14 +4467,14 @@ export class Api<
      *
      * @tags Roles
      * @name GetPermissionMatrix
-     * @summary Get the permission matrix (all valid resource/action combinations)
+     * @summary Get the permission matrix (all valid resource capabilities and minimum levels)
      * @request GET:/api/v1/roles/permissions/matrix
-     * @response `200` `Record<string,(string)[]>` OK
+     * @response `200` `Record<string,PermissionMatrixViewItem>` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getPermissionMatrix: (params: RequestParams = {}) =>
-      this.request<Record<string, string[]>, ProblemDetails>({
+      this.request<Record<string, PermissionMatrixViewItem>, ProblemDetails>({
         path: `/api/v1/roles/permissions/matrix`,
         method: "GET",
         format: "json",

@@ -11,7 +11,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Roles.Commands;
 
-[RequirePermission(ResourceType.Role, ResourceAction.Update)]
+[RequirePermission(ResourceType.Role, PermissionLevel.Write)]
 public sealed record PatchRolePermissions(Guid Id, JsonMergePatchDocument<PatchRolePermissionsModel> Patch) : ICommand<Result<RoleDetails>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchRolePermissions, PatchRolePermissionsModel>
@@ -39,10 +39,11 @@ public sealed record PatchRolePermissions(Guid Id, JsonMergePatchDocument<PatchR
         public PermissionInputValidator()
         {
             RuleFor(x => x.ResourceType).IsInEnum();
-            RuleFor(x => x.ResourceAction).IsInEnum();
+            RuleFor(x => x.PermissionLevel).IsInEnum();
+            RuleForEach(x => x.SpecificPermissions).IsInEnum();
             RuleFor(x => x)
-                .Must(p => PermissionMatrix.IsAllowed(p.ResourceType, p.ResourceAction))
-                .WithMessage(p => $"Invalid permission: [{p.ResourceType}]-[{p.ResourceAction}] is not an allowed combination.");
+                .Must(p => PermissionMatrix.IsAllowed(p.ResourceType, p.PermissionLevel, p.SpecificPermissions))
+                .WithMessage(p => $"Invalid permission: [{p.ResourceType}]-[{p.PermissionLevel}] with specifics [{string.Join(", ", p.SpecificPermissions ?? [])}] is not an allowed combination.");
         }
     }
 }
@@ -55,7 +56,7 @@ internal sealed class PatchRolePermissionsHandler(IUnitOfWork unitOfWork) : ICom
         if (role is null)
             return Result.Failure<RoleDetails>(new NotFoundError("The provided role does not exist"));
 
-        var current = new PatchRolePermissionsModel(role.Permissions.Select(x => new PatchPermissionModel(x.ResourceType, x.ResourceAction)));
+        var current = new PatchRolePermissionsModel(role.Permissions.Select(x => new PatchPermissionModel(x.ResourceType, x.PermissionLevel, x.SpecificPermissions)));
         var patched = command.Patch.ApplyTo(current, RoleJsonContext.Default.PatchRolePermissionsModel);
         var permissions = patched.Permissions.Select(x => x.ToDomain(role.Id));
 

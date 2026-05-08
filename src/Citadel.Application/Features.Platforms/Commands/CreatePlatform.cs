@@ -17,7 +17,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Create)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Write)]
 public sealed record CreatePlatform(string Name, string? Address, PlatformType Type, PlatformConnectorType ConnectorType) : ICommand<Result<Platform>>
 {
     internal class Validator : AbstractValidator<CreatePlatform>

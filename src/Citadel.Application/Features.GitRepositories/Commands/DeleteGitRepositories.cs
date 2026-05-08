@@ -18,7 +18,7 @@ using System.Security.Claims;
 
 namespace Application.Features.GitRepositories.Commands;
 
-[RequirePermission(ResourceType.GitRepository, ResourceAction.Delete)]
+[RequirePermission(ResourceType.GitRepository, PermissionLevel.Execute)]
 public sealed record DeleteGitRepositories(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteGitRepositoriesHandler(

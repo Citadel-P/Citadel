@@ -16,11 +16,11 @@ internal sealed class GetAlertRulesHandler(IUnitOfWork unitOfWork, IHttpContextA
     {
         var user = httpContextAccessor.HttpContext?.User;
         var rules = user is not null && !user.IsAdmin()
-            ? await unitOfWork.AlertRules.GetAuthorizedAsync(user.GetUserId(), ResourceType.Alert, ResourceAction.View, cancellationToken)
+            ? await unitOfWork.AlertRules.GetAuthorizedAsync(user.GetUserId(), ResourceType.Alert, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
             : await unitOfWork.AlertRules.GetAllAsync(cancellationToken);
 
         var channels = user is not null && !user.IsAdmin()
-            ? await unitOfWork.AlertRules.GetAuthorizedChannelsAsync(user.GetUserId(), ResourceType.AlertChannel, ResourceAction.View, cancellationToken)
+            ? await unitOfWork.AlertRules.GetAuthorizedChannelsAsync(user.GetUserId(), ResourceType.AlertChannel, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
             : await unitOfWork.AlertRules.GetAllChannelsAsync(cancellationToken);
 
         return Result.Success((rules, channels));

@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.Containers.Queries;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.View)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record GetContainerStats(string ContainerId) : IQuery<Result<IEnumerable<ContainerStat>>>
 {
     internal class Validator : AbstractValidator<GetContainerById>

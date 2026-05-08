@@ -13,7 +13,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Alerters.Commands;
 
-[RequirePermission(ResourceType.Alert, ResourceAction.Update)]
+[RequirePermission(ResourceType.Alert, PermissionLevel.Write)]
 public sealed record AcknowledgeAlertEvents(IEnumerable<Guid> Ids) : ICommand<Result>
 {
     internal sealed class Validator : AbstractValidator<AcknowledgeAlertEvents>

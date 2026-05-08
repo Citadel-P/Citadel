@@ -31,10 +31,11 @@ CREATE TABLE platforms (
 
 CREATE TABLE resourceaccesses (
     id uuid NOT NULL,
-    action text NOT NULL,
     actorid uuid NOT NULL,
+    permissionlevel integer NOT NULL,
     resourceid uuid NOT NULL,
-    resourcetype text NOT NULL,
+    resourcetype integer NOT NULL,
+    specificpermissions integer NOT NULL,
     CONSTRAINT pk_resourceaccesses PRIMARY KEY (id)
 );
 
@@ -202,9 +203,10 @@ CREATE TABLE actorroles (
 
 CREATE TABLE permissions (
     id uuid NOT NULL,
-    resourceaction text NOT NULL,
-    resourcetype text NOT NULL,
+    permissionlevel integer NOT NULL,
+    resourcetype integer NOT NULL,
     roleid uuid NOT NULL,
+    specificpermissions integer NOT NULL,
     CONSTRAINT pk_permissions PRIMARY KEY (id),
     CONSTRAINT fk_permissions_roles_roleid FOREIGN KEY (roleid) REFERENCES roles (id) ON DELETE CASCADE
 );
@@ -411,214 +413,78 @@ VALUES ('019d0000-0001-7000-8001-000000000011', 300, TIMESTAMPTZ '2026-01-01T00:
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000022', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'RAM > 80% - Platform', '[]', 3, 'Warning', 80.0, 'PlatformRamHigh');
 
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('017b5a65-e312-8a67-b7fd-6124f6ddeeee', 'View', 'GitRepository', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('0292fdeb-9a33-5a4c-60e9-395eac821cdc', 'Delete', 'User', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('0309bcb2-05ec-623d-e45b-ec10cfddee24', 'Create', 'Role', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('052e45fb-cb15-9380-6a33-c233fde703a6', 'Update', 'GitAccount', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('0854c122-21bc-147b-506b-6caf72ac48ca', 'View', 'Team', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('0f030749-53d1-bade-8ef3-30112991786d', 'Create', 'Stack', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('117176b6-ca23-e53d-d996-83affab7ed48', 'View', 'Stack', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('1a0b6504-d508-0f6d-4513-12b80c3ab4d8', 'Update', 'Platform', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('1a84bf5e-dcf2-8a0b-8c4f-066f98ed2498', 'Exec', 'Platform', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('21d8c7f7-5480-5509-e2ab-e3c8fdbb5ab8', 'Update', 'AlertChannel', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('2548763c-c9b7-5359-a80a-5ce706c5c42c', 'Update', 'Alert', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('29b878e1-64b3-eee4-d8d9-7a7fb015c14c', 'Log', 'Deployment', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('2e0582c8-9569-22cd-c777-69f03893b8ec', 'Delete', 'GitRepository', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('30f18293-2d41-2525-3210-e0f83bafa13d', 'Update', 'Stack', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('36667c46-31d9-3c62-1375-459c4daba3ed', 'Log', 'Stack', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('37023893-2218-6946-8caa-bbc8a7ad77a1', 'Log', 'Platform', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('3a8c08b1-d033-1580-65f9-a1cb3ed3fc6a', 'Create', 'Registry', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('3d84b4f0-2433-c34e-45e1-84d18b6c155d', 'Pull', 'Platform', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('3e1abbe9-b2f2-21b8-bf02-38d4c10cd79d', 'Create', 'Role', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('3e5365c6-7759-a0ad-e7fa-32263d00682c', 'View', 'GitAccount', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('4711987b-af34-12f7-4cf4-795f51049571', 'Pull', 'Platform', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('47a25f07-9bb1-361d-788e-4d99fd0e50ee', 'Update', 'User', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('49ce8531-88f1-5ed2-a1c7-95d40cc72c47', 'Create', 'User', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('4aedeb0a-de43-b841-5970-9743bcde952b', 'Create', 'Stack', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('4b68a9cf-0af5-b0d6-8c05-e8b7e98b3919', 'View', 'Stack', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('4cfe0dcb-ce92-0500-981f-7d79b3782877', 'Create', 'Alert', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('510688a3-f3e5-851a-29fb-8c8ae66a06d5', 'View', 'User', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('57de5bf0-3ba6-3067-d4d0-c8c6a889507b', 'View', 'Role', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('5e169a67-b789-1d24-db33-ea48a69f362e', 'Create', 'Team', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('5e8afc50-270c-4413-c5f1-bd25dac435d9', 'Apply', 'Stack', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('5ede29a8-8e33-2d7c-48c3-1e5d733edd73', 'View', 'AlertChannel', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('65cb87df-133d-b577-21f6-2f20190ce45f', 'View', 'Registry', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('6deaa9b4-66e6-22bb-3f49-62584ccd9e1f', 'View', 'Platform', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('6e332b06-35e2-fbbd-e12c-bb7f02ab2474', 'Create', 'Alert', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('6f3a7126-e96a-d249-5e58-108bd0bd1f0f', 'View', 'AlertChannel', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('7238045c-c070-0ba5-b133-6083ea208d1b', 'Apply', 'Stack', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('723bb5cb-0c68-80e7-d890-7c4f6e3ce23a', 'Delete', 'Team', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('73174250-b459-3def-d4e6-82d09d07ece9', 'Update', 'GitRepository', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('75575fd4-2d45-4302-12ba-1ebf9e9ea17f', 'Create', 'GitRepository', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('780d5066-5b19-668e-9f2f-0103f6cb23be', 'View', 'Deployment', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('7ad3c461-3f87-fe3c-a1e7-4a490906600e', 'Delete', 'Platform', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('7ba78b50-a388-1606-e334-30c69758e60f', 'View', 'Deployment', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('7ccb3b9e-a09a-d3c9-82ed-3f71646d2576', 'View', 'GitAccount', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('7d64c2fa-810b-9866-5d31-be639383d279', 'Exec', 'Deployment', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('7fddc3c2-6d6e-cb92-a7a3-59a7a18b7c08', 'View', 'GitRepository', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('83ac5b37-8bd4-e093-3cdd-7e9f61300108', 'View', 'Alert', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('8469f325-f132-73f4-0fa4-42131875a5ed', 'Update', 'Role', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('8487254d-0383-5b91-fa5f-816cfdc29054', 'View', 'Team', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('8658afec-8be0-2f4b-7b1e-478ac44341ec', 'Create', 'Registry', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('88dc9733-349d-635c-7ef6-829065f4f87b', 'Create', 'AlertChannel', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('8b1633bc-d6ba-a419-38ea-e4d7e4b48cbe', 'Create', 'Deployment', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('8ce09606-e435-8a9b-2dab-8d1dfc91a198', 'Delete', 'Alert', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('8de4cd72-b2ce-4e18-f148-b93892845825', 'View', 'Alert', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9308eb9b-7faa-e3d3-ffa8-86fc7946fae0', 'View', 'Team', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9365df99-cab8-01da-f3c7-dc17a54e8801', 'Delete', 'GitAccount', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('969a37a2-af1e-fa24-35b8-4857f802e001', 'Apply', 'Deployment', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9982a665-f493-ce5f-9fd7-cd355f1ce257', 'Exec', 'Platform', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('99a0ba24-900d-448e-70f0-6e5eda10f8fc', 'Apply', 'Deployment', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('99b23eff-a5c8-0cbe-6383-b99e43a43b23', 'Create', 'AlertChannel', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9aa863b1-84ad-e6c5-738f-41425290cbb8', 'Create', 'User', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9d3d40da-3f88-d22a-e596-adcb5e101a71', 'Log', 'Stack', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9e087c4f-e933-37c9-3941-b1803f83ede3', 'Create', 'Platform', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9f3d1be4-d19e-9453-86aa-2ae06eae6d18', 'Delete', 'AlertChannel', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9fbad9ed-4795-61d8-e05b-748d2ee8aa30', 'Exec', 'Deployment', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9fd296b8-cb43-5a62-9672-cf562aa6efd1', 'Update', 'GitRepository', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('9feb50a6-6f53-b270-5e7c-f679e7d85ed5', 'Update', 'Role', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('a178007d-0c14-258e-bb6a-8828a5c28db7', 'Update', 'Deployment', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('a1a791a5-9c37-88ad-c0e2-9a6717191298', 'Update', 'Stack', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('a7ac62e2-2a4d-50c6-6700-af7a5a345bf7', 'Update', 'Team', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('a9d333db-b006-8e96-192d-2c8444e2837d', 'Log', 'Platform', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('acece9ff-20d1-f3d5-c304-3a07adb9a03b', 'Update', 'Alert', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('b60ccb85-3aaa-0077-b0e8-7adbb9f4a596', 'View', 'User', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('b678aa42-8c01-b706-1332-b85adb4e3096', 'Delete', 'Registry', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('bf01fa5c-a0a9-749e-b6c9-2d04af953b2b', 'Create', 'GitRepository', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('c1184544-a092-3f80-c4d6-6f778db56b26', 'Update', 'GitAccount', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('c12c9075-9343-73ec-322a-cc41a23230db', 'Delete', 'Deployment', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('c3e7230a-af2b-ba29-57ae-3c4043b66d61', 'View', 'Deployment', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('c71643e0-9549-edeb-c7ff-496efa58260c', 'Create', 'Platform', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('c717528a-5a83-69a2-6893-4ab5fbc14d1b', 'View', 'Platform', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('c75f0cb6-117e-8929-d133-c45f363c1610', 'Delete', 'Role', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('cdd4e750-840f-2a08-7a9a-3bd65a4360e9', 'Delete', 'Stack', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('ce566660-f041-32b6-0942-2f8abb92b17d', 'View', 'Registry', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('d23893f2-7f44-a593-83de-22ca4a8c80a1', 'Update', 'Registry', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('d868c269-b60f-2be0-2451-9b81b3c95674', 'View', 'AlertChannel', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('d990b800-123d-a0ec-9b6a-239915235880', 'Create', 'GitAccount', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('deb33289-b4e7-0111-9e93-079c08f09cf3', 'Create', 'Team', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('e0494cd9-b3ec-b088-0532-089d029accca', 'Update', 'Team', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('e08e5c0a-2e94-f112-22dd-e06d44dd2d9b', 'View', 'Stack', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('e0e6d40a-91ae-d947-56a3-6e71df38581a', 'Update', 'User', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('e13e141d-8322-f5f5-0488-cf961e919143', 'Update', 'Deployment', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('e3b44e1b-f776-b5ce-509d-2b529768a528', 'View', 'Registry', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('e6a62042-68c0-d60f-2888-f685176a8f4f', 'Create', 'Deployment', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('e92ef59e-f1ab-51fc-abc8-4d90c98e5bf9', 'Update', 'Platform', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('ec427e29-a8ed-8604-59cc-7eda3268fc30', 'View', 'Alert', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('f1782e79-808e-d628-a83a-10b4639b9a68', 'View', 'GitRepository', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('f30ff44f-86d5-8215-2c0f-60ed6ebd6234', 'Update', 'Registry', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('f3e95d8a-2b63-3cb3-51ca-c5329b5b823e', 'Log', 'Deployment', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('f43aa780-94d7-54b7-ceef-0cee3a2922df', 'View', 'Role', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('f4595acc-f991-34d8-834c-4a1136010e17', 'View', 'Platform', '30000000-0000-0000-0000-000000000003');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('f7be80a4-dffa-1049-994a-5314ee03efaf', 'Create', 'GitAccount', '30000000-0000-0000-0000-000000000001');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('f893a35b-7eac-bd31-921e-ec48bd5335e8', 'View', 'Role', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('fc6bc1bc-bb69-098b-b09e-07a96444f57e', 'Update', 'AlertChannel', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('ff6e9bea-dbf2-e811-d4ba-6702a55c3f92', 'View', 'GitAccount', '30000000-0000-0000-0000-000000000002');
-INSERT INTO permissions (id, resourceaction, resourcetype, roleid)
-VALUES ('ffc7419f-9c54-80fa-cac0-9e52ebeda6d3', 'View', 'User', '30000000-0000-0000-0000-000000000003');
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('018a880f-7e94-2797-62c6-0423a024e70e', 2, 0, '30000000-0000-0000-0000-000000000001', 6);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('030c8f34-4447-d6b0-bc28-62b9626999c7', 0, 1, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('1960cc66-8053-a58c-e2c2-2046b6bbe9c6', 1, 0, '30000000-0000-0000-0000-000000000002', 2);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('2533e6f2-53e3-1281-01f7-cc28045cbc4f', 1, 11, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('2c629740-ea41-f1c3-6624-4e237479112c', 2, 1, '30000000-0000-0000-0000-000000000001', 15);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9', 2, 4, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('2f089df9-84b2-1f53-738a-46f52ef600b7', 1, 3, '30000000-0000-0000-0000-000000000002', 8);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('361e1bf8-ef0f-1409-9137-6fa885696a19', 2, 8, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('38789c3c-9e04-471c-bec8-d9a9384b291d', 2, 3, '30000000-0000-0000-0000-000000000001', 8);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('3bf8e221-07a0-052c-d831-2c82d22f7660', 1, 10, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('4032d1e2-fe5e-16ef-f554-69bd2c2ac19d', 0, 11, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('440deb9d-ace8-5e15-ef80-3a42f11a0c42', 2, 11, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('44debca1-5d97-b691-196c-8e421143e307', 1, 9, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('5977b71b-2687-273c-04d9-98f8169b6aef', 1, 1, '30000000-0000-0000-0000-000000000002', 11);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('645b4c54-7937-2180-7186-be24ac6bf330', 2, 6, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('672ebf04-40e5-547b-29f2-6daf5c3c3856', 0, 9, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('80aa1c34-79dd-6587-52db-52605326fe77', 1, 8, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('86dadd60-fced-3dcd-cdbe-8d262bec7d22', 1, 6, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('909763b4-50a0-e1c7-6df1-61add076910c', 0, 2, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('936632a5-4e74-0a17-fb8e-497c960c3005', 0, 0, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('94717f37-cc1a-de60-9bca-dc6379444bfb', 0, 6, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('97597a3e-c415-667b-039a-a7a287daefea', 0, 5, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('987e89d0-2c8f-87d8-830f-7461a7db392e', 2, 5, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('9b075e03-6326-7b95-ae78-2b296990ce26', 1, 5, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('a60ba8de-ff46-b387-85ed-913d96170a2a', 0, 8, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('b104e60e-87ef-a58f-f04a-ba2fc634f037', 0, 7, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('b3abb382-80da-8170-b011-05af044e7908', 1, 4, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('d42ecc7d-98f8-c309-f883-c18e807dcc73', 0, 3, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('d5a0384e-7ad8-baa4-deea-10233a70221e', 1, 2, '30000000-0000-0000-0000-000000000002', 11);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('d5fa8563-b0a2-4f11-7e16-7c1877e43dda', 2, 7, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('dbb104e4-d7e2-5173-b0b2-6d1519c2f682', 2, 9, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('e01c76d8-7be7-ab3c-6b6c-c454ab53c33c', 2, 2, '30000000-0000-0000-0000-000000000001', 11);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('e04cd0d3-47bf-2d28-e099-c7a9b61e3875', 0, 4, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('ee9254c3-9b59-15a0-aa85-898f5974a603', 1, 7, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('fb710f21-c146-e381-00f0-820f58ecb69a', 0, 10, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('fbb8ef70-2ec3-134f-0c18-1533173d5849', 2, 10, '30000000-0000-0000-0000-000000000001', 0);
 
 INSERT INTO registries (id, configuration, createdat, createdbyactorid, description, name, registryhost, status)
 VALUES ('00000000-0000-0000-0000-000000000100', '{
@@ -626,7 +492,7 @@ VALUES ('00000000-0000-0000-0000-000000000100', '{
 }', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'Public Docker Hub Registry', 'Docker Hub', 'hub.docker.com', 'Active');
 
 INSERT INTO teams (id, actorid, name)
-VALUES ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000003', 'Default Team');
+VALUES ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000003', 'Operators');
 
 INSERT INTO users (id, actorid, createdat, createdbyactorid, email, name, password)
 VALUES ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'admin@citadel.local', 'admin', 'o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1');
@@ -709,6 +575,8 @@ CREATE INDEX ix_images_registryid ON images (registryid);
 
 CREATE INDEX ix_permissions_roleid ON permissions (roleid);
 
+CREATE UNIQUE INDEX ix_permissions_roleid_resourcetype ON permissions (roleid, resourcetype);
+
 CREATE UNIQUE INDEX ix_platforms_address ON platforms (address);
 
 CREATE UNIQUE INDEX ix_platformstats_platformid_created ON platformstats (platformid, created);
@@ -721,9 +589,7 @@ CREATE UNIQUE INDEX ix_registries_name ON registries (name);
 
 CREATE INDEX ix_resourceaccesses_actor ON resourceaccesses (actorid);
 
-CREATE INDEX ix_resourceaccesses_resourcetype_resourceid_actorid ON resourceaccesses (resourcetype, resourceid, actorid);
-
-CREATE UNIQUE INDEX ix_resourceaccesses_resourcetype_resourceid_actorid_action ON resourceaccesses (resourcetype, resourceid, actorid, action);
+CREATE UNIQUE INDEX ix_resourceaccesses_resourcetype_resourceid_actorid ON resourceaccesses (resourcetype, resourceid, actorid);
 
 CREATE INDEX ix_stackreleases_createdbyactorid ON stackreleases (createdbyactorid);
 
@@ -750,7 +616,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260502215426_migration0001', '10.0.7');
+VALUES ('20260508172912_migration0001', '10.0.7');
 
 COMMIT;
 

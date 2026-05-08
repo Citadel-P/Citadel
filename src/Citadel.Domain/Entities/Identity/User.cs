@@ -91,11 +91,6 @@ public sealed class User(
         {
             yield return new Claim("role", role);
         }
-
-        foreach (var permission in userAuthInfo.Permissions)
-        {
-            yield return new Claim("permission", permission.ToString()!);
-        }
     }
 
     /// <summary>

@@ -17,7 +17,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(ResourceType.Deployment, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Execute)]
 public sealed record DeleteDeployments(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteDeploymentsHandler(

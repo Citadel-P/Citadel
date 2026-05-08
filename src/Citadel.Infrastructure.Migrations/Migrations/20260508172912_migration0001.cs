@@ -54,10 +54,11 @@ namespace Infrastructure.Migrations.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
-                    action = table.Column<string>(type: "text", nullable: false),
                     actorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    permissionlevel = table.Column<int>(type: "integer", nullable: false),
                     resourceid = table.Column<Guid>(type: "uuid", nullable: false),
-                    resourcetype = table.Column<string>(type: "text", nullable: false)
+                    resourcetype = table.Column<int>(type: "integer", nullable: false),
+                    specificpermissions = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -388,9 +389,10 @@ namespace Infrastructure.Migrations.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
-                    resourceaction = table.Column<string>(type: "text", nullable: false),
-                    resourcetype = table.Column<string>(type: "text", nullable: false),
-                    roleid = table.Column<Guid>(type: "uuid", nullable: false)
+                    permissionlevel = table.Column<int>(type: "integer", nullable: false),
+                    resourcetype = table.Column<int>(type: "integer", nullable: false),
+                    roleid = table.Column<Guid>(type: "uuid", nullable: false),
+                    specificpermissions = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -780,113 +782,45 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.InsertData(
                 table: "permissions",
-                columns: new[] { "id", "resourceaction", "resourcetype", "roleid" },
+                columns: new[] { "id", "permissionlevel", "resourcetype", "roleid", "specificpermissions" },
                 values: new object[,]
                 {
-                    { new Guid("017b5a65-e312-8a67-b7fd-6124f6ddeeee"), "View", "GitRepository", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("0292fdeb-9a33-5a4c-60e9-395eac821cdc"), "Delete", "User", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("0309bcb2-05ec-623d-e45b-ec10cfddee24"), "Create", "Role", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("052e45fb-cb15-9380-6a33-c233fde703a6"), "Update", "GitAccount", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("0854c122-21bc-147b-506b-6caf72ac48ca"), "View", "Team", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("0f030749-53d1-bade-8ef3-30112991786d"), "Create", "Stack", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("117176b6-ca23-e53d-d996-83affab7ed48"), "View", "Stack", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("1a0b6504-d508-0f6d-4513-12b80c3ab4d8"), "Update", "Platform", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("1a84bf5e-dcf2-8a0b-8c4f-066f98ed2498"), "Exec", "Platform", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("21d8c7f7-5480-5509-e2ab-e3c8fdbb5ab8"), "Update", "AlertChannel", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("2548763c-c9b7-5359-a80a-5ce706c5c42c"), "Update", "Alert", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("29b878e1-64b3-eee4-d8d9-7a7fb015c14c"), "Log", "Deployment", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("2e0582c8-9569-22cd-c777-69f03893b8ec"), "Delete", "GitRepository", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("30f18293-2d41-2525-3210-e0f83bafa13d"), "Update", "Stack", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("36667c46-31d9-3c62-1375-459c4daba3ed"), "Log", "Stack", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("37023893-2218-6946-8caa-bbc8a7ad77a1"), "Log", "Platform", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("3a8c08b1-d033-1580-65f9-a1cb3ed3fc6a"), "Create", "Registry", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("3d84b4f0-2433-c34e-45e1-84d18b6c155d"), "Pull", "Platform", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("3e1abbe9-b2f2-21b8-bf02-38d4c10cd79d"), "Create", "Role", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("3e5365c6-7759-a0ad-e7fa-32263d00682c"), "View", "GitAccount", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("4711987b-af34-12f7-4cf4-795f51049571"), "Pull", "Platform", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("47a25f07-9bb1-361d-788e-4d99fd0e50ee"), "Update", "User", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("49ce8531-88f1-5ed2-a1c7-95d40cc72c47"), "Create", "User", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("4aedeb0a-de43-b841-5970-9743bcde952b"), "Create", "Stack", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("4b68a9cf-0af5-b0d6-8c05-e8b7e98b3919"), "View", "Stack", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("4cfe0dcb-ce92-0500-981f-7d79b3782877"), "Create", "Alert", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("510688a3-f3e5-851a-29fb-8c8ae66a06d5"), "View", "User", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("57de5bf0-3ba6-3067-d4d0-c8c6a889507b"), "View", "Role", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("5e169a67-b789-1d24-db33-ea48a69f362e"), "Create", "Team", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("5e8afc50-270c-4413-c5f1-bd25dac435d9"), "Apply", "Stack", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("5ede29a8-8e33-2d7c-48c3-1e5d733edd73"), "View", "AlertChannel", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("65cb87df-133d-b577-21f6-2f20190ce45f"), "View", "Registry", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("6deaa9b4-66e6-22bb-3f49-62584ccd9e1f"), "View", "Platform", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("6e332b06-35e2-fbbd-e12c-bb7f02ab2474"), "Create", "Alert", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("6f3a7126-e96a-d249-5e58-108bd0bd1f0f"), "View", "AlertChannel", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("7238045c-c070-0ba5-b133-6083ea208d1b"), "Apply", "Stack", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("723bb5cb-0c68-80e7-d890-7c4f6e3ce23a"), "Delete", "Team", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("73174250-b459-3def-d4e6-82d09d07ece9"), "Update", "GitRepository", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("75575fd4-2d45-4302-12ba-1ebf9e9ea17f"), "Create", "GitRepository", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("780d5066-5b19-668e-9f2f-0103f6cb23be"), "View", "Deployment", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("7ad3c461-3f87-fe3c-a1e7-4a490906600e"), "Delete", "Platform", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("7ba78b50-a388-1606-e334-30c69758e60f"), "View", "Deployment", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("7ccb3b9e-a09a-d3c9-82ed-3f71646d2576"), "View", "GitAccount", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("7d64c2fa-810b-9866-5d31-be639383d279"), "Exec", "Deployment", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("7fddc3c2-6d6e-cb92-a7a3-59a7a18b7c08"), "View", "GitRepository", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("83ac5b37-8bd4-e093-3cdd-7e9f61300108"), "View", "Alert", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("8469f325-f132-73f4-0fa4-42131875a5ed"), "Update", "Role", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("8487254d-0383-5b91-fa5f-816cfdc29054"), "View", "Team", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("8658afec-8be0-2f4b-7b1e-478ac44341ec"), "Create", "Registry", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("88dc9733-349d-635c-7ef6-829065f4f87b"), "Create", "AlertChannel", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("8b1633bc-d6ba-a419-38ea-e4d7e4b48cbe"), "Create", "Deployment", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("8ce09606-e435-8a9b-2dab-8d1dfc91a198"), "Delete", "Alert", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("8de4cd72-b2ce-4e18-f148-b93892845825"), "View", "Alert", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("9308eb9b-7faa-e3d3-ffa8-86fc7946fae0"), "View", "Team", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("9365df99-cab8-01da-f3c7-dc17a54e8801"), "Delete", "GitAccount", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("969a37a2-af1e-fa24-35b8-4857f802e001"), "Apply", "Deployment", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("9982a665-f493-ce5f-9fd7-cd355f1ce257"), "Exec", "Platform", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("99a0ba24-900d-448e-70f0-6e5eda10f8fc"), "Apply", "Deployment", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("99b23eff-a5c8-0cbe-6383-b99e43a43b23"), "Create", "AlertChannel", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("9aa863b1-84ad-e6c5-738f-41425290cbb8"), "Create", "User", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("9d3d40da-3f88-d22a-e596-adcb5e101a71"), "Log", "Stack", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("9e087c4f-e933-37c9-3941-b1803f83ede3"), "Create", "Platform", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("9f3d1be4-d19e-9453-86aa-2ae06eae6d18"), "Delete", "AlertChannel", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("9fbad9ed-4795-61d8-e05b-748d2ee8aa30"), "Exec", "Deployment", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("9fd296b8-cb43-5a62-9672-cf562aa6efd1"), "Update", "GitRepository", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("9feb50a6-6f53-b270-5e7c-f679e7d85ed5"), "Update", "Role", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("a178007d-0c14-258e-bb6a-8828a5c28db7"), "Update", "Deployment", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("a1a791a5-9c37-88ad-c0e2-9a6717191298"), "Update", "Stack", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("a7ac62e2-2a4d-50c6-6700-af7a5a345bf7"), "Update", "Team", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("a9d333db-b006-8e96-192d-2c8444e2837d"), "Log", "Platform", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("acece9ff-20d1-f3d5-c304-3a07adb9a03b"), "Update", "Alert", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("b60ccb85-3aaa-0077-b0e8-7adbb9f4a596"), "View", "User", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("b678aa42-8c01-b706-1332-b85adb4e3096"), "Delete", "Registry", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("bf01fa5c-a0a9-749e-b6c9-2d04af953b2b"), "Create", "GitRepository", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("c1184544-a092-3f80-c4d6-6f778db56b26"), "Update", "GitAccount", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("c12c9075-9343-73ec-322a-cc41a23230db"), "Delete", "Deployment", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("c3e7230a-af2b-ba29-57ae-3c4043b66d61"), "View", "Deployment", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("c71643e0-9549-edeb-c7ff-496efa58260c"), "Create", "Platform", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("c717528a-5a83-69a2-6893-4ab5fbc14d1b"), "View", "Platform", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("c75f0cb6-117e-8929-d133-c45f363c1610"), "Delete", "Role", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("cdd4e750-840f-2a08-7a9a-3bd65a4360e9"), "Delete", "Stack", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("ce566660-f041-32b6-0942-2f8abb92b17d"), "View", "Registry", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("d23893f2-7f44-a593-83de-22ca4a8c80a1"), "Update", "Registry", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("d868c269-b60f-2be0-2451-9b81b3c95674"), "View", "AlertChannel", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("d990b800-123d-a0ec-9b6a-239915235880"), "Create", "GitAccount", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("deb33289-b4e7-0111-9e93-079c08f09cf3"), "Create", "Team", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("e0494cd9-b3ec-b088-0532-089d029accca"), "Update", "Team", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("e08e5c0a-2e94-f112-22dd-e06d44dd2d9b"), "View", "Stack", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("e0e6d40a-91ae-d947-56a3-6e71df38581a"), "Update", "User", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("e13e141d-8322-f5f5-0488-cf961e919143"), "Update", "Deployment", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("e3b44e1b-f776-b5ce-509d-2b529768a528"), "View", "Registry", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("e6a62042-68c0-d60f-2888-f685176a8f4f"), "Create", "Deployment", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("e92ef59e-f1ab-51fc-abc8-4d90c98e5bf9"), "Update", "Platform", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("ec427e29-a8ed-8604-59cc-7eda3268fc30"), "View", "Alert", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("f1782e79-808e-d628-a83a-10b4639b9a68"), "View", "GitRepository", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("f30ff44f-86d5-8215-2c0f-60ed6ebd6234"), "Update", "Registry", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("f3e95d8a-2b63-3cb3-51ca-c5329b5b823e"), "Log", "Deployment", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("f43aa780-94d7-54b7-ceef-0cee3a2922df"), "View", "Role", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("f4595acc-f991-34d8-834c-4a1136010e17"), "View", "Platform", new Guid("30000000-0000-0000-0000-000000000003") },
-                    { new Guid("f7be80a4-dffa-1049-994a-5314ee03efaf"), "Create", "GitAccount", new Guid("30000000-0000-0000-0000-000000000001") },
-                    { new Guid("f893a35b-7eac-bd31-921e-ec48bd5335e8"), "View", "Role", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("fc6bc1bc-bb69-098b-b09e-07a96444f57e"), "Update", "AlertChannel", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("ff6e9bea-dbf2-e811-d4ba-6702a55c3f92"), "View", "GitAccount", new Guid("30000000-0000-0000-0000-000000000002") },
-                    { new Guid("ffc7419f-9c54-80fa-cac0-9e52ebeda6d3"), "View", "User", new Guid("30000000-0000-0000-0000-000000000003") }
+                    { new Guid("018a880f-7e94-2797-62c6-0423a024e70e"), 2, 0, new Guid("30000000-0000-0000-0000-000000000001"), 6 },
+                    { new Guid("030c8f34-4447-d6b0-bc28-62b9626999c7"), 0, 1, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("1960cc66-8053-a58c-e2c2-2046b6bbe9c6"), 1, 0, new Guid("30000000-0000-0000-0000-000000000002"), 2 },
+                    { new Guid("2533e6f2-53e3-1281-01f7-cc28045cbc4f"), 1, 11, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("2c629740-ea41-f1c3-6624-4e237479112c"), 2, 1, new Guid("30000000-0000-0000-0000-000000000001"), 15 },
+                    { new Guid("2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9"), 2, 4, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("2f089df9-84b2-1f53-738a-46f52ef600b7"), 1, 3, new Guid("30000000-0000-0000-0000-000000000002"), 8 },
+                    { new Guid("361e1bf8-ef0f-1409-9137-6fa885696a19"), 2, 8, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("38789c3c-9e04-471c-bec8-d9a9384b291d"), 2, 3, new Guid("30000000-0000-0000-0000-000000000001"), 8 },
+                    { new Guid("3bf8e221-07a0-052c-d831-2c82d22f7660"), 1, 10, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("4032d1e2-fe5e-16ef-f554-69bd2c2ac19d"), 0, 11, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("440deb9d-ace8-5e15-ef80-3a42f11a0c42"), 2, 11, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("44debca1-5d97-b691-196c-8e421143e307"), 1, 9, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("5977b71b-2687-273c-04d9-98f8169b6aef"), 1, 1, new Guid("30000000-0000-0000-0000-000000000002"), 11 },
+                    { new Guid("645b4c54-7937-2180-7186-be24ac6bf330"), 2, 6, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("672ebf04-40e5-547b-29f2-6daf5c3c3856"), 0, 9, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("80aa1c34-79dd-6587-52db-52605326fe77"), 1, 8, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("86dadd60-fced-3dcd-cdbe-8d262bec7d22"), 1, 6, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("909763b4-50a0-e1c7-6df1-61add076910c"), 0, 2, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("936632a5-4e74-0a17-fb8e-497c960c3005"), 0, 0, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("94717f37-cc1a-de60-9bca-dc6379444bfb"), 0, 6, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("97597a3e-c415-667b-039a-a7a287daefea"), 0, 5, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("987e89d0-2c8f-87d8-830f-7461a7db392e"), 2, 5, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("9b075e03-6326-7b95-ae78-2b296990ce26"), 1, 5, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("a60ba8de-ff46-b387-85ed-913d96170a2a"), 0, 8, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("b104e60e-87ef-a58f-f04a-ba2fc634f037"), 0, 7, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("b3abb382-80da-8170-b011-05af044e7908"), 1, 4, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("d42ecc7d-98f8-c309-f883-c18e807dcc73"), 0, 3, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("d5a0384e-7ad8-baa4-deea-10233a70221e"), 1, 2, new Guid("30000000-0000-0000-0000-000000000002"), 11 },
+                    { new Guid("d5fa8563-b0a2-4f11-7e16-7c1877e43dda"), 2, 7, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("dbb104e4-d7e2-5173-b0b2-6d1519c2f682"), 2, 9, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("e01c76d8-7be7-ab3c-6b6c-c454ab53c33c"), 2, 2, new Guid("30000000-0000-0000-0000-000000000001"), 11 },
+                    { new Guid("e04cd0d3-47bf-2d28-e099-c7a9b61e3875"), 0, 4, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("ee9254c3-9b59-15a0-aa85-898f5974a603"), 1, 7, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("fb710f21-c146-e381-00f0-820f58ecb69a"), 0, 10, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("fbb8ef70-2ec3-134f-0c18-1533173d5849"), 2, 10, new Guid("30000000-0000-0000-0000-000000000001"), 0 }
                 });
 
             migrationBuilder.InsertData(
@@ -897,7 +831,7 @@ namespace Infrastructure.Migrations.Migrations
             migrationBuilder.InsertData(
                 table: "teams",
                 columns: new[] { "id", "actorid", "name" },
-                values: new object[] { new Guid("20000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000003"), "Default Team" });
+                values: new object[] { new Guid("20000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000003"), "Operators" });
 
             migrationBuilder.InsertData(
                 table: "users",
@@ -1107,6 +1041,12 @@ namespace Infrastructure.Migrations.Migrations
                 column: "roleid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_permissions_roleid_resourcetype",
+                table: "permissions",
+                columns: new[] { "roleid", "resourcetype" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_platforms_address",
                 table: "platforms",
                 column: "address",
@@ -1142,12 +1082,7 @@ namespace Infrastructure.Migrations.Migrations
             migrationBuilder.CreateIndex(
                 name: "ix_resourceaccesses_resourcetype_resourceid_actorid",
                 table: "resourceaccesses",
-                columns: new[] { "resourcetype", "resourceid", "actorid" });
-
-            migrationBuilder.CreateIndex(
-                name: "ix_resourceaccesses_resourcetype_resourceid_actorid_action",
-                table: "resourceaccesses",
-                columns: new[] { "resourcetype", "resourceid", "actorid", "action" },
+                columns: new[] { "resourcetype", "resourceid", "actorid" },
                 unique: true);
 
             migrationBuilder.CreateIndex(

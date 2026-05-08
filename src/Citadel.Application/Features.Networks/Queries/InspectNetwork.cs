@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.Networks.Queries;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.View)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record InspectNetwork(Guid PlatformId, string NetworkId): IQuery<Result<DockerNetworkDetails>>
 {
     internal class Validator : AbstractValidator<InspectNetwork>

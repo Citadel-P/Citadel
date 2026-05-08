@@ -10,7 +10,7 @@ using static Hosting.Common.Validators;
 
 namespace Application.Features.Networks.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Create)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Write)]
 public sealed record CreateNetwork(
     Guid PlatformId,
     string Name,

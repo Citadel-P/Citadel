@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.GitAccounts.Queries;
 
-[RequirePermission(ResourceType.GitAccount, ResourceAction.View)]
+[RequirePermission(ResourceType.GitAccount, PermissionLevel.Read)]
 public sealed record GetGitAccount(Guid Id) : IQuery<Result<GitAccount>>;
 
 internal sealed class GetGitAccountHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetGitAccount, Result<GitAccount>>

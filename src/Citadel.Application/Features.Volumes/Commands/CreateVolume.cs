@@ -11,7 +11,7 @@ using static Hosting.Common.Validators;
 
 namespace Application.Features.Volumes.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Create)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Write)]
 public sealed record CreateVolume(
     Guid PlatformId,
     string Name,

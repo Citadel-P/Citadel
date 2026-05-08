@@ -14,7 +14,7 @@ using Hosting.Common;
 
 namespace Application.Features.Stacks.Commands;
 
-[RequirePermission(ResourceType.Stack, ResourceAction.Update)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Write)]
 public sealed record PatchStack(Guid Id, JsonMergePatchDocument<StackPatchModel> Patch) : ICommand<Result<Stack>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchStack, StackPatchModel>

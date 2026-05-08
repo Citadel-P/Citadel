@@ -336,12 +336,8 @@ public static class PublicEndpoints
             .WithName("deleteRoles");
 
         roles.MapGet("/permissions/matrix", () =>
-            TypedResults.Ok(
-                PermissionMatrix.GetAll()
-                    .ToDictionary(
-                        kvp => kvp.Key.ToString(),
-                        kvp => kvp.Value.Select(a => a.ToString()).ToArray())))
-            .WithSummary("Get the permission matrix (all valid resource/action combinations)")
+            TypedResults.Ok(PermissionMatrixView.Map()))
+            .WithSummary("Get the permission matrix (all valid resource capabilities and minimum levels)")
             .WithName("getPermissionMatrix")
             .AllowAnonymous();
     }

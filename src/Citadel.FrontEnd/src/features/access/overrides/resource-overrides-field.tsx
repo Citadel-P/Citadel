@@ -1,4 +1,10 @@
-import { ResourceAction, ResourceType, UserResourceAccessInput } from '@/api/generated/api.types';
+import {
+  ResourceType,
+  PermissionLevel,
+  SpecificPermission,
+  PermissionInput,
+  PermissionMatrixViewItem,
+} from '@/api/generated/api.types';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +24,7 @@ import { PluralResourceMap } from '@/api/types';
 import { Link } from 'react-router';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState, type ComponentType } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type ResourceItem = {
   id: string;
@@ -25,29 +32,35 @@ type ResourceItem = {
 };
 
 type OverrideResourceType =
+  | ResourceType.Platform
   | ResourceType.Deployment
   | ResourceType.Stack
-  | ResourceType.Platform
+  | ResourceType.Registry
   | ResourceType.GitRepository;
 
 type DisplayResourceItem = ResourceItem & {
   resourceType: OverrideResourceType;
 };
 
-type ResourceSelectionMap = Record<string, string[]>;
+type ResourceSelectionMap = Record<
+  string,
+  { permissionLevel: PermissionLevel | null; specificPermissions: SpecificPermission[] }
+>;
 type ResourceDraftSelections = Record<OverrideResourceType, ResourceSelectionMap>;
 
 const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
+  ResourceType.Platform,
   ResourceType.Deployment,
   ResourceType.Stack,
-  ResourceType.Platform,
+  ResourceType.Registry,
   ResourceType.GitRepository,
 ];
 
 const OVERRIDE_RESOURCE_ICONS: Record<OverrideResourceType, ComponentType<{ className?: string }>> = {
+  [ResourceType.Platform]: CitadelIcons.Platform,
   [ResourceType.Deployment]: CitadelIcons.Deployment,
   [ResourceType.Stack]: CitadelIcons.Stack,
-  [ResourceType.Platform]: CitadelIcons.Platform,
+  [ResourceType.Registry]: CitadelIcons.Registry,
   [ResourceType.GitRepository]: CitadelIcons.GitRepository,
 };
 
@@ -57,31 +70,33 @@ const isOverrideResourceType = (resourceType: ResourceType): resourceType is Ove
 const createEmptyDraftSelections = (): ResourceDraftSelections =>
   Object.fromEntries(OVERRIDE_RESOURCE_TYPES.map((resourceType) => [resourceType, {}])) as ResourceDraftSelections;
 
-const buildDraftSelections = (entries: UserResourceAccessInput[]): ResourceDraftSelections => {
+const buildDraftSelections = (entries: Array<PermissionInput & { resourceId: string }>): ResourceDraftSelections => {
   const draft = createEmptyDraftSelections();
 
   for (const entry of entries) {
     if (!isOverrideResourceType(entry.resourceType)) continue;
 
-    const actions = draft[entry.resourceType][entry.resourceId] ?? [];
-    if (!actions.includes(entry.action)) {
-      actions.push(entry.action);
-    }
-    draft[entry.resourceType][entry.resourceId] = actions;
+    draft[entry.resourceType][entry.resourceId] = {
+      permissionLevel: entry.permissionLevel,
+      specificPermissions: entry.specificPermissions ?? [],
+    };
   }
 
   return draft;
 };
 
-const flattenDraftSelections = (draftSelectionsByType: ResourceDraftSelections): UserResourceAccessInput[] =>
+const flattenDraftSelections = (
+  draftSelectionsByType: ResourceDraftSelections,
+): Array<PermissionInput & { resourceId: string }> =>
   OVERRIDE_RESOURCE_TYPES.flatMap((resourceType) =>
-    Object.entries(draftSelectionsByType[resourceType]).flatMap(([resourceId, actions]) =>
-      actions.map((action) => ({
+    Object.entries(draftSelectionsByType[resourceType])
+      .filter(([, state]) => state.permissionLevel)
+      .map(([resourceId, state]) => ({
         resourceType,
         resourceId,
-        action: action as ResourceAction,
+        permissionLevel: state.permissionLevel!,
+        specificPermissions: state.specificPermissions.length > 0 ? state.specificPermissions : null,
       })),
-    ),
   );
 
 const getResourceRowKey = (resourceType: ResourceType, resourceId: string) => `${resourceType}:${resourceId}`;
@@ -142,41 +157,12 @@ const ResourceActionsCell = ({ onEdit, onDelete }: { onEdit: () => void; onDelet
   </TableCell>
 );
 
-const ResourcePermissionsCell = ({
-  options,
-  selectedValues,
-  onChange,
-  disabled,
-  placeholder,
-}: {
-  options: Array<{ label: string; value: string }>;
-  selectedValues: string[];
-  onChange: (values: string[]) => void;
-  disabled: boolean;
-  placeholder: string;
-}) => (
-  <TableCell>
-    <div className="max-w-xl">
-      <MultiSelect
-        options={options}
-        defaultValue={selectedValues}
-        onValueChange={onChange}
-        placeholder={placeholder}
-        maxCount={4}
-        resetOnDefaultValueChange={true}
-        animation={0}
-        disabled={disabled}
-      />
-    </div>
-  </TableCell>
-);
-
 export const ResourceOverridesField = ({
   value,
   onChange,
 }: {
-  value: UserResourceAccessInput[] | null;
-  onChange: (next: UserResourceAccessInput[]) => void;
+  value: Array<PermissionInput & { resourceId: string }> | null;
+  onChange: (next: Array<PermissionInput & { resourceId: string }>) => void;
 }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<OverrideResourceType>(ResourceType.Platform);
@@ -184,10 +170,13 @@ export const ResourceOverridesField = ({
     createEmptyDraftSelections(),
   );
 
-  const entries = useMemo(() => (value ?? []) as UserResourceAccessInput[], [value]);
+  const entries = useMemo(() => (value ?? []) as Array<PermissionInput & { resourceId: string }>, [value]);
 
-  const { data: matrixData, isLoading: isMatrixLoading } = useRead('getPermissionMatrix');
-  const permissionMatrix = useMemo(() => (matrixData?.data ?? {}) as Record<string, string[]>, [matrixData]);
+  const { data: matrixData } = useRead('getPermissionMatrix');
+  const permissionMatrix = useMemo(
+    () => (matrixData?.data ?? {}) as Record<OverrideResourceType, PermissionMatrixViewItem>,
+    [matrixData],
+  );
 
   const resourceTypeOptions = useMemo(
     () =>
@@ -239,12 +228,6 @@ export const ResourceOverridesField = ({
     return map;
   }, [deploymentItems.items, stackItems.items, platformItems.items, gitRepositoryItems.items]);
 
-  const getActionOptions = (resourceType: OverrideResourceType) =>
-    (permissionMatrix[resourceType] ?? []).map((action) => ({
-      label: action,
-      value: action,
-    }));
-
   const selectedByResourceKey = draftSelectionsByType[effectiveSelectedType];
 
   const openDialogWithDraft = (resourceType: OverrideResourceType) => {
@@ -253,13 +236,17 @@ export const ResourceOverridesField = ({
     setDialogOpen(true);
   };
 
-  const handleResourceActionChange = (resourceId: string, actions: string[]) => {
+  const handleResourcePermissionChange = (
+    resourceId: string,
+    permissionLevel: PermissionLevel | null,
+    specificPermissions: SpecificPermission[],
+  ) => {
     setDraftSelectionsByType((prev) => {
       const currentTypeSelections = { ...prev[effectiveSelectedType] };
-      if (actions.length === 0) {
-        delete currentTypeSelections[resourceId];
+      if (permissionLevel) {
+        currentTypeSelections[resourceId] = { permissionLevel, specificPermissions };
       } else {
-        currentTypeSelections[resourceId] = actions;
+        delete currentTypeSelections[resourceId];
       }
 
       return {
@@ -280,7 +267,7 @@ export const ResourceOverridesField = ({
         variant="outline"
         className="w-full max-w-100 flex flex-row gap-2"
         onClick={() => openDialogWithDraft(effectiveSelectedType)}>
-        <Plus className="h-3 w-3" /> Add Resources
+        <Plus className="h-3 w-3" /> Grant Access
       </Button>
 
       {entries.length > 0 && (
@@ -289,7 +276,8 @@ export const ResourceOverridesField = ({
             <TableHeader>
               <TableRow>
                 <TableHead>Resource</TableHead>
-                <TableHead>Permissions</TableHead>
+                <TableHead className="w-32">Level</TableHead>
+                <TableHead className="flex-1">Specific</TableHead>
                 <TableHead className="text-center w-28">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -302,13 +290,12 @@ export const ResourceOverridesField = ({
                     grouped.set(key, {
                       resourceType: entry.resourceType,
                       resourceId: entry.resourceId,
-                      actions: [entry.action],
+                      permissionLevel: entry.permissionLevel,
+                      specificPermissions: entry.specificPermissions ?? [],
                     });
-                  } else if (!existing.actions.includes(entry.action)) {
-                    existing.actions.push(entry.action);
                   }
                   return grouped;
-                }, new Map<string, { resourceType: ResourceType; resourceId: string; actions: string[] }>()),
+                }, new Map<string, { resourceType: ResourceType; resourceId: string; permissionLevel: PermissionLevel; specificPermissions: SpecificPermission[] }>()),
               )
                 .map(([, row]) => row)
                 .sort((a, b) => {
@@ -322,6 +309,19 @@ export const ResourceOverridesField = ({
                 .map((row) => {
                   const resourceType = row.resourceType as OverrideResourceType;
                   const resourceName = allResourceNameMap.get(row.resourceId) ?? row.resourceId;
+                  const matrix = permissionMatrix[resourceType];
+                  const availableSpecific =
+                    row.permissionLevel && matrix
+                      ? Object.entries(matrix.specificPermissions)
+                          .filter(([, minLevel]) => {
+                            const levels = [PermissionLevel.Read, PermissionLevel.Write, PermissionLevel.Execute];
+                            return (
+                              levels.indexOf(minLevel as PermissionLevel) <=
+                              levels.indexOf(row.permissionLevel as PermissionLevel)
+                            );
+                          })
+                          .map(([perm]) => perm)
+                      : [];
                   return (
                     <TableRow key={getResourceRowKey(row.resourceType, row.resourceId)}>
                       <ResourceLinkCell
@@ -329,7 +329,37 @@ export const ResourceOverridesField = ({
                         resourceId={row.resourceId}
                         resourceName={resourceName}
                       />
-                      <TableCell>{row.actions.sort((a, b) => a.localeCompare(b)).join(', ')}</TableCell>
+                      <TableCell>
+                        <Select value={row.permissionLevel ?? ''} disabled>
+                          <SelectTrigger className="w-45">
+                            <SelectValue placeholder="Select level" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background">
+                            {row.permissionLevel && (
+                              <SelectItem value={row.permissionLevel}>{row.permissionLevel}</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        {row.permissionLevel && availableSpecific.length > 0 ? (
+                          <div className="w-120">
+                            <MultiSelect
+                              options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
+                              defaultValue={row.specificPermissions}
+                              placeholder="Select capabilities"
+                              onValueChange={() => {}}
+                              maxCount={3}
+                              animation={0}
+                              disabled
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            {row.permissionLevel ? 'No capabilities' : '—'}
+                          </p>
+                        )}
+                      </TableCell>
                       <ResourceActionsCell
                         onEdit={() => handleEditRow(row.resourceType)}
                         onDelete={() =>
@@ -362,7 +392,7 @@ export const ResourceOverridesField = ({
                 value={effectiveSelectedType}
                 onChange={(next) => setSelectedType(next as OverrideResourceType)}
                 options={resourceTypeOptions}
-                placeholder={isMatrixLoading ? 'Loading resource types...' : 'Select resource type'}
+                placeholder="Select resource type"
                 allLabel="Resource Type"
                 selectableLabel={false}
               />
@@ -374,7 +404,8 @@ export const ResourceOverridesField = ({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Resource</TableHead>
-                      <TableHead>Permissions</TableHead>
+                      <TableHead className="w-32">Level</TableHead>
+                      <TableHead className="flex-1">Specific</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -386,7 +417,23 @@ export const ResourceOverridesField = ({
                       </TableRow>
                     ) : (
                       resources.map((resource) => {
-                        const resourceActionOptions = getActionOptions(resource.resourceType);
+                        const matrix = permissionMatrix[resource.resourceType];
+                        if (!matrix) return null;
+                        const levels = [PermissionLevel.Read, PermissionLevel.Write, PermissionLevel.Execute];
+                        const maxIndex = levels.indexOf(matrix.maximumLevel as PermissionLevel);
+                        const availableLevels = levels.filter((_, i) => i <= maxIndex);
+                        const currentState = selectedByResourceKey[resource.id];
+                        const currentLevel = currentState?.permissionLevel ?? null;
+                        const currentSpecific = currentState?.specificPermissions ?? [];
+                        const availableSpecific = !currentLevel
+                          ? []
+                          : Object.entries(matrix.specificPermissions)
+                              .filter(
+                                ([, minLevel]) =>
+                                  levels.indexOf(minLevel as PermissionLevel) <= levels.indexOf(currentLevel),
+                              )
+                              .map(([perm]) => perm);
+
                         return (
                           <TableRow key={getResourceRowKey(resource.resourceType, resource.id)}>
                             <ResourceLinkCell
@@ -394,13 +441,43 @@ export const ResourceOverridesField = ({
                               resourceId={resource.id}
                               resourceName={resource.name}
                             />
-                            <ResourcePermissionsCell
-                              options={resourceActionOptions}
-                              selectedValues={selectedByResourceKey[resource.id] ?? []}
-                              onChange={(values) => handleResourceActionChange(resource.id, values)}
-                              placeholder={`Select ${resource.resourceType} permissions`}
-                              disabled={isResourcesLoading || resourceActionOptions.length === 0}
-                            />
+                            <TableCell>
+                              <Select
+                                value={currentLevel ?? ''}
+                                onValueChange={(v) =>
+                                  handleResourcePermissionChange(resource.id, v ? (v as PermissionLevel) : null, [])
+                                }>
+                                <SelectTrigger className="w-40">
+                                  <SelectValue placeholder="Select level" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-background">
+                                  {availableLevels.map((level) => (
+                                    <SelectItem key={level} value={level}>
+                                      {level}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              {currentLevel && availableSpecific.length > 0 ? (
+                                <MultiSelect
+                                  options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
+                                  defaultValue={currentSpecific}
+                                  onValueChange={(v) =>
+                                    handleResourcePermissionChange(resource.id, currentLevel, v as SpecificPermission[])
+                                  }
+                                  placeholder="Select capabilities"
+                                  maxCount={3}
+                                  animation={0}
+                                  disabled={isResourcesLoading}
+                                />
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  {currentLevel ? 'No capabilities' : '—'}
+                                </p>
+                              )}
+                            </TableCell>
                           </TableRow>
                         );
                       })

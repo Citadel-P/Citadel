@@ -14,7 +14,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(ResourceType.Deployment, ResourceAction.Update)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Write)]
 public sealed record ChangeDeploymentState(IEnumerable<Guid> DeploymentIds, DeploymentAction Action) : ICommand<Result>;
 
 internal sealed class ChangeDeploymentStateHandler(

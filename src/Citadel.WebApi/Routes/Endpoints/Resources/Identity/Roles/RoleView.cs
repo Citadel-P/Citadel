@@ -8,7 +8,10 @@ public sealed record RoleView(Guid Id, string Name, Domain.RoleType RoleType, IE
     internal static RoleView Map(RoleDetails role) => new(role.Id, role.Name, role.RoleType, role.Permissions.Select(PermissionView.Map));
 }
 
-public sealed record PermissionView(Hosting.Common.ResourceType ResourceType, Hosting.Common.ResourceAction ResourceAction)
+public sealed record PermissionView(
+    Hosting.Common.ResourceType ResourceType,
+    Hosting.Common.PermissionLevel PermissionLevel,
+    IEnumerable<Hosting.Common.SpecificPermission> SpecificPermissions)
 {
-    internal static PermissionView Map(Permission permission) => new(permission.ResourceType, permission.ResourceAction);
+    internal static PermissionView Map(Permission permission) => new(permission.ResourceType, permission.PermissionLevel, permission.SpecificPermissions);
 }

@@ -28,7 +28,7 @@ public class GitRepositoryViewTests(PostgresTestFixture fixture) : IntegrationTe
         await CreateGitRepositoryAsync("gr-hidden");
 
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.GitRepository, visibleRepositoryId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.GitRepository, visibleRepositoryId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",

@@ -10,8 +10,13 @@ using Mediator;
 
 namespace Application.Features.Identity.Teams.Commands;
 
-[RequirePermission(ResourceType.Team, ResourceAction.Update)]
-public sealed record AddTeamResourceAccess(Guid TeamId, ResourceType ResourceType, Guid ResourceId, ResourceAction Action) : ICommand<Result<TeamDetails>>
+[RequirePermission(ResourceType.Team, PermissionLevel.Write)]
+public sealed record AddTeamResourceAccess(
+    Guid TeamId,
+    ResourceType ResourceType,
+    Guid ResourceId,
+    PermissionLevel PermissionLevel,
+    IEnumerable<SpecificPermission>? SpecificPermissions) : ICommand<Result<TeamDetails>>
 {
     internal sealed class Validator : AbstractValidator<AddTeamResourceAccess>
     {
@@ -20,10 +25,11 @@ public sealed record AddTeamResourceAccess(Guid TeamId, ResourceType ResourceTyp
             RuleFor(x => x.TeamId).NotEmpty();
             RuleFor(x => x.ResourceId).NotEmpty();
             RuleFor(x => x.ResourceType).IsInEnum();
-            RuleFor(x => x.Action).IsInEnum();
+            RuleFor(x => x.PermissionLevel).IsInEnum();
+            RuleForEach(x => x.SpecificPermissions).IsInEnum();
             RuleFor(x => x)
-                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.Action))
-                .WithMessage(x => $"Invalid permission: [{x.ResourceType}]-[{x.Action}] is not an allowed combination.");
+                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.PermissionLevel, x.SpecificPermissions))
+                .WithMessage(x => $"Invalid permission: [{x.ResourceType}]-[{x.PermissionLevel}] with specifics [{string.Join(", ", x.SpecificPermissions ?? [])}] is not an allowed combination.");
         }
     }
 }
@@ -41,7 +47,8 @@ internal sealed class AddTeamResourceAccessHandler(IUnitOfWork unitOfWork, IActo
             team.ActorId,
             command.ResourceType,
             command.ResourceId,
-            command.Action,
+            command.PermissionLevel,
+            command.SpecificPermissions,
             cancellationToken);
 
         if (result.IsFailure(out var error))

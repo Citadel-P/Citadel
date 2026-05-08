@@ -76,17 +76,19 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Registry>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Registry>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
     {
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT * FROM Registries r WHERE "
             + AuthorizationSql.ResourcePredicatePrefix + "r.Id" + AuthorizationSql.ResourcePredicateSuffix
             + " ORDER BY r.CreatedAt DESC;";
 
+        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
         var result = await db.QueryAsync<RegistryDto>(sql, new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
 

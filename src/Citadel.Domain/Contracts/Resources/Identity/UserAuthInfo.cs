@@ -6,5 +6,4 @@ public sealed record UserAuthInfo(
     string Name, 
     string Email, 
     string? Password,
-    IEnumerable<string> Roles,
-    IEnumerable<AppPermission> Permissions);
+    IEnumerable<string> Roles);

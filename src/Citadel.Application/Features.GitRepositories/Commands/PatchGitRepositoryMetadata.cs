@@ -13,7 +13,7 @@ using static Application.Features.GitRepositories.Commands.PatchGitRepositoryHan
 
 namespace Application.Features.GitRepositories.Commands;
 
-[RequirePermission(ResourceType.GitRepository, ResourceAction.Update)]
+[RequirePermission(ResourceType.GitRepository, PermissionLevel.Write)]
 public sealed record PatchGitRepositoryMetadata(Guid Id, JsonMergePatchDocument<GitRepository> Patch) : ICommand<Result<GitRepository>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchGitRepositoryMetadata, GitRepository>

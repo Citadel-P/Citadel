@@ -3575,7 +3575,7 @@
         "tags": [
           "Roles"
         ],
-        "summary": "Get the permission matrix (all valid resource/action combinations)",
+        "summary": "Get the permission matrix (all valid resource capabilities and minimum levels)",
         "operationId": "getPermissionMatrix",
         "responses": {
           "500": {
@@ -3595,10 +3595,7 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
+                    "$ref": "#/components/schemas/PermissionMatrixViewItem"
                   }
                 }
               }
@@ -14260,7 +14257,8 @@
         "required": [
           "resourceType",
           "resourceId",
-          "action"
+          "permissionLevel",
+          "specificPermissions"
         ],
         "type": "object",
         "properties": {
@@ -14271,8 +14269,17 @@
             "type": "string",
             "format": "uuid"
           },
-          "action": {
-            "$ref": "#/components/schemas/ResourceAction"
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
           }
         }
       },
@@ -14292,7 +14299,8 @@
         "required": [
           "resourceType",
           "resourceId",
-          "action"
+          "permissionLevel",
+          "specificPermissions"
         ],
         "type": "object",
         "properties": {
@@ -14303,8 +14311,17 @@
             "type": "string",
             "format": "uuid"
           },
-          "action": {
-            "$ref": "#/components/schemas/ResourceAction"
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
           }
         }
       },
@@ -20911,30 +20928,72 @@
       "PermissionInput": {
         "required": [
           "resourceType",
-          "resourceAction"
+          "permissionLevel",
+          "specificPermissions"
         ],
         "type": "object",
         "properties": {
           "resourceType": {
             "$ref": "#/components/schemas/ResourceType"
           },
-          "resourceAction": {
-            "$ref": "#/components/schemas/ResourceAction"
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
+          }
+        }
+      },
+      "PermissionLevel": {
+        "enum": [
+          "Read",
+          "Write",
+          "Execute"
+        ]
+      },
+      "PermissionMatrixViewItem": {
+        "required": [
+          "maximumLevel",
+          "specificPermissions"
+        ],
+        "type": "object",
+        "properties": {
+          "maximumLevel": {
+            "type": "string"
+          },
+          "specificPermissions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
       "PermissionView": {
         "required": [
           "resourceType",
-          "resourceAction"
+          "permissionLevel",
+          "specificPermissions"
         ],
         "type": "object",
         "properties": {
           "resourceType": {
             "$ref": "#/components/schemas/ResourceType"
           },
-          "resourceAction": {
-            "$ref": "#/components/schemas/ResourceAction"
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
           }
         }
       },
@@ -21952,7 +22011,8 @@
         "required": [
           "resourceType",
           "resourceId",
-          "action"
+          "permissionLevel",
+          "specificPermissions"
         ],
         "type": "object",
         "properties": {
@@ -21963,8 +22023,17 @@
             "type": "string",
             "format": "uuid"
           },
-          "action": {
-            "$ref": "#/components/schemas/ResourceAction"
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
           }
         }
       },
@@ -21972,7 +22041,8 @@
         "required": [
           "resourceType",
           "resourceId",
-          "action"
+          "permissionLevel",
+          "specificPermissions"
         ],
         "type": "object",
         "properties": {
@@ -21983,8 +22053,17 @@
             "type": "string",
             "format": "uuid"
           },
-          "action": {
-            "$ref": "#/components/schemas/ResourceAction"
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
           }
         }
       },
@@ -22061,18 +22140,6 @@
           }
         }
       },
-      "ResourceAction": {
-        "enum": [
-          "View",
-          "Create",
-          "Update",
-          "Delete",
-          "Apply",
-          "Pull",
-          "Exec",
-          "Log"
-        ]
-      },
       "ResourceControlState": {
         "enum": [
           "Idle",
@@ -22111,6 +22178,7 @@
           "Platform",
           "Deployment",
           "Stack",
+          "Image",
           "Registry",
           "GitRepository",
           "GitAccount",
@@ -22214,6 +22282,15 @@
         "enum": [
           "Daily",
           "Weekly"
+        ]
+      },
+      "SpecificPermission": {
+        "enum": [
+          "None",
+          "Apply",
+          "Logs",
+          "Terminal",
+          "Pull"
         ]
       },
       "StackConfigView": {
@@ -22719,7 +22796,8 @@
         "required": [
           "resourceType",
           "resourceId",
-          "action"
+          "permissionLevel",
+          "specificPermissions"
         ],
         "type": "object",
         "properties": {
@@ -22730,8 +22808,17 @@
             "type": "string",
             "format": "uuid"
           },
-          "action": {
-            "$ref": "#/components/schemas/ResourceAction"
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
           }
         }
       },
@@ -22917,7 +23004,8 @@
         "required": [
           "resourceType",
           "resourceId",
-          "action"
+          "permissionLevel",
+          "specificPermissions"
         ],
         "type": "object",
         "properties": {
@@ -22928,8 +23016,17 @@
             "type": "string",
             "format": "uuid"
           },
-          "action": {
-            "$ref": "#/components/schemas/ResourceAction"
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
           }
         }
       },

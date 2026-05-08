@@ -70,7 +70,7 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
     }
 
     [Fact]
-    public async Task Get_Permission_Matrix_Deployment_Contains_Apply_And_Log()
+    public async Task Get_Permission_Matrix_Deployment_Contains_Maximum_Level_And_Specific_Permissions()
     {
         var response = await Client.GetAsync(
             "/api/v1/roles/permissions/matrix",
@@ -83,14 +83,16 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
             cancellationToken: TestContext.Current.CancellationToken);
 
         var deployment = doc.RootElement.GetProperty(nameof(ResourceType.Deployment));
-        var actions = deployment.EnumerateArray().Select(x => x.GetString()).ToArray();
+        var maximumLevel = deployment.GetProperty("maximumLevel").GetString();
+        var specifics = deployment.GetProperty("specificPermissions");
 
-        Assert.Contains(nameof(ResourceAction.Apply), actions);
-        Assert.Contains(nameof(ResourceAction.Log), actions);
+        Assert.Equal(nameof(PermissionLevel.Execute), maximumLevel);
+        Assert.Equal(nameof(PermissionLevel.Write), specifics.GetProperty(nameof(SpecificPermission.Apply)).GetString());
+        Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Logs)).GetString());
     }
 
     [Fact]
-    public async Task Get_Permission_Matrix_Platform_Contains_Pull_Exec_Log()
+    public async Task Get_Permission_Matrix_Platform_Contains_Pull_Terminal_And_Logs_Minimum_Levels()
     {
         var response = await Client.GetAsync(
             "/api/v1/roles/permissions/matrix",
@@ -103,15 +105,15 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
             cancellationToken: TestContext.Current.CancellationToken);
 
         var platform = doc.RootElement.GetProperty(nameof(ResourceType.Platform));
-        var actions = platform.EnumerateArray().Select(x => x.GetString()).ToArray();
+        var specifics = platform.GetProperty("specificPermissions");
 
-        Assert.Contains(nameof(ResourceAction.Pull), actions);
-        Assert.Contains(nameof(ResourceAction.Exec), actions);
-        Assert.Contains(nameof(ResourceAction.Log), actions);
+        Assert.False(specifics.TryGetProperty(nameof(SpecificPermission.Pull), out _));
+        Assert.Equal(nameof(PermissionLevel.Execute), specifics.GetProperty(nameof(SpecificPermission.Terminal)).GetString());
+        Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Logs)).GetString());
     }
 
     [Fact]
-    public async Task Get_Permission_Matrix_User_Does_Not_Contain_Apply_Or_Log()
+    public async Task Get_Permission_Matrix_User_Does_Not_Contain_Specific_Permissions()
     {
         var response = await Client.GetAsync(
             "/api/v1/roles/permissions/matrix",
@@ -124,27 +126,26 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
             cancellationToken: TestContext.Current.CancellationToken);
 
         var user = doc.RootElement.GetProperty(nameof(ResourceType.User));
-        var actions = user.EnumerateArray().Select(x => x.GetString()).ToArray();
+        var specifics = user.GetProperty("specificPermissions");
 
-        Assert.DoesNotContain(nameof(ResourceAction.Apply), actions);
-        Assert.DoesNotContain(nameof(ResourceAction.Log), actions);
-        Assert.DoesNotContain(nameof(ResourceAction.Pull), actions);
-        Assert.DoesNotContain(nameof(ResourceAction.Exec), actions);
+        Assert.Equal(JsonValueKind.Object, specifics.ValueKind);
+        Assert.False(specifics.EnumerateObject().Any());
     }
 
-    // ── Matrix-based validation at role creation ──────────────────────────────
+    // Matrix-based validation at role creation 
 
     [Fact]
     public async Task Create_Role_With_Disallowed_Permission_Returns_BadRequest()
     {
-        // ResourceAction.Log is a valid enum value but is NOT allowed for ResourceType.User
+        // SpecificPermission.Logs is valid globally but is NOT allowed for ResourceType.User
         var createJson = """
         {
           "name": "Role-Invalid-Matrix",
           "permissions": [
             {
               "resourceType": "User",
-              "resourceAction": "Log"
+              "permissionLevel": "Read",
+              "specificPermissions": ["Logs"]
             }
           ]
         }
@@ -168,7 +169,8 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
           "permissions": [
             {
               "resourceType": "Team",
-              "resourceAction": "Apply"
+              "permissionLevel": "Execute",
+              "specificPermissions": ["Apply"]
             }
           ]
         }
@@ -187,7 +189,7 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
         Assert.Contains("Apply", body, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ── Matrix-based validation at role permission patch ──────────────────────
+    // Matrix-based validation at role permission patch 
 
     [Fact]
     public async Task Patch_Role_Permissions_With_Disallowed_Permission_Returns_BadRequest()
@@ -199,7 +201,8 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
           "permissions": [
             {
               "resourceType": "Registry",
-              "resourceAction": "View"
+              "permissionLevel": "Read",
+              "specificPermissions": []
             }
           ]
         }
@@ -215,13 +218,14 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
             cancellationToken: TestContext.Current.CancellationToken);
         var roleId = doc.RootElement.GetProperty("id").GetGuid();
 
-        // ResourceAction.Log is valid enum but not allowed for ResourceType.Role
+        // SpecificPermission.Logs is valid globally but not allowed for ResourceType.Role
         var patchJson = """
         {
           "permissions": [
             {
               "resourceType": "Role",
-              "resourceAction": "Log"
+              "permissionLevel": "Read",
+              "specificPermissions": ["Logs"]
             }
           ]
         }

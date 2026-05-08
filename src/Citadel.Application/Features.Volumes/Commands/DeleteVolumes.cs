@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.Volumes.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute)]
 public sealed record DeleteVolumes(Guid PlatformId, string[] Names, bool? Force = false) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<DeleteVolumes>

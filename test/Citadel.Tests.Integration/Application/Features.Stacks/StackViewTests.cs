@@ -26,7 +26,7 @@ public class StackViewTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         await CreateStackAsync("stack-hidden");
 
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Stack, visibleStackId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.Stack, visibleStackId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",

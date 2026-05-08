@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Users.Queries;
 
-[RequirePermission(ResourceType.User, ResourceAction.View)]
+[RequirePermission(ResourceType.User, PermissionLevel.Read)]
 public sealed record GetUsers(int Page = 1, int PageSize = 50, string? Name = null) : IQuery<Result<PagedResult<UserDetails>>>
 {
     internal sealed class Validator : AbstractValidator<GetUsers>
@@ -31,7 +31,7 @@ internal sealed class GetUsersHandler(IUnitOfWork unitOfWork, IHttpContextAccess
     {
         var user = httpContextAccessor.HttpContext?.User;
         var pagedUsers = user is not null && !user.IsAdmin()
-            ? await unitOfWork.Users.GetAuthorizedPagedAsync(user.GetUserId(), ResourceType.User, ResourceAction.View, query.Page, query.PageSize, query.Name, cancellationToken)
+            ? await unitOfWork.Users.GetAuthorizedPagedAsync(user.GetUserId(), ResourceType.User, PermissionLevel.Read, SpecificPermission.None, query.Page, query.PageSize, query.Name, cancellationToken)
             : await unitOfWork.Users.GetPagedAsync(query.Page, query.PageSize, query.Name, cancellationToken);
 
         return Result.Success(pagedUsers);

@@ -15,7 +15,7 @@ public class AlertChannelViewTests(PostgresTestFixture fixture) : IntegrationTes
         await CreateAlertChannelAsync("channel-hidden");
 
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.AlertChannel, visibleChannelId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.AlertChannel, visibleChannelId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",

@@ -19,7 +19,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Alerters.Commands;
 
-[RequirePermission(ResourceType.Alert, ResourceAction.Update)]
+[RequirePermission(ResourceType.Alert, PermissionLevel.Write)]
 public sealed record PatchAlertRule(Guid Id, JsonMergePatchDocument<AlertRule> Patch) : ICommand<Result<AlertRule>>
 {
     internal sealed class Validator : AbstractValidator<PatchAlertRule>

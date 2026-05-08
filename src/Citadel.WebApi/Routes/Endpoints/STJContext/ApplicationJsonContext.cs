@@ -270,6 +270,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeleteRolesInput))]
 [JsonSerializable(typeof(PatchRolePermissionsInput))]
 [JsonSerializable(typeof(PatchRolePermissionsInputPatchDocument))]
+[JsonSerializable(typeof(PermissionMatrixViewItem))]
+[JsonSerializable(typeof(IReadOnlyDictionary<string, PermissionMatrixViewItem>))]
 [JsonSerializable(typeof(PermissionView))]
 [JsonSerializable(typeof(RoleView))]
 [JsonSerializable(typeof(RolesView))]

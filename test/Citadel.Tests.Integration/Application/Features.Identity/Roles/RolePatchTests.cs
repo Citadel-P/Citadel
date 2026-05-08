@@ -14,7 +14,7 @@ public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var role = Role.Create("OriginalRole", RoleType.Custom);
-        role.SetPermissions([Permission.Create(role.Id, ResourceType.Registry, ResourceAction.View)]);
+        role.SetPermissions([Permission.Create(role.Id, ResourceType.Registry, PermissionLevel.Read)]);
         await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
         roleId = role.Id;
@@ -28,11 +28,13 @@ public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
           "permissions": [
             {
               "resourceType": "Role",
-              "resourceAction": "Update"
+              "permissionLevel": "Write",
+              "specificPermissions": []
             },
             {
               "resourceType": "Registry",
-              "resourceAction": "Delete"
+              "permissionLevel": "Execute",
+              "specificPermissions": []
             }
           ]
         }
@@ -50,8 +52,8 @@ public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
 
         Assert.NotNull(role);
         Assert.Equal(2, role.Permissions.Count());
-        Assert.Contains(role.Permissions, x => x.ResourceType == ResourceType.Role && x.ResourceAction == ResourceAction.Update);
-        Assert.Contains(role.Permissions, x => x.ResourceType == ResourceType.Registry && x.ResourceAction == ResourceAction.Delete);
+        Assert.Contains(role.Permissions, x => x.ResourceType == ResourceType.Role && x.PermissionLevel == PermissionLevel.Write);
+        Assert.Contains(role.Permissions, x => x.ResourceType == ResourceType.Registry && x.PermissionLevel == PermissionLevel.Execute);
         await VerifyJson(responseBody);
     }
 
@@ -63,7 +65,8 @@ public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
           "permissions": [
             {
               "resourceType": "Role",
-              "resourceAction": "Nope"
+              "permissionLevel": "Nope",
+              "specificPermissions": []
             }
           ]
         }
@@ -84,7 +87,8 @@ public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
           "permissions": [
             {
               "resourceType": "Role",
-              "resourceAction": "View"
+              "permissionLevel": "Read",
+              "specificPermissions": []
             }
           ]
         }
@@ -126,7 +130,8 @@ public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
           "permissions": [
             {
               "resourceType": "Role",
-              "resourceAction": "Update"
+              "permissionLevel": "Write",
+              "specificPermissions": []
             }
           ]
         }
@@ -160,9 +165,10 @@ public class RolePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var role = Role.Create(name, roleType);
-        role.SetPermissions([Permission.Create(role.Id, ResourceType.Registry, ResourceAction.View)]);
+        role.SetPermissions([Permission.Create(role.Id, ResourceType.Registry, PermissionLevel.Read)]);
         await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
+
         return role.Id;
     }
 }

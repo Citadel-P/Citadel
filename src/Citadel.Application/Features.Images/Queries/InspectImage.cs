@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.Images.Queries;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.View)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Result<InspectImageResult>>
 {
     internal class Validator : AbstractValidator<InspectImage>

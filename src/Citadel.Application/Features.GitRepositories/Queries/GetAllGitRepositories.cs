@@ -17,7 +17,7 @@ internal sealed class GetAllGitRepositoriesHandler(IUnitOfWork unitOfWork, IHttp
     {
         var user = httpContextAccessor.HttpContext?.User;
         var gitRepositories = user is not null && !user.IsAdmin()
-            ? await unitOfWork.GitRepositories.GetAuthorizedAsync(user.GetUserId(), ResourceType.GitRepository, ResourceAction.View, cancellationToken)
+            ? await unitOfWork.GitRepositories.GetAuthorizedAsync(user.GetUserId(), ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
             : await unitOfWork.GitRepositories.GetAllAsync(cancellationToken);
 
         IEnumerable<GitRepository> orderedGitRepositories = gitRepositories.OrderByDescending(x => x.CreatedAt);

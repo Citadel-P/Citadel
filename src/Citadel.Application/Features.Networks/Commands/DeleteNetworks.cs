@@ -9,7 +9,7 @@ using Mediator;
 
 namespace Application.Features.Networks.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute)]
 public sealed record class DeleteNetworks(Guid PlatformId, string[] Ids) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<DeleteNetworks>

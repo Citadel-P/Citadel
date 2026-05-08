@@ -6,7 +6,7 @@ using Mediator;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(ResourceType.Deployment, ResourceAction.Exec)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Execute, SpecificPermission.Terminal)]
 public sealed record ResizeDeploymentExecSession(string GroupId, int Cols, int Rows) : ICommand<Result>;
 
 internal sealed class ResizeDeploymentExecSessionHandler(IExecSessionManager execSessionManager)

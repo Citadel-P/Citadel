@@ -8,7 +8,7 @@ using Hosting.Common;
 
 namespace Application.Features.Stacks.Commands;
 
-[RequirePermission(ResourceType.Stack, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Execute)]
 public sealed record DeleteStacks(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteStacksHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteStacks, Result>

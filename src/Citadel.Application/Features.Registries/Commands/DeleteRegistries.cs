@@ -15,7 +15,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Registries.Commands;
 
-[RequirePermission(ResourceType.Registry, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Registry, PermissionLevel.Execute)]
 public sealed record DeleteRegistries(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal class DeleteRegistriesHandler(
@@ -60,5 +60,4 @@ internal class DeleteRegistriesHandler(
             ? Result.Success()
             : Result.Failure(new NotFoundError("No registries found matching the provided IDs for deletion."));
     }
-}
- 
+} 

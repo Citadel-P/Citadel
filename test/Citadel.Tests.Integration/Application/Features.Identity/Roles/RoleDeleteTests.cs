@@ -14,7 +14,7 @@ public class RoleDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase(
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var role = Role.Create("delete-me", RoleType.Custom);
-        role.SetPermissions([Permission.Create(role.Id, ResourceType.Role, ResourceAction.View)]);
+        role.SetPermissions([Permission.Create(role.Id, ResourceType.Role, PermissionLevel.Read)]);
         await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
         roleId = role.Id;
@@ -90,7 +90,7 @@ public class RoleDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase(
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var role = Role.Create(name, roleType);
-        role.SetPermissions([Permission.Create(role.Id, ResourceType.Role, ResourceAction.View)]);
+        role.SetPermissions([Permission.Create(role.Id, ResourceType.Role, PermissionLevel.Read)]);
         await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
         return role.Id;

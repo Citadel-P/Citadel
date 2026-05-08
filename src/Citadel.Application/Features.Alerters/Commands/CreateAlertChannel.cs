@@ -13,7 +13,7 @@ using Hosting.Common;
 
 namespace Application.Features.Alerters.Commands;
 
-[RequirePermission(ResourceType.AlertChannel, ResourceAction.Create)]
+[RequirePermission(ResourceType.AlertChannel, PermissionLevel.Write)]
 public sealed record CreateAlertChannel(
     string Name,
     AlertDestination AlertDestination,

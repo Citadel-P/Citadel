@@ -3,6 +3,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using Hosting.Common;
+using Infrastructure.Repositories.DbQueue;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
@@ -28,6 +29,7 @@ public sealed class AlertEventTests(PostgresTestFixture fixture) : IntegrationTe
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.RemoveAll<IAlertEventStreamManager>();
+        services.AddHostedService<NotificationWorker>();
         services.AddSingleton(_ => _alertEventStreamManager.Object);
     }
 
@@ -141,7 +143,7 @@ public sealed class AlertEventTests(PostgresTestFixture fixture) : IntegrationTe
     public async Task List_AlertEvents_Should_Return_Only_Alerts_User_Is_Permitted_To_View()
     {
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Alert, _alertId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.Alert, _alertId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",

@@ -164,7 +164,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         {
           "resourceType": "Deployment",
           "resourceId": "{{deploymentId}}",
-          "action": "View"
+          "permissionLevel": "Read"
         }
         """;
 
@@ -209,7 +209,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         {
           "resourceType": "Deployment",
           "resourceId": "{{deploymentId}}",
-          "action": "View"
+          "permissionLevel": "Read"
         }
         """;
 
@@ -261,7 +261,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             await uow.Roles.ReplaceActorRolesAsync(seededTeam.ActorId, [oldRoleId], TestContext.Current.CancellationToken);
             await uow.ResourceAccesses.ReplaceAsync(
                 seededTeam.ActorId,
-                [ResourceAccess.Create(ResourceType.Deployment, oldDeploymentId, seededTeam.ActorId, ResourceAction.View)],
+                [ResourceAccess.Create(ResourceType.Deployment, oldDeploymentId, seededTeam.ActorId, PermissionLevel.Read)],
                 TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
@@ -274,7 +274,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             {
               "resourceType": "Deployment",
               "resourceId": "{{newDeploymentId}}",
-              "action": "View"
+              "permissionLevel": "Read"
             }
           ]
         }
@@ -304,21 +304,24 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         var canOldUserViewNewDeployment = await uowVerify.Users.HasPermissionAsync(
             oldUser.UserId,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             newDeploymentId,
             TestContext.Current.CancellationToken);
 
         var canNewUserViewNewDeployment = await uowVerify.Users.HasPermissionAsync(
             newUser.UserId,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             newDeploymentId,
             TestContext.Current.CancellationToken);
 
         var canNewUserViewOldDeployment = await uowVerify.Users.HasPermissionAsync(
             newUser.UserId,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             oldDeploymentId,
             TestContext.Current.CancellationToken);
 
@@ -342,7 +345,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             await uow.Roles.ReplaceActorRolesAsync(seededTeam.ActorId, [roleId], TestContext.Current.CancellationToken);
             await uow.ResourceAccesses.ReplaceAsync(
                 seededTeam.ActorId,
-                [ResourceAccess.Create(ResourceType.Deployment, deploymentId, seededTeam.ActorId, ResourceAction.View)],
+                [ResourceAccess.Create(ResourceType.Deployment, deploymentId, seededTeam.ActorId, PermissionLevel.Read)],
                 TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
@@ -374,7 +377,8 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         var hasAccess = await uowVerify.Users.HasPermissionAsync(
             member.UserId,
             ResourceType.Deployment,
-            ResourceAction.View,
+            PermissionLevel.Read,
+            SpecificPermission.None,
             deploymentId,
             TestContext.Current.CancellationToken);
 
@@ -385,7 +389,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
     {
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var role = Role.Create(name, RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, ResourceAction.View)]);
+        var role = Role.Create(name, RoleType.Custom, [Permission.Create(Guid.Empty, ResourceType.Registry, PermissionLevel.Read)]);
 
         await uow.Roles.AddAsync(role, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);

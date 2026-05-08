@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.Deployments.Queries;
 
-[RequirePermission(ResourceType.Deployment, ResourceAction.View)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Read)]
 public sealed record GetDeployment(Guid Id) : IQuery<Result<Deployment>>;
 
 internal sealed class GetDeploymentHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetDeployment, Result<Deployment>>

@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.Images.Queries;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.View)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record GetAllLocalImages(Guid PlatformId): IQuery<Result<IEnumerable<Image>>>;
 
 internal class GetAllLocalImagesHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetAllLocalImages, Result<IEnumerable<Image>>>

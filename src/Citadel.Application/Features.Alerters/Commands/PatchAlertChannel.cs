@@ -12,7 +12,7 @@ using Hosting.Common;
 
 namespace Application.Features.Alerters.Commands;
 
-[RequirePermission(ResourceType.AlertChannel, ResourceAction.Update)]
+[RequirePermission(ResourceType.AlertChannel, PermissionLevel.Write)]
 public sealed record PatchAlertChannel(Guid Id, JsonMergePatchDocument<AlertChannel> Patch) : ICommand<Result<AlertChannel>>
 {
     internal sealed class Validator : AbstractValidator<PatchAlertChannel>

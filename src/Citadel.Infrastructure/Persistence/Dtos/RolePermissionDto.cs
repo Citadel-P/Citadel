@@ -5,5 +5,6 @@ internal sealed record RolePermissionDto(
     string Name,
     string RoleType,
     Guid? PermissionId,
-    string? ResourceType,
-    string? ResourceAction);
+    int? ResourceType,
+    int? PermissionLevel,
+    int? SpecificPermissions);

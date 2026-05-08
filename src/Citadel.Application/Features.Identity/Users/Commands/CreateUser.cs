@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Users.Commands;
 
-[RequirePermission(ResourceType.User, ResourceAction.Create)]
+[RequirePermission(ResourceType.User, PermissionLevel.Write)]
 public sealed record CreateUser(
     string Name,
     string Email,
@@ -35,7 +35,7 @@ public sealed record CreateUser(
             RuleForEach(x => x.RoleIds).NotEmpty();
 
             RuleForEach(x => x.ResourceAccesses)
-                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.Action))
+                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.PermissionLevel, x.SpecificPermissions))
                 .WithMessage("Invalid permission combination in resource accesses.");
         }
     }
@@ -90,7 +90,7 @@ internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IHttpContextAcce
         if (resourceAccesses.Length > 0)
         {
             var accessRows = resourceAccesses
-                .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, user.ActorId, x.Action))
+                .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, user.ActorId, x.PermissionLevel, x.SpecificPermissions))
                 .ToArray();
 
             await unitOfWork.ResourceAccesses.ReplaceAsync(user.ActorId, accessRows, cancellationToken);

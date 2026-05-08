@@ -6,7 +6,7 @@ using Mediator;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(ResourceType.Deployment, ResourceAction.Exec)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Execute, SpecificPermission.Terminal)]
 public sealed record StartDeploymentShellSession(string GroupId, string Shell) : ICommand<Result>;
 
 

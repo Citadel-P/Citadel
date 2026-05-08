@@ -5,11 +5,11 @@
   permissions: [
     {
       resourceType: Role,
-      resourceAction: Update
+      permissionLevel: Write
     },
     {
       resourceType: Registry,
-      resourceAction: Delete
+      permissionLevel: Execute
     }
   ]
 }

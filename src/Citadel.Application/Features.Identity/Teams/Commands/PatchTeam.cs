@@ -12,7 +12,7 @@ using Mediator;
 
 namespace Application.Features.Identity.Teams.Commands;
 
-[RequirePermission(ResourceType.Team, ResourceAction.Update)]
+[RequirePermission(ResourceType.Team, PermissionLevel.Write)]
 public sealed record PatchTeam(Guid Id, JsonMergePatchDocument<PatchTeamModel> Patch) : ICommand<Result<TeamDetails>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchTeam, PatchTeamModel>
@@ -33,7 +33,7 @@ public sealed record PatchTeam(Guid Id, JsonMergePatchDocument<PatchTeamModel> P
             RuleForEach(x => x.UserIds).NotEmpty();
             RuleForEach(x => x.RoleIds).NotEmpty();
             RuleForEach(x => x.ResourceAccesses)
-                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.Action))
+                .Must(x => PermissionMatrix.IsAllowed(x.ResourceType, x.PermissionLevel, x.SpecificPermissions))
                 .WithMessage("Invalid permission combination in resource accesses.");
         }
     }
@@ -90,7 +90,7 @@ internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork) : ICommandHandler
         {
             var resourceAccesses = patched.ResourceAccesses
                 .Distinct()
-                .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, team.ActorId, x.Action))
+                .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, team.ActorId, x.PermissionLevel, x.SpecificPermissions))
                 .ToArray();
 
             await unitOfWork.ResourceAccesses.ReplaceAsync(team.ActorId, resourceAccesses, cancellationToken);

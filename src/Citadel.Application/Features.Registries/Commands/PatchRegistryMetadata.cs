@@ -11,7 +11,7 @@ using Hosting.Common;
 
 namespace Application.Features.Registries.Commands;
 
-[RequirePermission(ResourceType.Registry, ResourceAction.Update)]
+[RequirePermission(ResourceType.Registry, PermissionLevel.Write)]
 public sealed record PatchRegistryMetadata(Guid Id, JsonMergePatchDocument<Registry> Patch) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchRegistryMetadata, Registry>

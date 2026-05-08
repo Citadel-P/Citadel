@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Users.Queries;
 
-[RequirePermission(ResourceType.User, ResourceAction.View)]
+[RequirePermission(ResourceType.User, PermissionLevel.Read)]
 public sealed record SearchUsers(string Query, int Limit = 20) : IQuery<Result<IEnumerable<UserSearchItem>>>
 {
     internal sealed class Validator : AbstractValidator<SearchUsers>
@@ -38,7 +38,7 @@ internal sealed class SearchUsersHandler(IUnitOfWork unitOfWork, IHttpContextAcc
 
         var user = httpContextAccessor.HttpContext?.User;
         var items = user is not null && !user.IsAdmin()
-            ? await unitOfWork.Users.SearchAuthorizedAsync(user.GetUserId(), ResourceType.User, ResourceAction.View, search, query.Limit, cancellationToken)
+            ? await unitOfWork.Users.SearchAuthorizedAsync(user.GetUserId(), ResourceType.User, PermissionLevel.Read, SpecificPermission.None, search, query.Limit, cancellationToken)
             : await unitOfWork.Users.SearchAsync(search, query.Limit, cancellationToken);
 
         return Result.Success(items);

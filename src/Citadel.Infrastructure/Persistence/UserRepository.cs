@@ -8,12 +8,19 @@ using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
-using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
 
 internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) : IUserRepository
 {
+    private static readonly int ReadPermissionLevelValue = (int)PermissionLevel.Read;
+    private static readonly int WritePermissionLevelValue = (int)PermissionLevel.Write;
+    private static readonly int ExecutePermissionLevelValue = (int)PermissionLevel.Execute;
+
+    private static readonly int[] ReadGrantedPermissionLevels = [ReadPermissionLevelValue, WritePermissionLevelValue, ExecutePermissionLevelValue];
+    private static readonly int[] WriteGrantedPermissionLevels = [WritePermissionLevelValue, ExecutePermissionLevelValue];
+    private static readonly int[] ExecuteGrantedPermissionLevels = [ExecutePermissionLevelValue];
+
     private const string UserAggregateCtes = """
         UserTeams AS (
             SELECT ut.UserId, ARRAY_AGG(DISTINCT t.Name ORDER BY t.Name) AS Teams
@@ -90,7 +97,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return new PagedResult<UserDetails>(rows.ToDetails(), totalCount, page, pageSize);
     }
 
-    public async Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken)
+    public async Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
         const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + ", " + UserAggregateCtes + " " + """
             SELECT
@@ -113,11 +120,13 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
         var offset = (page - 1) * pageSize;
+        var grantedPermissionLevels = GetGrantedPermissionLevelValues(permissionLevel);
         var parameters = new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
             PageSize = pageSize,
             Offset = offset,
             Name = name,
@@ -144,7 +153,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return db.QueryAsync<UserSearchItem>(sql, new { Query = query, Limit = limit, cancellationToken }, transaction: tx());
     }
 
-    public Task<IEnumerable<UserSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, string query, int limit, CancellationToken cancellationToken)
+    public Task<IEnumerable<UserSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, string query, int limit, CancellationToken cancellationToken)
     {
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
             SELECT u.Id, u.Name, u.Email
@@ -152,11 +161,13 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             WHERE (u.Name ILIKE '%' || @Query || '%' OR u.Email ILIKE '%' || @Query || '%') AND
         """ + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY u.Name ASC LIMIT @Limit;";
 
+        var grantedPermissionLevels = GetGrantedPermissionLevelValues(permissionLevel);
         var parameters = new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
             Query = query,
             Limit = limit,
             cancellationToken
@@ -294,7 +305,13 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return await db.ExecuteAsync(insertSql, new { UserId = userId, TeamIds = teamIdArray, cancellationToken }, transaction: tx());
     }
 
-    public async Task<bool> HasPermissionAsync(Guid userId, ResourceType resourceType, ResourceAction action, Guid? resourceId, CancellationToken ct)
+    public async Task<bool> HasPermissionAsync(
+        Guid userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        Guid? resourceId,
+        CancellationToken ct)
     {
         const string sql = """
             WITH ActorScope AS (
@@ -320,7 +337,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 JOIN Permissions p ON p.RoleId = ar.RoleId
                 JOIN ActorScope actorScope ON actorScope.ActorId = ar.ActorId
                 WHERE p.ResourceType = @ResourceType
-                  AND p.ResourceAction = @Action
+                  AND p.PermissionLevel = ANY(@GrantedPermissionLevels)
+                  AND (@SpecificPermission = 0 OR (p.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
             )
             SELECT
                 EXISTS (
@@ -335,19 +353,32 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                         JOIN ActorScope actorScope ON actorScope.ActorId = ra.ActorId
                         WHERE ra.ResourceType = @ResourceType
                           AND ra.ResourceId = @ResourceId
-                          AND ra.Action = @Action
+                          AND ra.PermissionLevel = ANY(@GrantedPermissionLevels)
+                          AND (@SpecificPermission = 0 OR (ra.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
                     )
                 );
             """;
+
+        var grantedPermissionLevels = GetGrantedPermissionLevelValues(permissionLevel);
 
         return await db.ExecuteScalarAsync<bool>(sql, new
         {
             UserId = userId,
             ResourceId = resourceId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action)
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission
         });
     }
+
+    internal static int[] GetGrantedPermissionLevelValues(PermissionLevel requiredPermissionLevel)
+        => requiredPermissionLevel switch
+        {
+            PermissionLevel.Read => ReadGrantedPermissionLevels,
+            PermissionLevel.Write => WriteGrantedPermissionLevels,
+            PermissionLevel.Execute => ExecuteGrantedPermissionLevels,
+            _ => throw new ArgumentOutOfRangeException(nameof(requiredPermissionLevel), requiredPermissionLevel, null),
+        };
 
     public async Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken)
     {
@@ -381,11 +412,9 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 TargetUser.ActorId,
                 TargetUser.Password,
                 Roles.Name as RoleName, 
-                CASE
-                    WHEN Permissions.ResourceType IS NOT NULL AND Permissions.ResourceAction IS NOT NULL
-                    THEN Permissions.ResourceType || '_' || Permissions.ResourceAction
-                    ELSE NULL
-                END AS PermissionName
+                Permissions.ResourceType::integer AS PermissionResourceType,
+                Permissions.PermissionLevel::integer AS PermissionLevel,
+                Permissions.SpecificPermissions::integer AS SpecificPermissions
             FROM TargetUser
             LEFT JOIN ActorScope ON 1 = 1
             LEFT JOIN ActorRoles ON ActorRoles.ActorId = ActorScope.ActorId
@@ -407,13 +436,6 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             g.Key.Password,
             [.. g.Where(r => !string.IsNullOrWhiteSpace(r.RoleName))
                     .Select(r => r.RoleName!)
-                    .Distinct()],
-            [.. g.Where(r => !string.IsNullOrWhiteSpace(r.PermissionName))
-                    .Select(r => Enum.TryParse<AppPermission>(r.PermissionName, out var permission)
-                        ? permission
-                        : (AppPermission?)null)
-                    .Where(permission => permission.HasValue)
-                    .Select(permission => permission!.Value)
                     .Distinct()]
         )).FirstOrDefault();
     }

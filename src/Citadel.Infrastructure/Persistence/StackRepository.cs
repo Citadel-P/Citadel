@@ -119,17 +119,19 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
     {
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + InfoSelect + " WHERE "
                         + AuthorizationSql.ResourcePredicatePrefix + "s.Id" + AuthorizationSql.ResourcePredicateSuffix
                         + " ORDER BY s.CreatedAt DESC, s.Name ASC";
 
+        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
         var result = await db.QueryAsync<StackDto>(sql, new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
 

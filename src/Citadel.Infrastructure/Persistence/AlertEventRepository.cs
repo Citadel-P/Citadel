@@ -216,7 +216,8 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
     public async Task<PagedResult<AlertEvent>> GetAuthorizedPagedAsync(
         Guid userId,
         ResourceType permissionResourceType,
-        ResourceAction action,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
         Guid? resourceId,
         AlertType? alertType,
         AlertResourceType? resourceType,
@@ -267,12 +268,14 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AND " + AuthorizationSql.PermissionResourcePredicatePrefix + "a.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
         var offset = (page - 1) * pageSize;
+        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
 
         var p = new
         {
             UserId = userId,
-            PermissionResourceType = EnumFormatter<ResourceType>.GetValue(permissionResourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            PermissionResourceType = (int)permissionResourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
             ResourceId = resourceId,
             AlertType = alertType is null ? null : EnumFormatter<AlertType>.GetValue(alertType.Value),
             ResourceType = resourceType is null ? null : EnumFormatter<AlertResourceType>.GetValue(resourceType.Value),

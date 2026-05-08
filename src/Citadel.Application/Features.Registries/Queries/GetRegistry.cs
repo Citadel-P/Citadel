@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.Registries.Queries;
 
-[RequirePermission(ResourceType.Registry, ResourceAction.View)]
+[RequirePermission(ResourceType.Registry, PermissionLevel.Read)]
 public sealed record GetRegistry(Guid Id) : IQuery<Result<Registry>>;
 internal sealed class GetRegistryHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetRegistry, Result<Registry>>
 {

@@ -86,7 +86,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         modelBuilder.Entity("Team").HasData(new
         {
             Id = teamId,
-            Name = "Default Team",
+            Name = "Operators",
             ActorId = teamActorId
         });
 
@@ -109,46 +109,45 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         // Permissions — only valid combinations from the matrix are seeded
         var permissions = new List<object>();
 
-        foreach (var (resource, actions) in PermissionMatrix.GetAll())
+        foreach (var (resource, capabilities) in PermissionMatrix.GetAll())
         {
-            foreach (var action in actions)
+            var specificPermissions = capabilities.SpecificPermissionMinimumLevels.Keys.OrderBy(x => x).ToArray();
+
+            permissions.Add(new
             {
-                // Admin -> everything in the matrix
-                permissions.Add(new
-                {
-                    Id = CreatePermissionSeedId(adminRoleId, resource, action),
-                    RoleId = adminRoleId,
-                    ResourceType = resource.ToString(),
-                    ResourceAction = action.ToString(),
-                    RoleType = RoleType.System.ToString()
-                });
+                Id = CreatePermissionSeedId(adminRoleId, resource, PermissionLevel.Execute, specificPermissions),
+                RoleId = adminRoleId,
+                ResourceType = (int)resource,
+                PermissionLevel = (int)PermissionLevel.Execute,
+                SpecificPermissions = Domain.Entities.Identity.Permission.ToSpecificPermissionsMask(specificPermissions),
+                RoleType = RoleType.System.ToString()
+            });
 
-                // Viewer -> only View
-                if (action == ResourceAction.View)
-                {
-                    permissions.Add(new
-                    {
-                        Id = CreatePermissionSeedId(viewerRoleId, resource, action),
-                        RoleId = viewerRoleId,
-                        ResourceType = resource.ToString(),
-                        ResourceAction = action.ToString(),
-                        RoleType = RoleType.System.ToString()
-                    });
-                }
+            permissions.Add(new
+            {
+                Id = CreatePermissionSeedId(viewerRoleId, resource, PermissionLevel.Read, []),
+                RoleId = viewerRoleId,
+                ResourceType = (int)resource,
+                PermissionLevel = (int)PermissionLevel.Read,
+                SpecificPermissions = 0,
+                RoleType = RoleType.System.ToString()
+            });
 
-                // Operator -> everything except Delete
-                if (action != ResourceAction.Delete)
-                {
-                    permissions.Add(new
-                    {
-                        Id = CreatePermissionSeedId(operatorRoleId, resource, action),
-                        RoleId = operatorRoleId,
-                        ResourceType = resource.ToString(),
-                        ResourceAction = action.ToString(),
-                        RoleType = RoleType.System.ToString()
-                    });
-                }
-            }
+            var operatorSpecificPermissions = capabilities.SpecificPermissionMinimumLevels
+                .Where(x => x.Value <= PermissionLevel.Write)
+                .Select(x => x.Key)
+                .OrderBy(x => x)
+                .ToArray();
+
+            permissions.Add(new
+            {
+                Id = CreatePermissionSeedId(operatorRoleId, resource, PermissionLevel.Write, operatorSpecificPermissions),
+                RoleId = operatorRoleId,
+                ResourceType = (int)resource,
+                PermissionLevel = (int)PermissionLevel.Write,
+                SpecificPermissions = Domain.Entities.Identity.Permission.ToSpecificPermissionsMask(operatorSpecificPermissions),
+                RoleType = RoleType.System.ToString()
+            });
         }
 
         modelBuilder.Entity("Permission").HasData(permissions);
@@ -195,9 +194,13 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         });
     }
 
-    private static Guid CreatePermissionSeedId(Guid roleId, ResourceType resourceType, ResourceAction resourceAction)
+    private static Guid CreatePermissionSeedId(
+        Guid roleId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        IEnumerable<SpecificPermission> specificPermissions)
     {
-        var input = $"permission:{roleId:D}:{resourceType}:{resourceAction}";
+        var input = $"permission:{roleId:D}:{resourceType}:{permissionLevel}:{string.Join(',', specificPermissions.OrderBy(x => x))}";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         var hex = Convert.ToHexString(hash);
 
@@ -591,8 +594,9 @@ internal static class Configuration
         permission.HasKey("Id");
         
         permission.Property<Guid>("RoleId").IsRequired();
-        permission.Property<string>("ResourceType").HasColumnType(Text).IsRequired();
-        permission.Property<string>("ResourceAction").HasColumnType(Text).IsRequired();
+        permission.Property<int>("ResourceType").HasColumnType(Integer).IsRequired();
+        permission.Property<int>("PermissionLevel").HasColumnType(Integer).IsRequired();
+        permission.Property<int>("SpecificPermissions").HasColumnType(Integer).IsRequired();
 
         permission
             .HasOne("Role")
@@ -601,6 +605,7 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.Cascade);
 
         permission.HasIndex("RoleId").HasDatabaseName($"IX_{tableName}_RoleId");
+        permission.HasIndex("RoleId", "ResourceType").IsUnique().HasDatabaseName($"IX_{tableName}_RoleId_ResourceType");
 
         return builder;
     }
@@ -617,14 +622,14 @@ internal static class Configuration
 
         resourceAccess.Property<Guid>("ResourceId").IsRequired();
         resourceAccess.Property<Guid>("ActorId").IsRequired();
-        resourceAccess.Property<string>("ResourceType").HasColumnType(Text).IsRequired();
-        resourceAccess.Property<string>("Action").HasColumnType(Text).IsRequired();
+        resourceAccess.Property<int>("ResourceType").HasColumnType(Integer).IsRequired();
+        resourceAccess.Property<int>("PermissionLevel").HasColumnType(Integer).IsRequired();
+        resourceAccess.Property<int>("SpecificPermissions").HasColumnType(Integer).IsRequired();
 
         resourceAccess.HasIndex(
             "ResourceType",
             "ResourceId",
-            "ActorId",
-            "Action")
+            "ActorId")
         .IsUnique();
 
         resourceAccess.HasIndex(

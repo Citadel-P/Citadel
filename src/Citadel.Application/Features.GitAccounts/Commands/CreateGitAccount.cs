@@ -13,7 +13,7 @@ using System.Security.Claims;
 
 namespace Application.Features.GitAccounts.Commands;
 
-[RequirePermission(ResourceType.GitAccount, ResourceAction.Create)]
+[RequirePermission(ResourceType.GitAccount, PermissionLevel.Write)]
 public sealed record CreateGitAccount(
     string Name,
     string Domain,

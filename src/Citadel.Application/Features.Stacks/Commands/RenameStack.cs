@@ -10,7 +10,7 @@ using Mediator;
 
 namespace Application.Features.Stacks.Commands;
 
-[RequirePermission(ResourceType.Stack, ResourceAction.Update)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Write)]
 public sealed record RenameStack(Guid Id, string Name) : ICommand<Result<Stack>>
 {
     internal sealed class Validator : AbstractValidator<RenameStack>

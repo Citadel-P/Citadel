@@ -17,7 +17,7 @@ using static Application.Features.GitRepositories.Commands.PatchGitRepositoryHan
 
 namespace Application.Features.GitRepositories.Commands;
 
-[RequirePermission(ResourceType.GitRepository, ResourceAction.Update)]
+[RequirePermission(ResourceType.GitRepository, PermissionLevel.Write)]
 public sealed record RenameGitRepository(Guid Id, string Name) : ICommand<Result<GitRepository>>
 {
     internal sealed class Validator : AbstractValidator<RenameGitRepository>

@@ -17,7 +17,7 @@ internal sealed class GetAllRegistriesHandler(IUnitOfWork unitOfWork, IHttpConte
     {
         var user = httpContextAccessor.HttpContext?.User;
         var registries = user is not null && !user.IsAdmin()
-            ? await unitOfWork.Registries.GetAuthorizedAsync(user.GetUserId(), ResourceType.Registry, ResourceAction.View, cancellationToken)
+            ? await unitOfWork.Registries.GetAuthorizedAsync(user.GetUserId(), ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
             : await unitOfWork.Registries.GetAllAsync(cancellationToken);
 
         if (query.IncludeDisabled == true)

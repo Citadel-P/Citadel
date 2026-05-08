@@ -20,7 +20,7 @@ using ActivityEvent = Domain.Entities.Activities.ActivityEvent;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(ResourceType.Deployment, ResourceAction.Update)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Write)]
 public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment> Patch) : ICommand<Result<Deployment>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchDeployment, Deployment>

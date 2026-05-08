@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Teams.Queries;
 
-[RequirePermission(ResourceType.Team, ResourceAction.View)]
+[RequirePermission(ResourceType.Team, PermissionLevel.Read)]
 public sealed record SearchTeams(string Query, int Limit = 20) : IQuery<Result<IEnumerable<TeamSearchItem>>>
 {
     internal sealed class Validator : AbstractValidator<SearchTeams>
@@ -38,7 +38,7 @@ internal sealed class SearchTeamsHandler(IUnitOfWork unitOfWork, IHttpContextAcc
 
         var user = httpContextAccessor.HttpContext?.User;
         var items = user is not null && !user.IsAdmin()
-            ? await unitOfWork.Teams.SearchAuthorizedAsync(user.GetUserId(), ResourceType.Team, ResourceAction.View, search, query.Limit, cancellationToken)
+            ? await unitOfWork.Teams.SearchAuthorizedAsync(user.GetUserId(), ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, search, query.Limit, cancellationToken)
             : await unitOfWork.Teams.SearchAsync(search, query.Limit, cancellationToken);
 
         return Result.Success(items);

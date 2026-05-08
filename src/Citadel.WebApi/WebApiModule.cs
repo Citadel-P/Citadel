@@ -149,7 +149,8 @@ internal static class WebApiModule
         }
 
         converters.Add(new JsonStringEnumConverter<ResourceType>());
-        converters.Add(new JsonStringEnumConverter<ResourceAction>());
+        converters.Add(new JsonStringEnumConverter<PermissionLevel>());
+        converters.Add(new JsonStringEnumConverter<SpecificPermission>());
     }
 
     internal static WebApplicationBuilder AddCitadelRateLimiter(this WebApplicationBuilder builder)

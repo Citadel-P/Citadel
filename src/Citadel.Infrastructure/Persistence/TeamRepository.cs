@@ -107,7 +107,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return new PagedResult<TeamDetails>(rows.ToDetails(), totalCount, page, pageSize);
     }
 
-    public async Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, string? name, CancellationToken cancellationToken)
+    public async Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
         const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + ", " + TeamAggregateCtes + " " + """
             SELECT
@@ -127,11 +127,13 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
             + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
         var offset = (page - 1) * pageSize;
+        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
         var parameters = new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
             PageSize = pageSize,
             Offset = offset,
             Name = name,
@@ -157,7 +159,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return db.QueryAsync<TeamSearchItem>(sql, new { Query = query, Limit = limit, cancellationToken }, transaction: tx());
     }
 
-    public Task<IEnumerable<TeamSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, string query, int limit, CancellationToken cancellationToken)
+    public Task<IEnumerable<TeamSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, string query, int limit, CancellationToken cancellationToken)
     {
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
             SELECT t.Id, t.Name
@@ -165,11 +167,13 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
             WHERE t.Name ILIKE '%' || @Query || '%' AND
         """ + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY t.Name ASC LIMIT @Limit;";
 
+        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
         var parameters = new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
             Query = query,
             Limit = limit,
             cancellationToken

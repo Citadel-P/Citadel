@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.Stacks.Queries;
 
-[RequirePermission(ResourceType.Stack, ResourceAction.View)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Read)]
 public sealed record GetStackReleases(Guid StackId) : IQuery<Result<IEnumerable<StackRelease>>>;
 
 internal sealed class GetStackReleasesHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetStackReleases, Result<IEnumerable<StackRelease>>>

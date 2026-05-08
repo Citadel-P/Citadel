@@ -7,7 +7,7 @@ using Hosting.Common;
 
 namespace Application.Features.Platforms.Queries;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.View)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record GetPlatforms() : IQuery<Result<IEnumerable<Platform>>>;
 
 internal class GetPlatformsHandler(IUnitOfWork unitOfWork): IQueryHandler<GetPlatforms, Result<IEnumerable<Platform>>>

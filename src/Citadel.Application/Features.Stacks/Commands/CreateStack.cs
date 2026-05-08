@@ -13,7 +13,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Stacks.Commands;
 
-[RequirePermission(ResourceType.Stack, ResourceAction.Create)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Write)]
 public sealed record CreateStack(
     string Name,
     Guid PlatformId,

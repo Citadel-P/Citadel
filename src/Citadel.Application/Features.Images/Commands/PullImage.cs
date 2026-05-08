@@ -11,7 +11,7 @@ namespace Application.Features.Images.Commands;
 /// <summary>
 /// Command to pull an image from a registry.
 /// </summary>
-[RequirePermission(ResourceType.Platform, ResourceAction.Pull)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute, SpecificPermission.Pull)]
 public sealed record PullImage(Guid PlatformId, Guid RegistryId, string ImageTag) : IStreamCommand<PullImageStreamItem>
 {
     internal class Validator : AbstractValidator<PullImage>

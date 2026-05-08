@@ -218,7 +218,8 @@ public partial class StackJsonContext : JsonSerializerContext
     Converters = new[]
     {
         typeof(JsonStringEnumConverter<ResourceType>),
-        typeof(JsonStringEnumConverter<ResourceAction>)
+        typeof(JsonStringEnumConverter<PermissionLevel>),
+        typeof(JsonStringEnumConverter<SpecificPermission>)
     })]
 [JsonSerializable(typeof(PatchRolePermissionsModel))]
 [JsonSerializable(typeof(PatchPermissionModel))]
@@ -226,6 +227,7 @@ public partial class StackJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(IEnumerable<UserResourceAccessModel>))]
 [JsonSerializable(typeof(TeamResourceAccessModel))]
 [JsonSerializable(typeof(IEnumerable<TeamResourceAccessModel>))]
+[JsonSerializable(typeof(IEnumerable<SpecificPermission>))]
 [JsonSerializable(typeof(PatchUserModel))]
 [JsonSerializable(typeof(PatchTeamModel))]
 public partial class RoleJsonContext : JsonSerializerContext

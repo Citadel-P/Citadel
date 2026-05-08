@@ -15,7 +15,7 @@ public class GitAccountViewTests(PostgresTestFixture fixture) : IntegrationTestB
         await CreateGitAccountAsync("ga-hidden");
 
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.GitAccount, visibleAccountId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.GitAccount, visibleAccountId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",

@@ -16,7 +16,7 @@ namespace Application.Features.Deployments.Queries
         {
             var user = httpContextAccessor.HttpContext?.User;
             var deployments = user is not null && !user.IsAdmin()
-                ? await unitOfWork.Deployments.GetAuthorizedInfoAsync(user.GetUserId(), ResourceType.Deployment, ResourceAction.View, cancellationToken)
+                ? await unitOfWork.Deployments.GetAuthorizedInfoAsync(user.GetUserId(), ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
                 : await unitOfWork.Deployments.GetInfoAsync(cancellationToken);
 
             return Result.Success(deployments);

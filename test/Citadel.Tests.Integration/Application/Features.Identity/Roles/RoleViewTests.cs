@@ -11,8 +11,8 @@ public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
     [Fact]
     public async Task List_Roles_Should_Return_All_Roles_For_Admin()
     {
-        var firstRoleId = await CreateRoleAsync("role-admin-1", [(ResourceType.Role, ResourceAction.View)]);
-        var secondRoleId = await CreateRoleAsync("role-admin-2", [(ResourceType.Registry, ResourceAction.View)]);
+        var firstRoleId = await CreateRoleAsync("role-admin-1", [(ResourceType.Role, PermissionLevel.Read)]);
+        var secondRoleId = await CreateRoleAsync("role-admin-2", [(ResourceType.Registry, PermissionLevel.Read)]);
 
         var response = await Client.GetAsync("/api/v1/roles", TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
@@ -30,9 +30,9 @@ public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
     [Fact]
     public async Task Get_Role_Should_Return_Role_When_User_Has_View_Access()
     {
-        var roleId = await CreateRoleAsync("role-readable", [(ResourceType.Role, ResourceAction.View)]);
+        var roleId = await CreateRoleAsync("role-readable", [(ResourceType.Role, PermissionLevel.Read)]);
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Role, roleId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.Role, roleId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",
@@ -52,11 +52,11 @@ public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
     [Fact]
     public async Task List_Roles_Should_Return_Forbidden_When_User_Has_Only_Resource_Level_Access()
     {
-        var visibleRoleId = await CreateRoleAsync("role-visible", [(ResourceType.Role, ResourceAction.View)]);
-        await CreateRoleAsync("role-hidden", [(ResourceType.Registry, ResourceAction.View)]);
+        var visibleRoleId = await CreateRoleAsync("role-visible", [(ResourceType.Role, PermissionLevel.Read)]);
+        await CreateRoleAsync("role-hidden", [(ResourceType.Registry, PermissionLevel.Read)]);
 
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Role, visibleRoleId, ResourceAction.View)]);
+            resourceGrants: [new ResourceGrant(ResourceType.Role, visibleRoleId, PermissionLevel.Read)]);
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
             "Bearer",
@@ -69,7 +69,7 @@ public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
     [Fact]
     public async Task Get_Role_Should_Return_Forbidden_When_User_Has_No_Rights_To_View_It()
     {
-        var roleId = await CreateRoleAsync("role-protected", [(ResourceType.Role, ResourceAction.View)]);
+        var roleId = await CreateRoleAsync("role-protected", [(ResourceType.Role, PermissionLevel.Read)]);
         var subject = await CreateAuthorizationSubjectAsync();
 
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
@@ -81,7 +81,7 @@ public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
         Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    private async Task<Guid> CreateRoleAsync(string name, IEnumerable<(ResourceType ResourceType, ResourceAction ResourceAction)> permissions)
+    private async Task<Guid> CreateRoleAsync(string name, IEnumerable<(ResourceType ResourceType, PermissionLevel PermissionLevel)> permissions)
     {
         var createJson = $$"""
         {
@@ -90,7 +90,7 @@ public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fi
             {{string.Join(",", permissions.Select(x => $$"""
             {
               "resourceType": "{{x.ResourceType}}",
-              "resourceAction": "{{x.ResourceAction}}"
+              "permissionLevel": "{{x.PermissionLevel}}"
             }
             """))}}
           ]

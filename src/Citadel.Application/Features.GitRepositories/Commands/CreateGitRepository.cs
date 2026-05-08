@@ -19,7 +19,7 @@ using System.Threading.Channels;
 
 namespace Application.Features.GitRepositories.Commands;
 
-[RequirePermission(ResourceType.GitRepository, ResourceAction.Create)]
+[RequirePermission(ResourceType.GitRepository, PermissionLevel.Write)]
 public sealed record CreateGitRepository(
     string Name,
     string? Description,

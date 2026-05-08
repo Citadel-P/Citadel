@@ -22,7 +22,8 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 r.RoleType,
                 p.Id AS PermissionId,
                 p.ResourceType,
-                p.ResourceAction
+                p.PermissionLevel,
+                p.SpecificPermissions
             FROM Roles r
             LEFT JOIN Permissions p ON p.RoleId = r.Id
             WHERE r.Id = @Id
@@ -41,7 +42,8 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 r.RoleType,
                 p.Id AS PermissionId,
                 p.ResourceType,
-                p.ResourceAction
+                p.PermissionLevel,
+                p.SpecificPermissions
             FROM Roles r
             LEFT JOIN Permissions p ON p.RoleId = r.Id
             ORDER BY r.Name ASC
@@ -50,7 +52,7 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Role>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Role>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
     {
         const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
             SELECT
@@ -59,7 +61,8 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 r.RoleType,
                 p.Id AS PermissionId,
                 p.ResourceType,
-                p.ResourceAction
+                p.PermissionLevel,
+                p.SpecificPermissions
             FROM Roles r
             LEFT JOIN Permissions p ON p.RoleId = r.Id
             WHERE
@@ -68,8 +71,9 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
         var result = await db.QueryAsync<RolePermissionDto>(sql, new
         {
             UserId = userId,
-            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
-            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel),
+            SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
 
@@ -85,7 +89,8 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 r.RoleType,
                 p.Id AS PermissionId,
                 p.ResourceType,
-                p.ResourceAction
+                p.PermissionLevel,
+                p.SpecificPermissions
             FROM Roles r
             LEFT JOIN Permissions p ON p.RoleId = r.Id
             WHERE r.Id = ANY(@Ids)
@@ -113,7 +118,7 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
         using var enumerator = role.Permissions.GetEnumerator();
         if (enumerator.MoveNext())
         {
-            sql.Append("INSERT INTO Permissions (Id, RoleId, ResourceType, ResourceAction) VALUES ");
+            sql.Append("INSERT INTO Permissions (Id, RoleId, ResourceType, PermissionLevel, SpecificPermissions) VALUES ");
 
             var index = 0;
             do
@@ -122,11 +127,12 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 if (index > 0)
                     sql.Append(", ");
 
-                sql.Append($"(@PermissionId{index}, @PermissionRoleId{index}, @ResourceType{index}, @ResourceAction{index})");
+                sql.Append($"(@PermissionId{index}, @PermissionRoleId{index}, @ResourceType{index}, @PermissionLevel{index}, @SpecificPermissions{index})");
                 parameters.Add($"PermissionId{index}", permission.Id);
                 parameters.Add($"PermissionRoleId{index}", role.Id);
-                parameters.Add($"ResourceType{index}", EnumFormatter<ResourceType>.GetValue(permission.ResourceType));
-                parameters.Add($"ResourceAction{index}", EnumFormatter<ResourceAction>.GetValue(permission.ResourceAction));
+                parameters.Add($"ResourceType{index}", (int)permission.ResourceType);
+                parameters.Add($"PermissionLevel{index}", (int)permission.PermissionLevel);
+                parameters.Add($"SpecificPermissions{index}", Permission.ToSpecificPermissionsMask(permission.SpecificPermissions));
                 index++;
             }
             while (enumerator.MoveNext());
@@ -170,7 +176,7 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<IEnumerable<Permission>> GetPermissionsAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT ResourceType, ResourceAction FROM Permissions WHERE RoleId = @RoleId";
+        const string sql = "SELECT ResourceType, PermissionLevel, SpecificPermissions FROM Permissions WHERE RoleId = @RoleId";
         var rows = await db.QueryAsync<PermissionAssignmentDto>(sql, new { RoleId = roleId, cancellationToken }, transaction: tx());
         return rows.Select(x => x.ToDomain(roleId));
     }
@@ -201,13 +207,14 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
         var rows = 0;
         foreach (var permission in permissions)
         {
-            const string insertSql = "INSERT INTO Permissions (Id, RoleId, ResourceType, ResourceAction) VALUES (@Id, @RoleId, @ResourceType, @ResourceAction)";
+            const string insertSql = "INSERT INTO Permissions (Id, RoleId, ResourceType, PermissionLevel, SpecificPermissions) VALUES (@Id, @RoleId, @ResourceType, @PermissionLevel, @SpecificPermissions)";
             rows += await db.ExecuteAsync(insertSql, new
             {
                 Id = permission.Id,
                 RoleId = roleId,
-                ResourceType = EnumFormatter<ResourceType>.GetValue(permission.ResourceType),
-                ResourceAction = EnumFormatter<ResourceAction>.GetValue(permission.ResourceAction),
+                ResourceType = (int)permission.ResourceType,
+                PermissionLevel = (int)permission.PermissionLevel,
+                SpecificPermissions = Permission.ToSpecificPermissionsMask(permission.SpecificPermissions),
                 cancellationToken
             }, transaction: tx());
         }

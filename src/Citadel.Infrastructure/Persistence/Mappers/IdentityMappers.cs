@@ -1,5 +1,7 @@
-using Domain.Entities.Identity;
+using Domain;
 using Domain.Contracts.Resources.Identity;
+using Domain.Entities.Identity;
+using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 
 namespace Infrastructure.Persistence.Mappers;
@@ -37,7 +39,11 @@ internal static class IdentityMappers
         => dtos.Select(ToDomain);
 
     internal static Permission ToDomain(this PermissionAssignmentDto dto, Guid roleId)
-        => Permission.Create(roleId, Enum.Parse<Hosting.Common.ResourceType>(dto.ResourceType), Enum.Parse<Hosting.Common.ResourceAction>(dto.ResourceAction));
+        => Permission.Create(
+            roleId,
+            (ResourceType)dto.ResourceType,
+            (PermissionLevel)dto.PermissionLevel,
+            Permission.FromSpecificPermissionsMask(dto.SpecificPermissions));
 
     internal static IEnumerable<Role> ToDomain(this IEnumerable<RolePermissionDto> dtos)
         => dtos
@@ -45,11 +51,12 @@ internal static class IdentityMappers
             .Select(group => Role.FromPersistence(
                 group.Key.Id,
                 group.Key.Name,
-                Enum.Parse<Domain.RoleType>(group.Key.RoleType),
-                group.Where(x => x.PermissionId.HasValue && x.ResourceType is not null && x.ResourceAction is not null)
+                Enum.Parse<RoleType>(group.Key.RoleType),
+                group.Where(x => x.PermissionId.HasValue && x.ResourceType.HasValue && x.PermissionLevel.HasValue)
                     .Select(x => Permission.Create(
                         group.Key.Id,
-                        Enum.Parse<Hosting.Common.ResourceType>(x.ResourceType!),
-                        Enum.Parse<Hosting.Common.ResourceAction>(x.ResourceAction!),
+                        (ResourceType)x.ResourceType!.Value,
+                        (PermissionLevel)x.PermissionLevel!.Value,
+                        Permission.FromSpecificPermissionsMask(x.SpecificPermissions ?? 0),
                         x.PermissionId!.Value))));
 }

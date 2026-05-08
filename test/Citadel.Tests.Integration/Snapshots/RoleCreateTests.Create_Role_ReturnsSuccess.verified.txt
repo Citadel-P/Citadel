@@ -5,11 +5,11 @@
   permissions: [
     {
       resourceType: Registry,
-      resourceAction: View
+      permissionLevel: Read
     },
     {
       resourceType: Role,
-      resourceAction: Update
+      permissionLevel: Write
     }
   ]
 }

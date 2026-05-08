@@ -11,7 +11,7 @@ using Mediator;
 
 namespace Application.Features.GitAccounts.Commands;
 
-[RequirePermission(ResourceType.GitAccount, ResourceAction.Update)]
+[RequirePermission(ResourceType.GitAccount, PermissionLevel.Write)]
 public sealed record PatchGitAccount(Guid Id, JsonMergePatchDocument<GitAccount> Patch) : ICommand<Result<GitAccount>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchGitAccount, GitAccount>

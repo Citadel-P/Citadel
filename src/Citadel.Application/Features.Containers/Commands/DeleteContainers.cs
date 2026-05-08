@@ -11,7 +11,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Containers.Commands;
 
-[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
+[RequirePermission(ResourceType.Platform, PermissionLevel.Execute)]
 public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bool? Force = false, bool? Link = false) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<DeleteContainers>

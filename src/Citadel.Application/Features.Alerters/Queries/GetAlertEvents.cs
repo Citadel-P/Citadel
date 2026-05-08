@@ -38,7 +38,8 @@ internal sealed class GetAlertEventsHandler(IUnitOfWork unitOfWork, IHttpContext
             ? await unitOfWork.AlertEvents.GetAuthorizedPagedAsync(
                 userId: user.GetUserId(),
                 permissionResourceType: Hosting.Common.ResourceType.Alert,
-                action: ResourceAction.View,
+                permissionLevel: PermissionLevel.Read,
+                specificPermission: SpecificPermission.None,
                 resourceId: query.ResourceId,
                 alertType: query.AlertType,
                 resourceType: query.ResourceType,
@@ -47,13 +48,13 @@ internal sealed class GetAlertEventsHandler(IUnitOfWork unitOfWork, IHttpContext
                 cancellationToken: cancellationToken,
                 unresolvedOnly: query.UnresolvedOnly)
             : await unitOfWork.AlertEvents.GetPagedAsync(
-                resourceId: query.ResourceId,
-                alertType: query.AlertType,
-                resourceType: query.ResourceType,
-                page: query.Page,
-                pageSize: query.PageSize,
-                cancellationToken: cancellationToken,
-                unresolvedOnly: query.UnresolvedOnly);
+                query.ResourceId,
+                query.AlertType,
+                query.ResourceType,
+                query.Page,
+                query.PageSize,
+                cancellationToken,
+                query.UnresolvedOnly);
 
         return Result.Success(alertEvents);
     }
