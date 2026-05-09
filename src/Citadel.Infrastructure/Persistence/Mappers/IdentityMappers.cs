@@ -24,11 +24,24 @@ internal static class IdentityMappers
     internal static IEnumerable<UserDetails> ToDetails(this IEnumerable<UserWithActorDto> dtos)
         => dtos.Select(ToDetails);
 
+    internal static ResourceAccessDetails ToDetails(this ResourceAccessDetailsDto dto)
+        => new(
+            dto.Id,
+            dto.ActorId,
+            dto.ResourceId,
+            (ResourceType)dto.ResourceType,
+            dto.ResourceName,
+            (PermissionLevel)dto.PermissionLevel,
+            Permission.FromSpecificPermissionsMask(dto.SpecificPermissions));
+
+    internal static IEnumerable<ResourceAccessDetails> ToDetails(this IEnumerable<ResourceAccessDetailsDto> dtos)
+        => dtos.Select(ToDetails);
+
     private static IEnumerable<ResourceInfo> ParseResources(string json)
         => JsonSerializer.Deserialize(json, RoleJsonContext.Default.IEnumerableResourceInfo) ?? EmptyResources;
 
     internal static TeamDetails ToDetails(this TeamWithActorDto dto)
-        => new(dto.Id, dto.Name, dto.ActorId, dto.IsEnabled, dto.TotalMembers, ParseResources(dto.Roles));
+        => new(dto.Id, dto.Name, dto.ActorId, dto.IsEnabled, dto.TotalMembers, ParseResources(dto.Users), ParseResources(dto.Roles));
 
     internal static IEnumerable<TeamDetails> ToDetails(this IEnumerable<TeamWithActorDto> dtos)
         => dtos.Select(ToDetails);
@@ -40,7 +53,7 @@ internal static class IdentityMappers
         => dtos.Select(ToDomain);
 
     internal static Role ToDomain(this RoleDto dto)
-        => Role.FromPersistence(dto.Id, dto.Name, Enum.Parse<Domain.RoleType>(dto.RoleType));
+        => Role.FromPersistence(dto.Id, dto.Name, Enum.Parse<RoleType>(dto.RoleType));
 
     internal static IEnumerable<Role> ToDomain(this IEnumerable<RoleDto> dtos)
         => dtos.Select(ToDomain);

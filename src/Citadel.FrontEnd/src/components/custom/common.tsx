@@ -253,6 +253,73 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   );
 }
 
+export const extractIds = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    if (typeof item === 'string') {
+      return item;
+    }
+
+    if (item && typeof item === 'object' && 'id' in item) {
+      const id = (item as { id?: unknown }).id;
+      if (typeof id === 'string') {
+        return id;
+      }
+    }
+
+    return [];
+  });
+};
+
+type IdSearchMultiSelectOption = {
+  label: string;
+  value: string;
+};
+
+export const IdSearchMultiSelectField = ({
+  value,
+  onChange,
+  options,
+  isLoading,
+  searchValue,
+  onSearchValueChange,
+  loadingPlaceholder,
+  selectPlaceholder,
+  searchingEmptyIndicator,
+  emptyIndicator,
+}: {
+  value: string[] | null;
+  onChange: (ids: string[]) => void;
+  options: IdSearchMultiSelectOption[];
+  isLoading: boolean;
+  searchValue: string;
+  onSearchValueChange: (value: string) => void;
+  loadingPlaceholder: string;
+  selectPlaceholder: string;
+  searchingEmptyIndicator: string;
+  emptyIndicator: string;
+}) => {
+  return (
+    <div className="max-w-100">
+      <MultiSelect
+        options={options}
+        defaultValue={(value ?? []).map(String)}
+        onValueChange={onChange}
+        placeholder={isLoading ? loadingPlaceholder : selectPlaceholder}
+        searchable
+        searchValue={searchValue}
+        onSearchValueChange={onSearchValueChange}
+        disableLocalSearchFilter
+        emptyIndicator={isLoading ? searchingEmptyIndicator : emptyIndicator}
+        maxCount={5}
+        animation={0}
+        resetOnDefaultValueChange={true}
+      />
+    </div>
+  );
+};
+
 export const DockerLabelsSection = ({ labels }: { labels: Record<string, string> | undefined }) => {
   if (!labels) return null;
   const entries = Object.entries(labels);

@@ -42,9 +42,14 @@ type DisplayResourceItem = ResourceItem & {
   resourceType: OverrideResourceType;
 };
 
+type ResourceAccessEntry = PermissionInput & {
+  resourceId: string;
+  resourceName?: string | null;
+};
+
 type ResourceSelectionMap = Record<
   string,
-  { permissionLevel: PermissionLevel | null; specificPermissions: SpecificPermission[] }
+  { permissionLevel: PermissionLevel | null; specificPermissions: SpecificPermission[]; resourceName?: string | null }
 >;
 type ResourceDraftSelections = Record<OverrideResourceType, ResourceSelectionMap>;
 
@@ -70,7 +75,7 @@ const isOverrideResourceType = (resourceType: ResourceType): resourceType is Ove
 const createEmptyDraftSelections = (): ResourceDraftSelections =>
   Object.fromEntries(OVERRIDE_RESOURCE_TYPES.map((resourceType) => [resourceType, {}])) as ResourceDraftSelections;
 
-const buildDraftSelections = (entries: Array<PermissionInput & { resourceId: string }>): ResourceDraftSelections => {
+const buildDraftSelections = (entries: ResourceAccessEntry[]): ResourceDraftSelections => {
   const draft = createEmptyDraftSelections();
 
   for (const entry of entries) {
@@ -79,21 +84,21 @@ const buildDraftSelections = (entries: Array<PermissionInput & { resourceId: str
     draft[entry.resourceType][entry.resourceId] = {
       permissionLevel: entry.permissionLevel,
       specificPermissions: entry.specificPermissions ?? [],
+      resourceName: entry.resourceName,
     };
   }
 
   return draft;
 };
 
-const flattenDraftSelections = (
-  draftSelectionsByType: ResourceDraftSelections,
-): Array<PermissionInput & { resourceId: string }> =>
+const flattenDraftSelections = (draftSelectionsByType: ResourceDraftSelections): ResourceAccessEntry[] =>
   OVERRIDE_RESOURCE_TYPES.flatMap((resourceType) =>
     Object.entries(draftSelectionsByType[resourceType])
       .filter(([, state]) => state.permissionLevel)
       .map(([resourceId, state]) => ({
         resourceType,
         resourceId,
+        resourceName: state.resourceName ?? null,
         permissionLevel: state.permissionLevel!,
         specificPermissions: state.specificPermissions.length > 0 ? state.specificPermissions : null,
       })),
@@ -104,20 +109,11 @@ const getResourceRowKey = (resourceType: ResourceType, resourceId: string) => `$
 const getResourceEditPath = (resourceType: OverrideResourceType, resourceId: string) =>
   `/${PluralResourceMap[resourceType].toLowerCase()}/edit/${resourceId}`;
 
+const rowName = (resourceName: string | null | undefined, resourceId: string) => resourceName ?? resourceId;
+
 const readResourceItems = (data: unknown): ResourceItem[] => {
   const raw = Object.values((data as Record<string, unknown>) ?? {}).at(0);
   return (Array.isArray(raw) ? raw : []) as ResourceItem[];
-};
-
-const useOverrideResourceItems = (resourceType: OverrideResourceType) => {
-  const plural = PluralResourceMap[resourceType as keyof typeof PluralResourceMap];
-  const read = useRead(`list${plural}` as any);
-  const items = useMemo(() => readResourceItems(read.data?.data), [read.data]);
-
-  return {
-    items,
-    isLoading: read.isLoading,
-  };
 };
 
 const ResourceLinkCell = ({
@@ -161,8 +157,8 @@ export const ResourceOverridesField = ({
   value,
   onChange,
 }: {
-  value: Array<PermissionInput & { resourceId: string }> | null;
-  onChange: (next: Array<PermissionInput & { resourceId: string }>) => void;
+  value: ResourceAccessEntry[] | null;
+  onChange: (next: ResourceAccessEntry[]) => void;
 }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<OverrideResourceType>(ResourceType.Platform);
@@ -170,7 +166,7 @@ export const ResourceOverridesField = ({
     createEmptyDraftSelections(),
   );
 
-  const entries = useMemo(() => (value ?? []) as Array<PermissionInput & { resourceId: string }>, [value]);
+  const entries = useMemo(() => (value ?? []) as ResourceAccessEntry[], [value]);
 
   const { data: matrixData } = useRead('getPermissionMatrix');
   const permissionMatrix = useMemo(
@@ -194,39 +190,23 @@ export const ResourceOverridesField = ({
     return (resourceTypeOptions[0]?.value as OverrideResourceType | undefined) ?? ResourceType.Platform;
   }, [resourceTypeOptions, selectedType]);
 
-  const deploymentItems = useOverrideResourceItems(ResourceType.Deployment);
-  const stackItems = useOverrideResourceItems(ResourceType.Stack);
-  const platformItems = useOverrideResourceItems(ResourceType.Platform);
-  const gitRepositoryItems = useOverrideResourceItems(ResourceType.GitRepository);
-  const selectedTypeItems = useOverrideResourceItems(effectiveSelectedType);
+  const selectedTypePlural = PluralResourceMap[effectiveSelectedType as keyof typeof PluralResourceMap];
+  const selectedTypeRead = useRead(`list${selectedTypePlural}` as any, undefined, { enabled: dialogOpen });
 
   const resources = useMemo<DisplayResourceItem[]>(
     () =>
-      selectedTypeItems.items.map((resource) => ({
+      readResourceItems(selectedTypeRead.data?.data).map((resource) => ({
         ...resource,
         resourceType: effectiveSelectedType,
       })),
-    [selectedTypeItems.items, effectiveSelectedType],
+    [selectedTypeRead.data, effectiveSelectedType],
   );
 
-  const isResourcesLoading = selectedTypeItems.isLoading;
-
-  const allResourceNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-
-    const allKnownResources = [
-      ...deploymentItems.items,
-      ...stackItems.items,
-      ...platformItems.items,
-      ...gitRepositoryItems.items,
-    ];
-
-    for (const resource of allKnownResources) {
-      map.set(resource.id, resource.name);
-    }
-
-    return map;
-  }, [deploymentItems.items, stackItems.items, platformItems.items, gitRepositoryItems.items]);
+  const isResourcesLoading = selectedTypeRead.isLoading;
+  const resourceNameById = useMemo(
+    () => new Map(resources.map((resource) => [resource.id, resource.name] as const)),
+    [resources],
+  );
 
   const selectedByResourceKey = draftSelectionsByType[effectiveSelectedType];
 
@@ -244,7 +224,12 @@ export const ResourceOverridesField = ({
     setDraftSelectionsByType((prev) => {
       const currentTypeSelections = { ...prev[effectiveSelectedType] };
       if (permissionLevel) {
-        currentTypeSelections[resourceId] = { permissionLevel, specificPermissions };
+        const existingName = currentTypeSelections[resourceId]?.resourceName;
+        currentTypeSelections[resourceId] = {
+          permissionLevel,
+          specificPermissions,
+          resourceName: existingName ?? resourceNameById.get(resourceId) ?? null,
+        };
       } else {
         delete currentTypeSelections[resourceId];
       }
@@ -290,25 +275,28 @@ export const ResourceOverridesField = ({
                     grouped.set(key, {
                       resourceType: entry.resourceType,
                       resourceId: entry.resourceId,
+                      resourceName: entry.resourceName,
                       permissionLevel: entry.permissionLevel,
                       specificPermissions: entry.specificPermissions ?? [],
                     });
+                  } else if (!existing.resourceName && entry.resourceName) {
+                    existing.resourceName = entry.resourceName;
                   }
                   return grouped;
-                }, new Map<string, { resourceType: ResourceType; resourceId: string; permissionLevel: PermissionLevel; specificPermissions: SpecificPermission[] }>()),
+                }, new Map<string, { resourceType: ResourceType; resourceId: string; resourceName?: string | null; permissionLevel: PermissionLevel; specificPermissions: SpecificPermission[] }>()),
               )
                 .map(([, row]) => row)
                 .sort((a, b) => {
                   if (a.resourceType !== b.resourceType) {
                     return a.resourceType.localeCompare(b.resourceType);
                   }
-                  const aName = allResourceNameMap.get(a.resourceId) ?? a.resourceId;
-                  const bName = allResourceNameMap.get(b.resourceId) ?? b.resourceId;
+                  const aName = rowName(a.resourceName, a.resourceId);
+                  const bName = rowName(b.resourceName, b.resourceId);
                   return aName.localeCompare(bName);
                 })
                 .map((row) => {
                   const resourceType = row.resourceType as OverrideResourceType;
-                  const resourceName = allResourceNameMap.get(row.resourceId) ?? row.resourceId;
+                  const resourceName = rowName(row.resourceName, row.resourceId);
                   const matrix = permissionMatrix[resourceType];
                   const availableSpecific =
                     row.permissionLevel && matrix

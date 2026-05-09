@@ -9,6 +9,7 @@ import {
   type FieldChange,
   type FieldItemConfig,
 } from '@/components/custom/form-builder';
+import { IdSearchMultiSelectField, extractIds } from '@/components/custom/common';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { useTeamsList } from '@/features/access/teams/hooks/useTeamsList';
 import { ResourceOverridesField } from '@/features/access/overrides/resource-overrides-field';
@@ -24,25 +25,6 @@ type UserInput = CreateUserInput | PatchUserInput;
 type UserFormResource = Partial<UserInput> & {
   teams?: ResourceInfo[] | null;
   roles?: ResourceInfo[] | null;
-};
-
-const extractIds = (value: unknown): string[] => {
-  if (!Array.isArray(value)) return [];
-
-  return value.flatMap((item) => {
-    if (typeof item === 'string') {
-      return item;
-    }
-
-    if (item && typeof item === 'object' && 'id' in item) {
-      const id = (item as { id?: unknown }).id;
-      if (typeof id === 'string') {
-        return id;
-      }
-    }
-
-    return [];
-  });
 };
 
 const normalizeUserResource = (resource?: UserFormResource): UserInput => {
@@ -67,22 +49,18 @@ const TeamMultiSelectField = ({ value, onChange }: { value: string[] | null; onC
   );
 
   return (
-    <div className="max-w-100">
-      <MultiSelect
-        options={options}
-        defaultValue={(value ?? []).map(String)}
-        onValueChange={onChange}
-        placeholder={isLoading ? 'Loading teams...' : 'Select teams...'}
-        searchable
-        searchValue={teamSearch}
-        onSearchValueChange={setTeamSearch}
-        disableLocalSearchFilter
-        emptyIndicator={isLoading ? 'Searching teams...' : 'No teams found.'}
-        maxCount={5}
-        animation={0}
-        resetOnDefaultValueChange={true}
-      />
-    </div>
+    <IdSearchMultiSelectField
+      value={value}
+      onChange={onChange}
+      options={options}
+      isLoading={isLoading}
+      searchValue={teamSearch}
+      onSearchValueChange={setTeamSearch}
+      loadingPlaceholder="Loading teams..."
+      selectPlaceholder="Select teams..."
+      searchingEmptyIndicator="Searching teams..."
+      emptyIndicator="No teams found."
+    />
   );
 };
 
@@ -108,7 +86,7 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
 
   const { save: handleSave, isPending } = useSaveResource<UserInput, any>({
     mode,
-    basePath: 'users',
+    basePath: 'access/users',
     entityName: 'User',
     onCreate: (payload) => createUser({ data: payload as CreateUserInput }),
     onUpdate: (payload) => updateUser({ id: id!, data: payload as PatchUserInput }),

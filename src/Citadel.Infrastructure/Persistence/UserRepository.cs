@@ -58,10 +58,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         """;
 
     private const string UserAggregateJoins = """
-
         LEFT JOIN UserTeams teams ON teams.UserId = u.Id
         LEFT JOIN UserRoles roles ON roles.ActorId = u.ActorId
-
         """;
 
     public async Task<User?> GetAsync(Guid id, CancellationToken cancellationToken)
@@ -73,7 +71,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken)
     {
-        const string selectSql = "WITH " + UserAggregateCtes + " " + """
+        const string selectSql = $$"""
+            WITH {{UserAggregateCtes}}
             SELECT
                 u.Id,
                 u.Name,
@@ -86,9 +85,9 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 COALESCE(roles.Roles, '[]') AS Roles
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
-            """ + UserAggregateJoins + """
+            {{UserAggregateJoins}}
             WHERE u.Id = @Id
-            """;
+         """;
 
         var result = await db.QuerySingleOrDefaultAsync<UserWithActorDto>(selectSql, new { Id = userId, cancellationToken }, transaction: tx());
         return result?.ToDetails();
@@ -106,7 +105,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         name = string.IsNullOrWhiteSpace(name) ? null : name;
 
 
-        const string selectSql = "WITH " + UserAggregateCtes + " " + """
+        const string selectSql = $$"""
+            WITH {{UserAggregateCtes}}
             SELECT
                 u.Id,
                 u.Name,
@@ -119,11 +119,11 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 COALESCE(roles.Roles, '[]') AS Roles
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
-            """ + UserAggregateJoins + """
+            {{UserAggregateJoins}}
             WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
             ORDER BY u.Name ASC
             LIMIT @PageSize OFFSET @Offset
-            """;
+         """;
 
         const string countSql = """
             SELECT COUNT(*)
@@ -143,7 +143,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
-        const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + ", " + UserAggregateCtes + " " + """
+        const string selectSql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}, {{UserAggregateCtes}}
             SELECT
                 u.Id,
                 u.Name,
@@ -156,12 +157,19 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 COALESCE(roles.Roles, '[]') AS Roles
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
-            """ + UserAggregateJoins + """
+            {{UserAggregateJoins}}
             WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
-        """ + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY u.Name ASC LIMIT @PageSize OFFSET @Offset;";
+            {{AuthorizationSql.ResourcePredicatePrefix}}u.Id{{AuthorizationSql.ResourcePredicateSuffix}} 
+            ORDER BY u.Name ASC LIMIT @PageSize OFFSET @Offset;
+        """;
 
-        const string countSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT COUNT(*) FROM Users u WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%') "
-            + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
+        const string countSql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT COUNT(*)
+            FROM Users u
+            WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
+            {{AuthorizationSql.ResourcePredicatePrefix}}u.Id{{AuthorizationSql.ResourcePredicateSuffix}};
+        """;
 
         var offset = (page - 1) * pageSize;
         var grantedPermissionLevels = GetGrantedPermissionLevelValues(permissionLevel);
@@ -199,11 +207,15 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public Task<IEnumerable<UserSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, string query, int limit, CancellationToken cancellationToken)
     {
-        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
             SELECT u.Id, u.Name, u.Email
             FROM Users u
             WHERE (u.Name ILIKE '%' || @Query || '%' OR u.Email ILIKE '%' || @Query || '%') AND
-        """ + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY u.Name ASC LIMIT @Limit;";
+            {{AuthorizationSql.ResourcePredicatePrefix}}u.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+            ORDER BY u.Name ASC
+            LIMIT @Limit;
+        """;
 
         var grantedPermissionLevels = GetGrantedPermissionLevelValues(permissionLevel);
         var parameters = new

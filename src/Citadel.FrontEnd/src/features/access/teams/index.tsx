@@ -1,5 +1,5 @@
 import { PagedResultViewOfTeamView, TeamView } from '@/api/generated/api.types';
-import { ActionData, DropdownActionComponent, RequiredFormComponents } from '@/pages/types';
+import { ActionData, DropdownActionComponent } from '@/pages/types';
 import { useSelectedResources, useTeamQuery } from '@/lib/atoms';
 import { useMemo } from 'react';
 import { PagedDataTable } from '@/components/custom/common';
@@ -19,15 +19,6 @@ export const Teams = ({
   actions: Record<string, DropdownActionComponent>;
   isLoading: boolean;
 }) => <TeamsTable pagedResult={items} isLoading={isLoading} actions={actions} />;
-
-export const TeamFormComponents: RequiredFormComponents = {
-  AddForm: {
-    Header: {
-      title: 'Team',
-    },
-    Content: () => <></>,
-  },
-};
 
 const EMPTY_ROWS: TeamView[] = [];
 
@@ -99,7 +90,7 @@ const columns = (
   {
     accessorKey: 'roles',
     header: ({ column }) => <SortableCell cellName="Roles" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{row.original.roles?.join(',')}</span>,
+    cell: ({ row }) => <span className="text-[13px]">{row.original.roles?.map((s) => s.name).join(',')}</span>,
   },
   {
     id: 'actions',

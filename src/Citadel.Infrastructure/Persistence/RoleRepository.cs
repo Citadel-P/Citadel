@@ -54,7 +54,8 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<IEnumerable<Role>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
     {
-        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
             SELECT
                 r.Id,
                 r.Name,
@@ -66,7 +67,8 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
             FROM Roles r
             LEFT JOIN Permissions p ON p.RoleId = r.Id
             WHERE
-        """ + AuthorizationSql.ResourcePredicatePrefix + "r.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY r.Name ASC;";
+            {{AuthorizationSql.ResourcePredicatePrefix}}r.Id{{AuthorizationSql.ResourcePredicateSuffix}} ORDER BY r.Name ASC;
+        """;
 
         var result = await db.QueryAsync<RolePermissionDto>(sql, new
         {
@@ -95,7 +97,7 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
             LEFT JOIN Permissions p ON p.RoleId = r.Id
             WHERE r.Id = ANY(@Ids)
             ORDER BY r.Name ASC
-            """;
+        """;
         var idArray = ids as Guid[] ?? [.. ids];
         var result = await db.QueryAsync<RolePermissionDto>(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
         return result.ToDomain();
@@ -194,7 +196,7 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
             INSERT INTO ActorRoles (ActorId, RoleId)
             SELECT @ActorId, roleId
             FROM unnest(@RoleIds::uuid[]) AS roleId
-            """;
+         """;
 
         return await db.ExecuteAsync(insertSql, new { ActorId = actorId, RoleIds = roleIdArray, cancellationToken }, transaction: tx());
     }

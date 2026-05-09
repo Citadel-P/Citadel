@@ -49,7 +49,7 @@ public interface IActorRepository
 
 public interface IResourceAccessRepository
 {
-    Task<IEnumerable<ResourceAccess>> GetAllByActorIdAsync(Guid actorId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceAccessDetails>> GetAllByActorIdAsync(Guid actorId, CancellationToken cancellationToken);
     Task<int> AddAsync(ResourceAccess resourceAccess, CancellationToken cancellationToken);
     Task<int> RemoveAsync(
         Guid actorId,

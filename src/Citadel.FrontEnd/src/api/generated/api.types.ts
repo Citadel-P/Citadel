@@ -2787,6 +2787,7 @@ export interface ResourceAccessView {
   resourceType: ResourceType;
   /** @format uuid */
   resourceId: string;
+  resourceName: null | string;
   permissionLevel: PermissionLevel;
   specificPermissions: null | SpecificPermission[];
 }
@@ -2970,6 +2971,7 @@ export interface TeamView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   totalMembers: number | string;
+  users?: null | ResourceInfo[];
   roles?: null | ResourceInfo[];
   resourceAccesses?: null | ResourceAccessView[];
 }

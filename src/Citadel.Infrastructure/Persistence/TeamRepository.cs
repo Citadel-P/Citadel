@@ -1,7 +1,6 @@
 ﻿using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using Hosting.Common;
@@ -10,7 +9,6 @@ using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
 using System.Text.Json;
-using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
 
@@ -20,6 +18,23 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
         TeamMembers AS (
             SELECT ut.TeamId, COUNT(*)::int AS TotalMembers
             FROM UsersTeams ut
+            GROUP BY ut.TeamId
+        ),
+        TeamUsers AS (
+            SELECT
+                ut.TeamId,
+                JSONB_AGG(
+                    DISTINCT JSONB_BUILD_OBJECT(
+                        'id', u.Id,
+                        'name', u.Name
+                    )
+                    ORDER BY JSONB_BUILD_OBJECT(
+                        'id', u.Id,
+                        'name', u.Name
+                    )
+                )::text AS Users
+            FROM UsersTeams ut
+            JOIN Users u ON u.Id = ut.UserId
             GROUP BY ut.TeamId
         ),
         TeamRoles AS (
@@ -45,7 +60,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
         LEFT JOIN TeamMembers members ON members.TeamId = t.Id
         LEFT JOIN TeamRoles roles ON roles.ActorId = t.ActorId
-
+        LEFT JOIN TeamUsers users ON users.TeamId = t.Id
         """;
 
     private const string TargetTeamAggregateJoins = """
@@ -71,20 +86,22 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<TeamDetails?> GetDetailsAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = "WITH " + TeamAggregateCtes + " " + """
+        const string sql = $$"""
+            WITH {{TeamAggregateCtes}}
             SELECT
                 t.Id,
                 t.Name,
                 t.ActorId,
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
+                COALESCE(users.Users, '[]') AS Users,
                 COALESCE(roles.Roles, '[]') AS Roles
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
-            """ + TeamAggregateJoins + """
+            {{TeamAggregateJoins}}
             WHERE t.Id = @Id
             LIMIT 1
-            """;
+        """;
 
         var result = await db.QuerySingleOrDefaultAsync<TeamWithActorDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDetails();
@@ -92,20 +109,22 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<PagedResult<TeamDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
-        const string selectSql = "WITH " + TeamAggregateCtes + " " + """
-        SELECT
-            t.Id,
-            t.Name,
-            t.ActorId,
-            a.IsEnabled,
-            COALESCE(members.TotalMembers, 0) AS TotalMembers,
-            COALESCE(roles.Roles, '[]') AS Roles
-        FROM Teams t
-        JOIN Actors a ON a.Id = t.ActorId
-        """ + TeamAggregateJoins + """
-        WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%')
-        ORDER BY t.Name ASC
-        LIMIT @PageSize OFFSET @Offset
+        const string selectSql = $$"""
+            WITH {{TeamAggregateCtes}}
+            SELECT
+                t.Id,
+                t.Name,
+                t.ActorId,
+                a.IsEnabled,
+                COALESCE(members.TotalMembers, 0) AS TotalMembers,
+                COALESCE(users.Users, '[]') AS Users,
+                COALESCE(roles.Roles, '[]') AS Roles
+            FROM Teams t
+            JOIN Actors a ON a.Id = t.ActorId
+            {{TeamAggregateJoins}}
+            WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%')
+            ORDER BY t.Name ASC
+            LIMIT @PageSize OFFSET @Offset
         """;
         const string countSql = """
         SELECT COUNT(*)
@@ -123,19 +142,22 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, int page, int pageSize, string? name, CancellationToken cancellationToken)
     {
-        const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + ", " + TeamAggregateCtes + " " + """
+        const string selectSql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}, {{TeamAggregateCtes}}
             SELECT
                 t.Id,
                 t.Name,
                 t.ActorId,
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
+                COALESCE(users.Users, '[]') AS Users,
                 COALESCE(roles.Roles, '[]') AS Roles
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
-            """ + TeamAggregateJoins + """
+            {{TeamAggregateJoins}}
             WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%') AND
-        """ + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY t.Name ASC LIMIT @PageSize OFFSET @Offset;";
+            {{AuthorizationSql.ResourcePredicatePrefix}}t.Id{{AuthorizationSql.ResourcePredicateSuffix}} ORDER BY t.Name ASC LIMIT @PageSize OFFSET @Offset;
+        """;
 
         const string countSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT COUNT(*) FROM Teams t WHERE (@Name IS NULL OR t.Name ILIKE '%' || @Name || '%') AND"
             + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
@@ -175,11 +197,13 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public Task<IEnumerable<TeamSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, string query, int limit, CancellationToken cancellationToken)
     {
-        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
             SELECT t.Id, t.Name
             FROM Teams t
             WHERE t.Name ILIKE '%' || @Query || '%' AND
-        """ + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY t.Name ASC LIMIT @Limit;";
+            {{AuthorizationSql.ResourcePredicatePrefix}}t.Id{{AuthorizationSql.ResourcePredicateSuffix}} ORDER BY t.Name ASC LIMIT @Limit;
+        """;
 
         var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
         var parameters = new
@@ -277,8 +301,8 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public async Task<(TeamDetails? Team, bool UserExists, bool HasMember)> GetMemberAssignmentStateAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = "WITH " + """
-            TargetTeam AS (
+        const string sql = $$"""
+            WITH  TargetTeam AS (
                 SELECT
                     t.Id,
                     t.Name,
@@ -298,8 +322,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 FROM UsersTeams ut
                 WHERE ut.TeamId = @TeamId
                   AND ut.UserId = @UserId
-            )
-            """ + ", " + TeamAggregateCtes + " " + """
+            ), {{TeamAggregateCtes}}
             SELECT
                 tt.Id,
                 tt.Name,
@@ -311,7 +334,8 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 EXISTS (SELECT 1 FROM ExistingMember) AS HasMember
             FROM (SELECT 1) seed
             LEFT JOIN TargetTeam tt ON 1 = 1
-            """ + TargetTeamAggregateJoins;
+            {{TargetTeamAggregateJoins}}
+        """;
 
         var result = await db.QuerySingleAsync<TeamMemberAssignmentStateDto>(sql, new { TeamId = teamId, UserId = userId, cancellationToken }, transaction: tx());
         var team = result.Id.HasValue && result.ActorId.HasValue && result.IsEnabled.HasValue && result.Name is not null

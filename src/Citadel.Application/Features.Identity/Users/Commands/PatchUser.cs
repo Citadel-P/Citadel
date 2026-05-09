@@ -132,6 +132,6 @@ internal sealed class PatchUserHandler(IUnitOfWork unitOfWork) : ICommandHandler
             actor.IsEnabled,
             state.User.CreatedAt,
             state.User.CreatedByActorId,
-            ResourceAccesses: persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions)));
+            ResourceAccesses: persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.ResourceName, x.PermissionLevel, x.SpecificPermissions)));
     }
 }

@@ -23,7 +23,7 @@ internal sealed class GetTeamHandler(IUnitOfWork unitOfWork) : IQueryHandler<Get
 
         return Result.Success(team with
         {
-            ResourceAccesses = resourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions))
+            ResourceAccesses = resourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.ResourceName, x.PermissionLevel, x.SpecificPermissions))
         });
     }
 }

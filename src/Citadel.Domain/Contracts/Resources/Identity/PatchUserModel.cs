@@ -5,6 +5,7 @@ namespace Domain.Contracts.Resources.Identity;
 public sealed record ResourceAccessView(
     ResourceType ResourceType,
     Guid ResourceId,
+    string? ResourceName,
     PermissionLevel PermissionLevel,
     IEnumerable<SpecificPermission>? SpecificPermissions);
 

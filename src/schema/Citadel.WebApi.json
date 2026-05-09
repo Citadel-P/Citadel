@@ -22144,6 +22144,7 @@
         "required": [
           "resourceType",
           "resourceId",
+          "resourceName",
           "permissionLevel",
           "specificPermissions"
         ],
@@ -22155,6 +22156,12 @@
           "resourceId": {
             "type": "string",
             "format": "uuid"
+          },
+          "resourceName": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "permissionLevel": {
             "$ref": "#/components/schemas/PermissionLevel"
@@ -22915,6 +22922,15 @@
               "string"
             ],
             "format": "int32"
+          },
+          "users": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ResourceInfo"
+            }
           },
           "roles": {
             "type": [

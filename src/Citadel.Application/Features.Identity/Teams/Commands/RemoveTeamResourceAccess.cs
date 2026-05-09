@@ -57,7 +57,7 @@ internal sealed class RemoveTeamResourceAccessHandler(IUnitOfWork unitOfWork, IA
         var persistedResourceAccesses = await unitOfWork.ResourceAccesses.GetAllByActorIdAsync(team.ActorId, cancellationToken);
         return team with
         {
-            ResourceAccesses = persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions))
+            ResourceAccesses = persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.ResourceName, x.PermissionLevel, x.SpecificPermissions))
         };
     }
 }

@@ -1,6 +1,6 @@
 using Dapper;
-using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
@@ -11,17 +11,52 @@ namespace Infrastructure.Persistence;
 
 internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransaction> tx) : IResourceAccessRepository
 {
-    public async Task<IEnumerable<ResourceAccess>> GetAllByActorIdAsync(Guid actorId, CancellationToken cancellationToken)
+    public async Task<IEnumerable<ResourceAccessDetails>> GetAllByActorIdAsync(
+    Guid actorId,
+    CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT Id, ResourceId, ActorId, ResourceType, PermissionLevel, SpecificPermissions
-            FROM ResourceAccesses
-            WHERE ActorId = @ActorId
-            ORDER BY ResourceType, ResourceId
-            """;
+            WITH ResourceLookup(ResourceId, ResourceType, ResourceName) AS (
+                SELECT Id, @PlatformResourceType, Name FROM Platforms
+                UNION ALL
+                SELECT Id, @DeploymentResourceType, Name FROM Deployments
+                UNION ALL
+                SELECT Id, @StackResourceType, Name FROM Stacks
+                UNION ALL
+                SELECT Id, @RegistryResourceType, Name FROM Registries
+                UNION ALL
+                SELECT Id, @GitRepositoryResourceType, Name FROM GitRepositories
+            )
+            SELECT
+                ra.Id,
+                ra.ActorId,
+                ra.ResourceId,
+                ra.ResourceType,
+                rl.ResourceName,
+                ra.PermissionLevel,
+                ra.SpecificPermissions
+            FROM ResourceAccesses ra
+            LEFT JOIN ResourceLookup rl
+                ON rl.ResourceId = ra.ResourceId
+               AND rl.ResourceType = ra.ResourceType
+            WHERE ra.ActorId = @ActorId
+            ORDER BY ra.ResourceType, ra.ResourceId
+        """;
 
-        var rows = await db.QueryAsync<ResourceAccessDto>(sql, new { ActorId = actorId }, transaction: tx());
-        return rows.ToDomain();
+        var rows = await db.QueryAsync<ResourceAccessDetailsDto>(
+            sql,
+            new
+            {
+                ActorId = actorId,
+                PlatformResourceType = (int)ResourceType.Platform,
+                DeploymentResourceType = (int)ResourceType.Deployment,
+                StackResourceType = (int)ResourceType.Stack,
+                RegistryResourceType = (int)ResourceType.Registry,
+                GitRepositoryResourceType = (int)ResourceType.GitRepository,
+            },
+            transaction: tx());
+
+        return rows.ToDetails();
     }
 
     public Task<int> AddAsync(ResourceAccess resourceAccess, CancellationToken cancellationToken)

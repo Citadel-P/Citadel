@@ -1,38 +1,38 @@
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
-import { UserForm } from './form';
+import { TeamForm } from './form';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useRead } from '@/lib/hooks';
-import { UserView } from '@/api/generated/api.types';
+import { TeamView } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
-import { UserActions } from './actions';
+import { TeamActions } from './actions';
 
-export const UserFormComponents: RequiredFormComponents = {
+export const TeamFormComponents: RequiredFormComponents = {
   AddForm: {
     Header: {
-      title: 'User',
+      title: 'Team',
     },
-    Content: () => <UserForm mode="add" />,
+    Content: () => <TeamForm mode="add" />,
   },
   EditForm: {
     skipMetadataUpdate: true,
     Header: {
       canEditDescription: false,
-      Indicator: ({ resource }: { resource: UserView }) => (
+      Indicator: ({ resource }: { resource: TeamView }) => (
         <StateIndicator value={resource.isEnabled as any} enableLabel={true} />
       ),
       ActionButtons: ({ resource }) => (
-        <GenericActionBarButtons resource={resource} actions={Object.values(UserActions)} />
+        <GenericActionBarButtons resource={resource} actions={Object.values(TeamActions)} />
       ),
     },
     Tabs: [
       {
         label: 'Config',
-        Content: ({ resource }) => <UserForm mode="edit" resource={resource} />,
+        Content: ({ resource }) => <TeamForm mode="edit" resource={resource} />,
       },
     ],
 
     useData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getUser', { id });
+      const { data, isLoading } = useRead('getTeam', { id });
       return { item: data?.data as any, isLoading };
     },
   },

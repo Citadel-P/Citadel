@@ -31,6 +31,6 @@ internal sealed class GetUserHandler(IUnitOfWork unitOfWork) : IQueryHandler<Get
             user.CreatedByActorId,
             user.Teams,
             user.Roles,
-            ResourceAccesses: resourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions))));
+            ResourceAccesses: resourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.ResourceName, x.PermissionLevel, x.SpecificPermissions))));
     }
 }

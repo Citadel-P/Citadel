@@ -107,6 +107,6 @@ internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IHttpContextAcce
             userActor.IsEnabled,
             user.CreatedAt,
             user.CreatedByActorId,
-            ResourceAccesses: persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions)));
+            ResourceAccesses: persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.ResourceName, x.PermissionLevel, x.SpecificPermissions)));
     }
 }

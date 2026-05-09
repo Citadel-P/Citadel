@@ -15,7 +15,7 @@
 - For Stack persistence, treat Stack as the aggregate root and do not expose a separate StackRelease repository; child StackRelease persistence should be handled through StackRepository.
 - Do not modify the validation pipeline when fixing tests in this codebase; prefer updating tests to match handler behavior instead.
 - Follow the established resource update pattern by splitting updates into Patch, PatchMetadata, and Rename operations, and mirror that pattern consistently in tests.
-- Prefer hoisting shared ActorScope CTEs once per query; avoid `OR EXISTS` in authorized repository queries when a `UNION`-based authorization set is cleaner and more scalable. Prefer `JOINs` over `IN (SELECT ...)` for actor-scope authorization checks.
+- Prefer hoisting shared ActorScope CTEs once per query; avoid `OR EXISTS` in authorized repository queries when a `UNION`-based authorization set is cleaner and more scalable. Prefer `JOINs` over `IN (SELECT ...)` for actor-scope authorization checks, and simplify resource name resolution by using a unified lookup projection (for example a SQL view or UNION ALL lookup) instead of multiple conditional joins per resource type.
 - When handling stale container stats batches, prefer using `IPlatformContainerCache` to validate container existence instead of querying the database again.
 
 ## Caching Guidelines

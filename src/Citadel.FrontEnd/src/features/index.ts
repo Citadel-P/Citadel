@@ -21,7 +21,7 @@ import { GitRepoComponents } from './git-repos';
 import { GitRepoFormComponents } from './git-repos/form';
 import { AccessComponents } from './access';
 import { UserFormComponents } from './access/users/form';
-import { TeamFormComponents } from './access/teams';
+import { TeamFormComponents } from './access/teams/form';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
