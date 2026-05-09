@@ -6,6 +6,6 @@ internal sealed record TeamMemberAssignmentStateDto(
     Guid? ActorId,
     bool? IsEnabled,
     int TotalMembers,
-    IEnumerable<string> Roles,
+    string Roles,
     bool UserExists,
     bool HasMember);

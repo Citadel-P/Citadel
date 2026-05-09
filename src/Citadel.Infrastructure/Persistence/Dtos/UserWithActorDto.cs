@@ -9,5 +9,5 @@ internal sealed record UserWithActorDto(
     bool IsEnabled,
     DateTime CreatedAt,
     Guid CreatedByActorId,
-    IEnumerable<string> Teams,
-    IEnumerable<string> Roles);
+    string Teams,
+    string Roles);

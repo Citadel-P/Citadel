@@ -54,6 +54,10 @@ internal sealed class AddTeamResourceAccessHandler(IUnitOfWork unitOfWork, IActo
         if (result.IsFailure(out var error))
             return Result.Failure<TeamDetails>(error);
 
-        return team;
+        var persistedResourceAccesses = await unitOfWork.ResourceAccesses.GetAllByActorIdAsync(team.ActorId, cancellationToken);
+        return team with
+        {
+            ResourceAccesses = persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions))
+        };
     }
 }

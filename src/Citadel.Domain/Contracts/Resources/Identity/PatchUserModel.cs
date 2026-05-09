@@ -2,7 +2,7 @@ using Hosting.Common;
 
 namespace Domain.Contracts.Resources.Identity;
 
-public sealed record UserResourceAccessModel(
+public sealed record ResourceAccessView(
     ResourceType ResourceType,
     Guid ResourceId,
     PermissionLevel PermissionLevel,
@@ -14,4 +14,4 @@ public sealed record PatchUserModel(
     bool? IsEnabled,
     IEnumerable<Guid>? TeamIds,
     IEnumerable<Guid>? RoleIds,
-    IEnumerable<UserResourceAccessModel>? ResourceAccesses);
+    IEnumerable<ResourceAccessView>? ResourceAccesses);

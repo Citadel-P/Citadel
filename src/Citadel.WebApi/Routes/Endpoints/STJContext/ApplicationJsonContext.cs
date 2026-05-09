@@ -1,8 +1,10 @@
 ﻿using Application.Features.Images.Queries;
 using Domain;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Compose;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
+using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Registries;
@@ -38,6 +40,7 @@ using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Auth;
 using Application.Features.Identity.Auth.Models;
 using Application.Features.Identity.Auth.Models;
+using Domain.Contracts.Resources;
 
 namespace Application.Models;
 
@@ -238,6 +241,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(PermissionInput))]
 [JsonSerializable(typeof(UserResourceAccessInput))]
 [JsonSerializable(typeof(IEnumerable<UserResourceAccessInput>))]
+[JsonSerializable(typeof(ResourceAccessView))]
+[JsonSerializable(typeof(IEnumerable<ResourceAccessView>))]
 [JsonSerializable(typeof(CreateUserInput))]
 [JsonSerializable(typeof(PatchUserInput))]
 [JsonSerializable(typeof(AddUserResourceAccessInput))]
@@ -280,6 +285,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(PatchDeploymentInput))]
 [JsonSerializable(typeof(PatchResourceMetadata))]
 [JsonSerializable(typeof(PatchGitRepositoryInput))]
+[JsonSerializable(typeof(ResourceInfo))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

@@ -15,14 +15,22 @@ internal sealed class GetUserHandler(IUnitOfWork unitOfWork) : IQueryHandler<Get
 {
     public async ValueTask<Result<UserDetails>> Handle(GetUser query, CancellationToken cancellationToken)
     {
-        var user = await unitOfWork.Users.GetAsync(query.Id, cancellationToken);
+        var user = await unitOfWork.Users.GetDetailsAsync(query.Id, cancellationToken);
         if (user is null)
             return Result.Failure<UserDetails>(new NotFoundError($"User with ID {query.Id} does not exist"));
 
-        var actor = await unitOfWork.Actors.GetById(user.ActorId, cancellationToken);
-        if (actor is null)
-            return Result.Failure<UserDetails>(new NotFoundError("The provided actor does not exist"));
+        var resourceAccesses = await unitOfWork.ResourceAccesses.GetAllByActorIdAsync(user.ActorId, cancellationToken);
 
-        return Result.Success(new UserDetails(user.Id, user.Name, user.Email, user.ActorId, actor.IsEnabled, user.CreatedAt, user.CreatedByActorId));
+        return Result.Success(new UserDetails(
+            user.Id,
+            user.Name,
+            user.Email,
+            user.ActorId,
+            user.IsEnabled,
+            user.CreatedAt,
+            user.CreatedByActorId,
+            user.Teams,
+            user.Roles,
+            ResourceAccesses: resourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions))));
     }
 }

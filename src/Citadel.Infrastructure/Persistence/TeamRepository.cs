@@ -1,5 +1,7 @@
 ﻿using Dapper;
+using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using Hosting.Common;
@@ -7,6 +9,7 @@ using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
+using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
@@ -20,7 +23,18 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
             GROUP BY ut.TeamId
         ),
         TeamRoles AS (
-            SELECT ar.ActorId, ARRAY_AGG(DISTINCT r.Name ORDER BY r.Name) AS Roles
+            SELECT
+                ar.ActorId,
+                JSONB_AGG(
+                    DISTINCT JSONB_BUILD_OBJECT(
+                        'id', r.Id,
+                        'name', r.Name
+                    )
+                    ORDER BY JSONB_BUILD_OBJECT(
+                        'id', r.Id,
+                        'name', r.Name
+                    )
+                )::text AS Roles
             FROM ActorRoles ar
             JOIN Roles r ON r.Id = ar.RoleId
             GROUP BY ar.ActorId
@@ -64,7 +78,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 t.ActorId,
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
-                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
+                COALESCE(roles.Roles, '[]') AS Roles
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
             """ + TeamAggregateJoins + """
@@ -85,7 +99,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
             t.ActorId,
             a.IsEnabled,
             COALESCE(members.TotalMembers, 0) AS TotalMembers,
-            COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
+            COALESCE(roles.Roles, '[]') AS Roles
         FROM Teams t
         JOIN Actors a ON a.Id = t.ActorId
         """ + TeamAggregateJoins + """
@@ -116,7 +130,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 t.ActorId,
                 a.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
-                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
+                COALESCE(roles.Roles, '[]') AS Roles
             FROM Teams t
             JOIN Actors a ON a.Id = t.ActorId
             """ + TeamAggregateJoins + """
@@ -292,7 +306,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 tt.ActorId,
                 tt.IsEnabled,
                 COALESCE(members.TotalMembers, 0) AS TotalMembers,
-                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles,
+                COALESCE(roles.Roles, '[]') AS Roles,
                 EXISTS (SELECT 1 FROM TargetUser) AS UserExists,
                 EXISTS (SELECT 1 FROM ExistingMember) AS HasMember
             FROM (SELECT 1) seed
@@ -301,7 +315,7 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
         var result = await db.QuerySingleAsync<TeamMemberAssignmentStateDto>(sql, new { TeamId = teamId, UserId = userId, cancellationToken }, transaction: tx());
         var team = result.Id.HasValue && result.ActorId.HasValue && result.IsEnabled.HasValue && result.Name is not null
-            ? new TeamDetails(result.Id.Value, result.Name, result.ActorId.Value, result.IsEnabled.Value, result.TotalMembers, result.Roles)
+            ? new TeamDetails(result.Id.Value, result.Name, result.ActorId.Value, result.IsEnabled.Value, result.TotalMembers, JsonSerializer.Deserialize(result.Roles, RoleJsonContext.Default.IEnumerableResourceInfo) ?? [])
             : null;
 
         return (team, result.UserExists, result.HasMember);

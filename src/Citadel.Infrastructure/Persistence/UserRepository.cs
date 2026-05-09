@@ -1,5 +1,4 @@
 ﻿using Dapper;
-using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
@@ -23,13 +22,35 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     private const string UserAggregateCtes = """
         UserTeams AS (
-            SELECT ut.UserId, ARRAY_AGG(DISTINCT t.Name ORDER BY t.Name) AS Teams
+            SELECT
+                ut.UserId,
+                JSONB_AGG(
+                    DISTINCT JSONB_BUILD_OBJECT(
+                        'id', t.Id,
+                        'name', t.Name
+                    )
+                    ORDER BY JSONB_BUILD_OBJECT(
+                        'id', t.Id,
+                        'name', t.Name
+                    )
+                )::text AS Teams
             FROM UsersTeams ut
             JOIN Teams t ON t.Id = ut.TeamId
             GROUP BY ut.UserId
         ),
         UserRoles AS (
-            SELECT ar.ActorId, ARRAY_AGG(DISTINCT r.Name ORDER BY r.Name) AS Roles
+            SELECT
+                ar.ActorId,
+                JSONB_AGG(
+                    DISTINCT JSONB_BUILD_OBJECT(
+                        'id', r.Id,
+                        'name', r.Name
+                    )
+                    ORDER BY JSONB_BUILD_OBJECT(
+                        'id', r.Id,
+                        'name', r.Name
+                    )
+                )::text AS Roles
             FROM ActorRoles ar
             JOIN Roles r ON r.Id = ar.RoleId
             GROUP BY ar.ActorId
@@ -48,6 +69,29 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         const string sql = "SELECT * FROM Users WHERE Id = @Id";
         var result = await db.QuerySingleOrDefaultAsync<UserDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
+    }
+
+    public async Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        const string selectSql = "WITH " + UserAggregateCtes + " " + """
+            SELECT
+                u.Id,
+                u.Name,
+                u.Email,
+                u.ActorId,
+                a.IsEnabled,
+                u.CreatedAt,
+                u.CreatedByActorId,
+                COALESCE(teams.Teams, '[]') AS Teams,
+                COALESCE(roles.Roles, '[]') AS Roles
+            FROM Users u
+            JOIN Actors a ON a.Id = u.ActorId
+            """ + UserAggregateJoins + """
+            WHERE u.Id = @Id
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<UserWithActorDto>(selectSql, new { Id = userId, cancellationToken }, transaction: tx());
+        return result?.ToDetails();
     }
 
     public async Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken)
@@ -71,8 +115,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 a.IsEnabled,
                 u.CreatedAt,
                 u.CreatedByActorId,
-                COALESCE(teams.Teams, ARRAY[]::text[]) AS Teams,
-                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
+                COALESCE(teams.Teams, '[]') AS Teams,
+                COALESCE(roles.Roles, '[]') AS Roles
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
             """ + UserAggregateJoins + """
@@ -108,8 +152,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 a.IsEnabled,
                 u.CreatedAt,
                 u.CreatedByActorId,
-                COALESCE(teams.Teams, ARRAY[]::text[]) AS Teams,
-                COALESCE(roles.Roles, ARRAY[]::text[]) AS Roles
+                COALESCE(teams.Teams, '[]') AS Teams,
+                COALESCE(roles.Roles, '[]') AS Roles
             FROM Users u
             JOIN Actors a ON a.Id = u.ActorId
             """ + UserAggregateJoins + """

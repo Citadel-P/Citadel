@@ -22140,11 +22140,57 @@
           }
         }
       },
+      "ResourceAccessView": {
+        "required": [
+          "resourceType",
+          "resourceId",
+          "permissionLevel",
+          "specificPermissions"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SpecificPermission"
+            }
+          }
+        }
+      },
       "ResourceControlState": {
         "enum": [
           "Idle",
           "Processing"
         ]
+      },
+      "ResourceInfo": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
       },
       "ResourceSpec": {
         "required": [
@@ -22844,8 +22890,7 @@
           "name",
           "actorId",
           "isEnabled",
-          "totalMembers",
-          "roles"
+          "totalMembers"
         ],
         "type": "object",
         "properties": {
@@ -22872,9 +22917,21 @@
             "format": "int32"
           },
           "roles": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ResourceInfo"
+            }
+          },
+          "resourceAccesses": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ResourceAccessView"
             }
           }
         }
@@ -23056,9 +23113,7 @@
           "name",
           "email",
           "actorId",
-          "isEnabled",
-          "createdAt",
-          "createdByActorId"
+          "isEnabled"
         ],
         "type": "object",
         "properties": {
@@ -23079,20 +23134,13 @@
           "isEnabled": {
             "type": "boolean"
           },
-          "createdAt": {
-            "format": "date-time"
-          },
-          "createdByActorId": {
-            "type": "string",
-            "format": "uuid"
-          },
           "teams": {
             "type": [
               "null",
               "array"
             ],
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ResourceInfo"
             }
           },
           "roles": {
@@ -23101,7 +23149,16 @@
               "array"
             ],
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ResourceInfo"
+            }
+          },
+          "resourceAccesses": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ResourceAccessView"
             }
           }
         }

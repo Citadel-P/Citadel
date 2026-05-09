@@ -1,3 +1,4 @@
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Identity.Users;
@@ -8,10 +9,9 @@ public sealed record UserView(
     string Email,
     Guid ActorId,
     bool IsEnabled,
-    DateTime CreatedAt,
-    Guid CreatedByActorId,
-    IEnumerable<string>? Teams = null,
-    IEnumerable<string>? Roles = null
+    IEnumerable<ResourceInfo>? Teams = null,
+    IEnumerable<ResourceInfo>? Roles = null,
+    IEnumerable<ResourceAccessView>? ResourceAccesses = null
     )
 {
     internal static UserView Map(UserDetails user) => new(
@@ -20,8 +20,7 @@ public sealed record UserView(
         user.Email,
         user.ActorId,
         user.IsEnabled,
-        user.CreatedAt,
-        user.CreatedByActorId,
         user.Teams,
-        user.Roles);
+        user.Roles,
+        user.ResourceAccesses);
 }

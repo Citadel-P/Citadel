@@ -3,12 +3,27 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using Hosting.Common;
+using Infrastructure.Persistence.Dtos;
+using Infrastructure.Persistence.Mappers;
 using System.Data;
 
 namespace Infrastructure.Persistence;
 
 internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransaction> tx) : IResourceAccessRepository
 {
+    public async Task<IEnumerable<ResourceAccess>> GetAllByActorIdAsync(Guid actorId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT Id, ResourceId, ActorId, ResourceType, PermissionLevel, SpecificPermissions
+            FROM ResourceAccesses
+            WHERE ActorId = @ActorId
+            ORDER BY ResourceType, ResourceId
+            """;
+
+        var rows = await db.QueryAsync<ResourceAccessDto>(sql, new { ActorId = actorId }, transaction: tx());
+        return rows.ToDomain();
+    }
+
     public Task<int> AddAsync(ResourceAccess resourceAccess, CancellationToken cancellationToken)
     {
         const string sql = """

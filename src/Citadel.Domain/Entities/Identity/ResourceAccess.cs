@@ -17,14 +17,13 @@ public class ResourceAccess
         Guid resourceId,
         Guid actorId,
         PermissionLevel permissionLevel,
-        IEnumerable<SpecificPermission>? specificPermissions = null,
-        Guid? id = null)
+        IEnumerable<SpecificPermission>? specificPermissions = null)
     {
         var normalizedSpecificPermissions = Permission.NormalizeSpecificPermissions(resourceType, permissionLevel, specificPermissions);
 
         return new()
         {
-            Id = id ?? Guid.CreateVersion7(),
+            Id = Guid.CreateVersion7(),
             ResourceType = resourceType,
             ResourceId = resourceId,
             ActorId = actorId,
@@ -32,5 +31,24 @@ public class ResourceAccess
             SpecificPermissions = normalizedSpecificPermissions,
         };
 
+    }
+
+    public static ResourceAccess FromPersistence(
+        Guid id,
+        ResourceType resourceType,
+        Guid resourceId,
+        Guid actorId,
+        PermissionLevel permissionLevel,
+        IEnumerable<SpecificPermission>? specificPermissions = null)
+    {
+        return new()
+        {
+            Id = id,
+            ResourceType = resourceType,
+            ResourceId = resourceId,
+            ActorId = actorId,
+            PermissionLevel = permissionLevel,
+            SpecificPermissions = specificPermissions?.ToList() ?? [],
+        };
     }
 }

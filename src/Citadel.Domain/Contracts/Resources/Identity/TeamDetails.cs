@@ -6,4 +6,5 @@ public sealed record TeamDetails(
     Guid ActorId,
     bool IsEnabled,
     int? TotalMembers = 0,
-    IEnumerable<string>? Roles = null);
+    IEnumerable<ResourceInfo>? Roles = null,
+    IEnumerable<ResourceAccessView>? ResourceAccesses = null);

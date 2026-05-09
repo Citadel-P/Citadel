@@ -135,10 +135,10 @@ const ResourceLinkCell = ({
     <TableCell>
       <Link
         to={getResourceEditPath(resourceType, resourceId)}
-        className="table-link flex gap-2 items-center"
+        className="table-link flex gap-2 items-center max-w-48 sm:max-w-72"
         title={resourceName}>
         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-        {resourceName}
+        <span className="truncate">{resourceName}</span>
       </Link>
     </TableCell>
   );
@@ -331,7 +331,7 @@ export const ResourceOverridesField = ({
                       />
                       <TableCell>
                         <Select value={row.permissionLevel ?? ''} disabled>
-                          <SelectTrigger className="w-45">
+                          <SelectTrigger className="w-full max-w-full">
                             <SelectValue placeholder="Select level" />
                           </SelectTrigger>
                           <SelectContent className="bg-background">
@@ -343,7 +343,7 @@ export const ResourceOverridesField = ({
                       </TableCell>
                       <TableCell>
                         {row.permissionLevel && availableSpecific.length > 0 ? (
-                          <div className="w-120">
+                          <div className="w-full min-w-0 max-w-full">
                             <MultiSelect
                               options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
                               defaultValue={row.specificPermissions}
@@ -380,7 +380,7 @@ export const ResourceOverridesField = ({
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-225 max-h-[85vh] flex flex-col p-0">
+        <DialogContent className="sm:max-w-225 max-h-[85vh] flex flex-col p-0 ">
           <DialogHeader className="shrink-0 border-b px-6 py-4">
             <DialogTitle>Resource Overrides</DialogTitle>
             <DialogDescription>Select resources and assign direct permissions for this user.</DialogDescription>

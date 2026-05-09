@@ -91,12 +91,12 @@ const columns = (
   {
     accessorKey: 'teams',
     header: ({ column }) => <SortableCell cellName="Teams" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{row.original.teams?.join(',')}</span>,
+    cell: ({ row }) => <span className="text-[13px]">{row.original.teams?.map((s) => s.name).join(', ')}</span>,
   },
   {
     accessorKey: 'roles',
     header: ({ column }) => <SortableCell cellName="Roles" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{row.original.roles?.join(',')}</span>,
+    cell: ({ row }) => <span className="text-[13px]">{row.original.roles?.map((s) => s.name).join(', ')}</span>,
   },
   {
     id: 'actions',

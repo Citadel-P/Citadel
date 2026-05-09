@@ -2,6 +2,7 @@ import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { UserForm } from './form';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useRead } from '@/lib/hooks';
+import { UserView } from '@/api/generated/api.types';
 
 export const UserFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -13,8 +14,9 @@ export const UserFormComponents: RequiredFormComponents = {
   EditForm: {
     skipMetadataUpdate: true,
     Header: {
-      Indicator: ({ resource }: { resource: RequiredFormFields }) => {
-        return <StateIndicator value={resource.status as any} />;
+      canEditDescription: false,
+      Indicator: ({ resource }: { resource: UserView }) => {
+        return <StateIndicator value={resource.isEnabled as any} enableLabel={true} />;
       },
       ActionButtons: () => null,
     },
@@ -27,8 +29,8 @@ export const UserFormComponents: RequiredFormComponents = {
       },
     ],
     useData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getRegistryConfig', { id });
-      return { item: data?.data, isLoading };
+      const { data, isLoading } = useRead('getUser', { id });
+      return { item: data?.data as any, isLoading };
     },
   },
 };

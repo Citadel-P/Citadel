@@ -10,7 +10,7 @@ public sealed record UserResourceAccessInput(
     PermissionLevel PermissionLevel,
     IEnumerable<SpecificPermission>? SpecificPermissions)
 {
-    internal UserResourceAccessModel ToModel() => new(ResourceType, ResourceId, PermissionLevel, SpecificPermissions);
+    internal ResourceAccessView ToModel() => new(ResourceType, ResourceId, PermissionLevel, SpecificPermissions);
 }
 
 public sealed record CreateUserInput(

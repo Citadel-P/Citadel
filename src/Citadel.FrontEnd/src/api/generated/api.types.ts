@@ -2783,6 +2783,20 @@ export interface ResolveAlertEventsInput {
   resolutionNote: null | string;
 }
 
+export interface ResourceAccessView {
+  resourceType: ResourceType;
+  /** @format uuid */
+  resourceId: string;
+  permissionLevel: PermissionLevel;
+  specificPermissions: null | SpecificPermission[];
+}
+
+export interface ResourceInfo {
+  /** @format uuid */
+  id: string;
+  name: string;
+}
+
 export interface ResourceSpec {
   /**
    * @format float
@@ -2956,7 +2970,8 @@ export interface TeamView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   totalMembers: number | string;
-  roles: string[];
+  roles?: null | ResourceInfo[];
+  resourceAccesses?: null | ResourceAccessView[];
 }
 
 export interface TeamsView {
@@ -3023,12 +3038,9 @@ export interface UserView {
   /** @format uuid */
   actorId: string;
   isEnabled: boolean;
-  /** @format date-time */
-  createdAt: any;
-  /** @format uuid */
-  createdByActorId: string;
-  teams?: null | string[];
-  roles?: null | string[];
+  teams?: null | ResourceInfo[];
+  roles?: null | ResourceInfo[];
+  resourceAccesses?: null | ResourceAccessView[];
 }
 
 export interface UsersView {

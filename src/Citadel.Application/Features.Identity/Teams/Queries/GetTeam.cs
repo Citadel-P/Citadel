@@ -19,6 +19,11 @@ internal sealed class GetTeamHandler(IUnitOfWork unitOfWork) : IQueryHandler<Get
         if (team is null)
             return Result.Failure<TeamDetails>(new NotFoundError($"Team with ID {query.Id} does not exist"));
 
-        return Result.Success(team);
+        var resourceAccesses = await unitOfWork.ResourceAccesses.GetAllByActorIdAsync(team.ActorId, cancellationToken);
+
+        return Result.Success(team with
+        {
+            ResourceAccesses = resourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions))
+        });
     }
 }

@@ -8,5 +8,6 @@ public sealed record UserDetails(
     bool IsEnabled,
     DateTime CreatedAt,
     Guid CreatedByActorId,
-    IEnumerable<string>? Teams = null,
-    IEnumerable<string>? Roles = null);
+    IEnumerable<ResourceInfo>? Teams = null,
+    IEnumerable<ResourceInfo>? Roles = null,
+    IEnumerable<ResourceAccessView>? ResourceAccesses = null);

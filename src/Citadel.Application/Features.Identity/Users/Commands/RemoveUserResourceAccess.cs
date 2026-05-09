@@ -58,6 +58,15 @@ internal sealed class RemoveUserResourceAccessHandler(IUnitOfWork unitOfWork, IA
         if (result.IsFailure(out var error))
             return Result.Failure<UserDetails>(error);
 
-        return new UserDetails(user.Id, user.Name, user.Email, user.ActorId, actor.IsEnabled, user.CreatedAt, user.CreatedByActorId);
+        var persistedResourceAccesses = await unitOfWork.ResourceAccesses.GetAllByActorIdAsync(user.ActorId, cancellationToken);
+        return new UserDetails(
+            user.Id,
+            user.Name,
+            user.Email,
+            user.ActorId,
+            actor.IsEnabled,
+            user.CreatedAt,
+            user.CreatedByActorId,
+            ResourceAccesses: persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions)));
     }
 }

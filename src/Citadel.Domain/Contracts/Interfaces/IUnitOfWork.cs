@@ -49,6 +49,7 @@ public interface IActorRepository
 
 public interface IResourceAccessRepository
 {
+    Task<IEnumerable<ResourceAccess>> GetAllByActorIdAsync(Guid actorId, CancellationToken cancellationToken);
     Task<int> AddAsync(ResourceAccess resourceAccess, CancellationToken cancellationToken);
     Task<int> RemoveAsync(
         Guid actorId,
@@ -71,6 +72,7 @@ public interface IUserRepository
         CancellationToken ct);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
     Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken);
     Task<PagedResult<UserDetails>> GetPagedAsync(int page, int pageSize, string? name, CancellationToken cancellationToken);
     Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, int page, int pageSize, string? name, CancellationToken cancellationToken);

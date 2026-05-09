@@ -1,4 +1,4 @@
-import { PatchUserInput, CreateUserInput, UserResourceAccessInput } from '@/api/generated/api.types';
+import { PatchUserInput, CreateUserInput, UserResourceAccessInput, ResourceInfo } from '@/api/generated/api.types';
 import {
   FormShell,
   defineField,
@@ -13,12 +13,49 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { useTeamsList } from '@/features/access/teams/hooks/useTeamsList';
 import { ResourceOverridesField } from '@/features/access/overrides/resource-overrides-field';
 import { Constants } from '@/lib/constants';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useParams } from 'react-router';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useQueryClient } from '@tanstack/react-query';
 
 type UserInput = CreateUserInput | PatchUserInput;
+
+type UserFormResource = Partial<UserInput> & {
+  teams?: ResourceInfo[] | null;
+  roles?: ResourceInfo[] | null;
+};
+
+const extractIds = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    if (typeof item === 'string') {
+      return item;
+    }
+
+    if (item && typeof item === 'object' && 'id' in item) {
+      const id = (item as { id?: unknown }).id;
+      if (typeof id === 'string') {
+        return id;
+      }
+    }
+
+    return [];
+  });
+};
+
+const normalizeUserResource = (resource?: UserFormResource): UserInput => {
+  if (!resource) {
+    return {} as UserInput;
+  }
+
+  return {
+    ...resource,
+    teamIds: extractIds(resource.teamIds ?? resource.teams),
+    roleIds: extractIds(resource.roleIds ?? resource.roles),
+  } as UserInput;
+};
 
 const TeamMultiSelectField = ({ value, onChange }: { value: string[] | null; onChange: (ids: string[]) => void }) => {
   const [teamSearch, setTeamSearch] = useState('');
@@ -43,16 +80,17 @@ const TeamMultiSelectField = ({ value, onChange }: { value: string[] | null; onC
         emptyIndicator={isLoading ? 'Searching teams...' : 'No teams found.'}
         maxCount={5}
         animation={0}
-        resetOnDefaultValueChange={false}
+        resetOnDefaultValueChange={true}
       />
     </div>
   );
 };
 
-export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: UserInput }) => {
+export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: UserFormResource }) => {
   const id = useParams().id;
   const [update, setUpdate] = useState<Partial<UserInput>>({});
   const [confirmPassword, setConfirmPassword] = useState('');
+  const queryClient = useQueryClient();
 
   const { mutateAsync: createUser } = useMutate('createUser');
   const { mutateAsync: updateUser } = useMutate('updateUser');
@@ -63,26 +101,40 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
     [rolesData],
   );
 
+  const refreshData = useCallback(() => {
+    localStorage.removeItem(`user:${id ?? 'new'}`);
+    queryClient.invalidateQueries({ queryKey: ['getUser', { id }] });
+  }, [id, queryClient]);
+
   const { save: handleSave, isPending } = useSaveResource<UserInput, any>({
     mode,
     basePath: 'users',
     entityName: 'User',
     onCreate: (payload) => createUser({ data: payload as CreateUserInput }),
     onUpdate: (payload) => updateUser({ id: id!, data: payload as PatchUserInput }),
-    onRefresh: () => {
-      localStorage.removeItem(`User:${id ?? 'new'}`);
-    },
+    onRefresh: refreshData,
   });
 
   const wrappedSave = async (payload: UserInput) => {
+    const sanitizedPayload = (() => {
+      if (mode !== 'edit') return payload;
+
+      const next = { ...(payload as PatchUserInput) } as Record<string, unknown>;
+      if (typeof next.password === 'string' && next.password.trim().length === 0) {
+        delete next.password;
+      }
+      return next as unknown as UserInput;
+    })();
+
     if (mode === 'add') {
       const pwd = (payload as CreateUserInput).password ?? '';
       if (confirmPassword !== pwd) return;
     }
-    return handleSave(payload);
+
+    return handleSave(sanitizedPayload);
   };
 
-  const original = resource ?? ({} as UserInput);
+  const original = useMemo(() => normalizeUserResource(resource), [resource]);
 
   const schema = useMemo(
     () => ({
@@ -145,43 +197,56 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
               defineField<UserInput, 'password'>({
                 key: 'password',
                 label: 'Password',
-                required: true,
+                description: mode === 'edit' ? 'Leave blank to keep the current password.' : undefined,
+                required: mode === 'add',
                 validate: (value) => {
                   const password = String(value ?? '');
-                  if (!password) return 'Required';
+
+                  if (mode === 'add' && !password) return 'Required';
+                  if (mode === 'edit' && !password) return null;
+
                   return password.length < 6 ? 'Password must be at least 6 characters long' : null;
                 },
                 render: (value, set) => (
-                  <FieldInput type="password" value={value ?? ''} onChange={(v) => set({ password: v })} />
+                  <FieldInput
+                    type="password"
+                    value={value ?? ''}
+                    onChange={(v) => set({ password: v })}
+                    placeholder={mode === 'edit' ? 'Leave blank to keep current password' : undefined}
+                  />
                 ),
               }),
-              {
-                kind: 'field' as const,
-                field: {
-                  key: 'confirmPassword' as any,
-                  label: 'Confirm Password',
-                  validate: () => {
-                    const pwd = (update as Partial<CreateUserInput>).password ?? '';
-                    if (confirmPassword.length === 0) return 'Required';
-                    return confirmPassword !== pwd ? 'Passwords do not match' : null;
-                  },
-                  render: (_value: any, _set: FieldChange<UserInput>) => {
-                    const pwd = (update as Partial<CreateUserInput>).password ?? '';
-                    const mismatch = confirmPassword.length > 0 && confirmPassword !== pwd;
-                    return (
-                      <div className="flex flex-col gap-1">
-                        <FieldInput
-                          type="password"
-                          value={confirmPassword}
-                          onChange={setConfirmPassword}
-                          placeholder="Repeat password"
-                        />
-                        {mismatch && <p className="text-xs text-destructive">Passwords do not match</p>}
-                      </div>
-                    );
-                  },
-                },
-              } as FieldItemConfig<UserInput>,
+              ...(mode === 'add'
+                ? [
+                    {
+                      kind: 'field' as const,
+                      field: {
+                        key: 'confirmPassword' as any,
+                        label: 'Confirm Password',
+                        validate: () => {
+                          const pwd = (update as Partial<CreateUserInput>).password ?? '';
+                          if (confirmPassword.length === 0) return 'Required';
+                          return confirmPassword !== pwd ? 'Passwords do not match' : null;
+                        },
+                        render: (_value: any, _set: FieldChange<UserInput>) => {
+                          const pwd = (update as Partial<CreateUserInput>).password ?? '';
+                          const mismatch = confirmPassword.length > 0 && confirmPassword !== pwd;
+                          return (
+                            <div className="flex flex-col gap-1">
+                              <FieldInput
+                                type="password"
+                                value={confirmPassword}
+                                onChange={setConfirmPassword}
+                                placeholder="Repeat password"
+                              />
+                              {mismatch && <p className="text-xs text-destructive">Passwords do not match</p>}
+                            </div>
+                          );
+                        },
+                      },
+                    } as FieldItemConfig<UserInput>,
+                  ]
+                : []),
             ],
           }),
           defineGroupField<UserInput>({
@@ -193,7 +258,7 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
                 label: 'Teams',
                 description: 'Add this user to teams. Users inherit all roles assigned to their teams.',
                 render: (value, set) => (
-                  <TeamMultiSelectField value={value ?? []} onChange={(ids) => set({ teamIds: ids })} />
+                  <TeamMultiSelectField value={extractIds(value)} onChange={(ids) => set({ teamIds: ids })} />
                 ),
               }),
             ],
@@ -210,7 +275,7 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
                   <div className="max-w-100">
                     <MultiSelect
                       options={roleOptions}
-                      defaultValue={(value ?? []).map(String)}
+                      defaultValue={extractIds(value)}
                       onValueChange={(vals) => set({ roleIds: vals })}
                       placeholder={rolesLoading ? 'Loading...' : 'Select roles...'}
                       disabled={rolesLoading}
@@ -255,7 +320,7 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
       setUpdate={setUpdate}
       onSave={wrappedSave}
       pending={isPending}
-      draftKey={`User:${id ?? 'new'}`}
+      draftKey={`user:${id ?? 'new'}`}
       draftVersion={1}
     />
   );

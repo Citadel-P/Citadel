@@ -123,6 +123,15 @@ internal sealed class PatchUserHandler(IUnitOfWork unitOfWork) : ICommandHandler
         await unitOfWork.Actors.UpdateAsync(actor, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return new UserDetails(state.User.Id, state.User.Name, state.User.Email, state.User.ActorId, actor.IsEnabled, state.User.CreatedAt, state.User.CreatedByActorId);
+        var persistedResourceAccesses = await unitOfWork.ResourceAccesses.GetAllByActorIdAsync(state.User.ActorId, cancellationToken);
+        return new UserDetails(
+            state.User.Id,
+            state.User.Name,
+            state.User.Email,
+            state.User.ActorId,
+            actor.IsEnabled,
+            state.User.CreatedAt,
+            state.User.CreatedByActorId,
+            ResourceAccesses: persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions)));
     }
 }

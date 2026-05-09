@@ -21,7 +21,7 @@ public sealed record CreateUser(
     bool IsEnabled = true,
     IEnumerable<Guid>? TeamIds = null,
     IEnumerable<Guid>? RoleIds = null,
-    IEnumerable<UserResourceAccessModel>? ResourceAccesses = null) : ICommand<Result<UserDetails>>
+    IEnumerable<ResourceAccessView>? ResourceAccesses = null) : ICommand<Result<UserDetails>>
 {
     internal sealed class Validator : AbstractValidator<CreateUser>
     {
@@ -98,6 +98,15 @@ internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IHttpContextAcce
 
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return new UserDetails(user.Id, user.Name, user.Email, user.ActorId, userActor.IsEnabled, user.CreatedAt, user.CreatedByActorId);
+        var persistedResourceAccesses = await unitOfWork.ResourceAccesses.GetAllByActorIdAsync(user.ActorId, cancellationToken);
+        return new UserDetails(
+            user.Id,
+            user.Name,
+            user.Email,
+            user.ActorId,
+            userActor.IsEnabled,
+            user.CreatedAt,
+            user.CreatedByActorId,
+            ResourceAccesses: persistedResourceAccesses.Select(x => new ResourceAccessView(x.ResourceType, x.ResourceId, x.PermissionLevel, x.SpecificPermissions)));
     }
 }
