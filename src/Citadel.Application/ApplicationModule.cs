@@ -41,6 +41,7 @@ public static class ApplicationModule
                     typeof(StreamPermissionBehavior<,>)
                 ];
             })
+            .AddLookups()
             .AddPermissions()
             .AddSingleton<IErrorFactoryProvider, ErrorFactoryProvider>()
             .AddSingleton<IValidatorMetadataProvider, ValidatorMetadataProvider>();
@@ -75,6 +76,10 @@ public static class ApplicationModule
             .AddScoped<IPermissionService, PermissionService>()
             .AddScoped<IActorRoleService, ActorRoleService>()
             .AddScoped<IActorResourceAccessService, ActorResourceAccessService>();
+
+    private static IServiceCollection AddLookups(this IServiceCollection services)
+        => services
+            ;
 
     private static IServiceCollection AddSignalRServices(this IServiceCollection services) =>
         services

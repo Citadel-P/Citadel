@@ -72,33 +72,55 @@ import { formatId } from '@/lib/utils';
 import { StateIndicator } from './state-indicator';
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
-  type,
+  sourceType,
+  targetType,
   selected,
   onSelect,
   disabled,
   align = 'start',
   placeholder,
   className,
+  sourceResourceId,
   platformId,
 }: {
-  type: ResourceType;
+  sourceType: ResourceType;
+  targetType: ResourceType;
   selected?: T | string | undefined;
   onSelect?: (item: T | undefined) => void;
   disabled?: boolean;
   align?: 'start' | 'center' | 'end';
   placeholder?: string;
   className?: string;
+  sourceResourceId?: string;
   platformId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
   const { ref: triggerRef, width: contentWidth, measure } = useMeasuredWidth(400);
+  const read = useRead(`lookup`, {
+    query: {
+      TargetResourceType: targetType,
+      SourceResourceType: sourceType,
+      SourceResourceId: sourceResourceId,
+      PlatformId: platformId,
+    },
+  });
+  const items = useMemo<T[]>(() => {
+    const lookupData = read.data?.data as unknown;
+    if (Array.isArray(lookupData)) {
+      return lookupData as T[];
+    }
 
-  const resourceName = PluralResourceMap[type];
+    if (lookupData && typeof lookupData === 'object') {
+      const firstValue = Object.values(lookupData as Record<string, unknown>).at(0);
+      if (Array.isArray(firstValue)) {
+        return firstValue as T[];
+      }
+    }
 
-  const read = useRead(`list${resourceName}` as any, { platformId });
-  const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
+    return [];
+  }, [read.data?.data]);
   const selectedItem =
     typeof selected === 'string'
       ? items.find((i) => i.id === selected || (i as unknown as { dockerImageId?: string }).dockerImageId === selected)
@@ -140,7 +162,11 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
         className="w-full max-w-100 p-0 bg-background"
         style={contentWidth ? { width: `${contentWidth}px` } : undefined}>
         <Command shouldFilter={false} defaultValue={selectedItem?.name ?? '__none__'}>
-          <CommandInput placeholder={`Search ${PluralResourceMap[type]}`} value={search} onValueChange={setSearch} />
+          <CommandInput
+            placeholder={`Search ${PluralResourceMap[sourceType]}`}
+            value={search}
+            onValueChange={setSearch}
+          />
 
           <CommandList>
             <CommandEmpty>No results found.</CommandEmpty>

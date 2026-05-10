@@ -124,7 +124,8 @@ function SearchSection() {
       />
       {query.resourceType !== 'All' && (
         <ResourceSelectorField
-          type={query.resourceType as any}
+          sourceType="Alert"
+          targetType={query.resourceType}
           onSelect={handleResourceChange as any}
           selected={query.resourceId}
           placeholder={`Select ${query.resourceType}`}

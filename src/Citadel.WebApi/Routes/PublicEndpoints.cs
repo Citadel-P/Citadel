@@ -7,13 +7,12 @@ using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
+using WebApi.Routes.Endpoints.Resources.Identity.Roles;
+using WebApi.Routes.Endpoints.Resources.Identity.Teams;
+using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
-using WebApi.Routes.Endpoints.Resources.Identity.Users;
-using WebApi.Routes.Endpoints.Resources.Identity.Roles;
-using WebApi.Routes.Endpoints.Resources.Identity.Teams;
-using Hosting.Common.Attributes;
 
 namespace WebApi.Routes;
 
@@ -37,6 +36,7 @@ public static class PublicEndpoints
     const string DeploymentsName = nameof(Deployments);
     const string StacksName = nameof(Stacks);
     const string AuthenticationName = nameof(Authentication);
+    const string LookupName = nameof(Lookup);
 
     public static void MapPublicEndpoints(this WebApplication app)
     {
@@ -113,6 +113,10 @@ public static class PublicEndpoints
             var alertRules = group.MapGroup("/alertRules").WithTags(AlertRulesName).RequireAuthorization();
             {
                 MapAlertRulesEndpoints(alertRules);
+            }
+            var lookup = group.MapGroup("/lookup").WithTags(LookupName).RequireAuthorization();
+            {
+                MapLookupEndpoints(lookup);
             }
         }
 
@@ -1287,5 +1291,17 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteTeams");
+    }
+
+    private static void MapLookupEndpoints(RouteGroupBuilder lookup)
+    {
+        lookup.MapGet("/", Lookup.Get)
+            .WithSummary("Lookup resources")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("lookup");
     }
 }

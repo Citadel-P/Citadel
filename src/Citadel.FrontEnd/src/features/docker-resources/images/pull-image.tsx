@@ -65,7 +65,8 @@ export default function PullImageForm() {
               <div className="flex flex-col sm:flex-row sm:items-baseline">
                 <div className="flex-none w-full sm:w-36 text-sm font-medium">Registry</div>
                 <ResourceSelectorField
-                  type={'Registry'}
+                  sourceType="Image"
+                  targetType='Registry'
                   selected={registry}
                   onSelect={handleRegistrySelect}
                   placeholder="Select Registry"

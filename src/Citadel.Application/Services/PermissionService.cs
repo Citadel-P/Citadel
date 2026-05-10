@@ -40,7 +40,7 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
             return uow.Users.HasPermissionAsync(userId, resourceType, permissionLevel, specificPermission, resourceId, ct);
         }
 
-        // For global permissions (eg list deployments), we cache the result to reduce database load and improve performance. 
+        // For global permissions (eg list deployments), we cache the result to reduce db load 
         var cacheKey = new PermissionCacheKey(userId, resourceType, permissionLevel, specificPermission);
         return memoryCache.GetOrCreateAsync(cacheKey, async entry =>
         {

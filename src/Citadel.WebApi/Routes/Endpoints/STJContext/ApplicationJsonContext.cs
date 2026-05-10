@@ -34,6 +34,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Volumes;
+using WebApi.Routes.Endpoints.Resources.Lookup;
 using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageResponseItem;
 using ApiActorView = WebApi.Routes.Endpoints.Resources.Identity.Actors.ActorView;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
@@ -41,6 +42,7 @@ using WebApi.Routes.Endpoints.Resources.Identity.Auth;
 using Application.Features.Identity.Auth.Models;
 using Application.Features.Identity.Auth.Models;
 using Domain.Contracts.Resources;
+using Hosting.Common;
 
 namespace Application.Models;
 
@@ -52,6 +54,8 @@ namespace Application.Models;
     })]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Guid[]))]
+[JsonSerializable(typeof(ResourceType))]
+[JsonSerializable(typeof(ResourceType?))]
 [JsonSerializable(typeof(ActorType))]
 [JsonSerializable(typeof(ActorType?))]
 [JsonSerializable(typeof(ApiActorView))]
@@ -134,6 +138,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(CreateNetworkView))]
 [JsonSerializable(typeof(DeleteNetworksInput))]
 [JsonSerializable(typeof(ListNetworksRequest))]
+[JsonSerializable(typeof(LookupRequest))]
 [JsonSerializable(typeof(NetworksView))]
 [JsonSerializable(typeof(CreateVolumeInput))]
 [JsonSerializable(typeof(DeleteVolumesInput))]

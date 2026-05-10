@@ -3,8 +3,10 @@ using System.Text.Json;
 using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Platforms;
+using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -64,6 +66,80 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         const string sql = "SELECT Id, Address, ConnectorType FROM Platforms ORDER BY Name";
         var result = await db.QueryAsync<PlatformConnectionInfoDto>(sql, transaction: tx());
         return result.Select(s => s.ToDomain());
+    }
+
+    public Task<bool> CanAccessAsync(Guid userId, Guid platformId, CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}} SELECT EXISTS (SELECT 1 FROM Platforms p WHERE p.Id = @PlatformId AND 
+            {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}})
+        """;
+
+        return db.ExecuteScalarAsync<bool>(sql, new
+        {
+            UserId = userId,
+            PlatformId = platformId,
+            ResourceType = (int)ResourceType.Platform,
+            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(PermissionLevel.Read),
+            SpecificPermission = (int)SpecificPermission.None,
+            cancellationToken
+        }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetDeploymentLookupAsync(Guid platformId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT d.Id, d.Name
+            FROM Deployments d
+            WHERE d.PlatformId = @PlatformId
+            ORDER BY d.Name
+         """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            PlatformId = platformId,
+            cancellationToken
+        }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetStackLookupAsync(Guid platformId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT s.Id, s.Name
+            FROM Stacks s
+            JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+            WHERE sr.PlatformId = @PlatformId
+            ORDER BY s.Name
+         """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            PlatformId = platformId,
+            cancellationToken
+        }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid platformId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT DISTINCT r.Id, r.Name
+            FROM Images i
+            JOIN Registries r ON r.Id = i.RegistryId
+            WHERE i.PlatformId = @PlatformId
+            ORDER BY r.Name
+         """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            PlatformId = platformId,
+            cancellationToken
+        }, transaction: tx());
+    }
+
+    public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS(SELECT 1 FROM Platforms WHERE Id = @Id)";
+        return db.ExecuteScalarAsync<bool>(sql, new { Id = id }, transaction: tx());
     }
 
     public Task<int> AddAsync(Platform platform, CancellationToken cancellationToken)
@@ -179,6 +255,42 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         ";
 
         var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, transaction: tx());
+        return result.ToDomain();
+    }
+
+    public async Task<IEnumerable<Platform>> GetAuthorizedWithLatestStatAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            
+            SELECT p.*,
+                s.Id as Stat_Id,
+                s.Created as Stat_Created,
+                s.CpuUsage as Stat_CpuUsage,
+                s.MemoryUsage as Stat_MemoryUsage,
+                s.RxBytes as Stat_RxBytes,
+                s.TxBytes as Stat_TxBytes
+            FROM Platforms p
+            LEFT JOIN PlatformStats s ON s.Id = (
+                SELECT Id FROM PlatformStats
+                WHERE PlatformId = p.Id
+                ORDER BY Created DESC
+                LIMIT 1
+            )
+            WHERE {{AuthorizationSql.ResourcePredicatePrefix}}p.Id {{AuthorizationSql.ResourcePredicateSuffix}}
+            ORDER BY p.Name
+         """;
+
+        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new
+        {
+            UserId = userId,
+            ResourceType = (int)resourceType,
+            GrantedPermissionLevels = grantedPermissionLevels,
+            SpecificPermission = (int)specificPermission,
+            cancellationToken
+        }, transaction: tx());
+
         return result.ToDomain();
     }
 

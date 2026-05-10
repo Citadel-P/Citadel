@@ -1,5 +1,4 @@
-﻿using Domain;
-using Domain.Contracts.Interfaces;
+﻿using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;

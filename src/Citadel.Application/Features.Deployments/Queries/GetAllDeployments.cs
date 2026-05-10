@@ -1,6 +1,6 @@
-﻿using Hosting.Common;
-using Domain.Contracts.Interfaces;
+﻿using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
+using Hosting.Common;
 using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
