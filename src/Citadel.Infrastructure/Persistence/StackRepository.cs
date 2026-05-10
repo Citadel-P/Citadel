@@ -1,6 +1,7 @@
 using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
@@ -138,12 +139,89 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         return result.ToDomain();
     }
 
+    public Task<bool> CanAccessAsync(Guid userId, Guid stackId, CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}} 
+            SELECT EXISTS (SELECT 1 FROM Stacks s WHERE s.Id = @StackId AND 
+            {{AuthorizationSql.ResourcePredicatePrefix}}s.Id{{AuthorizationSql.ResourcePredicateSuffix}})
+        """;
+
+        return db.ExecuteScalarAsync<bool>(sql, new
+        {
+            UserId = userId,
+            StackId = stackId,
+            ResourceType = (int)ResourceType.Stack,
+            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(PermissionLevel.Read),
+            SpecificPermission = (int)SpecificPermission.None,
+            cancellationToken
+        }, transaction: tx());
+    }
+
     public async Task<IEnumerable<Stack>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = InfoSelect + " " + "WHERE s.Id = ANY(@Ids) ORDER BY s.CreatedAt DESC, s.Name ASC";
         var idArray = ids as Guid[] ?? [.. ids];
         var result = await db.QueryAsync<StackDto>(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
         return result.ToDomain();
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT p.Id, p.Name
+            FROM Stacks s
+            JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+            JOIN Platforms p ON p.Id = sr.PlatformId
+            WHERE s.Id = @StackId
+            LIMIT 1
+         """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            StackId = stackId,
+            cancellationToken
+        }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT DISTINCT r.Id, r.Name
+            FROM Stacks s
+            JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+            JOIN Containers c ON c.PlatformId = sr.PlatformId AND c.Stack = s.Name
+            JOIN Images i ON i.Id = c.ImageId
+            JOIN Registries r ON r.Id = i.RegistryId
+            WHERE s.Id = @StackId
+            ORDER BY r.Name
+         """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            StackId = stackId,
+            cancellationToken
+        }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetGitRepositoryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT gr.Id, gr.Name
+            FROM Stacks s
+            JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+            JOIN GitRepositories gr ON gr.Id = CAST(sr.Spec ->> 'GitRepoId' AS uuid)
+            WHERE s.Id = @StackId
+              AND s.StackSource = @StackSource
+            LIMIT 1
+         """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            StackId = stackId,
+            StackSource = EnumFormatter<StackSource>.GetValue(StackSource.Git),
+            cancellationToken
+        }, transaction: tx());
     }
 
     public async Task<IEnumerable<StackRelease>> GetReleasesByStackIdAsync(Guid stackId, CancellationToken cancellationToken)
@@ -157,6 +235,12 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Stacks WHERE Name = @Name)";
         return db.ExecuteScalarAsync<bool>(sql, new { Name = name, cancellationToken }, transaction: tx());
+    }
+
+    public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM Stacks WHERE Id = @Id)";
+        return db.ExecuteScalarAsync<bool>(sql, new { Id = id, cancellationToken }, transaction: tx());
     }
 
     public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)

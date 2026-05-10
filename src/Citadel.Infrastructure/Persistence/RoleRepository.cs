@@ -1,6 +1,7 @@
 using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Entities.Identity;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
@@ -162,6 +163,24 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
     {
         const string sql = "SELECT RoleId FROM ActorRoles WHERE ActorId = @ActorId";
         return db.QueryAsync<Guid>(sql, new { ActorId = actorId, cancellationToken }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetUserRoleLookupAsync(Guid sourceUserId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT r.Id, r.Name
+            FROM Users u
+            JOIN ActorRoles ar ON ar.ActorId = u.ActorId
+            JOIN Roles r ON r.Id = ar.RoleId
+            WHERE u.Id = @SourceUserId
+            ORDER BY r.Name
+            """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            SourceUserId = sourceUserId,
+            cancellationToken
+        }, transaction: tx());
     }
 
     public Task<int> AddActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)

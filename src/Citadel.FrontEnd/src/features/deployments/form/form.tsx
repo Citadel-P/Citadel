@@ -257,7 +257,9 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
             render: (value, set) => {
               return (
                 <ResourceSelectorField
-                  type="Platform"
+                  sourceType="Deployment"
+                  targetType="Platform"
+                  sourceResourceId={id}
                   selected={value}
                   onSelect={(v: PlatformView | undefined) => set({ platformId: v?.id })}
                   placeholder="Select Platform"
@@ -307,9 +309,10 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                         render: (val, set) => {
                           return (
                             <ResourceSelectorField
-                              type="Registry"
+                              sourceType="Deployment"
+                              targetType="Registry"
+                              sourceResourceId={id}
                               selected={val}
-                              platformId={currentPlatformId}
                               onSelect={(v: ImageView | undefined) =>
                                 set((prev) => ({
                                   spec: {
@@ -364,9 +367,11 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                     description: 'These images are immediately available for deployment without a remote pull.',
                     render: (val, set) => (
                       <ResourceSelectorField
-                        type="Image"
-                        selected={val}
+                        sourceType={id ? "Deployment" : "Platform"}
+                        targetType="Image"
+                        sourceResourceId={id ?? currentPlatformId}
                         platformId={currentPlatformId}
+                        selected={val}
                         onSelect={(v: ImageView | undefined) => {
                           lastAppliedServerPortsRef.current = null;
                           set((prev) => ({
@@ -375,7 +380,7 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                               image: {
                                 $type: 'Local',
                                 ...((prev.spec?.image as DeploymentImageInfoLocalImage) ?? {}),
-                                imageId: v?.dockerImageId ?? '',
+                                imageId: v?.id ?? '',
                               } satisfies DeploymentImageInfoLocalImage,
                               ports: [],
                             },

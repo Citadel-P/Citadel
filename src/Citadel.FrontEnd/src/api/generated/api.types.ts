@@ -7418,5 +7418,41 @@ export class Api<
         type: ContentType.Json,
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags Lookup
+     * @name Lookup
+     * @summary Lookup resources
+     * @request GET:/api/v1/lookup
+     * @secure
+     * @response `200` `(ResourceInfo)[]` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    lookup: (
+      query: {
+        TargetResourceType: ResourceType;
+        SourceResourceType?: ResourceType;
+        /** @format uuid */
+        SourceResourceId?: string;
+        /** @format uuid */
+        PlatformId?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceInfo[], ProblemDetails>({
+        path: `/api/v1/lookup`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
   };
 }

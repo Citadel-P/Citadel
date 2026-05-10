@@ -2,7 +2,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.Attributes;
 using Hosting.Common.Extensions;
 using Hosting.Common.Models;
 using LightResults;
@@ -11,7 +10,6 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Teams.Queries;
 
-[RequirePermission(ResourceType.Team, PermissionLevel.Read)]
 public sealed record GetTeams(string? Name = null, int Page = 1, int PageSize = 50) : IQuery<Result<PagedResult<TeamDetails>>>
 {
     internal sealed class Validator : AbstractValidator<GetTeams>

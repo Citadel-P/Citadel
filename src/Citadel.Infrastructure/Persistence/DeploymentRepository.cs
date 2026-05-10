@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
@@ -126,6 +127,12 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
         return result.ToDomain();
     }
+    
+    public Task<bool> ExistsAsync(Guid platformId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE PlatformId = @PlatformId)";
+        return db.ExecuteScalarAsync<bool>(sql, new { PlatformId = platformId, cancellationToken }, transaction: tx());
+    }
 
     public Task<bool> ExistsAsync(string name, Guid platformId, CancellationToken cancellationToken)
     {
@@ -167,6 +174,23 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AutoUpdateState_RemoteDigest = deployment.AutoUpdateState?.RemoteDigest,
             AutoUpdateState_LastError = deployment.AutoUpdateState?.LastError,
 
+        }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetImageLookupAsync(Guid deploymentId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT i.Id, i.Name
+            FROM Deployments d
+            JOIN Images i ON i.PlatformId = d.PlatformId
+            WHERE d.Id = @DeploymentId
+            ORDER BY i.Name
+         """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            DeploymentId = deploymentId,
+            cancellationToken
         }, transaction: tx());
     }
 
@@ -242,6 +266,60 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         }, transaction: tx());
 
         return result.ToDomain();
+    }
+
+    public Task<bool> CanAccessAsync(Guid userId, Guid deploymentId, CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT EXISTS (SELECT 1 FROM Deployments d WHERE d.Id = @DeploymentId AND 
+            {{AuthorizationSql.ResourcePredicatePrefix}}d.Id{{AuthorizationSql.ResourcePredicateSuffix}})
+        """;
+
+        return db.ExecuteScalarAsync<bool>(sql, new
+        {
+            UserId = userId,
+            DeploymentId = deploymentId,
+            ResourceType = (int)ResourceType.Deployment,
+            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(PermissionLevel.Read),
+            SpecificPermission = (int)SpecificPermission.None,
+            cancellationToken
+        }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid deploymentId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT p.Id, p.Name
+            FROM Deployments d
+            JOIN Platforms p ON p.Id = d.PlatformId
+            WHERE d.Id = @DeploymentId
+            LIMIT 1
+         """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            DeploymentId = deploymentId,
+            cancellationToken
+        }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid deploymentId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT DISTINCT r.Id, r.Name
+            FROM Deployments d
+            JOIN Registries r ON r.Id = CAST(d.Spec -> 'Image' ->> 'RegistryId' AS uuid)
+            WHERE d.Id = @DeploymentId
+              AND d.Spec -> 'Image' ->> '$type' = 'External'
+            ORDER BY r.Name
+         """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            DeploymentId = deploymentId,
+            cancellationToken
+        }, transaction: tx());
     }
 
     public async Task<IEnumerable<Deployment>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken)

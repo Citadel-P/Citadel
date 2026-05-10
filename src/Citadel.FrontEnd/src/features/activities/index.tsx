@@ -103,7 +103,8 @@ function SearchSection() {
       />
       {query.resourceType != 'All' && (
         <ResourceSelectorField
-          type={query.resourceType as any}
+          sourceType='Activity'
+          targetType={query.resourceType}
           onSelect={handleResourceChange as any}
           selected={query.resourceId}
           placeholder={'Select ' + query.resourceType}

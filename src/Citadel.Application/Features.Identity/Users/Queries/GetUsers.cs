@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Users.Queries;
 
-[RequirePermission(ResourceType.User, PermissionLevel.Read)]
 public sealed record GetUsers(int Page = 1, int PageSize = 50, string? Name = null) : IQuery<Result<PagedResult<UserDetails>>>
 {
     internal sealed class Validator : AbstractValidator<GetUsers>

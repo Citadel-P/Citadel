@@ -1,4 +1,5 @@
-﻿using Domain.Contracts.Resources.Identity;
+﻿using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Activities;
@@ -78,14 +79,17 @@ public interface IUserRepository
     Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, int page, int pageSize, string? name, CancellationToken cancellationToken);
     Task<IEnumerable<UserSearchItem>> SearchAsync(string query, int limit, CancellationToken cancellationToken);
     Task<IEnumerable<UserSearchItem>> SearchAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, string query, int limit, CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(Guid userId, Guid resourceId, CancellationToken cancellationToken);
     Task<IEnumerable<User>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<(bool NameExists, bool EmailExists)> GetConflictsAsync(string name, string email, Guid? excludeId, CancellationToken cancellationToken);
     Task<(User? User, bool IsEnabled, bool NameExists, bool EmailExists)> GetUserUpdateStateAsync(Guid id, string? name, string? email, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid excludeId, CancellationToken cancellationToken);
     Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
     Task<bool> ExistsByEmailAsync(string email, Guid? excludeId, CancellationToken cancellationToken);
     Task<int> AddAsync(User user, CancellationToken cancellationToken);
     Task<int> UpdateAsync(User user, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetTeamsLookupAsync(Guid sourceUserId, Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<Guid>> GetTeamIdsAsync(Guid userId, CancellationToken cancellationToken);
     Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken);
 }
@@ -112,8 +116,13 @@ public interface IStackRepository
     Task<IEnumerable<Stack>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(Guid userId, Guid stackId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetGitRepositoryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<StackRelease>> GetReleasesByStackIdAsync(Guid stackId, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
     Task<int> AddAsync(Stack stack, CancellationToken cancellationToken);
@@ -239,6 +248,7 @@ public interface IRoleRepository
     Task<int> AddAsync(Role role, CancellationToken cancellationToken);
     Task<int> RenameAsync(Role role, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetUserRoleLookupAsync(Guid sourceUserId, Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<Guid>> GetActorRoleIdsAsync(Guid actorId, CancellationToken cancellationToken);
     Task<int> AddActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken);
     Task<int> RemoveActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken);
@@ -252,16 +262,22 @@ public interface IPlatformRepository
     Task<Platform?> GetByIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<Platform?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Platform>> GetAuthorizedWithLatestStatAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<Platform?> GetPlatformWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
     Task<PlatformConnectionInfo?> GetPlatformByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<PlatformConnectionInfo?> GetInfoAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<PlatformConnectionInfo>> GetPlatformsInfoAsync(CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(Guid userId, Guid platformId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetDeploymentLookupAsync(Guid platformId, Guid userId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetStackLookupAsync(Guid platformId, Guid userId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid platformId, Guid userId, CancellationToken cancellationToken);
 
     Task<int?> PlatformNameExistsAsync(string name, Guid excludePlatformId, CancellationToken cancellationToken);
     Task<bool> NameOrAddressExistsAsync(string name, string address, CancellationToken cancellationToken);
 
     Task<int> AddAsync(Platform platform, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Platform platform, CancellationToken cancellationToken);
+    public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(Guid platformId, CancellationToken cancellationToken);
 }
@@ -288,9 +304,14 @@ public interface IDeploymentRepository
     Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(Guid userId, Guid deploymentId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid deploymentId, Guid userId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid deploymentId, Guid userId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceInfo>> GetImageLookupAsync(Guid deploymentId, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<bool> ExistsAsync(Guid platformId, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, Guid platformId, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, Guid platformId, CancellationToken cancellationToken);
     Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken);

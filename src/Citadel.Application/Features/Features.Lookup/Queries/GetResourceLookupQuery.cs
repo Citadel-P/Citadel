@@ -1,0 +1,241 @@
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
+using Hosting.Common;
+using Hosting.Common.ErrorTypes;
+using Hosting.Common.Extensions;
+using LightResults;
+using Mediator;
+using Microsoft.AspNetCore.Http;
+
+namespace Application.Features.Features.Lookup.Queries;
+
+public sealed record LookupContext(Guid? PlatformId = null);
+
+public sealed record GetResourceLookupQuery(
+    ResourceType? SourceResourceType,
+    Guid? SourceResourceId,
+    ResourceType TargetResourceType,
+    LookupContext Context) : IQuery<Result<IEnumerable<ResourceInfo>>>;
+
+internal sealed class GetResourceLookupQueryHandler(
+    IHttpContextAccessor httpContextAccessor,
+    IUnitOfWork unitOfWork) : IQueryHandler<GetResourceLookupQuery, Result<IEnumerable<ResourceInfo>>>
+{
+    public async ValueTask<Result<IEnumerable<ResourceInfo>>> Handle(GetResourceLookupQuery query, CancellationToken cancellationToken)
+    {
+        var userId = httpContextAccessor.HttpContext?.User.GetUserId();
+        if (userId is null || userId == Guid.Empty)
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("Invalid user ID."));
+        }
+
+        var hasSourceType = query.SourceResourceType.HasValue;
+        var hasSourceId = query.SourceResourceId.HasValue;
+        if (!hasSourceType && hasSourceId)
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(
+                new BadRequestError("sourceResourceType must be provided when sourceResourceId is specified."));
+        }
+
+        return await ResolveAsync(
+            query.SourceResourceType,
+            query.SourceResourceId,
+            query.TargetResourceType,
+            userId.Value,
+            query.Context,
+            cancellationToken);
+    }
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> ResolveAsync(
+        ResourceType? sourceType,
+        Guid? sourceId,
+        ResourceType targetType,
+        Guid userId,
+        LookupContext context,
+        CancellationToken cancellationToken)
+    {
+        if (sourceType.HasValue && sourceId.HasValue)
+        {
+            var accessResult = await ValidateSourceAccessAsync(sourceType.Value, sourceId.Value, userId, cancellationToken);
+            if (accessResult.IsFailure(out var accessError))
+            {
+                return Result.Failure<IEnumerable<ResourceInfo>>(accessError);
+            }
+        }
+
+        return (sourceType, targetType) switch
+        {
+            (ResourceType.Deployment, ResourceType.Platform) => await GetDeploymentPlatformLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.Deployment, ResourceType.Registry) => await GetDeploymentRegistryLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.Deployment, ResourceType.Image) => await GetDeploymentImageLookupAsync(sourceId, cancellationToken),
+            (ResourceType.Stack, ResourceType.Platform) => await GetStackPlatformLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.Stack, ResourceType.Registry) => await GetStackRegistryLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.Stack, ResourceType.GitRepository) => await GetStackGitRepositoryLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.User, ResourceType.Team) => await GetUserTeamLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.User, ResourceType.Role) => await GetUserRoleLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.Platform, ResourceType.Deployment) => await GetPlatformDeploymentLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.Platform, ResourceType.Stack) => await GetPlatformStackLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.Platform, ResourceType.Registry) => await GetPlatformRegistryLookupAsync(sourceId, userId, cancellationToken),
+            (ResourceType.Platform, ResourceType.Image) => await GetPlatformImageLookupAsync(sourceId, cancellationToken),
+            (ResourceType.Image, ResourceType.Registry) => await GetImageRegistryLookupAsync(userId, cancellationToken),
+            (null, ResourceType.Team) => await GetTeamLookupAsync(userId, cancellationToken),
+            (null, ResourceType.Role) => await GetRoleLookupAsync(userId, cancellationToken),
+            (null, ResourceType.Registry) => await GetRegistryLookupAsync(userId, cancellationToken),
+            (null, ResourceType.GitRepository) => await GetGitRepositoryLookupAsync(userId, cancellationToken),
+            (null, ResourceType.Deployment) => await GetDeploymentLookupAsync(userId, cancellationToken),
+            (null, ResourceType.Stack) => await GetStackLookupAsync(userId, cancellationToken),
+            (null, ResourceType.Image) => await GetImageLookupAsync(userId, context, cancellationToken),
+            _ => Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError(GetUnsupportedLookupMessage(sourceType, targetType)))
+        };
+    }
+
+    private async Task<Result> ValidateSourceAccessAsync(ResourceType sourceType, Guid sourceId, Guid userId, CancellationToken cancellationToken)
+    {
+        var canAccess = sourceType switch
+        {
+            ResourceType.Deployment => await unitOfWork.Deployments.CanAccessAsync(userId, sourceId, cancellationToken),
+            ResourceType.Stack => await unitOfWork.Stacks.CanAccessAsync(userId, sourceId, cancellationToken),
+            ResourceType.User => await unitOfWork.Users.CanAccessAsync(userId, sourceId, cancellationToken),
+            ResourceType.Platform => await unitOfWork.Platforms.CanAccessAsync(userId, sourceId, cancellationToken),
+            _ => false
+        };
+
+        return canAccess
+            ? Result.Success()
+            : Result.Failure(GetSourceNotFoundError(sourceType));
+    }
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentPlatformLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Deployments.GetPlatformLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("sourceResourceId is required for Deployment -> Platform lookup."));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentRegistryLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Deployments.GetRegistryLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Success((await unitOfWork.Registries.GetAuthorizedAsync(userId, ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+                .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentImageLookupAsync(Guid? sourceId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Deployments.GetImageLookupAsync(sourceId.Value, cancellationToken))
+            : Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("sourceResourceId is required for Deployment -> Image lookup."));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetStackPlatformLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Stacks.GetPlatformLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("sourceResourceId is required for Stack -> Platform lookup."));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetStackRegistryLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Stacks.GetRegistryLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Success((await unitOfWork.Registries.GetAuthorizedAsync(userId, ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+                .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetStackGitRepositoryLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Stacks.GetGitRepositoryLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Success((await unitOfWork.GitRepositories.GetAuthorizedAsync(userId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+                .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserTeamLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Users.GetTeamsLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Success((await unitOfWork.Teams.SearchAuthorizedAsync(userId, ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, string.Empty, 50, cancellationToken))
+                .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserRoleLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Roles.GetUserRoleLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Success((await unitOfWork.Roles.GetAuthorizedAsync(userId, ResourceType.Role, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+                .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformDeploymentLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Platforms.GetDeploymentLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Success((await unitOfWork.Deployments.GetAuthorizedInfoAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+                .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformStackLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Platforms.GetStackLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Success((await unitOfWork.Stacks.GetAuthorizedInfoAsync(userId, ResourceType.Stack, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+                .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformRegistryLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
+        => sourceId.HasValue
+            ? Result.Success(await unitOfWork.Platforms.GetRegistryLookupAsync(sourceId.Value, userId, cancellationToken))
+            : Result.Success((await unitOfWork.Registries.GetAuthorizedAsync(userId, ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+                .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformImageLookupAsync(Guid? sourceId, CancellationToken cancellationToken)
+    {
+        if (!sourceId.HasValue)
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("sourceResourceId is required for Platform -> Image lookup."));
+        }
+
+        var items = await unitOfWork.Images.GetByPlatformIdAsync(sourceId.Value, cancellationToken);
+        return Result.Success(items.Select(static item => new ResourceInfo(item.Id, item.Name)));
+    }
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetImageRegistryLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Registries.GetAuthorizedAsync(userId, ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetTeamLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Teams.SearchAuthorizedAsync(userId, ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, string.Empty, 50, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetRoleLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Roles.GetAuthorizedAsync(userId, ResourceType.Role, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetRegistryLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Registries.GetAuthorizedAsync(userId, ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetGitRepositoryLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.GitRepositories.GetAuthorizedAsync(userId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Deployments.GetAuthorizedInfoAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetStackLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Stacks.GetAuthorizedInfoAsync(userId, ResourceType.Stack, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetImageLookupAsync(Guid userId, LookupContext context, CancellationToken cancellationToken)
+    {
+        if (context.PlatformId is null || context.PlatformId == Guid.Empty)
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("platformId is required for image lookup."));
+        }
+
+        var canAccessPlatform = await unitOfWork.Platforms.CanAccessAsync(userId, context.PlatformId.Value, cancellationToken);
+        if (!canAccessPlatform)
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(new NotFoundError("The scoped platform does not exist or is not accessible."));
+        }
+
+        var items = await unitOfWork.Images.GetByPlatformIdAsync(context.PlatformId.Value, cancellationToken);
+        return Result.Success(items.Select(static item => new ResourceInfo(item.Id, item.Name)));
+    }
+
+    private static string GetUnsupportedLookupMessage(ResourceType? sourceType, ResourceType targetType)
+        => sourceType is null
+            ? $"Lookup for target {targetType} is not supported."
+            : $"Lookup from {sourceType.Value} to {targetType} is not supported.";
+
+    private static Error GetSourceNotFoundError(ResourceType sourceType)
+        => sourceType switch
+        {
+            ResourceType.Deployment => new NotFoundError("The source deployment does not exist or is not accessible."),
+            ResourceType.Stack => new NotFoundError("The source stack does not exist or is not accessible."),
+            ResourceType.User => new NotFoundError("The source user does not exist or is not accessible."),
+            ResourceType.Platform => new NotFoundError("The source platform does not exist or is not accessible."),
+            _ => new BadRequestError($"Source resource type {sourceType} is not supported for lookups.")
+        };
+}

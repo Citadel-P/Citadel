@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using Hosting.Common;
@@ -191,6 +192,25 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return new PagedResult<UserDetails>(rows.ToDetails(), totalCount, page, pageSize);
     }
 
+    public Task<bool> CanAccessAsync(Guid userId, Guid resourceId, CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT EXISTS (SELECT 1 FROM Users u WHERE u.Id = @ResourceId AND 
+            {{AuthorizationSql.ResourcePredicatePrefix}}u.Id{{AuthorizationSql.ResourcePredicateSuffix}})
+        """;
+
+        return db.ExecuteScalarAsync<bool>(sql, new
+        {
+            UserId = userId,
+            ResourceId = resourceId,
+            ResourceType = (int)ResourceType.User,
+            GrantedPermissionLevels = GetGrantedPermissionLevelValues(PermissionLevel.Read),
+            SpecificPermission = (int)SpecificPermission.None,
+            cancellationToken
+        }, transaction: tx());
+    }
+
     public Task<IEnumerable<UserSearchItem>> SearchAsync(string query, int limit, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -296,6 +316,12 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return (user, result.IsEnabled ?? false, result.NameExists, result.EmailExists);
     }
 
+    public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM Users WHERE Id = @Id)";
+        return db.ExecuteScalarAsync<bool>(sql, new { Id = id, cancellationToken }, transaction: tx());
+    }
+
     public Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Users WHERE Name = @Name AND (@ExcludeId IS NULL OR Id != @ExcludeId))";
@@ -341,6 +367,23 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     {
         const string sql = "SELECT TeamId FROM UsersTeams WHERE UserId = @UserId";
         return db.QueryAsync<Guid>(sql, new { UserId = userId, cancellationToken }, transaction: tx());
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetTeamsLookupAsync(Guid sourceUserId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT t.Id, t.Name
+            FROM UsersTeams ut
+            JOIN Teams t ON t.Id = ut.TeamId
+            WHERE ut.UserId = @SourceUserId
+            ORDER BY t.Name
+            """;
+
+        return db.QueryAsync<ResourceInfo>(sql, new
+        {
+            SourceUserId = sourceUserId,
+            cancellationToken
+        }, transaction: tx());
     }
 
     public async Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken)

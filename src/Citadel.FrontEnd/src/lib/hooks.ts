@@ -50,7 +50,15 @@ export function useRead<
   const stableArgs = args ?? EMPTY_ARGS;
   const queryKey = useMemo(() => [resource, stableArgs] as const, [resource, stableArgs]);
 
-  const isEnabled = !!apiClient && resDef.requiredParams.every((p) => (args as any)?.[p] != null);
+  const isEnabled =
+    !!apiClient &&
+    resDef.requiredParams.every((p) => {
+      const topLevelValue = (args as any)?.[p];
+      if (topLevelValue != null) return true;
+
+      const queryValue = (args as any)?.query?.[p];
+      return queryValue != null;
+    });
 
   return useQuery<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | EmptyArgs]>({
     queryKey,
