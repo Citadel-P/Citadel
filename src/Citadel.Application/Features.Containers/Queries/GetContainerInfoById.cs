@@ -1,17 +1,16 @@
-﻿using Domain;
+﻿using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using FluentValidation;
-using Hosting.Common;
-using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Containers.Queries;
 
-[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record GetContainerInfoById(string ContainerId) : IQuery<Result<ContainerInfo>>
 {
     internal class Validator : AbstractValidator<GetContainerById>
@@ -21,14 +20,23 @@ public sealed record GetContainerInfoById(string ContainerId) : IQuery<Result<Co
     }
 }
 
-internal class GetContainerInfoByIdHandler(IConnectorFactory<IContainerConnector> connectorFactory, IUnitOfWork unitOfWork) : IQueryHandler<GetContainerInfoById, Result<ContainerInfo>>
+internal class GetContainerInfoByIdHandler(
+    IConnectorFactory<IContainerConnector> connectorFactory,
+    IUnitOfWork unitOfWork,
+    IContainerPlatformAuthorizationService containerPlatformAuthorizationService) : IQueryHandler<GetContainerInfoById, Result<ContainerInfo>>
 {
     public async ValueTask<Result<ContainerInfo>> Handle(GetContainerInfoById query, CancellationToken cancellationToken)
     {
+        var hasAccess = await containerPlatformAuthorizationService.HasAccessAsync([query.ContainerId], PermissionLevel.Read, SpecificPermission.None, cancellationToken);
+        if (!hasAccess)
+        {
+            return Result.Failure<ContainerInfo>(new ForbiddenError("Missing permission [Read] on [Platform]"));
+        }
+
         var platform = await unitOfWork.Platforms.GetPlatformByContainerIdAsync(query.ContainerId, cancellationToken);
         if (platform is null)
         {
-            return Result.Failure<ContainerInfo>(new NotFoundError("Platform is disconnected or unavailable."));
+            return Result.Failure<ContainerInfo>(new NotFoundError("Container does not exist"));
         }
 
         var command = new InspectContainerCommand

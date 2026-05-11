@@ -5,7 +5,6 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -15,7 +14,6 @@ using System.Security.Claims;
 
 namespace Application.Features.Containers.Commands;
 
-[RequirePermission(ResourceType.Platform, PermissionLevel.Write)]
 public sealed record PatchContainer(string[] ContainerIds, ContainerAction Action) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<PatchContainer>
@@ -29,11 +27,18 @@ internal sealed class PatchContainerHandler(
     IContainerProcessingService containerService,
     IPlatformContainerCache platformContainerCache,
     IHttpContextAccessor httpContextAccessor,
-    IConnectorFactory<IContainerConnector> connectorFactory)
+    IConnectorFactory<IContainerConnector> connectorFactory,
+    IContainerPlatformAuthorizationService containerPlatformAuthorizationService)
     : ICommandHandler<PatchContainer, Result>
 {
     public async ValueTask<Result> Handle(PatchContainer request, CancellationToken ct)
     {
+        var hasAccess = await containerPlatformAuthorizationService.HasAccessAsync(request.ContainerIds, PermissionLevel.Write, SpecificPermission.None, ct);
+        if (!hasAccess)
+        {
+            return Result.Failure(new ForbiddenError("Missing permission [Write] on [Platform]"));
+        }
+
         var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
 

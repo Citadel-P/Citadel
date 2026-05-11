@@ -1,16 +1,15 @@
-﻿using Domain;
+﻿using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Containers.Queries;
 
-[RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record InspectContainer(string ContainerId) : IQuery<Result<ContainerInspectionInfo>>
 {
     internal sealed class Validator : AbstractValidator<InspectContainer>
@@ -20,15 +19,25 @@ public sealed record InspectContainer(string ContainerId) : IQuery<Result<Contai
     }
 }
 
-internal sealed class InspectContainerHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IContainerConnector> connectorFactory)
+internal sealed class InspectContainerHandler(
+    IContainerPlatformAuthorizationService containerPlatformAuthorizationService,
+    IUnitOfWork unitOfWork,
+    IConnectorFactory<IContainerConnector> connectorFactory)
     : IQueryHandler<InspectContainer, Result<ContainerInspectionInfo>>
 {
     
     public async ValueTask<Result<ContainerInspectionInfo>> Handle(InspectContainer query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetPlatformWithContainer(query.ContainerId, out var platform))
+        var hasAccess = await containerPlatformAuthorizationService.HasAccessAsync([query.ContainerId], PermissionLevel.Read, SpecificPermission.None, cancellationToken);
+        if (!hasAccess)
         {
-            return Result.Failure<ContainerInspectionInfo>(new NotFoundError($"No platform found for container ID {query.ContainerId}"));
+            return Result.Failure<ContainerInspectionInfo>(new ForbiddenError("Missing permission [Read] on [Platform]"));
+        }
+
+        var platform = await unitOfWork.Platforms.GetPlatformByContainerIdAsync(query.ContainerId, cancellationToken);
+        if (platform is null)
+        {
+            return Result.Failure<ContainerInspectionInfo>(new NotFoundError("Container does not exist"));
         }
 
         var command = new InspectContainerCommand

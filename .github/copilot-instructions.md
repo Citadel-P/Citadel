@@ -16,6 +16,7 @@
 - Do not modify the validation pipeline when fixing tests in this codebase; prefer updating tests to match handler behavior instead.
 - Follow the established resource update pattern by splitting updates into Patch, PatchMetadata, and Rename operations, and mirror that pattern consistently in tests.
 - Prefer hoisting shared ActorScope CTEs once per query; for list handlers, prefer DB-side filtering using shared authorization CTEs instead of in-memory filtering. When handling authorization for list handlers, distinguish the global permission attribute from DB-side filtering — treat attributes as expressing global (non-resource) checks and do not assume an attribute change fixes DB-side filtering behaviors unless the global permission check semantics are actually changed. Avoid `OR EXISTS` in authorized repository queries when a `UNION`-based authorization set is cleaner and more scalable. Prefer `JOINs` over `IN (SELECT ...)` for actor-scope authorization checks, and simplify resource name resolution by using a unified lookup projection (for example a SQL view or UNION ALL lookup) instead of multiple conditional joins per resource type.
+- For batch container commands, avoid per-item authorization loops; perform batch access checks in a single authorization call or CTE that validates all container IDs together.
 - When handling stale container stats batches, prefer using `IPlatformContainerCache` to validate container existence instead of querying the database again.
 
 ## Caching Guidelines

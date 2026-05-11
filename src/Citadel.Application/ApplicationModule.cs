@@ -74,6 +74,7 @@ public static class ApplicationModule
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>()
             .AddSingleton<IDelayWithJitterService, DelayWithJitterService>()
             .AddScoped<IPermissionService, PermissionService>()
+            .AddScoped<IContainerPlatformAuthorizationService, ContainerPlatformAuthorizationService>()
             .AddScoped<IActorRoleService, ActorRoleService>()
             .AddScoped<IActorResourceAccessService, ActorResourceAccessService>();
 

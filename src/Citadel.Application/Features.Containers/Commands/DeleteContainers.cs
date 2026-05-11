@@ -1,8 +1,7 @@
 ﻿using Application.Services;
-using Domain;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.Attributes;
+using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
@@ -11,7 +10,6 @@ using System.Security.Claims;
 
 namespace Application.Features.Containers.Commands;
 
-[RequirePermission(ResourceType.Platform, PermissionLevel.Execute)]
 public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bool? Force = false, bool? Link = false) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<DeleteContainers>
@@ -24,11 +22,20 @@ public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bo
     }
 }
 
-internal sealed class DeleteContainersHandler(IContainerProcessingService containerService, IHttpContextAccessor httpContextAccessor)
+internal sealed class DeleteContainersHandler(
+    IContainerProcessingService containerService,
+    IHttpContextAccessor httpContextAccessor,
+    IContainerPlatformAuthorizationService containerPlatformAuthorizationService)
     : ICommandHandler<DeleteContainers, Result>
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken ct)
     {
+        var hasAccess = await containerPlatformAuthorizationService.HasAccessAsync(request.ContainerIds, PermissionLevel.Execute, SpecificPermission.None, ct);
+        if (!hasAccess)
+        {
+            return Result.Failure(new ForbiddenError("Missing permission [Execute] on [Platform]"));
+        }
+
         var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
 
