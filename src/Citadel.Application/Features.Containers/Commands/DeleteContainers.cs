@@ -23,14 +23,14 @@ public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bo
 }
 
 internal sealed class DeleteContainersHandler(
-    IContainerProcessingService containerService,
     IHttpContextAccessor httpContextAccessor,
-    IContainerPlatformAuthorizationService containerPlatformAuthorizationService)
+    IContainerProcessingService containerService,
+    IContainerAuthorizationService containerAuthorizationService)
     : ICommandHandler<DeleteContainers, Result>
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken ct)
     {
-        var hasAccess = await containerPlatformAuthorizationService.HasAccessAsync(request.ContainerIds, PermissionLevel.Execute, SpecificPermission.None, ct);
+        var hasAccess = await containerAuthorizationService.HasAccessAsync(request.ContainerIds, ResourceType.Platform, PermissionLevel.Execute, SpecificPermission.None, ct);
         if (!hasAccess)
         {
             return Result.Failure(new ForbiddenError("Missing permission [Execute] on [Platform]"));

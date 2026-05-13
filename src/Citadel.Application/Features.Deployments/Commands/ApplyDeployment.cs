@@ -10,7 +10,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(ResourceType.Deployment, PermissionLevel.Write, SpecificPermission.Apply)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.Apply)]
 public sealed record ApplyDeployment(Guid Id, bool? Recreate = false) : IStreamCommand<DeploymentStreamItem>;
 
 internal sealed class ApplyDeploymentHandler(IApplyDeploymentService deploymentApplyService, IHttpContextAccessor httpContextAccessor)

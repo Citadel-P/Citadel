@@ -25,7 +25,7 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useLocalStorage, useMutate, useRead } from '@/lib/hooks';
-import { Lock, Plus, Loader2, Trash, BoxIcon } from 'lucide-react';
+import { Lock, Plus, Loader2, Trash } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { atom, useAtom } from 'jotai';
 import { useQueryClient } from '@tanstack/react-query';
@@ -60,7 +60,6 @@ export const RESOURCE_ICONS: Record<ResourceType, ResourceIcon> = {
   Platform: CitadelIcons.Platform,
   Deployment: CitadelIcons.Deployment,
   Stack: CitadelIcons.Stack,
-  Image: BoxIcon,
   Registry: CitadelIcons.Registry,
   GitRepository: CitadelIcons.GitRepository,
   GitAccount: CitadelIcons.GitAccount,

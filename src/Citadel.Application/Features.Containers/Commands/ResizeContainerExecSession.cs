@@ -1,5 +1,6 @@
 ﻿using Application.Services;
 using Application.Services.SignalR;
+using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
@@ -10,15 +11,15 @@ public sealed record ResizeContainerExecSession(string GroupId, int Cols, int Ro
 
 internal sealed class ResizeContainerExecSessionHandler(
     IExecSessionManager execSessionManager,
-    IContainerPlatformAuthorizationService containerPlatformAuthorizationService)
+    IContainerAuthorizationService containerAuthorizationService)
     : ICommandHandler<ResizeContainerExecSession, Result>
 {
     public async ValueTask<Result> Handle(ResizeContainerExecSession command, CancellationToken cancellationToken)
     {
-        var hasAccess = await containerPlatformAuthorizationService.HasTerminalAccessAsync(command.GroupId, cancellationToken);
+        var hasAccess = await containerAuthorizationService.HasTerminalAccessAsync(ResourceType.Platform, command.GroupId, cancellationToken);
         if (!hasAccess)
         {
-            return Result.Failure(new ForbiddenError("Missing permission [Execute] on [Platform]"));
+            return Result.Failure(new ForbiddenError("Missing specific permission [Terminal] on [Platform]"));
         }
 
         await execSessionManager.ResizeAsync(command.GroupId, command.Cols, command.Rows, cancellationToken);

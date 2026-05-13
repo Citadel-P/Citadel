@@ -5,7 +5,7 @@ import { ActionBar } from '@/components/custom/action-bar';
 import { AlertEventDropdownActions, AlertEventGroupActions } from './actions';
 import { AlertEventsTable } from './table';
 import { useAlertEventsList } from './hooks/useAlertEventsList';
-import { AlertResourceType, AlertType } from '@/api/generated/api.types';
+import { AlertResourceType, AlertType, LookupResourceType } from '@/api/generated/api.types';
 import { useAlertEventQuery } from '@/lib/atoms';
 import { FilterBar, filterFieldClassName, ResourceSelectorField, SelectField } from '@/components/custom/common';
 import { Switch } from '@/components/ui/switch';
@@ -124,8 +124,8 @@ function SearchSection() {
       />
       {query.resourceType !== 'All' && (
         <ResourceSelectorField
-          sourceType="Alert"
-          targetType={query.resourceType}
+          sourceType={LookupResourceType.Alert}
+          targetType={LookupResourceType[query.resourceType]}
           onSelect={handleResourceChange as any}
           selected={query.resourceId}
           placeholder={`Select ${query.resourceType}`}

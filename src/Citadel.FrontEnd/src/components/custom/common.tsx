@@ -7,6 +7,7 @@ import {
   AutoUpdateStatus,
   ContainerStateStatus,
   ContainerStatView,
+  LookupResourceType,
   PlatformStatus,
   UpdateBehavior,
   ActivityResourceType,
@@ -33,7 +34,7 @@ import {
   User,
 } from 'lucide-react';
 import { cn, filterBySplit, normalizeDockerId, toFixedNumber } from '@/lib/utils';
-import { PluralResourceMap, ResourceType } from '@/api/types';
+import { PluralResourceMap } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
 import Convert from 'ansi-to-html';
 import { Badge } from '../ui/badge';
@@ -82,9 +83,10 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   className,
   sourceResourceId,
   platformId,
+  queryEnabled = true,
 }: {
-  sourceType: ResourceType;
-  targetType: ResourceType;
+  sourceType: LookupResourceType;
+  targetType: LookupResourceType;
   selected?: T | string | undefined;
   onSelect?: (item: T | undefined) => void;
   disabled?: boolean;
@@ -93,19 +95,25 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   className?: string;
   sourceResourceId?: string;
   platformId?: string;
+  queryEnabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
   const { ref: triggerRef, width: contentWidth, measure } = useMeasuredWidth(400);
-  const read = useRead(`lookup`, {
-    query: {
-      TargetResourceType: targetType,
-      SourceResourceType: sourceType,
-      SourceResourceId: sourceResourceId,
-      PlatformId: platformId,
+
+  const read = useRead(
+    `lookup`,
+    {
+      query: {
+        TargetResourceType: targetType,
+        SourceResourceType: sourceType,
+        SourceResourceId: sourceResourceId,
+        PlatformId: platformId,
+      },
     },
-  });
+    { enabled: queryEnabled },
+  );
   const items = useMemo<T[]>(() => {
     const lookupData = read.data?.data as unknown;
     if (Array.isArray(lookupData)) {
@@ -205,7 +213,8 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
 }
 
 export function MultiResourceSelectorField<T extends { id: string; name: string }>({
-  type,
+  sourceType,
+  targetType,
   selected,
   onSelect,
   disabled,
@@ -213,8 +222,11 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   platformId,
   className,
   valueKey = 'id',
+  sourceResourceId,
+  queryEnabled = true,
 }: {
-  type: ResourceType;
+  sourceType: LookupResourceType;
+  targetType: LookupResourceType;
   selected?: string[] | T[];
   onSelect?: (items: T[]) => void;
   disabled?: boolean;
@@ -223,11 +235,34 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   platformId?: string;
   className?: string;
   valueKey?: 'id' | 'name';
+  sourceResourceId?: string;
+  queryEnabled?: boolean;
 }) {
-  const resourceName = PluralResourceMap[type];
+  const resourceName = PluralResourceMap[sourceType];
+  const read = useRead(
+    `lookup`,
+    {
+      query: {
+        TargetResourceType: targetType,
+        SourceResourceType: sourceType,
+        SourceResourceId: sourceResourceId,
+        PlatformId: platformId,
+      },
+    },
+    { enabled: queryEnabled },
+  );
 
-  const read = useRead(`list${resourceName}` as any, { platformId });
-  const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
+  const items = useMemo<T[]>(() => {
+    const lookupData = read.data?.data as unknown;
+    if (Array.isArray(lookupData)) return lookupData as T[];
+
+    if (lookupData && typeof lookupData === 'object') {
+      const firstValue = Object.values(lookupData as Record<string, unknown>).at(0);
+      if (Array.isArray(firstValue)) return firstValue as T[];
+    }
+
+    return [];
+  }, [read.data?.data]);
 
   const getValue = useCallback((item: T) => (valueKey === 'name' ? item.name : item.id), [valueKey]);
 

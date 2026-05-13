@@ -79,7 +79,6 @@ export enum ResourceType {
   Platform = "Platform",
   Deployment = "Deployment",
   Stack = "Stack",
-  Image = "Image",
   Registry = "Registry",
   GitRepository = "GitRepository",
   GitAccount = "GitAccount",
@@ -131,6 +130,23 @@ export enum PermissionLevel {
   Read = "Read",
   Write = "Write",
   Execute = "Execute",
+}
+
+export enum LookupResourceType {
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  Image = "Image",
+  Network = "Network",
+  Volume = "Volume",
+  Registry = "Registry",
+  GitRepository = "GitRepository",
+  GitAccount = "GitAccount",
+  Alert = "Alert",
+  AlertChannel = "AlertChannel",
+  User = "User",
+  Team = "Team",
+  Role = "Role",
 }
 
 export enum GitTransport {
@@ -7437,8 +7453,8 @@ export class Api<
      */
     lookup: (
       query: {
-        TargetResourceType: ResourceType;
-        SourceResourceType?: ResourceType;
+        TargetResourceType: LookupResourceType;
+        SourceResourceType?: LookupResourceType;
         /** @format uuid */
         SourceResourceId?: string;
         /** @format uuid */

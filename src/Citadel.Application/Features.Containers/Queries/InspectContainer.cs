@@ -1,5 +1,4 @@
 ﻿using Application.Services;
-using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using FluentValidation;
@@ -20,15 +19,15 @@ public sealed record InspectContainer(string ContainerId) : IQuery<Result<Contai
 }
 
 internal sealed class InspectContainerHandler(
-    IContainerPlatformAuthorizationService containerPlatformAuthorizationService,
     IUnitOfWork unitOfWork,
-    IConnectorFactory<IContainerConnector> connectorFactory)
+    IConnectorFactory<IContainerConnector> connectorFactory,
+    IContainerAuthorizationService containerAuthorizationService)
     : IQueryHandler<InspectContainer, Result<ContainerInspectionInfo>>
 {
     
     public async ValueTask<Result<ContainerInspectionInfo>> Handle(InspectContainer query, CancellationToken cancellationToken)
     {
-        var hasAccess = await containerPlatformAuthorizationService.HasAccessAsync([query.ContainerId], PermissionLevel.Read, SpecificPermission.None, cancellationToken);
+        var hasAccess = await containerAuthorizationService.HasAccessAsync([query.ContainerId], ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken);
         if (!hasAccess)
         {
             return Result.Failure<ContainerInspectionInfo>(new ForbiddenError("Missing permission [Read] on [Platform]"));

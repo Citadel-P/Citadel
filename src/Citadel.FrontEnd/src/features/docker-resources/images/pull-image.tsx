@@ -4,7 +4,7 @@ import { useInlineSubHeader, useTaskSheet } from '@/lib/atoms';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
-import { RegistryView } from '@/api/generated/api.types';
+import { LookupResourceType, RegistryView } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
 import { AlertMessage } from '@/components/custom/alert-message';
 
@@ -65,8 +65,8 @@ export default function PullImageForm() {
               <div className="flex flex-col sm:flex-row sm:items-baseline">
                 <div className="flex-none w-full sm:w-36 text-sm font-medium">Registry</div>
                 <ResourceSelectorField
-                  sourceType="Image"
-                  targetType='Registry'
+                  sourceType={LookupResourceType.Image}
+                  targetType={LookupResourceType.Registry}
                   selected={registry}
                   onSelect={handleRegistrySelect}
                   placeholder="Select Registry"

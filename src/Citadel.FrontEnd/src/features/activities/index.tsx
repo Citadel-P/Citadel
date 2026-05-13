@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useActivitiesGroup } from './hooks/useActivitiesGroup';
 import { ActivitiesTable } from './table';
-import { ActivityEventType, ActivityResourceType } from '@/api/generated/api.types';
+import { ActivityEventType, ActivityResourceType, LookupResourceType } from '@/api/generated/api.types';
 import { useActivityQuery } from '@/lib/atoms';
 import { FilterBar, filterFieldClassName, ResourceSelectorField, SelectField } from '@/components/custom/common';
 import { ResourceType } from '@/api/types';
@@ -103,8 +103,8 @@ function SearchSection() {
       />
       {query.resourceType != 'All' && (
         <ResourceSelectorField
-          sourceType='Activity'
-          targetType={query.resourceType}
+          sourceType={LookupResourceType.Activity}
+          targetType={LookupResourceType[query.resourceType]}
           onSelect={handleResourceChange as any}
           selected={query.resourceId}
           placeholder={'Select ' + query.resourceType}

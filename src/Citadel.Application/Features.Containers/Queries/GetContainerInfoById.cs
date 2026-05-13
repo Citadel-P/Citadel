@@ -21,13 +21,13 @@ public sealed record GetContainerInfoById(string ContainerId) : IQuery<Result<Co
 }
 
 internal class GetContainerInfoByIdHandler(
-    IConnectorFactory<IContainerConnector> connectorFactory,
     IUnitOfWork unitOfWork,
-    IContainerPlatformAuthorizationService containerPlatformAuthorizationService) : IQueryHandler<GetContainerInfoById, Result<ContainerInfo>>
+    IConnectorFactory<IContainerConnector> connectorFactory,
+    IContainerAuthorizationService containerAuthorizationService) : IQueryHandler<GetContainerInfoById, Result<ContainerInfo>>
 {
     public async ValueTask<Result<ContainerInfo>> Handle(GetContainerInfoById query, CancellationToken cancellationToken)
     {
-        var hasAccess = await containerPlatformAuthorizationService.HasAccessAsync([query.ContainerId], PermissionLevel.Read, SpecificPermission.None, cancellationToken);
+        var hasAccess = await containerAuthorizationService.HasAccessAsync([query.ContainerId], ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken);
         if (!hasAccess)
         {
             return Result.Failure<ContainerInfo>(new ForbiddenError("Missing permission [Read] on [Platform]"));

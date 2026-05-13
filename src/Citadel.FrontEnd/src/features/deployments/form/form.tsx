@@ -11,6 +11,7 @@ import {
   UpdateBehavior,
   DeploymentConfigView,
   PatchDeploymentInput,
+  LookupResourceType,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -257,8 +258,8 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
             render: (value, set) => {
               return (
                 <ResourceSelectorField
-                  sourceType="Deployment"
-                  targetType="Platform"
+                  sourceType={LookupResourceType.Deployment}
+                  targetType={LookupResourceType.Platform}
                   sourceResourceId={id}
                   selected={value}
                   onSelect={(v: PlatformView | undefined) => set({ platformId: v?.id })}
@@ -309,8 +310,8 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                         render: (val, set) => {
                           return (
                             <ResourceSelectorField
-                              sourceType="Deployment"
-                              targetType="Registry"
+                              sourceType={LookupResourceType.Deployment}
+                              targetType={LookupResourceType.Registry}
                               sourceResourceId={id}
                               selected={val}
                               onSelect={(v: ImageView | undefined) =>
@@ -367,10 +368,11 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                     description: 'These images are immediately available for deployment without a remote pull.',
                     render: (val, set) => (
                       <ResourceSelectorField
-                        sourceType={id ? "Deployment" : "Platform"}
-                        targetType="Image"
+                        sourceType={id ? LookupResourceType.Deployment : LookupResourceType.Platform}
+                        targetType={LookupResourceType.Image}
                         sourceResourceId={id ?? currentPlatformId}
                         platformId={currentPlatformId}
+                        queryEnabled={!!currentPlatformId}
                         selected={val}
                         onSelect={(v: ImageView | undefined) => {
                           lastAppliedServerPortsRef.current = null;
@@ -404,7 +406,11 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                 validate: (v) => (!v ? 'Source is required' : null),
                 render: (value, set) => (
                   <MultiResourceSelectorField
-                    type="Network"
+                    targetType={LookupResourceType.Network}
+                    sourceType={LookupResourceType.Platform}
+                    sourceResourceId={currentPlatformId}
+                    platformId={currentPlatformId}
+                    queryEnabled={!!currentPlatformId}
                     selected={value ?? []}
                     onSelect={(v: DockerNetworkResult[] | undefined) =>
                       set((prev) => ({
@@ -415,7 +421,6 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                       }))
                     }
                     placeholder="Select Network(s)"
-                    platformId={currentPlatformId}
                     valueKey="name"
                   />
                 ),

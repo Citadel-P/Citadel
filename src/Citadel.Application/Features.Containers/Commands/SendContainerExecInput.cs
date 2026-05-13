@@ -11,15 +11,15 @@ public sealed record SendContainerExecInput(string GroupId, byte[] Data) : IComm
 
 internal sealed class SendContainerExecInputHandler(
     IExecSessionManager execSessionManager,
-    IContainerPlatformAuthorizationService containerPlatformAuthorizationService)
+    IContainerAuthorizationService containerAuthorizationService)
     : ICommandHandler<SendContainerExecInput, Result>
 {
     public async ValueTask<Result> Handle(SendContainerExecInput command, CancellationToken cancellationToken)
     {
-        var hasAccess = await containerPlatformAuthorizationService.HasTerminalAccessAsync(command.GroupId, cancellationToken);
+        var hasAccess = await containerAuthorizationService.HasTerminalAccessAsync(ResourceType.Platform, command.GroupId, cancellationToken);
         if (!hasAccess)
         {
-            return Result.Failure(new ForbiddenError("Missing permission [Execute] on [Platform]"));
+            return Result.Failure(new ForbiddenError("Missing specific permission [Terminal] on [Platform]"));
         }
 
         await execSessionManager.SendInputAsync(command.GroupId, command.Data, cancellationToken);
