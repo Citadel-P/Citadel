@@ -74,9 +74,10 @@ public static class ApplicationModule
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>()
             .AddSingleton<IDelayWithJitterService, DelayWithJitterService>()
             .AddScoped<IPermissionService, PermissionService>()
-            .AddScoped<IContainerPlatformAuthorizationService, ContainerPlatformAuthorizationService>()
+            .AddScoped<IContainerAuthorizationService, ContainerAuthorizationService>()
             .AddScoped<IActorRoleService, ActorRoleService>()
-            .AddScoped<IActorResourceAccessService, ActorResourceAccessService>();
+            .AddScoped<IActorResourceAccessService, ActorResourceAccessService>()
+            .AddScoped<INetworkService, NetworkService>();
 
     private static IServiceCollection AddLookups(this IServiceCollection services)
         => services

@@ -12,15 +12,15 @@ public sealed record StartContainerShellSession(string GroupId, string Shell) : 
 
 internal sealed class StartContainerShellSessionHandler(
     IExecSessionManager execSessionManager,
-    IContainerPlatformAuthorizationService containerPlatformAuthorizationService)
+    IContainerAuthorizationService containerAuthorizationService)
     : ICommandHandler<StartContainerShellSession, Result>
 {
     public async ValueTask<Result> Handle(StartContainerShellSession command, CancellationToken cancellationToken)
     {
-        var hasAccess = await containerPlatformAuthorizationService.HasTerminalAccessAsync(command.GroupId, cancellationToken);
+        var hasAccess = await containerAuthorizationService.HasTerminalAccessAsync(ResourceType.Platform, command.GroupId, cancellationToken);
         if (!hasAccess)
         {
-            return Result.Failure(new ForbiddenError("Missing permission [Execute] on [Platform]"));
+            return Result.Failure(new ForbiddenError("Missing specific permission [Terminal] on [Platform]"));
         }
 
         await execSessionManager.StartExecProcess(command.GroupId, command.Shell, cancellationToken);

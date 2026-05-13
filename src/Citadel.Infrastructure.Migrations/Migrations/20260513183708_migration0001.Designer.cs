@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260508172912_migration0001")]
+    [Migration("20260513183708_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -1188,7 +1188,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("dbb104e4-d7e2-5173-b0b2-6d1519c2f682"),
                             PermissionLevel = 2,
-                            ResourceType = 9,
+                            ResourceType = 8,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
                             SpecificPermissions = 0
                         },
@@ -1196,7 +1196,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("672ebf04-40e5-547b-29f2-6daf5c3c3856"),
                             PermissionLevel = 0,
-                            ResourceType = 9,
+                            ResourceType = 8,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
                             SpecificPermissions = 0
                         },
@@ -1204,7 +1204,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("44debca1-5d97-b691-196c-8e421143e307"),
                             PermissionLevel = 1,
-                            ResourceType = 9,
+                            ResourceType = 8,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
@@ -1212,7 +1212,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("fbb8ef70-2ec3-134f-0c18-1533173d5849"),
                             PermissionLevel = 2,
-                            ResourceType = 10,
+                            ResourceType = 9,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
                             SpecificPermissions = 0
                         },
@@ -1220,7 +1220,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("fb710f21-c146-e381-00f0-820f58ecb69a"),
                             PermissionLevel = 0,
-                            ResourceType = 10,
+                            ResourceType = 9,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
                             SpecificPermissions = 0
                         },
@@ -1228,7 +1228,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("3bf8e221-07a0-052c-d831-2c82d22f7660"),
                             PermissionLevel = 1,
-                            ResourceType = 10,
+                            ResourceType = 9,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
@@ -1236,7 +1236,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("440deb9d-ace8-5e15-ef80-3a42f11a0c42"),
                             PermissionLevel = 2,
-                            ResourceType = 11,
+                            ResourceType = 10,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
                             SpecificPermissions = 0
                         },
@@ -1244,7 +1244,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("4032d1e2-fe5e-16ef-f554-69bd2c2ac19d"),
                             PermissionLevel = 0,
-                            ResourceType = 11,
+                            ResourceType = 10,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
                             SpecificPermissions = 0
                         },
@@ -1252,17 +1252,17 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("2533e6f2-53e3-1281-01f7-cc28045cbc4f"),
                             PermissionLevel = 1,
-                            ResourceType = 11,
+                            ResourceType = 10,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
                         new
                         {
-                            Id = new Guid("018a880f-7e94-2797-62c6-0423a024e70e"),
+                            Id = new Guid("5e619024-7ab9-2ed2-5467-c34cd6187a4b"),
                             PermissionLevel = 2,
                             ResourceType = 0,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 6
+                            SpecificPermissions = 14
                         },
                         new
                         {
@@ -1274,11 +1274,11 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("1960cc66-8053-a58c-e2c2-2046b6bbe9c6"),
+                            Id = new Guid("633f823e-b9e2-2e78-080e-598fc9bac5b3"),
                             PermissionLevel = 1,
                             ResourceType = 0,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 2
+                            SpecificPermissions = 14
                         },
                         new
                         {
@@ -1298,11 +1298,11 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("5977b71b-2687-273c-04d9-98f8169b6aef"),
+                            Id = new Guid("cd4e7d5f-0629-0c84-74e6-21569b8b6e11"),
                             PermissionLevel = 1,
                             ResourceType = 1,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 11
+                            SpecificPermissions = 15
                         },
                         new
                         {
@@ -1330,33 +1330,9 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("38789c3c-9e04-471c-bec8-d9a9384b291d"),
-                            PermissionLevel = 2,
-                            ResourceType = 3,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 8
-                        },
-                        new
-                        {
-                            Id = new Guid("d42ecc7d-98f8-c309-f883-c18e807dcc73"),
-                            PermissionLevel = 0,
-                            ResourceType = 3,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("2f089df9-84b2-1f53-738a-46f52ef600b7"),
-                            PermissionLevel = 1,
-                            ResourceType = 3,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 8
-                        },
-                        new
-                        {
                             Id = new Guid("987e89d0-2c8f-87d8-830f-7461a7db392e"),
                             PermissionLevel = 2,
-                            ResourceType = 5,
+                            ResourceType = 4,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
                             SpecificPermissions = 0
                         },
@@ -1364,7 +1340,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("97597a3e-c415-667b-039a-a7a287daefea"),
                             PermissionLevel = 0,
-                            ResourceType = 5,
+                            ResourceType = 4,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
                             SpecificPermissions = 0
                         },
@@ -1372,7 +1348,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("9b075e03-6326-7b95-ae78-2b296990ce26"),
                             PermissionLevel = 1,
-                            ResourceType = 5,
+                            ResourceType = 4,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
@@ -1380,7 +1356,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("645b4c54-7937-2180-7186-be24ac6bf330"),
                             PermissionLevel = 2,
-                            ResourceType = 6,
+                            ResourceType = 5,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
                             SpecificPermissions = 0
                         },
@@ -1388,7 +1364,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("94717f37-cc1a-de60-9bca-dc6379444bfb"),
                             PermissionLevel = 0,
-                            ResourceType = 6,
+                            ResourceType = 5,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
                             SpecificPermissions = 0
                         },
@@ -1396,7 +1372,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("86dadd60-fced-3dcd-cdbe-8d262bec7d22"),
                             PermissionLevel = 1,
-                            ResourceType = 6,
+                            ResourceType = 5,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
@@ -1404,7 +1380,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9"),
                             PermissionLevel = 2,
-                            ResourceType = 4,
+                            ResourceType = 3,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
                             SpecificPermissions = 0
                         },
@@ -1412,7 +1388,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("e04cd0d3-47bf-2d28-e099-c7a9b61e3875"),
                             PermissionLevel = 0,
-                            ResourceType = 4,
+                            ResourceType = 3,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
                             SpecificPermissions = 0
                         },
@@ -1420,7 +1396,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("b3abb382-80da-8170-b011-05af044e7908"),
                             PermissionLevel = 1,
-                            ResourceType = 4,
+                            ResourceType = 3,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
@@ -1428,7 +1404,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("d5fa8563-b0a2-4f11-7e16-7c1877e43dda"),
                             PermissionLevel = 2,
-                            ResourceType = 7,
+                            ResourceType = 6,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
                             SpecificPermissions = 0
                         },
@@ -1436,7 +1412,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("b104e60e-87ef-a58f-f04a-ba2fc634f037"),
                             PermissionLevel = 0,
-                            ResourceType = 7,
+                            ResourceType = 6,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
                             SpecificPermissions = 0
                         },
@@ -1444,7 +1420,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("ee9254c3-9b59-15a0-aa85-898f5974a603"),
                             PermissionLevel = 1,
-                            ResourceType = 7,
+                            ResourceType = 6,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
@@ -1452,7 +1428,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("361e1bf8-ef0f-1409-9137-6fa885696a19"),
                             PermissionLevel = 2,
-                            ResourceType = 8,
+                            ResourceType = 7,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
                             SpecificPermissions = 0
                         },
@@ -1460,7 +1436,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("a60ba8de-ff46-b387-85ed-913d96170a2a"),
                             PermissionLevel = 0,
-                            ResourceType = 8,
+                            ResourceType = 7,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
                             SpecificPermissions = 0
                         },
@@ -1468,7 +1444,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("80aa1c34-79dd-6587-52db-52605326fe77"),
                             PermissionLevel = 1,
-                            ResourceType = 8,
+                            ResourceType = 7,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         });

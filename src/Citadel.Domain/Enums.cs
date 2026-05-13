@@ -622,3 +622,21 @@ public enum ExecTarget
     Deployment,
     Stack
 }
+
+public enum LookupResourceType
+{
+    Platform,
+    Deployment,
+    Stack,
+    Image,
+    Network,
+    Volume,
+    Registry,
+    GitRepository,
+    GitAccount,
+    Alert,
+    AlertChannel,
+    User,
+    Team,
+    Role,
+}

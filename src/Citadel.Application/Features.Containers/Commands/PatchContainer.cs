@@ -28,12 +28,12 @@ internal sealed class PatchContainerHandler(
     IPlatformContainerCache platformContainerCache,
     IHttpContextAccessor httpContextAccessor,
     IConnectorFactory<IContainerConnector> connectorFactory,
-    IContainerPlatformAuthorizationService containerPlatformAuthorizationService)
+    IContainerAuthorizationService containerAuthorizationService)
     : ICommandHandler<PatchContainer, Result>
 {
     public async ValueTask<Result> Handle(PatchContainer request, CancellationToken ct)
     {
-        var hasAccess = await containerPlatformAuthorizationService.HasAccessAsync(request.ContainerIds, PermissionLevel.Write, SpecificPermission.None, ct);
+        var hasAccess = await containerAuthorizationService.HasAccessAsync(request.ContainerIds, ResourceType.Platform, PermissionLevel.Write, SpecificPermission.None, ct);
         if (!hasAccess)
         {
             return Result.Failure(new ForbiddenError("Missing permission [Write] on [Platform]"));

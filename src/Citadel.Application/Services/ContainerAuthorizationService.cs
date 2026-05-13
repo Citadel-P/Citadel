@@ -6,19 +6,19 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.Services;
 
-public interface IContainerPlatformAuthorizationService
+internal interface IContainerAuthorizationService
 {
-    Task<bool> HasAccessAsync(IEnumerable<string> containerIds, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
-    Task<bool> HasTerminalAccessAsync(string groupId, CancellationToken cancellationToken);
+    Task<bool> HasAccessAsync(IEnumerable<string> containerIds, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<bool> HasTerminalAccessAsync(ResourceType resourceType, string groupId, CancellationToken cancellationToken);
 }
 
-internal sealed class ContainerPlatformAuthorizationService(
-    IHttpContextAccessor httpContextAccessor,
-    IPlatformContainerCache platformContainerCache,
+internal sealed class ContainerAuthorizationService(
     IUnitOfWork unitOfWork,
-    IPermissionService permissionService) : IContainerPlatformAuthorizationService
+    IPermissionService permissionService,
+    IHttpContextAccessor httpContextAccessor,
+    IPlatformContainerCache platformContainerCache) : IContainerAuthorizationService
 {
-    public async Task<bool> HasAccessAsync(IEnumerable<string> containerIds, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
+    public async Task<bool> HasAccessAsync(IEnumerable<string> containerIds, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
     {
         var ids = containerIds as string[] ?? [.. containerIds];
         if (ids.Length == 0)
@@ -53,7 +53,7 @@ internal sealed class ContainerPlatformAuthorizationService(
         {
             var hasPermission = await permissionService.HasPermissionAsync(
                 userId,
-                ResourceType.Platform,
+                resourceType,
                 permissionLevel,
                 specificPermission,
                 platformId,
@@ -68,12 +68,12 @@ internal sealed class ContainerPlatformAuthorizationService(
         return true;
     }
 
-    public Task<bool> HasTerminalAccessAsync(string groupId, CancellationToken cancellationToken)
+    public Task<bool> HasTerminalAccessAsync(ResourceType resourceType, string groupId, CancellationToken cancellationToken)
     {
         var containerId = TryGetContainerId(groupId);
         return containerId is null
             ? Task.FromResult(false)
-            : HasAccessAsync([containerId], PermissionLevel.Execute, SpecificPermission.Terminal, cancellationToken);
+            : HasAccessAsync([containerId], resourceType, PermissionLevel.Read, SpecificPermission.Terminal, cancellationToken);
     }
 
     private async Task<Guid?> ResolvePlatformIdAsync(string containerId, CancellationToken cancellationToken)
@@ -130,9 +130,16 @@ internal sealed class ContainerPlatformAuthorizationService(
 
     private static string? TryGetContainerId(string groupId)
     {
-        var parts = groupId.Split(':', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 3 && parts[0] == "container-exec"
-            ? parts[1]
-            : null;
+        const string prefix = "container-exec:";
+
+        if (!groupId.StartsWith(prefix, StringComparison.Ordinal))
+            return null;
+
+        var start = prefix.Length;
+        var end = groupId.IndexOf(':', start);
+
+        return end < 0
+            ? null
+            : groupId[start..end];
     }
 }

@@ -40,8 +40,6 @@ using ApiActorView = WebApi.Routes.Endpoints.Resources.Identity.Actors.ActorView
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Auth;
 using Application.Features.Identity.Auth.Models;
-using Application.Features.Identity.Auth.Models;
-using Domain.Contracts.Resources;
 using Hosting.Common;
 
 namespace Application.Models;
@@ -54,6 +52,8 @@ namespace Application.Models;
     })]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Guid[]))]
+[JsonSerializable(typeof(LookupResourceType))]
+[JsonSerializable(typeof(LookupResourceType?))]
 [JsonSerializable(typeof(ResourceType))]
 [JsonSerializable(typeof(ResourceType?))]
 [JsonSerializable(typeof(ActorType))]

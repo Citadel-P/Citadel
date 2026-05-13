@@ -87,7 +87,7 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
         var specifics = deployment.GetProperty("specificPermissions");
 
         Assert.Equal(nameof(PermissionLevel.Execute), maximumLevel);
-        Assert.Equal(nameof(PermissionLevel.Write), specifics.GetProperty(nameof(SpecificPermission.Apply)).GetString());
+        Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Apply)).GetString());
         Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Logs)).GetString());
     }
 
@@ -107,8 +107,8 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
         var platform = doc.RootElement.GetProperty(nameof(ResourceType.Platform));
         var specifics = platform.GetProperty("specificPermissions");
 
-        Assert.False(specifics.TryGetProperty(nameof(SpecificPermission.Pull), out _));
-        Assert.Equal(nameof(PermissionLevel.Execute), specifics.GetProperty(nameof(SpecificPermission.Terminal)).GetString());
+        Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Pull)).GetString());
+        Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Terminal)).GetString());
         Assert.Equal(nameof(PermissionLevel.Read), specifics.GetProperty(nameof(SpecificPermission.Logs)).GetString());
     }
 

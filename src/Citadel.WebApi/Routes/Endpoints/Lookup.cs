@@ -3,7 +3,6 @@ using Domain.Contracts.Resources;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Lookup;
 
 namespace WebApi.Routes.Endpoints;
@@ -12,8 +11,7 @@ public static class Lookup
 {
     public static async Task<Results<Ok<IEnumerable<ResourceInfo>>, ProblemHttpResult>> Get(
         IMediator mediator,
-        [AsParameters]
-        LookupRequest request,
+        [AsParameters] LookupRequest request,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(

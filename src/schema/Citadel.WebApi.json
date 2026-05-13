@@ -13538,14 +13538,14 @@
             "in": "query",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/ResourceType"
+              "$ref": "#/components/schemas/LookupResourceType"
             }
           },
           {
             "name": "SourceResourceType",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/ResourceType"
+              "$ref": "#/components/schemas/LookupResourceType"
             }
           },
           {
@@ -20281,6 +20281,24 @@
           }
         }
       },
+      "LookupResourceType": {
+        "enum": [
+          "Platform",
+          "Deployment",
+          "Stack",
+          "Image",
+          "Network",
+          "Volume",
+          "Registry",
+          "GitRepository",
+          "GitAccount",
+          "Alert",
+          "AlertChannel",
+          "User",
+          "Team",
+          "Role"
+        ]
+      },
       "MountPointInfo": {
         "required": [
           "type",
@@ -22353,7 +22371,6 @@
           "Platform",
           "Deployment",
           "Stack",
-          "Image",
           "Registry",
           "GitRepository",
           "GitAccount",
