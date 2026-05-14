@@ -409,7 +409,7 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                     targetType={LookupResourceType.Network}
                     sourceType={LookupResourceType.Deployment}
                     sourceResourceId={mode == 'add' ? undefined : id}
-                    platformId={ currentPlatformId}
+                    platformId={currentPlatformId}
                     queryEnabled={!!currentPlatformId}
                     selected={value ?? []}
                     onSelect={(v: DockerNetworkResult[] | undefined) =>
@@ -704,7 +704,7 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
         ],
       }),
     }),
-    [provider, currentPlatformId, currentSpec.image, mode],
+    [provider, currentPlatformId, currentSpec.image, mode, id],
   );
 
   return (

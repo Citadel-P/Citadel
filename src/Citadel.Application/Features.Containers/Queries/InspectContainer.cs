@@ -27,10 +27,10 @@ internal sealed class InspectContainerHandler(
     
     public async ValueTask<Result<ContainerInspectionInfo>> Handle(InspectContainer query, CancellationToken cancellationToken)
     {
-        var hasAccess = await containerAuthorizationService.HasAccessAsync([query.ContainerId], ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken);
+        var hasAccess = await containerAuthorizationService.HasAccessAsync([query.ContainerId], ResourceType.Platform, PermissionLevel.Read, SpecificPermission.Inspect, cancellationToken);
         if (!hasAccess)
         {
-            return Result.Failure<ContainerInspectionInfo>(new ForbiddenError("Missing permission [Read] on [Platform]"));
+            return Result.Failure<ContainerInspectionInfo>(new ForbiddenError("Missing specific permission [Inspect] on [Platform]"));
         }
 
         var platform = await unitOfWork.Platforms.GetPlatformByContainerIdAsync(query.ContainerId, cancellationToken);

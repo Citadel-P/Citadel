@@ -22479,10 +22479,11 @@
       "SpecificPermission": {
         "enum": [
           "None",
-          "Apply",
           "Logs",
-          "Terminal",
-          "Pull"
+          "Inspect",
+          "Apply",
+          "Pull",
+          "Terminal"
         ]
       },
       "StackConfigView": {

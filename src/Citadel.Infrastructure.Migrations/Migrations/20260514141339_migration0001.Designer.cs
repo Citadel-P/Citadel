@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260514084352_migration0001")]
+    [Migration("20260514141339_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -1258,11 +1258,11 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("5e619024-7ab9-2ed2-5467-c34cd6187a4b"),
+                            Id = new Guid("a4b222e3-7452-b5f4-377b-c05652533f67"),
                             PermissionLevel = 2,
                             ResourceType = 0,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 14
+                            SpecificPermissions = 27
                         },
                         new
                         {
@@ -1274,19 +1274,19 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("633f823e-b9e2-2e78-080e-598fc9bac5b3"),
+                            Id = new Guid("07b143ad-6b02-c7ff-3d7d-48af137b2bbc"),
                             PermissionLevel = 1,
                             ResourceType = 0,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 14
+                            SpecificPermissions = 27
                         },
                         new
                         {
-                            Id = new Guid("2c629740-ea41-f1c3-6624-4e237479112c"),
+                            Id = new Guid("76e4e5dc-c649-c02d-e754-e41cc49955d5"),
                             PermissionLevel = 2,
                             ResourceType = 1,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 15
+                            SpecificPermissions = 31
                         },
                         new
                         {
@@ -1298,19 +1298,19 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("cd4e7d5f-0629-0c84-74e6-21569b8b6e11"),
+                            Id = new Guid("68b977f5-a0d2-7235-a7ff-1b68baeb943f"),
                             PermissionLevel = 1,
                             ResourceType = 1,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 15
+                            SpecificPermissions = 31
                         },
                         new
                         {
-                            Id = new Guid("e01c76d8-7be7-ab3c-6b6c-c454ab53c33c"),
+                            Id = new Guid("bc9bb12f-b72b-a750-3ba3-49a8b6574858"),
                             PermissionLevel = 2,
                             ResourceType = 2,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 11
+                            SpecificPermissions = 15
                         },
                         new
                         {
@@ -1322,11 +1322,11 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("d5a0384e-7ad8-baa4-deea-10233a70221e"),
+                            Id = new Guid("1e6772eb-d9b9-ef19-565e-14ae0f6691d0"),
                             PermissionLevel = 1,
                             ResourceType = 2,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 11
+                            SpecificPermissions = 15
                         },
                         new
                         {

@@ -9,7 +9,8 @@ public class Permission
         (int)SpecificPermission.Apply |
         (int)SpecificPermission.Logs |
         (int)SpecificPermission.Terminal |
-        (int)SpecificPermission.Pull;
+        (int)SpecificPermission.Pull |
+        (int)SpecificPermission.Inspect;
 
     public Guid Id { get; private set; }
     public Guid RoleId { get; private set; }
@@ -93,6 +94,9 @@ public class Permission
 
         if ((mask & (int)SpecificPermission.Pull) != 0)
             permissions.Add(SpecificPermission.Pull);
+
+        if ((mask & (int)SpecificPermission.Inspect) != 0)
+            permissions.Add(SpecificPermission.Inspect);
 
         return [.. permissions];
     }
