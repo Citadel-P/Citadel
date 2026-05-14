@@ -59,10 +59,11 @@ export enum StackReleaseStatus {
 
 export enum SpecificPermission {
   None = "None",
-  Apply = "Apply",
   Logs = "Logs",
-  Terminal = "Terminal",
+  Inspect = "Inspect",
+  Apply = "Apply",
   Pull = "Pull",
+  Terminal = "Terminal",
 }
 
 export enum ScheduleType {
