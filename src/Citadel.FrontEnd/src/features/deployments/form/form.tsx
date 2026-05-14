@@ -407,9 +407,9 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                 render: (value, set) => (
                   <MultiResourceSelectorField
                     targetType={LookupResourceType.Network}
-                    sourceType={LookupResourceType.Platform}
-                    sourceResourceId={currentPlatformId}
-                    platformId={currentPlatformId}
+                    sourceType={LookupResourceType.Deployment}
+                    sourceResourceId={mode == 'add' ? undefined : id}
+                    platformId={ currentPlatformId}
                     queryEnabled={!!currentPlatformId}
                     selected={value ?? []}
                     onSelect={(v: DockerNetworkResult[] | undefined) =>

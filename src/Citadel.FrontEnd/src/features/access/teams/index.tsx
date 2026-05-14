@@ -90,7 +90,7 @@ const columns = (
   {
     accessorKey: 'roles',
     header: ({ column }) => <SortableCell cellName="Roles" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{row.original.roles?.map((s) => s.name).join(',')}</span>,
+    cell: ({ row }) => <span className="text-[13px]">{row.original.roles?.map((s) => s.name).join(' + ')}</span>,
   },
   {
     id: 'actions',

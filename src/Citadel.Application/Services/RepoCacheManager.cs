@@ -121,7 +121,7 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
         // Combine repo root with the command's relative path
         var executionDir = Path.GetFullPath(Path.Combine(repoRoot, hook.Path));
 
-        // Security: Prevent Directory Traversal
+        // GrpcRequestMetadata: Prevent Directory Traversal
         if (!executionDir.StartsWith(repoRoot, StringComparison.OrdinalIgnoreCase))
             return Result.Failure($"Security Violation: Hook path '{hook.Path}' is outside repo root.");
 

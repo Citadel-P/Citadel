@@ -160,8 +160,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             JOIN Actors a ON a.Id = u.ActorId
             {{UserAggregateJoins}}
             WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
-            {{AuthorizationSql.ResourcePredicatePrefix}}u.Id{{AuthorizationSql.ResourcePredicateSuffix}} 
-            ORDER BY u.Name ASC LIMIT @PageSize OFFSET @Offset;
+            AND {{AuthorizationSql.ResourcePredicatePrefix}}u.Id{{AuthorizationSql.ResourcePredicateSuffix}} 
+            ORDER BY u.Name ASC LIMIT @PageSize OFFSET @Offset
         """;
 
         const string countSql = $$"""
@@ -169,7 +169,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             SELECT COUNT(*)
             FROM Users u
             WHERE (@Name IS NULL OR u.Name ILIKE '%' || @Name || '%')
-            {{AuthorizationSql.ResourcePredicatePrefix}}u.Id{{AuthorizationSql.ResourcePredicateSuffix}};
+            AND {{AuthorizationSql.ResourcePredicatePrefix}}u.Id{{AuthorizationSql.ResourcePredicateSuffix}}
         """;
 
         var offset = (page - 1) * pageSize;

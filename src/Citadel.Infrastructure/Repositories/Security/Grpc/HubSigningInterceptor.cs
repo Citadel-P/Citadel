@@ -1,10 +1,10 @@
-﻿using System.Buffers;
-using System.Buffers.Binary;
-using Google.Protobuf;
+﻿using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Hosting.Common;
 using NSec.Cryptography;
+using System.Buffers.Binary;
+using System.Security.Cryptography;
 
 namespace Infrastructure.Repositories.Security.Grpc;
 
@@ -19,25 +19,26 @@ namespace Infrastructure.Repositories.Security.Grpc;
 /// - Relies on deterministic serialization: protobuf maps may still produce slightly different byte orders if versions differ, so both client and server must use the same .NET/Protobuf version.
 /// - Does not sign streamed responses: only signs the request, not the server’s stream.
 /// </remarks>
-public class HubSigningInterceptor : Interceptor
+public sealed class HubSigningInterceptor : Interceptor
 {
-    private readonly SignatureAlgorithm algo;
-    private readonly Key hubPrivateKey;
-    private const int NonceSize = 8;
+    private readonly SignatureAlgorithm algorithm =
+        SignatureAlgorithm.Ed25519;
+
+    private readonly Key privateKey;
 
     public HubSigningInterceptor()
     {
-        hubPrivateKey = Helpers.GetOrCreatePrivateKey();
-        algo = SignatureAlgorithm.Ed25519;
+        privateKey = Helpers.GetOrCreatePrivateKey();
     }
-     
+
     public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(
         TRequest request,
         ClientInterceptorContext<TRequest, TResponse> context,
         AsyncUnaryCallContinuation<TRequest, TResponse> continuation)
     {
-        var newContext = PrepareSignedContext(request, context);
-        return continuation(request, newContext);
+        var signedContext = SignRequest(request, context);
+
+        return continuation(request, signedContext);
     }
 
     public override AsyncServerStreamingCall<TResponse> AsyncServerStreamingCall<TRequest, TResponse>(
@@ -45,49 +46,60 @@ public class HubSigningInterceptor : Interceptor
         ClientInterceptorContext<TRequest, TResponse> context,
         AsyncServerStreamingCallContinuation<TRequest, TResponse> continuation)
     {
-        var newContext = PrepareSignedContext(request, context);
-        return continuation(request, newContext);
+        var signedContext = SignRequest(request, context);
+
+        return continuation(request, signedContext);
     }
 
-    private ClientInterceptorContext<TRequest, TResponse> PrepareSignedContext<TRequest, TResponse>(
+    private ClientInterceptorContext<TRequest, TResponse> SignRequest<TRequest, TResponse>(
         TRequest request,
         ClientInterceptorContext<TRequest, TResponse> context)
         where TRequest : class
         where TResponse : class
     {
-        if (request is not IMessage protoMessage)
-            throw new InvalidOperationException("TRequest must implement IMessage");
+        if (request is not IMessage proto)
+            throw new InvalidOperationException(
+                "TRequest must implement IMessage");
 
-        int messageSize = protoMessage.CalculateSize();
-        int totalSize = NonceSize + messageSize;
-        byte[] buffer = ArrayPool<byte>.Shared.Rent(totalSize);
+        long timestamp =
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-        try
-        {
-            var span = buffer.AsSpan(0, totalSize);
-            var nonceSpan = span[..NonceSize];
-            var messageSpan = span.Slice(NonceSize, messageSize);
+        byte[] nonce =
+            RandomNumberGenerator.GetBytes(Constants.GrpcRequestMetadata.NonceSize);
 
-            // Fill nonce with current Unix timestamp
-            BinaryPrimitives.WriteInt64LittleEndian(nonceSpan, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        byte[] bodyHash =
+            Helpers.RequestSigning.ComputeSha256(proto);
 
-            // Serialize protobuf directly into the buffer
-            protoMessage.WriteTo(messageSpan);
+        byte[] signedPayload =
+            Helpers.RequestSigning.BuildSignedPayload(
+                timestamp,
+                nonce,
+                context.Method.FullName,
+                bodyHash);
 
-            // Sign nonce + message
-            byte[] signature = algo.Sign(hubPrivateKey, span);
+        byte[] signature =
+            algorithm.Sign(privateKey, signedPayload);
 
-            // Ensure headers exist and add signature + nonce
-            var headers = context.Options.Headers ?? [];
-            headers.Add(Constants.NonceHeaderKey, nonceSpan.ToArray());
-            headers.Add(Constants.SignatureHeaderKey, signature);
+        var headers = context.Options.Headers ?? new Metadata();
 
-            var newOptions = context.Options.WithHeaders(headers);
-            return new ClientInterceptorContext<TRequest, TResponse>(context.Method, context.Host, newOptions);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
+        Span<byte> timestampBytes = stackalloc byte[Constants.GrpcRequestMetadata.TimestampSize];
+
+        BinaryPrimitives.WriteInt64LittleEndian(
+            timestampBytes,
+            timestamp);
+
+        headers.Add(Constants.GrpcRequestMetadata.TimestampHeaderKey, timestampBytes.ToArray());
+        headers.Add(Constants.GrpcRequestMetadata.NonceHeaderKey, nonce);
+        headers.Add(Constants.GrpcRequestMetadata.ContentHashHeaderKey, bodyHash);
+        headers.Add(Constants.GrpcRequestMetadata.SignatureHeaderKey, signature);
+
+        var options = context.Options.WithHeaders(headers);
+
+        CryptographicOperations.ZeroMemory(signedPayload);
+
+        return new ClientInterceptorContext<TRequest, TResponse>(
+            context.Method,
+            context.Host,
+            options);
     }
 }

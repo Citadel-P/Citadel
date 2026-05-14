@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260513183708_migration0001")]
+    [Migration("20260514084352_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -2000,7 +2000,7 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasOne("Platform", null)
                         .WithMany()
                         .HasForeignKey("PlatformId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_activityevents_platforms_platformid");
                 });
 
