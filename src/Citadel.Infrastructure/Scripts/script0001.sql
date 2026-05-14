@@ -154,7 +154,7 @@ CREATE TABLE activityevents (
     status text NOT NULL,
     CONSTRAINT pk_activityevents PRIMARY KEY (id),
     CONSTRAINT fk_activityevents_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
-    CONSTRAINT fk_activityevents_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+    CONSTRAINT fk_activityevents_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE SET NULL
 );
 
 CREATE TABLE deployments (
@@ -610,7 +610,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260513183708_migration0001', '10.0.7');
+VALUES ('20260514084352_migration0001', '10.0.7');
 
 COMMIT;
 

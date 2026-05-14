@@ -323,9 +323,7 @@ export function PortMappingField({
           const [hostPort, containerPort] = hasMapping ? value.split(':') : ['', value];
 
           return (
-            <div
-              key={idx}
-              className="flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-100 max-h-9">
+            <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-100 max-h-9">
               <div className="flex flex-1 w-full">
                 <Input
                   placeholder="Host port"
@@ -377,11 +375,7 @@ export function InputGroupField({
   return (
     <div className="col-span-2 ">
       <div className="space-y-2 flex flex-col gap-2">
-        <div
-          className={cn(
-            'flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-100 max-h-9',
-            className,
-          )}>
+        <div className={cn('flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-100 max-h-9', className)}>
           <div className="flex flex-1 w-full">
             <span className="flex z-10 items-center justify-center w-20 shadow-xs shrink-0 bg-accent/60 border-l rounded-l-sm border-y border-border text-xs">
               {prefixPlaceholder}
@@ -752,6 +746,7 @@ export function FormShell<T>({
 
     try {
       await onSave(merged as T);
+      setUpdate({});
 
       if (draftKey && typeof window !== 'undefined') {
         setDraftInfo({ hasDraft: false, savedAt: undefined });
@@ -763,7 +758,7 @@ export function FormShell<T>({
       }
       throw e;
     }
-  }, [validateAll, merged, onSave, draftKey, draftVersion]);
+  }, [validateAll, merged, onSave, draftKey, draftVersion, setUpdate]);
 
   /* -------------------------------------------------------------------------- */
   /*                                    UI                                     */

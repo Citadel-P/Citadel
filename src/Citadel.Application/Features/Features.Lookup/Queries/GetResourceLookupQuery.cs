@@ -70,6 +70,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Deployment, LookupResourceType.Platform) => await GetDeploymentPlatformLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Deployment, LookupResourceType.Registry) => await GetDeploymentRegistryLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Deployment, LookupResourceType.Image) => await GetDeploymentImageLookupAsync(sourceId, cancellationToken),
+            (LookupResourceType.Deployment, LookupResourceType.Network) => await GetDeploymentNetworkLookupAsync(context, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.Platform) => await GetStackPlatformLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.Registry) => await GetStackRegistryLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.GitRepository) => await GetStackGitRepositoryLookupAsync(sourceId, userId, cancellationToken),
@@ -130,6 +131,20 @@ internal sealed class GetResourceLookupQueryHandler(
         => sourceId.HasValue
             ? Result.Success(await unitOfWork.Deployments.GetImageLookupAsync(sourceId.Value, cancellationToken))
             : Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("sourceResourceId is required for Deployment -> Image lookup."));
+    
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentNetworkLookupAsync(LookupContext? context, CancellationToken cancellationToken)
+    {
+        if (context?.PlatformId == null || !context.PlatformId.HasValue)
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("PlatformId is required for Deployment -> Network lookup."));
+        }
+        var result = await networkService.List(new ListNetworks(context.PlatformId.Value), cancellationToken);
+        if (result.IsFailure(out var error, out var networks))
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(error.Message);
+        }
+        return Result.Success(networks.Select(static item => new ResourceInfo(Guid.Empty, item.Name)));
+    }
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetStackPlatformLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
         => sourceId.HasValue

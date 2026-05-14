@@ -262,7 +262,7 @@ export const ResourceOverridesField = ({
               <TableRow>
                 <TableHead>Resource</TableHead>
                 <TableHead className="w-32">Level</TableHead>
-                <TableHead className="flex-1">Specific</TableHead>
+                <TableHead className="flex-1">Capabilities</TableHead>
                 <TableHead className="text-center w-28">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -393,7 +393,7 @@ export const ResourceOverridesField = ({
                     <TableRow>
                       <TableHead>Resource</TableHead>
                       <TableHead className="w-32">Level</TableHead>
-                      <TableHead className="flex-1">Specific</TableHead>
+                      <TableHead className="flex-1">Capabilities</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

@@ -289,7 +289,7 @@ namespace Infrastructure.Migrations.Migrations
                         column: x => x.platformid,
                         principalTable: "platforms",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(

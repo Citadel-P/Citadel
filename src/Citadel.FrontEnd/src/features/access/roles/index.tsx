@@ -359,7 +359,7 @@ const PermissionsMatrixTable = ({
           <TableRow>
             <TableHead className="w-48">Resource</TableHead>
             <TableHead className="w-32">Level</TableHead>
-            <TableHead className="flex-1">Specific</TableHead>
+            <TableHead className="flex-1">Capabilities</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

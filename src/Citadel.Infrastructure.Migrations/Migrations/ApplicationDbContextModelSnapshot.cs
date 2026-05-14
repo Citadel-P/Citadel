@@ -1997,7 +1997,7 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasOne("Platform", null)
                         .WithMany()
                         .HasForeignKey("PlatformId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_activityevents_platforms_platformid");
                 });
 

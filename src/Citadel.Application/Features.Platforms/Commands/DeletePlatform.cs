@@ -31,6 +31,18 @@ internal class DeletePlatformHandler(
     {
         foreach (var platformId in command.Ids)
         {
+            var deploymentsExist = await unitOfWork.Deployments.ExistsAsync(platformId, cancellationToken);
+            if (deploymentsExist)
+            {
+                return Result.Failure(new ConflictError("Platform has active deployment(s), delete or migrate them first."));
+            }
+
+            var stacksExist = await unitOfWork.Stacks.ExistsAsync(platformId, cancellationToken);
+            if (stacksExist)
+            {
+                return Result.Failure(new ConflictError("Platform has active stack(s), delete or migrate them first."));
+            }
+
             var platform = await unitOfWork.Platforms.GetInfoAsync(platformId, cancellationToken);
             if (platform is null)
             {
