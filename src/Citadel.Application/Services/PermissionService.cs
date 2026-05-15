@@ -23,7 +23,7 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
         );
 
     public Task<bool> HasPermissionAsync(
-        Guid userId,
+        Guid[] actorIds,
         ResourceType resourceType,
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
@@ -48,7 +48,7 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
         });
     }
     public Task<bool> HasPermissionForAllAsync(
-        Guid userId,
+        Guid[] actorIds,
         ResourceType resourceType,
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
