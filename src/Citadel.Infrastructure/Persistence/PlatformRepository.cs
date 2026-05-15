@@ -80,7 +80,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             UserId = userId,
             PlatformId = platformId,
             ResourceType = (int)ResourceType.Platform,
-            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(PermissionLevel.Read),
+            GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read),
             SpecificPermission = (int)SpecificPermission.None,
             cancellationToken
         }, transaction: tx());
@@ -281,12 +281,12 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             ORDER BY p.Name
          """;
 
-        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = grantedPermissionLevels,
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());

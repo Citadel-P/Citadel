@@ -268,13 +268,13 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AND " + AuthorizationSql.PermissionResourcePredicatePrefix + "a.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
         var offset = (page - 1) * pageSize;
-        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
 
         var p = new
         {
             UserId = userId,
             PermissionResourceType = (int)permissionResourceType,
-            GrantedPermissionLevels = grantedPermissionLevels,
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             ResourceId = resourceId,
             AlertType = alertType is null ? null : EnumFormatter<AlertType>.GetValue(alertType.Value),

@@ -219,12 +219,12 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             GROUP BY r.Id
             ";
 
-        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var rows = await db.QueryAsync<AlertRuleDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = grantedPermissionLevels,
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
@@ -316,12 +316,12 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             WHERE
         """ + AuthorizationSql.ResourcePredicatePrefix + "channel.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
-        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var rows = await db.QueryAsync<AlertChannelDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = grantedPermissionLevels,
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());

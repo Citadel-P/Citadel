@@ -28,7 +28,7 @@ internal static class AuthorizationSql
             JOIN Permissions p ON p.RoleId = ar.RoleId
             JOIN ActorScope actorScope ON actorScope.ActorId = ar.ActorId
             WHERE p.ResourceType = @ResourceType
-              AND p.PermissionLevel = ANY(@GrantedPermissionLevels)
+              AND (p.PermissionLevel & @GrantedPermissionMask) <> 0
               AND (@SpecificPermission = 0 OR (p.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
             LIMIT 1
         )
@@ -41,7 +41,7 @@ internal static class AuthorizationSql
             JOIN Permissions p ON p.RoleId = ar.RoleId
             JOIN ActorScope actorScope ON actorScope.ActorId = ar.ActorId
             WHERE p.ResourceType = @PermissionResourceType
-              AND p.PermissionLevel = ANY(@GrantedPermissionLevels)
+              AND (p.PermissionLevel & @GrantedPermissionMask) <> 0
               AND (@SpecificPermission = 0 OR (p.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
             LIMIT 1
         )
@@ -55,7 +55,7 @@ internal static class AuthorizationSql
                 FROM ResourceAccesses ra
                 JOIN ActorScope actorScope ON actorScope.ActorId = ra.ActorId
                 WHERE ra.ResourceType = @ResourceType
-                  AND ra.PermissionLevel = ANY(@GrantedPermissionLevels)
+                  AND (ra.PermissionLevel & @GrantedPermissionMask) <> 0
                   AND (@SpecificPermission = 0 OR (ra.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
                   AND ra.ResourceId = 
         """;
@@ -68,7 +68,7 @@ internal static class AuthorizationSql
                 FROM ResourceAccesses ra
                 JOIN ActorScope actorScope ON actorScope.ActorId = ra.ActorId
                 WHERE ra.ResourceType = @PermissionResourceType
-                  AND ra.PermissionLevel = ANY(@GrantedPermissionLevels)
+                  AND (ra.PermissionLevel & @GrantedPermissionMask) <> 0
                   AND (@SpecificPermission = 0 OR (ra.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
                   AND ra.ResourceId = 
         """;

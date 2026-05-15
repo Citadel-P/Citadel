@@ -163,12 +163,12 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
             + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
         var offset = (page - 1) * pageSize;
-        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var parameters = new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = grantedPermissionLevels,
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             PageSize = pageSize,
             Offset = offset,
@@ -205,12 +205,12 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
             {{AuthorizationSql.ResourcePredicatePrefix}}t.Id{{AuthorizationSql.ResourcePredicateSuffix}} ORDER BY t.Name ASC LIMIT @Limit;
         """;
 
-        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var parameters = new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = grantedPermissionLevels,
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             Query = query,
             Limit = limit,
@@ -297,6 +297,19 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
     {
         const string sql = "SELECT UserId FROM UsersTeams WHERE TeamId = @TeamId";
         return db.QueryAsync<Guid>(sql, new { TeamId = teamId, cancellationToken }, transaction: tx());
+    }
+
+    public Task<IEnumerable<Guid>> GetUserIdsByActorIdAsync(Guid actorId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT Id FROM Users WHERE ActorId = @ActorId
+            UNION
+            SELECT ut.UserId FROM UsersTeams ut
+            JOIN Teams t ON t.Id = ut.TeamId
+            WHERE t.ActorId = @ActorId
+            """;
+
+        return db.QueryAsync<Guid>(sql, new { ActorId = actorId, cancellationToken }, transaction: tx());
     }
 
     public async Task<(TeamDetails? Team, bool UserExists, bool HasMember)> GetMemberAssignmentStateAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)

@@ -1,3 +1,4 @@
+using Application.Services.Identity;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
@@ -39,7 +40,7 @@ public sealed record PatchTeam(Guid Id, JsonMergePatchDocument<PatchTeamModel> P
     }
 }
 
-internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchTeam, Result<TeamDetails>>
+internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<PatchTeam, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(PatchTeam command, CancellationToken cancellationToken)
     {
@@ -69,6 +70,7 @@ internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork) : ICommandHandler
             }
 
             await unitOfWork.Teams.ReplaceMembersAsync(team.Id, userIds, cancellationToken);
+            evictor.EvictUsersAsync(userIds, cancellationToken);
         }
 
         if (patched.RoleIds is not null)

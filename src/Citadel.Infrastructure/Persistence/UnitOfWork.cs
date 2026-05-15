@@ -1,5 +1,6 @@
 ﻿using Domain.Contracts.Interfaces;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
 using System.Data;
 using System.Data.Common;
 
@@ -12,12 +13,15 @@ internal class UnitOfWork : IUnitOfWork
     private IDbTransaction? transaction;
     private bool disposed;
 
-    public UnitOfWork(IDbConnectionFactory factory, ILogger<UnitOfWork> logger)
+    public UnitOfWork(
+        IDbConnectionFactory factory,
+        ILogger<UnitOfWork> logger,
+        IMemoryCache memoryCache)
     {
         connection = factory.Create();
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        Users = new Lazy<IUserRepository>(() => new UserRepository(connection, GetTransaction));
+        Users = new Lazy<IUserRepository>(() => new UserRepository(connection, GetTransaction, memoryCache));
         Teams = new Lazy<ITeamRepository>(() => new TeamRepository(connection, GetTransaction));
         Roles = new Lazy<IRoleRepository>(() => new RoleRepository(connection, GetTransaction));
         Actors = new Lazy<IActorRepository>(() => new ActorRepository(connection, GetTransaction));

@@ -71,11 +71,12 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
             {{AuthorizationSql.ResourcePredicatePrefix}}r.Id{{AuthorizationSql.ResourcePredicateSuffix}} ORDER BY r.Name ASC;
         """;
 
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var result = await db.QueryAsync<RolePermissionDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel),
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());

@@ -1,3 +1,4 @@
+using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using FluentValidation;
@@ -22,7 +23,7 @@ public sealed record RemoveTeamMember(Guid TeamId, Guid UserId) : ICommand<Resul
     }
 }
 
-internal sealed class RemoveTeamMemberHandler(IUnitOfWork unitOfWork) : ICommandHandler<RemoveTeamMember, Result<TeamDetails>>
+internal sealed class RemoveTeamMemberHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<RemoveTeamMember, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(RemoveTeamMember command, CancellationToken cancellationToken)
     {
@@ -38,6 +39,8 @@ internal sealed class RemoveTeamMemberHandler(IUnitOfWork unitOfWork) : ICommand
 
         await unitOfWork.Teams.RemoveMemberAsync(command.TeamId, command.UserId, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        evictor.EvictUsersAsync([command.UserId], cancellationToken);
 
         return state.Team;
     }

@@ -31,7 +31,7 @@ public interface IActorResourceAccessService
         CancellationToken cancellationToken);
 }
 
-internal sealed class ActorRoleService(IUnitOfWork unitOfWork) : IActorRoleService
+internal sealed class ActorRoleService(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : IActorRoleService
 {
     public async Task<Result> AssignRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)
     {
@@ -44,6 +44,7 @@ internal sealed class ActorRoleService(IUnitOfWork unitOfWork) : IActorRoleServi
             return Result.Failure(new ConflictError("The role is already assigned to the actor"));
 
         await unitOfWork.CommitAsync(cancellationToken);
+        await evictor.EvictForActorAsync(actorId, cancellationToken);
         return Result.Success();
     }
 
@@ -58,6 +59,7 @@ internal sealed class ActorRoleService(IUnitOfWork unitOfWork) : IActorRoleServi
             return Result.Failure(new NotFoundError("The role is not assigned to the actor"));
 
         await unitOfWork.CommitAsync(cancellationToken);
+        await evictor.EvictForActorAsync(actorId, cancellationToken);
         return Result.Success();
     }
 }

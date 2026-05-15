@@ -126,12 +126,12 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                         + AuthorizationSql.ResourcePredicatePrefix + "s.Id" + AuthorizationSql.ResourcePredicateSuffix
                         + " ORDER BY s.CreatedAt DESC, s.Name ASC";
 
-        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var result = await db.QueryAsync<StackDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = grantedPermissionLevels,
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
@@ -152,7 +152,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             UserId = userId,
             StackId = stackId,
             ResourceType = (int)ResourceType.Stack,
-            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(PermissionLevel.Read),
+            GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read),
             SpecificPermission = (int)SpecificPermission.None,
             cancellationToken
         }, transaction: tx());

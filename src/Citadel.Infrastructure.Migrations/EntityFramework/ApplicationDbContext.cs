@@ -635,9 +635,14 @@ internal static class Configuration
         resourceAccess.HasIndex(
             "ResourceType",
             "ResourceId",
-            "ActorId");
+            "ActorId",
+            "PermissionLevel")
+        .HasDatabaseName($"IX_{tableName}_PermissionLookup");
 
-        resourceAccess.HasIndex("ActorId").HasDatabaseName($"IX_{tableName}_Actor"); ;
+        resourceAccess.HasIndex(
+            "ActorId",
+            "ResourceType")
+        .HasDatabaseName($"IX_{tableName}_Actor_ResourceType");
 
         return builder;
     }

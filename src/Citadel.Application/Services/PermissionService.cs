@@ -14,14 +14,14 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
 {
     private static readonly TimeSpan PermissionCacheTtl = TimeSpan.FromSeconds(60);
 
-    public  Task<Result> EnforceAsync<TMessage>(TMessage message, ClaimsPrincipal user, CancellationToken cancellationToken = default) where TMessage : notnull
+    public Task<Result> EnforceAsync<TMessage>(TMessage message, ClaimsPrincipal user, CancellationToken cancellationToken = default) where TMessage : notnull
         => PermissionPipeline.Enforce(
             message,
             user.GetUserId(),
             this,
             cancellationToken
         );
-    
+
     public Task<bool> HasPermissionAsync(
         Guid userId,
         ResourceType resourceType,
@@ -40,13 +40,29 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
             return uow.Users.HasPermissionAsync(userId, resourceType, permissionLevel, specificPermission, resourceId, ct);
         }
 
-        // For global permissions (eg list deployments), we cache the result to reduce db load 
         var cacheKey = new PermissionCacheKey(userId, resourceType, permissionLevel, specificPermission);
         return memoryCache.GetOrCreateAsync(cacheKey, async entry =>
         {
             entry.SlidingExpiration = PermissionCacheTtl;
             return await uow.Users.HasPermissionAsync(userId, resourceType, permissionLevel, specificPermission, null, ct);
-        })!;
+        });
+    }
+    public Task<bool> HasPermissionForAllAsync(
+        Guid userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        Guid[] resourceIds,
+        CancellationToken ct)
+    {
+        if (!PermissionMatrix.IsAllowed(resourceType, permissionLevel, specificPermission == SpecificPermission.None ? null : [specificPermission]))
+            throw new InvalidOperationException(
+                $"Invalid runtime permission check: [{resourceType}]-[{permissionLevel}] with specific [{specificPermission}] is not an allowed combination.");
+
+        if (resourceIds.Length == 0)
+            return Task.FromResult(true);
+
+        return uow.Users.HasPermissionForAllAsync(userId, resourceType, permissionLevel, specificPermission, resourceIds, ct);
     }
 
     private readonly record struct PermissionCacheKey(Guid UserId, ResourceType ResourceType, PermissionLevel PermissionLevel, SpecificPermission SpecificPermission);
