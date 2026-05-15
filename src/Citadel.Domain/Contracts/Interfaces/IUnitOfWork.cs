@@ -70,6 +70,7 @@ public interface IUserRepository
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
         Guid? resourceId,
+        Guid[] actorIds,
         CancellationToken ct);
 
     Task<bool> HasPermissionForAllAsync(
@@ -78,7 +79,9 @@ public interface IUserRepository
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
         Guid[] resourceIds,
+        Guid[] actorIds,
         CancellationToken ct);
+    Task<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
     Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken);

@@ -301,12 +301,16 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         Assert.Contains(newRoleId, roleIds);
         Assert.DoesNotContain(oldRoleId, roleIds);
 
+        var actorIdsOld = await uowVerify.Users.GetActorScopeAsync(oldUser.UserId, TestContext.Current.CancellationToken);
+        var actorIdsNew = await uowVerify.Users.GetActorScopeAsync(newUser.UserId, TestContext.Current.CancellationToken);
+
         var canOldUserViewNewDeployment = await uowVerify.Users.HasPermissionAsync(
             oldUser.UserId,
             ResourceType.Deployment,
             PermissionLevel.Read,
             SpecificPermission.None,
             newDeploymentId,
+            actorIdsOld,
             TestContext.Current.CancellationToken);
 
         var canNewUserViewNewDeployment = await uowVerify.Users.HasPermissionAsync(
@@ -315,6 +319,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             PermissionLevel.Read,
             SpecificPermission.None,
             newDeploymentId,
+            actorIdsNew,
             TestContext.Current.CancellationToken);
 
         var canNewUserViewOldDeployment = await uowVerify.Users.HasPermissionAsync(
@@ -323,6 +328,7 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             PermissionLevel.Read,
             SpecificPermission.None,
             oldDeploymentId,
+            actorIdsNew,
             TestContext.Current.CancellationToken);
 
         Assert.False(canOldUserViewNewDeployment);
@@ -374,12 +380,15 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         Assert.Empty(memberIds);
         Assert.Empty(roleIds);
 
+        var actorIdsMember = await uowVerify.Users.GetActorScopeAsync(member.UserId, TestContext.Current.CancellationToken);
+
         var hasAccess = await uowVerify.Users.HasPermissionAsync(
             member.UserId,
             ResourceType.Deployment,
             PermissionLevel.Read,
             SpecificPermission.None,
             deploymentId,
+            actorIdsMember,
             TestContext.Current.CancellationToken);
 
         Assert.False(hasAccess);

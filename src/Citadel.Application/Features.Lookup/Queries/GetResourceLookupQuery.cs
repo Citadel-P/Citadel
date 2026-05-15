@@ -10,7 +10,7 @@ using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 
-namespace Application.Features.Features.Lookup.Queries;
+namespace Application.Features.Lookup.Queries;
 
 public sealed record GetResourceLookupQuery(
     LookupResourceType? SourceResourceType,

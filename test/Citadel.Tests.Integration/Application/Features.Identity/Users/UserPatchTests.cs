@@ -243,12 +243,15 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         Assert.Contains(newRoleId, roleIds);
         Assert.DoesNotContain(oldRoleId, roleIds);
 
+        var actorIds = await verificationUow.Users.GetActorScopeAsync(seeded.UserId, TestContext.Current.CancellationToken);
+
         var hasOldAccess = await verificationUow.Users.HasPermissionAsync(
             seeded.UserId,
             ResourceType.Deployment,
             PermissionLevel.Read,
             SpecificPermission.None,
             oldDeploymentId,
+            actorIds,
             TestContext.Current.CancellationToken);
 
         var hasNewAccess = await verificationUow.Users.HasPermissionAsync(
@@ -257,6 +260,7 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             PermissionLevel.Read,
             SpecificPermission.None,
             newDeploymentId,
+            actorIds,
             TestContext.Current.CancellationToken);
 
         Assert.False(hasOldAccess);
@@ -308,12 +312,15 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         Assert.Empty(teamIds);
         Assert.Empty(roleIds);
 
+        var actorIds2 = await verificationUow.Users.GetActorScopeAsync(seeded.UserId, TestContext.Current.CancellationToken);
+
         var hasAccess = await verificationUow.Users.HasPermissionAsync(
             seeded.UserId,
             ResourceType.Deployment,
             PermissionLevel.Read,
             SpecificPermission.None,
             deploymentId,
+            actorIds2,
             TestContext.Current.CancellationToken);
 
         Assert.False(hasAccess);

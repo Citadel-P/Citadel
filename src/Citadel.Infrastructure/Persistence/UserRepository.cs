@@ -8,14 +8,11 @@ using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace Infrastructure.Persistence;
 
-internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx, IMemoryCache memoryCache) : IUserRepository
+internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) : IUserRepository
 {
-    private static readonly TimeSpan ActorScopeCacheTtl = TimeSpan.FromSeconds(30);
-
     private static readonly int ReadPermissionLevelValue = (int)PermissionLevel.Read;
     private static readonly int WritePermissionLevelValue = (int)PermissionLevel.Write;
     private static readonly int ExecutePermissionLevelValue = (int)PermissionLevel.Execute;
@@ -410,12 +407,9 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx, 
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
         Guid? resourceId,
+        Guid[] actorIds,
         CancellationToken ct)
     {
-        var actorIds = await GetActorScopeAsync(userId, ct);
-        if (actorIds == null || actorIds.Length == 0)
-            return false;
-
         // Check global permission first (short-circuit)
         var grantedPermissionMask = GetGrantedPermissionMask(permissionLevel);
         var hasGlobal = await HasGlobalPermissionAsync(actorIds, resourceType, grantedPermissionMask, specificPermission, ct);
@@ -459,13 +453,9 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx, 
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
         Guid[] resourceIds,
+        Guid[] actorIds,
         CancellationToken ct)
     {
-        // empty array is trivially allowed
-        if (resourceIds.Length == 0)
-            return true;
-
-        var actorIds = await GetActorScopeAsync(userId, ct);
         if (actorIds == null || actorIds.Length == 0)
             return false;
 
@@ -506,14 +496,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx, 
         return result;
     }
 
-    private async ValueTask<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct)
+    public async Task<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct)
     {
-        if (memoryCache.TryGetValue<Guid[]>(userId, out var cachedActorIds))
-        {
-            if (cachedActorIds != null && cachedActorIds.Length > 0)
-                return cachedActorIds;
-        }
-
         const string sql = """
             SELECT ActorId FROM (
                 SELECT Users.ActorId
@@ -533,19 +517,9 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx, 
             ) s
         """;
 
-        var rows = await db.QueryAsync<Guid>(sql, new { UserId = userId, cancellationToken = ct }, transaction: tx());
-        var actorIds = rows.ToArray();
-
-        var cacheEntryOptions = new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = ActorScopeCacheTtl
-        };
-
-        memoryCache.Set(userId, actorIds, cacheEntryOptions);
-        return actorIds;
+        var result = await db.QueryAsync<Guid>(sql, new { UserId = userId, cancellationToken = ct }, transaction: tx());
+        return [.. result];
     }
-
-    // Legacy helper removed: callers should use GetGrantedPermissionMask for bitmask semantics.
 
     internal static int GetGrantedPermissionMask(PermissionLevel requiredPermissionLevel)
         => requiredPermissionLevel switch

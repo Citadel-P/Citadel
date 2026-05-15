@@ -86,6 +86,7 @@ internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvicto
             }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(team.ActorId, roleIds, cancellationToken);
+            await evictor.EvictForActorAsync(team.ActorId, cancellationToken);
         }
 
         if (patched.ResourceAccesses is not null)

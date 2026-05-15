@@ -79,12 +79,15 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
         Assert.Contains(teamId, assignedTeamIds);
         Assert.Contains(roleId, assignedRoleIds);
 
+        var actorIds = await uow.Users.GetActorScopeAsync(user.Id, TestContext.Current.CancellationToken);
+
         var canViewVisible = await uow.Users.HasPermissionAsync(
             user.Id,
             ResourceType.Deployment,
             PermissionLevel.Read,
             SpecificPermission.None,
             deploymentVisible,
+            actorIds,
             TestContext.Current.CancellationToken);
 
         var canViewHidden = await uow.Users.HasPermissionAsync(
@@ -93,6 +96,7 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
             PermissionLevel.Read,
             SpecificPermission.None,
             deploymentHidden,
+            actorIds,
             TestContext.Current.CancellationToken);
 
         var hasGlobalView = await uow.Users.HasPermissionAsync(
@@ -101,6 +105,7 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
             PermissionLevel.Read,
             SpecificPermission.None,
             null,
+            actorIds,
             TestContext.Current.CancellationToken);
 
         Assert.True(canViewVisible);
