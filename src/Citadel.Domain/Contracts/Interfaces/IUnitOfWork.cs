@@ -65,7 +65,7 @@ public interface IResourceAccessRepository
 public interface IUserRepository 
 {
     Task<bool> HasPermissionAsync(
-        Guid userId,
+        Guid[] actorIds,
         ResourceType resourceType,
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
@@ -73,7 +73,7 @@ public interface IUserRepository
         CancellationToken ct);
 
     Task<bool> HasPermissionForAllAsync(
-        Guid userId,
+        Guid[] actorIds,
         ResourceType resourceType,
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
