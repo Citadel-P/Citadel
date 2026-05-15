@@ -15,7 +15,7 @@ using System.Security.Claims;
 namespace Application.Features.Deployments.Commands;
 
 [RequirePermission(ResourceType.Deployment, PermissionLevel.Write)]
-public sealed record ChangeDeploymentState(IEnumerable<Guid> DeploymentIds, DeploymentAction Action) : ICommand<Result>;
+public sealed record ChangeDeploymentState(IEnumerable<Guid> Ids, DeploymentAction Action) : ICommand<Result>;
 
 internal sealed class ChangeDeploymentStateHandler(
     IDeploymentProcessingService deploymentProcessingService,
@@ -28,7 +28,7 @@ internal sealed class ChangeDeploymentStateHandler(
         var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
 
-        var deployments = await deploymentProcessingService.MarkProcessingAsync(command.DeploymentIds, actorId, cancellationToken);
+        var deployments = await deploymentProcessingService.MarkProcessingAsync(command.Ids, actorId, cancellationToken);
 
         if (deployments.Count == 0)
         {

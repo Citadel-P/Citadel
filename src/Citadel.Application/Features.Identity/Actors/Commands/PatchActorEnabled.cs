@@ -1,3 +1,4 @@
+using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using FluentValidation;
@@ -20,7 +21,7 @@ public sealed record PatchActorEnabled(Guid Id, bool IsEnabled) : ICommand<Resul
     }
 }
 
-internal sealed class PatchActorEnabledHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor)
+internal sealed class PatchActorEnabledHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor, IActorScopeEvictor evictor)
     : ICommandHandler<PatchActorEnabled, Result<Actor>>
 {
     public async ValueTask<Result<Actor>> Handle(PatchActorEnabled command, CancellationToken cancellationToken)
@@ -50,6 +51,8 @@ internal sealed class PatchActorEnabledHandler(IUnitOfWork unitOfWork, IHttpCont
 
         await unitOfWork.Actors.UpdateAsync(actor, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        await evictor.EvictForActorAsync(actor.Id, cancellationToken);
 
         return actor;
     }

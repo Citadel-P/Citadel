@@ -82,12 +82,12 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             + AuthorizationSql.ResourcePredicatePrefix + "r.Id" + AuthorizationSql.ResourcePredicateSuffix
             + " ORDER BY r.CreatedAt DESC;";
 
-        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var result = await db.QueryAsync<RegistryDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = grantedPermissionLevels,
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());

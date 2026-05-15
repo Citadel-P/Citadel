@@ -71,6 +71,14 @@ public interface IUserRepository
         SpecificPermission specificPermission,
         Guid? resourceId,
         CancellationToken ct);
+
+    Task<bool> HasPermissionForAllAsync(
+        Guid userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        Guid[] resourceIds,
+        CancellationToken ct);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
     Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken);
@@ -236,6 +244,7 @@ public interface ITeamRepository
     Task<int> AddMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken);
     Task<int> RemoveMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken);
     Task<int> ReplaceMembersAsync(Guid teamId, IEnumerable<Guid> userIds, CancellationToken cancellationToken);
+    Task<IEnumerable<Guid>> GetUserIdsByActorIdAsync(Guid actorId, CancellationToken cancellationToken);
 }
 
 public interface IRoleRepository

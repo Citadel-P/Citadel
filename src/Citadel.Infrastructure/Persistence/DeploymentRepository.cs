@@ -255,12 +255,12 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             + AuthorizationSql.ResourcePredicatePrefix + "d.Id" + AuthorizationSql.ResourcePredicateSuffix
             + " ORDER BY d.CreatedAt DESC, d.Name ASC";
 
-        var grantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel);
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
         var result = await db.QueryAsync<DeploymentDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = grantedPermissionLevels,
+            GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());
@@ -281,7 +281,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             UserId = userId,
             DeploymentId = deploymentId,
             ResourceType = (int)ResourceType.Deployment,
-            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(PermissionLevel.Read),
+            GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read),
             SpecificPermission = (int)SpecificPermission.None,
             cancellationToken
         }, transaction: tx());

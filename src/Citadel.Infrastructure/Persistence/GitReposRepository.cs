@@ -135,7 +135,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
         {
             UserId = userId,
             ResourceType = (int)resourceType,
-            GrantedPermissionLevels = UserRepository.GetGrantedPermissionLevelValues(permissionLevel),
+            GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
             SpecificPermission = (int)specificPermission,
             cancellationToken
         }, transaction: tx());

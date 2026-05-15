@@ -67,6 +67,7 @@ public static class ApplicationModule
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
+            .AddScoped<IActorScopeEvictor, ActorScopeEvictor>()
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<CustomRegistryConnectorStrategy>()
