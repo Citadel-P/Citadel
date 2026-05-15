@@ -43,8 +43,9 @@ public class HasPermissionForAllIntegrationTests(PostgresTestFixture fixture) : 
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var actorIds = await uow.Users.GetActorScopeAsync(subject.UserId, TestContext.Current.CancellationToken);
 
-        var result = await uow.Users.HasPermissionForAllAsync(subject.UserId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, new[] { depA, depB }, TestContext.Current.CancellationToken);
+        var result = await uow.Users.HasPermissionForAllAsync(subject.UserId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, new[] { depA, depB }, actorIds, TestContext.Current.CancellationToken);
 
         Assert.False(result);
     }
@@ -65,7 +66,8 @@ public class HasPermissionForAllIntegrationTests(PostgresTestFixture fixture) : 
         await uow.ResourceAccesses.AddAsync(access, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
-        var result = await uow.Users.HasPermissionForAllAsync(subject.UserId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, new[] { depA, depB }, TestContext.Current.CancellationToken);
+        var actorIds = await uow.Users.GetActorScopeAsync(subject.UserId, TestContext.Current.CancellationToken);
+        var result = await uow.Users.HasPermissionForAllAsync(subject.UserId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, new[] { depA, depB }, actorIds, TestContext.Current.CancellationToken);
         Assert.True(result);
     }
 

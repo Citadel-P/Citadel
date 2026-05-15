@@ -8,6 +8,7 @@ using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Application.Services.Identity;
 
 namespace Application.Features.Identity.Teams.Commands;
 
@@ -32,7 +33,7 @@ public sealed record CreateTeam(
     }
 }
 
-internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork) : ICommandHandler<CreateTeam, Result<TeamDetails>>
+internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<CreateTeam, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(CreateTeam command, CancellationToken cancellationToken)
     {
@@ -59,6 +60,7 @@ internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork) : ICommandHandle
                 return Result.Failure<TeamDetails>(new NotFoundError($"User with ID {missingUserId} does not exist"));
 
             await unitOfWork.Teams.ReplaceMembersAsync(team.Id, userIds, cancellationToken);
+            evictor.EvictUsersAsync(userIds, cancellationToken);
         }
 
         if (roleIds.Length > 0)
@@ -70,6 +72,7 @@ internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork) : ICommandHandle
                 return Result.Failure<TeamDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(team.ActorId, roleIds, cancellationToken);
+            await evictor.EvictForActorAsync(team.ActorId, cancellationToken);
         }
 
         if (resourceAccesses.Length > 0)

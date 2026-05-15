@@ -9,6 +9,7 @@ using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Application.Services.Identity;
 
 namespace Application.Features.Identity.Users.Commands;
 
@@ -43,7 +44,7 @@ public sealed record PatchUser(Guid Id, JsonMergePatchDocument<PatchUserModel> P
     }
 }
 
-internal sealed class PatchUserHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchUser, Result<UserDetails>>
+internal sealed class PatchUserHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<PatchUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(PatchUser command, CancellationToken cancellationToken)
     {
@@ -81,6 +82,7 @@ internal sealed class PatchUserHandler(IUnitOfWork unitOfWork) : ICommandHandler
             }
 
             await unitOfWork.Users.ReplaceTeamsAsync(state.User.Id, teamIds, cancellationToken);
+            evictor.EvictUsersAsync([state.User.Id], cancellationToken);
         }
 
         if (patched.RoleIds is not null)
@@ -96,6 +98,7 @@ internal sealed class PatchUserHandler(IUnitOfWork unitOfWork) : ICommandHandler
             }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(state.User.ActorId, roleIds, cancellationToken);
+            await evictor.EvictForActorAsync(state.User.ActorId, cancellationToken);
         }
 
         if (patched.ResourceAccesses is not null)

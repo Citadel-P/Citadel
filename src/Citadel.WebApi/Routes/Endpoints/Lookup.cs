@@ -1,4 +1,4 @@
-using Application.Features.Features.Lookup.Queries;
+using Application.Features.Lookup.Queries;
 using Domain.Contracts.Resources;
 using Hosting.Extensions;
 using Mediator;

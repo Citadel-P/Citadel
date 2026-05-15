@@ -12,7 +12,7 @@ namespace Application.Services;
 
 internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IPermissionService
 {
-    private static readonly TimeSpan PermissionCacheTtl = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan ActorScopeCacheTtl = TimeSpan.FromMinutes(30);
 
     public Task<Result> EnforceAsync<TMessage>(TMessage message, ClaimsPrincipal user, CancellationToken cancellationToken = default) where TMessage : notnull
         => PermissionPipeline.Enforce(
@@ -22,7 +22,7 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
             cancellationToken
         );
 
-    public Task<bool> HasPermissionAsync(
+    public async Task<bool> HasPermissionAsync(
         Guid userId,
         ResourceType resourceType,
         PermissionLevel permissionLevel,
@@ -35,19 +35,12 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
                 $"Invalid runtime permission check: [{resourceType}]-[{permissionLevel}] with specific [{specificPermission}] is not an allowed combination.");
 
         // Per resource permissions are not cached, as they are expected to be less common and more dynamic.
-        if (resourceId is not null)
-        {
-            return uow.Users.HasPermissionAsync(userId, resourceType, permissionLevel, specificPermission, resourceId, ct);
-        }
+        var actorIds = await GetActorScopeAsync(userId, ct);
 
-        var cacheKey = new PermissionCacheKey(userId, resourceType, permissionLevel, specificPermission);
-        return memoryCache.GetOrCreateAsync(cacheKey, async entry =>
-        {
-            entry.SlidingExpiration = PermissionCacheTtl;
-            return await uow.Users.HasPermissionAsync(userId, resourceType, permissionLevel, specificPermission, null, ct);
-        });
+        return await uow.Users.HasPermissionAsync(userId, resourceType, permissionLevel, specificPermission, resourceId, actorIds, ct);
     }
-    public Task<bool> HasPermissionForAllAsync(
+
+    public async Task<bool> HasPermissionForAllAsync(
         Guid userId,
         ResourceType resourceType,
         PermissionLevel permissionLevel,
@@ -58,11 +51,32 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
         if (!PermissionMatrix.IsAllowed(resourceType, permissionLevel, specificPermission == SpecificPermission.None ? null : [specificPermission]))
             throw new InvalidOperationException(
                 $"Invalid runtime permission check: [{resourceType}]-[{permissionLevel}] with specific [{specificPermission}] is not an allowed combination.");
-
+        
+        // empty array is trivially allowed
         if (resourceIds.Length == 0)
-            return Task.FromResult(true);
+            return true;
 
-        return uow.Users.HasPermissionForAllAsync(userId, resourceType, permissionLevel, specificPermission, resourceIds, ct);
+        var actorIds = await GetActorScopeAsync(userId, ct);
+        return await uow.Users.HasPermissionForAllAsync(userId, resourceType, permissionLevel, specificPermission, resourceIds, actorIds, ct);
+    }
+
+    private async ValueTask<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct)
+    {
+        if (memoryCache.TryGetValue<Guid[]>(userId, out var cachedActorIds))
+        {
+            if (cachedActorIds != null && cachedActorIds.Length > 0)
+                return cachedActorIds;
+        }
+
+        var actorIds = await uow.Users.GetActorScopeAsync(userId, ct);
+
+        var cacheEntryOptions = new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = ActorScopeCacheTtl
+        };
+
+        memoryCache.Set(userId, actorIds, cacheEntryOptions);
+        return actorIds;
     }
 
     private readonly record struct PermissionCacheKey(Guid UserId, ResourceType ResourceType, PermissionLevel PermissionLevel, SpecificPermission SpecificPermission);
