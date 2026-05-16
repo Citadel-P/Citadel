@@ -176,5 +176,4 @@ export const ReversePluralResourceMap = Object.fromEntries(
   [V in (typeof PluralResourceMap)[keyof typeof PluralResourceMap]]: keyof typeof PluralResourceMap;
 };
 
-export type LogTarget = 'Deployment' | 'Container' | 'Stack';
-export type ExecTarget = LogTarget;
+export type TargetResource = 'Deployment' | 'Container' | 'Stack';

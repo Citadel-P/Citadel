@@ -2,7 +2,10 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Deployments;
+using Domain.Entities.Platforms;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
@@ -247,6 +250,30 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             """;
         var result = await db.QueryAsync<DeploymentDto>(sql, transaction: tx());
         return result.ToDomain();
+    }
+
+    public async Task<PlatformConnectionInfo?> GetPlatformByDeploymentIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT 
+                Platforms.Id,
+                Platforms.Name,
+                Platforms.Address,
+                Platforms.ConnectorType
+            FROM Deployments d
+            JOIN Platforms p ON p.Id = d.PlatformId
+            WHERE d.Id = @DeploymentId
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<PlatformConnectionInfoDto>(sql, new { DeploymentId = id }, transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public Task<string?> GetContainerIdAsync(Guid deploymentId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT c.DockerContainerId FROM Deployments d JOIN Containers c ON c.DeploymentId = d.Id WHERE d.Id = @DeploymentId LIMIT 1";
+        return db.QuerySingleOrDefaultAsync<string>(sql, new { DeploymentId = deploymentId, cancellationToken }, transaction: tx());
     }
 
     public async Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)

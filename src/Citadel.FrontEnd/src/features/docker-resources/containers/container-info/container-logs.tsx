@@ -3,14 +3,19 @@ import { HubConnection } from '@microsoft/signalr';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { LogViewer } from '@/components/custom/common';
 import { normalizeDockerId } from '@/lib/utils';
-import { LogTarget } from '@/api/types';
 
 const MAX_LOGS = 5000;
 const decoder = new TextDecoder('utf-8');
 
-export const ContainerLogs = memo(({ containerId, source }: { containerId: string | undefined; source: LogTarget }) => {
+type LogsProps = {
+  hubMethodName: string;
+  containerId?: string | undefined;
+  deploymentId?: string | undefined;
+};
+
+const Logs = memo(({ hubMethodName, containerId, deploymentId }: LogsProps) => {
   const nid = normalizeDockerId(containerId);
-  const { containerLogs: logs, clearLogs } = useContainerLogGroup(nid, source);
+  const { containerLogs: logs, clearLogs } = useContainerLogGroup(hubMethodName, nid, deploymentId);
 
   return (
     <div className="flex flex-col gap-3">
@@ -27,14 +32,30 @@ export const ContainerLogs = memo(({ containerId, source }: { containerId: strin
     </div>
   );
 });
+Logs.displayName = 'Logs';
+
+export const ContainerLogs = memo(({ containerId }: { containerId: string }) => (
+  <Logs hubMethodName="StartContainerLogs" containerId={containerId} />
+));
 ContainerLogs.displayName = 'ContainerLogs';
+
+export const DeploymentLogs = memo(
+  ({ deploymentId, containerId }: { deploymentId: string; containerId: string | undefined }) => (
+    <Logs hubMethodName="StartDeploymentLogs" containerId={containerId} deploymentId={deploymentId} />
+  ),
+);
+DeploymentLogs.displayName = 'DeploymentLogs';
 
 interface LogEntry {
   timestamp: string;
   message: string;
 }
 
-export const useContainerLogGroup = (containerId?: string, source?: LogTarget) => {
+export const useContainerLogGroup = (
+  hubMethodName: string,
+  containerId: string | undefined,
+  deploymentId?: string | undefined,
+) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const logsMapRef = useRef<Map<string, string>>(new Map());
@@ -42,7 +63,7 @@ export const useContainerLogGroup = (containerId?: string, source?: LogTarget) =
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevContainerIdRef = useRef<string | undefined>(containerId);
 
-  // Safe reset when the container ID actually changes
+  // Safe reset when the resource ID actually changes
   useEffect(() => {
     if (containerId !== prevContainerIdRef.current) {
       prevContainerIdRef.current = containerId;
@@ -113,14 +134,13 @@ export const useContainerLogGroup = (containerId?: string, source?: LogTarget) =
 
   const startLogs = useCallback(
     async (hub: HubConnection) => {
-      if (!containerId) return;
       try {
-        await hub.invoke('StartContainerLogs', containerId, source ?? 'Container');
+        await hub.invoke(hubMethodName, deploymentId ?? containerId);
       } catch (error) {
         console.error('Failed to start container logs stream', error);
       }
     },
-    [containerId, source],
+    [containerId, hubMethodName, deploymentId],
   );
 
   const setupEventListeners = useCallback(

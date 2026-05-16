@@ -6,10 +6,13 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.Services;
 
+/// <summary>
+/// Containers are identified by their Docker ID rather than an internal resource ID.
+/// As a result, the permission attribute currently does not resolve or validate Docker IDs automatically.
+/// </summary>
 internal interface IContainerAuthorizationService
 {
     Task<bool> HasAccessAsync(IEnumerable<string> containerIds, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
-    Task<bool> HasTerminalAccessAsync(ResourceType resourceType, string groupId, CancellationToken cancellationToken);
 }
 
 internal sealed class ContainerAuthorizationService(
@@ -68,14 +71,6 @@ internal sealed class ContainerAuthorizationService(
         return true;
     }
 
-    public Task<bool> HasTerminalAccessAsync(ResourceType resourceType, string groupId, CancellationToken cancellationToken)
-    {
-        var containerId = TryGetContainerId(groupId);
-        return containerId is null
-            ? Task.FromResult(false)
-            : HasAccessAsync([containerId], resourceType, PermissionLevel.Read, SpecificPermission.Terminal, cancellationToken);
-    }
-
     private async Task<Guid?> ResolvePlatformIdAsync(string containerId, CancellationToken cancellationToken)
     {
         if (platformContainerCache.TryGetPlatformWithContainer(containerId, out var platform))
@@ -126,20 +121,5 @@ internal sealed class ContainerAuthorizationService(
         }
 
         return resolvedContainerCount == containerIds.Length;
-    }
-
-    private static string? TryGetContainerId(string groupId)
-    {
-        const string prefix = "container-exec:";
-
-        if (!groupId.StartsWith(prefix, StringComparison.Ordinal))
-            return null;
-
-        var start = prefix.Length;
-        var end = groupId.IndexOf(':', start);
-
-        return end < 0
-            ? null
-            : groupId[start..end];
     }
 }

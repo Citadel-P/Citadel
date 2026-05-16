@@ -1,28 +1,29 @@
-﻿using Application.Services;
-using Application.Services.SignalR;
+﻿using Application.Services.SignalR;
+using Domain.Contracts.Interfaces;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Deployments.Commands;
 
-public sealed record StartDeploymentLogs(string ContainerId) : ICommand<Result>;
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.Logs)]
+public sealed record StartDeploymentLogs(Guid Id) : ICommand<Result>;
 
-internal sealed class StartContainerLogsHandler(
-    IContainerLogStreamManager containerLogStreamManager,
-    IContainerAuthorizationService containerAuthorizationService)
-    : ICommandHandler<StartDeploymentLogs, Result>
+internal sealed class StartDeploymentLogsHandler(
+    IUnitOfWork unitOfWork,
+    IContainerLogStreamManager containerLogStreamManager): ICommandHandler<StartDeploymentLogs, Result>
 {
     public async ValueTask<Result> Handle(StartDeploymentLogs command, CancellationToken cancellationToken)
     {
-        var hasAccess = await containerAuthorizationService.HasAccessAsync([command.ContainerId], ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.Logs, cancellationToken);
-        if (!hasAccess)
+        var containerId = await unitOfWork.Deployments.GetContainerIdAsync(command.Id, cancellationToken);
+        if (containerId is null)
         {
-            return Result.Failure(new ForbiddenError("Missing specific permission [Logs] on [Deployment]"));
+            return Result.Failure(new NotFoundError("Container does not exist"));
         }
 
-        containerLogStreamManager.StartContainerLogs(command.ContainerId);
+        containerLogStreamManager.StartContainerLogs(containerId);
         return Result.Success();
     }
 }

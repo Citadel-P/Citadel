@@ -58,6 +58,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(ResourceType?))]
 [JsonSerializable(typeof(ActorType))]
 [JsonSerializable(typeof(ActorType?))]
+[JsonSerializable(typeof(TargetResource))]
 [JsonSerializable(typeof(ApiActorView))]
 [JsonSerializable(typeof(PatchActorEnabledInput))]
 [JsonSerializable(typeof(List<Platform>))]

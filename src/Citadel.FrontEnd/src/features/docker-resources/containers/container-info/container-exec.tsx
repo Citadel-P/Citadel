@@ -10,34 +10,69 @@ import '@xterm/xterm/css/xterm.css';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Power, PowerOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ExecTarget } from '@/api/types';
 
-const SHELLS = [
+type Shell = 'bash' | 'sh';
+
+interface ShellOption {
+  label: string;
+  value: Shell;
+}
+
+interface ExecTerminalProps {
+  terminalRef: React.RefObject<HTMLDivElement | null>;
+  shell: Shell;
+  setShell: (shell: Shell) => void;
+  isLoading: boolean;
+  isConnected: boolean;
+  disabled?: boolean;
+  toggleConnection: () => void;
+}
+
+interface UseContainerExecOptions {
+  containerId?: string;
+  disabled?: boolean;
+  deploymentId?: string;
+  methodNames?: {
+    sendExecInput?: string;
+    resizeExec?: string;
+    startExecProcess?: string;
+  };
+}
+
+const SHELLS: ShellOption[] = [
   { label: 'bash', value: 'bash' },
   { label: 'sh', value: 'sh' },
 ];
 
-export const ContainerExec = ({
-  containerId,
-  disabled,
-  target,
-}: {
-  containerId?: string;
-  disabled?: boolean;
-  target: ExecTarget;
-}) => {
-  const nid = normalizeDockerId(containerId);
-  const { terminalRef, isLoading, isConnected, shell, setShell, toggleConnection } = useContainerExecTerminal(
-    nid,
-    disabled,
-    target,
-  );
+const THEMES = {
+  light: {
+    background: '#f7f8f9',
+    foreground: '#24292e',
+    cursor: '#24292e',
+    selectionBackground: '#c8d9fa',
+  },
+  dark: {
+    background: '#151b25',
+    foreground: '#f6f8fa',
+    cursor: '#ffffff',
+    selectionBackground: '#6e778a',
+  },
+} as const;
 
+const ExecTerminal: React.FC<ExecTerminalProps> = ({
+  terminalRef,
+  shell,
+  setShell,
+  isLoading,
+  isConnected,
+  disabled,
+  toggleConnection,
+}) => {
   return (
     <div className="flex flex-col w-full h-[60vh]">
-      <div className="flex items-center justify-between bg-secondary/20 p-2 rounded-t-md ">
+      <div className="flex items-center justify-between bg-secondary/20 p-2 rounded-t-md">
         <div className="flex flex-row gap-4">
-          <Select onValueChange={(e) => setShell(e as 'bash' | 'sh')} value={shell} disabled={isConnected || isLoading}>
+          <Select value={shell} disabled={isConnected || isLoading} onValueChange={(value) => setShell(value as Shell)}>
             <SelectTrigger className="w-full min-w-32 max-h-8 bg-background rounded-sm shadow-xs">
               <SelectValue placeholder="Select a shell" />
             </SelectTrigger>
@@ -56,7 +91,8 @@ export const ContainerExec = ({
             disabled={isLoading}
             variant="outline"
             className="rounded-sm h-8 shadow-xs text-sm font-normal"
-            onClick={toggleConnection}>
+            onClick={toggleConnection}
+          >
             {isConnected ? (
               <span className="flex items-center gap-2">
                 Disconnect
@@ -76,32 +112,34 @@ export const ContainerExec = ({
   );
 };
 
-const THEMES = {
-  light: { background: '#f7f8f9', foreground: '#24292e', cursor: '#24292e', selectionBackground: '#c8d9fa' },
-  dark: { background: '#151b25', foreground: '#f6f8fa', cursor: '#ffffff', selectionBackground: '#6e778a' },
-};
+export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
+  const { containerId, disabled = false, deploymentId, methodNames = {} } = options;
 
-export const useContainerExecTerminal = (containerId?: string, disabled?: boolean, target?: ExecTarget) => {
+  const {
+    sendExecInput = 'SendExecInput',
+    resizeExec = 'ResizeExec',
+    startExecProcess = 'StartExecProcess',
+  } = methodNames;
+
   const { theme } = useLayoutContext();
-  const [shell, setShell] = useState<'bash' | 'sh'>('bash');
+  const [shell, setShell] = useState<Shell>('bash');
   const [isActive, setIsActive] = useState(false);
 
   const sessionId = useMemo(() => nanoid(), []);
   const groupId = containerId ? `container-exec:${containerId}:${sessionId}` : undefined;
+  const targetId = deploymentId ?? containerId;
 
   const termRef = useRef<Terminal | null>(null);
-  const fitRef = useRef(new FitAddon());
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hubRef = useRef<HubConnection | null>(null);
-
   const execStartedRef = useRef(false);
-
-  const handleExecOutput = useCallback((data: Uint8Array | ArrayBuffer) => {
-    termRef.current?.write(new Uint8Array(data));
-  }, []);
 
   useEffect(() => {
     if (disabled || !containerRef.current || !containerId) return;
+
+    const fitAddon = new FitAddon();
+    fitAddonRef.current = fitAddon;
 
     const term = new Terminal({
       cursorBlink: true,
@@ -111,42 +149,42 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
       theme: theme.mode === 'dark' ? THEMES.dark : THEMES.light,
     });
 
-    term.loadAddon(fitRef.current);
+    term.loadAddon(fitAddon);
     term.open(containerRef.current);
-    fitRef.current.fit();
+    fitAddon.fit();
     termRef.current = term;
 
-    const onDataDisposable = term.onData((data) => {
-      if (execStartedRef.current && hubRef.current?.state === HubConnectionState.Connected && groupId) {
-        const bytes = new TextEncoder().encode(data);
-        hubRef.current.invoke('SendExecInput', groupId, bytes, target ?? 'Container').catch(console.error);
-      }
+    const dataDisposable = term.onData((data) => {
+      if (!execStartedRef.current) return;
+      if (hubRef.current?.state !== HubConnectionState.Connected) return;
+      if (!groupId || !targetId) return;
+
+      const bytes = new TextEncoder().encode(data);
+      hubRef.current.invoke(sendExecInput, targetId, sessionId, bytes).catch(console.error);
     });
 
-    const ro = new ResizeObserver(() => {
-      fitRef.current.fit();
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
 
-      if (
-        execStartedRef.current &&
-        hubRef.current?.state === HubConnectionState.Connected &&
-        groupId &&
-        termRef.current
-      ) {
-        hubRef.current
-          .invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows, target ?? 'Container')
-          .catch(console.error);
-      }
+      if (!execStartedRef.current) return;
+      if (hubRef.current?.state !== HubConnectionState.Connected) return;
+      if (!groupId || !targetId || !termRef.current) return;
+
+      hubRef.current
+        .invoke(resizeExec, targetId, sessionId, termRef.current.cols, termRef.current.rows)
+        .catch(console.error);
     });
 
-    ro.observe(containerRef.current);
+    resizeObserver.observe(containerRef.current);
 
     return () => {
-      ro.disconnect();
-      onDataDisposable.dispose();
+      resizeObserver.disconnect();
+      dataDisposable.dispose();
       term.dispose();
       termRef.current = null;
+      fitAddonRef.current = null;
     };
-  }, [containerId, disabled, groupId, theme.mode, target]);
+  }, [containerId, disabled, groupId, sessionId, targetId, sendExecInput, resizeExec, theme.mode]);
 
   useEffect(() => {
     if (!disabled) return;
@@ -161,6 +199,10 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
       termRef.current.options.theme = theme.mode === 'dark' ? THEMES.dark : THEMES.light;
     }
   }, [theme.mode]);
+
+  const handleExecOutput = useCallback((data: Uint8Array | ArrayBuffer) => {
+    termRef.current?.write(new Uint8Array(data));
+  }, []);
 
   const setupEventListeners = useCallback(
     (hub: HubConnection) => {
@@ -180,20 +222,20 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
 
   const onJoinedGroup = useCallback(
     async (hub: HubConnection) => {
-      if (!groupId) return;
+      if (!groupId || !targetId) return;
 
       try {
-        await hub.invoke('StartExecProcess', groupId, shell, target ?? 'Container');
+        await hub.invoke(startExecProcess, targetId, sessionId, shell);
         execStartedRef.current = true;
 
         if (termRef.current) {
-          await hub.invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows, target ?? 'Container');
+          await hub.invoke(resizeExec, targetId, sessionId, termRef.current.cols, termRef.current.rows);
         }
       } catch {
         termRef.current?.writeln('\r\n\x1b[31m[failed to start process]\x1b[0m');
       }
     },
-    [groupId, shell, target],
+    [groupId, targetId, sessionId, shell, startExecProcess, resizeExec],
   );
 
   const { isLoading, isConnected } = useSignalRGroup({
@@ -205,7 +247,7 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
     onJoinedGroup,
   });
 
-  const toggleConnection = () => {
+  const toggleConnection = useCallback(() => {
     if (isConnected) {
       setIsActive(false);
       execStartedRef.current = false;
@@ -216,7 +258,7 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
       termRef.current?.focus();
       setIsActive(true);
     }
-  };
+  }, [isConnected]);
 
   return {
     terminalRef: containerRef,
@@ -226,4 +268,34 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
     setShell,
     toggleConnection,
   };
+};
+
+export const DeploymentExec: React.FC<{
+  deploymentId: string;
+  containerId: string | undefined;
+  disabled?: boolean;
+}> = ({ deploymentId, containerId, disabled }) => {
+  const nid = normalizeDockerId(containerId);
+  const terminal = useContainerExecTerminal({
+    containerId: nid,
+    disabled,
+    deploymentId,
+    methodNames: {
+      sendExecInput: 'SendDeploymentExecInput',
+      resizeExec: 'ResizeDeploymentExec',
+      startExecProcess: 'StartDeploymentExecProcess',
+    },
+  });
+
+  return <ExecTerminal {...terminal} disabled={disabled} />;
+};
+
+export const ContainerExec: React.FC<{
+  containerId?: string;
+  disabled?: boolean;
+}> = ({ containerId, disabled }) => {
+  const nid = normalizeDockerId(containerId);
+  const terminal = useContainerExecTerminal({ containerId: nid, disabled });
+
+  return <ExecTerminal {...terminal} disabled={disabled} />;
 };

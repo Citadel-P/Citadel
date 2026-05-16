@@ -75,8 +75,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<GitRepoDeleted>]
 [GenerateShapeFor<GitRepoCloned>]
 [GenerateShapeFor<GitRepoPulled>]
-[GenerateShapeFor<LogTarget>]
-[GenerateShapeFor<ExecTarget>]
+[GenerateShapeFor<TargetResource>]
 partial class SignalRMessagePackContext;
 
 internal static class DerivedTypesMapping

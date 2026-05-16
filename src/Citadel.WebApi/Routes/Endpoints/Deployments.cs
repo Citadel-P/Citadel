@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 
 namespace WebApi.Routes.Endpoints;
@@ -112,4 +113,9 @@ public static class Deployments
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
+    public static async Task<Results<Ok<ContainerInspectView>, ProblemHttpResult>> Inspect(IMediator mediator, [Description("Deployment id")] Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new InspectDeployment(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ContainerInspectView.Map);
+    }
 }

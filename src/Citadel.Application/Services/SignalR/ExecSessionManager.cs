@@ -8,9 +8,9 @@ namespace Application.Services.SignalR;
 
 public interface IExecSessionManager : IStreamGroupManager
 {
-    Task StartExecProcess(string groupId, string shell, CancellationToken ct);
-    Task SendInputAsync(string groupId, byte[] data, CancellationToken ct);
-    Task ResizeAsync(string groupId, int cols, int rows, CancellationToken ct);
+    Task StartExecProcess(string containerId, string sessionId, string shell, CancellationToken ct);
+    Task SendInputAsync(string containerId, string sessionId, byte[] data, CancellationToken ct);
+    Task ResizeAsync(string containerId, string sessionId, int cols, int rows, CancellationToken ct);
 }
 
 internal sealed class ExecSessionManager(
@@ -20,32 +20,35 @@ internal sealed class ExecSessionManager(
     IPlatformContainerCache platformContainerCache)
     : BaseStreamManager<ExecStreamContext>, IExecSessionManager
 {
-    public async Task StartExecProcess(string groupId, string shell, CancellationToken ct)
+    public async Task StartExecProcess(string containerId, string sessionId, string shell, CancellationToken ct)
     {
-        var ctx = streams.GetOrAdd(groupId, _ => new ExecStreamContext());
+        if (string.IsNullOrWhiteSpace(containerId))
+            return;
 
-        var (containerId, sessionId) = GetContainerIdFromGroup(groupId);
+        var normalized = NormalizeDockerId(containerId);
 
-        if (string.IsNullOrEmpty(containerId) || string.IsNullOrEmpty(sessionId))
+        var ctx = streams.GetOrAdd(sessionId, _ => new ExecStreamContext());
+
+        if (string.IsNullOrEmpty(normalized) || string.IsNullOrEmpty(sessionId))
             return;
 
         if (!ctx.TryStart()) return;
 
         ctx.StreamTask = Task.Run(
-           () => StreamExecAsync(ctx, containerId, sessionId, shell, ct), ctx.Cancellation.Token);
+           () => StreamExecAsync(ctx, normalized, sessionId, shell, ct), ctx.Cancellation.Token);
     }
 
-    public async Task SendInputAsync(string groupId, byte[] data, CancellationToken ct)
+    public async Task SendInputAsync(string containerId, string sessionId, byte[] data, CancellationToken ct)
     {
-        if (!streams.TryGetValue(groupId, out var ctx)) return;
+        if (!streams.TryGetValue(sessionId, out var ctx)) return;
         if (ctx.Session == null) return;
 
         await ctx.Session.SendAsync(data, ct);
     }
 
-    public async Task ResizeAsync(string groupId, int cols, int rows, CancellationToken ct)
+    public async Task ResizeAsync(string containerId, string sessionId, int cols, int rows, CancellationToken ct)
     {
-        if (!streams.TryGetValue(groupId, out var ctx)) return;
+        if (!streams.TryGetValue(sessionId, out var ctx)) return;
 
         ctx.LatestCols = cols;
         ctx.LatestRows = rows;
@@ -106,13 +109,5 @@ internal sealed class ExecSessionManager(
 
             ctx.ResetStarted();
         }
-    }
-
-    private static (string, string) GetContainerIdFromGroup(string groupId)
-    {
-        // format: container-exec:{containerId}:{sessionId}
-        var parts = groupId.Split(':', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 3) return (string.Empty, string.Empty);
-        return (NormalizeDockerId(parts[1]), parts[2]);
     }
 }

@@ -1,27 +1,29 @@
-﻿using Application.Services;
-using Application.Services.SignalR;
+﻿using Application.Services.SignalR;
+using Domain.Contracts.Interfaces;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Deployments.Commands;
 
-public sealed record ResizeDeploymentExecSession(string GroupId, int Cols, int Rows) : ICommand<Result>;
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.Terminal)]
+public sealed record ResizeDeploymentExecSession(Guid Id, string SessionId, int Cols, int Rows) : ICommand<Result>;
 
 internal sealed class ResizeDeploymentExecSessionHandler(
-    IExecSessionManager execSessionManager,
-    IContainerAuthorizationService containerAuthorizationService): ICommandHandler<ResizeDeploymentExecSession, Result>
+    IUnitOfWork unitOfWork,
+    IExecSessionManager execSessionManager): ICommandHandler<ResizeDeploymentExecSession, Result>
 {
     public async ValueTask<Result> Handle(ResizeDeploymentExecSession command, CancellationToken cancellationToken)
     {
-        var hasAccess = await containerAuthorizationService.HasTerminalAccessAsync(ResourceType.Deployment, command.GroupId, cancellationToken);
-        if (!hasAccess)
+        var containerId = await unitOfWork.Deployments.GetContainerIdAsync(command.Id, cancellationToken);
+        if (containerId is null)
         {
-            return Result.Failure(new ForbiddenError("Missing specific permission [Terminal] on [Deployment]"));
+            return Result.Failure(new NotFoundError("Container does not exist"));
         }
 
-        await execSessionManager.ResizeAsync(command.GroupId, command.Cols, command.Rows, cancellationToken);
+        await execSessionManager.ResizeAsync(containerId, command.SessionId, command.Cols, command.Rows, cancellationToken);
         return Result.Success();
     }
 }

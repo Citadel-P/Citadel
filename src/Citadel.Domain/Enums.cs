@@ -609,14 +609,7 @@ public enum RoleType
     Custom
 }
 
-public enum LogTarget
-{
-    Container,
-    Deployment,
-    Stack
-}
-
-public enum ExecTarget
+public enum TargetResource
 {
     Container,
     Deployment,
