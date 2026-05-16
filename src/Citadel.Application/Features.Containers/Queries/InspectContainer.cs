@@ -1,4 +1,5 @@
 ﻿using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using FluentValidation;
@@ -30,7 +31,7 @@ internal sealed class InspectContainerHandler(
         var hasAccess = await containerAuthorizationService.HasAccessAsync([query.ContainerId], ResourceType.Platform, PermissionLevel.Read, SpecificPermission.Inspect, cancellationToken);
         if (!hasAccess)
         {
-            return Result.Failure<ContainerInspectionInfo>(new ForbiddenError("Missing specific permission [Inspect] on [Platform]"));
+            return Result.Failure<ContainerInspectionInfo>(new ForbiddenError($"Missing specific permission [Inspect] on [Platform]"));
         }
 
         var platform = await unitOfWork.Platforms.GetPlatformByContainerIdAsync(query.ContainerId, cancellationToken);

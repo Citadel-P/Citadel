@@ -106,6 +106,7 @@ export const resources = {
   restartDeployments: { method: "POST", key: "restartDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
   stopDeployments: { method: "POST", key: "stopDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
   startDeployments: { method: "POST", key: "startDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
+  inspectDeployment: { method: "GET", key: "inspectDeployment", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   listStacks: { method: "GET", key: "listStacks", params: ["params"], requiredParams: [], queryParams: [] },
   createStack: { method: "POST", key: "createStack", params: ["data","params"], requiredParams: [], queryParams: [] },
   deleteStacks: { method: "DELETE", key: "deleteStacks", params: ["params"], requiredParams: [], queryParams: [] },

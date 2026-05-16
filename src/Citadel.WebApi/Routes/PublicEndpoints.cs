@@ -922,6 +922,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("startDeployments");
+
+        deployment.MapGet("{id}/inspect", Deployments.Inspect)
+            .WithSummary("Inspect a deployment")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("inspectDeployment");
     }
 
     private static void MapStackEndpoints(RouteGroupBuilder stacks)

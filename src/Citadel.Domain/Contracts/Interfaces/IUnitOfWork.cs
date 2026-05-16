@@ -315,6 +315,8 @@ public interface IDeploymentRepository
     Task<Deployment?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken);
+    Task<string?> GetContainerIdAsync(Guid deploymentId, CancellationToken cancellationToken);
+    Task<PlatformConnectionInfo?> GetPlatformByDeploymentIdAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<bool> CanAccessAsync(Guid userId, Guid deploymentId, CancellationToken cancellationToken);
     Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid deploymentId, Guid userId, CancellationToken cancellationToken);

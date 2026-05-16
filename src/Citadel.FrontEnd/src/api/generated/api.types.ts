@@ -6543,6 +6543,34 @@ export class Api<
     /**
      * No description
      *
+     * @tags Deployments
+     * @name InspectDeployment
+     * @summary Inspect a deployment
+     * @request GET:/api/v1/deployments/{id}/inspect
+     * @secure
+     * @response `200` `ContainerInspectView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    inspectDeployment: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ContainerInspectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/${id}/inspect`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
      * @tags Stacks
      * @name ListStacks
      * @summary List all stacks

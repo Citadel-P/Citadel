@@ -16,19 +16,19 @@ import {
   UpdateBehavior,
 } from '@/api/generated/api.types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ContainerLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { DockerContainerView } from '@/api/types';
-import ContainerInspect from '@/features/docker-resources/containers/container-info/container-inspect';
+import { DeploymentInspect } from '@/features/docker-resources/containers/container-info/container-inspect';
 import { formatId, normalizeDockerId } from '@/lib/utils';
 import { ContainerInfoTable } from '@/features/docker-resources/containers/container-info/container-info-table';
 import { useContainerInfoGroup } from '@/features/docker-resources/containers/hooks/useContainerInfoGroup';
 import Loader from '@/components/ui/loader';
-import { ContainerExec } from '@/features/docker-resources/containers/container-info/container-exec';
+import { DeploymentExec } from '@/features/docker-resources/containers/container-info/container-exec';
 import { ContainerStats } from '@/features/docker-resources/containers/container-info/container-stats';
 import { ActivitiesTab } from '@/features/activities';
 import { ArrowRight, ArrowUpCircle, X } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ActivityAlertZone } from '@/components/custom/task-sheet';
+import { DeploymentLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -174,10 +174,10 @@ const DeploymentRuntime = ({ deployment }: { deployment: DeploymentView }) => {
 
   if (isLoading || !containerInfo) return <Loader />;
 
-  return <RuntimeView containerInfo={containerInfo} />;
+  return <RuntimeView containerInfo={containerInfo} deploymentId={deployment.id} />;
 };
 
-const RuntimeView = ({ containerInfo }: { containerInfo: DockerContainerView }) => {
+const RuntimeView = ({ containerInfo, deploymentId }: { containerInfo: DockerContainerView; deploymentId: string }) => {
   return (
     <div className="flex flex-col gap-4 w-full">
       <ContainerInfoTable
@@ -187,12 +187,24 @@ const RuntimeView = ({ containerInfo }: { containerInfo: DockerContainerView }) 
           DisplayStatus: false,
         }}
       />
-      <RuntimeTabs containerInfo={containerInfo} disabled={containerInfo.state !== ContainerStateStatus.Running} />
+      <RuntimeTabs
+        containerInfo={containerInfo}
+        deploymentId={deploymentId}
+        disabled={containerInfo.state !== ContainerStateStatus.Running}
+      />
     </div>
   );
 };
 
-const RuntimeTabs = ({ containerInfo, disabled }: { containerInfo: DockerContainerView; disabled?: boolean }) => {
+const RuntimeTabs = ({
+  containerInfo,
+  deploymentId,
+  disabled,
+}: {
+  containerInfo: DockerContainerView;
+  deploymentId: string;
+  disabled?: boolean;
+}) => {
   const nid = normalizeDockerId(containerInfo.id);
 
   return (
@@ -212,13 +224,13 @@ const RuntimeTabs = ({ containerInfo, disabled }: { containerInfo: DockerContain
         </TabsTrigger>
       </TabsList>
       <TabsContent value="logs" className="w-full mt-2">
-        <ContainerLogs key={nid} containerId={nid} source="Deployment" />
+        <DeploymentLogs key={nid} containerId={nid} deploymentId={deploymentId} />
       </TabsContent>
       <TabsContent value="inspect" className="w-full mt-2">
-        <ContainerInspect key={nid} containerId={nid} />
+        <DeploymentInspect key={nid} deploymentId={deploymentId} />
       </TabsContent>
       <TabsContent value="terminal" className="w-full mt-2">
-        <ContainerExec key={nid} containerId={nid} disabled={disabled} target="Deployment" />
+        <DeploymentExec key={nid} containerId={nid} deploymentId={deploymentId} disabled={disabled} />
       </TabsContent>
       <TabsContent value="stats" className="w-full mt-2">
         <ContainerStats key={nid} resource={containerInfo} />
