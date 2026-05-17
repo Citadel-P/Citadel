@@ -6,8 +6,13 @@ import MemoryUsage from './stats/memory-usage';
 import CpuUsage from './stats/cpu-usage';
 import NetworkUsage from './stats/network-usage';
 
-export const ContainerStats = ({ resource }: { resource: DockerContainerView | undefined }) => {
-  const { data, isLoading } = useRead('getContainerStats', { id: resource?.id });
+type StatsPanelProps = {
+  resource: DockerContainerView | undefined;
+  baseStats: ContainerStatView[];
+  isLoading: boolean;
+};
+
+const StatsPanel = ({ resource, baseStats, isLoading }: StatsPanelProps) => {
   const [liveStats, setLiveStats] = useState<ContainerStatView[]>([]);
   const lastStatRef = useRef<ContainerStatView | undefined>(resource?.containerStat);
 
@@ -22,9 +27,9 @@ export const ContainerStats = ({ resource }: { resource: DockerContainerView | u
   }, [resource?.containerStat, resource?.state]);
 
   const stats = useMemo(() => {
-    const base = data?.data?.stats ?? [];
+    const base = baseStats ?? [];
     return [...base, ...liveStats].sort((a, b) => Number(a.created) - Number(b.created));
-  }, [data?.data?.stats, liveStats]);
+  }, [baseStats, liveStats]);
 
   return (
     <div className="flex flex-col gap gap-y-4">
@@ -33,4 +38,22 @@ export const ContainerStats = ({ resource }: { resource: DockerContainerView | u
       <NetworkUsage container={resource} stats={stats} isLoading={isLoading} />
     </div>
   );
+};
+
+export const ContainerStats = ({ resource }: { resource: DockerContainerView | undefined }) => {
+  const { data, isLoading } = useRead('getContainerStats', { id: resource?.id });
+  const baseStats = data?.data?.stats ?? [];
+  return <StatsPanel resource={resource} baseStats={baseStats} isLoading={isLoading} />;
+};
+
+export const DeploymentStats = ({
+  resource,
+  deploymentId,
+}: {
+  resource: DockerContainerView | undefined;
+  deploymentId: string;
+}) => {
+  const { data, isLoading } = useRead('getDeploymentStats', { id: deploymentId });
+  const baseStats = data?.data?.stats ?? [];
+  return <StatsPanel resource={resource} baseStats={baseStats} isLoading={isLoading} />;
 };

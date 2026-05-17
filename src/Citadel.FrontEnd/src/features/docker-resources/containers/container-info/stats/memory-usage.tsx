@@ -82,7 +82,7 @@ const MemoryUsage = ({
               formatter={(value, name) => (
                 <>
                   <div
-                    className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-(--color-bg)"
+                    className="h-2.5 w-2.5 shrink-0 rounded-xs bg-(--color-bg)"
                     style={
                       {
                         '--color-bg': `var(--color-${name})`,
@@ -120,12 +120,12 @@ const MemoryUsage = ({
   );
 
   return isLoading ? (
-    <Skeleton className="h-[225px] w-full rounded-xl" />
+    <Skeleton className="h-56.26 w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs py-0">
       <MemoryUsageHeader container={container} />
       <CardContent className="px-2 sm:px-6">
-        <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
+        <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
           {memoizedChart}
         </ChartContainer>
       </CardContent>
@@ -147,7 +147,7 @@ const MemoryUsageHeader = ({ container }: MemoryUsageHeaderProps) => {
   );
 
   return (
-    <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
+    <CardHeader className="flex flex-col items-stretch border-b p-0! sm:flex-row">
       <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
         <CardTitle>Memory Usage</CardTitle>
         <CardDescription>Showing total memory usage for the past 24 hours</CardDescription>

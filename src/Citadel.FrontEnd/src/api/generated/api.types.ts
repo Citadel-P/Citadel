@@ -6257,6 +6257,34 @@ export class Api<
      * No description
      *
      * @tags Deployments
+     * @name GetDeploymentStats
+     * @summary Get deployment stats
+     * @request GET:/api/v1/deployments/{id}/stats
+     * @secure
+     * @response `200` `ContainerStatsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getDeploymentStats: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ContainerStatsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/${id}/stats`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
      * @name GetDeploymentConfig
      * @summary Get deployment configuration
      * @request GET:/api/v1/deployments/{deploymentId}/_cfg
@@ -6275,6 +6303,34 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/deployments/${deploymentId}/_cfg`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name GetDeploymentContainerInfo
+     * @summary Get basic container details
+     * @request GET:/api/v1/deployments/{id}/info
+     * @secure
+     * @response `200` `ContainerInfoView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getDeploymentContainerInfo: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ContainerInfoView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/${id}/info`,
         method: "GET",
         secure: true,
         format: "json",

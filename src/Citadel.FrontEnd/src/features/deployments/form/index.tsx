@@ -8,7 +8,6 @@ import { useDeploymentGroup } from './hooks/useDeploymentGroup';
 import {
   ActivityStatus,
   AutoUpdateStatus,
-  ContainerStateStatus,
   DeploymentStatus,
   DeploymentView,
   LatestActivityView,
@@ -19,11 +18,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DockerContainerView } from '@/api/types';
 import { DeploymentInspect } from '@/features/docker-resources/containers/container-info/container-inspect';
 import { formatId, normalizeDockerId } from '@/lib/utils';
-import { ContainerInfoTable } from '@/features/docker-resources/containers/container-info/container-info-table';
+import { DeploymentContainerInfoTable } from '@/features/docker-resources/containers/container-info/container-info-table';
 import { useContainerInfoGroup } from '@/features/docker-resources/containers/hooks/useContainerInfoGroup';
-import Loader from '@/components/ui/loader';
 import { DeploymentExec } from '@/features/docker-resources/containers/container-info/container-exec';
-import { ContainerStats } from '@/features/docker-resources/containers/container-info/container-stats';
+import { DeploymentStats } from '@/features/docker-resources/containers/container-info/container-stats';
 import { ActivitiesTab } from '@/features/activities';
 import { ArrowRight, ArrowUpCircle, X } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
@@ -65,7 +63,7 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         disabled: (resource: DeploymentView): boolean =>
           resource.status === DeploymentStatus.Degraded || resource.status === DeploymentStatus.Created,
         Content: ({ resource }: { resource: DeploymentView }) => {
-          return <DeploymentRuntime key={resource.containerId} deployment={resource} />;
+          return <DeploymentRuntime key={resource.id} deployment={resource} />;
         },
       },
       {
@@ -165,22 +163,53 @@ const DeploymentUpdateNotice = ({ deployment }: { deployment: DeploymentView }) 
 };
 
 const DeploymentRuntime = ({ deployment }: { deployment: DeploymentView }) => {
-  const { containerInfo, isLoading } = useContainerInfoGroup(
+  const { containerInfo, isLoading, error } = useContainerInfoGroup(
     deployment.dockerContainerId ?? undefined,
     deployment.platformId,
   );
 
   if (deployment.status === DeploymentStatus.Degraded) return null;
+  const disabled = deployment.status !== DeploymentStatus.Healthy;
 
-  if (isLoading || !containerInfo) return <Loader />;
+  if (!deployment.dockerContainerId)
+    return <div className="text-sm text-muted-foreground mb-2">No container assigned</div>;
 
-  return <RuntimeView containerInfo={containerInfo} deploymentId={deployment.id} />;
+  if (error)
+    return (
+      <div className="mb-2">
+        <AlertMessage type="warning">
+          <div className="truncate">{(error as any)?.error?.detail ?? 'Platform unavailable'}</div>
+        </AlertMessage>
+      </div>
+    );
+
+  return (
+    <RuntimeView
+      containerInfo={containerInfo}
+      containerId={deployment.dockerContainerId}
+      deploymentId={deployment.id}
+      containerLoading={isLoading}
+      disabled={disabled}
+    />
+  );
 };
 
-const RuntimeView = ({ containerInfo, deploymentId }: { containerInfo: DockerContainerView; deploymentId: string }) => {
+const RuntimeView = ({
+  containerInfo,
+  containerId,
+  deploymentId,
+  disabled,
+}: {
+  containerInfo?: DockerContainerView | undefined;
+  containerId?: string | undefined;
+  deploymentId: string;
+  containerLoading?: boolean;
+  disabled?: boolean;
+}) => {
   return (
     <div className="flex flex-col gap-4 w-full">
-      <ContainerInfoTable
+      <DeploymentContainerInfoTable
+        deploymentId={deploymentId}
         container={containerInfo}
         displayOptions={{
           DisplayContainerName: true,
@@ -189,8 +218,9 @@ const RuntimeView = ({ containerInfo, deploymentId }: { containerInfo: DockerCon
       />
       <RuntimeTabs
         containerInfo={containerInfo}
+        containerId={containerId}
         deploymentId={deploymentId}
-        disabled={containerInfo.state !== ContainerStateStatus.Running}
+        disabled={disabled}
       />
     </div>
   );
@@ -198,14 +228,16 @@ const RuntimeView = ({ containerInfo, deploymentId }: { containerInfo: DockerCon
 
 const RuntimeTabs = ({
   containerInfo,
+  containerId,
   deploymentId,
   disabled,
 }: {
-  containerInfo: DockerContainerView;
+  containerInfo?: DockerContainerView | undefined;
+  containerId?: string | undefined;
   deploymentId: string;
   disabled?: boolean;
 }) => {
-  const nid = normalizeDockerId(containerInfo.id);
+  const nid = normalizeDockerId(containerInfo?.id ?? containerId);
 
   return (
     <Tabs defaultValue="logs" className="w-full">
@@ -224,16 +256,16 @@ const RuntimeTabs = ({
         </TabsTrigger>
       </TabsList>
       <TabsContent value="logs" className="w-full mt-2">
-        <DeploymentLogs key={nid} containerId={nid} deploymentId={deploymentId} />
+        <DeploymentLogs key={deploymentId} containerId={nid} deploymentId={deploymentId} />
       </TabsContent>
       <TabsContent value="inspect" className="w-full mt-2">
-        <DeploymentInspect key={nid} deploymentId={deploymentId} />
+        <DeploymentInspect key={deploymentId} deploymentId={deploymentId} />
       </TabsContent>
       <TabsContent value="terminal" className="w-full mt-2">
-        <DeploymentExec key={nid} containerId={nid} deploymentId={deploymentId} disabled={disabled} />
+        <DeploymentExec key={deploymentId} containerId={nid} deploymentId={deploymentId} disabled={disabled} />
       </TabsContent>
       <TabsContent value="stats" className="w-full mt-2">
-        <ContainerStats key={nid} resource={containerInfo} />
+        <DeploymentStats key={deploymentId} resource={containerInfo} deploymentId={deploymentId} />
       </TabsContent>
     </Tabs>
   );
