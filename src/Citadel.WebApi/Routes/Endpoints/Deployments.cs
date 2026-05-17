@@ -1,4 +1,5 @@
-﻿using Application.Features.Deployments.Commands;
+﻿using Application.Features.Containers.Queries;
+using Application.Features.Deployments.Commands;
 using Application.Features.Deployments.Queries;
 using Domain;
 using Domain.Contracts.Resources.Deployments;
@@ -18,13 +19,13 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Deployments
 {
-    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Get(IMediator mediator, [Description("The deployment id")] Guid deploymentId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Get(IMediator mediator, [Description("Deployment id")] Guid deploymentId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetDeployment(deploymentId), cancellationToken);
         return EndpointHandlers.HandleResult(result, DeploymentView.Map);
     }
 
-    public static async Task<Results<Ok<DeploymentConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("The deployment id")] Guid deploymentId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DeploymentConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("Deployment id")] Guid deploymentId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetDeployment(deploymentId), cancellationToken);
         return EndpointHandlers.HandleResult(result, DeploymentConfigView.Map);
@@ -34,6 +35,12 @@ public static class Deployments
     {
         var result = await mediator.Send(new GetAllDeployments(), cancellationToken);
         return EndpointHandlers.HandleResult(result, DeploymentsView.Map);
+    }
+
+    public static async Task<Results<Ok<ContainerInfoView>, ProblemHttpResult>> GetInfo(IMediator mediator, Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetDeploymentContainerInfo(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ContainerInfoView.Map);
     }
 
     public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateDeploymentInput request, CancellationToken cancellationToken)
@@ -117,5 +124,11 @@ public static class Deployments
     {
         var result = await mediator.Send(new InspectDeployment(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, ContainerInspectView.Map);
+    }
+
+    public static async Task<Results<Ok<ContainerStatsView>, ProblemHttpResult>> GetStats(IMediator mediator, [Description("Deployment id")] Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetDeploymentStats(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ContainerStatsView.Map);
     }
 }

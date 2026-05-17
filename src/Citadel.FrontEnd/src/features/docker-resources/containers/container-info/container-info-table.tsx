@@ -150,29 +150,74 @@ export const ContainerInfoTable = ({
   container,
   displayOptions,
 }: {
-  container: DockerContainerView;
+  container?: DockerContainerView | undefined;
   displayOptions: DisplayOptions;
 }) => {
-  const { data, isLoading } = useRead('getContainerInfo', { id: container.id });
+  const { data, isLoading } = useRead('getContainerInfo', { id: container?.id });
   const containerInfo = data?.data;
 
+  return (
+    <ContainerInfoTableRenderer
+      containerInfo={containerInfo}
+      container={container}
+      displayOptions={displayOptions}
+      isLoading={isLoading}
+    />
+  );
+};
+
+export const DeploymentContainerInfoTable = ({
+  deploymentId,
+  container,
+  displayOptions,
+}: {
+  deploymentId: string;
+  container?: DockerContainerView | undefined;
+  displayOptions: DisplayOptions;
+}) => {
+  const { data, isLoading } = useRead('getDeploymentContainerInfo', { id: deploymentId });
+  const containerInfo = data?.data;
+
+  return (
+    <ContainerInfoTableRenderer
+      containerInfo={containerInfo}
+      container={container}
+      displayOptions={displayOptions}
+      isLoading={isLoading}
+    />
+  );
+};
+
+const ContainerInfoTableRenderer = ({
+  containerInfo,
+  container,
+  displayOptions,
+  isLoading,
+}: {
+  containerInfo?: ContainerInfoView | undefined;
+  container?: DockerContainerView | undefined;
+  displayOptions: DisplayOptions;
+  isLoading?: boolean;
+}) => {
   const columns = useMemo(() => getColumns(displayOptions), [displayOptions]);
 
-  if (isLoading || !containerInfo) return null;
+  const tableData: ContainerInfoRow[] = containerInfo
+    ? [
+        {
+          ...containerInfo,
+          name: container?.name ?? containerInfo.name,
+          id: containerInfo.containerId,
+          containerStat: container?.containerStat ?? {},
+          state: container?.state ?? containerInfo.state,
+        },
+      ]
+    : [];
 
-  const tableData: ContainerInfoRow[] = [
-    {
-      ...containerInfo,
-      name: container.name,
-      id: containerInfo.containerId,
-      containerStat: container.containerStat,
-      state: container.state,
-    },
-  ];
+  const finalIsLoading = !container?.id || Boolean(isLoading);
 
   return (
     <div className="rounded-sm border p-1 shadow-xs">
-      <DataTable columns={columns} data={tableData} isLoading={isLoading} />
+      <DataTable columns={columns} data={tableData} isLoading={finalIsLoading} />
     </div>
   );
 };

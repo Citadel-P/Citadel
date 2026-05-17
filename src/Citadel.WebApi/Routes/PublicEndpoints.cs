@@ -824,6 +824,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getDeployment");
 
+        deployment.MapGet("{id}/stats", Deployments.GetStats)
+            .WithSummary("Get deployment stats")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getDeploymentStats");
+
         deployment.MapGet("/{deploymentId}/_cfg", Deployments.GetConfig)
             .WithSummary("Get deployment configuration")
             .ProducesValidationProblem()
@@ -831,6 +839,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getDeploymentConfig");
+
+        deployment.MapGet("{id}/info", Deployments.GetInfo)
+            .WithSummary("Get basic container details")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getDeploymentContainerInfo");
 
         deployment.MapPost("/", Deployments.Create)
             .WithSummary("Create a deployment")
