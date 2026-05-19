@@ -45,9 +45,10 @@ public class HasPermissionForAllIntegrationTests(PostgresTestFixture fixture) : 
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var actorIds = await uow.Users.GetActorScopeAsync(subject.UserId, TestContext.Current.CancellationToken);
 
-        var result = await uow.Users.HasPermissionForAllAsync(subject.UserId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, new[] { depA, depB }, actorIds, TestContext.Current.CancellationToken);
+        var resA = await uow.Users.GetEffectivePermissionsAsync(actorIds, ResourceType.Deployment, depA, TestContext.Current.CancellationToken);
+        var resB = await uow.Users.GetEffectivePermissionsAsync(actorIds, ResourceType.Deployment, depB, TestContext.Current.CancellationToken);
 
-        Assert.False(result);
+        Assert.False(resA.Has(PermissionLevel.Read, SpecificPermission.None) && resB.Has(PermissionLevel.Read, SpecificPermission.None));
     }
 
     [Fact]
@@ -67,8 +68,10 @@ public class HasPermissionForAllIntegrationTests(PostgresTestFixture fixture) : 
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         var actorIds = await uow.Users.GetActorScopeAsync(subject.UserId, TestContext.Current.CancellationToken);
-        var result = await uow.Users.HasPermissionForAllAsync(subject.UserId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, new[] { depA, depB }, actorIds, TestContext.Current.CancellationToken);
-        Assert.True(result);
+        var resA = await uow.Users.GetEffectivePermissionsAsync(actorIds, ResourceType.Deployment, depA, TestContext.Current.CancellationToken);
+        var resB = await uow.Users.GetEffectivePermissionsAsync(actorIds, ResourceType.Deployment, depB, TestContext.Current.CancellationToken);
+
+        Assert.True(resA.Has(PermissionLevel.Read, SpecificPermission.None) && resB.Has(PermissionLevel.Read, SpecificPermission.None));
     }
 
     private async Task<Guid> GetDeploymentIdByNameAsync(string name)

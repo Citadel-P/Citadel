@@ -60,7 +60,7 @@ internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvict
                 return Result.Failure<TeamDetails>(new NotFoundError($"User with ID {missingUserId} does not exist"));
 
             await unitOfWork.Teams.ReplaceMembersAsync(team.Id, userIds, cancellationToken);
-            evictor.EvictUsersAsync(userIds, cancellationToken);
+            evictor.EvictUsers(userIds, cancellationToken);
         }
 
         if (roleIds.Length > 0)
@@ -72,7 +72,7 @@ internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvict
                 return Result.Failure<TeamDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(team.ActorId, roleIds, cancellationToken);
-            await evictor.EvictForActorAsync(team.ActorId, cancellationToken);
+            await evictor.EvictPermissionsForActorAsync(team.ActorId, cancellationToken);
         }
 
         if (resourceAccesses.Length > 0)

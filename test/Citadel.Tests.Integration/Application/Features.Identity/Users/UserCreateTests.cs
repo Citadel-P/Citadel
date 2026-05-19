@@ -81,36 +81,27 @@ public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(
 
         var actorIds = await uow.Users.GetActorScopeAsync(user.Id, TestContext.Current.CancellationToken);
 
-        var canViewVisible = await uow.Users.HasPermissionAsync(
-            user.Id,
+        var visibleMetadata = await uow.Users.GetEffectivePermissionsAsync(
+            actorIds,
             ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
             deploymentVisible,
-            actorIds,
             TestContext.Current.CancellationToken);
 
-        var canViewHidden = await uow.Users.HasPermissionAsync(
-            user.Id,
+        var hiddenMetadata = await uow.Users.GetEffectivePermissionsAsync(
+            actorIds,
             ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
             deploymentHidden,
-            actorIds,
             TestContext.Current.CancellationToken);
 
-        var hasGlobalView = await uow.Users.HasPermissionAsync(
-            user.Id,
+        var globalMetadata = await uow.Users.GetEffectivePermissionsAsync(
+            actorIds,
             ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
             null,
-            actorIds,
             TestContext.Current.CancellationToken);
 
-        Assert.True(canViewVisible);
-        Assert.False(canViewHidden);
-        Assert.False(hasGlobalView);
+        Assert.True(visibleMetadata.Has(PermissionLevel.Read, SpecificPermission.None));
+        Assert.False(hiddenMetadata.Has(PermissionLevel.Read, SpecificPermission.None));
+        Assert.False(globalMetadata.Has(PermissionLevel.Read, SpecificPermission.None));
     }
 
     [Fact]

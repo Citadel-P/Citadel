@@ -40,7 +40,7 @@ internal sealed class RemoveTeamMemberHandler(IUnitOfWork unitOfWork, IActorScop
         await unitOfWork.Teams.RemoveMemberAsync(command.TeamId, command.UserId, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        evictor.EvictUsersAsync([command.UserId], cancellationToken);
+        evictor.EvictUsers([command.UserId], cancellationToken);
 
         return state.Team;
     }

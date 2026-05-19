@@ -75,7 +75,7 @@ internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IHttpContextAcce
                 return Result.Failure<UserDetails>(new NotFoundError($"Team with ID {missingTeamId} does not exist"));
 
             await unitOfWork.Users.ReplaceTeamsAsync(user.Id, teamIds, cancellationToken);
-            evictor.EvictUsersAsync([user.Id], cancellationToken);
+            evictor.EvictUsers([user.Id], cancellationToken);
         }
 
         if (roleIds.Length > 0)
@@ -87,7 +87,7 @@ internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IHttpContextAcce
                 return Result.Failure<UserDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(user.ActorId, roleIds, cancellationToken);
-            await evictor.EvictForActorAsync(user.ActorId, cancellationToken);
+            await evictor.EvictPermissionsForActorAsync(user.ActorId, cancellationToken);
         }
 
         if (resourceAccesses.Length > 0)

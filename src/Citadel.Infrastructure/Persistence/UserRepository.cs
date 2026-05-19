@@ -4,6 +4,7 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
@@ -13,10 +14,6 @@ namespace Infrastructure.Persistence;
 
 internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) : IUserRepository
 {
-    private static readonly int ReadPermissionLevelValue = (int)PermissionLevel.Read;
-    private static readonly int WritePermissionLevelValue = (int)PermissionLevel.Write;
-    private static readonly int ExecutePermissionLevelValue = (int)PermissionLevel.Execute;
-
     private const string UserAggregateCtes = """
         UserTeams AS (
             SELECT
@@ -401,101 +398,60 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return await db.ExecuteAsync(insertSql, new { UserId = userId, TeamIds = teamIdArray, cancellationToken }, transaction: tx());
     }
 
-    public async Task<bool> HasPermissionAsync(
-        Guid userId,
+    // Note: HasPermission* compatibility helpers removed. Use ResolvePermissionsAsync in IPermissionService
+    // or GetEffectivePermissionsAsync(...) + PermissionMetadata.Has(...) where needed.
+
+    public async Task<PermissionMetadata> GetEffectivePermissionsAsync(
+        Guid[] actorIds,
         ResourceType resourceType,
-        PermissionLevel permissionLevel,
-        SpecificPermission specificPermission,
         Guid? resourceId,
-        Guid[] actorIds,
         CancellationToken ct)
     {
-        // Check global permission first (short-circuit)
-        var grantedPermissionMask = GetGrantedPermissionMask(permissionLevel);
-        var hasGlobal = await HasGlobalPermissionAsync(actorIds, resourceType, grantedPermissionMask, specificPermission, ct);
+        const string sql = """
+        WITH EffectivePermissions AS (
+            SELECT
+                p.PermissionLevel,
+                p.SpecificPermissions
+            FROM ActorRoles ar
+            JOIN Permissions p ON p.RoleId = ar.RoleId
+            WHERE ar.ActorId = ANY(@ActorIds)
+              AND p.ResourceType = @ResourceType
 
-        if (hasGlobal)
-            return true;
+            UNION ALL
 
-        // No global access: if no specific resource requested, deny
-        if (resourceId is null)
-        {
-            return false;
-        }
-
-        const string resourceSql = """
-            SELECT EXISTS (
-                SELECT 1
-                FROM ResourceAccesses ra
-                WHERE ra.ActorId = ANY(@ActorIds)
-                  AND ra.ResourceType = @ResourceType
-                  AND ra.ResourceId = @ResourceId
-                      AND (ra.PermissionLevel & @GrantedPermissionMask) <> 0
-                  AND (@SpecificPermission = 0 OR (ra.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
-            )
+            SELECT
+                ra.PermissionLevel,
+                ra.SpecificPermissions
+            FROM ResourceAccesses ra
+            WHERE @HasResource = TRUE
+              AND ra.ActorId = ANY(@ActorIds)
+              AND ra.ResourceType = @ResourceType
+              AND ra.ResourceId = @ResourceId
+        )
+        SELECT
+            COALESCE(bit_or(PermissionLevel), 0) AS PermissionLevel,
+            COALESCE(bit_or(SpecificPermissions), 0) AS SpecificPermissions
+        FROM EffectivePermissions;
         """;
 
-        var result = await db.ExecuteScalarAsync<bool>(resourceSql, new
-        {
-            ActorIds = actorIds,
-            ResourceId = resourceId,
-            ResourceType = (int)resourceType,
-            GrantedPermissionMask = grantedPermissionMask,
-            SpecificPermission = (int)specificPermission
-        }, transaction: tx());
-
-        return result;
+        return await db.QuerySingleAsync<PermissionMetadata>(
+            sql,
+            new
+            {
+                ActorIds = actorIds,
+                ResourceType = (int)resourceType,
+                ResourceId = resourceId,
+                HasResource = resourceId.HasValue,
+                cancellationToken = ct
+            },
+            transaction: tx());
     }
 
-    public async Task<bool> HasPermissionForAllAsync(
-        Guid userId,
-        ResourceType resourceType,
-        PermissionLevel permissionLevel,
-        SpecificPermission specificPermission,
-        Guid[] resourceIds,
-        Guid[] actorIds,
-        CancellationToken ct)
-    {
-        if (actorIds == null || actorIds.Length == 0)
-            return false;
+    
 
-        // Check global permission first (short-circuit)
-        var grantedPermissionMask = GetGrantedPermissionMask(permissionLevel);
-        var hasGlobal = await HasGlobalPermissionAsync(actorIds, resourceType, grantedPermissionMask, specificPermission, ct);
+   
 
-        if (hasGlobal)
-        {
-            return true;
-        }
-
-        const string resourceSql = """
-            SELECT NOT EXISTS (
-                SELECT 1
-                FROM unnest(@ResourceIds::uuid[]) r(ResourceId)
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM ResourceAccesses ra
-                    WHERE ra.ActorId = ANY(@ActorIds)
-                      AND ra.ResourceType = @ResourceType
-                      AND ra.ResourceId = r.ResourceId
-                      AND (ra.PermissionLevel & @GrantedPermissionMask) <> 0
-                      AND (@SpecificPermission = 0 OR (ra.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
-                )
-            )
-        """;
-
-        var result = await db.ExecuteScalarAsync<bool>(resourceSql, new
-        {
-            ActorIds = actorIds,
-            ResourceIds = resourceIds,
-            ResourceType = (int)resourceType,
-            GrantedPermissionMask = grantedPermissionMask,
-            SpecificPermission = (int)specificPermission
-        }, transaction: tx());
-
-        return result;
-    }
-
+    
     public async Task<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct)
     {
         const string sql = """
@@ -521,38 +477,10 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return [.. result];
     }
 
-    internal static int GetGrantedPermissionMask(PermissionLevel requiredPermissionLevel)
-        => requiredPermissionLevel switch
-        {
-            PermissionLevel.Read => ReadPermissionLevelValue | WritePermissionLevelValue | ExecutePermissionLevelValue,
-            PermissionLevel.Write => WritePermissionLevelValue | ExecutePermissionLevelValue,
-            PermissionLevel.Execute => ExecutePermissionLevelValue,
-            _ => throw new ArgumentOutOfRangeException(nameof(requiredPermissionLevel), requiredPermissionLevel, null),
-        };
+   internal static int GetGrantedPermissionMask(PermissionLevel requiredPermissionLevel)
+        => PermissionHelpers.GetGrantedPermissionMask(requiredPermissionLevel);
 
-    private Task<bool> HasGlobalPermissionAsync(Guid[] actorIds, ResourceType resourceType, int permissionMask, SpecificPermission specificPermission, CancellationToken ct)
-    {
-        const string globalSql = """
-            SELECT EXISTS (
-                SELECT 1
-                FROM ActorRoles ar
-                JOIN Permissions p ON p.RoleId = ar.RoleId
-                WHERE ar.ActorId = ANY(@ActorIds)
-                  AND p.ResourceType = @ResourceType
-                  AND (p.PermissionLevel & @GrantedPermissionMask) <> 0
-                  AND (@SpecificPermission = 0 OR (p.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
-            )
-        """;
-
-        return db.ExecuteScalarAsync<bool>(globalSql, new
-        {
-            ActorIds = actorIds,
-            ResourceType = (int)resourceType,
-            GrantedPermissionMask = permissionMask,
-            SpecificPermission = (int)specificPermission,
-            cancellationToken = ct
-        }, transaction: tx());
-    }
+   
 
     public async Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken)
     {

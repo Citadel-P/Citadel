@@ -304,36 +304,27 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         var actorIdsOld = await uowVerify.Users.GetActorScopeAsync(oldUser.UserId, TestContext.Current.CancellationToken);
         var actorIdsNew = await uowVerify.Users.GetActorScopeAsync(newUser.UserId, TestContext.Current.CancellationToken);
 
-        var canOldUserViewNewDeployment = await uowVerify.Users.HasPermissionAsync(
-            oldUser.UserId,
-            ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
-            newDeploymentId,
+        var oldUserNewDeployment = await uowVerify.Users.GetEffectivePermissionsAsync(
             actorIdsOld,
-            TestContext.Current.CancellationToken);
-
-        var canNewUserViewNewDeployment = await uowVerify.Users.HasPermissionAsync(
-            newUser.UserId,
             ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
             newDeploymentId,
-            actorIdsNew,
             TestContext.Current.CancellationToken);
 
-        var canNewUserViewOldDeployment = await uowVerify.Users.HasPermissionAsync(
-            newUser.UserId,
+        var newUserNewDeployment = await uowVerify.Users.GetEffectivePermissionsAsync(
+            actorIdsNew,
             ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
-            oldDeploymentId,
-            actorIdsNew,
+            newDeploymentId,
             TestContext.Current.CancellationToken);
 
-        Assert.False(canOldUserViewNewDeployment);
-        Assert.True(canNewUserViewNewDeployment);
-        Assert.False(canNewUserViewOldDeployment);
+        var newUserOldDeployment = await uowVerify.Users.GetEffectivePermissionsAsync(
+            actorIdsNew,
+            ResourceType.Deployment,
+            oldDeploymentId,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(oldUserNewDeployment.Has(PermissionLevel.Read, SpecificPermission.None));
+        Assert.True(newUserNewDeployment.Has(PermissionLevel.Read, SpecificPermission.None));
+        Assert.False(newUserOldDeployment.Has(PermissionLevel.Read, SpecificPermission.None));
     }
 
     [Fact]
@@ -382,16 +373,8 @@ public class TeamPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
 
         var actorIdsMember = await uowVerify.Users.GetActorScopeAsync(member.UserId, TestContext.Current.CancellationToken);
 
-        var hasAccess = await uowVerify.Users.HasPermissionAsync(
-            member.UserId,
-            ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
-            deploymentId,
-            actorIdsMember,
-            TestContext.Current.CancellationToken);
-
-        Assert.False(hasAccess);
+        var meta = await uowVerify.Users.GetEffectivePermissionsAsync(actorIdsMember, ResourceType.Deployment, deploymentId, TestContext.Current.CancellationToken);
+        Assert.False(meta.Has(PermissionLevel.Read, SpecificPermission.None));
     }
 
     private async Task<Guid> SeedRoleAsync(string name)

@@ -44,7 +44,7 @@ internal sealed class ActorRoleService(IUnitOfWork unitOfWork, IActorScopeEvicto
             return Result.Failure(new ConflictError("The role is already assigned to the actor"));
 
         await unitOfWork.CommitAsync(cancellationToken);
-        await evictor.EvictForActorAsync(actorId, cancellationToken);
+        await evictor.EvictPermissionsForActorAsync(actorId, cancellationToken);
         return Result.Success();
     }
 
@@ -59,7 +59,7 @@ internal sealed class ActorRoleService(IUnitOfWork unitOfWork, IActorScopeEvicto
             return Result.Failure(new NotFoundError("The role is not assigned to the actor"));
 
         await unitOfWork.CommitAsync(cancellationToken);
-        await evictor.EvictForActorAsync(actorId, cancellationToken);
+        await evictor.EvictPermissionsForActorAsync(actorId, cancellationToken);
         return Result.Success();
     }
 }

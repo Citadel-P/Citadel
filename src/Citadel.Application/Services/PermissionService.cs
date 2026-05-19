@@ -1,4 +1,5 @@
-﻿using Citadel.SourceGen;
+﻿using Application.Permissions;
+using Citadel.SourceGen;
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -13,6 +14,10 @@ namespace Application.Services;
 internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IPermissionService
 {
     private static readonly TimeSpan ActorScopeCacheTtl = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan PermissionCacheTtl = TimeSpan.FromMinutes(5);
+
+    // Very small, request-local dedupe store.
+    private readonly Dictionary<PermissionCacheKey, PermissionMetadata> requestCache = [];
 
     public Task<Result> EnforceAsync<TMessage>(TMessage message, ClaimsPrincipal user, CancellationToken cancellationToken = default) where TMessage : notnull
         => PermissionPipeline.Enforce(
@@ -22,47 +27,62 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
             cancellationToken
         );
 
-    public async Task<bool> HasPermissionAsync(
-        Guid userId,
-        ResourceType resourceType,
-        PermissionLevel permissionLevel,
-        SpecificPermission specificPermission,
-        Guid? resourceId,
-        CancellationToken ct)
+    public async Task<PermissionMetadata> ResolvePermissionsAsync(Guid userId, ResourceType resourceType, Guid? resourceId, CancellationToken ct = default)
     {
-        if (!PermissionMatrix.IsAllowed(resourceType, permissionLevel, specificPermission == SpecificPermission.None ? null : [specificPermission]))
-            throw new InvalidOperationException(
-                $"Invalid runtime permission check: [{resourceType}]-[{permissionLevel}] with specific [{specificPermission}] is not an allowed combination.");
+        if (userId == Guid.Empty)
+            return default!;
 
-        // Per resource permissions are not cached, as they are expected to be less common and more dynamic.
+        var key = new PermissionCacheKey(userId, resourceType, resourceId);
+
+        if (requestCache.TryGetValue(key, out var requestCached))
+            return requestCached;
+
+        var permCacheKey = $"perm:{userId}:{(int)resourceType}:{resourceId?.ToString() ?? string.Empty}";
+
+        if (memoryCache.TryGetValue<PermissionMetadata>(permCacheKey, out var memCached))
+        {
+            requestCache[key] = memCached;
+            return memCached;
+        }
+
         var actorIds = await GetActorScopeAsync(userId, ct);
 
-        return await uow.Users.HasPermissionAsync(userId, resourceType, permissionLevel, specificPermission, resourceId, actorIds, ct);
-    }
+        var permissions = await uow.Users.GetEffectivePermissionsAsync(actorIds, resourceType, resourceId, ct);
 
-    public async Task<bool> HasPermissionForAllAsync(
-        Guid userId,
-        ResourceType resourceType,
-        PermissionLevel permissionLevel,
-        SpecificPermission specificPermission,
-        Guid[] resourceIds,
-        CancellationToken ct)
-    {
-        if (!PermissionMatrix.IsAllowed(resourceType, permissionLevel, specificPermission == SpecificPermission.None ? null : [specificPermission]))
-            throw new InvalidOperationException(
-                $"Invalid runtime permission check: [{resourceType}]-[{permissionLevel}] with specific [{specificPermission}] is not an allowed combination.");
-        
-        // empty array is trivially allowed
-        if (resourceIds.Length == 0)
-            return true;
+        var cacheOptions = new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = PermissionCacheTtl
+        };
 
-        var actorIds = await GetActorScopeAsync(userId, ct);
-        return await uow.Users.HasPermissionForAllAsync(userId, resourceType, permissionLevel, specificPermission, resourceIds, actorIds, ct);
+        memoryCache.Set(permCacheKey, permissions, cacheOptions);
+
+        // Maintain an index of permission cache keys per user so evictors can remove them when actor scope changes.
+        // Index must outlive the permission entries it tracks to avoid orphaned perm keys.
+        var permIndexKey = $"perm-index:{userId}";
+        var permIndexOptions = new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = PermissionCacheTtl + TimeSpan.FromMinutes(1)
+        };
+
+        if (memoryCache.TryGetValue<HashSet<string>>(permIndexKey, out var existingIndex) && existingIndex is not null)
+        {
+            var updated = new HashSet<string>(existingIndex, StringComparer.Ordinal) { permCacheKey };
+            memoryCache.Set(permIndexKey, updated, permIndexOptions);
+        }
+        else
+        {
+            memoryCache.Set(permIndexKey, new HashSet<string> { permCacheKey }, permIndexOptions);
+        }
+        requestCache[key] = permissions;
+
+        return permissions;
     }
 
     private async ValueTask<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct)
     {
-        if (memoryCache.TryGetValue<Guid[]>(userId, out var cachedActorIds))
+        var actorCacheKey = $"actor-scope:{userId}";
+
+        if (memoryCache.TryGetValue<Guid[]>(actorCacheKey, out var cachedActorIds))
         {
             if (cachedActorIds != null && cachedActorIds.Length > 0)
                 return cachedActorIds;
@@ -75,9 +95,7 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
             AbsoluteExpirationRelativeToNow = ActorScopeCacheTtl
         };
 
-        memoryCache.Set(userId, actorIds, cacheEntryOptions);
+        memoryCache.Set(actorCacheKey, actorIds, cacheEntryOptions);
         return actorIds;
     }
-
-    private readonly record struct PermissionCacheKey(Guid UserId, ResourceType ResourceType, PermissionLevel PermissionLevel, SpecificPermission SpecificPermission);
 }

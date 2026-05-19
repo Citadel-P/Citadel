@@ -19,8 +19,8 @@ public class PermissionServiceTests
             .ReturnsAsync(actorIds);
 
         users
-            .Setup(x => x.HasPermissionAsync(It.IsAny<Guid>(), ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .Setup(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, (Guid?)null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Hosting.Common.Attributes.PermissionMetadata(PermissionLevel.Read, SpecificPermission.None));
 
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(x => x.Users).Returns(users.Object);
@@ -29,14 +29,17 @@ public class PermissionServiceTests
         var service = new PermissionService(uow.Object, memoryCache);
         var userId = Guid.NewGuid();
 
-        var first = await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, CancellationToken.None);
-        var second = await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, CancellationToken.None);
+        var firstMeta = await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, CancellationToken.None);
+        var secondMeta = await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, CancellationToken.None);
+
+        var first = firstMeta.Has(PermissionLevel.Read, SpecificPermission.None);
+        var second = secondMeta.Has(PermissionLevel.Read, SpecificPermission.None);
 
         Assert.True(first);
         Assert.True(second);
 
         users.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
-        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        users.Verify(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -49,8 +52,8 @@ public class PermissionServiceTests
             .Setup(x => x.GetActorScopeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actorIds);
         users
-            .Setup(x => x.HasPermissionAsync(It.IsAny<Guid>(), ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, It.IsAny<Guid?>(), It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .Setup(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Hosting.Common.Attributes.PermissionMetadata(PermissionLevel.Read, SpecificPermission.None));
 
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(x => x.Users).Returns(users.Object);
@@ -60,11 +63,11 @@ public class PermissionServiceTests
         var userId = Guid.NewGuid();
         var resourceId = Guid.NewGuid();
 
-        await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, resourceId, CancellationToken.None);
-        await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, resourceId, CancellationToken.None);
+        await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, resourceId, CancellationToken.None);
+        await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, resourceId, CancellationToken.None);
 
         users.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
-        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, resourceId, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        users.Verify(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, resourceId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -77,8 +80,8 @@ public class PermissionServiceTests
             .Setup(x => x.GetActorScopeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actorIds);
         users
-            .Setup(x => x.HasPermissionAsync(It.IsAny<Guid>(), ResourceType.Deployment, It.IsAny<PermissionLevel>(), It.IsAny<SpecificPermission>(), null, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .Setup(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, (Guid?)null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Hosting.Common.Attributes.PermissionMetadata(PermissionLevel.Read, SpecificPermission.None));
 
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(x => x.Users).Returns(users.Object);
@@ -87,11 +90,10 @@ public class PermissionServiceTests
         var service = new PermissionService(uow.Object, memoryCache);
         var userId = Guid.NewGuid();
 
-        await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, CancellationToken.None);
-        await service.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Execute, SpecificPermission.Apply, null, CancellationToken.None);
+        await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, CancellationToken.None);
+        await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, CancellationToken.None);
 
         users.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
-        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, null, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()), Times.Once);
-        users.Verify(x => x.HasPermissionAsync(userId, ResourceType.Deployment, PermissionLevel.Execute, SpecificPermission.Apply, null, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        users.Verify(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

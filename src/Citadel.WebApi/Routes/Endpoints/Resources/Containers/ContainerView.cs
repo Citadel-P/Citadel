@@ -2,6 +2,7 @@
 using Domain;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
@@ -61,12 +62,12 @@ public sealed record ContainerView(
             Platform: container.Platform == null ? null : PlatformView.Map(container.Platform));
     }
 
-    internal static async Task<ContainerView> Map(Container container, IContainerPermissionService permissionService)
+    internal static async Task<ContainerView> Map(Container container, IPermissionEvaluator permissionEvaluator)
     {
-        var permissions = await permissionService.GetContainerPermissions(container);
+        var permissions = await permissionEvaluator.EvaluateAsync(container.PlatformId, ResourceType.Platform);
         return Map(container) with
         {
-            Metadata = new (permissions.CanEdit, permissions.CanDelete)
+            Metadata = new (permissions)
         };
     }
 };

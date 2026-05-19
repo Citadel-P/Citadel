@@ -1,5 +1,4 @@
 ﻿using Application.Permissions;
-using Application.Permissions.Requirements;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.Identity;
@@ -11,7 +10,6 @@ using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
 using Hosting.Common.Pipelines;
 using Hosting.Common.Pipelines.Interfaces;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using System.Threading.Channels;
 
@@ -154,9 +152,7 @@ public static class ApplicationModule
     {
         return
             services
-            .AddScoped<IContainerPermissionService, ContainerPermissionService>()
-            .AddScoped<IAuthorizationHandler, EditContainerHandler>()
-            .AddScoped<IAuthorizationHandler, DeleteContainerHandler>();
+            .AddScoped<IPermissionEvaluator, PermissionEvaluator>();
     }
 
 }

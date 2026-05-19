@@ -245,26 +245,20 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
 
         var actorIds = await verificationUow.Users.GetActorScopeAsync(seeded.UserId, TestContext.Current.CancellationToken);
 
-        var hasOldAccess = await verificationUow.Users.HasPermissionAsync(
-            seeded.UserId,
+        var oldMetadata = await verificationUow.Users.GetEffectivePermissionsAsync(
+            actorIds,
             ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
             oldDeploymentId,
-            actorIds,
             TestContext.Current.CancellationToken);
 
-        var hasNewAccess = await verificationUow.Users.HasPermissionAsync(
-            seeded.UserId,
+        var newMetadata = await verificationUow.Users.GetEffectivePermissionsAsync(
+            actorIds,
             ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
             newDeploymentId,
-            actorIds,
             TestContext.Current.CancellationToken);
 
-        Assert.False(hasOldAccess);
-        Assert.True(hasNewAccess);
+        Assert.False(oldMetadata.Has(PermissionLevel.Read, SpecificPermission.None));
+        Assert.True(newMetadata.Has(PermissionLevel.Read, SpecificPermission.None));
     }
 
     [Fact]
@@ -314,16 +308,13 @@ public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(f
 
         var actorIds2 = await verificationUow.Users.GetActorScopeAsync(seeded.UserId, TestContext.Current.CancellationToken);
 
-        var hasAccess = await verificationUow.Users.HasPermissionAsync(
-            seeded.UserId,
-            ResourceType.Deployment,
-            PermissionLevel.Read,
-            SpecificPermission.None,
-            deploymentId,
+        var metadata = await verificationUow.Users.GetEffectivePermissionsAsync(
             actorIds2,
+            ResourceType.Deployment,
+            deploymentId,
             TestContext.Current.CancellationToken);
 
-        Assert.False(hasAccess);
+        Assert.False(metadata.Has(PermissionLevel.Read, SpecificPermission.None));
     }
 
     private async Task<Guid> SeedTeamAsync(string name)

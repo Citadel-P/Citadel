@@ -82,7 +82,7 @@ internal sealed class PatchUserHandler(IUnitOfWork unitOfWork, IActorScopeEvicto
             }
 
             await unitOfWork.Users.ReplaceTeamsAsync(state.User.Id, teamIds, cancellationToken);
-            evictor.EvictUsersAsync([state.User.Id], cancellationToken);
+            evictor.EvictUsers([state.User.Id], cancellationToken);
         }
 
         if (patched.RoleIds is not null)
@@ -98,7 +98,7 @@ internal sealed class PatchUserHandler(IUnitOfWork unitOfWork, IActorScopeEvicto
             }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(state.User.ActorId, roleIds, cancellationToken);
-            await evictor.EvictForActorAsync(state.User.ActorId, cancellationToken);
+            await evictor.EvictPermissionsForActorAsync(state.User.ActorId, cancellationToken);
         }
 
         if (patched.ResourceAccesses is not null)

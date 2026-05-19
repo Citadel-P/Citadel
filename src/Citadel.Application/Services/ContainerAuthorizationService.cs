@@ -54,13 +54,8 @@ internal sealed class ContainerAuthorizationService(
 
         foreach (var platformId in platformIds)
         {
-            var hasPermission = await permissionService.HasPermissionAsync(
-                userId,
-                resourceType,
-                permissionLevel,
-                specificPermission,
-                platformId,
-                cancellationToken);
+            var metadata = await permissionService.ResolvePermissionsAsync(userId, resourceType, platformId, cancellationToken);
+            var hasPermission = metadata.Has(permissionLevel, specificPermission);
 
             if (!hasPermission)
             {

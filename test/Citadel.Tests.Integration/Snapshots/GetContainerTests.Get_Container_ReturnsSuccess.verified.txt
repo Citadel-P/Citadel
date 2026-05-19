@@ -37,7 +37,9 @@
     platformStatus: Offline
   },
   metadata: {
-    canEdit: true,
-    canDelete: true
+    permissionMetadata: {
+      permissionLevel: 7,
+      specificPermissions: 31
+    }
   }
 }

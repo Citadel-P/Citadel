@@ -1,4 +1,4 @@
-﻿using Domain.Contracts.Resources;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
@@ -11,6 +11,7 @@ using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.Models;
 
 namespace Domain.Contracts.Interfaces;
@@ -64,23 +65,12 @@ public interface IResourceAccessRepository
 
 public interface IUserRepository 
 {
-    Task<bool> HasPermissionAsync(
-        Guid userId,
-        ResourceType resourceType,
-        PermissionLevel permissionLevel,
-        SpecificPermission specificPermission,
-        Guid? resourceId,
-        Guid[] actorIds,
+    Task<PermissionMetadata> GetEffectivePermissionsAsync(
+        Guid[] actorIds, 
+        ResourceType resourceType, 
+        Guid? resourceId, 
         CancellationToken ct);
 
-    Task<bool> HasPermissionForAllAsync(
-        Guid userId,
-        ResourceType resourceType,
-        PermissionLevel permissionLevel,
-        SpecificPermission specificPermission,
-        Guid[] resourceIds,
-        Guid[] actorIds,
-        CancellationToken ct);
     Task<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
     Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
@@ -105,7 +95,7 @@ public interface IUserRepository
     Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken);
 }
 
-public interface IRegistryRepository 
+public interface IRegistryRepository
 {
     Task<Registry?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken);
@@ -171,7 +161,7 @@ public interface IGitAccountRepository
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }
 
-public interface IContainerRepository 
+public interface IContainerRepository
 {
     Task<Container?> GetByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<Container?> GetContainerInfoAsync(string dockerContainerId, CancellationToken cancellationToken);
@@ -192,14 +182,14 @@ public interface IContainerRepository
     Task<int> DeleteAsync(IEnumerable<Guid> containersId, CancellationToken cancellationToken);
 }
 
-public interface IContainerStatRepository 
+public interface IContainerStatRepository
 {
     Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string containerId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<ContainerStat> stats, CancellationToken cancellationToken);
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
 }
 
-public interface IActivityEventRepository 
+public interface IActivityEventRepository
 {
     Task<int> AddAsync(ActivityEvent activityEvent, CancellationToken cancellationToken);
     Task<ActivityEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
@@ -209,7 +199,7 @@ public interface IActivityEventRepository
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
 }
 
-public interface IRefreshTokenRepository 
+public interface IRefreshTokenRepository
 {
     Task<int> CountAsync(Guid userId, CancellationToken cancellationToken);
     Task<int> AddAsync(RefreshToken refreshToken, CancellationToken cancellationToken);
@@ -219,7 +209,7 @@ public interface IRefreshTokenRepository
     Task<int> DeleteOldestTokensAsync(Guid userId, int tokensToRemoveCount, CancellationToken cancellationToken);
 }
 
-public interface IPlatformStatRepository 
+public interface IPlatformStatRepository
 {
     Task<IEnumerable<PlatformStat>> GetStatsAggregatedLast24HoursAsync(Guid platformId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<PlatformStat> stats, CancellationToken cancellationToken);
@@ -269,7 +259,7 @@ public interface IRoleRepository
     Task<int> ReplacePermissionsAsync(Guid roleId, IEnumerable<Permission> permissions, CancellationToken cancellationToken);
 }
 
-public interface IPlatformRepository 
+public interface IPlatformRepository
 {
     Task<Platform?> GetByIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<Platform?> GetByNameAsync(string name, CancellationToken cancellationToken);

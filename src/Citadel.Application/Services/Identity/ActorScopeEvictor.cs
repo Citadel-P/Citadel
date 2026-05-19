@@ -5,28 +5,52 @@ namespace Application.Services.Identity;
 
 internal interface IActorScopeEvictor
 {
-    Task EvictForActorAsync(Guid actorId, CancellationToken cancellationToken = default);
-    void EvictUsersAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default);
+    Task EvictPermissionsForActorAsync(Guid actorId, CancellationToken cancellationToken = default);
+    void EvictUsers(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default);
 }
 
 internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCache) : IActorScopeEvictor
 {
-
-    public async Task EvictForActorAsync(Guid actorId, CancellationToken cancellationToken = default)
+    public async Task EvictPermissionsForActorAsync(Guid actorId, CancellationToken cancellationToken = default)
     {
         var userIds = await uow.Teams.GetUserIdsByActorIdAsync(actorId, cancellationToken);
 
-        foreach (var id in (userIds ?? Enumerable.Empty<Guid>()).Distinct())
+        foreach (var id in (userIds ?? []).Distinct())
         {
-            memoryCache.Remove(id);
+            var actorCacheKey = $"actor-scope:{id}";
+            memoryCache.Remove(actorCacheKey);
+
+            // Also evict any permission cache entries associated with this user
+            var permIndexKey = $"perm-index:{id}";
+            if (memoryCache.TryGetValue<HashSet<string>>(permIndexKey, out var permKeys) && permKeys is not null)
+            {
+                foreach (var pk in permKeys)
+                {
+                    memoryCache.Remove(pk);
+                }
+
+                memoryCache.Remove(permIndexKey);
+            }
         }
     }
 
-    public void EvictUsersAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
+    public void EvictUsers(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
     {
-        foreach (var id in userIds ?? Enumerable.Empty<Guid>())
+        foreach (var id in userIds ?? [])
         {
-            memoryCache.Remove(id);
+            var actorCacheKey = $"actor-scope:{id}";
+            memoryCache.Remove(actorCacheKey);
+
+            var permIndexKey = $"perm-index:{id}";
+            if (memoryCache.TryGetValue<HashSet<string>>(permIndexKey, out var permKeys) && permKeys is not null)
+            {
+                foreach (var pk in permKeys)
+                {
+                    memoryCache.Remove(pk);
+                }
+
+                memoryCache.Remove(permIndexKey);
+            }
         }
     }
 }

@@ -18609,21 +18609,13 @@
         }
       },
       "EndpointMetadata": {
+        "required": [
+          "permissionMetadata"
+        ],
         "type": "object",
         "properties": {
-          "canEdit": {
-            "type": [
-              "null",
-              "boolean"
-            ],
-            "default": false
-          },
-          "canDelete": {
-            "type": [
-              "null",
-              "boolean"
-            ],
-            "default": false
+          "permissionMetadata": {
+            "$ref": "#/components/schemas/PermissionMetadata"
           }
         }
       },
@@ -21385,6 +21377,7 @@
       },
       "PermissionLevel": {
         "enum": [
+          "None",
           "Read",
           "Write",
           "Execute"
@@ -21405,6 +21398,17 @@
             "additionalProperties": {
               "type": "string"
             }
+          }
+        }
+      },
+      "PermissionMetadata": {
+        "type": "object",
+        "properties": {
+          "permissionLevel": {
+            "$ref": "#/components/schemas/PermissionLevel"
+          },
+          "specificPermissions": {
+            "$ref": "#/components/schemas/SpecificPermission"
           }
         }
       },

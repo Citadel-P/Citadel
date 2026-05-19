@@ -52,7 +52,7 @@ internal sealed class PatchActorEnabledHandler(IUnitOfWork unitOfWork, IHttpCont
         await unitOfWork.Actors.UpdateAsync(actor, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        await evictor.EvictForActorAsync(actor.Id, cancellationToken);
+        await evictor.EvictPermissionsForActorAsync(actor.Id, cancellationToken);
 
         return actor;
     }
