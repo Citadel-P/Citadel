@@ -22,7 +22,17 @@ internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCach
 
             // Also evict any permission cache entries associated with this user
             var permIndexKey = $"perm-index:{id}";
-            if (memoryCache.TryGetValue<HashSet<string>>(permIndexKey, out var permKeys) && permKeys is not null)
+            // Prefer typed PermissionCacheKey index if present
+            if (memoryCache.TryGetValue<HashSet<Permissions.PermissionCacheKey>>(permIndexKey, out var typedPermKeys) && typedPermKeys is not null)
+            {
+                foreach (var pk in typedPermKeys)
+                {
+                    memoryCache.Remove(pk);
+                }
+
+                memoryCache.Remove(permIndexKey);
+            }
+            else if (memoryCache.TryGetValue<HashSet<string>>(permIndexKey, out var permKeys) && permKeys is not null)
             {
                 foreach (var pk in permKeys)
                 {
@@ -42,7 +52,16 @@ internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCach
             memoryCache.Remove(actorCacheKey);
 
             var permIndexKey = $"perm-index:{id}";
-            if (memoryCache.TryGetValue<HashSet<string>>(permIndexKey, out var permKeys) && permKeys is not null)
+            if (memoryCache.TryGetValue<HashSet<global::Application.Permissions.PermissionCacheKey>>(permIndexKey, out var typedPermKeys) && typedPermKeys is not null)
+            {
+                foreach (var pk in typedPermKeys)
+                {
+                    memoryCache.Remove(pk);
+                }
+
+                memoryCache.Remove(permIndexKey);
+            }
+            else if (memoryCache.TryGetValue<HashSet<string>>(permIndexKey, out var permKeys) && permKeys is not null)
             {
                 foreach (var pk in permKeys)
                 {

@@ -4,6 +4,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Deployments;
+using WebApi.Routes.Endpoints.Resources.Identity;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
@@ -26,7 +27,7 @@ public sealed record ContainerView(
     PlatformView? Platform = null,
     ImageView? ImageView = null,
     DeploymentView? DeploymentView = null,
-    EndpointMetadata? Metadata = null)
+    PlatformCapabilities? Capabilities = null)
 {
     internal static IEnumerable<ContainerView> Map(IEnumerable<Container> containersInfo)
         => containersInfo?.Select(Map).ToList() ?? [];
@@ -67,7 +68,7 @@ public sealed record ContainerView(
         var permissions = await permissionEvaluator.EvaluateAsync(container.PlatformId, ResourceType.Platform);
         return Map(container) with
         {
-            Metadata = new (permissions)
+            Capabilities = CapabilityMapper.ToPlatformCapabilities(permissions)
         };
     }
 };

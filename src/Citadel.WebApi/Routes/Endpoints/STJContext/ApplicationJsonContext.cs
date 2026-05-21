@@ -1,4 +1,5 @@
-﻿using Application.Features.Images.Queries;
+﻿using Application.Features.Identity.Auth.Models;
+using Application.Features.Images.Queries;
 using Domain;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Compose;
@@ -15,32 +16,32 @@ using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Hosting.Common;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
-using WebApi.Routes.Endpoints.Resources.Identity.Actors;
-using WebApi.Routes.Endpoints.Resources.Identity.Users;
-using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
+using WebApi.Routes.Endpoints.Resources.Identity;
+using WebApi.Routes.Endpoints.Resources.Identity.Actors;
+using WebApi.Routes.Endpoints.Resources.Identity.Auth;
+using WebApi.Routes.Endpoints.Resources.Identity.Roles;
+using WebApi.Routes.Endpoints.Resources.Identity.Teams;
+using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Images;
+using WebApi.Routes.Endpoints.Resources.Lookup;
 using WebApi.Routes.Endpoints.Resources.Networks;
 using WebApi.Routes.Endpoints.Resources.Paging;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Volumes;
-using WebApi.Routes.Endpoints.Resources.Lookup;
-using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageResponseItem;
 using ApiActorView = WebApi.Routes.Endpoints.Resources.Identity.Actors.ActorView;
-using WebApi.Routes.Endpoints.Resources.Identity.Roles;
-using WebApi.Routes.Endpoints.Resources.Identity.Auth;
-using Application.Features.Identity.Auth.Models;
-using Hosting.Common;
+using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageResponseItem;
 
 namespace Application.Models;
 
@@ -145,7 +146,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeleteVolumesInput))]
 [JsonSerializable(typeof(ListVolumesRequest))]
 [JsonSerializable(typeof(VolumesView))]
-[JsonSerializable(typeof(EndpointMetadata))]
 [JsonSerializable(typeof(IEnumerable<DockerHubRepositoryInfo>))]
 [JsonSerializable(typeof(DockerHubTag))]
 [JsonSerializable(typeof(IEnumerable<DockerHubImage>))]
@@ -292,6 +292,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(PatchResourceMetadata))]
 [JsonSerializable(typeof(PatchGitRepositoryInput))]
 [JsonSerializable(typeof(ResourceInfo))]
+[JsonSerializable(typeof(ResourceCapabilities))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

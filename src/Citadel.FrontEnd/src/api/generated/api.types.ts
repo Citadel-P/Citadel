@@ -128,6 +128,7 @@ export enum PlatformConnectorType {
 }
 
 export enum PermissionLevel {
+  None = "None",
   Read = "Read",
   Write = "Write",
   Execute = "Execute",
@@ -1310,7 +1311,7 @@ export interface ContainerView {
   platform?: null | PlatformView;
   imageView?: null | ImageView;
   deploymentView?: null | DeploymentView;
-  metadata?: null | EndpointMetadata;
+  capabilities?: null | PlatformCapabilities;
 }
 
 export interface ContainerVolumeResult {
@@ -1526,6 +1527,17 @@ export interface DeploymentApplyError {
   message: null | string;
 }
 
+export interface DeploymentCapabilities {
+  canViewLogs: boolean;
+  canInspect: boolean;
+  canOpenTerminal: boolean;
+  canPull: boolean;
+  canApply: boolean;
+  canRead: boolean;
+  canWrite: boolean;
+  canExecute: boolean;
+}
+
 export interface DeploymentConfigView {
   /** @format uuid */
   id: string;
@@ -1612,6 +1624,7 @@ export interface DeploymentView {
   dockerContainerId?: null | string;
   dockerImageId?: null | string;
   latestActivityView?: null | LatestActivityView;
+  capabilities?: null | DeploymentCapabilities;
 }
 
 export interface DeploymentsView {
@@ -1728,13 +1741,6 @@ export interface EndpointIpamConfiguration {
   ipv4Address: null | string;
   ipv6Address: null | string;
   linkLocalIPs: string[];
-}
-
-export interface EndpointMetadata {
-  /** @default false */
-  canEdit?: null | boolean;
-  /** @default false */
-  canDelete?: null | boolean;
 }
 
 export interface EndpointSettingsInfo {
@@ -2468,6 +2474,16 @@ export interface PermissionView {
   resourceType: ResourceType;
   permissionLevel: PermissionLevel;
   specificPermissions: SpecificPermission[];
+}
+
+export interface PlatformCapabilities {
+  canViewLogs: boolean;
+  canInspect: boolean;
+  canOpenTerminal: boolean;
+  canPull: boolean;
+  canRead: boolean;
+  canWrite: boolean;
+  canExecute: boolean;
 }
 
 export interface PlatformDescriptorDockerPlatformDescriptor {

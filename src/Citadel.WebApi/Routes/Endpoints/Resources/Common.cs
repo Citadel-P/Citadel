@@ -1,11 +1,8 @@
-using Hosting.Common.Attributes;
 using Hosting.Common.MergePatch;
 using System.Reflection;
 using System.Text.Json;
 
 namespace WebApi.Routes.Endpoints.Resources;
-
-public sealed record EndpointMetadata(PermissionMetadata PermissionMetadata);
 
 public sealed record RenameResource(Guid Id, string Name);
 

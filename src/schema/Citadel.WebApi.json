@@ -16853,13 +16853,13 @@
               }
             ]
           },
-          "metadata": {
+          "capabilities": {
             "oneOf": [
               {
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/EndpointMetadata"
+                "$ref": "#/components/schemas/PlatformCapabilities"
               }
             ]
           }
@@ -17716,6 +17716,45 @@
           }
         }
       },
+      "DeploymentCapabilities": {
+        "required": [
+          "canViewLogs",
+          "canInspect",
+          "canOpenTerminal",
+          "canPull",
+          "canApply",
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object",
+        "properties": {
+          "canViewLogs": {
+            "type": "boolean"
+          },
+          "canInspect": {
+            "type": "boolean"
+          },
+          "canOpenTerminal": {
+            "type": "boolean"
+          },
+          "canPull": {
+            "type": "boolean"
+          },
+          "canApply": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
+          }
+        }
+      },
       "DeploymentConfigView": {
         "required": [
           "id",
@@ -18125,6 +18164,16 @@
               },
               {
                 "$ref": "#/components/schemas/LatestActivityView"
+              }
+            ]
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentCapabilities"
               }
             ]
           }
@@ -18605,17 +18654,6 @@
             "items": {
               "type": "string"
             }
-          }
-        }
-      },
-      "EndpointMetadata": {
-        "required": [
-          "permissionMetadata"
-        ],
-        "type": "object",
-        "properties": {
-          "permissionMetadata": {
-            "$ref": "#/components/schemas/PermissionMetadata"
           }
         }
       },
@@ -21401,17 +21439,6 @@
           }
         }
       },
-      "PermissionMetadata": {
-        "type": "object",
-        "properties": {
-          "permissionLevel": {
-            "$ref": "#/components/schemas/PermissionLevel"
-          },
-          "specificPermissions": {
-            "$ref": "#/components/schemas/SpecificPermission"
-          }
-        }
-      },
       "PermissionView": {
         "required": [
           "resourceType",
@@ -21431,6 +21458,41 @@
             "items": {
               "$ref": "#/components/schemas/SpecificPermission"
             }
+          }
+        }
+      },
+      "PlatformCapabilities": {
+        "required": [
+          "canViewLogs",
+          "canInspect",
+          "canOpenTerminal",
+          "canPull",
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object",
+        "properties": {
+          "canViewLogs": {
+            "type": "boolean"
+          },
+          "canInspect": {
+            "type": "boolean"
+          },
+          "canOpenTerminal": {
+            "type": "boolean"
+          },
+          "canPull": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
           }
         }
       },

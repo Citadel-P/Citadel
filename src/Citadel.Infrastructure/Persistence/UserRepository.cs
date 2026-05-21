@@ -64,6 +64,67 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return result?.ToDomain();
     }
 
+    public async Task<IReadOnlyDictionary<Guid, PermissionMetadata>> GetEffectivePermissionsBatchAsync(
+        Guid[] actorIds,
+        ResourceType resourceType,
+        Guid[] resourceIds,
+        CancellationToken ct)
+    {
+        const string sql = """
+        WITH Ids AS (
+            SELECT unnest(@ResourceIds::uuid[]) AS Id
+        ),
+        EffectivePermissions AS (
+            -- role permissions apply to all resources (ResourceId = NULL)
+            SELECT NULL::uuid AS ResourceId, p.PermissionLevel, p.SpecificPermissions
+            FROM ActorRoles ar
+            JOIN Permissions p ON p.RoleId = ar.RoleId
+            WHERE ar.ActorId = ANY(@ActorIds)
+              AND p.ResourceType = @ResourceType
+
+            UNION ALL
+
+            SELECT ra.ResourceId, ra.PermissionLevel, ra.SpecificPermissions
+            FROM ResourceAccesses ra
+            WHERE ra.ActorId = ANY(@ActorIds)
+              AND ra.ResourceType = @ResourceType
+              AND ra.ResourceId = ANY(@ResourceIds)
+        )
+        SELECT
+            ids.Id AS ResourceId,
+            COALESCE(bit_or(ep.PermissionLevel), 0) AS PermissionLevel,
+            COALESCE(bit_or(ep.SpecificPermissions), 0) AS SpecificPermissions
+        FROM Ids ids
+        LEFT JOIN EffectivePermissions ep ON ep.ResourceId IS NULL OR ep.ResourceId = ids.Id
+        GROUP BY ids.Id;
+        """;
+
+        var rows = await db.QueryAsync<EffectivePermissionRow>(
+            sql,
+            new
+            {
+                ActorIds = actorIds,
+                ResourceType = (int)resourceType,
+                ResourceIds = resourceIds,
+            },
+            transaction: tx());
+
+        var dict = new Dictionary<Guid, PermissionMetadata>();
+        foreach (var r in rows)
+        {
+            dict[r.ResourceId] = new PermissionMetadata((PermissionLevel)r.PermissionLevel, (SpecificPermission)r.SpecificPermissions);
+        }
+
+        // Ensure all requested IDs are present
+        foreach (var id in resourceIds)
+        {
+            if (!dict.ContainsKey(id))
+                dict[id] = PermissionMetadata.Empty;
+        }
+
+        return dict;
+    }
+
     public async Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken)
     {
         const string selectSql = $$"""

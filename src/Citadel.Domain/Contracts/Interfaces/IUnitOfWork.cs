@@ -70,6 +70,12 @@ public interface IUserRepository
         ResourceType resourceType, 
         Guid? resourceId, 
         CancellationToken ct);
+    
+    Task<IReadOnlyDictionary<Guid, PermissionMetadata>> GetEffectivePermissionsBatchAsync(
+        Guid[] actorIds, 
+        ResourceType resourceType, 
+        Guid[] resourceIds, 
+        CancellationToken ct = default);
 
     Task<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);

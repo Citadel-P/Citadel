@@ -1,6 +1,8 @@
 using Application.Services;
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
+using Hosting.Common.Attributes;
+using Application.Permissions;
 using Microsoft.Extensions.Caching.Memory;
 using Moq;
 
@@ -95,5 +97,79 @@ public class PermissionServiceTests
 
         users.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
         users.Verify(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ResolvePermissionsAsyncForIds_PerformsNoDbWhenFullyCached()
+    {
+        var users = new Mock<IUserRepository>();
+        var actorIds = new[] { Guid.NewGuid() };
+
+        users
+            .Setup(x => x.GetActorScopeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(actorIds);
+
+        users
+            .Setup(x => x.GetEffectivePermissionsBatchAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<Guid, PermissionMetadata>());
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(x => x.Users).Returns(users.Object);
+
+        using var memoryCache = new MemoryCache(new MemoryCacheOptions());
+        var service = new PermissionService(uow.Object, memoryCache);
+        var userId = Guid.NewGuid();
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
+
+        // Prime cache by calling ResolvePermissionsAsyncForIds which will populate the cache
+        users.Verify(x => x.GetEffectivePermissionsBatchAsync(It.IsAny<Guid[]>(), It.IsAny<ResourceType>(), It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // Manually seed memory cache for each id
+        var meta = new PermissionMetadata(PermissionLevel.Read, SpecificPermission.None);
+        foreach (var id in ids)
+        {
+            var key = new PermissionCacheKey(userId, ResourceType.Deployment, id);
+            memoryCache.Set(key, meta, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) });
+        }
+
+        var res = await service.ResolvePermissionsAsyncForIds(userId, ResourceType.Deployment, ids, CancellationToken.None);
+
+        // No DB calls should have occurred
+        users.Verify(x => x.GetEffectivePermissionsBatchAsync(It.IsAny<Guid[]>(), It.IsAny<ResourceType>(), It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal(2, res.Count);
+    }
+
+    [Fact]
+    public async Task ResolvePermissionsAsyncForIds_PerformsOneDbWhenMiss()
+    {
+        var users = new Mock<IUserRepository>();
+        var actorIds = new[] { Guid.NewGuid() };
+
+        users
+            .Setup(x => x.GetActorScopeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(actorIds);
+
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var fetched = new Dictionary<Guid, PermissionMetadata>
+        {
+            { ids[0], new PermissionMetadata(PermissionLevel.Read, SpecificPermission.None) }
+        };
+
+        users
+            .Setup(x => x.GetEffectivePermissionsBatchAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fetched);
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(x => x.Users).Returns(users.Object);
+
+        using var memoryCache = new MemoryCache(new MemoryCacheOptions());
+        var service = new PermissionService(uow.Object, memoryCache);
+        var userId = Guid.NewGuid();
+
+        var res = await service.ResolvePermissionsAsyncForIds(userId, ResourceType.Deployment, ids, CancellationToken.None);
+
+        // Single batch DB call
+        users.Verify(x => x.GetEffectivePermissionsBatchAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(2, res.Count);
     }
 }

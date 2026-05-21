@@ -36,10 +36,13 @@
     },
     platformStatus: Offline
   },
-  metadata: {
-    permissionMetadata: {
-      permissionLevel: 7,
-      specificPermissions: 31
-    }
+  capabilities: {
+    canViewLogs: true,
+    canInspect: true,
+    canOpenTerminal: true,
+    canPull: true,
+    canRead: true,
+    canWrite: true,
+    canExecute: true
   }
 }

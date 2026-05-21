@@ -1,0 +1,122 @@
+using Hosting.Common;
+using Hosting.Common.Attributes;
+
+namespace WebApi.Routes.Endpoints.Resources.Identity;
+
+public record ResourceCapabilities(
+    bool CanRead,
+    bool CanWrite,
+    bool CanExecute
+);
+
+public sealed record PlatformCapabilities(
+    bool CanRead,
+    bool CanWrite,
+    bool CanExecute,
+    bool CanViewLogs,
+    bool CanInspect,
+    bool CanOpenTerminal,
+    bool CanPull
+) : ResourceCapabilities(
+    CanRead,
+    CanWrite,
+    CanExecute);
+
+public sealed record DeploymentCapabilities(
+    bool CanRead,
+    bool CanWrite,
+    bool CanExecute,
+    bool CanViewLogs,
+    bool CanInspect,
+    bool CanOpenTerminal,
+    bool CanPull,
+    bool CanApply
+) : ResourceCapabilities(
+    CanRead,
+    CanWrite,
+    CanExecute);
+
+public static class CapabilityMapper
+{
+    public static PlatformCapabilities ToPlatformCapabilities(
+        PermissionMetadata permission)
+    {
+        var common = BuildCommon(permission);
+
+        return new PlatformCapabilities(
+            common.CanRead,
+            common.CanWrite,
+            common.CanExecute,
+
+            CanViewLogs:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Logs) != 0,
+
+            CanInspect:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Inspect) != 0,
+
+            CanOpenTerminal:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Terminal) != 0,
+
+            CanPull:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Pull) != 0
+        );
+    }
+
+    public static DeploymentCapabilities ToDeploymentCapabilities(
+        PermissionMetadata permission)
+    {
+        var common = BuildCommon(permission);
+
+        return new DeploymentCapabilities(
+            common.CanRead,
+            common.CanWrite,
+            common.CanExecute,
+
+            CanViewLogs:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Logs) != 0,
+
+            CanInspect:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Inspect) != 0,
+
+            CanOpenTerminal:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Terminal) != 0,
+
+            CanPull:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Pull) != 0,
+
+            CanApply:
+                common.CanWrite &&
+                (permission.SpecificPermissions & SpecificPermission.Apply) != 0
+        );
+    }
+
+    private static ResourceCapabilities BuildCommon(
+        PermissionMetadata permission)
+    {
+        var level = permission.PermissionLevel;
+        var canExecute =
+            (level & PermissionLevel.Execute) != 0;
+
+        var canWrite =
+            canExecute ||
+            (level & PermissionLevel.Write) != 0;
+
+        var canRead =
+            canWrite ||
+            (level & PermissionLevel.Read) != 0;
+
+        return new ResourceCapabilities(
+            CanRead: canRead,
+            CanWrite: canWrite,
+            CanExecute: canExecute
+        );
+    }
+}

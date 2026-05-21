@@ -1,14 +1,51 @@
 ﻿
+using Application.Permissions;
 using Domain;
 using Domain.Entities.Deployments;
+using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Activities;
+using WebApi.Routes.Endpoints.Resources.Identity;
+using Hosting.Common.Attributes;
 namespace WebApi.Routes.Endpoints.Resources.Deployments;
 
 public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments)
 {
-    internal static DeploymentsView Map(IEnumerable<Deployment> deployments) => new(
-        Deployments: deployments.Select(DeploymentView.Map)
-        );
+    internal static async Task<DeploymentsView> Map(IEnumerable<Deployment> deployments, IPermissionEvaluator permissionEvaluator)
+    {
+        var list = deployments as Deployment[] ?? [.. deployments];
+
+        if (list.Length == 0)
+            return new DeploymentsView([]);
+
+        var ids = new Guid[list.Length];
+
+        for (var i = 0; i < list.Length; i++)
+        {
+            ids[i] = list[i].Id;
+        }
+
+        var perms = await permissionEvaluator
+            .EvaluateAsync(ids, ResourceType.Deployment);
+
+        var views = new DeploymentView[list.Length];
+
+        for (var i = 0; i < list.Length; i++)
+        {
+            var deployment = list[i];
+
+            var baseView = DeploymentView.Map(deployment);
+
+            perms.TryGetValue(deployment.Id, out var meta);
+
+            views[i] = baseView with
+            {
+                Capabilities = CapabilityMapper.ToDeploymentCapabilities(
+                    meta == default ? PermissionMetadata.Empty : meta)
+            };
+        }
+
+        return new DeploymentsView(views);
+    }
 }
 
 public sealed record DeploymentView(
@@ -29,7 +66,8 @@ public sealed record DeploymentView(
     Guid? ContainerId = null,
     string? DockerContainerId = null,
     string? DockerImageId = null,
-    LatestActivityView? LatestActivityView = null
+    LatestActivityView? LatestActivityView = null,
+    DeploymentCapabilities? Capabilities = null
     )
 {
     internal static DeploymentView Map(Deployment deployment) => new(
@@ -52,6 +90,15 @@ public sealed record DeploymentView(
         DockerImageId: deployment.Container?.DockerImageId ?? deployment.Image?.DockerImageId,
         LatestActivityView: deployment.LatestActivityEvent?.Map()
         );
+
+    internal static async Task<DeploymentView> Map(Deployment deployment, IPermissionEvaluator permissionEvaluator)
+    {
+        var permissions = await permissionEvaluator.EvaluateAsync(deployment.Id, ResourceType.Deployment);
+        return Map(deployment) with
+        {
+            Capabilities = CapabilityMapper.ToDeploymentCapabilities(permissions)
+        };
+    }
 }
 
 public sealed record DeploymentConfigView(
