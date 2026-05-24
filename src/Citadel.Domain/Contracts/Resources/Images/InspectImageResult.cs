@@ -19,6 +19,7 @@ public record InspectImageResult(
     IEnumerable<ContainerImageResult> Containers
     )
 {
+    public Guid PlatformId { get; set; }
     public Registry? Registry { get; set; }
 };
 

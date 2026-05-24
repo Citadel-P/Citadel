@@ -1,11 +1,11 @@
-import { DockerNetworkResult } from '@/api/generated/api.types';
+import { DockerNetworkResultView } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 
 export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } =
-  createActionsBuilder<DockerNetworkResult>()
+  createActionsBuilder<DockerNetworkResultView>()
     .addAction({
       key: 'inspect',
       type: 'command',
@@ -34,7 +34,7 @@ export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } =
       icon: Trash,
       mutateKey: 'deleteNetworks',
       canExecute: (r) => {
-        const can = (x: DockerNetworkResult) => x.inUse === false;
+        const can = (x: DockerNetworkResultView) => x.inUse === false;
         return Array.isArray(r) ? r.every(can) : can(r);
       },
       separatorBefore: true,

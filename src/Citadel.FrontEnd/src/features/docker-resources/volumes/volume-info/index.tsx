@@ -1,4 +1,4 @@
-import { DockerVolumeResult } from '@/api/generated/api.types';
+import { DockerVolumeResultView } from '@/api/generated/api.types';
 import { Box, Info } from 'lucide-react';
 import { ContainerInfoTable } from './container-info-table';
 import { useRead } from '@/lib/hooks';
@@ -9,7 +9,7 @@ import { VolumeInfoTable } from './volume-info-table';
 import { VolumeInfoActions } from './actions';
 import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
 
-export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResult> = {
+export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResultView> = {
   Header: {
     Indicator: ({ resource }) => {
       return <StateIndicator value={resource?.inUse ?? false} />;
@@ -31,7 +31,7 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
   },
 };
 
-const InspectVolumeWrapper = ({ resource }: { resource: DockerVolumeResult }) => {
+const InspectVolumeWrapper = ({ resource }: { resource: DockerVolumeResultView }) => {
   return (
     <div className="flex flex-col gap-8">
       <Section title="Details" Icon={Info}>

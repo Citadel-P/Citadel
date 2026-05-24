@@ -65,7 +65,12 @@ internal sealed class CreateVolumeHandler(IPlatformContainerCache platformContai
             );
 
             var volumeConnector = connectorFactory.GetConnector(platform.ConnectorType);
-            return await volumeConnector.CreateVolumeAsync(request, cancellationToken: cancellationToken);
+            var volumeResult = await volumeConnector.CreateVolumeAsync(request, cancellationToken: cancellationToken);
+            if (volumeResult.IsSuccess(out var volume))
+            {
+                volume.PlatformId = command.PlatformId;
+            }
+            return volumeResult;
         }
         catch (RpcException ex)
         {

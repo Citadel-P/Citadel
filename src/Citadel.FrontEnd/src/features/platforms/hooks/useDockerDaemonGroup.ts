@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { ContainerView, DockerNetworkResult, DockerVolumeResult, ImageView } from '@/api/generated/api.types';
+import { ContainerView, DockerNetworkResultView, DockerVolumeResultView, ImageView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
 export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaemonListeners) => {
@@ -17,13 +17,19 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
     listenersRef.current?.onImageEvent?.({ image, eventType });
   }, []);
 
-  const handleVolumeEventReceived = useCallback((volume: DockerVolumeResult, eventType: string, actorId: string) => {
-    listenersRef.current?.onVolumeEvent?.({ volume, eventType, actorId });
-  }, []);
+  const handleVolumeEventReceived = useCallback(
+    (volume: DockerVolumeResultView, eventType: string, actorId: string) => {
+      listenersRef.current?.onVolumeEvent?.({ volume, eventType, actorId });
+    },
+    [],
+  );
 
-  const handleNetworkEventReceived = useCallback((network: DockerNetworkResult, eventType: string, actorId: string) => {
-    listenersRef.current?.onNetworkEvent?.({ network, eventType, actorId });
-  }, []);
+  const handleNetworkEventReceived = useCallback(
+    (network: DockerNetworkResultView, eventType: string, actorId: string) => {
+      listenersRef.current?.onNetworkEvent?.({ network, eventType, actorId });
+    },
+    [],
+  );
 
   const setupEventListeners = useCallback(
     (hub: HubConnection) => {
@@ -66,12 +72,12 @@ export interface ImageEvent extends BaseEvent {
 }
 
 export interface VolumeEvent extends BaseEvent {
-  volume: DockerVolumeResult;
+  volume: DockerVolumeResultView;
   actorId: string;
 }
 
 export interface NetworkEvent extends BaseEvent {
-  network: DockerNetworkResult;
+  network: DockerNetworkResultView;
   actorId: string;
 }
 

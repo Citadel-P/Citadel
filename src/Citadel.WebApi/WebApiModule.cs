@@ -1,4 +1,5 @@
 ﻿using Application.Configs;
+using Application.Permissions;
 using Application.Services.Abstractions;
 using Hosting.Common;
 using Hosting.Common.Extensions;

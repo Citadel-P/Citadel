@@ -1,32 +1,32 @@
-﻿using System.ComponentModel;
-using Application.Features.Volumes.Queries;
-using Domain.Contracts.Resources.Volumes;
+﻿using Application.Features.Volumes.Queries;
+using Application.Permissions;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 
 namespace WebApi.Routes.Endpoints;
 
 public static class Volumes
 {
-    public static async Task<Results<Ok<VolumesView>, ProblemHttpResult>> List(IMediator mediator, [Description("The platform id")] Guid platformId, [AsParameters] ListVolumesRequest listNetworksRequest, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<VolumesView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionService, [Description("The platform id")] Guid platformId, [AsParameters] ListVolumesRequest listNetworksRequest, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(listNetworksRequest.ToQuery(platformId), cancellationToken);
-        return EndpointHandlers.HandleResult(result, (v) => new VolumesView(v));
+        return await EndpointHandlers.HandleResult(result, permissionService, VolumesView.Map);
     }
 
-    public static async Task<Results<Ok<DockerVolumeResult>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateVolumeInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DockerVolumeResultView>, ProblemHttpResult>> Create(IMediator mediator, IPermissionEvaluator permissionService, [FromBody] CreateVolumeInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, v => v);
+        return await EndpointHandlers.HandleResult(result, permissionService, DockerVolumeResultView.Map);
     }
 
-    public static async Task<Results<Ok<DockerVolumeResult>, ProblemHttpResult>> Inspect(IMediator mediator, Guid platformId, string name, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DockerVolumeResultView>, ProblemHttpResult>> Inspect(IMediator mediator, IPermissionEvaluator permissionService, Guid platformId, string name, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new InspectVolume(platformId, name), cancellationToken);
-        return EndpointHandlers.HandleResult(result, v => v);
+        return await EndpointHandlers.HandleResult(result, permissionService, DockerVolumeResultView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteVolumesInput request, CancellationToken cancellationToken)

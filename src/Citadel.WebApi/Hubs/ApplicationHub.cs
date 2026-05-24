@@ -1,15 +1,9 @@
 ﻿using Application.Features.Containers.Commands;
 using Application.Features.Deployments.Commands;
-using Application.Features.Images.Queries;
-using Application.Features.Platforms.Queries;
 using Application.Services.SignalR;
-using Domain;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using WebApi.Routes.Endpoints.Resources.Containers;
-using WebApi.Routes.Endpoints.Resources.Images;
-using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Hubs;
 
@@ -55,35 +49,6 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
     #endregion
 
     #region Client Methods
-    public async Task<PlatformsView> GetPlatforms()
-    {
-        var result = await mediator.Send(new GetPlatforms(), Context.ConnectionAborted);
-        if (result.IsSuccess(out var platforms))
-        {
-            return PlatformsView.Map(platforms);
-        }
-        else return new PlatformsView([]);
-    }
-
-    public async Task<ContainersView> GetContainers(Guid id)
-    {
-        var response = await mediator.Send(new GetContainers(id), Context.ConnectionAborted);
-        if (response.IsSuccess(out var containers))
-        {
-            return ContainersView.Map(containers);
-        }
-        else return new ContainersView([]);
-    }
-
-    public async Task<ImagesView> GetImages(Guid id)
-    {
-        var response = await mediator.Send(new GetAllLocalImages(id), Context.ConnectionAborted);
-        if (response.IsSuccess(out var images))
-        {
-            return ImagesView.Map(images);
-        }
-        else return new ImagesView([]);
-    }
 
     public async Task StartContainerLogs(string containerId)
     {

@@ -4,7 +4,7 @@ import {
   ImageView,
   DeploymentImageInfoExternalImage,
   DeploymentImageInfoLocalImage,
-  DockerNetworkResult,
+  DockerNetworkResultView,
   ContainerRestartPolicy,
   ResourceSpec,
   StopSignal,
@@ -412,7 +412,7 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                     platformId={currentPlatformId}
                     queryEnabled={!!currentPlatformId}
                     selected={value ?? []}
-                    onSelect={(v: DockerNetworkResult[] | undefined) =>
+                    onSelect={(v: DockerNetworkResultView[] | undefined) =>
                       set((prev) => ({
                         spec: {
                           ...prev.spec!,

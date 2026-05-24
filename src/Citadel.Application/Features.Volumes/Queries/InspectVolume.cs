@@ -37,6 +37,11 @@ internal sealed class InspectVolumeHandler(IPlatformContainerCache platformConta
         );
 
         var volumeConnector = connectorFactory.GetConnector(platform.ConnectorType);
-        return await volumeConnector.InspectVolumeAsync(command, cancellationToken);
+        var result = await volumeConnector.InspectVolumeAsync(command, cancellationToken);
+        if (result.IsSuccess(out var volume))
+        {
+            volume.PlatformId = query.PlatformId;
+        }
+        return result;
     }
 }

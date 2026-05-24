@@ -15,7 +15,10 @@ public record DockerVolumeResult (
     IEnumerable<ContainerVolumeResult> Containers,
     IReadOnlyDictionary<string, string> Status,
     IReadOnlyDictionary<string, string> Labels,
-    IReadOnlyDictionary<string, string> Options);
+    IReadOnlyDictionary<string, string> Options)
+{
+    public Guid PlatformId { get; set; }
+}
 
 public record ContainerVolumeResult(
     string Id,

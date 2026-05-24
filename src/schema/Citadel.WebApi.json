@@ -8590,7 +8590,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DockerNetworkDetails"
+                  "$ref": "#/components/schemas/DockerNetworkDetailsView"
                 }
               }
             }
@@ -8997,7 +8997,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DockerVolumeResult"
+                  "$ref": "#/components/schemas/DockerVolumeResultView"
                 }
               }
             }
@@ -9093,7 +9093,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DockerVolumeResult"
+                  "$ref": "#/components/schemas/DockerVolumeResultView"
                 }
               }
             }
@@ -18339,7 +18339,7 @@
           }
         }
       },
-      "DockerNetworkDetails": {
+      "DockerNetworkDetailsView": {
         "required": [
           "name",
           "id",
@@ -18433,10 +18433,20 @@
             "items": {
               "$ref": "#/components/schemas/NetworkPeerInfo"
             }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NetworkCapabilities"
+              }
+            ]
           }
         }
       },
-      "DockerNetworkResult": {
+      "DockerNetworkResultView": {
         "required": [
           "name",
           "id",
@@ -18520,10 +18530,20 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NetworkCapabilities"
+              }
+            ]
           }
         }
       },
-      "DockerVolumeResult": {
+      "DockerVolumeResultView": {
         "required": [
           "id",
           "name",
@@ -18605,6 +18625,16 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VolumeCapabilities"
+              }
+            ]
           }
         }
       },
@@ -20119,6 +20149,33 @@
           }
         }
       },
+      "ImageCapabilities": {
+        "required": [
+          "canInspect",
+          "canPull",
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object",
+        "properties": {
+          "canInspect": {
+            "type": "boolean"
+          },
+          "canPull": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
+          }
+        }
+      },
       "ImagePullError": {
         "required": [
           "code",
@@ -20289,6 +20346,16 @@
                 "$ref": "#/components/schemas/RegistryView"
               }
             ]
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageCapabilities"
+              }
+            ]
           }
         }
       },
@@ -20408,6 +20475,16 @@
               },
               {
                 "$ref": "#/components/schemas/RegistryView"
+              }
+            ]
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageCapabilities"
               }
             ]
           }
@@ -20685,6 +20762,29 @@
           }
         }
       },
+      "NetworkCapabilities": {
+        "required": [
+          "canInspect",
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object",
+        "properties": {
+          "canInspect": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
+          }
+        }
+      },
       "NetworkConnectedContainer": {
         "required": [
           "name",
@@ -20881,7 +20981,7 @@
           "networks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DockerNetworkResult"
+              "$ref": "#/components/schemas/DockerNetworkResultView"
             }
           }
         }
@@ -21970,6 +22070,16 @@
               },
               {
                 "$ref": "#/components/schemas/PlatformDescriptor"
+              }
+            ]
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformCapabilities"
               }
             ]
           }
@@ -23745,6 +23855,29 @@
           }
         }
       },
+      "VolumeCapabilities": {
+        "required": [
+          "canInspect",
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object",
+        "properties": {
+          "canInspect": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
+          }
+        }
+      },
       "VolumeCapacityRange": {
         "required": [
           "requiredBytes",
@@ -23937,7 +24070,7 @@
           "volumes": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DockerVolumeResult"
+              "$ref": "#/components/schemas/DockerVolumeResultView"
             }
           }
         }

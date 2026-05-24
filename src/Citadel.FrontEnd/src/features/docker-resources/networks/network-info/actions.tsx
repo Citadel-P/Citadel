@@ -2,9 +2,9 @@ import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { DockerNetworkDetails } from '@/api/generated/api.types';
+import { DockerNetworkDetailsView } from '@/api/generated/api.types';
 
-export const { info: NetworkInfoActions } = createActionsBuilder<DockerNetworkDetails>()
+export const { info: NetworkInfoActions } = createActionsBuilder<DockerNetworkDetailsView>()
   .addAction({
     key: 'delete',
     type: 'command',

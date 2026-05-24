@@ -1,4 +1,4 @@
-import { DockerNetworkDetails, NetworkConnectedContainer } from '@/api/generated/api.types';
+import { DockerNetworkDetailsView, NetworkConnectedContainer } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { useAppContext } from '@/lib/context/app-context';
 import { truncate } from '@/lib/truncate';
@@ -44,7 +44,7 @@ const columns = (platformId: string | undefined): ColumnDef<NetworkConnectedCont
   },
 ];
 
-export const ContainerInfoTable = ({ network }: { network: DockerNetworkDetails | undefined }) => {
+export const ContainerInfoTable = ({ network }: { network: DockerNetworkDetailsView | undefined }) => {
   const { currentPlatform } = useAppContext();
   const containers: NetworkConnectedContainerProps[] = useMemo(
     () =>

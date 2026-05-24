@@ -2,9 +2,9 @@ import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { DockerVolumeResult } from '@/api/generated/api.types';
+import { DockerVolumeResultView } from '@/api/generated/api.types';
 
-export const { info: VolumeInfoActions } = createActionsBuilder<DockerVolumeResult>()
+export const { info: VolumeInfoActions } = createActionsBuilder<DockerVolumeResultView>()
   .addAction({
     key: 'delete',
     type: 'command',

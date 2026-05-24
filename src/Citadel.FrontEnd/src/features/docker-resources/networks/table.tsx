@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DockerNetworkResult } from '@/api/generated/api.types';
+import { DockerNetworkResultView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -19,13 +19,13 @@ export const NetworksTable = ({
   isLoading,
 }: {
   isLoading: boolean;
-  items: DockerNetworkResult[];
+  items: DockerNetworkResultView[];
   actions: Record<
     string,
-    React.FC<{ resource: DockerNetworkResult; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: DockerNetworkResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const [_, setSelectedResources] = useSelectedResources<DockerNetworkResult>('Network');
+  const [_, setSelectedResources] = useSelectedResources<DockerNetworkResultView>('Network');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
@@ -38,9 +38,9 @@ export const NetworksTable = ({
 const columns = (
   actions: Record<
     string,
-    React.FC<{ resource: DockerNetworkResult; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: DockerNetworkResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<DockerNetworkResult>[] => [
+): ColumnDef<DockerNetworkResultView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -144,7 +144,7 @@ const columns = (
   },
 ];
 
-const NetworkNameRow = ({ network }: { network: DockerNetworkResult }) => {
+const NetworkNameRow = ({ network }: { network: DockerNetworkResultView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onClick() {

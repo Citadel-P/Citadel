@@ -9,21 +9,22 @@ using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using Hosting.Common.MergePatch;
 using Domain.Entities.Platforms;
+using Application.Permissions;
 
 namespace WebApi.Routes.Endpoints;
 
 public static class Platforms
 {
-    public static async Task<Results<Ok<PlatformsView>, ProblemHttpResult>> List(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<PlatformsView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionService, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetPlatforms(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, PlatformsView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, PlatformsView.Map);
     }
 
-    public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Get(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionService, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetPlatformById(id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, PlatformView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, PlatformView.Map);
     }
 
     public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] PlatformInput request, CancellationToken cancellationToken)
@@ -49,10 +50,10 @@ public static class Platforms
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<Ok<ContainersView>, ProblemHttpResult>> ListContainers(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ContainersView>, ProblemHttpResult>> ListContainers(IMediator mediator, IPermissionEvaluator permissionService, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetContainers(id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, ContainersView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, ContainersView.Map);
     }
 
 }

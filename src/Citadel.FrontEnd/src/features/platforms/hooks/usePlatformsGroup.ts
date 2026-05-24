@@ -1,101 +1,113 @@
-import { useState, useCallback } from 'react';
-import { PlatformDescriptorDockerPlatformDescriptor, PlatformsView, PlatformView } from '@/api/generated/api.types';
+import { useState, useMemo, useCallback } from 'react';
+import { PlatformDescriptorDockerPlatformDescriptor, PlatformView } from '@/api/generated/api.types';
 import { HubConnection } from '@microsoft/signalr';
 import { PlatformStatsBatchView } from '@/api/types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRead } from '@/lib/hooks';
+
+const normalizePlatform = (s: PlatformView): PlatformView => {
+  if (Array.isArray(s.platformDescriptor)) {
+    const desc = (s.platformDescriptor as any)[1];
+    desc.$type = (s.platformDescriptor as any)[0];
+
+    return {
+      ...s,
+      platformDescriptor: desc,
+    };
+  }
+
+  return s;
+};
 
 export const usePlatformsGroup = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [platformsMessage, setPlatformsMessage] = useState<PlatformView[] | undefined>();
+  const { data, isLoading } = useRead('listPlatforms');
+  const [realtimePlatforms, setRealtimePlatforms] = useState<PlatformView[] | null>(null);
+
+  const platformsMessage = useMemo(() => {
+    if (realtimePlatforms) {
+      return realtimePlatforms;
+    }
+
+    return data?.data.platforms.map(normalizePlatform) ?? [];
+  }, [realtimePlatforms, data]);
 
   const handlePlatformsUpdated = useCallback((platforms: PlatformView[]) => {
-    const processed = platforms.map((s) => {
-      if (Array.isArray(s.platformDescriptor)) {
-        const desc = (s.platformDescriptor as any)[1];
-        desc.$type = (s.platformDescriptor as any)[0];
-        return { ...s, platformDescriptor: desc };
-      }
-      return s;
-    });
-    setPlatformsMessage(processed);
+    setRealtimePlatforms(platforms.map(normalizePlatform));
   }, []);
 
-  const handlePlatformUpdated = useCallback((platform: PlatformView) => {
-    setPlatformsMessage((currentPlatforms) => {
-      if (!currentPlatforms) return [platform];
+  const handlePlatformUpdated = useCallback(
+    (platform: PlatformView) => {
+      const normalized = normalizePlatform(platform);
 
-      const existingIndex = currentPlatforms.findIndex((p) => p.id === platform.id);
+      setRealtimePlatforms((current) => {
+        const source = current ?? data?.data.platforms.map(normalizePlatform) ?? [];
 
-      if (existingIndex === -1) {
-        return [...currentPlatforms, platform];
-      } else {
-        const updated = [...currentPlatforms];
-        updated[existingIndex] = platform;
+        const existingIndex = source.findIndex((p) => p.id === normalized.id);
+
+        if (existingIndex === -1) {
+          return [...source, normalized];
+        }
+
+        const updated = [...source];
+        updated[existingIndex] = normalized;
+
         return updated;
-      }
-    });
-  }, []);
+      });
+    },
+    [data],
+  );
 
-  const handlePlatformDeleted = useCallback((id: string) => {
-    setPlatformsMessage((currentPlatforms) => {
-      if (!currentPlatforms) return [];
-      return currentPlatforms.filter((p) => p.id !== id);
-    });
-  }, []);
+  const handlePlatformDeleted = useCallback(
+    (id: string) => {
+      setRealtimePlatforms((current) => {
+        const source = current ?? data?.data.platforms.map(normalizePlatform) ?? [];
 
-  const handlePlatformStatsUpdated = useCallback((stats: PlatformStatsBatchView) => {
-    setPlatformsMessage((currentPlatforms) => {
-      if (!currentPlatforms) return;
+        return source.filter((p) => p.id !== id);
+      });
+    },
+    [data],
+  );
 
-      const existingIndex = currentPlatforms.findIndex((p) => p.id === stats.platformId);
-      if (existingIndex === -1) return currentPlatforms;
+  const handlePlatformStatsUpdated = useCallback(
+    (stats: PlatformStatsBatchView) => {
+      setRealtimePlatforms((current) => {
+        const source = current ?? data?.data.platforms.map(normalizePlatform) ?? [];
 
-      const updatedPlatforms = [...currentPlatforms];
-      const target = { ...updatedPlatforms[existingIndex] };
+        const existingIndex = source.findIndex((p) => p.id === stats.platformId);
 
-      target.stats = [stats.stat];
-      target.networkCount = stats.networkCount;
-      target.volumeCount = stats.volumeCount;
-      target.imageCount = stats.imageCount;
-      target.memTotal = stats.memTotal;
+        if (existingIndex === -1) {
+          return source;
+        }
 
-      if (target.type === 'Docker') {
-        // Deep clone the descriptor to ensure React sees the change
-        const descriptor = { ...(target.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor) };
-        descriptor.containerCount = stats.containerCount;
-        descriptor.containersRunning = stats.containersRunning;
-        descriptor.containersPaused = stats.containersPaused;
-        descriptor.containersStopped = stats.containersStopped;
-        target.platformDescriptor = descriptor;
-      }
+        const updatedPlatforms = [...source];
+        const target = { ...updatedPlatforms[existingIndex] };
 
-      updatedPlatforms[existingIndex] = target;
-      return updatedPlatforms;
-    });
-  }, []);
+        target.stats = [stats.stat];
+        target.networkCount = stats.networkCount;
+        target.volumeCount = stats.volumeCount;
+        target.imageCount = stats.imageCount;
+        target.memTotal = stats.memTotal;
 
-  const getPlatformsList = useCallback(async (hubConnection: HubConnection) => {
-    try {
-      setIsLoading(true);
-      const response = await hubConnection.invoke<PlatformsView>('GetPlatforms');
-      if (response && response.platforms) {
-        const processed = response.platforms.map((s) => {
-          // Check if it's already processed to avoid double-parsing on re-renders
-          if (Array.isArray(s.platformDescriptor)) {
-            const desc = (s.platformDescriptor as any)[1];
-            desc.$type = (s.platformDescriptor as any)[0];
-            return { ...s, platformDescriptor: desc };
-          }
-          return s;
-        });
-        setPlatformsMessage(processed);
-      }
-    } catch (err) {
-      console.error('Failed to fetch platforms', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+        if (target.type === 'Docker') {
+          const descriptor = {
+            ...(target.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor),
+          };
+
+          descriptor.containerCount = stats.containerCount;
+          descriptor.containersRunning = stats.containersRunning;
+          descriptor.containersPaused = stats.containersPaused;
+          descriptor.containersStopped = stats.containersStopped;
+
+          target.platformDescriptor = descriptor;
+        }
+
+        updatedPlatforms[existingIndex] = target;
+
+        return updatedPlatforms;
+      });
+    },
+    [data],
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
@@ -117,22 +129,10 @@ export const usePlatformsGroup = () => {
     [handlePlatformsUpdated, handlePlatformUpdated, handlePlatformDeleted, handlePlatformStatsUpdated],
   );
 
-  const onJoinedGroup = useCallback(
-    (hubConnection: HubConnection) => {
-      if (!hubConnection) return;
-      getPlatformsList(hubConnection);
-      hubConnection.onreconnected(() => {
-        getPlatformsList(hubConnection);
-      });
-    },
-    [getPlatformsList],
-  );
-
   useSignalRGroup({
     groupName: 'platforms',
     setupEventListeners,
     removeEventListeners,
-    onJoinedGroup,
   });
 
   return {

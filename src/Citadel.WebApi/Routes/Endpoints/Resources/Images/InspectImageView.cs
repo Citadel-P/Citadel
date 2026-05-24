@@ -1,5 +1,8 @@
-﻿using WebApi.Routes.Endpoints.Resources.Registries;
+﻿using Application.Permissions;
 using Domain.Contracts.Resources.Images;
+using Hosting.Common;
+using WebApi.Routes.Endpoints.Resources.Identity;
+using WebApi.Routes.Endpoints.Resources.Registries;
 
 namespace WebApi.Routes.Endpoints.Resources.Images;
 
@@ -19,11 +22,12 @@ public sealed record InspectImageView(
     IEnumerable<HistoryImageResult> Layers,
     IDictionary<string, string> Labels,
     IEnumerable<ContainerImageResult> Containers,
-    RegistryView? Registry
+    RegistryView? Registry,
+    ImageCapabilities? Capabilities = null
     )
 {
 
-    public static InspectImageView Map (InspectImageResult image)
+    internal static InspectImageView Map (InspectImageResult image)
     {
         var nameTag = image.RepoTags.FirstOrDefault()?.Split(':', 2);
         return new InspectImageView(
@@ -44,5 +48,14 @@ public sealed record InspectImageView(
             Containers: image.Containers,
             Registry: image.Registry is not null ? RegistryView.Map(image.Registry) : null
         );
+    }
+
+    internal static async Task<InspectImageView> Map(InspectImageResult image, IPermissionEvaluator permissionEvaluator)
+    {
+        var permissions = await permissionEvaluator.EvaluateAsync(image.PlatformId, ResourceType.Platform);
+        return Map(image) with
+        {
+            Capabilities = CapabilityMapper.ToImageCapabilities(permissions)
+        };
     }
 };

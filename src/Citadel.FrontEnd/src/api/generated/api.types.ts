@@ -1677,7 +1677,7 @@ export interface DockerHubTagView {
   lastPulled: string;
 }
 
-export interface DockerNetworkDetails {
+export interface DockerNetworkDetailsView {
   name: string;
   id: string;
   created: string;
@@ -1695,9 +1695,10 @@ export interface DockerNetworkDetails {
   labels: Record<string, string>;
   containers: Record<string, NetworkConnectedContainer>;
   peers: NetworkPeerInfo[];
+  capabilities?: null | NetworkCapabilities;
 }
 
-export interface DockerNetworkResult {
+export interface DockerNetworkResultView {
   name: string;
   id: string;
   created: string;
@@ -1714,9 +1715,10 @@ export interface DockerNetworkResult {
   ipam: null | IpAddressManagementConfig;
   options: Record<string, string>;
   labels: Record<string, string>;
+  capabilities?: null | NetworkCapabilities;
 }
 
-export interface DockerVolumeResult {
+export interface DockerVolumeResultView {
   id: string;
   name: string;
   inUse: boolean;
@@ -1730,6 +1732,7 @@ export interface DockerVolumeResult {
   status: Record<string, string>;
   labels: Record<string, string>;
   options: Record<string, string>;
+  capabilities?: null | VolumeCapabilities;
 }
 
 export interface DriverConfiguration {
@@ -2095,6 +2098,14 @@ export interface IPAMInput {
   options?: null | Record<string, string>;
 }
 
+export interface ImageCapabilities {
+  canInspect: boolean;
+  canPull: boolean;
+  canRead: boolean;
+  canWrite: boolean;
+  canExecute: boolean;
+}
+
 export interface ImagePullError {
   /**
    * @format int64
@@ -2154,6 +2165,7 @@ export interface ImageView {
   /** @format uuid */
   registryId?: null | string;
   registry?: null | RegistryView;
+  capabilities?: null | ImageCapabilities;
 }
 
 export interface ImagesView {
@@ -2181,6 +2193,7 @@ export interface InspectImageView {
   labels: Record<string, string>;
   containers: ContainerImageResult[];
   registry: null | RegistryView;
+  capabilities?: null | ImageCapabilities;
 }
 
 export interface IpAddressInfo {
@@ -2250,6 +2263,13 @@ export interface MountPointInfo {
   propagation: null | string;
 }
 
+export interface NetworkCapabilities {
+  canInspect: boolean;
+  canRead: boolean;
+  canWrite: boolean;
+  canExecute: boolean;
+}
+
 export interface NetworkConnectedContainer {
   name: string;
   endpointId: string;
@@ -2297,7 +2317,7 @@ export interface NetworkSettingsInfo {
 }
 
 export interface NetworksView {
-  networks: DockerNetworkResult[];
+  networks: DockerNetworkResultView[];
 }
 
 export interface PagedResultViewOfActivityView {
@@ -2642,6 +2662,7 @@ export interface PlatformView {
   connectorType: PlatformConnectorType;
   stats: null | PlatformStatView[];
   platformDescriptor: null | PlatformDescriptor;
+  capabilities?: null | PlatformCapabilities;
 }
 
 export interface PlatformsView {
@@ -3096,6 +3117,13 @@ export interface VolumeAccessMode {
   availability: string;
 }
 
+export interface VolumeCapabilities {
+  canInspect: boolean;
+  canRead: boolean;
+  canWrite: boolean;
+  canExecute: boolean;
+}
+
 export interface VolumeCapacityRange {
   /**
    * @format int64
@@ -3154,7 +3182,7 @@ export interface VolumeVersionInfo {
 }
 
 export interface VolumesView {
-  volumes: DockerVolumeResult[];
+  volumes: DockerVolumeResultView[];
 }
 
 type BaseStackUpdateState = object;
@@ -5952,7 +5980,7 @@ export class Api<
      * @summary Inspect a network
      * @request GET:/api/v1/networks/{platformId}/{networkId}
      * @secure
-     * @response `200` `DockerNetworkDetails` OK
+     * @response `200` `DockerNetworkDetailsView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -5966,7 +5994,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<
-        DockerNetworkDetails,
+        DockerNetworkDetailsView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/networks/${platformId}/${networkId}`,
@@ -6074,7 +6102,7 @@ export class Api<
      * @summary Inspect a volume
      * @request GET:/api/v1/volumes/{platformId}/{name}
      * @secure
-     * @response `200` `DockerVolumeResult` OK
+     * @response `200` `DockerVolumeResultView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -6088,7 +6116,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<
-        DockerVolumeResult,
+        DockerVolumeResultView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/volumes/${platformId}/${name}`,
@@ -6106,7 +6134,7 @@ export class Api<
      * @summary Create a volume
      * @request POST:/api/v1/volumes
      * @secure
-     * @response `200` `DockerVolumeResult` OK
+     * @response `200` `DockerVolumeResultView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -6116,7 +6144,7 @@ export class Api<
      */
     createVolume: (data: CreateVolumeInput, params: RequestParams = {}) =>
       this.request<
-        DockerVolumeResult,
+        DockerVolumeResultView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/volumes`,

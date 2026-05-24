@@ -1,112 +1,172 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { ContainersView, ContainerStatView } from '@/api/generated/api.types';
 import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { useRead } from '@/lib/hooks';
 
 export const useContainersGroup = (platformId?: string) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
+  const { data, isLoading } = useRead('listContainers', { id: platformId });
+  const [realtimeContainersInfo, setRealtimeContainersInfo] = useState<ContainersView>();
 
-  const onContainerEvent = useCallback((containerEvent: ContainerEvent) => {
-    setContainersInfo((currentInfo) => {
-      if (!currentInfo) {
-        return currentInfo;
-      }
+  const containersInfo = useMemo<ContainersView | undefined>(() => {
+    if (realtimeContainersInfo) {
+      return realtimeContainersInfo;
+    }
 
-      const updatedContainers = [...(currentInfo.containers ?? [])];
-      const existingIndex = updatedContainers.findIndex((c) => c.containerId === containerEvent?.container.containerId);
+    if (data?.data) {
+      return {
+        containers: data.data.containers,
+      };
+    }
 
-      switch (containerEvent?.eventType) {
-        case 'create':
-          if (existingIndex === -1) {
-            return { ...currentInfo, containers: [containerEvent.container, ...updatedContainers] };
-          }
-          if (JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerEvent.container)) {
-            updatedContainers[existingIndex] = containerEvent.container;
-            return { ...currentInfo, containers: updatedContainers };
-          }
-          break;
+    return undefined;
+  }, [realtimeContainersInfo, data]);
 
-        case 'destroy':
-          if (existingIndex !== -1) {
-            updatedContainers.splice(existingIndex, 1);
-            return { ...currentInfo, containers: updatedContainers };
-          }
-          break;
+  const onContainerEvent = useCallback(
+    (containerEvent: ContainerEvent) => {
+      setRealtimeContainersInfo((currentInfo) => {
+        const source =
+          currentInfo ??
+          (data?.data
+            ? {
+                containers: data.data.containers,
+              }
+            : undefined);
 
-        default:
-          if (
-            existingIndex !== -1 &&
-            JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerEvent?.container)
-          ) {
-            if (containerEvent?.container) {
-              updatedContainers[existingIndex] = containerEvent?.container;
+        if (!source?.containers) {
+          return source;
+        }
+
+        const updatedContainers = [...source.containers];
+
+        const existingIndex = updatedContainers.findIndex(
+          (c) => c.containerId === containerEvent.container.containerId,
+        );
+
+        switch (containerEvent.eventType) {
+          case 'create': {
+            if (existingIndex === -1) {
+              return {
+                ...source,
+                containers: [containerEvent.container, ...updatedContainers],
+              };
             }
-            return { ...currentInfo, containers: updatedContainers };
-          }
-          break;
-      }
 
-      return currentInfo;
-    });
-  }, []);
+            if (JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerEvent.container)) {
+              updatedContainers[existingIndex] = containerEvent.container;
+
+              return {
+                ...source,
+                containers: updatedContainers,
+              };
+            }
+
+            break;
+          }
+
+          case 'destroy': {
+            if (existingIndex !== -1) {
+              updatedContainers.splice(existingIndex, 1);
+
+              return {
+                ...source,
+                containers: updatedContainers,
+              };
+            }
+
+            break;
+          }
+
+          default: {
+            if (
+              existingIndex !== -1 &&
+              JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerEvent.container)
+            ) {
+              updatedContainers[existingIndex] = containerEvent.container;
+
+              return {
+                ...source,
+                containers: updatedContainers,
+              };
+            }
+
+            break;
+          }
+        }
+
+        return source;
+      });
+    },
+    [data],
+  );
 
   useDockerDaemonGroup(platformId, { onContainerEvent });
 
   const handleContainersInfoUpdated = useCallback((containers: ContainersView) => {
-    setContainersInfo(containers);
+    setRealtimeContainersInfo(containers);
   }, []);
 
-  const handleContainersStatsUpdated = useCallback((stats: ContainerStatView[]) => {
-    setContainersInfo((currentInfo) => {
-      if (!currentInfo || !currentInfo.containers) {
-        return currentInfo;
-      }
+  const handleContainersStatsUpdated = useCallback(
+    (stats: ContainerStatView[]) => {
+      setRealtimeContainersInfo((currentInfo) => {
+        const source =
+          currentInfo ??
+          (data?.data
+            ? {
+                containers: data.data.containers,
+              }
+            : undefined);
 
-      const statsMap = new Map(stats.map((stat) => [stat.containerId, stat]));
-      let hasChanged = false;
-
-      const updatedContainers = currentInfo.containers.map((container) => {
-        const stat = statsMap.get(container.id);
-        if (stat) {
-          hasChanged = true;
-          return { ...container, lastStats: stat };
+        if (!source?.containers) {
+          return source;
         }
-        return container;
+
+        const statsMap = new Map(stats.map((stat) => [stat.containerId, stat]));
+
+        let hasChanged = false;
+
+        const updatedContainers = source.containers.map((container) => {
+          const stat = statsMap.get(container.containerId);
+
+          if (!stat) {
+            return container;
+          }
+
+          hasChanged = true;
+
+          return {
+            ...container,
+            lastStats: stat,
+          };
+        });
+
+        if (!hasChanged) {
+          return source;
+        }
+
+        return {
+          ...source,
+          containers: updatedContainers,
+        };
       });
-
-      if (hasChanged) {
-        return { ...currentInfo, containers: updatedContainers };
-      }
-
-      return currentInfo;
-    });
-  }, []);
-
-  const getContainersList = useCallback(
-    async (hubConnection: HubConnection) => {
-      setIsLoading(true);
-      const containers = await hubConnection.invoke<ContainersView>('GetContainers', platformId);
-      if (containers) {
-        setContainersInfo(containers);
-      }
-      setIsLoading(false);
     },
-    [platformId],
+    [data],
   );
 
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
       hubConnection.on('ContainersInfoUpdated', handleContainersInfoUpdated);
+
       hubConnection.on('ContainersStatsUpdated', handleContainersStatsUpdated);
     },
-    [handleContainersStatsUpdated, handleContainersInfoUpdated],
+    [handleContainersInfoUpdated, handleContainersStatsUpdated],
   );
 
   const removeEventListeners = useCallback(
     (hubConnection: HubConnection) => {
       hubConnection.off('ContainersInfoUpdated', handleContainersInfoUpdated);
+
       hubConnection.off('ContainersStatsUpdated', handleContainersStatsUpdated);
     },
     [handleContainersInfoUpdated, handleContainersStatsUpdated],
@@ -116,9 +176,11 @@ export const useContainersGroup = (platformId?: string) => {
     groupName: `containers:${platformId}`,
     setupEventListeners,
     removeEventListeners,
-    onJoinedGroup: getContainersList,
     skip: !platformId,
   });
 
-  return { containersInfo, isLoading };
+  return {
+    containersInfo,
+    isLoading,
+  };
 };

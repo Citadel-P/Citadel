@@ -1,8 +1,8 @@
-import { DockerNetworkDetails } from '@/api/generated/api.types';
+import { DockerNetworkDetailsView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 
-const columns: ColumnDef<DockerNetworkDetails>[] = [
+const columns: ColumnDef<DockerNetworkDetailsView>[] = [
   {
     accessorKey: 'driver',
     header: () => <span>Driver</span>,
@@ -30,7 +30,7 @@ const columns: ColumnDef<DockerNetworkDetails>[] = [
   },
 ];
 
-export const NetworkInfoTable = ({ network }: { network: DockerNetworkDetails | undefined }) => {
+export const NetworkInfoTable = ({ network }: { network: DockerNetworkDetailsView | undefined }) => {
   if (!network) return <></>;
   return (
     <div className="rounded-sm border p-1 shadow-xs">

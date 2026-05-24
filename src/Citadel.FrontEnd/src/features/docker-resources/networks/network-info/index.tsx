@@ -1,4 +1,4 @@
-import { DockerNetworkDetails, DockerNetworkResult } from '@/api/generated/api.types';
+import { DockerNetworkDetailsView, DockerNetworkResultView } from '@/api/generated/api.types';
 import { Box, Info, Share2 } from 'lucide-react';
 import { ContainerInfoTable } from './container-info-table';
 import { NetworkInfoTable } from './network-info-table';
@@ -10,7 +10,7 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { NetworkInfoActions } from './actions';
 import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
 
-export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDetails> = {
+export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDetailsView> = {
   Header: {
     Indicator: ({ resource }) => {
       return <StateIndicator value={Object.keys(resource.containers ?? {}).length > 0} />;
@@ -23,7 +23,7 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
               id: resource.id,
               name: resource.name,
               inUse: Object.keys(resource.containers ?? {}).length > 0,
-            } as DockerNetworkResult
+            } as DockerNetworkResultView
           }
           actions={Object.values(NetworkInfoActions)}
         />
@@ -43,7 +43,7 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
   },
 };
 
-const InspectNetworkWrapper = ({ resource }: { resource: DockerNetworkDetails }) => {
+const InspectNetworkWrapper = ({ resource }: { resource: DockerNetworkDetailsView }) => {
   return (
     <div className="flex flex-col gap-8">
       <Section title="Details" Icon={Info}>

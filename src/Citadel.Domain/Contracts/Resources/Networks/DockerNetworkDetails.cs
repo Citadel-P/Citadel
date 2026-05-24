@@ -17,4 +17,7 @@ public record DockerNetworkDetails(
     IReadOnlyDictionary<string, string> Options,
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyDictionary<string, NetworkConnectedContainer> Containers,
-    IReadOnlyList<NetworkPeerInfo> Peers);
+    IReadOnlyList<NetworkPeerInfo> Peers)
+{
+    public Guid PlatformId{ get; set; }
+}

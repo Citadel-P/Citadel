@@ -1,9 +1,9 @@
-import { DockerNetworkResult } from '@/api/generated/api.types';
+import { DockerNetworkResultView } from '@/api/generated/api.types';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 
-export const { dropdown: PlatformDropdownActions } = createActionsBuilder<DockerNetworkResult>()
+export const { dropdown: PlatformDropdownActions } = createActionsBuilder<DockerNetworkResultView>()
   .addAction({
     key: 'inspect',
     type: 'command',

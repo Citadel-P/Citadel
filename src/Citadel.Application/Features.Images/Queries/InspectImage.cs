@@ -1,5 +1,4 @@
-﻿using Domain;
-using Domain.Contracts.Interfaces;
+﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using FluentValidation;
 using Hosting.Common;
@@ -41,6 +40,7 @@ internal sealed class InspectImageHandler(IPlatformContainerCache platformContai
             if (image != null)
             {
                 inspectResult.Registry = image.Registry;
+                inspectResult.PlatformId = query.PlatformId;
             }
 
             return inspectResult;

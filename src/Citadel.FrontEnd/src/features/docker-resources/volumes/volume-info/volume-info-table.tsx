@@ -1,10 +1,10 @@
-import { DockerVolumeResult } from '@/api/generated/api.types';
+import { DockerVolumeResultView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ColumnDef } from '@tanstack/react-table';
 
-const columns: ColumnDef<DockerVolumeResult>[] = [
+const columns: ColumnDef<DockerVolumeResultView>[] = [
   {
     accessorKey: 'driver',
     header: () => <span>Driver</span>,
@@ -27,7 +27,7 @@ const columns: ColumnDef<DockerVolumeResult>[] = [
   },
 ];
 
-export const VolumeInfoTable = ({ volume }: { volume: DockerVolumeResult | undefined }) => {
+export const VolumeInfoTable = ({ volume }: { volume: DockerVolumeResultView | undefined }) => {
   if (!volume) return <></>;
   return (
     <div className="rounded-sm border p-1 shadow-xs">

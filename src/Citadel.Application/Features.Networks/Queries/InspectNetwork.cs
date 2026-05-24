@@ -39,6 +39,12 @@ internal sealed class InspectNetworkHandler(IPlatformContainerCache platformCont
         );
 
         var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);
-        return await networkConnector.InspectNetworkAsync(args, cancellationToken);
+        var result = await networkConnector.InspectNetworkAsync(args, cancellationToken);
+        if (result.IsSuccess(out var inspectResult))
+        {
+            inspectResult.PlatformId = query.PlatformId;
+            return inspectResult;
+        }
+        return result;
     }
 }

@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DockerVolumeResult } from '@/api/generated/api.types';
+import { DockerVolumeResultView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -19,14 +19,14 @@ export const VolumesTable = ({
   actions,
   isLoading,
 }: {
-  items: DockerVolumeResult[];
+  items: DockerVolumeResultView[];
   isLoading: boolean;
   actions: Record<
     string,
-    React.FC<{ resource: DockerVolumeResult; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: DockerVolumeResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const [_, setSelectedResources] = useSelectedResources<DockerVolumeResult>('Volume');
+  const [_, setSelectedResources] = useSelectedResources<DockerVolumeResultView>('Volume');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
@@ -39,9 +39,9 @@ export const VolumesTable = ({
 const columns = (
   actions: Record<
     string,
-    React.FC<{ resource: DockerVolumeResult; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: DockerVolumeResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<DockerVolumeResult>[] => [
+): ColumnDef<DockerVolumeResultView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -101,7 +101,7 @@ const columns = (
   },
 ];
 
-const VolumeNameRow = ({ volume }: { volume: DockerVolumeResult }) => {
+const VolumeNameRow = ({ volume }: { volume: DockerVolumeResultView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onClick() {

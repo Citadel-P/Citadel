@@ -1,4 +1,5 @@
-﻿using Application.Services.Abstractions;
+﻿using Application.Permissions;
+using Application.Services.Abstractions;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Platforms;
@@ -74,10 +75,10 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
             .Group(WellKnownSignalRGroups.PlatformsGroup)
             .SendAsync("PlatformUpdated", platform.Map());
 
-    public Task PushPlatformsUpdates(IEnumerable<Platform> platforms) =>
-        hubContext.Clients
+    public Task PushPlatformsUpdates(IEnumerable<Platform> platforms)
+        => hubContext.Clients
             .Group(WellKnownSignalRGroups.PlatformsGroup)
-            .SendAsync("PlatformsUpdated", PlatformsView.Map(platforms).Platforms);
+            .SendAsync("PlatformsUpdated", PlatformView.Map(platforms));
 
     public Task PlatformDeleted(Guid platformId) =>
         hubContext.Clients

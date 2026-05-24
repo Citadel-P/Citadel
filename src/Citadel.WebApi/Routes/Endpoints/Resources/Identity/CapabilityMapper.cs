@@ -22,6 +22,37 @@ public sealed record PlatformCapabilities(
     CanWrite,
     CanExecute);
 
+public sealed record ImageCapabilities(
+    bool CanRead,
+    bool CanWrite,
+    bool CanExecute,
+    bool CanInspect,
+    bool CanPull
+) : ResourceCapabilities(
+    CanRead,
+    CanWrite,
+    CanExecute);
+
+public sealed record VolumeCapabilities(
+    bool CanRead,
+    bool CanWrite,
+    bool CanExecute,
+    bool CanInspect
+) : ResourceCapabilities(
+    CanRead,
+    CanWrite,
+    CanExecute);
+
+public sealed record NetworkCapabilities(
+    bool CanRead,
+    bool CanWrite,
+    bool CanExecute,
+    bool CanInspect
+) : ResourceCapabilities(
+    CanRead,
+    CanWrite,
+    CanExecute);
+
 public sealed record DeploymentCapabilities(
     bool CanRead,
     bool CanWrite,
@@ -38,8 +69,7 @@ public sealed record DeploymentCapabilities(
 
 public static class CapabilityMapper
 {
-    public static PlatformCapabilities ToPlatformCapabilities(
-        PermissionMetadata permission)
+    public static PlatformCapabilities ToPlatformCapabilities(PermissionMetadata permission)
     {
         var common = BuildCommon(permission);
 
@@ -63,6 +93,55 @@ public static class CapabilityMapper
             CanPull:
                common.CanRead &&
                 (permission.SpecificPermissions & SpecificPermission.Pull) != 0
+        );
+    }
+
+    public static ImageCapabilities ToImageCapabilities(PermissionMetadata permission)
+    {
+        var common = BuildCommon(permission);
+
+        return new ImageCapabilities(
+            common.CanRead,
+            common.CanWrite,
+            common.CanExecute,
+
+            CanInspect:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Inspect) != 0,
+
+            CanPull:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Pull) != 0
+        );
+    }
+
+    public static VolumeCapabilities ToVolumeCapabilities(PermissionMetadata permission)
+    {
+        var common = BuildCommon(permission);
+
+        return new VolumeCapabilities(
+            common.CanRead,
+            common.CanWrite,
+            common.CanExecute,
+
+            CanInspect:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Inspect) != 0
+        );
+    }
+
+    public static NetworkCapabilities ToNetworkCapabilities(PermissionMetadata permission)
+    {
+        var common = BuildCommon(permission);
+
+        return new NetworkCapabilities(
+            common.CanRead,
+            common.CanWrite,
+            common.CanExecute,
+
+            CanInspect:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Inspect) != 0
         );
     }
 

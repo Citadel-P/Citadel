@@ -5,7 +5,6 @@ using Domain;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Deployments;
 using Hosting.Common.MergePatch;
-using Hosting.Common.Pipelines.Interfaces;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;

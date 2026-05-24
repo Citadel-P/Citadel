@@ -80,46 +80,6 @@ public class ApplicationHubTests(PostgresTestFixture fixture) : IntegrationTestB
     }
 
     [Fact]
-    public async Task GetPlatforms_ReturnsSeededPlatform()
-    {
-        var conn = await CreateConnectionAsync();
-
-        // Act
-        var view = await conn.InvokeAsync<PlatformsView>("GetPlatforms", cancellationToken: TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.NotNull(view);
-        Assert.Single(view.Platforms);
-    }
-
-    [Fact]
-    public async Task GetContainers_ReturnsSeededContainers()
-    {
-        var conn = await CreateConnectionAsync();
-
-        // Act
-        var view = await conn.InvokeAsync<ContainersView>("GetContainers", platformId, cancellationToken: TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.NotNull(view);
-        Assert.Equal(4, view.Containers.Count());
-        Assert.Equal(3, view.Containers.Select(i => i.ImageView).Where(i => i is not null).Count());
-    }
-
-    [Fact]
-    public async Task GetImages_ReturnsSeededImages()
-    {
-        var conn = await CreateConnectionAsync();
-
-        // Act
-        var view = await conn.InvokeAsync<ImagesView>("GetImages", platformId, cancellationToken: TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.NotNull(view);
-        Assert.Equal(3, view.Images.Count());
-    }
-
-    [Fact]
     public async Task JoinGroup_AddsSubscriber_OnResolver()
     {
         // Arrange

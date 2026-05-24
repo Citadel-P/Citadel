@@ -16,7 +16,10 @@ public record DockerNetworkResult(
     string? ConfigFrom,
     IpAddressManagementConfig? Ipam,
     IReadOnlyDictionary<string, string> Options,
-    IReadOnlyDictionary<string, string> Labels);
+    IReadOnlyDictionary<string, string> Labels)
+{
+    public Guid PlatformId { get; set; }
+}
 
 public record IpamSubnetConfiguration(
     string? Subnet,

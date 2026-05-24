@@ -1,5 +1,11 @@
-﻿using Domain;
+﻿using Application.Permissions;
+using Domain;
+using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
+using Hosting.Common;
+using Hosting.Common.Attributes;
+using WebApi.Routes.Endpoints.Resources.Deployments;
+using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Platforms;
 
@@ -18,20 +24,67 @@ public sealed record PlatformView(
     PlatformStatus Status,
     PlatformConnectorType ConnectorType,
     IEnumerable<PlatformStatView>? Stats,
-    PlatformDescriptor? PlatformDescriptor
+    PlatformDescriptor? PlatformDescriptor,
+     PlatformCapabilities? Capabilities = null
     )
 {
     internal static List<PlatformView> Map(IEnumerable<Platform> platforms)
-        => [.. platforms.Select(Map)];
+            => [.. platforms.Select(Map)];
 
     internal static PlatformView Map(Platform platform)
         => platform.Map();
+
+    internal static async Task<PlatformView[]> Map(IEnumerable<Platform> platforms, IPermissionEvaluator permissionEvaluator)
+    {
+        var list = platforms as Platform[] ?? [.. platforms];
+
+        if (list.Length == 0)
+            return [];
+
+        var ids = new Guid[list.Length];
+
+        for (var i = 0; i < list.Length; i++)
+        {
+            ids[i] = list[i].Id;
+        }
+
+        var perms = await permissionEvaluator
+            .EvaluateAsync(ids, ResourceType.Platform);
+
+        var views = new PlatformView[list.Length];
+
+        for (var i = 0; i < list.Length; i++)
+        {
+            var platform = list[i];
+
+            var baseView = Map(platform);
+
+            perms.TryGetValue(platform.Id, out var meta);
+
+            views[i] = baseView with
+            {
+                Capabilities = CapabilityMapper.ToPlatformCapabilities(
+                    meta == default ? PermissionMetadata.Empty : meta)
+            };
+        }
+
+        return views;
+    }
+
+    internal static async Task<PlatformView> Map(Platform platform, IPermissionEvaluator permissionService)
+    {
+        var permissions = await permissionService.EvaluateAsync(platform.Id, ResourceType.Platform);
+        return platform.Map() with
+        {
+            Capabilities = CapabilityMapper.ToPlatformCapabilities(permissions)
+        };
+    }
 }
 
 public sealed record PlatformsView(IEnumerable<PlatformView> Platforms)
 {
-    internal static PlatformsView Map(IEnumerable<Platform> platforms)
-       => new(PlatformView.Map(platforms));
+    internal static async Task<PlatformsView> Map(IEnumerable<Platform> platforms, IPermissionEvaluator permissionEvaluator)
+       => new(await PlatformView.Map(platforms, permissionEvaluator));
 }
 
 internal static class PlatformMapperExtension
