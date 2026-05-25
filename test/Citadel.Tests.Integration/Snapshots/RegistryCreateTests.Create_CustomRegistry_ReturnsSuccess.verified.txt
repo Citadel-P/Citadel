@@ -7,5 +7,10 @@
   registryHost: registry123:9999,
   type: Custom,
   createdAt: DateTimeOffset_1,
+  capabilities: {
+    canRead: true,
+    canWrite: true,
+    canExecute: true
+  },
   isDefault: true
 }

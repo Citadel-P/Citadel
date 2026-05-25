@@ -3,6 +3,7 @@ using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
@@ -82,7 +83,13 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Platform, LookupResourceType.Image) => await GetPlatformImageLookupAsync(sourceId, cancellationToken),
             (LookupResourceType.Platform, LookupResourceType.Network) => await GetPlatformNetworkLookupAsync(sourceId, cancellationToken),
             (LookupResourceType.Platform, LookupResourceType.Volume) => await GetPlatformVolumeLookupAsync(sourceId, cancellationToken),
+            (LookupResourceType.Alert, LookupResourceType.Platform) => await GetAlertPlatformLookupAsync(userId, cancellationToken),
+            (LookupResourceType.Alert, LookupResourceType.Deployment) => await GetAlertDeploymentLookupAsync(userId, cancellationToken),
+            (LookupResourceType.Alert, LookupResourceType.Stack) => await GetAlertStackLookupAsync(userId, cancellationToken),
+            (LookupResourceType.Alert, LookupResourceType.AlertChannel) => await GetAlertChannelLookupAsync(userId, cancellationToken),
             (LookupResourceType.Image, LookupResourceType.Registry) => await GetImageRegistryLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.Platform) => await GetPlatformLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.Alert) => await GetAlertLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Team) => await GetTeamLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Role) => await GetRoleLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Registry) => await GetRegistryLookupAsync(userId, cancellationToken),
@@ -102,6 +109,7 @@ internal sealed class GetResourceLookupQueryHandler(
             LookupResourceType.Stack => await unitOfWork.Stacks.CanAccessAsync(userId, sourceId, cancellationToken),
             LookupResourceType.User => await unitOfWork.Users.CanAccessAsync(userId, sourceId, cancellationToken),
             LookupResourceType.Platform => await unitOfWork.Platforms.CanAccessAsync(userId, sourceId, cancellationToken),
+            LookupResourceType.Alert => await unitOfWork.AlertRules.CanAccessAsync(userId, sourceId, cancellationToken),
             _ => false
         };
 
@@ -225,12 +233,35 @@ internal sealed class GetResourceLookupQueryHandler(
         return Result.Success(networks.Select(static item => new ResourceInfo(Guid.Empty, item.Name)));
     }
 
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetAlertPlatformLookupAsync(Guid userId, CancellationToken cancellationToken)
+       => Result.Success((await unitOfWork.Platforms.GetAuthorizedAsync(userId, ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+               .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetAlertDeploymentLookupAsync(Guid userId, CancellationToken cancellationToken)
+       => Result.Success((await unitOfWork.Deployments.GetAuthorizedInfoAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+               .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetAlertStackLookupAsync(Guid userId, CancellationToken cancellationToken)
+       => Result.Success((await unitOfWork.Stacks.GetAuthorizedInfoAsync(userId, ResourceType.Stack, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+               .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetAlertChannelLookupAsync(Guid userId, CancellationToken cancellationToken)
+       => Result.Success((await unitOfWork.AlertRules.GetAuthorizedAlertChannelsAsync(userId, ResourceType.AlertChannel, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+               .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
     private async Task<Result<IEnumerable<ResourceInfo>>> GetImageRegistryLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Registries.GetAuthorizedAsync(userId, ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetTeamLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Teams.SearchAuthorizedAsync(userId, ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, string.Empty, 50, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Platforms.GetAuthorizedAsync(userId, ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetAlertLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.AlertRules.GetAuthorizedAsync(userId, ResourceType.Alert, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetRoleLookupAsync(Guid userId, CancellationToken cancellationToken)

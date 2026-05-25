@@ -1,5 +1,6 @@
 using Application.Features.Alerters.Commands;
 using Application.Features.Alerters.Queries;
+using Application.Permissions;
 using Domain.Entities.Alerts;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
@@ -14,10 +15,10 @@ namespace WebApi.Routes.Endpoints;
 
 public static class AlertRules
 {
-    public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> GetRule(IMediator mediator, Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> GetRule(IMediator mediator, IPermissionEvaluator permissionService, Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAlertRule(id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, AlertRuleView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, AlertRuleView.Map);
     }
 
     public static async Task<Results<Ok<AlertRuleConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, Guid id, CancellationToken cancellationToken)
@@ -26,10 +27,10 @@ public static class AlertRules
         return EndpointHandlers.HandleResult(result, AlertRuleConfigView.Map);
     }
 
-    public static async Task<Results<Ok<AlertRulesView>, ProblemHttpResult>> ListRules(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<AlertRulesView>, ProblemHttpResult>> ListRules(IMediator mediator, IPermissionEvaluator permissionService, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAlertRules(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, AlertRulesView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, AlertRulesView.Map);
     }
 
     public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> CreateRule(IMediator mediator, [FromBody] CreateAlertRuleInput request, CancellationToken cancellationToken)

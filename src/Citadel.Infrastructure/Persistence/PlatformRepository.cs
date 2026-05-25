@@ -294,6 +294,28 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return result.ToDomain();
     }
 
+    public async Task<IEnumerable<Platform>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT p.*
+            FROM Platforms p
+            WHERE {{AuthorizationSql.ResourcePredicatePrefix}}p.Id {{AuthorizationSql.ResourcePredicateSuffix}}
+            ORDER BY p.Name
+         """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
+        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new
+        {
+            UserId = userId,
+            ResourceType = (int)resourceType,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)specificPermission,
+            cancellationToken
+        }, transaction: tx());
+
+        return result.ToDomain();
+    }
 
     public async Task<PlatformConnectionInfo?> GetPlatformByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken)
     {

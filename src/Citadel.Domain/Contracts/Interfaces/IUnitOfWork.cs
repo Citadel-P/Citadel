@@ -271,6 +271,7 @@ public interface IPlatformRepository
     Task<Platform?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Platform>> GetAuthorizedWithLatestStatAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IEnumerable<Platform>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<Platform?> GetPlatformWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
     Task<PlatformConnectionInfo?> GetPlatformByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<PlatformConnectionInfo?> GetInfoAsync(Guid platformId, CancellationToken cancellationToken);
@@ -343,6 +344,7 @@ public interface IAlertRuleRepository
     Task<AlertChannel?> GetChannelByIdAsync(Guid channelId, CancellationToken cancellationToken);
     Task<IEnumerable<AlertChannel>> GetAllChannelsAsync(CancellationToken cancellationToken);
     Task<IEnumerable<AlertChannel>> GetAuthorizedChannelsAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IEnumerable<AlertChannel>> GetAuthorizedAlertChannelsAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> AddChannelAsync(AlertChannel alertChannel, CancellationToken cancellationToken);
     Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken);
@@ -350,6 +352,7 @@ public interface IAlertRuleRepository
     Task<int> UpdateChannelAsync(AlertChannel channel, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<int> RemoveChannelsRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(Guid userId, Guid alertRuleId, CancellationToken cancellationToken);
 }
 
 public interface IAlertEventRepository

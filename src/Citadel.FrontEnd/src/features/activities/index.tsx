@@ -103,8 +103,8 @@ function SearchSection() {
       />
       {query.resourceType != 'All' && (
         <ResourceSelectorField
-          sourceType={LookupResourceType.Activity}
-          targetType={LookupResourceType[query.resourceType]}
+          sourceType={LookupResourceType.None}
+          targetType={query.resourceType === 'AlertRule' ? 'Alert' : LookupResourceType[query.resourceType]}
           onSelect={handleResourceChange as any}
           selected={query.resourceId}
           placeholder={'Select ' + query.resourceType}

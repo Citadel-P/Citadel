@@ -1,35 +1,36 @@
-﻿using System.ComponentModel;
-using Application.Features.Registries.Commands;
+﻿using Application.Features.Registries.Commands;
 using Application.Features.Registries.Queries;
+using Application.Permissions;
+using Domain.Entities.Registries;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
-using WebApi.Routes.Endpoints.Resources.Registries;
-using Domain.Entities.Registries;
+using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Registries;
 
 namespace WebApi.Routes.Endpoints;
 
 public static class Registries
 {
-    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateRegistryInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, IPermissionEvaluator permissionService, [FromBody] CreateRegistryInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, RegistryView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, RegistryView.Map);
     }
 
-    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> List(IMediator mediator, bool? includeDisabled, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionService, bool? includeDisabled, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllRegistries(includeDisabled), cancellationToken);
-        return EndpointHandlers.HandleResult(result, RegistriesView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, RegistriesView.Map);
     }
 
-    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Get(IMediator mediator, [Description("Registry id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionService, [Description("Registry id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetRegistry(id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, RegistryView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, RegistryView.Map);
     }
 
     public static async Task<Results<Ok<RegistryConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("Registry id")] Guid id, CancellationToken cancellationToken)
@@ -45,33 +46,36 @@ public static class Registries
     }
 
     public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Patch(
-        IMediator mediator, 
+        IMediator mediator,
+        IPermissionEvaluator permissionService,
         [FromRoute][Description("Registry ID")] Guid id,
         RegistryInputPatchDocument patchInput, 
         CancellationToken cancellationToken)
     {
         var mapped = patchInput.Map<PatchRegistryInput, Registry>();
         var result = await mediator.Send(new PatchRegistry(id, mapped), cancellationToken);
-        return EndpointHandlers.HandleResult(result, RegistryView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, RegistryView.Map);
     }
 
     public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> PatchMetadata(
         IMediator mediator,
+        IPermissionEvaluator permissionService,
         [FromRoute][Description("Registry ID")] Guid id,
         PatchResourceMetadataDocument patchInput,
         CancellationToken cancellationToken)
     {
         var mapped = patchInput.Map<PatchResourceMetadata, Registry>();
         var result = await mediator.Send(new PatchRegistryMetadata(id, mapped), cancellationToken);
-        return EndpointHandlers.HandleResult(result, RegistryView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, RegistryView.Map);
     }
 
     public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Rename(
         IMediator mediator,
+        IPermissionEvaluator permissionService,
         [FromBody] RenameResource renameResource,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new RenameRegistry(renameResource.Id, renameResource.Name), cancellationToken);
-        return EndpointHandlers.HandleResult(result, RegistryView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, RegistryView.Map);
     }
 }

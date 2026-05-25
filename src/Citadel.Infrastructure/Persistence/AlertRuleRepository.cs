@@ -232,6 +232,24 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return rows?.ToDomain() ?? [];
     }
 
+    public Task<bool> CanAccessAsync(Guid userId, Guid alertRuleId, CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}} SELECT EXISTS (SELECT 1 FROM AlertRules r WHERE r.Id = @AlertRuleId AND 
+            {{AuthorizationSql.ResourcePredicatePrefix}}r.Id{{AuthorizationSql.ResourcePredicateSuffix}})
+        """;
+
+        return db.ExecuteScalarAsync<bool>(sql, new
+        {
+            UserId = userId,
+            AlertRuleId = alertRuleId,
+            ResourceType = (int)ResourceType.Alert,
+            GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read),
+            SpecificPermission = (int)SpecificPermission.None,
+            cancellationToken
+        }, transaction: tx());
+    }
+
     public async Task<PagedResult<AlertRule>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
         const string countQuery = "SELECT COUNT(*) FROM AlertRules";
@@ -354,6 +372,24 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             transaction: tx());
 
         return dto?.ToDomain();
+    }
+
+    public async Task<IEnumerable<AlertChannel>> GetAuthorizedAlertChannelsAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
+    {
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + @"
+            SELECT ac.Id, ac.Name, ac.AlertDestination, ac.Url, ac.IsActive, ac.CreatedByActorId, ac.CreatedAt
+            FROM AlertChannels ac
+            WHERE " + AuthorizationSql.ResourcePredicatePrefix + "ac.Id" + AuthorizationSql.ResourcePredicateSuffix;
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
+        var rows = await db.QueryAsync<AlertChannelDto>(sql, new
+        {
+            UserId = userId,
+            ResourceType = (int)resourceType,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)specificPermission,
+            cancellationToken
+        }, transaction: tx());
+        return rows?.Select(r => r.ToDomain()) ?? [];
     }
 
     public async Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken)

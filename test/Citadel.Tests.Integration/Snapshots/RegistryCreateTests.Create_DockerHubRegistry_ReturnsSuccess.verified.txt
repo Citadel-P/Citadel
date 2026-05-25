@@ -6,5 +6,10 @@
   registryHost: docker.io,
   type: DockerHub,
   createdAt: DateTimeOffset_1,
+  capabilities: {
+    canRead: true,
+    canWrite: true,
+    canExecute: true
+  },
   isDefault: true
 }

@@ -1,5 +1,8 @@
+using Application.Permissions;
 using Domain;
 using Domain.Entities.Alerts;
+using Hosting.Common;
+using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Alerters;
 
@@ -15,10 +18,20 @@ public sealed partial record AlertRuleView(
     AlertRuleStatus Status,
     IEnumerable<AlertChannelView> Channels,
     IEnumerable<AlertRuleLimitedTo> LimitedTo,
-    IEnumerable<AlertRuleQuietHour> QuietHours)
+    IEnumerable<AlertRuleQuietHour> QuietHours,
+    ResourceCapabilities? Capabilities = null)
 {
     internal static AlertRuleView Map(AlertRule rule)
         => Map(rule, new Dictionary<Guid, AlertChannel>());
+
+    internal static async Task<AlertRuleView> Map(AlertRule rule, IPermissionEvaluator permissionEvaluator)
+    {
+        var permissions = await permissionEvaluator.EvaluateAsync(rule.Id, ResourceType.Alert);
+        return Map(rule) with
+        {
+            Capabilities = CapabilityMapper.ToResourceCapabilities(permissions)
+        };
+    }
 
     internal static AlertRuleView Map(AlertRule rule, IReadOnlyDictionary<Guid, AlertChannel> channelsById)
     {

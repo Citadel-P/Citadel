@@ -71,7 +71,7 @@ public static class CapabilityMapper
 {
     public static PlatformCapabilities ToPlatformCapabilities(PermissionMetadata permission)
     {
-        var common = BuildCommon(permission);
+        var common = ToResourceCapabilities(permission);
 
         return new PlatformCapabilities(
             common.CanRead,
@@ -98,7 +98,7 @@ public static class CapabilityMapper
 
     public static ImageCapabilities ToImageCapabilities(PermissionMetadata permission)
     {
-        var common = BuildCommon(permission);
+        var common = ToResourceCapabilities(permission);
 
         return new ImageCapabilities(
             common.CanRead,
@@ -117,7 +117,7 @@ public static class CapabilityMapper
 
     public static VolumeCapabilities ToVolumeCapabilities(PermissionMetadata permission)
     {
-        var common = BuildCommon(permission);
+        var common = ToResourceCapabilities(permission);
 
         return new VolumeCapabilities(
             common.CanRead,
@@ -132,7 +132,7 @@ public static class CapabilityMapper
 
     public static NetworkCapabilities ToNetworkCapabilities(PermissionMetadata permission)
     {
-        var common = BuildCommon(permission);
+        var common = ToResourceCapabilities(permission);
 
         return new NetworkCapabilities(
             common.CanRead,
@@ -148,7 +148,7 @@ public static class CapabilityMapper
     public static DeploymentCapabilities ToDeploymentCapabilities(
         PermissionMetadata permission)
     {
-        var common = BuildCommon(permission);
+        var common = ToResourceCapabilities(permission);
 
         return new DeploymentCapabilities(
             common.CanRead,
@@ -177,7 +177,7 @@ public static class CapabilityMapper
         );
     }
 
-    private static ResourceCapabilities BuildCommon(
+    public static ResourceCapabilities ToResourceCapabilities(
         PermissionMetadata permission)
     {
         var level = permission.PermissionLevel;

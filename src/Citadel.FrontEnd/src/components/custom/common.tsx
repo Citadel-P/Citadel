@@ -99,7 +99,6 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-
   const { ref: triggerRef, width: contentWidth, measure } = useMeasuredWidth(400);
 
   const read = useRead(

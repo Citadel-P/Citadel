@@ -1,6 +1,7 @@
 using Application.Features.Deployments.Queries;
 using Application.Features.GitRepositories.Commands;
 using Application.Features.GitRepositories.Queries;
+using Application.Permissions;
 using Domain.Entities.Git;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
@@ -21,16 +22,16 @@ public static class GitRepositories
         return EndpointHandlers.HandleResult(result, GitRepositoryView.Map);
     }
 
-    public static async Task<Results<Ok<GitRepositoriesView>, ProblemHttpResult>> List(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<GitRepositoriesView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionService, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllGitRepositories(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, GitRepositoriesView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, GitRepositoriesView.Map);
     }
 
-    public static async Task<Results<Ok<GitRepositoryView>, ProblemHttpResult>> Get(IMediator mediator, [Description("Git repository id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<GitRepositoryView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionService, [Description("Git repository id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetGitRepository(id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, GitRepositoryView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, GitRepositoryView.Map);
     }
 
     public static async Task<Results<Ok<GitRepositoryConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("Git repository id")] Guid id, CancellationToken cancellationToken)

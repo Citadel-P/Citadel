@@ -3,7 +3,6 @@ using Domain;
 using Domain.Entities;
 using Hosting.Common;
 using Hosting.Common.Attributes;
-using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Identity;
 using WebApi.Routes.Endpoints.Resources.Registries;
 

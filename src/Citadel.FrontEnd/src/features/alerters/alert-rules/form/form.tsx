@@ -11,6 +11,7 @@ import {
   AlertRuleStatus,
   CreateAlertRuleInput,
   PatchAlertRuleInput,
+  LookupResourceType,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -254,7 +255,9 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
                 description: `Optionally limit this alert rule to specific ${resourceFromAlertType().toLocaleLowerCase()}s.`,
                 render: (value, set) => (
                   <MultiResourceSelectorField
-                    type={resourceFromAlertType()}
+                    targetType={resourceFromAlertType()}
+                    sourceType={LookupResourceType.Alert}
+                    sourceResourceId={mode == 'add' ? undefined : id}
                     selected={
                       (value as Array<string | LimitedToEntry> | undefined)?.map((item) =>
                         typeof item === 'string' ? item : item.resourceId,
@@ -286,7 +289,9 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
                 description: 'Select which notification channels will receive this alert.',
                 render: (value, set) => (
                   <MultiResourceSelectorField
-                    type="AlertChannel"
+                    targetType={LookupResourceType.AlertChannel}
+                    sourceType={LookupResourceType.Alert}
+                    sourceResourceId={mode == 'add' ? undefined : id}
                     selected={(value as string[]) ?? []}
                     onSelect={(v: any[] | undefined) =>
                       set(() => ({
@@ -317,7 +322,7 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
         ],
       }),
     }),
-    [mode, showThresholdFields, showCooldown, resourceFromAlertType],
+    [mode, showThresholdFields, showCooldown, id, resourceFromAlertType],
   );
 
   return (

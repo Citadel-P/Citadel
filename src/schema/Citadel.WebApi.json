@@ -15777,6 +15777,16 @@
             "items": {
               "$ref": "#/components/schemas/AlertRuleQuietHour"
             }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
           }
         }
       },
@@ -19393,6 +19403,16 @@
                 "$ref": "#/components/schemas/LatestActivityView"
               }
             ]
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
           }
         }
       },
@@ -22611,6 +22631,16 @@
           "createdAt": {
             "format": "date-time"
           },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
+          },
           "isDefault": {
             "type": "boolean"
           }
@@ -22783,6 +22813,25 @@
             "items": {
               "$ref": "#/components/schemas/SpecificPermission"
             }
+          }
+        }
+      },
+      "ResourceCapabilities": {
+        "required": [
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object",
+        "properties": {
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
           }
         }
       },

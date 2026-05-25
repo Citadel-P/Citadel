@@ -1,6 +1,9 @@
+using Application.Permissions;
 using Domain;
 using Domain.Entities.Git;
+using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Activities;
+using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.GitRepositories;
 
@@ -19,7 +22,8 @@ public sealed record GitRepositoryView(
     RepoCommand? OnPull,
     DateTime CreatedAt,
     ResourceControlState ControlState,
-    LatestActivityView? LatestActivityView)
+    LatestActivityView? LatestActivityView,
+    ResourceCapabilities? Capabilities = null)
 {
     internal static GitRepositoryView Map(GitRepository gitRepository) => new(
         gitRepository.Id,
@@ -37,6 +41,15 @@ public sealed record GitRepositoryView(
         gitRepository.CreatedAt,
         gitRepository.ControlState,
         gitRepository.LatestActivityEvent?.Map());
+
+    internal static async Task<GitRepositoryView> Map(GitRepository gitRepository, IPermissionEvaluator permissionEvaluator)
+    {
+        var permissions = await permissionEvaluator.EvaluateAsync(gitRepository.Id, ResourceType.GitRepository);
+        return Map(gitRepository) with
+        {
+            Capabilities = CapabilityMapper.ToResourceCapabilities(permissions)
+        };
+    }
 }
 
 

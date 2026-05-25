@@ -1,5 +1,4 @@
 
-using Application.Features.Alerters.Commands;
 using Application.Features.Alerters.Queries;
 using Hosting.Extensions;
 using Mediator;
