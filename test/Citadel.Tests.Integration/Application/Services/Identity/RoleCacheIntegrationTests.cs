@@ -39,7 +39,7 @@ public class RoleCacheIntegrationTests(PostgresTestFixture fixture) : Integratio
         // Ensure present
         Assert.NotNull(roleCache.GetRoles(userId));
 
-        evictor.EvictUsers(new[] { userId }, CancellationToken.None);
+        await evictor.EvictUsers(new[] { userId }, CancellationToken.None);
 
         var rolesAfter = roleCache.GetRoles(userId);
         Assert.Null(rolesAfter);

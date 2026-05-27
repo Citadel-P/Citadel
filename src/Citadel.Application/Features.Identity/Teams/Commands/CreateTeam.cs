@@ -60,7 +60,7 @@ internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvict
                 return Result.Failure<TeamDetails>(new NotFoundError($"User with ID {missingUserId} does not exist"));
 
             await unitOfWork.Teams.ReplaceMembersAsync(team.Id, userIds, cancellationToken);
-            evictor.EvictUsers(userIds, cancellationToken);
+            await evictor.EvictUsers(userIds, cancellationToken);
         }
 
         if (roleIds.Length > 0)

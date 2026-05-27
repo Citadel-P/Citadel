@@ -1,7 +1,6 @@
 ﻿using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
-using Hosting.Common.Extensions;
 using Hosting.Common.Pipelines.Interfaces;
 
 namespace Application.Permissions;

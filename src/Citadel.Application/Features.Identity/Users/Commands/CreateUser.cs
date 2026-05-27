@@ -75,7 +75,7 @@ internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IHttpContextAcce
                 return Result.Failure<UserDetails>(new NotFoundError($"Team with ID {missingTeamId} does not exist"));
 
             await unitOfWork.Users.ReplaceTeamsAsync(user.Id, teamIds, cancellationToken);
-            evictor.EvictUsers([user.Id], cancellationToken);
+            await evictor.EvictUsers(new[] { user.Id }, cancellationToken);
         }
 
         if (roleIds.Length > 0)

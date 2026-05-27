@@ -82,7 +82,7 @@ internal sealed class PatchUserHandler(IUnitOfWork unitOfWork, IActorScopeEvicto
             }
 
             await unitOfWork.Users.ReplaceTeamsAsync(state.User.Id, teamIds, cancellationToken);
-            evictor.EvictUsers([state.User.Id], cancellationToken);
+            await evictor.EvictUsers(new[] { state.User.Id }, cancellationToken);
         }
 
         if (patched.RoleIds is not null)

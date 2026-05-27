@@ -146,7 +146,7 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
                 ["@ActorId"] = actorId,
                 ["@Name"] = "Test user",
                 ["@Email"] = email,
-                ["@Password"] = null,
+                ["@Password"] = string.Empty,
                 ["@CreatedAt"] = now,
                 ["@CreatedByActorId"] = Constants.SystemId
             });

@@ -166,6 +166,28 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return db.QueryAsync<Guid>(sql, new { ActorId = actorId, cancellationToken }, transaction: tx());
     }
 
+    public async Task<IDictionary<Guid, Guid[]>> GetActorRoleIdsAsync(IEnumerable<Guid> actorIds, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT ActorId, RoleId FROM ActorRoles WHERE ActorId = ANY(@ActorIds)";
+        var idArray = actorIds as Guid[] ?? [.. actorIds];
+        var rows = await db.QueryAsync<ActorRoleDto>(sql, new { ActorIds = idArray, cancellationToken }, transaction: tx());
+
+        var dict = new Dictionary<Guid, Guid[]>();
+        foreach (var g in rows.GroupBy(r => r.ActorId))
+        {
+            dict[g.Key] = [.. g.Select(x => x.RoleId)];
+        }
+
+        // Ensure requested actorIds are present in the map
+        foreach (var aid in idArray)
+        {
+            if (!dict.ContainsKey(aid))
+                dict[aid] = [];
+        }
+
+        return dict;
+    }
+
     public Task<IEnumerable<ResourceInfo>> GetUserRoleLookupAsync(Guid sourceUserId, Guid userId, CancellationToken cancellationToken)
     {
         const string sql = """

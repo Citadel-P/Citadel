@@ -83,7 +83,7 @@ public class ActorScopeEvictorIntegrationTests(PostgresTestFixture fixture) : In
         var _ = await permissionService.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, TestContext.Current.CancellationToken);
         Assert.True(memoryCache.TryGetValue($"actor-scope:{userId}", out Guid[]? _));
 
-        evictor.EvictUsers([userId], TestContext.Current.CancellationToken);
+        await evictor.EvictUsers(new[] { userId }, TestContext.Current.CancellationToken);
 
         Assert.False(memoryCache.TryGetValue($"actor-scope:{userId}", out _));
 

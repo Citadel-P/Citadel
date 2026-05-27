@@ -263,6 +263,7 @@ public interface IRoleRepository
     Task<int> ReplaceActorRolesAsync(Guid actorId, IEnumerable<Guid> roleIds, CancellationToken cancellationToken);
     Task<IEnumerable<Permission>> GetPermissionsAsync(Guid roleId, CancellationToken cancellationToken);
     Task<int> ReplacePermissionsAsync(Guid roleId, IEnumerable<Permission> permissions, CancellationToken cancellationToken);
+    Task<IDictionary<Guid, Guid[]>> GetActorRoleIdsAsync(IEnumerable<Guid> actorIds, CancellationToken cancellationToken);
 }
 
 public interface IPlatformRepository
