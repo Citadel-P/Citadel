@@ -5,6 +5,7 @@ using Application.Configs;
 using Hosting.Common;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Application.Services.Identity;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Application.Services;
@@ -16,7 +17,7 @@ public interface IJwtService
     bool TryValidate(string refreshToken, out Guid tokenId);
 }
 
-internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfiguration> jwtConfig) : IJwtService
+internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfiguration> jwtConfig, IRoleCache roleCache) : IJwtService
 {
     private readonly JwtConfiguration jwtConfig = jwtConfig.Value;
 
@@ -36,7 +37,22 @@ internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfi
         };
 
         JwtSecurityTokenHandler tokenHandler = new();
-        return tokenHandler.WriteToken(tokenHandler.CreateToken(tokenDescriptor));
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+        var written = tokenHandler.WriteToken(token);
+
+        // Populate server-side role cache from claims 
+        if (claims is not null)
+        {
+            var sub = claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
+            if (Guid.TryParse(sub, out var userId))
+            {
+                var roles = claims.Where(c => c.Type == ClaimTypes.Role || string.Equals(c.Type, "role", StringComparison.OrdinalIgnoreCase))
+                                  .Select(c => c.Value);
+                roleCache.SetRoles(userId, roles);
+            }
+        }
+
+        return written;
     }
 
     public (Guid, string) CreateRefreshToken()

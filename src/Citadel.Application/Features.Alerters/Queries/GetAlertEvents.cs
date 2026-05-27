@@ -2,12 +2,11 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using FluentValidation;
-using Hosting.Common.Extensions;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Models;
 using LightResults;
 using Mediator;
-using Hosting.Common;
-using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Alerters.Queries;
 
@@ -29,14 +28,14 @@ public sealed record GetAlertEvents(
     }
 }
 
-internal sealed class GetAlertEventsHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor) : IQueryHandler<GetAlertEvents, Result<PagedResult<AlertEvent>>>
+internal sealed class GetAlertEventsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor) : IQueryHandler<GetAlertEvents, Result<PagedResult<AlertEvent>>>
 {
     public async ValueTask<Result<PagedResult<AlertEvent>>> Handle(GetAlertEvents query, CancellationToken cancellationToken)
     {
-        var user = httpContextAccessor.HttpContext?.User;
-        var alertEvents = user is not null && !user.IsAdmin()
+        var user = userContextAccessor.Current;
+        var alertEvents = user is not null && !user.IsAdmin
             ? await unitOfWork.AlertEvents.GetAuthorizedPagedAsync(
-                userId: user.GetUserId(),
+                userId: user.UserId,
                 permissionResourceType: Hosting.Common.ResourceType.Alert,
                 permissionLevel: PermissionLevel.Read,
                 specificPermission: SpecificPermission.None,

@@ -8,6 +8,7 @@ using Citadel.SourceGen;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Pipelines;
 using Hosting.Common.Pipelines.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +51,7 @@ public static class ApplicationModule
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
             .AddMemoryCache()
+            .AddSingleton<IRoleCache, RoleCache>()
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<ISyncBarrier, SyncBarrier>()
             .AddAlertEvaluators()
@@ -76,7 +78,8 @@ public static class ApplicationModule
             .AddScoped<IContainerAuthorizationService, ContainerAuthorizationService>()
             .AddScoped<IActorRoleService, ActorRoleService>()
             .AddScoped<IActorResourceAccessService, ActorResourceAccessService>()
-            .AddScoped<INetworkService, NetworkService>();
+            .AddScoped<INetworkService, NetworkService>()
+            .AddScoped<IUserContextAccessor, UserContextAccessor>();
 
     private static IServiceCollection AddLookups(this IServiceCollection services)
         => services

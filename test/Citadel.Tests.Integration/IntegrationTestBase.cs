@@ -12,7 +12,7 @@ using Npgsql;
 using System.Data.Common;
 using System.Net.Http.Headers;
 using System.Security.Claims;
-using System.Text.Json;
+using System.IdentityModel.Tokens.Jwt;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration;
@@ -85,6 +85,7 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
     {
         var jwt = Services.GetRequiredService<IJwtService>();
         return jwt.CreateAccessToken(claims ?? new[] {
+            new Claim(JwtRegisteredClaimNames.Sub, Constants.DefaultAdminId.ToString()),
             new Claim("role", "admin"),
             new Claim("name", "Test user"),
             new Claim("actorId", Constants.SystemId.ToString())
@@ -96,9 +97,9 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
         var jwt = Services.GetRequiredService<IJwtService>();
         var allClaims = new List<Claim>
         {
-            new("sub", userId.ToString()),
-            new("name", "Test user"),
-            new("actorId", actorId.ToString())
+            new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new Claim("name", "Test user"),
+            new Claim("actorId", actorId.ToString())
         };
 
         if (claims is not null)

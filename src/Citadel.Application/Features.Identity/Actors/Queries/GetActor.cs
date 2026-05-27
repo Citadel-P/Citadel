@@ -1,6 +1,7 @@
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using FluentValidation;
+using Hosting.Common.Abstraction;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -20,18 +21,18 @@ public sealed record GetActor(Guid Id) : IQuery<Result<Actor>>
     }
 }
 
-internal sealed class GetActorHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor)
+internal sealed class GetActorHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor)
     : IQueryHandler<GetActor, Result<Actor>>
 {
     public async ValueTask<Result<Actor>> Handle(GetActor query, CancellationToken cancellationToken)
     {
-        var user = httpContextAccessor.HttpContext?.User;
-        if (user is null || user.Identity?.IsAuthenticated != true)
+        var user = userContextAccessor.Current;
+        if (user is null || user.IsAuthenticated != true)
         {
             return Result.Failure<Actor>(new UnauthorizedError("Missing user context"));
         }
 
-        if (!user.IsAdmin())
+        if (!user.IsAdmin)
         {
             return Result.Failure<Actor>(new ForbiddenError("Only administrators can view actors."));
         }

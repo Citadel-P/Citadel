@@ -2,12 +2,10 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.Attributes;
-using Hosting.Common.Extensions;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Models;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Users.Queries;
 
@@ -24,13 +22,13 @@ public sealed record GetUsers(int Page = 1, int PageSize = 50, string? Name = nu
     }
 }
 
-internal sealed class GetUsersHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor) : IQueryHandler<GetUsers, Result<PagedResult<UserDetails>>>
+internal sealed class GetUsersHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor) : IQueryHandler<GetUsers, Result<PagedResult<UserDetails>>>
 {
     public async ValueTask<Result<PagedResult<UserDetails>>> Handle(GetUsers query, CancellationToken cancellationToken)
     {
-        var user = httpContextAccessor.HttpContext?.User;
-        var pagedUsers = user is not null && !user.IsAdmin()
-            ? await unitOfWork.Users.GetAuthorizedPagedAsync(user.GetUserId(), ResourceType.User, PermissionLevel.Read, SpecificPermission.None, query.Page, query.PageSize, query.Name, cancellationToken)
+        var user = userContextAccessor.Current;
+        var pagedUsers = user is not null && !user.IsAdmin
+            ? await unitOfWork.Users.GetAuthorizedPagedAsync(user.UserId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, query.Page, query.PageSize, query.Name, cancellationToken)
             : await unitOfWork.Users.GetPagedAsync(query.Page, query.PageSize, query.Name, cancellationToken);
 
         return Result.Success(pagedUsers);

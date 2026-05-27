@@ -2,11 +2,10 @@ using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using FluentValidation;
+using Hosting.Common.Abstraction;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Actors.Commands;
 
@@ -21,18 +20,18 @@ public sealed record PatchActorEnabled(Guid Id, bool IsEnabled) : ICommand<Resul
     }
 }
 
-internal sealed class PatchActorEnabledHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor, IActorScopeEvictor evictor)
+internal sealed class PatchActorEnabledHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor, IActorScopeEvictor evictor)
     : ICommandHandler<PatchActorEnabled, Result<Actor>>
 {
     public async ValueTask<Result<Actor>> Handle(PatchActorEnabled command, CancellationToken cancellationToken)
     {
-        var user = httpContextAccessor.HttpContext?.User;
-        if (user is null || user.Identity?.IsAuthenticated != true)
+        var user = userContextAccessor.Current;
+        if (user is null || user.IsAuthenticated != true)
         {
             return Result.Failure<Actor>(new UnauthorizedError("Missing user context"));
         }
 
-        if (!user.IsAdmin())
+        if (!user.IsAdmin)
         {
             return Result.Failure<Actor>(new ForbiddenError("Only administrators can update actors."));
         }

@@ -20,6 +20,9 @@ internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCach
             var actorCacheKey = $"actor-scope:{id}";
             memoryCache.Remove(actorCacheKey);
 
+            // Also evict server-side cached roles for this user
+            memoryCache.Remove($"user-roles:{id}");
+
             // Also evict any permission cache entries associated with this user
             var permIndexKey = $"perm-index:{id}";
             // Prefer typed PermissionCacheKey index if present
@@ -50,6 +53,9 @@ internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCach
         {
             var actorCacheKey = $"actor-scope:{id}";
             memoryCache.Remove(actorCacheKey);
+
+            // Also evict server-side cached roles for this user
+            memoryCache.Remove($"user-roles:{id}");
 
             var permIndexKey = $"perm-index:{id}";
             if (memoryCache.TryGetValue<HashSet<global::Application.Permissions.PermissionCacheKey>>(permIndexKey, out var typedPermKeys) && typedPermKeys is not null)

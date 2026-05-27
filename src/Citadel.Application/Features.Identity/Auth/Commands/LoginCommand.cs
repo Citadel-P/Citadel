@@ -1,5 +1,6 @@
 ﻿using Application.Features.Identity.Auth.Models;
 using Application.Services;
+using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
@@ -22,7 +23,7 @@ public sealed record LoginCommand(string EmailOrName, string Password) : IComman
     }
 }
 
-internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jwtService) : ICommandHandler<LoginCommand, Result<LoginResponse>>
+internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jwtService, IRoleCache roleCache) : ICommandHandler<LoginCommand, Result<LoginResponse>>
 {
     public async ValueTask<Result<LoginResponse>> Handle(LoginCommand query, CancellationToken cancellationToken)
     {
@@ -58,6 +59,9 @@ internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jw
         }
 
         await unitOfWork.CommitAsync(cancellationToken);
+
+        roleCache.SetRoles(userAuthInfo.Id, userAuthInfo.Roles);
+
         return (accessToken, refreshToken);
     }
 

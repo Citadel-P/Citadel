@@ -1,8 +1,7 @@
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
-using Hosting.Common.Extensions;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Pipelines.Interfaces;
-using Microsoft.AspNetCore.Http;
 
 namespace Application.Services;
 
@@ -18,7 +17,7 @@ internal interface IContainerAuthorizationService
 internal sealed class ContainerAuthorizationService(
     IUnitOfWork unitOfWork,
     IPermissionService permissionService,
-    IHttpContextAccessor httpContextAccessor,
+    IUserContextAccessor userContextAccessor,
     IPlatformContainerCache platformContainerCache) : IContainerAuthorizationService
 {
     public async Task<bool> HasAccessAsync(IEnumerable<string> containerIds, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
@@ -29,7 +28,7 @@ internal sealed class ContainerAuthorizationService(
             return false;
         }
 
-        var user = httpContextAccessor.HttpContext?.User;
+        var user = userContextAccessor.Current;
         if (user is null)
         {
             return false;
@@ -41,20 +40,19 @@ internal sealed class ContainerAuthorizationService(
             return false;
         }
 
-        if (user.IsAdmin())
+        if (user.IsAdmin)
         {
             return true;
         }
 
-        var userId = user.GetUserId();
-        if (userId == Guid.Empty)
+        if (user.UserId == Guid.Empty)
         {
             return false;
         }
 
         foreach (var platformId in platformIds)
         {
-            var metadata = await permissionService.ResolvePermissionsAsync(userId, resourceType, platformId, cancellationToken);
+            var metadata = await permissionService.ResolvePermissionsAsync(user.UserId, resourceType, platformId, cancellationToken);
             var hasPermission = metadata.Has(permissionLevel, specificPermission);
 
             if (!hasPermission)

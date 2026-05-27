@@ -3,13 +3,11 @@ using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
-using Grpc.Core;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Lookup.Queries;
 
@@ -21,13 +19,14 @@ public sealed record GetResourceLookupQuery(
 
 internal sealed class GetResourceLookupQueryHandler(
     INetworkService networkService,
-    IHttpContextAccessor httpContextAccessor,
+    IUserContextAccessor userContextAccessor,
     IUnitOfWork unitOfWork) : IQueryHandler<GetResourceLookupQuery, Result<IEnumerable<ResourceInfo>>>
 {
     public async ValueTask<Result<IEnumerable<ResourceInfo>>> Handle(GetResourceLookupQuery query, CancellationToken cancellationToken)
     {
-        var userId = httpContextAccessor.HttpContext?.User.GetUserId();
-        if (userId is null || userId == Guid.Empty)
+        var user = userContextAccessor.Current;
+        bool isAdmin = user?.IsAdmin ?? false;
+        if (user is null || user.UserId == Guid.Empty)
         {
             return Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("Invalid user ID."));
         }
@@ -44,7 +43,7 @@ internal sealed class GetResourceLookupQueryHandler(
             query.SourceResourceType,
             query.SourceResourceId,
             query.TargetResourceType,
-            userId.Value,
+            user.UserId,
             query.Context,
             cancellationToken);
     }

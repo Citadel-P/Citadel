@@ -3,11 +3,9 @@ using Citadel.SourceGen;
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
 using Hosting.Common.Attributes;
-using Hosting.Common.Extensions;
 using Hosting.Common.Pipelines.Interfaces;
 using LightResults;
 using Microsoft.Extensions.Caching.Memory;
-using System.Security.Claims;
 
 namespace Application.Services;
 
@@ -19,10 +17,10 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
     // Very small, request-local dedupe store.
     private readonly Dictionary<PermissionCacheKey, PermissionMetadata> requestCache = [];
 
-    public Task<Result> EnforceAsync<TMessage>(TMessage message, ClaimsPrincipal user, CancellationToken cancellationToken = default) where TMessage : notnull
+    public Task<Result> EnforceAsync<TMessage>(TMessage message, Guid userId, CancellationToken cancellationToken = default) where TMessage : notnull
         => PermissionPipeline.Enforce(
             message,
-            user.GetUserId(),
+            userId,
             this,
             cancellationToken
         );
