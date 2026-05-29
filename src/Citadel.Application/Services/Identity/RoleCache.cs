@@ -1,3 +1,4 @@
+using Hosting.Common;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Application.Services.Identity;
@@ -14,7 +15,7 @@ internal sealed class RoleCache(IMemoryCache memoryCache) : IRoleCache
 {
     private static readonly TimeSpan RoleCacheTtl = TimeSpan.FromMinutes(30);
 
-    private static string Key(Guid userId) => $"user-roles:{userId}";
+    private static string Key(Guid userId) => Constants.CacheKeys.UserRoles(userId);
 
     public void SetRoles(Guid userId, IEnumerable<string> roles)
     {

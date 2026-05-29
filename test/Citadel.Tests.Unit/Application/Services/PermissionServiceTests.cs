@@ -5,6 +5,7 @@ using Hosting.Common.Attributes;
 using Application.Permissions;
 using Microsoft.Extensions.Caching.Memory;
 using Moq;
+using Application.Services.Identity;
 
 namespace Tests.Unit.Application.Services;
 
@@ -13,13 +14,14 @@ public class PermissionServiceTests
     [Fact]
     public async Task HasPermissionAsync_CachesActorScope_WhenActorScopeNonEmpty()
     {
-        var users = new Mock<IUserRepository>();
+        var actorScopeProvider = new Mock<IActorScopeProvider>();
         var actorIds = new[] { Guid.NewGuid() };
 
-        users
+        actorScopeProvider
             .Setup(x => x.GetActorScopeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actorIds);
 
+        var users = new Mock<IUserRepository>();
         users
             .Setup(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, (Guid?)null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Hosting.Common.Attributes.PermissionMetadata(PermissionLevel.Read, SpecificPermission.None));
@@ -28,7 +30,8 @@ public class PermissionServiceTests
         uow.SetupGet(x => x.Users).Returns(users.Object);
 
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
-        var service = new PermissionService(uow.Object, memoryCache);
+        var permissionCache = new PermissionCache(memoryCache);
+        var service = new PermissionService(uow.Object, permissionCache, actorScopeProvider.Object);
         var userId = Guid.NewGuid();
 
         var firstMeta = await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, CancellationToken.None);
@@ -40,19 +43,21 @@ public class PermissionServiceTests
         Assert.True(first);
         Assert.True(second);
 
-        users.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
+        actorScopeProvider.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
         users.Verify(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task HasPermissionAsync_Should_NotCache_ResourceScopedRequest()
     {
-        var users = new Mock<IUserRepository>();
+        var actorScopeProvider = new Mock<IActorScopeProvider>();
         var actorIds = new[] { Guid.NewGuid() };
 
-        users
+        actorScopeProvider
             .Setup(x => x.GetActorScopeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actorIds);
+
+        var users = new Mock<IUserRepository>();
         users
             .Setup(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Hosting.Common.Attributes.PermissionMetadata(PermissionLevel.Read, SpecificPermission.None));
@@ -61,26 +66,29 @@ public class PermissionServiceTests
         uow.SetupGet(x => x.Users).Returns(users.Object);
 
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
-        var service = new PermissionService(uow.Object, memoryCache);
+        var permissionCache = new PermissionCache(memoryCache);
+        var service = new PermissionService(uow.Object, permissionCache, actorScopeProvider.Object);
         var userId = Guid.NewGuid();
         var resourceId = Guid.NewGuid();
 
         await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, resourceId, CancellationToken.None);
         await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, resourceId, CancellationToken.None);
 
-        users.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
+        actorScopeProvider.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
         users.Verify(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, resourceId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task HasPermissionAsync_CallsHasPermission_ForDifferentPermissionShapes()
     {
-        var users = new Mock<IUserRepository>();
+        var actorScopeProvider = new Mock<IActorScopeProvider>();
         var actorIds = new[] { Guid.NewGuid() };
 
-        users
+        actorScopeProvider
             .Setup(x => x.GetActorScopeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actorIds);
+
+        var users = new Mock<IUserRepository>();
         users
             .Setup(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, (Guid?)null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Hosting.Common.Attributes.PermissionMetadata(PermissionLevel.Read, SpecificPermission.None));
@@ -89,26 +97,28 @@ public class PermissionServiceTests
         uow.SetupGet(x => x.Users).Returns(users.Object);
 
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
-        var service = new PermissionService(uow.Object, memoryCache);
+        var permissionCache = new PermissionCache(memoryCache);
+        var service = new PermissionService(uow.Object, permissionCache, actorScopeProvider.Object);
         var userId = Guid.NewGuid();
 
         await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, CancellationToken.None);
         await service.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, CancellationToken.None);
 
-        users.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
+        actorScopeProvider.Verify(x => x.GetActorScopeAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
         users.Verify(x => x.GetEffectivePermissionsAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task ResolvePermissionsAsyncForIds_PerformsNoDbWhenFullyCached()
     {
-        var users = new Mock<IUserRepository>();
+        var actorScopeProvider = new Mock<IActorScopeProvider>();
         var actorIds = new[] { Guid.NewGuid() };
 
-        users
+        actorScopeProvider
             .Setup(x => x.GetActorScopeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actorIds);
 
+        var users = new Mock<IUserRepository>();
         users
             .Setup(x => x.GetEffectivePermissionsBatchAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<Guid, PermissionMetadata>());
@@ -117,7 +127,8 @@ public class PermissionServiceTests
         uow.SetupGet(x => x.Users).Returns(users.Object);
 
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
-        var service = new PermissionService(uow.Object, memoryCache);
+        var permissionCache = new PermissionCache(memoryCache);
+        var service = new PermissionService(uow.Object, permissionCache, actorScopeProvider.Object);
         var userId = Guid.NewGuid();
         var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
 
@@ -142,19 +153,19 @@ public class PermissionServiceTests
     [Fact]
     public async Task ResolvePermissionsAsyncForIds_PerformsOneDbWhenMiss()
     {
-        var users = new Mock<IUserRepository>();
-        var actorIds = new[] { Guid.NewGuid() };
+        var actorScopeProvider4 = new Mock<IActorScopeProvider>();
+        var actorIds4 = new[] { Guid.NewGuid() };
 
-        users
+        actorScopeProvider4
             .Setup(x => x.GetActorScopeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(actorIds);
+            .ReturnsAsync(actorIds4);
 
         var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
         var fetched = new Dictionary<Guid, PermissionMetadata>
         {
             { ids[0], new PermissionMetadata(PermissionLevel.Read, SpecificPermission.None) }
         };
-
+        var users = new Mock<IUserRepository>();
         users
             .Setup(x => x.GetEffectivePermissionsBatchAsync(It.IsAny<Guid[]>(), ResourceType.Deployment, It.IsAny<Guid[]>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(fetched);
@@ -163,7 +174,8 @@ public class PermissionServiceTests
         uow.SetupGet(x => x.Users).Returns(users.Object);
 
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
-        var service = new PermissionService(uow.Object, memoryCache);
+        var permissionCache = new PermissionCache(memoryCache);
+        var service = new PermissionService(uow.Object, permissionCache, actorScopeProvider4.Object);
         var userId = Guid.NewGuid();
 
         var res = await service.ResolvePermissionsAsyncForIds(userId, ResourceType.Deployment, ids, CancellationToken.None);

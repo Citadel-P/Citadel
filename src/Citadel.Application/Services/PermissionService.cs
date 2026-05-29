@@ -1,20 +1,17 @@
 ﻿using Application.Permissions;
 using Citadel.SourceGen;
 using Domain.Contracts.Interfaces;
+using Application.Services.Identity;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.Pipelines.Interfaces;
 using LightResults;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace Application.Services;
 
-internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IPermissionService
+internal class PermissionService(IUnitOfWork uow, IPermissionCache permissionCache, IActorScopeProvider actorScopeProvider) : IPermissionService
 {
-    private static readonly TimeSpan ActorScopeCacheTtl = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan PermissionCacheTtl = TimeSpan.FromMinutes(5);
-
-    // Very small, request-local dedupe store.
+    // Request-local dedupe store.
     private readonly Dictionary<PermissionCacheKey, PermissionMetadata> requestCache = [];
 
     public Task<Result> EnforceAsync<TMessage>(TMessage message, Guid userId, CancellationToken cancellationToken = default) where TMessage : notnull
@@ -35,40 +32,17 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
         if (requestCache.TryGetValue(key, out var requestCached))
             return requestCached;
 
-        if (memoryCache.TryGetValue<PermissionMetadata>(key, out var memCached))
+        if (permissionCache.Get(key) is PermissionMetadata memCached)
         {
             requestCache[key] = memCached;
             return memCached;
         }
 
-        var actorIds = await GetActorScopeAsync(userId, ct);
+        var actorIds = await actorScopeProvider.GetActorScopeAsync(userId, ct);
 
         var permissions = await uow.Users.GetEffectivePermissionsAsync(actorIds, resourceType, resourceId, ct);
 
-        var cacheOptions = new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = PermissionCacheTtl
-        };
-
-        memoryCache.Set(key, permissions, cacheOptions);
-
-        // Maintain an index of permission cache keys per user so evictors can remove them when actor scope changes.
-        // Index must outlive the permission entries it tracks to avoid orphaned perm keys.
-        var permIndexKey = $"perm-index:{userId}";
-        var permIndexOptions = new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = PermissionCacheTtl + TimeSpan.FromMinutes(1)
-        };
-
-        if (memoryCache.TryGetValue<HashSet<PermissionCacheKey>>(permIndexKey, out var existingIndex) && existingIndex is not null)
-        {
-            var updated = new HashSet<PermissionCacheKey>(existingIndex) { key };
-            memoryCache.Set(permIndexKey, updated, permIndexOptions);
-        }
-        else
-        {
-            memoryCache.Set(permIndexKey, new HashSet<PermissionCacheKey> { key }, permIndexOptions);
-        }
+        permissionCache.Set(key, permissions);
         requestCache[key] = permissions;
 
         return permissions;
@@ -100,7 +74,7 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
                 continue;
             }
 
-            if (memoryCache.TryGetValue<PermissionMetadata>(key, out var memCached))
+            if (permissionCache.Get(key) is PermissionMetadata memCached)
             {
                 requestCache[key] = memCached;
                 result[rid] = memCached;
@@ -114,19 +88,13 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
             return result;
 
         // Fetch actor scope once
-        var actorIds = await GetActorScopeAsync(userId, ct);
+        var actorIds = await actorScopeProvider.GetActorScopeAsync(userId, ct);
 
         // Fetch all missing permissions
         var toFetchArray = toFetch.ToArray();
         var fetched = await uow.Users.GetEffectivePermissionsBatchAsync(actorIds, resourceType, toFetchArray, ct);
 
-        var cacheOptions = new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = PermissionCacheTtl };
-        var permIndexKey = $"perm-index:{userId}";
-        var permIndexOptions = new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = PermissionCacheTtl + TimeSpan.FromMinutes(1) };
-
-        // Gather or create a single index set and update it once at the end to avoid cloning per item
-        var existingIndex = memoryCache.Get<HashSet<PermissionCacheKey>>(permIndexKey);
-        var indexSet = existingIndex is not null ? [.. existingIndex] : new HashSet<PermissionCacheKey>();
+        var indexSet = new List<PermissionCacheKey>();
 
         foreach (var rid in toFetchArray)
         {
@@ -134,37 +102,16 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
                 permissions = PermissionMetadata.Empty;
 
             var cacheKey = new PermissionCacheKey(userId, resourceType, rid);
-            memoryCache.Set(cacheKey, permissions, cacheOptions);
+            permissionCache.Set(cacheKey, permissions);
             requestCache[cacheKey] = permissions;
             result[rid] = permissions;
 
             indexSet.Add(cacheKey);
         }
-
         // Persist permission index once
-        memoryCache.Set(permIndexKey, indexSet, permIndexOptions);
+        permissionCache.AddManyToIndex(userId, indexSet);
 
         return result;
     }
 
-    private async ValueTask<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct)
-    {
-        var actorCacheKey = $"actor-scope:{userId}";
-
-        if (memoryCache.TryGetValue<Guid[]>(actorCacheKey, out var cachedActorIds))
-        {
-            if (cachedActorIds != null && cachedActorIds.Length > 0)
-                return cachedActorIds;
-        }
-
-        var actorIds = await uow.Users.GetActorScopeAsync(userId, ct);
-
-        var cacheEntryOptions = new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = ActorScopeCacheTtl
-        };
-
-        memoryCache.Set(actorCacheKey, actorIds, cacheEntryOptions);
-        return actorIds;
-    }
 }

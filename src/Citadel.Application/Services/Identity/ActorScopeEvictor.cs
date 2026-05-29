@@ -10,7 +10,7 @@ internal interface IActorScopeEvictor
     Task EvictUsers(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default);
 }
 
-internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCache, IRoleCache roleCache) : IActorScopeEvictor
+internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCache, IRoleCache roleCache, IActorScopeProvider actorScopeProvider, IPermissionCache permissionCache) : IActorScopeEvictor
 {
     public async Task EvictPermissionsForActorAsync(Guid actorId, CancellationToken cancellationToken = default)
     {
@@ -20,8 +20,14 @@ internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCach
         // Evict actor-scope keys and permission index entries first
         foreach (var id in distinctUserIds)
         {
-            EvictUserPermissionCache(id);
+            // Invalidate permission entries for the user via the permission cache abstraction
+            permissionCache.InvalidateUser(id);
+            // Keep actor-scope removal via memoryCache for now (actor scope key owned by ActorScopeProvider)
+            memoryCache.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(id));
         }
+
+        // Also remove cached actor scope entries from centralized provider
+        await actorScopeProvider.InvalidateManyAsync(distinctUserIds, cancellationToken);
 
         // Refresh roles for the users that remain (batch)
         if (distinctUserIds.Length > 0)
@@ -35,7 +41,13 @@ internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCach
 
         // Evict actor-scope keys and permission index entries up-front
         foreach (var id in idArray)
-            EvictUserPermissionCache(id);
+        {
+            permissionCache.InvalidateUser(id);
+            memoryCache.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(id));
+        }
+
+        // Also remove cached actor scope entries
+        await actorScopeProvider.InvalidateManyAsync(idArray, cancellationToken);
 
         // Batch fetch users to determine which exist and their actor ids
         var existingUsers = (await uow.Users.GetAllAsync(idArray, cancellationToken)) ?? [];
@@ -127,17 +139,9 @@ internal sealed class ActorScopeEvictor(IUnitOfWork uow, IMemoryCache memoryCach
 
     private void EvictUserPermissionCache(Guid userId)
     {
-        memoryCache.Remove($"actor-scope:{userId}");
+        memoryCache.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userId));
 
-        var permIndexKey = $"perm-index:{userId}";
-        if (memoryCache.TryGetValue<HashSet<PermissionCacheKey>>(permIndexKey, out var permissionKeys) && permissionKeys is not null)
-        {
-            foreach (var key in permissionKeys)
-            {
-                memoryCache.Remove(key);
-            }
-        }
-
-        memoryCache.Remove(permIndexKey);
+        // Moved to IPermissionCache
+        permissionCache.InvalidateUser(userId);
     }
 }

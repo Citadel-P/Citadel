@@ -68,6 +68,8 @@ public static class ApplicationModule
             .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
             .AddScoped<IActorScopeEvictor, ActorScopeEvictor>()
+            .AddScoped<IActorScopeProvider, ActorScopeProvider>()
+            .AddScoped<IPermissionCache, PermissionCache>()
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<CustomRegistryConnectorStrategy>()
@@ -137,7 +139,6 @@ public static class ApplicationModule
             .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(Helpers.ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
-
             .AddSingleton(Channel.CreateBounded<GitRepoSyncRequest>(Helpers.ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Reader)

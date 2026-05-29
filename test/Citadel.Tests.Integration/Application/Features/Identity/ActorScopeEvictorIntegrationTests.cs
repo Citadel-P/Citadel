@@ -28,7 +28,7 @@ public class ActorScopeEvictorIntegrationTests(PostgresTestFixture fixture) : In
         // Ensure we exercise the DB path (not a stale perm cache entry) so actor-scope gets populated
         foreach (ResourceType rt in Enum.GetValues<ResourceType>())
         {
-            var permKey = $"perm:{userId}:{(int)rt}:{string.Empty}";
+            var permKey = Constants.CacheKeys.Permission(userId, (int)rt, string.Empty);
             memoryCache.Remove(permKey);
         }
 
@@ -36,8 +36,8 @@ public class ActorScopeEvictorIntegrationTests(PostgresTestFixture fixture) : In
         var permMeta = await permissionService.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, TestContext.Current.CancellationToken);
         Console.WriteLine($"DEBUG: permMeta={permMeta}");
 
-        var actorCacheKey = $"actor-scope:{userId}";
-        var permCacheKey = $"perm:{userId}:{(int)ResourceType.Deployment}:{string.Empty}";
+        var actorCacheKey = Constants.CacheKeys.ActorScope(userId);
+        var permCacheKey = Constants.CacheKeys.Permission(userId, (int)ResourceType.Deployment, string.Empty);
 
         var hasActorCache = memoryCache.TryGetValue(actorCacheKey, out Guid[]? cachedAfter);
         var hasPermCache = memoryCache.TryGetValue(permCacheKey, out PermissionMetadata permCached);
@@ -48,7 +48,7 @@ public class ActorScopeEvictorIntegrationTests(PostgresTestFixture fixture) : In
         await evictor.EvictPermissionsForActorAsync(teamActorId, TestContext.Current.CancellationToken);
 
         // Assert removed
-        Assert.False(memoryCache.TryGetValue($"actor-scope:{userId}", out _));
+        Assert.False(memoryCache.TryGetValue(Constants.CacheKeys.ActorScope(userId), out _));
 
         // Simulate a new request: create a fresh scope so IPermissionService request cache is empty
         await using var newScope = Services.CreateAsyncScope();
@@ -57,12 +57,12 @@ public class ActorScopeEvictorIntegrationTests(PostgresTestFixture fixture) : In
         // Remove any perm cache entries so ResolvePermissionsAsync will call GetActorScopeAsync
         foreach (ResourceType rt in Enum.GetValues<ResourceType>())
         {
-            var permKey = $"perm:{userId}:{(int)rt}:{string.Empty}";
+            var permKey = Constants.CacheKeys.Permission(userId, (int)rt, string.Empty);
             memoryCache.Remove(permKey);
         }
 
         var repop = await newPermissionService.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, TestContext.Current.CancellationToken);
-        Assert.True(memoryCache.TryGetValue($"actor-scope:{userId}", out Guid[]? _));
+        Assert.True(memoryCache.TryGetValue(Constants.CacheKeys.ActorScope(userId), out Guid[]? _));
     }
 
     [Fact]
@@ -77,15 +77,15 @@ public class ActorScopeEvictorIntegrationTests(PostgresTestFixture fixture) : In
         var permissionService = scope.ServiceProvider.GetRequiredService<Hosting.Common.Pipelines.Interfaces.IPermissionService>();
 
         // Ensure no stale permission cache entry for the tested resource prevents actor-scope population
-        var singlePermKey = $"perm:{userId}:{(int)ResourceType.Deployment}:{string.Empty}";
+        var singlePermKey = Constants.CacheKeys.Permission(userId, (int)ResourceType.Deployment, string.Empty);
         memoryCache.Remove(singlePermKey);
 
         var _ = await permissionService.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, TestContext.Current.CancellationToken);
-        Assert.True(memoryCache.TryGetValue($"actor-scope:{userId}", out Guid[]? _));
+        Assert.True(memoryCache.TryGetValue(Constants.CacheKeys.ActorScope(userId), out Guid[]? _));
 
         await evictor.EvictUsers(new[] { userId }, TestContext.Current.CancellationToken);
 
-        Assert.False(memoryCache.TryGetValue($"actor-scope:{userId}", out _));
+        Assert.False(memoryCache.TryGetValue(Constants.CacheKeys.ActorScope(userId), out _));
 
         // Simulate a new request for repopulation
         await using var newScope2 = Services.CreateAsyncScope();
@@ -94,11 +94,11 @@ public class ActorScopeEvictorIntegrationTests(PostgresTestFixture fixture) : In
         // Remove any perm cache entries so ResolvePermissionsAsync will call GetActorScopeAsync
         foreach (ResourceType rt in Enum.GetValues<ResourceType>())
         {
-            var permKey = $"perm:{userId}:{(int)rt}:{string.Empty}";
+            var permKey = Constants.CacheKeys.Permission(userId, (int)rt, string.Empty);
             memoryCache.Remove(permKey);
         }
 
         var repop2 = await newPermissionService2.ResolvePermissionsAsync(userId, ResourceType.Deployment, null, TestContext.Current.CancellationToken);
-        Assert.True(memoryCache.TryGetValue($"actor-scope:{userId}", out Guid[]? _));
+        Assert.True(memoryCache.TryGetValue(Constants.CacheKeys.ActorScope(userId), out Guid[]? _));
     }
 }

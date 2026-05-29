@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
@@ -58,14 +53,16 @@ public class ActorScopeEvictorBatchTests
         var memoryCache = new Mock<IMemoryCache>();
         var roleCache = new Mock<IRoleCache>();
 
-        var evictor = new ActorScopeEvictor(uow.Object, memoryCache.Object, roleCache.Object);
+        var actorScopeProvider = new Mock<IActorScopeProvider>();
+        var permissionCache = new Mock<IPermissionCache>();
+        var evictor = new ActorScopeEvictor(uow.Object, memoryCache.Object, roleCache.Object, actorScopeProvider.Object, permissionCache.Object);
 
         await evictor.EvictUsers(new[] { userA, userB, userC }, CancellationToken.None);
 
         // actor-scope removed for all
-        memoryCache.Verify(m => m.Remove($"actor-scope:{userA}"), Times.Once);
-        memoryCache.Verify(m => m.Remove($"actor-scope:{userB}"), Times.Once);
-        memoryCache.Verify(m => m.Remove($"actor-scope:{userC}"), Times.Once);
+        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userA)), Times.Once);
+        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userB)), Times.Once);
+        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userC)), Times.Once);
 
         // role cache set for users A and B (actorA)
         roleCache.Verify(rc => rc.SetRoles(userA, It.Is<string[]>(arr => arr.Contains("role1") && arr.Contains("role2"))), Times.Once);

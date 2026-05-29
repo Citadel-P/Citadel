@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Application.Services.Identity;
 using Moq;
 using Domain.Contracts.Interfaces;
@@ -34,25 +30,27 @@ public class ActorScopeEvictorTests
         // provide minimal user/role repository mocks used by the evictor to avoid NREs
         var usersRepo = new Mock<IUserRepository>();
         usersRepo.Setup(r => r.GetAllAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
-            .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IEnumerable<User>?)Array.Empty<User>()));
+            .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IEnumerable<User>?)[]));
         uow.SetupGet(x => x.Users).Returns(usersRepo.Object);
 
         var rolesRepo = new Mock<IRoleRepository>();
         rolesRepo.Setup(r => r.GetActorRoleIdsAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
             .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IDictionary<Guid, Guid[]>)new Dictionary<Guid, Guid[]>()));
         rolesRepo.Setup(r => r.GetAllAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
-            .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IEnumerable<Role>?)Array.Empty<Role>()));
+            .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IEnumerable<Role>?)[]));
         uow.SetupGet(x => x.Roles).Returns(rolesRepo.Object);
 
         var memoryCache = new Mock<IMemoryCache>();
         var roleCache = new Mock<IRoleCache>();
 
-        var evictor = new ActorScopeEvictor(uow.Object, memoryCache.Object, roleCache.Object);
+        var actorScopeProvider = new Mock<IActorScopeProvider>();
+        var permissionCache = new Mock<IPermissionCache>();
+        var evictor = new ActorScopeEvictor(uow.Object, memoryCache.Object, roleCache.Object, actorScopeProvider.Object, permissionCache.Object);
 
         await evictor.EvictPermissionsForActorAsync(actorId, TestContext.Current.CancellationToken);
 
-        memoryCache.Verify(m => m.Remove($"actor-scope:{userA}"), Times.Once);
-        memoryCache.Verify(m => m.Remove($"actor-scope:{userB}"), Times.Once);
+        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userA)), Times.Once);
+        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userB)), Times.Once);
     }
 
     [Fact]
@@ -61,26 +59,28 @@ public class ActorScopeEvictorTests
         var uow = new Mock<IUnitOfWork>();
         var usersRepo = new Mock<IUserRepository>();
         usersRepo.Setup(r => r.GetAllAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
-            .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IEnumerable<User>?)Array.Empty<User>()));
+            .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IEnumerable<User>?)[]));
         uow.SetupGet(x => x.Users).Returns(usersRepo.Object);
 
         var rolesRepo = new Mock<IRoleRepository>();
         rolesRepo.Setup(r => r.GetActorRoleIdsAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
             .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IDictionary<Guid, Guid[]>)new Dictionary<Guid, Guid[]>()));
         rolesRepo.Setup(r => r.GetAllAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
-            .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IEnumerable<Role>)Array.Empty<Role>()));
+            .Returns((IEnumerable<Guid> ids, CancellationToken ct) => Task.FromResult((IEnumerable<Role>?)[]));
         uow.SetupGet(x => x.Roles).Returns(rolesRepo.Object);
         var memoryCache = new Mock<IMemoryCache>();
         var roleCache = new Mock<IRoleCache>();
 
-        var evictor = new ActorScopeEvictor(uow.Object, memoryCache.Object, roleCache.Object);
+        var actorScopeProvider = new Mock<IActorScopeProvider>();
+        var permissionCache = new Mock<IPermissionCache>();
+        var evictor = new ActorScopeEvictor(uow.Object, memoryCache.Object, roleCache.Object, actorScopeProvider.Object, permissionCache.Object);
 
         var userA = Guid.NewGuid();
         var userB = Guid.NewGuid();
 
         await evictor.EvictUsers(new[] { userA, userB }, TestContext.Current.CancellationToken);
 
-        memoryCache.Verify(m => m.Remove($"actor-scope:{userA}"), Times.Once);
-        memoryCache.Verify(m => m.Remove($"actor-scope:{userB}"), Times.Once);
+        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userA)), Times.Once);
+        memoryCache.Verify(m => m.Remove(Hosting.Common.Constants.CacheKeys.ActorScope(userB)), Times.Once);
     }
 }
