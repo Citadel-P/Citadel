@@ -20,6 +20,7 @@ export const deployAction: ActionConfig<DeploymentView, any> = {
     icon: Rocket,
     confirm: true,
     resourceType: 'Deployment',
+    requiredCapabilities: ['canRead', 'canApply'],
     useHandler: ({ resources }) => {
       const { open: openSheet } = useTaskSheet('Deployment');
       const selected = Array.isArray(resources) ? resources[0] : resources;
@@ -37,6 +38,7 @@ export const deployAction: ActionConfig<DeploymentView, any> = {
     icon: Rocket,
     confirm: true,
     resourceType: 'Deployment',
+    requiredCapabilities: ['canRead', 'canApply'],
     useHandler: ({ resources }) => {
       const { open: openSheet } = useTaskSheet('Deployment');
       const selected = Array.isArray(resources) ? resources[0] : resources;

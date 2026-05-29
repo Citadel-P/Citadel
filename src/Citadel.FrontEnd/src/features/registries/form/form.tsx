@@ -105,7 +105,15 @@ const HelperLink = ({ href, info }: { href: string; info: string }) => (
 );
 type RegistryInput = CreateRegistryInput | PatchRegistryInput;
 
-export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: RegistryInput }) => {
+export const RegistryForm = ({
+  mode,
+  resource,
+  disabled,
+}: {
+  mode: 'add' | 'edit';
+  resource?: RegistryInput;
+  disabled?: boolean;
+}) => {
   const id = useParams().id;
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<RegistryInput>>({});
@@ -492,6 +500,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
       setUpdate={setUpdate}
       onSave={handleSave}
       pending={isPending}
+      disabled={disabled}
       draftKey={`registry:${id ?? 'new'}`}
       draftVersion={1}
     />

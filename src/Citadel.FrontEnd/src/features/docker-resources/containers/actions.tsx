@@ -100,6 +100,7 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
       type: 'command',
       separatorBefore: true,
       icon: Eye,
+      requiredCapabilities: ['canInspect'],
       useHandler: ({ resources }) => {
         const navigate = useNavigate();
         const { currentPlatform } = useAppContext();

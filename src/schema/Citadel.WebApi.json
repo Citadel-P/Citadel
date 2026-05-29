@@ -16332,6 +16332,16 @@
                 "$ref": "#/components/schemas/DeploymentView"
               }
             ]
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformCapabilities"
+              }
+            ]
           }
         }
       },
@@ -18191,7 +18201,8 @@
       },
       "DeploymentsView": {
         "required": [
-          "deployments"
+          "deployments",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -18200,6 +18211,9 @@
             "items": {
               "$ref": "#/components/schemas/DeploymentView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },

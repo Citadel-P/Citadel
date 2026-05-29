@@ -85,7 +85,8 @@ public sealed record ContainerInfoView(
     IDictionary<string, string> Networks,
     ContainerStateStatus State,
     ImageView? ImageView,
-    DeploymentView? DeploymentView = null)
+    DeploymentView? DeploymentView = null,
+    PlatformCapabilities? Capabilities = null)
 {
     internal static ContainerInfoView Map(ContainerInfo container) => new(
         Name: container.Name,
@@ -101,4 +102,13 @@ public sealed record ContainerInfoView(
         ImageView: container.Image is not null ? ImagesView.Map(container.Image) : null,
         DeploymentView: container.Deployment is not null ? DeploymentView.Map(container.Deployment) : null
         );
+
+    internal static async Task<ContainerInfoView> Map(ContainerInfo container, IPermissionEvaluator permissionEvaluator)
+    {
+        var permissions = await permissionEvaluator.EvaluateAsync(container.PlatformId, ResourceType.Platform);
+        return Map(container) with
+        {
+            Capabilities = CapabilityMapper.ToPlatformCapabilities(permissions)
+        };
+    }
 }

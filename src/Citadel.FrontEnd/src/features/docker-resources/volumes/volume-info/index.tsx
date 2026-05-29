@@ -8,6 +8,7 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { VolumeInfoTable } from './volume-info-table';
 import { VolumeInfoActions } from './actions';
 import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResultView> = {
   Header: {
@@ -22,6 +23,7 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
   Tabs: [
     {
       label: 'Inspect',
+      disabled: (resource: DockerVolumeResultView) => !hasCapability(resource, 'canRead'),
       Content: ({ resource }) => <InspectVolumeWrapper resource={resource} />,
     },
   ],

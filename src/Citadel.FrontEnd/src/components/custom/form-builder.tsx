@@ -929,7 +929,10 @@ export function FormShell<T>({
                         id={key}
                         key={key}
                         disabled={fieldDisabled}
-                        className="relative border rounded-sm p-6 scroll-mt-22 xl:scroll-mt-20 shadow-xs">
+                        className={cn(
+                          'relative border rounded-sm p-6 scroll-mt-22 xl:scroll-mt-20 shadow-xs',
+                          fieldDisabled && 'pointer-events-none opacity-60',
+                        )}>
                         <SmartField
                           render={f.render}
                           value={value}
@@ -961,7 +964,13 @@ export function FormShell<T>({
                             const fieldDisabled = !!disabled || !!f.disabled;
 
                             return (
-                              <fieldset key={key} disabled={fieldDisabled} className={`relative pb-0 last:pb-0 flex-1`}>
+                              <fieldset
+                                key={key}
+                                disabled={fieldDisabled}
+                                className={cn(
+                                  'relative pb-0 last:pb-0 flex-1',
+                                  fieldDisabled && 'pointer-events-none opacity-60',
+                                )}>
                                 <SmartField
                                   render={f.render}
                                   value={value}
@@ -1014,7 +1023,10 @@ export function FormShell<T>({
                               <fieldset
                                 key={key}
                                 disabled={fieldDisabled}
-                                className={`relative pb-6 last:pb-0 ${group.direction === 'horizontal' ? 'flex-1' : 'block border-b last:border-b-0'}`}>
+                                className={cn(
+                                  `relative pb-6 last:pb-0 ${group.direction === 'horizontal' ? 'flex-1' : 'block border-b last:border-b-0'}`,
+                                  fieldDisabled && 'pointer-events-none opacity-60',
+                                )}>
                                 <SmartField
                                   render={f.render}
                                   value={value}
@@ -1048,7 +1060,10 @@ export function FormShell<T>({
                                     <fieldset
                                       key={key}
                                       disabled={fieldDisabled}
-                                      className="pb-1 last:pb-1 last:flex-1 scroll-mt-22 xl:scroll-mt-20">
+                                      className={cn(
+                                        'pb-1 last:pb-1 last:flex-1 scroll-mt-22 xl:scroll-mt-20',
+                                        fieldDisabled && 'pointer-events-none opacity-60',
+                                      )}>
                                       <SmartField
                                         render={f.render}
                                         value={value}

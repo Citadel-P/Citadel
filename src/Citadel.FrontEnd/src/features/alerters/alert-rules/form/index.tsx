@@ -6,6 +6,7 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { ActivitiesTab } from '@/features/activities';
 import { AlertRuleView } from '@/api/generated/api.types';
 import { AlertRuleActions } from './actions';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 const title = 'Rule';
 export const AlertRuleFormComponents: RequiredFormComponents = {
@@ -30,7 +31,7 @@ export const AlertRuleFormComponents: RequiredFormComponents = {
       {
         label: 'Config',
         Content: ({ resource }) => {
-          return <AlertRuleForm mode="edit" resource={resource} />;
+          return <AlertRuleForm mode="edit" resource={resource} disabled={!hasCapability(resource, 'canWrite')} />;
         },
       },
       {

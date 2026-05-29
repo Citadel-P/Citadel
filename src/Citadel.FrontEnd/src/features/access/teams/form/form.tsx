@@ -62,7 +62,15 @@ const UserMultiSelectField = ({ value, onChange }: { value: string[] | null; onC
   );
 };
 
-export const TeamForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: TeamFormResource }) => {
+export const TeamForm = ({
+  mode,
+  resource,
+  disabled,
+}: {
+  mode: 'add' | 'edit';
+  resource?: TeamFormResource;
+  disabled?: boolean;
+}) => {
   const id = useParams().id;
   const [update, setUpdate] = useState<Partial<TeamInput>>({});
   const queryClient = useQueryClient();
@@ -217,6 +225,7 @@ export const TeamForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
       setUpdate={setUpdate}
       onSave={wrappedSave}
       pending={isPending}
+      disabled={disabled}
       draftKey={`team:${id ?? 'new'}`}
       draftVersion={1}
     />

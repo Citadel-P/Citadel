@@ -5,6 +5,7 @@ import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
 import { ActionButton, ActionWithDialog, GroupActionWithDialog } from '@/components/custom/action-with-dialog';
 import { useMutate } from '@/lib/hooks';
 import { capitalize } from '@/lib/utils';
+import { CapabilityKey, hasCapabilities } from '@/lib/resource-capabilities';
 import type { DropdownActionComponent, ButtonGroupComponent, ButtonActionComponent } from '@/pages/types';
 import type { KnownResourceName, PrimaryArg, ResourceType } from '@/api/types';
 
@@ -26,6 +27,7 @@ export interface CommandAction<R, K extends KnownResourceName> {
   argName?: 'params' | 'data';
   resourceType?: ResourceType;
   separatorBefore?: boolean;
+  requiredCapabilities?: CapabilityKey[];
   useHandler?: (ctx: { resources: R | R[] }) => {
     run: () => void | Promise<void>;
     canExecute?: boolean;
@@ -61,6 +63,7 @@ type ToggleConfig<R, K extends KnownResourceName> = {
   argName?: 'params' | 'data';
   destructive?: boolean;
   resourceType?: ResourceType;
+  requiredCapabilities?: CapabilityKey[];
 };
 
 export type ActionConfig<R, K extends KnownResourceName> = CommandAction<R, K> | ToggleAction<R, K>;
@@ -302,21 +305,27 @@ function useUnifiedExecutor<R>(
     useVariables?: any;
     useSuccessHandler?: any;
     onSuccess?: any;
+    destructive?: boolean;
+    requiredCapabilities?: CapabilityKey[];
   },
   resources: R | R[],
   title: string,
   showToast: boolean,
 ) {
+  const requiredCapabilities: CapabilityKey[] =
+    act.requiredCapabilities ?? (act.destructive ? ['canExecute'] : act.mutateKey ? ['canWrite'] : []);
+  const capabilitiesAllow = hasCapabilities(resources, requiredCapabilities);
+
   if (act.useHandler) {
     const handler = act.useHandler({ resources });
     return {
       run: async () => await handler.run(),
-      canExecute: handler.canExecute ?? true,
+      canExecute: (handler.canExecute ?? true) && capabilitiesAllow,
       isPending: handler.isPending ?? false,
     };
   }
 
-  return useMutationLogic(act, resources, title, showToast, act.invalidate, act.argName);
+  return useMutationLogic(act, resources, title, showToast, capabilitiesAllow, act.invalidate, act.argName);
 }
 
 function useMutationLogic<R, K extends KnownResourceName>(
@@ -330,13 +339,14 @@ function useMutationLogic<R, K extends KnownResourceName>(
   resources: R | R[],
   title: string,
   showToast: boolean,
+  capabilitiesAllow: boolean,
   invalidate?: string,
   argName: 'params' | 'data' = 'data',
 ) {
   const { mutateAsync, isPending } = useMutate(act.mutateKey || ('none' as any));
   const client = useQueryClient();
 
-  const canExecute = act.mutateKey ? (act.canExecute ? act.canExecute(resources) : true) : false;
+  const canExecute = act.mutateKey ? (act.canExecute ? act.canExecute(resources) : true) && capabilitiesAllow : false;
 
   const vars = act.useVariables ? act.useVariables(resources) : undefined;
 

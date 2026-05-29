@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { cn } from '@/lib/utils';
 import { RequiredFormFields, ResourceTabElement } from '@/pages/types';
 import { useSegmentTitle } from '@/lib/atoms';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 export const ResourceTabs = ({
   localKey,
@@ -26,9 +26,21 @@ export const ResourceTabs = ({
 
   const [activeTab, setActiveTab] = useLocalStorage(localKey, tabs[0]?.label ?? 'default');
   const { sentinelRef, isStuck } = useStickySentinel();
+  const enabledTabs = useMemo(() => tabs.filter((tab) => !(tab.disabled?.(resource) ?? false)), [tabs, resource]);
+  const currentTabEnabled = useMemo(
+    () => tabs.some((tab) => tab.label === activeTab && !(tab.disabled?.(resource) ?? false)),
+    [activeTab, resource, tabs],
+  );
+  const effectiveActiveTab = currentTabEnabled ? activeTab : (enabledTabs[0]?.label ?? activeTab);
+
+  useEffect(() => {
+    if (effectiveActiveTab !== activeTab) {
+      setActiveTab(effectiveActiveTab);
+    }
+  }, [activeTab, effectiveActiveTab, setActiveTab]);
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
+    <Tabs value={effectiveActiveTab} onValueChange={setActiveTab} className="gap-4">
       <div ref={sentinelRef} aria-hidden className="h-px" />
       <div
         className={cn(
@@ -48,11 +60,13 @@ export const ResourceTabs = ({
         </TabsList>
       </div>
 
-      {tabs.map((tab) => (
-        <TabsContent key={tab.label} value={tab.label}>
-          <tab.Content resource={resource} metadataChanged={metadataChanged} />
-        </TabsContent>
-      ))}
+      {tabs
+        .filter((tab) => !(tab.disabled?.(resource) ?? false))
+        .map((tab) => (
+          <TabsContent key={tab.label} value={tab.label}>
+            <tab.Content resource={resource} metadataChanged={metadataChanged} />
+          </TabsContent>
+        ))}
     </Tabs>
   );
 };

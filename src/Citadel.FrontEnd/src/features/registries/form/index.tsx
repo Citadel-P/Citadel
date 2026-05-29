@@ -6,6 +6,7 @@ import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { RegistryView } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 export const RegistryFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -26,7 +27,7 @@ export const RegistryFormComponents: RequiredFormComponents = {
       {
         label: 'Config',
         Content: ({ resource }) => {
-          return <RegistryForm mode="edit" resource={resource} />;
+          return <RegistryForm mode="edit" resource={resource} disabled={!hasCapability(resource, 'canWrite')} />;
         },
       },
       {

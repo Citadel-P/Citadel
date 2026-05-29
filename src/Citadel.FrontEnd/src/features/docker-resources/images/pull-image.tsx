@@ -7,14 +7,20 @@ import { Input } from '@/components/ui/input';
 import { LookupResourceType, RegistryView } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
 import { AlertMessage } from '@/components/custom/alert-message';
+import { useAppContext } from '@/lib/context/app-context';
+import { hasCapabilities } from '@/lib/resource-capabilities';
 
 export const PullButton = () => {
   const { open, toggle } = useInlineSubHeader('Image');
+  const { currentPlatform } = useAppContext();
+  const canPull = hasCapabilities(currentPlatform, ['canWrite', 'canPull']);
+
   return (
     <Button
       type="button"
       aria-expanded={open}
       onClick={toggle}
+      disabled={!canPull}
       className="inline-flex items-center bg-primary hover:bg-primary/80 font-medium rounded-sm text-sm px-2.5 py-2.5">
       {open ? <Minus className="h-3 w-3 ml-1" /> : <Plus className="h-3 w-3 ml-1" />} Pull Image
     </Button>
@@ -24,8 +30,10 @@ export const PullButton = () => {
 export default function PullImageForm() {
   const { open: openSheet } = useTaskSheet('Image');
   const { open } = useInlineSubHeader('Image');
+  const { currentPlatform } = useAppContext();
   const [image, setImage] = useState('');
   const [registry, setRegistry] = useState<RegistryView | undefined>();
+  const canPull = hasCapabilities(currentPlatform, ['canRead', 'canPull']);
 
   const handleRegistrySelect = (newRegistry: RegistryView | undefined) => {
     setRegistry(newRegistry);
@@ -33,7 +41,7 @@ export default function PullImageForm() {
 
   const submit = (e?: React.SubmitEvent) => {
     e?.preventDefault();
-    if (!image || !registry) return;
+    if (!image || !registry || !canPull) return;
 
     openSheet({
       kind: 'pull',
@@ -86,7 +94,11 @@ export default function PullImageForm() {
 
               <div className="flex flex-col sm:flex-row sm:items-baseline">
                 <div className="flex-none w-full sm:w-36 text-sm" />
-                <Button type="submit" className="gap-2 text-sm" variant="outline" disabled={!image || !registry}>
+                <Button
+                  type="submit"
+                  className="gap-2 text-sm"
+                  variant="outline"
+                  disabled={!image || !registry || !canPull}>
                   Pull image
                   <Download className="w-4 h-4" />
                 </Button>

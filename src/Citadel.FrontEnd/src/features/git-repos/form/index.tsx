@@ -15,6 +15,7 @@ import { ActivityAlertZone } from '@/components/custom/task-sheet';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { truncate } from '@/lib/truncate';
 import { GitCommitHorizontalIcon } from 'lucide-react';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 const title = 'Repository';
 export const GitRepoFormComponents: RequiredFormComponents = {
@@ -46,8 +47,14 @@ export const GitRepoFormComponents: RequiredFormComponents = {
     Tabs: [
       {
         label: 'Config',
-        Content: ({ metadataChanged }) => {
-          return <GitRepoForm mode="edit" metadataChanged={metadataChanged} />;
+        Content: ({ resource, metadataChanged }: { resource: GitRepositoryView; metadataChanged?: boolean }) => {
+          return (
+            <GitRepoForm
+              mode="edit"
+              metadataChanged={metadataChanged}
+              disabled={!hasCapability(resource, 'canWrite')}
+            />
+          );
         },
       },
       {

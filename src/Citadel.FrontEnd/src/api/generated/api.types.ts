@@ -1064,6 +1064,7 @@ export interface AlertRuleView {
   channels: AlertChannelView[];
   limitedTo: AlertRuleLimitedTo[];
   quietHours: AlertRuleQuietHour[];
+  capabilities?: null | ResourceCapabilities;
 }
 
 export interface AlertRulesView {
@@ -1174,6 +1175,7 @@ export interface ContainerInfoView {
   state: ContainerStateStatus;
   imageView: null | ImageView;
   deploymentView?: null | DeploymentView;
+  capabilities?: null | PlatformCapabilities;
 }
 
 export interface ContainerInspectView {
@@ -1905,6 +1907,7 @@ export interface GitRepositoryView {
   createdAt: any;
   controlState: ResourceControlState;
   latestActivityView: null | LatestActivityView;
+  capabilities?: null | ResourceCapabilities;
 }
 
 export interface GraphDriverDataInfo {
@@ -2796,6 +2799,7 @@ export interface RegistryView {
   type: RegistryType;
   /** @format date-time */
   createdAt: any;
+  capabilities?: null | ResourceCapabilities;
   isDefault?: boolean;
 }
 
@@ -2844,6 +2848,12 @@ export interface ResourceAccessView {
   resourceName: null | string;
   permissionLevel: PermissionLevel;
   specificPermissions: null | SpecificPermission[];
+}
+
+export interface ResourceCapabilities {
+  canRead: boolean;
+  canWrite: boolean;
+  canExecute: boolean;
 }
 
 export interface ResourceInfo {

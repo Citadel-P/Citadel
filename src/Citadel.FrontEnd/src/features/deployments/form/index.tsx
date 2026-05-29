@@ -27,6 +27,7 @@ import { ArrowRight, ArrowUpCircle, X } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ActivityAlertZone } from '@/components/custom/task-sheet';
 import { DeploymentLogs } from '@/features/docker-resources/containers/container-info/container-logs';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -54,8 +55,14 @@ export const DeploymentFormComponents: RequiredFormComponents = {
     Tabs: [
       {
         label: 'Config',
-        Content: ({ metadataChanged }: { metadataChanged?: boolean }) => {
-          return <DeploymentForm mode="edit" metadataChanged={metadataChanged} />;
+        Content: ({ resource, metadataChanged }: { resource: DeploymentView; metadataChanged?: boolean }) => {
+          return (
+            <DeploymentForm
+              mode="edit"
+              metadataChanged={metadataChanged}
+              disabled={!hasCapability(resource, 'canWrite')}
+            />
+          );
         },
       },
       {
@@ -188,6 +195,7 @@ const DeploymentRuntime = ({ deployment }: { deployment: DeploymentView }) => {
       containerInfo={containerInfo}
       containerId={deployment.dockerContainerId}
       deploymentId={deployment.id}
+      deployment={deployment}
       containerLoading={isLoading}
       disabled={disabled}
     />
@@ -198,11 +206,13 @@ const RuntimeView = ({
   containerInfo,
   containerId,
   deploymentId,
+  deployment,
   disabled,
 }: {
   containerInfo?: DockerContainerView | undefined;
   containerId?: string | undefined;
   deploymentId: string;
+  deployment: DeploymentView;
   containerLoading?: boolean;
   disabled?: boolean;
 }) => {
@@ -220,6 +230,7 @@ const RuntimeView = ({
         containerInfo={containerInfo}
         containerId={containerId}
         deploymentId={deploymentId}
+        deployment={deployment}
         disabled={disabled}
       />
     </div>
@@ -230,40 +241,52 @@ const RuntimeTabs = ({
   containerInfo,
   containerId,
   deploymentId,
+  deployment,
   disabled,
 }: {
   containerInfo?: DockerContainerView | undefined;
   containerId?: string | undefined;
   deploymentId: string;
+  deployment: DeploymentView;
   disabled?: boolean;
 }) => {
   const nid = normalizeDockerId(containerInfo?.id ?? containerId);
+  const canViewLogs = hasCapability(deployment, 'canViewLogs');
+  const canInspect = hasCapability(deployment, 'canInspect');
+  const terminalDisabled = disabled || !hasCapability(deployment, 'canOpenTerminal');
+  const defaultValue = canViewLogs ? 'logs' : canInspect ? 'inspect' : terminalDisabled ? 'stats' : 'terminal';
 
   return (
-    <Tabs defaultValue="logs" className="w-full">
+    <Tabs defaultValue={defaultValue} className="w-full">
       <TabsList className="w-fit justify-start">
-        <TabsTrigger className="text-xs" value="logs">
+        <TabsTrigger className="text-xs" value="logs" disabled={!canViewLogs}>
           Logs
         </TabsTrigger>
-        <TabsTrigger className="text-xs" value="inspect">
+        <TabsTrigger className="text-xs" value="inspect" disabled={!canInspect}>
           Inspect
         </TabsTrigger>
-        <TabsTrigger className="text-xs" value="terminal" disabled={disabled}>
+        <TabsTrigger className="text-xs" value="terminal" disabled={terminalDisabled}>
           Terminal
         </TabsTrigger>
         <TabsTrigger className="text-xs" value="stats">
           Stats
         </TabsTrigger>
       </TabsList>
-      <TabsContent value="logs" className="w-full mt-2">
-        <DeploymentLogs key={deploymentId} containerId={nid} deploymentId={deploymentId} />
-      </TabsContent>
-      <TabsContent value="inspect" className="w-full mt-2">
-        <DeploymentInspect key={deploymentId} deploymentId={deploymentId} />
-      </TabsContent>
-      <TabsContent value="terminal" className="w-full mt-2">
-        <DeploymentExec key={deploymentId} containerId={nid} deploymentId={deploymentId} disabled={disabled} />
-      </TabsContent>
+      {canViewLogs && (
+        <TabsContent value="logs" className="w-full mt-2">
+          <DeploymentLogs key={deploymentId} containerId={nid} deploymentId={deploymentId} />
+        </TabsContent>
+      )}
+      {canInspect && (
+        <TabsContent value="inspect" className="w-full mt-2">
+          <DeploymentInspect key={deploymentId} deploymentId={deploymentId} />
+        </TabsContent>
+      )}
+      {!terminalDisabled && (
+        <TabsContent value="terminal" className="w-full mt-2">
+          <DeploymentExec key={deploymentId} containerId={nid} deploymentId={deploymentId} disabled={disabled} />
+        </TabsContent>
+      )}
       <TabsContent value="stats" className="w-full mt-2">
         <DeploymentStats key={deploymentId} resource={containerInfo} deploymentId={deploymentId} />
       </TabsContent>

@@ -9,6 +9,7 @@ import { RequiredDockerInfoComponents } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { NetworkInfoActions } from './actions';
 import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDetailsView> = {
   Header: {
@@ -23,6 +24,7 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
               id: resource.id,
               name: resource.name,
               inUse: Object.keys(resource.containers ?? {}).length > 0,
+              capabilities: resource.capabilities,
             } as DockerNetworkResultView
           }
           actions={Object.values(NetworkInfoActions)}
@@ -34,6 +36,7 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
   Tabs: [
     {
       label: 'Inspect',
+      disabled: (resource: DockerNetworkDetailsView) => !hasCapability(resource, 'canRead'),
       Content: ({ resource }) => <InspectNetworkWrapper resource={resource} />,
     },
   ],

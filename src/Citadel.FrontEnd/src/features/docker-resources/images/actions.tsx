@@ -10,6 +10,7 @@ export const { dropdown: ImageDropdownActions, group: ImageGroupActions } = crea
     key: 'inspect',
     type: 'command',
     icon: SearchCode,
+    requiredCapabilities: ['canInspect'],
     useHandler: ({ resources }) => {
       const navigate = useNavigate();
       const { currentPlatform } = useAppContext();

@@ -138,7 +138,15 @@ const stop_signals = {
 
 type DeploymentInput = CreateDeploymentInput | PatchDeploymentInput;
 
-export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; metadataChanged?: boolean }) => {
+export const DeploymentForm = ({
+  mode,
+  metadataChanged,
+  disabled,
+}: {
+  mode: 'add' | 'edit';
+  metadataChanged?: boolean;
+  disabled?: boolean;
+}) => {
   const id = useParams().id;
   const [update, setUpdate] = useState<Partial<DeploymentInput>>({});
   const queryClient = useQueryClient();
@@ -716,6 +724,7 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
       setUpdate={setUpdate}
       onSave={handleSave}
       pending={isPending}
+      disabled={disabled}
       draftKey={`deployment:${id ?? 'new'}`}
       draftVersion={1}
     />

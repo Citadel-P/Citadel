@@ -172,7 +172,7 @@ public static class CapabilityMapper
                 (permission.SpecificPermissions & SpecificPermission.Pull) != 0,
 
             CanApply:
-                common.CanWrite &&
+                common.CanRead &&
                 (permission.SpecificPermissions & SpecificPermission.Apply) != 0
         );
     }

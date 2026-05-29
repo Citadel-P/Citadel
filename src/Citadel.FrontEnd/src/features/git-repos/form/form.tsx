@@ -68,7 +68,15 @@ const GitAccountSelector = ({
 };
 type GitRepositoryInput = CreateGitRepositoryInput | PatchGitRepositoryInput;
 
-export const GitRepoForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; metadataChanged?: boolean }) => {
+export const GitRepoForm = ({
+  mode,
+  metadataChanged,
+  disabled,
+}: {
+  mode: 'add' | 'edit';
+  metadataChanged?: boolean;
+  disabled?: boolean;
+}) => {
   const id = useParams().id;
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<GitRepositoryInput>>({});
@@ -290,6 +298,7 @@ export const GitRepoForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; m
       setUpdate={setUpdate}
       onSave={handleSave}
       pending={isPending}
+      disabled={disabled}
       draftKey={`GitRepo:${id ?? 'new'}`}
       draftVersion={1}
     />

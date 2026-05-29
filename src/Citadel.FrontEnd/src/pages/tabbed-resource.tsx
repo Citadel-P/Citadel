@@ -10,6 +10,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ResourceHeader } from './resource-header';
 import { TabElement, TabbedResourceComponents } from './types';
+import { useAppContext } from '@/lib/context/app-context';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 type TabbedResourceViewProps<T = any> = {
   Components: TabbedResourceComponents<T>;
@@ -66,6 +68,8 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
 
   const showTabSearch = tabHeader.showSearch;
   const showAdd = tabHeader.showAdd ?? header.showAdd;
+  const { currentPlatform } = useAppContext();
+  const addDisabled = !hasCapability(currentPlatform, 'canWrite');
 
   return (
     <div className="flex-col relative">
@@ -78,6 +82,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
             subtitle={header.subtitle}
             showSearch={showTopSearch}
             showAdd={header.showAdd}
+            addDisabled={addDisabled}
             addButtonTitle={header.addButtonTitle}
             Extra={header.Extra}
             onSearch={setSearch}
@@ -117,6 +122,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
                 {showAdd && (
                   <Button
                     onClick={() => navigate(tabHeader.addButtonUrl ?? './add')}
+                    disabled={addDisabled}
                     className="bg-primary hover:bg-primary/80 text-sm px-2.5 py-2.5">
                     <Plus className="h-3 w-3" />
                     {tabHeader.addButtonTitle ?? header.addButtonTitle ?? `Add ${type}`}

@@ -18,6 +18,7 @@ import Loader from '@/components/ui/loader';
 import { ResourceTabs } from '@/components/custom/resource-tabs';
 import TaskSheet from '@/components/custom/task-sheet';
 import { PatchResourceMetadata } from '@/api/generated/api.types';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 export const ResourceForm = ({ mode }: { mode: 'add' | 'edit' }) => {
   const { type, tab } = useResourceParamType();
@@ -114,6 +115,7 @@ const EditFormContent = ({
   const tabs = Components?.Tabs ?? [];
   const Header = Components?.Header;
   const localKey = `${type}-workload-${id}.active-tab`;
+  const canWrite = hasCapability(item, 'canWrite');
 
   const invalidateRelatedQueries = () => queryClient.invalidateQueries();
 
@@ -133,8 +135,8 @@ const EditFormContent = ({
   return (
     <>
       <EditHeader
-        canEditTitle={Header.canEditTitle}
-        canEditDescription={Header.canEditDescription}
+        canEditTitle={canWrite && Header.canEditTitle !== false}
+        canEditDescription={canWrite && Header.canEditDescription !== false}
         item={item}
         Indicator={Header.Indicator}
         Actions={Header.ActionButtons}

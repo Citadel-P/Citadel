@@ -2,6 +2,7 @@ import {
   Api,
   ContainerStateStatus,
   ContainerStatView,
+  PlatformCapabilities,
   PlatformStatView,
   ResourceControlState,
 } from './generated/api.types';
@@ -156,6 +157,7 @@ export interface DockerContainerView {
   containerStat: ContainerStatView;
   containerPort: null | [];
   controlState: ResourceControlState;
+  capabilities?: null | PlatformCapabilities;
 }
 
 export interface DeleteDialogConfig<TItem, TRequest> {

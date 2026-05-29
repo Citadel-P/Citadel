@@ -44,6 +44,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
             containerStat: container.lastStats ?? {},
             containerPort: container.ports as any,
             controlState: container.controlState,
+            capabilities: container.capabilities,
           };
           setContainerInfo(updatedInfo);
         }

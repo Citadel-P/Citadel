@@ -64,7 +64,15 @@ const TeamMultiSelectField = ({ value, onChange }: { value: string[] | null; onC
   );
 };
 
-export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: UserFormResource }) => {
+export const UserForm = ({
+  mode,
+  resource,
+  disabled,
+}: {
+  mode: 'add' | 'edit';
+  resource?: UserFormResource;
+  disabled?: boolean;
+}) => {
   const id = useParams().id;
   const [update, setUpdate] = useState<Partial<UserInput>>({});
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -298,6 +306,7 @@ export const UserForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: 
       setUpdate={setUpdate}
       onSave={wrappedSave}
       pending={isPending}
+      disabled={disabled}
       draftKey={`user:${id ?? 'new'}`}
       draftVersion={1}
     />

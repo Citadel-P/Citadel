@@ -5,6 +5,7 @@ import { useRead } from '@/lib/hooks';
 import { TeamView } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { TeamActions } from './actions';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 export const TeamFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -27,7 +28,9 @@ export const TeamFormComponents: RequiredFormComponents = {
     Tabs: [
       {
         label: 'Config',
-        Content: ({ resource }) => <TeamForm mode="edit" resource={resource} />,
+        Content: ({ resource }) => (
+          <TeamForm mode="edit" resource={resource} disabled={!hasCapability(resource, 'canWrite')} />
+        ),
       },
     ],
 

@@ -10,6 +10,7 @@ type ResourceHeaderProps = {
   subtitle?: string;
   showSearch?: boolean;
   showAdd?: boolean;
+  addDisabled?: boolean;
   addButtonTitle?: string;
   Extra?: React.FC;
   onSearch: (query: string) => void;
@@ -23,6 +24,7 @@ export const ResourceHeader = ({
   subtitle,
   showSearch,
   showAdd,
+  addDisabled,
   addButtonTitle,
   Extra,
   onSearch,
@@ -47,6 +49,7 @@ export const ResourceHeader = ({
           <Button
             type="button"
             onClick={onAdd}
+            disabled={addDisabled}
             className="inline-flex items-center bg-primary hover:bg-primary/80 rounded-sm text-sm px-2.5 py-2.5">
             <Plus className="h-3 w-3" /> {addButtonTitle ?? `Add ${type}`}
           </Button>

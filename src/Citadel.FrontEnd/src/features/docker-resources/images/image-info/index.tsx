@@ -9,6 +9,7 @@ import { ContainerInfoTable } from './container-info-table';
 import { ImageLayerTable } from './image-layer-table';
 import { ImageInfoActions } from './actions';
 import { DockerLabelsSection, Section } from '@/components/custom/common';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView> = {
   Header: {
@@ -24,6 +25,7 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
               dockerImageId: resource.id,
               name: resource.name,
               tag: resource.tag,
+              capabilities: resource.capabilities,
             } as Partial<ImageView>
           }
           actions={Object.values(ImageInfoActions)}
@@ -35,6 +37,7 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
   Tabs: [
     {
       label: 'Inspect',
+      disabled: (resource: InspectImageView) => !hasCapability(resource, 'canRead'),
       Content: ({ resource }: { resource: InspectImageView }) => <InspectImageWrapper resource={resource} />,
     },
   ],

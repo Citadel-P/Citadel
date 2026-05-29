@@ -5,6 +5,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { RegularResourceComponents } from './types';
 import { ResourceHeader } from './resource-header';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 type RegularResourceViewProps<T = any> = {
   Components: RegularResourceComponents<T>;
@@ -42,6 +43,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
             subtitle={headerCfg.subtitle}
             showSearch={headerCfg.showSearch}
             showAdd={headerCfg.showAdd}
+            addDisabled={!hasCapability(items?.at(0), 'canWrite')}
             addButtonTitle={headerCfg.addButtonTitle}
             Extra={headerCfg.Extra}
             onSearch={setSearch}

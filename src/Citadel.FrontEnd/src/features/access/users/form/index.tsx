@@ -5,6 +5,7 @@ import { useRead } from '@/lib/hooks';
 import { UserView } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { UserActions } from './actions';
+import { hasCapability } from '@/lib/resource-capabilities';
 
 export const UserFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -27,7 +28,9 @@ export const UserFormComponents: RequiredFormComponents = {
     Tabs: [
       {
         label: 'Config',
-        Content: ({ resource }) => <UserForm mode="edit" resource={resource} />,
+        Content: ({ resource }) => (
+          <UserForm mode="edit" resource={resource} disabled={!hasCapability(resource, 'canWrite')} />
+        ),
       },
     ],
 

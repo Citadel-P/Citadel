@@ -52,7 +52,15 @@ type LimitedToEntry = {
 
 type AlertRuleInput = CreateAlertRuleInput | PatchAlertRuleInput;
 
-export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: AlertRuleInput }) => {
+export const AlertRuleForm = ({
+  mode,
+  resource,
+  disabled,
+}: {
+  mode: 'add' | 'edit';
+  resource?: AlertRuleInput;
+  disabled?: boolean;
+}) => {
   const id = useParams().id;
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<AlertRuleInput>>({});
@@ -334,6 +342,7 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
       setUpdate={setUpdate}
       onSave={handleSave}
       pending={isPending}
+      disabled={disabled}
       draftKey={`AlertRule:${id ?? 'new'}`}
       draftVersion={1}
     />

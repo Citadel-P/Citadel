@@ -19,10 +19,10 @@ public static class Containers
         return await EndpointHandlers.HandleResult(result, permissionService, ContainerView.Map);
     }
 
-    public static async Task<Results<Ok<ContainerInfoView>, ProblemHttpResult>> GetInfo(IMediator mediator, string id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ContainerInfoView>, ProblemHttpResult>> GetInfo(IMediator mediator, IPermissionEvaluator permissionService, string id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetContainerInfoById(id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, ContainerInfoView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, ContainerInfoView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> StartContainers(IMediator mediator, [FromBody]string[] containerIds, CancellationToken cancellationToken)
