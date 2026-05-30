@@ -20,7 +20,10 @@ public sealed record PlatformCapabilities(
 ) : ResourceCapabilities(
     CanRead,
     CanWrite,
-    CanExecute);
+    CanExecute)
+{
+    public static PlatformCapabilities Empty => new(false, false, false, false, false, false, false);
+}
 
 public sealed record ImageCapabilities(
     bool CanRead,
@@ -31,7 +34,10 @@ public sealed record ImageCapabilities(
 ) : ResourceCapabilities(
     CanRead,
     CanWrite,
-    CanExecute);
+    CanExecute)
+{
+    public static ImageCapabilities Empty => new(false, false, false, false, false);
+}
 
 public sealed record VolumeCapabilities(
     bool CanRead,
@@ -54,6 +60,20 @@ public sealed record NetworkCapabilities(
     CanExecute);
 
 public sealed record DeploymentCapabilities(
+    bool CanRead,
+    bool CanWrite,
+    bool CanExecute,
+    bool CanViewLogs,
+    bool CanInspect,
+    bool CanOpenTerminal,
+    bool CanPull,
+    bool CanApply
+) : ResourceCapabilities(
+    CanRead,
+    CanWrite,
+    CanExecute);
+
+public sealed record StackCapabilities(
     bool CanRead,
     bool CanWrite,
     bool CanExecute,
@@ -151,6 +171,38 @@ public static class CapabilityMapper
         var common = ToResourceCapabilities(permission);
 
         return new DeploymentCapabilities(
+            common.CanRead,
+            common.CanWrite,
+            common.CanExecute,
+
+            CanViewLogs:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Logs) != 0,
+
+            CanInspect:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Inspect) != 0,
+
+            CanOpenTerminal:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Terminal) != 0,
+
+            CanPull:
+               common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Pull) != 0,
+
+            CanApply:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Apply) != 0
+        );
+    }
+
+    public static StackCapabilities ToStackCapabilities(
+        PermissionMetadata permission)
+    {
+        var common = ToResourceCapabilities(permission);
+
+        return new StackCapabilities(
             common.CanRead,
             common.CanWrite,
             common.CanExecute,

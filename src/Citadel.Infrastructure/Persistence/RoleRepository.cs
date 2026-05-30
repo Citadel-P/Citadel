@@ -265,4 +265,11 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
         return rows;
     }
+
+    public async Task<IEnumerable<Guid>> GetActorIdsByRoleIdAsync(Guid roleId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT ActorId FROM ActorRoles WHERE RoleId = @RoleId";
+        var rows = await db.QueryAsync<Guid>(sql, new { RoleId = roleId, cancellationToken }, transaction: tx());
+        return rows;
+    }
 }

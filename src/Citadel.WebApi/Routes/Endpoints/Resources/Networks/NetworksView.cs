@@ -6,14 +6,14 @@ using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Networks;
 
-public sealed record NetworksView(IEnumerable<DockerNetworkResultView> Networks)
+public sealed record NetworksView(IEnumerable<DockerNetworkResultView> Networks, ResourceCapabilities Capabilities)
 {
     internal static async Task<NetworksView> Map(IEnumerable<DockerNetworkResult> networks, IPermissionEvaluator permissionEvaluator)
     {
         var list = networks as DockerNetworkResult[] ?? [.. networks];
-
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.Platform);
         if (list.Length == 0)
-            return new NetworksView([]);
+            return new NetworksView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
 
         // All networks belong to the same platform capability scope. Resolve once instead of N times.
         var platformId = list[0].PlatformId;
@@ -32,6 +32,6 @@ public sealed record NetworksView(IEnumerable<DockerNetworkResultView> Networks)
             };
         }
 
-        return new NetworksView(views);
+        return new NetworksView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
     }
 }

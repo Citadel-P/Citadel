@@ -86,6 +86,7 @@ const getTransportColor = (transport: GitTransport) => {
 function useGitAccounts() {
   const { data, refetch } = useRead('listGitAccounts');
   const accounts = data?.data?.gitAccounts ?? [];
+  const capabilities = data?.data.capabilities;
 
   const { mutateAsync: create, isPending: creating } = useMutate('createGitAccount');
   const { mutateAsync: update, isPending: updating } = useMutate('updateGitAccount');
@@ -111,6 +112,7 @@ function useGitAccounts() {
 
   return {
     accounts,
+    capabilities,
     save,
     removeAccount,
     saving: creating || updating,
@@ -122,10 +124,12 @@ function AccountCard({
   account,
   onEdit,
   onDelete,
+  disabled = false,
 }: {
   account: GitAccountView;
   onEdit: () => void;
   onDelete: (id: string) => Promise<void>;
+  disabled?: boolean;
 }) {
   const color = getTransportColor(account.transport);
   const letter = transportLabel[account.transport].charAt(0);
@@ -133,10 +137,14 @@ function AccountCard({
   return (
     <div
       role="button"
-      tabIndex={0}
-      onClick={onEdit}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onEdit()}
-      className="group relative bg-background rounded-xl border border-muted p-4 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-35">
+      tabIndex={disabled ? -1 : 0}
+      onClick={disabled ? undefined : onEdit}
+      onKeyDown={(e) => !disabled && (e.key === 'Enter' || e.key === ' ') && onEdit()}
+      aria-disabled={disabled}
+      className={cn(
+        'group relative bg-background rounded-xl border border-muted p-4 hover:border-zinc-300 hover:shadow-md transition-all flex flex-col justify-between h-35',
+        disabled ? 'hover:cursor-not-allowed opacity-70' : 'cursor-pointer',
+      )}>
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div
@@ -165,6 +173,7 @@ function AccountCard({
             title="Delete"
             icon={<Trash2 className="h-3.5 w-3.5" />}
             variant="outline"
+            disabled={disabled}
             onClick={() => onDelete(account.id)}
           />
         </div>
@@ -174,7 +183,7 @@ function AccountCard({
 }
 
 function GitAccountsSection() {
-  const { accounts, save, saving, removeAccount } = useGitAccounts();
+  const { accounts, capabilities, save, saving, removeAccount } = useGitAccounts();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<(GitAccountView & { configuration?: GitAuthConfiguration | null }) | null>(
@@ -260,19 +269,29 @@ function GitAccountsSection() {
             <p className="text-xs text-muted-foreground">Authentication credentials for your Git providers.</p>
           </div>
         </div>
-        <Button variant="outline" onClick={openAdd}>
+        <Button variant="outline" disabled={!capabilities?.canWrite} onClick={openAdd}>
           <Plus className="h-3 w-3" /> Add Account
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {accounts.map((a) => (
-          <AccountCard key={a.id} account={a} onEdit={() => openEdit(a)} onDelete={handleDelete} />
+          <AccountCard
+            key={a.id}
+            account={a}
+            onEdit={() => openEdit(a)}
+            onDelete={handleDelete}
+            disabled={!capabilities?.canWrite}
+          />
         ))}
 
         <button
-          onClick={openAdd}
-          className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600 h-35">
+          onClick={capabilities?.canWrite ? openAdd : undefined}
+          disabled={!capabilities?.canWrite}
+          className={cn(
+            'flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600 h-35',
+            !capabilities?.canWrite && 'hover:cursor-not-allowed',
+          )}>
           <Plus className="h-5 w-5" />
           <span className="text-sm font-medium">Add New Account</span>
         </button>
@@ -466,8 +485,8 @@ export const GitRepoComponents: RequiredComponents = {
     addButtonTitle: 'Add Repository',
   },
   useData(): ResourceDataHookResult<GitRepositoryView> {
-    const { gitRepos, isLoading } = useGitReposGroup();
-    return { items: gitRepos ?? [], isLoading };
+    const { gitRepos, capabilities, isLoading } = useGitReposGroup();
+    return { items: gitRepos ?? [], isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

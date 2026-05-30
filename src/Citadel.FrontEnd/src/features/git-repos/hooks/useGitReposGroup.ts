@@ -8,6 +8,7 @@ export const useGitReposGroup = () => {
   const { data, isLoading } = useRead('listGitRepositories');
   const [gitRepos, setGitRepos] = useState<GitRepositoryView[] | undefined>();
   const lastFetchedRef = useRef<GitRepositoryView[] | undefined>(data?.data?.gitRepositories);
+  const capabilities = data?.data.capabilities;
 
   useEffect(() => {
     if (data?.data?.gitRepositories && data.data.gitRepositories !== lastFetchedRef.current) {
@@ -57,5 +58,5 @@ export const useGitReposGroup = () => {
     removeEventListeners,
   });
 
-  return { gitRepos, isLoading };
+  return { gitRepos, capabilities, isLoading };
 };

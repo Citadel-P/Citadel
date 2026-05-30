@@ -815,6 +815,7 @@ export interface AlertChannelView {
 
 export interface AlertChannelsView {
   channels: AlertChannelView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface AlertEventInfoDeploymentAutoDeployFailedAlertInfo {
@@ -1069,6 +1070,7 @@ export interface AlertRuleView {
 
 export interface AlertRulesView {
   alertRules: AlertRuleView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface ApplyDeploymentInput {
@@ -1631,6 +1633,7 @@ export interface DeploymentView {
 
 export interface DeploymentsView {
   deployments: DeploymentView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface DockerHubImageView {
@@ -1806,10 +1809,12 @@ export interface GitAccountView {
   authType: GitAuthType;
   /** @format date-time */
   createdAt: any;
+  capabilities?: null | ResourceCapabilities;
 }
 
 export interface GitAccountsView {
   gitAccounts: GitAccountView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface GitAuthConfigurationBasicAuth {
@@ -1855,6 +1860,7 @@ export interface GitHubCrPackageVersionMetadata {
 
 export interface GitRepositoriesView {
   gitRepositories: GitRepositoryView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface GitRepositoryConfigView {
@@ -2173,6 +2179,7 @@ export interface ImageView {
 
 export interface ImagesView {
   images: ImageView[];
+  capabilities: ImageCapabilities;
 }
 
 export interface InspectImageView {
@@ -2321,6 +2328,7 @@ export interface NetworkSettingsInfo {
 
 export interface NetworksView {
   networks: DockerNetworkResultView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface PagedResultViewOfActivityView {
@@ -2670,6 +2678,7 @@ export interface PlatformView {
 
 export interface PlatformsView {
   platforms: PlatformView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface ProblemDetails {
@@ -2722,6 +2731,7 @@ export interface RefreshTokenResponse {
 
 export interface RegistriesView {
   registries: RegistryView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface RegistryConfigView {
@@ -2899,6 +2909,18 @@ export interface RoleView {
 
 export interface RolesView {
   roles: RoleView[];
+  capabilities: ResourceCapabilities;
+}
+
+export interface StackCapabilities {
+  canViewLogs: boolean;
+  canInspect: boolean;
+  canOpenTerminal: boolean;
+  canPull: boolean;
+  canApply: boolean;
+  canRead: boolean;
+  canWrite: boolean;
+  canExecute: boolean;
 }
 
 export interface StackConfigView {
@@ -2998,10 +3020,12 @@ export interface StackView {
   spec?: null | StackSpec;
   platformStatus?: PlatformStatus;
   platformName?: null | string;
+  capabilities?: null | StackCapabilities;
 }
 
 export interface StacksView {
   stacks: StackView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface SwarmPeer {
@@ -3042,6 +3066,7 @@ export interface TeamView {
 
 export interface TeamsView {
   pagedResult: PagedResultViewOfTeamView;
+  capabilities: ResourceCapabilities;
 }
 
 export interface TimeZoneInfo {
@@ -3111,6 +3136,7 @@ export interface UserView {
 
 export interface UsersView {
   pagedResult: PagedResultViewOfUserView;
+  capabilities: ResourceCapabilities;
 }
 
 export interface VerifyAlertChannelInput {
@@ -3193,6 +3219,7 @@ export interface VolumeVersionInfo {
 
 export interface VolumesView {
   volumes: DockerVolumeResultView[];
+  capabilities: ResourceCapabilities;
 }
 
 type BaseStackUpdateState = object;

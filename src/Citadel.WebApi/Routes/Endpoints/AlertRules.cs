@@ -15,10 +15,10 @@ namespace WebApi.Routes.Endpoints;
 
 public static class AlertRules
 {
-    public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> GetRule(IMediator mediator, IPermissionEvaluator permissionService, Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> GetRule(IMediator mediator, IPermissionEvaluator permissionEvaluator, Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAlertRule(id), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, AlertRuleView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, AlertRuleView.Map);
     }
 
     public static async Task<Results<Ok<AlertRuleConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, Guid id, CancellationToken cancellationToken)
@@ -27,10 +27,10 @@ public static class AlertRules
         return EndpointHandlers.HandleResult(result, AlertRuleConfigView.Map);
     }
 
-    public static async Task<Results<Ok<AlertRulesView>, ProblemHttpResult>> ListRules(IMediator mediator, IPermissionEvaluator permissionService, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<AlertRulesView>, ProblemHttpResult>> ListRules(IMediator mediator, IPermissionEvaluator permissionEvaluator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAlertRules(), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, AlertRulesView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, AlertRulesView.Map);
     }
 
     public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> CreateRule(IMediator mediator, [FromBody] CreateAlertRuleInput request, CancellationToken cancellationToken)
@@ -111,9 +111,9 @@ public static class AlertRules
         return EndpointHandlers.HandleResult(result, AlertChannelView.Map);
     }
 
-    public static async Task<Results<Ok<AlertChannelsView>, ProblemHttpResult>> ListChannels(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<AlertChannelsView>, ProblemHttpResult>> ListChannels(IMediator mediator, IPermissionEvaluator permissionEvaluator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAlertChannels(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, AlertChannelsView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, AlertChannelsView.Map);
     }
 }

@@ -6,14 +6,14 @@ using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.GitRepositories;
 
-public sealed record GitRepositoriesView(IEnumerable<GitRepositoryView> GitRepositories)
+public sealed record GitRepositoriesView(IEnumerable<GitRepositoryView> GitRepositories, ResourceCapabilities Capabilities)
 {
     internal static async Task<GitRepositoriesView> Map(IEnumerable<GitRepository> gitRepositories, IPermissionEvaluator permissionEvaluator)
     {
         var list = gitRepositories as GitRepository[] ?? [.. gitRepositories];
-
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.GitRepository);
         if (list.Length == 0)
-            return new GitRepositoriesView([]);
+            return new GitRepositoriesView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
 
         var ids = new Guid[list.Length];
 
@@ -41,6 +41,6 @@ public sealed record GitRepositoriesView(IEnumerable<GitRepositoryView> GitRepos
             };
         }
 
-        return new GitRepositoriesView(views);
+        return new GitRepositoriesView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
     }
 }

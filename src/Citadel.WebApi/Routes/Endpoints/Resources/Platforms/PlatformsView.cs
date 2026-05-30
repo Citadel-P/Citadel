@@ -81,10 +81,15 @@ public sealed record PlatformView(
     }
 }
 
-public sealed record PlatformsView(IEnumerable<PlatformView> Platforms)
+public sealed record PlatformsView(IEnumerable<PlatformView> Platforms, ResourceCapabilities Capabilities)
 {
     internal static async Task<PlatformsView> Map(IEnumerable<Platform> platforms, IPermissionEvaluator permissionEvaluator)
-       => new(await PlatformView.Map(platforms, permissionEvaluator));
+    {
+        var platformViews = await PlatformView.Map(platforms, permissionEvaluator);
+        var capabilities = CapabilityMapper.ToResourceCapabilities(
+            await permissionEvaluator.EvaluateAsync(ResourceType.Platform));
+        return new PlatformsView(platformViews, capabilities);
+    }
 }
 
 internal static class PlatformMapperExtension

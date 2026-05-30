@@ -16,8 +16,8 @@ export const PlatformComponents: RequiredComponents = {
   },
   DropdownActions: PlatformDropdownActions,
   useData: function (): ResourceDataHookResult<any> {
-    const { platformsMessage, isLoading } = usePlatformsGroup();
-    return { items: platformsMessage ?? [], isLoading };
+    const { platformsMessage, capabilities, isLoading } = usePlatformsGroup();
+    return { items: platformsMessage ?? [], isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

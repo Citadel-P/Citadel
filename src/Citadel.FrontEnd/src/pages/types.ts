@@ -1,3 +1,5 @@
+import { ResourceCapabilities } from '@/api/generated/api.types';
+
 type ResourceContentProps<T = any> = {
   items: any;
   actions: Record<string, DropdownActionComponent<T>>;
@@ -99,6 +101,7 @@ export interface RequiredDockerInfoComponents<T = any> {
 export interface ResourceDataHookResult<T> {
   items: T[];
   isLoading: boolean;
+  capabilities: ResourceCapabilities | undefined;
 }
 
 export interface TabHeaderOptions {

@@ -17,8 +17,8 @@ export const VolumeComponents: RequiredComponents = {
   },
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
-    const { volumes, isLoading } = useVolumesGroup(platformId);
-    return { items: volumes?.volumes ?? [], isLoading };
+    const { volumes, capabilities, isLoading } = useVolumesGroup(platformId);
+    return { items: volumes?.volumes ?? [], isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;
@@ -36,5 +36,5 @@ export const VolumeFormComponents: RequiredFormComponents = {
   AddForm: {
     Content: () => <VolumeForm mode="add" />,
   },
-  EditForm: {},
+  EditForm: undefined,
 };

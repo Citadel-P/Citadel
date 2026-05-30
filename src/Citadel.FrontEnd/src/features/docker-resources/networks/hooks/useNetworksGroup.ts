@@ -7,6 +7,7 @@ export const useNetworksGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listNetworks', { platformId });
   const [networks, setNetworks] = useState<NetworksView | undefined>();
   const lastDataRef = useRef<NetworksView | undefined>(data?.data);
+  const capabilities = data?.data.capabilities;
 
   useEffect(() => {
     if (data?.data && data.data !== lastDataRef.current) {
@@ -51,5 +52,5 @@ export const useNetworksGroup = (platformId?: string) => {
 
   useDockerDaemonGroup(platformId, { onNetworkEvent });
 
-  return { networks, isLoading };
+  return { networks, isLoading, capabilities };
 };

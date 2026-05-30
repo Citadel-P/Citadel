@@ -5,7 +5,6 @@ import { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { RegularResourceComponents } from './types';
 import { ResourceHeader } from './resource-header';
-import { hasCapability } from '@/lib/resource-capabilities';
 
 type RegularResourceViewProps<T = any> = {
   Components: RegularResourceComponents<T>;
@@ -17,7 +16,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
   const platformId = useParams().platformId ?? '';
   const [search, setSearch] = useState('');
 
-  const { items, isLoading = false } = Components.useData?.(platformId) ?? {};
+  const { items, capabilities, isLoading = false } = Components.useData?.(platformId) ?? {};
   const headerCfg = Components.header ?? { showSearch: true, showAdd: true };
 
   const filtered = useMemo(
@@ -43,7 +42,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
             subtitle={headerCfg.subtitle}
             showSearch={headerCfg.showSearch}
             showAdd={headerCfg.showAdd}
-            addDisabled={!hasCapability(items?.at(0), 'canWrite')}
+            addDisabled={!capabilities?.canWrite}
             addButtonTitle={headerCfg.addButtonTitle}
             Extra={headerCfg.Extra}
             onSearch={setSearch}

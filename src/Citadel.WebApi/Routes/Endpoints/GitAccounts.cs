@@ -1,12 +1,13 @@
-using System.ComponentModel;
 using Application.Features.GitAccounts.Commands;
 using Application.Features.GitAccounts.Queries;
+using Application.Permissions;
 using Domain.Entities.Git;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
 
 namespace WebApi.Routes.Endpoints;
@@ -19,16 +20,16 @@ public static class GitAccounts
         return EndpointHandlers.HandleResult(result, GitAccountView.Map);
     }
 
-    public static async Task<Results<Ok<GitAccountsView>, ProblemHttpResult>> List(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<GitAccountsView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllGitAccounts(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, GitAccountsView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, GitAccountsView.Map);
     }
 
-    public static async Task<Results<Ok<GitAccountView>, ProblemHttpResult>> Get(IMediator mediator, [Description("Git account id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<GitAccountView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionEvaluator, [Description("Git account id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetGitAccount(id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, GitAccountView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, GitAccountView.Map);
     }
 
     public static async Task<Results<Ok<GitAccountConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("Git account id")] Guid id, CancellationToken cancellationToken)

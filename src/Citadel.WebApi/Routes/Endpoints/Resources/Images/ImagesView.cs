@@ -24,14 +24,14 @@ public sealed record ImageView(
     ImageCapabilities? Capabilities = null
 );
 
-public sealed record ImagesView(IEnumerable<ImageView> Images)
+public sealed record ImagesView(IEnumerable<ImageView> Images, ImageCapabilities Capabilities)
 {
     internal static async Task<ImagesView> Map(IEnumerable<Image> images, IPermissionEvaluator permissionEvaluator)
     {
         var list = images as Image[] ?? [.. images];
-
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.Platform);
         if (list.Length == 0)
-            return new ImagesView([]);
+            return new ImagesView([], CapabilityMapper.ToImageCapabilities(resourcesPerms));
 
         // All images belong to the same platform capability scope.
         // Resolve once instead of N times.
@@ -51,10 +51,10 @@ public sealed record ImagesView(IEnumerable<ImageView> Images)
             };
         }
 
-        return new ImagesView(views);
+        return new ImagesView(views, CapabilityMapper.ToImageCapabilities(resourcesPerms));
     }
 
-    internal static ImagesView Map(IEnumerable<Image> images) => new(images?.Select(Map) ?? []);
+    internal static ImagesView Map(IEnumerable<Image> images) => new(images?.Select(Map) ?? [], ImageCapabilities.Empty);
     internal static ImageView Map(Image image)
         => new(
             Id: image.Id,

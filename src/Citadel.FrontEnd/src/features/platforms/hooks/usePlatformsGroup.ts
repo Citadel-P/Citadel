@@ -22,6 +22,7 @@ const normalizePlatform = (s: PlatformView): PlatformView => {
 export const usePlatformsGroup = () => {
   const { data, isLoading } = useRead('listPlatforms');
   const [realtimePlatforms, setRealtimePlatforms] = useState<PlatformView[] | null>(null);
+  const capabilities = data?.data.capabilities;
 
   const platformsMessage = useMemo(() => {
     if (realtimePlatforms) {
@@ -137,6 +138,7 @@ export const usePlatformsGroup = () => {
 
   return {
     platformsMessage,
+    capabilities,
     isLoading,
   };
 };

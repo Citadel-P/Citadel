@@ -1,11 +1,50 @@
+using Application.Permissions;
 using Domain;
 using Domain.Entities.Stacks;
+using Hosting.Common;
+using Hosting.Common.Attributes;
+using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Stacks;
 
-public sealed record StacksView(IEnumerable<StackView> Stacks)
+public sealed record StacksView(IEnumerable<StackView> Stacks, ResourceCapabilities Capabilities)
 {
-    internal static StacksView Map(IEnumerable<Stack> stacks) => new(stacks.Select(StackView.Map));
+    internal static async Task<StacksView> Map(IEnumerable<Stack> stacks, IPermissionEvaluator permissionEvaluator)
+    {
+        var list = stacks as Stack[] ?? [.. stacks];
+
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.Stack);
+        if (list.Length == 0)
+            return new StacksView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
+
+        var ids = new Guid[list.Length];
+
+        for (var i = 0; i < list.Length; i++)
+        {
+            ids[i] = list[i].Id;
+        }
+
+        var perms = await permissionEvaluator.EvaluateAsync(ids, ResourceType.Stack);
+
+        var views = new StackView[list.Length];
+
+        for (var i = 0; i < list.Length; i++)
+        {
+            var stack = list[i];
+
+            var baseView = StackView.Map(stack);
+
+            perms.TryGetValue(stack.Id, out var meta);
+
+            views[i] = baseView with
+            {
+                Capabilities = CapabilityMapper.ToStackCapabilities(
+                    meta == default ? PermissionMetadata.Empty : meta)
+            };
+        }
+
+        return new StacksView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
+    }
 }
 
 public sealed record StackView(
@@ -23,7 +62,8 @@ public sealed record StackView(
     string? Version = null,
     StackSpec? Spec = null,
     PlatformStatus PlatformStatus = PlatformStatus.Offline,
-    string? PlatformName = null)
+    string? PlatformName = null,
+    StackCapabilities? Capabilities = null)
 {
     internal static StackView Map(Stack stack) => new(
         Id: stack.Id,
@@ -41,6 +81,15 @@ public sealed record StackView(
         Spec: stack.CurrentStackRelease?.Spec,
         PlatformStatus: stack.CurrentStackRelease?.Platform?.Status ?? PlatformStatus.Offline,
         PlatformName: stack.CurrentStackRelease?.Platform?.Name);
+
+    internal static async Task<StackView> Map(Stack stack, IPermissionEvaluator permissionEvaluator)
+    {
+        var permissions = await permissionEvaluator.EvaluateAsync(stack.Id, ResourceType.Stack);
+        return Map(stack) with
+        {
+            Capabilities = CapabilityMapper.ToStackCapabilities(permissions)
+        };
+    }
 }
 
 public sealed record StackConfigView(

@@ -1,5 +1,6 @@
 using Application.Features.Identity.Teams.Commands;
 using Application.Features.Identity.Teams.Queries;
+using Application.Permissions;
 using Domain.Contracts.Resources.Identity;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
@@ -20,10 +21,10 @@ public static class Teams
         return EndpointHandlers.HandleResult(result, TeamView.Map);
     }
 
-    public static async Task<Results<Ok<TeamsView>, ProblemHttpResult>> List(IMediator mediator, [AsParameters] TeamsFilter filter, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<TeamsView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, [AsParameters] TeamsFilter filter, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(filter.ToQuery(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, TeamsView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, TeamsView.Map);
     }
 
     public static async Task<Results<Ok<IEnumerable<TeamSearchItemView>>, ProblemHttpResult>> Search(IMediator mediator, [AsParameters] TeamSearchFilter filter, CancellationToken cancellationToken)

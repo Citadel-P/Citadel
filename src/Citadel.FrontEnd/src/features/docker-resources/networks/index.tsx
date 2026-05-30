@@ -16,8 +16,8 @@ export const NetworkComponents: RequiredComponents = {
     return <ActionBar type="Network" items={items} actions={Object.values(NetworkGroupActions)} />;
   },
   useData: function (platformId: string): ResourceDataHookResult<any> {
-    const { networks, isLoading } = useNetworksGroup(platformId);
-    return { items: networks?.networks ?? [], isLoading };
+    const { networks, isLoading, capabilities } = useNetworksGroup(platformId);
+    return { items: networks?.networks ?? [], isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;
@@ -35,5 +35,5 @@ export const NetworkFormComponents: RequiredFormComponents = {
   AddForm: {
     Content: () => <NetworkForm mode="add" />,
   },
-  EditForm: {},
+  EditForm: undefined,
 };

@@ -1,5 +1,8 @@
+using Application.Permissions;
 using Domain;
 using Domain.Entities.Alerts;
+using Hosting.Common;
+using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Alerters;
 
@@ -25,10 +28,16 @@ public sealed record AlertChannelView(
     }
 }
 
-public sealed record AlertChannelsView(IEnumerable<AlertChannelView> Channels)
+public sealed record AlertChannelsView(IEnumerable<AlertChannelView> Channels, ResourceCapabilities Capabilities)
 {
-    internal static AlertChannelsView Map(IEnumerable<AlertChannel> channels)
+    internal static async Task<AlertChannelsView> Map(IEnumerable<AlertChannel> channels, IPermissionEvaluator permissionEvaluator)
     {
-        return new(channels.Select(AlertChannelView.Map));
+        var list = channels as AlertChannel[] ?? [.. channels];
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.AlertChannel);
+        if (list.Length == 0)
+            return new AlertChannelsView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
+
+        var views = list.Select(AlertChannelView.Map).ToArray();
+        return new AlertChannelsView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
     }
 }

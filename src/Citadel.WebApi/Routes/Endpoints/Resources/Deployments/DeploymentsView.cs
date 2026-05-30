@@ -8,14 +8,16 @@ using WebApi.Routes.Endpoints.Resources.Identity;
 using Hosting.Common.Attributes;
 namespace WebApi.Routes.Endpoints.Resources.Deployments;
 
-public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments)
+public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments, ResourceCapabilities Capabilities)
 {
     internal static async Task<DeploymentsView> Map(IEnumerable<Deployment> deployments, IPermissionEvaluator permissionEvaluator)
     {
         var list = deployments as Deployment[] ?? [.. deployments];
 
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.Deployment);
+
         if (list.Length == 0)
-            return new DeploymentsView([]);
+            return new DeploymentsView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
 
         var ids = new Guid[list.Length];
 
@@ -24,8 +26,7 @@ public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments)
             ids[i] = list[i].Id;
         }
 
-        var perms = await permissionEvaluator
-            .EvaluateAsync(ids, ResourceType.Deployment);
+        var perms = await permissionEvaluator.EvaluateAsync(ids, ResourceType.Deployment);
 
         var views = new DeploymentView[list.Length];
 
@@ -44,7 +45,7 @@ public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments)
             };
         }
 
-        return new DeploymentsView(views);
+        return new DeploymentsView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
     }
 }
 

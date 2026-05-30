@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { DeploymentView } from '@/api/generated/api.types';
+import { DeploymentView, ResourceCapabilities } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useDeploymentsGroup = () => {
   const { data, isLoading } = useRead('listDeployments');
   const [deployments, setDeployments] = useState<DeploymentView[] | undefined>();
+  const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<DeploymentView[]>([]);
 
   useEffect(() => {
@@ -15,6 +16,7 @@ export const useDeploymentsGroup = () => {
     if (newBase !== lastFetchedRef.current) {
       lastFetchedRef.current = newBase;
       setDeployments(newBase);
+      setcapabilities(data.data.capabilities)
     }
   }, [data]);
 
@@ -59,5 +61,5 @@ export const useDeploymentsGroup = () => {
     removeEventListeners,
   });
 
-  return { deployments, isLoading };
+  return { deployments, isLoading, capabilities };
 };

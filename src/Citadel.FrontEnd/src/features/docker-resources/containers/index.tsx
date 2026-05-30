@@ -13,7 +13,7 @@ export const ContainerComponents: RequiredComponents = {
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { containersInfo, isLoading } = useContainersGroup(platformId);
-    return { items: containersInfo?.containers ?? [], isLoading };
+    return { items: containersInfo?.containers ?? [], isLoading, capabilities: undefined };
   },
   header: {
     showAdd: false,

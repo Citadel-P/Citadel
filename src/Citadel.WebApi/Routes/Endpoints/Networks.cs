@@ -11,10 +11,10 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Networks
 {
-    public static async Task<Results<Ok<NetworksView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionService, [Description("The platform id")] Guid platformId, [AsParameters] ListNetworksRequest listNetworksRequest, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<NetworksView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, [Description("The platform id")] Guid platformId, [AsParameters] ListNetworksRequest listNetworksRequest, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(listNetworksRequest.ToQuery(platformId), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, NetworksView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, NetworksView.Map);
     }
 
     public static async Task<Results<Ok<CreateNetworkView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateNetworkInput request, CancellationToken cancellationToken)
@@ -29,9 +29,9 @@ public static class Networks
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<Ok<DockerNetworkDetailsView>, ProblemHttpResult>> Inspect(IMediator mediator, IPermissionEvaluator permissionService, Guid platformId, string networkId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DockerNetworkDetailsView>, ProblemHttpResult>> Inspect(IMediator mediator, IPermissionEvaluator permissionEvaluator, Guid platformId, string networkId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new InspectNetwork(platformId, networkId), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, DockerNetworkDetailsView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, DockerNetworkDetailsView.Map);
     }
 }

@@ -6,14 +6,16 @@ using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 
-public sealed record RegistriesView(IEnumerable<RegistryView> Registries)
+public sealed record RegistriesView(IEnumerable<RegistryView> Registries, ResourceCapabilities Capabilities)
 {
     internal static async Task<RegistriesView> Map(IEnumerable<Registry> registries, IPermissionEvaluator permissionEvaluator)
     {
         var list = registries as Registry[] ?? [.. registries];
 
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.Registry);
+
         if (list.Length == 0)
-            return new RegistriesView([]);
+            return new RegistriesView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
 
         var ids = new Guid[list.Length];
 
@@ -41,6 +43,6 @@ public sealed record RegistriesView(IEnumerable<RegistryView> Registries)
             };
         }
 
-        return new RegistriesView(views);
+        return new RegistriesView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
     }
 }

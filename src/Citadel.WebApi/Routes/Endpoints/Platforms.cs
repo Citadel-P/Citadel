@@ -15,16 +15,16 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Platforms
 {
-    public static async Task<Results<Ok<PlatformsView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionService, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<PlatformsView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetPlatforms(), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, PlatformsView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, PlatformsView.Map);
     }
 
-    public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionService, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionEvaluator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetPlatformById(id), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, PlatformView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, PlatformView.Map);
     }
 
     public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] PlatformInput request, CancellationToken cancellationToken)

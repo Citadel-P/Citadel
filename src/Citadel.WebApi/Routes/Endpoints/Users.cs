@@ -1,5 +1,6 @@
 using Application.Features.Identity.Users.Commands;
 using Application.Features.Identity.Users.Queries;
+using Application.Permissions;
 using Domain.Contracts.Resources.Identity;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
@@ -20,10 +21,10 @@ public static class Users
         return EndpointHandlers.HandleResult(result, UserView.Map);
     }
 
-    public static async Task<Results<Ok<UsersView>, ProblemHttpResult>> List(IMediator mediator, [AsParameters] UsersFilter filter, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<UsersView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, [AsParameters] UsersFilter filter, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(filter.ToQuery(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, UsersView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, UsersView.Map);
     }
 
     public static async Task<Results<Ok<IEnumerable<UserSearchItemView>>, ProblemHttpResult>> Search(IMediator mediator, [AsParameters] UserSearchFilter filter, CancellationToken cancellationToken)

@@ -29,7 +29,7 @@ export const AlertEventComponents: RequiredComponents = {
 
   useData: function (): ResourceDataHookResult<any> {
     const { pagedAlertEvents, isLoading } = useAlertEventsList();
-    return { items: pagedAlertEvents?.items ?? [], isLoading };
+    return { items: pagedAlertEvents?.items ?? [], isLoading, capabilities: undefined };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

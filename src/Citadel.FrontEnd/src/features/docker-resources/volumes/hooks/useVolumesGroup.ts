@@ -6,6 +6,7 @@ import { useRead } from '@/lib/hooks';
 export const useVolumesGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listVolumes', { platformId });
   const [volumes, setVolumes] = useState<VolumesView | undefined>();
+  const capabilities = data?.data.capabilities;
 
   const lastDataRef = useRef<VolumesView | undefined>(data?.data);
 
@@ -52,5 +53,5 @@ export const useVolumesGroup = (platformId?: string) => {
 
   useDockerDaemonGroup(platformId, { onVolumeEvent });
 
-  return { volumes, isLoading };
+  return { volumes, isLoading, capabilities };
 };

@@ -14,10 +14,10 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Images
 {
-    public static async Task<Results<Ok<ImagesView>, ProblemHttpResult>> ListImages(IMediator mediator, IPermissionEvaluator permissionService, [Description("The platform id")] Guid platformId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ImagesView>, ProblemHttpResult>> ListImages(IMediator mediator, IPermissionEvaluator permissionEvaluator, [Description("The platform id")] Guid platformId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllLocalImages(platformId), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, ImagesView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, ImagesView.Map);
     }
 
     public static async Task<Results<Ok<IEnumerable<IImageRepository>>, ProblemHttpResult>> GetExternalRepositories(IMediator mediator, [Description("The registry name")] string registryName, CancellationToken cancellationToken)
@@ -58,10 +58,10 @@ public static class Images
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
-    public static async Task<Results<Ok<InspectImageView>, ProblemHttpResult>> Inspect(IMediator mediator, IPermissionEvaluator permissionService, Guid platformId, string imageId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<InspectImageView>, ProblemHttpResult>> Inspect(IMediator mediator, IPermissionEvaluator permissionEvaluator, Guid platformId, string imageId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new InspectImage(platformId, imageId), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, InspectImageView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, InspectImageView.Map);
     }
 
     public static async Task<Results<Ok<ExposedPortsResult>, ProblemHttpResult>> GetExposedPorts(IMediator mediator, Guid platformId, string imageId, CancellationToken cancellationToken)

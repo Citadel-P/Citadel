@@ -22,7 +22,7 @@ export const RegistryComponents: RequiredComponents = {
 
   useData: function (): ResourceDataHookResult<any> {
     const { data, isLoading } = useRead(`listRegistries`, { query: { includeDisabled: true } });
-    return { items: data?.data?.registries ?? [], isLoading };
+    return { items: data?.data?.registries ?? [], isLoading, capabilities: data?.data?.capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

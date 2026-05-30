@@ -8,6 +8,7 @@ using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Application.Services.Identity;
 
 namespace Application.Features.Identity.Roles.Commands;
 
@@ -48,7 +49,7 @@ public sealed record PatchRolePermissions(Guid Id, JsonMergePatchDocument<PatchR
     }
 }
 
-internal sealed class PatchRolePermissionsHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchRolePermissions, Result<RoleDetails>>
+internal sealed class PatchRolePermissionsHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<PatchRolePermissions, Result<RoleDetails>>
 {
     public async ValueTask<Result<RoleDetails>> Handle(PatchRolePermissions command, CancellationToken cancellationToken)
     {
@@ -66,6 +67,10 @@ internal sealed class PatchRolePermissionsHandler(IUnitOfWork unitOfWork) : ICom
 
         await unitOfWork.Roles.ReplacePermissionsAsync(role.Id, permissions, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        // Invalidate permission caches for all users affected by this role change
+        await evictor.EvictPermissionsForRoleAsync(role.Id, cancellationToken);
+
         return new RoleDetails(role.Id, role.Name, role.RoleType, role.Permissions);
     }
 }

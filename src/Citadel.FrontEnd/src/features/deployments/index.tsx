@@ -21,8 +21,8 @@ export const DeploymentComponents: RequiredComponents = {
   },
 
   useData: function (): ResourceDataHookResult<any> {
-    const { deployments, isLoading } = useDeploymentsGroup();
-    return { items: deployments ?? [], isLoading };
+    const { deployments, capabilities, isLoading } = useDeploymentsGroup();
+    return { items: deployments ?? [], isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

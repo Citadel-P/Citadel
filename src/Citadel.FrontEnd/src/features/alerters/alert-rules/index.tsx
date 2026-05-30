@@ -80,6 +80,7 @@ const getDestinationColor = (dest: AlertDestination) => {
 function useAlertChannels() {
   const { data, refetch } = useRead('listAlertChannels');
   const channels = data?.data?.channels ?? [];
+  const capabilities = data?.data.capabilities;
 
   const { mutateAsync: verify, isPending: verifying } = useMutate('verifyAlertChannel');
   const { mutateAsync: create, isPending: creating } = useMutate('createAlertChannel');
@@ -114,6 +115,7 @@ function useAlertChannels() {
 
   return {
     channels,
+    capabilities,
     save,
     verifyChannel,
     removeChannel,
@@ -127,10 +129,12 @@ function ChannelCard({
   channel,
   onEdit,
   onDelete,
+  disabled = false,
 }: {
   channel: AlertChannelView;
   onEdit: () => void;
   onDelete: (id: string) => Promise<void>;
+  disabled?: boolean;
 }) {
   const color = getDestinationColor(channel.alertDestination);
   const letter = channel.alertDestination.charAt(0).toUpperCase();
@@ -138,10 +142,14 @@ function ChannelCard({
   return (
     <div
       role="button"
-      tabIndex={0}
-      onClick={onEdit}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onEdit()}
-      className="group relative bg-background rounded-xl border border-muted p-4 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-35">
+      tabIndex={disabled ? -1 : 0}
+      onClick={disabled ? undefined : onEdit}
+      onKeyDown={(e) => !disabled && (e.key === 'Enter' || e.key === ' ') && onEdit()}
+      aria-disabled={disabled}
+      className={cn(
+        'group relative bg-background rounded-xl border border-muted p-4 hover:border-zinc-300 hover:shadow-md transition-all flex flex-col justify-between h-35',
+        disabled ? 'hover:cursor-not-allowed opacity-70' : 'cursor-pointer',
+      )}>
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div
@@ -174,6 +182,7 @@ function ChannelCard({
             title="Delete"
             icon={<Trash2 className="h-3.5 w-3.5" />}
             variant="outline"
+            disabled={disabled}
             onClick={() => onDelete(channel.id)}
           />
         </div>
@@ -183,7 +192,7 @@ function ChannelCard({
 }
 
 function AlertNotificationChannels() {
-  const { channels, save, verifyChannel, saving, verifying, removeChannel } = useAlertChannels();
+  const { channels, capabilities, save, verifyChannel, saving, verifying, removeChannel } = useAlertChannels();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AlertChannelView | null>(null);
@@ -238,19 +247,29 @@ function AlertNotificationChannels() {
             <p className="text-xs text-muted-foreground">Destinations for your alert notifications.</p>
           </div>
         </div>
-        <Button variant="outline" onClick={openAdd}>
+        <Button variant="outline" disabled={!capabilities?.canWrite} onClick={openAdd}>
           <Plus className="h-3 w-3" /> Add Channel
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {channels.map((c) => (
-          <ChannelCard key={c.id} channel={c} onEdit={() => openEdit(c)} onDelete={handleDelete} />
+          <ChannelCard
+            key={c.id}
+            channel={c}
+            onEdit={() => openEdit(c)}
+            onDelete={handleDelete}
+            disabled={!capabilities?.canWrite}
+          />
         ))}
 
         <button
           onClick={openAdd}
-          className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600 h-35">
+          disabled={!capabilities?.canWrite}
+          className={cn(
+            'flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600 h-35',
+            !capabilities?.canWrite && 'hover:cursor-not-allowed',
+          )}>
           <Plus className="h-5 w-5" />
           <span className="text-sm font-medium">Connect New Channel</span>
         </button>
@@ -361,7 +380,9 @@ export const AlertRuleComponents: RequiredComponents = {
   },
   useData(): ResourceDataHookResult<AlertRuleView> {
     const { data, isLoading } = useRead('listAlertRules');
-    return { items: data?.data.alertRules ?? [], isLoading };
+    const capabilities = data?.data.capabilities;
+    const items = data?.data.alertRules ?? [];
+    return { items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

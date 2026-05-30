@@ -6,14 +6,14 @@ using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Alerters;
 
-public sealed record AlertRulesView(IEnumerable<AlertRuleView> AlertRules)
+public sealed record AlertRulesView(IEnumerable<AlertRuleView> AlertRules, ResourceCapabilities Capabilities)
 {
     internal static async Task<AlertRulesView> Map((IEnumerable<AlertRule> Rules, IEnumerable<AlertChannel> Channels) data, IPermissionEvaluator permissionEvaluator)
     {
         var list = data.Rules as AlertRule[] ?? [.. data.Rules];
-
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.Alert);
         if (list.Length == 0)
-            return new AlertRulesView([]);
+            return new AlertRulesView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
 
         var ids = new Guid[list.Length];
 
@@ -43,6 +43,6 @@ public sealed record AlertRulesView(IEnumerable<AlertRuleView> AlertRules)
             };
         }
 
-        return new AlertRulesView(views);
+        return new AlertRulesView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
     }
 }

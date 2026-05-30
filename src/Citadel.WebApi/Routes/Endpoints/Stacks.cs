@@ -1,5 +1,6 @@
 using Application.Features.Stacks.Commands;
 using Application.Features.Stacks.Queries;
+using Application.Permissions;
 using Domain.Entities.Stacks;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
@@ -14,10 +15,10 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Stacks
 {
-    public static async Task<Results<Ok<StackView>, ProblemHttpResult>> Get(IMediator mediator, [Description("The stack id")] Guid stackId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<StackView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionEvaluator, [Description("The stack id")] Guid stackId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetStack(stackId), cancellationToken);
-        return EndpointHandlers.HandleResult(result, StackView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, StackView.Map);
     }
 
     public static async Task<Results<Ok<StackConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("The stack id")] Guid stackId, CancellationToken cancellationToken)
@@ -26,10 +27,10 @@ public static class Stacks
         return EndpointHandlers.HandleResult(result, StackConfigView.Map);
     }
 
-    public static async Task<Results<Ok<StacksView>, ProblemHttpResult>> List(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<StacksView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllStacks(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, StacksView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, StacksView.Map);
     }
 
     public static async Task<Results<Ok<StackReleasesView>, ProblemHttpResult>> ListReleases(IMediator mediator, [Description("The stack id")] Guid stackId, CancellationToken cancellationToken)

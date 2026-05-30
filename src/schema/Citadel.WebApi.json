@@ -14814,7 +14814,8 @@
       },
       "AlertChannelsView": {
         "required": [
-          "channels"
+          "channels",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -14823,6 +14824,9 @@
             "items": {
               "$ref": "#/components/schemas/AlertChannelView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -15792,7 +15796,8 @@
       },
       "AlertRulesView": {
         "required": [
-          "alertRules"
+          "alertRules",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -15801,6 +15806,9 @@
             "items": {
               "$ref": "#/components/schemas/AlertRuleView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -18940,12 +18948,23 @@
           },
           "createdAt": {
             "format": "date-time"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
           }
         }
       },
       "GitAccountsView": {
         "required": [
-          "gitAccounts"
+          "gitAccounts",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -18954,6 +18973,9 @@
             "items": {
               "$ref": "#/components/schemas/GitAccountView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -19161,7 +19183,8 @@
       },
       "GitRepositoriesView": {
         "required": [
-          "gitRepositories"
+          "gitRepositories",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -19170,6 +19193,9 @@
             "items": {
               "$ref": "#/components/schemas/GitRepositoryView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -20395,7 +20421,8 @@
       },
       "ImagesView": {
         "required": [
-          "images"
+          "images",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -20404,6 +20431,9 @@
             "items": {
               "$ref": "#/components/schemas/ImageView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ImageCapabilities"
           }
         }
       },
@@ -21008,7 +21038,8 @@
       },
       "NetworksView": {
         "required": [
-          "networks"
+          "networks",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -21017,6 +21048,9 @@
             "items": {
               "$ref": "#/components/schemas/DockerNetworkResultView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -22121,7 +22155,8 @@
       },
       "PlatformsView": {
         "required": [
-          "platforms"
+          "platforms",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -22130,6 +22165,9 @@
             "items": {
               "$ref": "#/components/schemas/PlatformView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -22314,7 +22352,8 @@
       },
       "RegistriesView": {
         "required": [
-          "registries"
+          "registries",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -22323,6 +22362,9 @@
             "items": {
               "$ref": "#/components/schemas/RegistryView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -22990,7 +23032,8 @@
       },
       "RolesView": {
         "required": [
-          "roles"
+          "roles",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -22999,6 +23042,9 @@
             "items": {
               "$ref": "#/components/schemas/RoleView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -23017,6 +23063,45 @@
           "Pull",
           "Terminal"
         ]
+      },
+      "StackCapabilities": {
+        "required": [
+          "canViewLogs",
+          "canInspect",
+          "canOpenTerminal",
+          "canPull",
+          "canApply",
+          "canRead",
+          "canWrite",
+          "canExecute"
+        ],
+        "type": "object",
+        "properties": {
+          "canViewLogs": {
+            "type": "boolean"
+          },
+          "canInspect": {
+            "type": "boolean"
+          },
+          "canOpenTerminal": {
+            "type": "boolean"
+          },
+          "canPull": {
+            "type": "boolean"
+          },
+          "canApply": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          },
+          "canWrite": {
+            "type": "boolean"
+          },
+          "canExecute": {
+            "type": "boolean"
+          }
+        }
       },
       "StackConfigView": {
         "required": [
@@ -23471,12 +23556,23 @@
               "null",
               "string"
             ]
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackCapabilities"
+              }
+            ]
           }
         }
       },
       "StacksView": {
         "required": [
-          "stacks"
+          "stacks",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -23485,6 +23581,9 @@
             "items": {
               "$ref": "#/components/schemas/StackView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -23626,12 +23725,16 @@
       },
       "TeamsView": {
         "required": [
-          "pagedResult"
+          "pagedResult",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
           "pagedResult": {
             "$ref": "#/components/schemas/PagedResultViewOfTeamView"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -23853,12 +23956,16 @@
       },
       "UsersView": {
         "required": [
-          "pagedResult"
+          "pagedResult",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
           "pagedResult": {
             "$ref": "#/components/schemas/PagedResultViewOfUserView"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
@@ -24126,7 +24233,8 @@
       },
       "VolumesView": {
         "required": [
-          "volumes"
+          "volumes",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -24135,6 +24243,9 @@
             "items": {
               "$ref": "#/components/schemas/DockerVolumeResultView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       }

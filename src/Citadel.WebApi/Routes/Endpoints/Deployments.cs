@@ -19,10 +19,10 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Deployments
 {
-    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionService, [Description("Deployment id")] Guid deploymentId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionEvaluator, [Description("Deployment id")] Guid deploymentId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetDeployment(deploymentId), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, DeploymentView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, DeploymentView.Map);
     }
 
     public static async Task<Results<Ok<DeploymentConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("Deployment id")] Guid deploymentId, CancellationToken cancellationToken)
@@ -31,10 +31,10 @@ public static class Deployments
         return EndpointHandlers.HandleResult(result, DeploymentConfigView.Map);
     }
 
-    public static async Task<Results<Ok<DeploymentsView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionService, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DeploymentsView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllDeployments(), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, DeploymentsView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, DeploymentsView.Map);
     }
 
     public static async Task<Results<Ok<ContainerInfoView>, ProblemHttpResult>> GetInfo(IMediator mediator, Guid id, CancellationToken cancellationToken)

@@ -15,16 +15,16 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Registries
 {
-    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, IPermissionEvaluator permissionService, [FromBody] CreateRegistryInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, IPermissionEvaluator permissionEvaluator, [FromBody] CreateRegistryInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, RegistryView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, RegistryView.Map);
     }
 
-    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionService, bool? includeDisabled, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, bool? includeDisabled, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllRegistries(includeDisabled), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, RegistriesView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, RegistriesView.Map);
     }
 
     public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Get(IMediator mediator, IPermissionEvaluator permissionService, [Description("Registry id")] Guid id, CancellationToken cancellationToken)

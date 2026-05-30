@@ -6,14 +6,14 @@ using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Volumes;
 
-public sealed record VolumesView(IEnumerable<DockerVolumeResultView> Volumes)
+public sealed record VolumesView(IEnumerable<DockerVolumeResultView> Volumes, ResourceCapabilities Capabilities)
 {
     internal static async Task<VolumesView> Map(IEnumerable<DockerVolumeResult> volumes, IPermissionEvaluator permissionEvaluator)
     {
         var list = volumes as DockerVolumeResult[] ?? [.. volumes];
-
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.Platform);
         if (list.Length == 0)
-            return new VolumesView([]);
+            return new VolumesView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
 
         // All volumes belong to the same platform capability scope. Resolve once instead of N times.
         var platformId = list[0].PlatformId;
@@ -32,6 +32,6 @@ public sealed record VolumesView(IEnumerable<DockerVolumeResultView> Volumes)
             };
         }
 
-        return new VolumesView(views);
+        return new VolumesView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
     }
 }

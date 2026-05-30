@@ -1,5 +1,6 @@
 using Application.Features.Identity.Roles.Commands;
 using Application.Features.Identity.Roles.Queries;
+using Application.Permissions;
 using Domain.Contracts.Resources.Role;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
@@ -20,10 +21,10 @@ public static class Roles
         return EndpointHandlers.HandleResult(result, RoleView.Map);
     }
 
-    public static async Task<Results<Ok<RolesView>, ProblemHttpResult>> List(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RolesView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllRoles(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, RolesView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, RolesView.Map);
     }
 
     public static async Task<Results<Ok<RoleView>, ProblemHttpResult>> Get(IMediator mediator, [Description("Role id")] Guid id, CancellationToken cancellationToken)

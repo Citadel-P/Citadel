@@ -8,6 +8,7 @@ import { useRead } from '@/lib/hooks';
 export const useImagesGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listImages', { platformId });
   const [realtimeImagesInfo, setRealtimeImagesInfo] = useState<ImagesView>();
+  const capabilities = data?.data.capabilities;
 
   const imagesInfo = useMemo<ImagesView | undefined>(() => {
     return realtimeImagesInfo ?? data?.data;
@@ -122,5 +123,6 @@ export const useImagesGroup = (platformId?: string) => {
   return {
     imagesInfo,
     isLoading,
+    capabilities,
   };
 };
