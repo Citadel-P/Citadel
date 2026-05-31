@@ -3,18 +3,17 @@ import { RequiredDockerInfoComponents } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { ContainerLogs } from './container-logs';
 import { useContainerInfoGroup } from '../hooks/useContainerInfoGroup';
-import { DockerContainerView } from '@/api/types';
 import { ContainerInspect } from './container-inspect';
 import { ContainerStats } from './container-stats';
 import { ContainerInfoActions } from './actions';
 import { ContainerInfoTable } from './container-info-table';
-import { ContainerStateStatus, ImageView, ResourceControlState } from '@/api/generated/api.types';
+import { ContainerStateStatus, ContainerDataView, ImageView, ResourceControlState } from '@/api/generated/api.types';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { Link } from 'react-router';
 import { truncate } from '@/lib/truncate';
 import { ContainerExec } from './container-exec';
 
-export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContainerView> = {
+export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDataView> = {
   Header: {
     Indicator: ({ resource }) => {
       return (
@@ -42,17 +41,17 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContain
   Tabs: [
     {
       label: 'Logs',
-      disabled: (resource: DockerContainerView) => !hasCapability(resource, 'canViewLogs'),
+      disabled: (resource: ContainerDataView) => !hasCapability(resource, 'canViewLogs'),
       Content: ({ resource }) => <ContainerLogs containerId={resource?.id} />,
     },
     {
       label: 'Inspect',
-      disabled: (resource: DockerContainerView) => !hasCapability(resource, 'canInspect'),
+      disabled: (resource: ContainerDataView) => !hasCapability(resource, 'canInspect'),
       Content: ({ resource }) => <ContainerInspect containerId={resource?.id} />,
     },
     {
       label: 'Terminal',
-      disabled: (resource: DockerContainerView) =>
+      disabled: (resource: ContainerDataView) =>
         resource.state !== ContainerStateStatus.Running || !hasCapability(resource, 'canOpenTerminal'),
       Content: ({ resource }) => (
         <ContainerExec

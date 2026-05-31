@@ -12,8 +12,8 @@ export const ContainerComponents: RequiredComponents = {
   },
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
-    const { containersInfo, isLoading } = useContainersGroup(platformId);
-    return { items: containersInfo?.containers ?? [], isLoading, capabilities: undefined };
+    const { containersInfo, capabilities, isLoading } = useContainersGroup(platformId);
+    return { items: containersInfo?.containers ?? [], isLoading, capabilities };
   },
   header: {
     showAdd: false,

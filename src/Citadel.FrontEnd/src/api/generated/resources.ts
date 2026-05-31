@@ -39,6 +39,7 @@ export const resources = {
   getPermissionMatrix: { method: "GET", key: "getPermissionMatrix", params: ["params"], requiredParams: [], queryParams: [] },
   getContainer: { method: "GET", key: "getContainer", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   getContainerInfo: { method: "GET", key: "getContainerInfo", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
+  getContainerData: { method: "GET", key: "getContainerData", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   getContainerStats: { method: "GET", key: "getContainerStats", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   inspectContainer: { method: "GET", key: "inspectContainer", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   startContainers: { method: "PATCH", key: "startContainers", params: ["data","params"], requiredParams: [], queryParams: [] },

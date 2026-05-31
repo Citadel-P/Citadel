@@ -463,6 +463,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getContainerInfo");
 
+        containers.MapGet("{id}/data", Containers.GetContainerData)
+            .WithSummary("Get container data")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getContainerData");
+
         containers.MapGet("{id}/stats", Containers.GetStats)
             .WithSummary("Get container stats")
             .ProducesValidationProblem()

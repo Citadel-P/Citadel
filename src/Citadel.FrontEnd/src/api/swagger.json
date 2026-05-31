@@ -3806,6 +3806,102 @@
         ]
       }
     },
+    "/api/v1/containers/{id}/data": {
+      "get": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Get container data",
+        "operationId": "getContainerData",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerDataView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/containers/{id}/stats": {
       "get": {
         "tags": [
@@ -16195,6 +16291,84 @@
           }
         }
       },
+      "ContainerDataView": {
+        "required": [
+          "name",
+          "image",
+          "id",
+          "imageId",
+          "state",
+          "controlState"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "imageId": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ContainerStateStatus"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "created": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "stack": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "containerStat": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerStatView"
+              }
+            ]
+          },
+          "ports": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/HostPortBinding"
+              }
+            }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformCapabilities"
+              }
+            ]
+          }
+        }
+      },
       "ContainerHealthStatus": {
         "required": [
           "status",
@@ -16939,7 +17113,8 @@
       },
       "ContainersView": {
         "required": [
-          "containers"
+          "containers",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -16948,6 +17123,9 @@
             "items": {
               "$ref": "#/components/schemas/ContainerView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },

@@ -12,8 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { byteTransform } from '@/lib/bytes.helper';
-import { ContainerStatView } from '@/api/generated/api.types';
-import { DockerContainerView } from '@/api/types';
+import { ContainerStatView, ContainerDataView } from '@/api/generated/api.types';
 
 const MemoryUsage = ({
   stats,
@@ -21,7 +20,7 @@ const MemoryUsage = ({
   isLoading,
 }: {
   stats: ContainerStatView[];
-  container: DockerContainerView | undefined;
+  container: ContainerDataView | undefined;
   isLoading: boolean;
 }) => {
   const chartConfig = useMemo(
@@ -133,11 +132,11 @@ const MemoryUsage = ({
   );
 };
 interface MemoryUsageHeaderProps {
-  container: DockerContainerView | undefined;
+  container: ContainerDataView | undefined;
 }
 
 const MemoryUsageHeader = ({ container }: MemoryUsageHeaderProps) => {
-  const renderStat = (label: string, value: string | number | undefined) => (
+  const renderStat = (label: string, value: string | number | null | undefined) => (
     <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="text-sm text-foreground font-medium leading-none">

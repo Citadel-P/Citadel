@@ -6,8 +6,9 @@ import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useContainersGroup = (platformId?: string) => {
-  const { data, isLoading } = useRead('listContainers', { id: platformId });
+  const { data, isLoading, } = useRead('listContainers', { id: platformId });
   const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
+  const capabilities = data?.data.capabilities;
 
   const lastSynchronizedDataRef = useRef<any>(null);
 
@@ -117,5 +118,5 @@ export const useContainersGroup = (platformId?: string) => {
     skip: !platformId,
   });
 
-  return { containersInfo, isLoading };
+  return { containersInfo, capabilities, isLoading };
 };

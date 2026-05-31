@@ -1,11 +1,15 @@
-import { ContainerInfoView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
+import {
+  ContainerInfoView,
+  ContainerStateStatus,
+  ContainerStatView,
+  ContainerDataView,
+} from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { truncate } from '@/lib/truncate';
 import { ColumnDef } from '@tanstack/react-table';
 import { Clock, Server } from 'lucide-react';
 import { Link } from 'react-router';
-import { DockerContainerView } from '@/api/types';
 import { useRead } from '@/lib/hooks';
 import { useMemo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
@@ -150,7 +154,7 @@ export const ContainerInfoTable = ({
   container,
   displayOptions,
 }: {
-  container?: DockerContainerView | undefined;
+  container?: ContainerDataView | undefined;
   displayOptions: DisplayOptions;
 }) => {
   const { data, isLoading } = useRead('getContainerInfo', { id: container?.id });
@@ -172,7 +176,7 @@ export const DeploymentContainerInfoTable = ({
   displayOptions,
 }: {
   deploymentId: string;
-  container?: DockerContainerView | undefined;
+  container?: ContainerDataView | undefined;
   displayOptions: DisplayOptions;
 }) => {
   const { data, isLoading } = useRead('getDeploymentContainerInfo', { id: deploymentId });
@@ -195,7 +199,7 @@ const ContainerInfoTableRenderer = ({
   isLoading,
 }: {
   containerInfo?: ContainerInfoView | undefined;
-  container?: DockerContainerView | undefined;
+  container?: ContainerDataView | undefined;
   displayOptions: DisplayOptions;
   isLoading?: boolean;
 }) => {

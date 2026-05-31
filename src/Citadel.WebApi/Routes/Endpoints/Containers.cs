@@ -1,12 +1,13 @@
-﻿using System.ComponentModel;
-using Application.Features.Containers.Commands;
+﻿using Application.Features.Containers.Commands;
 using Application.Features.Containers.Queries;
 using Application.Permissions;
 using Domain;
+using Domain.Contracts.Resources.Containers;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources.Containers;
 
 namespace WebApi.Routes.Endpoints;
@@ -23,6 +24,12 @@ public static class Containers
     {
         var result = await mediator.Send(new GetContainerInfoById(id), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionService, ContainerInfoView.Map);
+    }
+
+    public static async Task<Results<Ok<ContainerDataView>, ProblemHttpResult>> GetContainerData(IMediator mediator, IPermissionEvaluator permissionService, string id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetContainerData(id), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionService, ContainerDataView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> StartContainers(IMediator mediator, [FromBody]string[] containerIds, CancellationToken cancellationToken)

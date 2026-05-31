@@ -112,3 +112,41 @@ public sealed record ContainerInfoView(
         };
     }
 }
+
+public sealed record ContainerDataView(
+    string Name,
+    string Image,
+    string Id,
+    string ImageId,
+    ContainerStateStatus State,
+    ResourceControlState ControlState,
+    long? Created = null,
+    string? Stack = null,
+    ContainerStatView? ContainerStat = null,
+    IDictionary<string, IReadOnlyList<HostPortBinding>>? Ports = null,
+    PlatformCapabilities? Capabilities = null
+    )
+{
+    internal static ContainerDataView Map(DockerContainer container) => new(
+        Name: container.Name,
+        Image: container.Image,
+        Id: container.Id,
+        ImageId: container.ImageId,
+        State: container.State,
+        Created: container.Created,
+        Stack: container.Stack,
+        ControlState: container.ControlState ?? ResourceControlState.Idle,
+        ContainerStat: null,
+        Ports: container.Ports
+        );
+
+    internal static async Task<ContainerDataView> Map((DockerContainer container, Guid platformId) tuple, IPermissionEvaluator permissionEvaluator)
+    {
+        var (container, platformId) = tuple;
+        var permissions = await permissionEvaluator.EvaluateAsync(platformId, ResourceType.Platform);
+        return Map(container) with
+        {
+            Capabilities = CapabilityMapper.ToPlatformCapabilities(permissions)
+        };
+    }
+}

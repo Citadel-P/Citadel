@@ -18,6 +18,7 @@ const IMPLIED_CAPABILITIES: Partial<Record<CapabilityKey, CapabilityKey[]>> = {
 };
 
 export const hasCapability = (resource: unknown, key: CapabilityKey): boolean => {
+  
   const capabilities = (resource as ResourceWithCapabilities | null | undefined)?.capabilities;
 
   if (capabilities == null) return true;

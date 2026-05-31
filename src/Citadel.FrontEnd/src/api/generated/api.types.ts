@@ -1145,6 +1145,24 @@ export interface ContainerConfiguration {
   labels: Record<string, string>;
 }
 
+export interface ContainerDataView {
+  name: string;
+  image: string;
+  id: string;
+  imageId: string;
+  state: ContainerStateStatus;
+  controlState: ResourceControlState;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  created?: null | number | string;
+  stack?: null | string;
+  containerStat?: null | ContainerStatView;
+  ports?: null | Record<string, HostPortBinding[]>;
+  capabilities?: null | PlatformCapabilities;
+}
+
 export interface ContainerHealthStatus {
   status: null | string;
   /**
@@ -1330,6 +1348,7 @@ export interface ContainerVolumeResult {
 
 export interface ContainersView {
   containers: ContainerView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface CreateAlertRuleInput {
@@ -4643,6 +4662,34 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/containers/${id}/info`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name GetContainerData
+     * @summary Get container data
+     * @request GET:/api/v1/containers/{id}/data
+     * @secure
+     * @response `200` `ContainerDataView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getContainerData: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ContainerDataView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/containers/${id}/data`,
         method: "GET",
         secure: true,
         format: "json",

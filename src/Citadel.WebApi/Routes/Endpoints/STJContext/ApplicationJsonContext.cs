@@ -293,6 +293,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(PatchGitRepositoryInput))]
 [JsonSerializable(typeof(ResourceInfo))]
 [JsonSerializable(typeof(ResourceCapabilities))]
+[JsonSerializable(typeof(ContainerDataView))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

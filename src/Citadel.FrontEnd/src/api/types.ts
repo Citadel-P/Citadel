@@ -1,11 +1,4 @@
-import {
-  Api,
-  ContainerStateStatus,
-  ContainerStatView,
-  PlatformCapabilities,
-  PlatformStatView,
-  ResourceControlState,
-} from './generated/api.types';
+import { Api, PlatformStatView } from './generated/api.types';
 import { ResourceName, resources } from '@/api/generated/resources';
 import { useApiClientContext } from '@/api/api-client-context';
 
@@ -146,18 +139,6 @@ export interface PlatformStatsBatchView {
   imageCount: number;
   memTotal: number;
   stat: PlatformStatView;
-}
-
-export interface DockerContainerView {
-  id: string;
-  name: string;
-  state: ContainerStateStatus;
-  created: number | null;
-  stack: string | null;
-  containerStat: ContainerStatView;
-  containerPort: null | [];
-  controlState: ResourceControlState;
-  capabilities?: null | PlatformCapabilities;
 }
 
 export interface DeleteDialogConfig<TItem, TRequest> {

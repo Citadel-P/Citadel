@@ -11,6 +11,7 @@ public sealed record DockerContainer(
     long? Created = null,
     string? Stack = null,
     DockerContainerStat? ContainerStat = null,
+    ResourceControlState? ControlState = null,
     IDictionary<string, IReadOnlyList<HostPortBinding>>? Ports = null
     );
 

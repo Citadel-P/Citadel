@@ -10,12 +10,12 @@ import {
   AutoUpdateStatus,
   DeploymentStatus,
   DeploymentView,
+  ContainerDataView,
   LatestActivityView,
   ResourceControlState,
   UpdateBehavior,
 } from '@/api/generated/api.types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DockerContainerView } from '@/api/types';
 import { DeploymentInspect } from '@/features/docker-resources/containers/container-info/container-inspect';
 import { formatId, normalizeDockerId } from '@/lib/utils';
 import { DeploymentContainerInfoTable } from '@/features/docker-resources/containers/container-info/container-info-table';
@@ -209,7 +209,7 @@ const RuntimeView = ({
   deployment,
   disabled,
 }: {
-  containerInfo?: DockerContainerView | undefined;
+  containerInfo?: ContainerDataView | undefined;
   containerId?: string | undefined;
   deploymentId: string;
   deployment: DeploymentView;
@@ -244,7 +244,7 @@ const RuntimeTabs = ({
   deployment,
   disabled,
 }: {
-  containerInfo?: DockerContainerView | undefined;
+  containerInfo?: ContainerDataView | undefined;
   containerId?: string | undefined;
   deploymentId: string;
   deployment: DeploymentView;

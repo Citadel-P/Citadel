@@ -53,7 +53,7 @@ public static class Platforms
     public static async Task<Results<Ok<ContainersView>, ProblemHttpResult>> ListContainers(IMediator mediator, IPermissionEvaluator permissionService, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetContainers(id), cancellationToken);
-        return await EndpointHandlers.HandleResult(result, permissionService, ContainersView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionService, (containers, perm) => ContainersView.Map(containers, id, perm));
     }
 
 }

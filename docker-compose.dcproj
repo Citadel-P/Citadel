@@ -15,5 +15,6 @@
     <None Include="src\Citadel.Application.Features.Alerters.Queries\GetAlertRules.cs" />
     <None Include="src\Citadel.Application.Features.Identity.Auth.Commands\LoginCommand.cs" />
     <None Include="src\Citadel.Application.Features.Identity.Auth\Commands\LoginCommand.cs" />
+    <None Include="src\Citadel.Application.Features.Identity.Roles.Commands.PatchRolePermissions.cs" />
   </ItemGroup>
 </Project>

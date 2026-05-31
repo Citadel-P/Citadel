@@ -1,30 +1,23 @@
 ﻿using Application.Permissions;
 using Domain.Entities;
 using Hosting.Common;
-using Hosting.Common.Attributes;
 using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
 
-public sealed record ContainersView(IEnumerable<ContainerView> Containers)
+public sealed record ContainersView(IEnumerable<ContainerView> Containers, PlatformCapabilities Capabilities)
 {
-    internal static ContainersView Map(IEnumerable<Container> containersInfo)
-        => new(ContainerView.Map(containersInfo));
+    internal static ContainersView Map(IEnumerable<Container> containers) =>
+        new(containers.Select(ContainerView.Map), PlatformCapabilities.Empty);
 
-    internal static async Task<ContainersView> Map(IEnumerable<Container> containers, IPermissionEvaluator permissionEvaluator)
+    internal static async Task<ContainersView> Map(IEnumerable<Container> containers, Guid platformId, IPermissionEvaluator permissionEvaluator)
     {
         var list = containers as Container[] ?? [.. containers];
-
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(platformId, ResourceType.Platform);
         if (list.Length == 0)
-            return new ContainersView([]);
+            return new ContainersView([], CapabilityMapper.ToPlatformCapabilities(resourcesPerms));
 
-        // All containers belong to the same platform capability scope.
-        // Resolve once instead of N times.
-        var platformId = list[0].PlatformId;
-
-        var meta = await permissionEvaluator.EvaluateAsync(platformId, ResourceType.Platform);
-
-        var capabilities = CapabilityMapper.ToPlatformCapabilities(meta == default ? PermissionMetadata.Empty : meta);
+        var capabilities = CapabilityMapper.ToPlatformCapabilities(resourcesPerms);
 
         var views = new ContainerView[list.Length];
 
@@ -36,6 +29,6 @@ public sealed record ContainersView(IEnumerable<ContainerView> Containers)
             };
         }
 
-        return new ContainersView(views);
+        return new ContainersView(views, capabilities);
     }
 }

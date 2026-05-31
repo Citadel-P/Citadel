@@ -2,15 +2,15 @@ import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { DockerContainerView } from '@/api/types';
 import { createContainerActions } from '../actions';
+import { ContainerDataView } from '@/api/generated/api.types';
 
-const useVariables = (resources: DockerContainerView | DockerContainerView[]) =>
+const useVariables = (resources: ContainerDataView | ContainerDataView[]) =>
   Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];
 
 const { startAction, stopAction, pauseAction, restartAction } = createContainerActions(useVariables);
 
-export const { info: ContainerInfoActions } = createActionsBuilder<DockerContainerView>()
+export const { info: ContainerInfoActions } = createActionsBuilder<ContainerDataView>()
   .addAction(startAction)
   .addAction(stopAction)
   .addAction(pauseAction)

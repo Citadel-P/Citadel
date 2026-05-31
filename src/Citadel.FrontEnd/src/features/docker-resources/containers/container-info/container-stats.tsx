@@ -1,5 +1,4 @@
-import { ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
-import { DockerContainerView } from '@/api/types';
+import { ContainerStateStatus, ContainerStatView, ContainerDataView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import MemoryUsage from './stats/memory-usage';
@@ -7,7 +6,7 @@ import CpuUsage from './stats/cpu-usage';
 import NetworkUsage from './stats/network-usage';
 
 type StatsPanelProps = {
-  resource: DockerContainerView | undefined;
+  resource: ContainerDataView | undefined;
   baseStats: ContainerStatView[];
   isLoading: boolean;
 };
@@ -40,7 +39,7 @@ const StatsPanel = ({ resource, baseStats, isLoading }: StatsPanelProps) => {
   );
 };
 
-export const ContainerStats = ({ resource }: { resource: DockerContainerView | undefined }) => {
+export const ContainerStats = ({ resource }: { resource: ContainerDataView | undefined }) => {
   const { data, isLoading } = useRead('getContainerStats', { id: resource?.id });
   const baseStats = data?.data?.stats ?? [];
   return <StatsPanel resource={resource} baseStats={baseStats} isLoading={isLoading} />;
@@ -50,7 +49,7 @@ export const DeploymentStats = ({
   resource,
   deploymentId,
 }: {
-  resource: DockerContainerView | undefined;
+  resource: ContainerDataView | undefined;
   deploymentId: string;
 }) => {
   const { data, isLoading } = useRead('getDeploymentStats', { id: deploymentId });
