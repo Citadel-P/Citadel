@@ -1,15 +1,15 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Stacks;
+using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Stacks.Commands;
 
@@ -32,13 +32,11 @@ public sealed record CreateStack(
     }
 }
 
-internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateStack, Result<Stack>>
+internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<CreateStack, Result<Stack>>
 {
     public async ValueTask<Result<Stack>> Handle(CreateStack command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         if (await unitOfWork.Stacks.ExistsAsync(command.Name, cancellationToken))
         {
             return Result.Failure<Stack>(new ConflictError("Name already exists"));
@@ -64,6 +62,7 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IHttpContextAcc
             }
         }
 
+        // Add Stack
         var stack = Stack.Create(
             name: command.Name,
             createdByActorId: actorId,
@@ -73,6 +72,20 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IHttpContextAcc
             description: command.Description);
 
         await unitOfWork.Stacks.AddAsync(stack, cancellationToken);
+
+        // Add activity
+        var activity = new ActivityEvent(
+            actorId: actorId,
+            resourceId: stack.Id,
+            platformId: command.PlatformId,
+            resourceName: stack.Name,
+            eventType: ActivityEventType.StackCreated,
+            status: ActivityStatus.Information,
+            info: new StackCreated(stack.ToSnapshot())
+            );
+
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         return stack;

@@ -2,19 +2,17 @@ using Application.Features.Deployments.Notifications;
 using Application.Services;
 using Application.Services.SignalR;
 using Application.TaskJobs;
-using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Git;
 using Domain.Entities.Activities;
 using Domain.Entities.Git;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using System.Security.Claims;
 
 namespace Application.Features.GitRepositories.Commands;
 
@@ -28,7 +26,7 @@ internal sealed class DeleteGitRepositoriesHandler(
     IActivityStreamManager activityHub,
     IGitRepositoryStreamManager gitRepositoryHub,
     INotificationQueue notificationQueue,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<DeleteGitRepositories, Result>
+    IUserContextAccessor userContext) : ICommandHandler<DeleteGitRepositories, Result>
 {
     public async ValueTask<Result> Handle(DeleteGitRepositories command, CancellationToken cancellationToken)
     {
@@ -36,9 +34,7 @@ internal sealed class DeleteGitRepositoriesHandler(
         if (toDelete is null || !toDelete.Any())
             return Result.Failure(new NotFoundError("No git repositories found matching the provided IDs for deletion."));
 
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         foreach (var gitRepository in toDelete)
         {
             gitRepository.MarkProcessing(actorId);

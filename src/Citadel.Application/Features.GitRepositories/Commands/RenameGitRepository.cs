@@ -6,13 +6,11 @@ using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 using static Application.Features.GitRepositories.Commands.PatchGitRepositoryHandler;
 
 namespace Application.Features.GitRepositories.Commands;
@@ -35,13 +33,11 @@ internal sealed class RenameGitRepositoryHandler(
     INotificationQueue notificationQueue,
     IActivityStreamManager activityHub,
     IGitRepositoryStreamManager gitRepositoryHub,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<RenameGitRepository, Result<GitRepository>>
+    IUserContextAccessor userContext) : ICommandHandler<RenameGitRepository, Result<GitRepository>>
 {
     public async ValueTask<Result<GitRepository>> Handle(RenameGitRepository command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var gitRepository = await unitOfWork.GitRepositories.GetAsync(command.Id, cancellationToken);
         if (gitRepository is null)
             return Result.Failure<GitRepository>(new NotFoundError("The provided git repository does not exist"));

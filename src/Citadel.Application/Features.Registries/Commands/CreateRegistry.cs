@@ -8,13 +8,11 @@ using Domain.Entities.Activities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Registries.Commands;
 
@@ -129,16 +127,14 @@ public sealed record CreateRegistry(
 
 internal class CreateRegistryHandler(
     IUnitOfWork unitOfWork, 
+    IUserContextAccessor userContext,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IHttpContextAccessor httpContextAccessor,
     IRegistryConnectorResolver registryResolver) : ICommandHandler<CreateRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(CreateRegistry command, CancellationToken cancellationToken)
     {
-        var user = httpContextAccessor.HttpContext?.User
-            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var exist = await unitOfWork.Registries.ExistsAsync(command.Name, cancellationToken);
         if (exist)
         {
@@ -156,8 +152,6 @@ internal class CreateRegistryHandler(
         {
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
-
-        var actorId = user.GetActorId();
 
         var registry = new Registry(
             name: command.Name,

@@ -5,14 +5,12 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Activities;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
-using Hosting.Common;
 
 namespace Application.Features.Alerters.Commands;
 
@@ -24,13 +22,11 @@ internal sealed class DeleteAlertRulesHandler(
     AlertRuleCache alertRuleCache,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<DeleteAlertRules, Result>
+    IUserContextAccessor userContext) : ICommandHandler<DeleteAlertRules, Result>
 {
     public async ValueTask<Result> Handle(DeleteAlertRules command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var rulesToDelete = await unitOfWork.AlertRules.GetAllAsync(command.Ids, cancellationToken);
 
         if (rulesToDelete == null || rulesToDelete.Any() == false)

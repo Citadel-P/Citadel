@@ -8,15 +8,13 @@ using Domain.Contracts.Resources.Git;
 using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
-using Hosting.Common;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 using System.Threading.Channels;
 
 namespace Application.Features.GitRepositories.Commands;
@@ -52,13 +50,11 @@ internal sealed class PatchGitRepositoryHandler(
     IActivityStreamManager activityHub,
     IGitRepositoryStreamManager gitRepositoryHub,
     ChannelWriter<GitRepoSyncRequest> gitSyncWriter,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<PatchGitRepository, Result<GitRepository>>
+    IUserContextAccessor userContext) : ICommandHandler<PatchGitRepository, Result<GitRepository>>
 {
     public async ValueTask<Result<GitRepository>> Handle(PatchGitRepository command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var gitRepository = await unitOfWork.GitRepositories.GetAsync(command.Id, cancellationToken);
         if (gitRepository is null)
             return Result.Failure<GitRepository>(new NotFoundError("The provided git repository does not exist"));

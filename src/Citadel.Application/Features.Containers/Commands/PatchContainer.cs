@@ -5,12 +5,10 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Containers.Commands;
 
@@ -24,9 +22,9 @@ public sealed record PatchContainer(string[] ContainerIds, ContainerAction Actio
 }
 
 internal sealed class PatchContainerHandler(
+    IUserContextAccessor userContext,
     IContainerProcessingService containerService,
     IPlatformContainerCache platformContainerCache,
-    IHttpContextAccessor httpContextAccessor,
     IConnectorFactory<IContainerConnector> connectorFactory,
     IContainerAuthorizationService containerAuthorizationService)
     : ICommandHandler<PatchContainer, Result>
@@ -39,9 +37,7 @@ internal sealed class PatchContainerHandler(
             return Result.Failure(new ForbiddenError("Missing permission [Write] on [Platform]"));
         }
 
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         if (!platformContainerCache.TryGetPlatformsWithContainers(request.ContainerIds, out var platforms))
         {
             return Result.Failure(new NotFoundError(

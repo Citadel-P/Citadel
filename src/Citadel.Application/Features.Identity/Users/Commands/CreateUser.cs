@@ -1,16 +1,15 @@
+using Application.Services.Identity;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using Application.Services.Identity;
 
 namespace Application.Features.Identity.Users.Commands;
 
@@ -42,13 +41,11 @@ public sealed record CreateUser(
     }
 }
 
-internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor, IActorScopeEvictor evictor) : ICommandHandler<CreateUser, Result<UserDetails>>
+internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext, IActorScopeEvictor evictor) : ICommandHandler<CreateUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(CreateUser command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-            ?? throw new ArgumentNullException("ActorId claim is missing");
-
+        var actorId = userContext.Current.ActorId;
         var conflicts = await unitOfWork.Users.GetConflictsAsync(command.Name, command.Email, null, cancellationToken);
         if (conflicts.NameExists)
             return Result.Failure<UserDetails>(new ConflictError("Name already exists"));

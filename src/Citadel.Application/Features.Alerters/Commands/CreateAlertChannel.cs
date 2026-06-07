@@ -3,13 +3,11 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
-using Hosting.Common;
 
 namespace Application.Features.Alerters.Commands;
 
@@ -32,15 +30,13 @@ public sealed record CreateAlertChannel(
 internal sealed class CreateAlertChannelHandler(
     IUnitOfWork unitOfWork,
     AlertRuleCache alertRuleCache,
-    IHttpContextAccessor httpContextAccessor)
+    IUserContextAccessor userContext)
     : ICommandHandler<CreateAlertChannel, Result<AlertChannel>>
 {
     public async ValueTask<Result<AlertChannel>> Handle(CreateAlertChannel command, CancellationToken cancellationToken)
     {
-        var user = httpContextAccessor.HttpContext?.User
-            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
-        var channel = new AlertChannel(command.Name, command.AlertDestination, command.Url, command.IsActive, user.GetActorId());
+        var actorId = userContext.Current.ActorId;
+        var channel = new AlertChannel(command.Name, command.AlertDestination, command.Url, command.IsActive, actorId);
         await unitOfWork.AlertRules.AddChannelAsync(channel, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         alertRuleCache.UpsertChannel(channel);

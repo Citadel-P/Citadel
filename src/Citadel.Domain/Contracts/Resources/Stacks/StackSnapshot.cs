@@ -1,0 +1,44 @@
+﻿using Domain.Entities.Stacks;
+
+namespace Domain.Contracts.Resources.Stacks;
+
+public sealed record StackSnapshot(
+    Guid Id,
+    string Name,
+    string? Description,
+    StackSource StackSource,
+    StackReleaseSnapshot? StackRelease);
+
+public sealed record StackReleaseSnapshot(
+    Guid PlatformId,
+    StackSpec Spec,
+    Guid CreatedByActorId,
+    string? Version);
+
+public static class StackSnapshotExtensions
+{
+    public static StackSnapshot ToSnapshot(this Stack stack, Guid? id = null)
+        => new(
+            Id: id ?? stack.Id,
+            Name: stack.Name,
+            Description: stack.Description,
+            StackSource: stack.StackSource,
+            StackRelease: stack.CurrentStackRelease?.ToSnapshot());
+
+    public static StackSnapshot ToSnapshot(this StackPatchModel stack, StackRelease stackRelease, Guid? id = null)
+        => new(
+            Id: id ?? Guid.NewGuid(),
+            Name: stack.Name,
+            Description: stack.Description,
+            StackSource: stack.StackSource ?? StackSource.WebEditor,
+            StackRelease: stackRelease?.ToSnapshot());
+
+    public static StackReleaseSnapshot ToSnapshot(this StackRelease stackRelease)
+        => new(
+            PlatformId: stackRelease.PlatformId,
+            Spec: stackRelease.Spec,
+            CreatedByActorId: stackRelease.CreatedByActorId,
+            Version: stackRelease.Version);
+}
+
+public sealed record StackResultSnapshot(IEnumerable<string>? ContainerIds = null, string? Message = null);

@@ -2,18 +2,16 @@ using Application.Features.Deployments.Notifications;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Domain;
-using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Alerters.Commands;
 
@@ -35,13 +33,11 @@ internal sealed class RenameAlertRuleHandler(
     AlertRuleCache alertRuleCache,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<RenameAlertRule, Result<AlertRule>>
+    IUserContextAccessor userContext) : ICommandHandler<RenameAlertRule, Result<AlertRule>>
 {
     public async ValueTask<Result<AlertRule>> Handle(RenameAlertRule command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var rule = await unitOfWork.AlertRules.GetByIdAsync(command.Id, cancellationToken);
         if (rule is null)
         {

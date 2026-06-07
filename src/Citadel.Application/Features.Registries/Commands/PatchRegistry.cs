@@ -8,14 +8,12 @@ using Domain.Entities.Activities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 namespace Application.Features.Registries.Commands;
 
 [RequirePermission(ResourceType.Registry, PermissionLevel.Write)]
@@ -131,16 +129,14 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
 
 internal class PatchRegistryHandler(
     IUnitOfWork unitOfWork,
+    IUserContextAccessor userContext,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IRegistryConnectorResolver registryResolver,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<PatchRegistry, Result<Registry>>
+    IRegistryConnectorResolver registryResolver) : ICommandHandler<PatchRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(PatchRegistry command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var registry = await unitOfWork.Registries.GetAsync(command.Id, cancellationToken);
         if (registry == null)
         {

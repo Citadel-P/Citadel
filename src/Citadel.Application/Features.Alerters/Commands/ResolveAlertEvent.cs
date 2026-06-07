@@ -1,15 +1,13 @@
 using Application.Features.Alerters.Notifications;
 using Application.Services.SignalR;
-using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Alerters.Commands;
 
@@ -30,13 +28,11 @@ internal sealed class ResolveAlertEventsHandler(
     IUnitOfWork unitOfWork,
     INotificationQueue notificationQueue,
     IAlertEventStreamManager alertEventStreamManager,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<ResolveAlertEvents, Result>
+    IUserContextAccessor userContext) : ICommandHandler<ResolveAlertEvents, Result>
 {
     public async ValueTask<Result> Handle(ResolveAlertEvents command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         IEnumerable<Guid> ids = command.Ids;
         if (!ids.TryGetNonEnumeratedCount(out var idCount) || idCount > 1)
         {

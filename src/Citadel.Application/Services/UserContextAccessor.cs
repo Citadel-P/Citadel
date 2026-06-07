@@ -25,12 +25,14 @@ internal sealed class UserContextAccessor : IUserContextAccessor
         }
 
         var userId = user.GetUserId();
+        var actorId = user.GetActorId();
         var roles = roleCache.GetRoles(userId) ?? [];
         var isAdmin = IsAdmin(roles);
         var isAuthenticated = user.Identity?.IsAuthenticated == true;
         return new UserContext
         {
             UserId = userId,
+            ActorId = actorId,
             IsAdmin = isAdmin,
             Roles = roles,
             IsAuthenticated = isAuthenticated
@@ -51,8 +53,10 @@ internal sealed class UserContextAccessor : IUserContextAccessor
     internal class UserContext : IUserContext
     {
         public Guid UserId { get; init; }
+        public Guid ActorId { get; init; }
         public bool IsAdmin { get; init; }
         public bool IsAuthenticated { get; init; }
         public string[] Roles { get; init; } = [];
+
     }
 }

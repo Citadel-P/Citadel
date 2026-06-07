@@ -2,20 +2,18 @@
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
-using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 using ActivityEvent = Domain.Entities.Activities.ActivityEvent;
 
 namespace Application.Features.Deployments.Commands;
@@ -45,13 +43,11 @@ public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment>
 }
 
 internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue, 
-    IActivityStreamManager activityHub, IHttpContextAccessor httpContextAccessor) : ICommandHandler<PatchDeployment, Result<Deployment>>
+    IActivityStreamManager activityHub, IUserContextAccessor userContext) : ICommandHandler<PatchDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(PatchDeployment command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var deployment = await unitOfWork.Deployments.GetAsync(command.Id, cancellationToken);
         if (deployment == null)
         {

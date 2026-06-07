@@ -488,7 +488,19 @@ public enum ActivityEventType
     GitRepoDeleted,
     GitRepoRenamed,
     GitRepoPulled,
-    GitRepoCloned
+    GitRepoCloned,
+    #endregion
+
+    #region Stack Events
+    StackCreated,
+    StackUpdated,
+    StackRenamed,
+    StackDeleted,
+    StackStarted,
+    StackStopped,
+    StackPaused,
+    StackApplied,
+    StackDegraded,
     #endregion
 }
 

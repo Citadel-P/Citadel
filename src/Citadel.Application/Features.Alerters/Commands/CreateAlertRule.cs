@@ -7,14 +7,12 @@ using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
-using Hosting.Common;
 
 namespace Application.Features.Alerters.Commands;
 
@@ -61,15 +59,11 @@ internal sealed class CreateAlertRuleHandler(
     AlertRuleCache alertRuleCache,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateAlertRule, Result<AlertRule>>
+    IUserContextAccessor userContext) : ICommandHandler<CreateAlertRule, Result<AlertRule>>
 {
     public async ValueTask<Result<AlertRule>> Handle(CreateAlertRule command, CancellationToken cancellationToken)
     {
-        var user = httpContextAccessor.HttpContext?.User
-            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
-        var actorId = user.GetActorId();
-
+        var actorId = userContext.Current.ActorId;
         if (command.Channels is not null)
         {
             foreach (var channelId in command.Channels)

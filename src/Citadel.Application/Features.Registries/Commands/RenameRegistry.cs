@@ -6,13 +6,11 @@ using Domain.Entities.Activities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Registries.Commands;
 
@@ -33,13 +31,11 @@ internal sealed class RenameRegistryHandler(
     IUnitOfWork unitOfWork,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<RenameRegistry, Result<Registry>>
+    IUserContextAccessor userContext) : ICommandHandler<RenameRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(RenameRegistry command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var registry = await unitOfWork.Registries.GetAsync(command.Id, cancellationToken);
         if (registry == null)
         {

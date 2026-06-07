@@ -4,14 +4,12 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Registries;
 using Domain.Entities.Activities;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Hosting.Common;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Registries.Commands;
 
@@ -22,13 +20,11 @@ internal class DeleteRegistriesHandler(
     IUnitOfWork unitOfWork,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<DeleteRegistries, Result>
+    IUserContextAccessor userContext) : ICommandHandler<DeleteRegistries, Result>
 {
     public async ValueTask<Result> Handle(DeleteRegistries command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var toDelete = await unitOfWork.Registries.GetAllAsync(command.Ids, cancellationToken);
 
         if (toDelete == null || toDelete.Any() == false)

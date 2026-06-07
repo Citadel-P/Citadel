@@ -290,7 +290,7 @@ export const StackForm = ({
               ? [
                   defineGroupField<StackInput>({
                     id: 'manual_stack_source',
-                    label: 'Manual Stack',
+                    label: 'Compose File',
                     items: [
                       defineField({
                         key: 'spec.composeFile',
