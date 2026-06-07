@@ -8,13 +8,11 @@ using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 using System.Threading.Channels;
 
 namespace Application.Features.GitRepositories.Commands;
@@ -48,13 +46,11 @@ internal sealed class CreateGitRepositoryHandler(
     IActivityStreamManager activityHub,
     IGitRepositoryStreamManager streamManager,
     ChannelWriter<GitRepoSyncRequest> gitSyncWriter,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateGitRepository, Result<GitRepository>>
+    IUserContextAccessor userContext) : ICommandHandler<CreateGitRepository, Result<GitRepository>>
 {
     public async ValueTask<Result<GitRepository>> Handle(CreateGitRepository command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var exists = await unitOfWork.GitRepositories.ExistsAsync(command.Name, cancellationToken);
         if (exists)
             return Result.Failure<GitRepository>(new ConflictError("Name already exists"));

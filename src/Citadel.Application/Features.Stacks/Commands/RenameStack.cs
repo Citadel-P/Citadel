@@ -1,8 +1,10 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -23,10 +25,11 @@ public sealed record RenameStack(Guid Id, string Name) : ICommand<Result<Stack>>
     }
 }
 
-internal sealed class RenameStackHandler(IUnitOfWork unitOfWork) : ICommandHandler<RenameStack, Result<Stack>>
+internal sealed class RenameStackHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<RenameStack, Result<Stack>>
 {
     public async ValueTask<Result<Stack>> Handle(RenameStack command, CancellationToken cancellationToken)
     {
+        var actorId = userContext.Current.ActorId;
         var stack = await unitOfWork.Stacks.GetAsync(command.Id, cancellationToken);
         if (stack == null || stack.CurrentStackRelease == null)
         {
@@ -38,8 +41,19 @@ internal sealed class RenameStackHandler(IUnitOfWork unitOfWork) : ICommandHandl
             return Result.Failure<Stack>(new ConflictError("Name already exists"));
         }
 
+        var activity = new ActivityEvent(
+            actorId: actorId,
+            resourceId: stack.Id,
+            platformId: stack.CurrentStackRelease.PlatformId,
+            resourceName: command.Name,
+            eventType: ActivityEventType.StackRenamed,
+            status: ActivityStatus.Success,
+            info: new StackRenamed(stack.Name, command.Name)
+           );
+
         stack.UpdateDetails(name: command.Name);
 
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.Stacks.UpdateAsync(stack, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

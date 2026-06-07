@@ -2,18 +2,16 @@
 using Application.Services;
 using Application.Services.SignalR;
 using Domain;
-using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Activities;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
@@ -26,14 +24,12 @@ internal sealed class DeleteDeploymentsHandler(
     IContainerProcessingService containerService,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IHttpContextAccessor httpContextAccessor)
+    IUserContextAccessor userContext)
     : ICommandHandler<DeleteDeployments, Result>
 {
     public async ValueTask<Result> Handle(DeleteDeployments command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var deployments = await deploymentProcessingService.MarkProcessingAsync(command.Ids, actorId, cancellationToken);
 
         if (deployments.Count == 0)

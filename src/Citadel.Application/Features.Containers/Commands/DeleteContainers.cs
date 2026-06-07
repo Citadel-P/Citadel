@@ -1,12 +1,10 @@
 ﻿using Application.Services;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Containers.Commands;
 
@@ -23,7 +21,7 @@ public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bo
 }
 
 internal sealed class DeleteContainersHandler(
-    IHttpContextAccessor httpContextAccessor,
+    IUserContextAccessor userContext,
     IContainerProcessingService containerService,
     IContainerAuthorizationService containerAuthorizationService)
     : ICommandHandler<DeleteContainers, Result>
@@ -36,9 +34,7 @@ internal sealed class DeleteContainersHandler(
             return Result.Failure(new ForbiddenError("Missing permission [Execute] on [Platform]"));
         }
 
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         return await containerService.DeleteContainers(request, actorId, ct);
     }
 

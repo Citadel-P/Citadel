@@ -1,16 +1,14 @@
 ﻿using Application.Services;
 using Domain;
-using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
@@ -20,14 +18,12 @@ public sealed record ChangeDeploymentState(IEnumerable<Guid> Ids, DeploymentActi
 internal sealed class ChangeDeploymentStateHandler(
     IDeploymentProcessingService deploymentProcessingService,
     IPlatformContainerCache platformContainerCache,
-    IHttpContextAccessor httpContextAccessor,
+    IUserContextAccessor userContext,
     IConnectorFactory<IContainerConnector> connectorFactory) : ICommandHandler<ChangeDeploymentState, Result>
 {
     public async ValueTask<Result> Handle(ChangeDeploymentState command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var deployments = await deploymentProcessingService.MarkProcessingAsync(command.Ids, actorId, cancellationToken);
 
         if (deployments.Count == 0)

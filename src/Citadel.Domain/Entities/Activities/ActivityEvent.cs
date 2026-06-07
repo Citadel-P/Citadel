@@ -74,6 +74,17 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.DeploymentDegraded
                 => ActivityResourceType.Deployment,
 
+            ActivityEventType.StackCreated
+            or ActivityEventType.StackUpdated
+            or ActivityEventType.StackRenamed
+            or ActivityEventType.StackDeleted
+            or ActivityEventType.StackStarted
+            or ActivityEventType.StackStopped
+            or ActivityEventType.StackPaused
+            or ActivityEventType.StackApplied
+            or ActivityEventType.StackDegraded
+                => ActivityResourceType.Stack,
+
             ActivityEventType.PlatformConnected
             or ActivityEventType.PlatformDisconnected
             or ActivityEventType.PlatformRenamed
@@ -160,6 +171,16 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.DeploymentApplied, DeploymentApplied) => true,
             (ActivityEventType.DeploymentPaused, DeploymentPaused) => true,
             (ActivityEventType.DeploymentDegraded, DeploymentDegraded) => true,
+
+            (ActivityEventType.StackCreated, StackCreated) => true,
+            (ActivityEventType.StackUpdated, StackUpdated) => true,
+            (ActivityEventType.StackDeleted, StackDeleted) => true,
+            (ActivityEventType.StackRenamed, StackRenamed) => true,
+            (ActivityEventType.StackStarted, StackStarted) => true,
+            (ActivityEventType.StackStopped, StackStopped) => true,
+            (ActivityEventType.StackApplied, StackApplied) => true,
+            (ActivityEventType.StackPaused, StackPaused) => true,
+            (ActivityEventType.StackDegraded, StackDegraded) => true,
 
             (ActivityEventType.AlertRuleCreated, AlertRuleCreated) => true,
             (ActivityEventType.AlertRuleUpdated, AlertRuleUpdated) => true,

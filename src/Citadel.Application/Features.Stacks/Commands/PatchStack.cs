@@ -1,7 +1,13 @@
+using Application.Features.Deployments.Commands;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Stacks;
+using Domain.Entities.Activities;
+using Domain.Entities.Deployments;
 using Domain.Entities.Stacks;
 using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
@@ -10,7 +16,6 @@ using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
-using Hosting.Common;
 
 namespace Application.Features.Stacks.Commands;
 
@@ -35,13 +40,11 @@ public sealed record PatchStack(Guid Id, JsonMergePatchDocument<StackPatchModel>
     }
 }
 
-internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor) : ICommandHandler<PatchStack, Result<Stack>>
+internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<PatchStack, Result<Stack>>
 {
     public async ValueTask<Result<Stack>> Handle(PatchStack command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var stack = await unitOfWork.Stacks.GetAsync(command.Id, cancellationToken);
         if (stack == null || stack.CurrentStackRelease == null)
         {
@@ -93,9 +96,22 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IHttpContextAcce
             }
         }
 
+        // Add activity
+        var activity = new ActivityEvent(
+                actorId: actorId,
+                resourceId: stack.Id,
+                resourceName: stack.Name,
+                status: ActivityStatus.Success,
+                platformId: stack.CurrentStackRelease.PlatformId,
+                eventType: ActivityEventType.StackUpdated,
+                info: new StackUpdated(stack.ToSnapshot(), patched.ToSnapshot(stack.CurrentStackRelease, command.Id))
+            );
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+
         var releaseChanged = patched.PlatformId.Value != stack.CurrentStackRelease.PlatformId
             || !Equals(patched.Spec, stack.CurrentStackRelease.Spec);
-
+        
+        // Patch stack 
         if (releaseChanged)
         {
             var nextRelease = StackRelease.Create(
@@ -110,7 +126,6 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IHttpContextAcce
 
         await unitOfWork.Stacks.UpdateAsync(stack, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
-
         return stack;
     }
 

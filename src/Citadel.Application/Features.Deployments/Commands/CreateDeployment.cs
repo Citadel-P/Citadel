@@ -8,6 +8,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
@@ -40,14 +41,12 @@ internal class CreateDeploymentHandler(
     IUnitOfWork unitOfWork,
     IDeploymentStreamManager deploymentHub,
     INotificationQueue notificationQueue, 
-    IActivityStreamManager activityHub, 
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateDeployment, Result<Deployment>>
+    IActivityStreamManager activityHub,
+    IUserContextAccessor userContext) : ICommandHandler<CreateDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(CreateDeployment command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var exist = await unitOfWork.Deployments.ExistsAsync(command.Name, command.PlatformId, cancellationToken);
         if (exist)
         {

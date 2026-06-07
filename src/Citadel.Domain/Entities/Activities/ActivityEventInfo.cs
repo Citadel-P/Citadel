@@ -2,6 +2,7 @@
 using Domain.Contracts.Resources.Deployments;
 using Domain.Contracts.Resources.Git;
 using Domain.Contracts.Resources.Registries;
+using Domain.Contracts.Resources.Stacks;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
@@ -18,6 +19,15 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(DeploymentPaused), nameof(ActivityEventType.DeploymentPaused))]
 [JsonDerivedType(typeof(DeploymentApplied), nameof(ActivityEventType.DeploymentApplied))]
 [JsonDerivedType(typeof(DeploymentDegraded), nameof(ActivityEventType.DeploymentDegraded))]
+[JsonDerivedType(typeof(StackCreated), nameof(ActivityEventType.StackCreated))]
+[JsonDerivedType(typeof(StackUpdated), nameof(ActivityEventType.StackUpdated))]
+[JsonDerivedType(typeof(StackRenamed), nameof(ActivityEventType.StackRenamed))]
+[JsonDerivedType(typeof(StackDeleted), nameof(ActivityEventType.StackDeleted))]
+[JsonDerivedType(typeof(StackStarted), nameof(ActivityEventType.StackStarted))]
+[JsonDerivedType(typeof(StackStopped), nameof(ActivityEventType.StackStopped))]
+[JsonDerivedType(typeof(StackPaused), nameof(ActivityEventType.StackPaused))]
+[JsonDerivedType(typeof(StackApplied), nameof(ActivityEventType.StackApplied))]
+[JsonDerivedType(typeof(StackDegraded), nameof(ActivityEventType.StackDegraded))]
 [JsonDerivedType(typeof(AlertRuleCreated), nameof(ActivityEventType.AlertRuleCreated))]
 [JsonDerivedType(typeof(AlertRuleUpdated), nameof(ActivityEventType.AlertRuleUpdated))]
 [JsonDerivedType(typeof(AlertRuleDeleted), nameof(ActivityEventType.AlertRuleDeleted))]
@@ -44,6 +54,18 @@ public sealed record DeploymentStopped(IEnumerable<string> ContainerIds) : Activ
 public sealed record DeploymentPaused(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record DeploymentDegraded(string Reason) : ActivityEventInfo;
 public sealed record DeploymentApplied(DeploymentSnapshot? Deployment, DeploymentResultSnapshot Result) : ActivityEventInfo;
+
+public sealed record StackCreated(StackSnapshot Stack) : ActivityEventInfo;
+public sealed record StackUpdated(StackSnapshot OldStack, StackSnapshot NewStack) : ActivityEventInfo;
+public sealed record StackRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record StackDeleted(StackSnapshot Stack) : ActivityEventInfo;
+public sealed record StackStarted(IEnumerable<string> ContainerIds) : ActivityEventInfo;
+public sealed record StackStopped(IEnumerable<string> ContainerIds) : ActivityEventInfo;
+public sealed record StackPaused(IEnumerable<string> ContainerIds) : ActivityEventInfo;
+public sealed record StackDegraded(string Reason) : ActivityEventInfo;
+public sealed record StackApplied(StackSnapshot? Stack, StackResultSnapshot Result) : ActivityEventInfo;
+
+
 public sealed record AlertRuleCreated(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
 public sealed record AlertRuleUpdated(AlertRuleSnapshot OldRule, AlertRuleSnapshot NewRule) : ActivityEventInfo;
 public sealed record AlertRuleDeleted(AlertRuleSnapshot AlertRule) : ActivityEventInfo;

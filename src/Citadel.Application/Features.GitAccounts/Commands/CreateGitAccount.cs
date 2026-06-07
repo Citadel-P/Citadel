@@ -3,13 +3,11 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.GitAccounts.Commands;
 
@@ -81,13 +79,11 @@ public sealed record CreateGitAccount(
 
 internal sealed class CreateGitAccountHandler(
     IUnitOfWork unitOfWork,
-    IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateGitAccount, Result<GitAccount>>
+    IUserContextAccessor userContext) : ICommandHandler<CreateGitAccount, Result<GitAccount>>
 {
     public async ValueTask<Result<GitAccount>> Handle(CreateGitAccount command, CancellationToken cancellationToken)
     {
-        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
-            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
-
+        var actorId = userContext.Current.ActorId;
         var exists = await unitOfWork.GitAccounts.ExistsAsync(command.Name, cancellationToken);
         if (exists)
             return Result.Failure<GitAccount>(new ConflictError("Name already exists"));
