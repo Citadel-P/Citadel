@@ -25,7 +25,6 @@ internal sealed class GetResourceLookupQueryHandler(
     public async ValueTask<Result<IEnumerable<ResourceInfo>>> Handle(GetResourceLookupQuery query, CancellationToken cancellationToken)
     {
         var user = userContextAccessor.Current;
-        bool isAdmin = user?.IsAdmin ?? false;
         if (user is null || user.UserId == Guid.Empty)
         {
             return Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("Invalid user ID."));
@@ -120,7 +119,7 @@ internal sealed class GetResourceLookupQueryHandler(
     private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentPlatformLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
      => sourceId.HasValue
          ? Result.Success(await unitOfWork.Deployments.GetPlatformLookupAsync(sourceId.Value, userId, cancellationToken))
-         : Result.Success((await unitOfWork.Platforms.GetAuthorizedWithLatestStatAsync(
+         : Result.Success((await unitOfWork.Platforms.GetAuthorizedAsync(
                  userId,
                  ResourceType.Platform,
                  PermissionLevel.Read,
@@ -156,7 +155,13 @@ internal sealed class GetResourceLookupQueryHandler(
     private async Task<Result<IEnumerable<ResourceInfo>>> GetStackPlatformLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
         => sourceId.HasValue
             ? Result.Success(await unitOfWork.Stacks.GetPlatformLookupAsync(sourceId.Value, userId, cancellationToken))
-            : Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("sourceResourceId is required for Stack -> Platform lookup."));
+            : Result.Success((await unitOfWork.Platforms.GetAuthorizedAsync(
+                 userId,
+                 ResourceType.Platform,
+                 PermissionLevel.Read,
+                 SpecificPermission.None,
+                 cancellationToken))
+             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetStackRegistryLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
         => sourceId.HasValue

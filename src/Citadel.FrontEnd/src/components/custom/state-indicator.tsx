@@ -5,11 +5,12 @@ import {
   DeploymentStatus,
   GitReposStatus,
   RegistryStatus,
+  StackReleaseStatus,
 } from '@/api/generated/api.types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LoaderCircle } from 'lucide-react';
 
-type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus | AlertRuleStatus | GitReposStatus;
+type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus | StackReleaseStatus | AlertRuleStatus | GitReposStatus;
 
 const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
   // Boolean-based statuses
@@ -29,21 +30,29 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
       return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
     case RegistryStatus.Deprecated:
       return { colorClass: 'bg-orange-500', tooltip: 'Deprecated' };
-    // Deployment
+    // Deployment/Stack
     case DeploymentStatus.Unknown:
+    case StackReleaseStatus.Unknown:
       return { colorClass: 'bg-violet-400', tooltip: 'Unknown' };
     case DeploymentStatus.Created:
+    case StackReleaseStatus.Created:
       return { colorClass: 'bg-blue-400', tooltip: 'Created' };
     case DeploymentStatus.Healthy:
+    case StackReleaseStatus.Healthy:
       return { colorClass: 'bg-green-500', tooltip: 'Healthy' };
     case DeploymentStatus.Failed:
+          case StackReleaseStatus.Failed:
       return { colorClass: 'bg-red-500', tooltip: 'Failed' };
     case DeploymentStatus.Stopped:
+    case StackReleaseStatus.Stopped:
       return { colorClass: 'bg-gray-500', tooltip: 'Stopped' };
     case DeploymentStatus.Degraded:
+    case StackReleaseStatus.Degraded:
       return { colorClass: 'bg-orange-500', tooltip: 'Degraded' };
     case DeploymentStatus.Applying:
     case DeploymentStatus.Pending:
+    case StackReleaseStatus.Applying:
+    case StackReleaseStatus.Pending:
       return { colorClass: 'bg-yellow-500', tooltip: 'Pending' };
     // Alerters
     case AlertRuleStatus.Enabled:

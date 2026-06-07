@@ -22,6 +22,8 @@ import { GitRepoFormComponents } from './git-repos/form';
 import { AccessComponents } from './access';
 import { UserFormComponents } from './access/users/form';
 import { TeamFormComponents } from './access/teams/form';
+import { StackFormComponents } from './stacks/form';
+import { StackComponents } from './stacks';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -34,6 +36,7 @@ export const ResourceComponents: {
   Platform: PlatformComponents,
   Registry: RegistryComponents,
   Deployment: DeploymentComponents,
+  Stack: StackComponents,
   Activity: ActivityComponents,
   AlertRule: AlertRuleComponents,
   Alert: AlertEventComponents,
@@ -59,7 +62,7 @@ export const ResourceFormComponents: {
   Activity: undefined,
   Alert: undefined,
   AlertChannel: undefined,
-  Stack: undefined,
+  Stack: StackFormComponents,
   GitRepository: GitRepoFormComponents,
   GitAccount: undefined,
   Access: undefined,

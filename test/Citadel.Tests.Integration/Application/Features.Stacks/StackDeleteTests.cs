@@ -21,7 +21,7 @@ public class StackDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase
         var stack = Stack.Create(
             "delete-me",
             Constants.SystemId,
-            StackSource.Manual,
+            StackSource.WebEditor,
             platform.Id,
             new ManualStack("docker-compose.yml", StackUpdateBehavior.Disabled));
 

@@ -44,7 +44,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var stack = Stack.Create(
             "stack-1",
             Constants.SystemId,
-            StackSource.Manual,
+            StackSource.WebEditor,
             platform.Id,
             new ManualStack("docker-compose.yml", StackUpdateBehavior.ServiceAutoDeploy),
             description: "original-description");
@@ -64,7 +64,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         {
           "platformId": "{{otherPlatformId}}",
           "spec": {
-            "$type": "Manual",
+            "$type": "WebEditor",
             "composeFile": "compose.updated.yml"
           }
         }
@@ -111,7 +111,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         {
           "platformId": "{{platformId}}",
           "spec": {
-            "$type": "Manual",
+            "$type": "WebEditor",
             "composeFile": "docker-compose.yml"
           }
         }
@@ -132,7 +132,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
             var otherStack = Stack.Create(
                 "other-stack",
                 Constants.SystemId,
-                StackSource.Manual,
+                StackSource.WebEditor,
                 platformId,
                 new ManualStack("docker-compose.other.yml", StackUpdateBehavior.StackAutoDeploy));
 

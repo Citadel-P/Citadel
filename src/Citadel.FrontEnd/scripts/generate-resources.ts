@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const OPENAPI_PATH = path.resolve('./src/api/swagger.json');
+const OPENAPI_PATH = path.resolve('./src/api/schema/swagger.json');
 const OUTPUT_PATH = path.resolve('./src/api/generated/resources.ts');
 
 interface OpenAPIOperation {

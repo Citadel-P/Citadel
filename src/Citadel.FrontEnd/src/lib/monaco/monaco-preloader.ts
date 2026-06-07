@@ -6,14 +6,23 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
-import yamlWorker from "./yaml.worker.js?worker"; 
+import yamlWorker from './yaml.worker.js?worker';
+import { configureMonacoYaml } from 'monaco-yaml';
 
 let isPreloaded = false;
 
 export function preloadMonaco() {
   if (isPreloaded) return;
   isPreloaded = true;
-
+  configureMonacoYaml(monaco, {
+    enableSchemaRequest: true,
+    schemas: [
+      {
+        fileMatch: ['**/*compose.yml', '**/*compose.yaml'],
+        uri: new URL('/api/schema/compose-spec.json', window.location.href).toString(),
+      },
+    ],
+  });
   self.MonacoEnvironment = {
     getWorker(_, label) {
       if (label === 'json') {
@@ -35,7 +44,7 @@ export function preloadMonaco() {
     },
   };
 
-  // 3. Configure loader to use local monaco instance
+  // Configure loader to use local monaco instance
   loader.config({ monaco });
 
   const run = async () => {

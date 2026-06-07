@@ -51,9 +51,9 @@ public class StackViewTests(PostgresTestFixture fixture) : IntegrationTestBase(f
             {
                 "name":"{{name}}",
                 "platformId":"{{platformId}}",
-                "stackSource":"Manual",
+                "stackSource":"WebEditor",
                 "spec":{
-                    "$type":"Manual",
+                    "$type":"WebEditor",
                     "composeFile":"docker-compose.yml"
                 }
             }

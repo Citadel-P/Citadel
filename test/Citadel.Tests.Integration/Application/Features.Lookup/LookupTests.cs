@@ -96,6 +96,7 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             spec: new GitStack(
                 GitRepoId: _visibleGitRepositoryId,
                 CommitSha: "abc123",
+                Branch: "main",
                 UpdateBehavior: StackUpdateBehavior.Notify));
         await uow.Stacks.AddAsync(gitStack, TestContext.Current.CancellationToken);
         _gitStackId = gitStack.Id;

@@ -130,7 +130,7 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
 
         return stackSource switch
         {
-            StackSource.Manual => new ManualStackUpdateState(recreateOnNewImage),
+            StackSource.WebEditor => new ManualStackUpdateState(recreateOnNewImage),
             StackSource.Git => new GitStackUpdateState(
                 RecreateStackOnNewImageState: recreateOnNewImage,
                 RecreateStackOnNewCommitState: new RecreateStackOnNewCommitState(
@@ -145,7 +145,7 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
 [JsonPolymorphic]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 [JsonDerivedType(typeof(GitStackUpdateState), nameof(StackSource.Git))]
-[JsonDerivedType(typeof(ManualStackUpdateState), nameof(StackSource.Manual))]
+[JsonDerivedType(typeof(ManualStackUpdateState), nameof(StackSource.WebEditor))]
 public abstract record StackUpdateState;
 
 public sealed record ManualStackUpdateState(RecreateStackOnNewImageState RecreateStackOnNewImageState) : StackUpdateState;
