@@ -29,7 +29,7 @@ function Inspect({
 
     return noDataMessage;
   }, [isLoading, isSuccess, data, loadingMessage, noDataMessage]);
-
+  
   return (
     <div className="flex-1 w-full border rounded-md overflow-hidden bg-slate-50 dark:bg-zinc-950">
       <MonacoEditor
@@ -45,7 +45,7 @@ function Inspect({
 }
 
 export const ContainerInspect = ({ containerId }: { containerId: string | undefined }) => {
-  return <Inspect readKey="inspectContainer" id={containerId} filename={`inspect-${containerId?.slice(0, 8)}.json`} />;
+  return <Inspect readKey="inspectContainer" id={containerId} filename={`inspect-${containerId}.json`} />;
 };
 
 export const DeploymentInspect = ({ deploymentId }: { deploymentId: string | undefined }) => {

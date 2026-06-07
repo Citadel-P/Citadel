@@ -28,7 +28,7 @@ export const StackFormComponents: RequiredFormComponents = {
         return <GenericActionBarButtons resource={resource} actions={Object.values(StackActions)} />;
       },
     },
-    SubHeader: ({ resource }: { resource: StackView }) => {
+    SubHeader: ({ resource: _resource }: { resource: StackView }) => {
       return <></>; //<DeploymentSubHeader latestActivity={resource.latestActivityView ?? null} deployment={resource} />;
     },
     Tabs: [
