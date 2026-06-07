@@ -1,5 +1,4 @@
 import { Monaco } from '@monaco-editor/react';
-import { configureMonacoYaml } from 'monaco-yaml';
 
 const yaml_language = {
   tokenPostfix: '.yaml',
@@ -190,18 +189,14 @@ export const registerYaml = (monaco: Monaco) => {
   const isRegistered = monaco.languages.getLanguages().some((l: any) => l.id === 'yaml');
 
   if (!isRegistered) {
-    monaco.languages.register({ id: 'yaml', aliases: ['yml'] });
-    monaco.languages.setMonarchTokensProvider('yaml', yaml_language as any);
-    monaco.languages.setLanguageConfiguration('yaml', yaml_conf as any);
+    monaco.languages.register({
+      id: 'yaml',
+      extensions: ['.yaml', '.yml'],
+      aliases: ['YAML', 'yaml', 'YML', 'yml'],
+      mimetypes: ['application/x-yaml'],
+    });
   }
 
-  configureMonacoYaml(monaco, {
-    enableSchemaRequest: true,
-    schemas: [
-      {
-        fileMatch: ['**/*compose.yml', '**/*compose.yaml'],
-        uri: typeof window !== 'undefined' ? new URL('/schema/compose-spec.json', window.location.href).toString() : '',
-      },
-    ],
-  });
+  monaco.languages.setMonarchTokensProvider('yaml', yaml_language as any);
+  monaco.languages.setLanguageConfiguration('yaml', yaml_conf as any);
 };

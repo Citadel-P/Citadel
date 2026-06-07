@@ -177,6 +177,7 @@ export const MonacoEditor = ({
   title,
 }: MonacoEditorProps) => {
   const [editorInstance, setEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const lastEditorValueRef = useRef(value);
   const { currentTheme, handleBeforeMount } = useThemeEditor();
 
   // Calculate dynamic height based on line count
@@ -208,12 +209,50 @@ export const MonacoEditor = ({
   }, [editorInstance]);
 
   const handleMount: OnMount = useCallback((editor) => {
+    lastEditorValueRef.current = editor.getValue();
     setEditorInstance(editor);
   }, []);
 
-  const editorPath = useMemo(() => filename?.split('/').pop(), [filename]);
+  useEffect(() => {
+    if (!editorInstance) return;
+    if (value === lastEditorValueRef.current) return;
+    if (value === editorInstance.getValue()) {
+      lastEditorValueRef.current = value;
+      return;
+    }
+
+    const model = editorInstance.getModel();
+    if (!model) return;
+
+    const position = editorInstance.getPosition();
+    const selections = editorInstance.getSelections();
+    const scrollTop = editorInstance.getScrollTop();
+    const scrollLeft = editorInstance.getScrollLeft();
+
+    model.setValue(value);
+
+    if (selections) {
+      editorInstance.setSelections(selections);
+    } else if (position) {
+      editorInstance.setPosition(model.validatePosition(position));
+    }
+    editorInstance.setScrollTop(scrollTop);
+    editorInstance.setScrollLeft(scrollLeft);
+
+    lastEditorValueRef.current = value;
+  }, [editorInstance, value]);
+
+  const editorPath = useMemo(() => {
+    if (!filename) return undefined;
+    const basename = filename.split(/[\\/]/).pop();
+    return basename ? `file:///${basename}` : undefined;
+  }, [filename]);
   const handleEditorChange = useCallback(
-    (nextValue: string | undefined) => onValueChange?.(nextValue ?? ''),
+    (nextValue: string | undefined) => {
+      const next = nextValue ?? '';
+      lastEditorValueRef.current = next;
+      onValueChange?.(next);
+    },
     [onValueChange],
   );
   const editorOptions = useMemo<monaco.editor.IStandaloneEditorConstructionOptions>(
@@ -248,7 +287,7 @@ export const MonacoEditor = ({
 
         <Editor
           language={language}
-          value={value}
+          defaultValue={value}
           theme={currentTheme}
           path={editorPath}
           height="100%"
