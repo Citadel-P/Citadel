@@ -281,7 +281,7 @@ public enum StackReleaseStatus
 
 public enum StackSource
 {
-    Manual = 0,
+    WebEditor = 0,
     Git
 }
 

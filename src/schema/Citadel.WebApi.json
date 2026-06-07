@@ -23281,6 +23281,24 @@
           }
         }
       },
+      "StackCommand": {
+        "required": [
+          "commands"
+        ],
+        "type": "object",
+        "properties": {
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "path": {
+            "type": "string",
+            "default": "./"
+          }
+        }
+      },
       "StackConfigView": {
         "required": [
           "id",
@@ -23401,7 +23419,7 @@
       },
       "StackSource": {
         "enum": [
-          "Manual",
+          "WebEditor",
           "Git"
         ]
       },
@@ -23421,7 +23439,7 @@
         "discriminator": {
           "propertyName": "$type",
           "mapping": {
-            "Manual": "#/components/schemas/StackSpecManualStack",
+            "WebEditor": "#/components/schemas/StackSpecManualStack",
             "Git": "#/components/schemas/StackSpecGitStack"
           }
         }
@@ -23429,6 +23447,7 @@
       "StackSpecGitStack": {
         "required": [
           "gitRepoId",
+          "branch",
           "commitSha",
           "updateBehavior"
         ],
@@ -23442,6 +23461,9 @@
           "gitRepoId": {
             "type": "string",
             "format": "uuid"
+          },
+          "branch": {
+            "type": "string"
           },
           "commitSha": {
             "type": [
@@ -23497,22 +23519,24 @@
             ]
           },
           "preDeploy": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackCommand"
+              }
+            ]
           },
           "postDeploy": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackCommand"
+              }
+            ]
           },
           "envVars": {
             "type": [
@@ -23539,7 +23563,7 @@
         "properties": {
           "$type": {
             "enum": [
-              "Manual"
+              "WebEditor"
             ],
             "type": "string"
           },
@@ -23556,22 +23580,24 @@
             ]
           },
           "preDeploy": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackCommand"
+              }
+            ]
           },
           "postDeploy": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackCommand"
+              }
+            ]
           },
           "envVars": {
             "type": [
@@ -23615,7 +23641,7 @@
           "propertyName": "$type",
           "mapping": {
             "Git": "#/components/schemas/StackUpdateStateGitStackUpdateState",
-            "Manual": "#/components/schemas/StackUpdateStateManualStackUpdateState"
+            "WebEditor": "#/components/schemas/StackUpdateStateManualStackUpdateState"
           }
         }
       },
@@ -23646,7 +23672,7 @@
         "properties": {
           "$type": {
             "enum": [
-              "Manual"
+              "WebEditor"
             ],
             "type": "string"
           },
@@ -23662,6 +23688,7 @@
           "description",
           "stackSource",
           "stackUpdateState",
+          "status",
           "createdAt",
           "createdByActorId",
           "controlState",
@@ -23688,6 +23715,9 @@
           "stackUpdateState": {
             "$ref": "#/components/schemas/StackUpdateState"
           },
+          "status": {
+            "$ref": "#/components/schemas/StackReleaseStatus"
+          },
           "createdAt": {
             "format": "date-time"
           },
@@ -23709,7 +23739,6 @@
             ],
             "format": "uuid"
           },
-          "status": { },
           "version": {
             "type": [
               "null",

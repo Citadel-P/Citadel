@@ -117,7 +117,7 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IHttpContextAcce
     private static bool IsCompatible(StackSource stackSource, StackSpec spec)
         => (stackSource, spec) switch
         {
-            (StackSource.Manual, ManualStack) => true,
+            (StackSource.WebEditor, ManualStack) => true,
             (StackSource.Git, GitStack) => true,
             _ => false
         };
@@ -125,7 +125,7 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IHttpContextAcce
     private static bool IsCompatible(StackSource stackSource, StackUpdateState stackUpdateState)
         => (stackSource, stackUpdateState) switch
         {
-            (StackSource.Manual, ManualStackUpdateState) => true,
+            (StackSource.WebEditor, ManualStackUpdateState) => true,
             (StackSource.Git, GitStackUpdateState) => true,
             _ => false
         };

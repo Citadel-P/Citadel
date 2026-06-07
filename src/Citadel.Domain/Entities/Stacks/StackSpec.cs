@@ -10,12 +10,12 @@ namespace Domain.Entities.Stacks;
 /// <param name="EnvFilePath">The path to write the file to, relative to the 'Run Directory'. </param>
 [JsonPolymorphic]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-[JsonDerivedType(typeof(ManualStack), nameof(StackSource.Manual))]
+[JsonDerivedType(typeof(ManualStack), nameof(StackSource.WebEditor))]
 [JsonDerivedType(typeof(GitStack), nameof(StackSource.Git))]
 public abstract record StackSpec(
     string? ProjectName,
-    List<string>? PreDeploy,
-    List<string>? PostDeploy,
+    StackCommand? PreDeploy,
+    StackCommand? PostDeploy,
     List<string>? EnvVars = null,
     string? EnvFilePath = null
     );
@@ -26,8 +26,8 @@ public sealed record ManualStack(
     List<string>? EnvVars = null,
     string? EnvFilePath = null,
     string? ProjectName = null,
-    List<string>? PreDeploy = null,
-    List<string>? PostDeploy = null
+    StackCommand? PreDeploy = null,
+    StackCommand? PostDeploy = null
     ) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath);
 
 /// <param name="GitRepoId">Reference to an existing Repo to attach to, <see cref="Git.GitRepository"/></param>
@@ -44,6 +44,7 @@ public sealed record ManualStack(
 /// <param name="WebHookSecret">A secret token to validate incoming webhooks from the Git provider. Default to the linked repos.</param>
 public sealed record GitStack(
     Guid GitRepoId,
+    string Branch,
     string? CommitSha, 
     StackUpdateBehavior UpdateBehavior,
     string? ProjectName = null,
@@ -51,8 +52,8 @@ public sealed record GitStack(
     bool? WebHookForceDeploy = false,
     string? WebHookSecret = null,
     List<string>? ComposePaths = null,
-    List<string>? PreDeploy = null,
-    List<string>? PostDeploy = null,
+    StackCommand? PreDeploy = null,
+    StackCommand? PostDeploy = null,
     List<string>? EnvVars = null,
     List<string>? AdditionalEnvFileFromRepo = null,
     string? EnvFilePath = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath);
@@ -65,3 +66,5 @@ public sealed record ImageUpdateState(
     DateTime LastCheckedAt,
     bool UpdateAvailable
 );
+
+public record StackCommand(List<string> Commands, string Path = "./");

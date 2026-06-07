@@ -42,7 +42,7 @@ export enum StackUpdateBehavior {
 }
 
 export enum StackSource {
-  Manual = "Manual",
+  WebEditor = "WebEditor",
   Git = "Git",
 }
 
@@ -350,14 +350,14 @@ export type StackUpdateState = BaseStackUpdateState &
         StackUpdateStateGitStackUpdateState
       >
     | BaseStackUpdateStateTypeMapping<
-        "Manual",
+        "WebEditor",
         StackUpdateStateManualStackUpdateState
       >
   );
 
 export type StackSpec = BaseStackSpec &
   (
-    | BaseStackSpecTypeMapping<"Manual", StackSpecManualStack>
+    | BaseStackSpecTypeMapping<"WebEditor", StackSpecManualStack>
     | BaseStackSpecTypeMapping<"Git", StackSpecGitStack>
   );
 
@@ -1348,7 +1348,7 @@ export interface ContainerVolumeResult {
 
 export interface ContainersView {
   containers: ContainerView[];
-  capabilities: ResourceCapabilities;
+  capabilities: PlatformCapabilities;
 }
 
 export interface CreateAlertRuleInput {
@@ -2942,6 +2942,12 @@ export interface StackCapabilities {
   canExecute: boolean;
 }
 
+export interface StackCommand {
+  commands: string[];
+  /** @default "./" */
+  path?: string;
+}
+
 export interface StackConfigView {
   /** @format uuid */
   id: string;
@@ -2980,6 +2986,7 @@ export interface StackSpecGitStack {
   $type?: "Git";
   /** @format uuid */
   gitRepoId: string;
+  branch: string;
   commitSha: null | string;
   updateBehavior: StackUpdateBehavior;
   /** @default true */
@@ -2990,19 +2997,19 @@ export interface StackSpecGitStack {
   composePaths?: null | string[];
   additionalEnvFileFromRepo?: null | string[];
   projectName?: null | string;
-  preDeploy?: null | string[];
-  postDeploy?: null | string[];
+  preDeploy?: null | StackCommand;
+  postDeploy?: null | StackCommand;
   envVars?: null | string[];
   envFilePath?: null | string;
 }
 
 export interface StackSpecManualStack {
-  $type?: "Manual";
+  $type?: "WebEditor";
   composeFile: string;
   updateBehavior: StackUpdateBehavior;
   projectName?: null | string;
-  preDeploy?: null | string[];
-  postDeploy?: null | string[];
+  preDeploy?: null | StackCommand;
+  postDeploy?: null | StackCommand;
   envVars?: null | string[];
   envFilePath?: null | string;
 }
@@ -3014,7 +3021,7 @@ export interface StackUpdateStateGitStackUpdateState {
 }
 
 export interface StackUpdateStateManualStackUpdateState {
-  $type?: "Manual";
+  $type?: "WebEditor";
   recreateStackOnNewImageState: RecreateStackOnNewImageState;
 }
 
@@ -3025,6 +3032,7 @@ export interface StackView {
   description: null | string;
   stackSource: StackSource;
   stackUpdateState: StackUpdateState;
+  status: StackReleaseStatus;
   /** @format date-time */
   createdAt: any;
   /** @format uuid */
@@ -3034,7 +3042,6 @@ export interface StackView {
   currentStackReleaseId: string;
   /** @format uuid */
   platformId?: null | string;
-  status?: any;
   version?: null | string;
   spec?: null | StackSpec;
   platformStatus?: PlatformStatus;

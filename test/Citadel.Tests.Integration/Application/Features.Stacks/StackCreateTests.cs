@@ -27,9 +27,9 @@ public class StackCreateTests(PostgresTestFixture fixture) : IntegrationTestBase
             {
                 "name":"stack-1",
                 "platformId":"{{platformId}}",
-                "stackSource":"Manual",
+                "stackSource":"WebEditor",
                 "spec":{
-                    "$type":"Manual",
+                    "$type":"WebEditor",
                     "composeFile":"docker-compose.yml"
                 }
             }
@@ -62,7 +62,7 @@ public class StackCreateTests(PostgresTestFixture fixture) : IntegrationTestBase
             var stack = Domain.Entities.Stacks.Stack.Create(
                 "stack-1",
                 Constants.SystemId,
-                StackSource.Manual,
+                StackSource.WebEditor,
                 platformId!.Value,
                 new Domain.Entities.Stacks.ManualStack("docker-compose.yml", StackUpdateBehavior.Disabled));
 
@@ -74,9 +74,9 @@ public class StackCreateTests(PostgresTestFixture fixture) : IntegrationTestBase
             {
                 "name":"stack-1",
                 "platformId":"{{platformId}}",
-                "stackSource":"Manual",
+                "stackSource":"WebEditor",
                 "spec":{
-                    "$type":"Manual",
+                    "$type":"WebEditor",
                     "composeFile":"docker-compose.yml"
                 }
             }
@@ -96,9 +96,9 @@ public class StackCreateTests(PostgresTestFixture fixture) : IntegrationTestBase
             {
                 "name":"stack-1",
                 "platformId":"{{Guid.NewGuid()}}",
-                "stackSource":"Manual",
+                "stackSource":"WebEditor",
                 "spec":{
-                    "$type":"Manual",
+                    "$type":"WebEditor",
                     "composeFile":"docker-compose.yml"
                 }
             }
