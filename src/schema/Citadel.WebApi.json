@@ -14711,7 +14711,7 @@
       },
       "ActivityEventInfoStackPaused": {
         "required": [
-          "containerIds"
+          "result"
         ],
         "properties": {
           "$type": {
@@ -14720,11 +14720,8 @@
             ],
             "type": "string"
           },
-          "containerIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+          "result": {
+            "type": "string"
           }
         }
       },
@@ -14750,7 +14747,7 @@
       },
       "ActivityEventInfoStackStarted": {
         "required": [
-          "containerIds"
+          "result"
         ],
         "properties": {
           "$type": {
@@ -14759,17 +14756,14 @@
             ],
             "type": "string"
           },
-          "containerIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+          "result": {
+            "type": "string"
           }
         }
       },
       "ActivityEventInfoStackStopped": {
         "required": [
-          "containerIds"
+          "result"
         ],
         "properties": {
           "$type": {
@@ -14778,11 +14772,8 @@
             ],
             "type": "string"
           },
-          "containerIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+          "result": {
+            "type": "string"
           }
         }
       },

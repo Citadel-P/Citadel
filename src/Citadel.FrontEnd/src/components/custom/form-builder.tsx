@@ -626,6 +626,7 @@ export function FormShell<T>({
 
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [optimisticOriginal, setOptimisticOriginal] = useState<T | null>(null);
 
   const [draftInfo, setDraftInfo] = useState<DraftInfo>({ hasDraft: false });
   const [draftLoadedBanner, setDraftLoadedBanner] = useState(false);
@@ -633,11 +634,12 @@ export function FormShell<T>({
   const sections = Object.keys(schema);
 
   const fieldMap = useMemo(() => extractFieldMap(schema), [schema]);
-  const merged = useMemo(() => deepMerge<T>(original, update), [original, update]);
+  const effectiveOriginal = useMemo(() => optimisticOriginal ?? original, [optimisticOriginal, original]);
+  const merged = useMemo(() => deepMerge<T>(effectiveOriginal, update), [effectiveOriginal, update]);
 
   const { errors, dirty } = useMemo(
-    () => computeValidationState(original, merged, fieldMap),
-    [original, merged, fieldMap],
+    () => computeValidationState(effectiveOriginal, merged, fieldMap),
+    [effectiveOriginal, merged, fieldMap],
   );
 
   const hasChanges = useMemo(() => Object.values(dirty).some(Boolean), [dirty]);
@@ -645,6 +647,24 @@ export function FormShell<T>({
   const canSave = hasChanges;
 
   const lastSavedAtLabel = draftInfo.savedAt ? fromNow(draftInfo.savedAt as any) : undefined;
+
+  const previousOriginalRef = useRef(original);
+
+  useEffect(() => {
+    if (!optimisticOriginal) {
+      previousOriginalRef.current = original;
+      return;
+    }
+
+    const originalCaughtUp = areValuesEqual(original, optimisticOriginal);
+    const originalChanged = !areValuesEqual(previousOriginalRef.current, original);
+
+    if (originalCaughtUp || originalChanged) {
+      setOptimisticOriginal(null);
+    }
+
+    previousOriginalRef.current = original;
+  }, [original, optimisticOriginal]);
 
   /* ------------------------- Load draft on first mount ------------------------- */
   useEffect(() => {
@@ -707,6 +727,7 @@ export function FormShell<T>({
     } else {
       setUpdate({});
     }
+    setOptimisticOriginal(null);
     setTouched({});
     if (draftKey && typeof window !== 'undefined') {
       clearDraft(draftKey);
@@ -717,7 +738,7 @@ export function FormShell<T>({
 
   const validateAll = useCallback(
     (value: T) => {
-      const { errors: allErrors } = computeValidationState(original, value, fieldMap);
+      const { errors: allErrors } = computeValidationState(effectiveOriginal, value, fieldMap);
       const valid = Object.values(allErrors).every((v) => !v);
 
       // mark all fields as touched so errors become visible
@@ -731,7 +752,7 @@ export function FormShell<T>({
 
       return valid;
     },
-    [original, fieldMap],
+    [effectiveOriginal, fieldMap],
   );
 
   const confirm = useCallback(async () => {
@@ -745,8 +766,11 @@ export function FormShell<T>({
     }
 
     try {
-      await onSave(merged as T);
+      const savedValue = merged as T;
+      await onSave(savedValue);
+      setOptimisticOriginal(savedValue);
       setUpdate({});
+      setTouched({});
 
       if (draftKey && typeof window !== 'undefined') {
         setDraftInfo({ hasDraft: false, savedAt: undefined });
@@ -1125,7 +1149,7 @@ export function FormShell<T>({
             <DialogTitle>Configuration changes</DialogTitle>
           </DialogHeader>
 
-          <MonacoDiff original={original} modified={merged} format="yaml" />
+          <MonacoDiff original={effectiveOriginal} modified={merged} format="yaml" />
         </DialogContent>
       </Dialog>
     </div>

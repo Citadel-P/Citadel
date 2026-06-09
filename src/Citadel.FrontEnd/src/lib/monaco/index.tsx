@@ -178,6 +178,7 @@ export const MonacoEditor = ({
 }: MonacoEditorProps) => {
   const [editorInstance, setEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const lastEditorValueRef = useRef(value);
+  const isApplyingExternalValueRef = useRef(false);
   const { currentTheme, handleBeforeMount } = useThemeEditor();
 
   // Calculate dynamic height based on line count
@@ -229,7 +230,14 @@ export const MonacoEditor = ({
     const scrollTop = editorInstance.getScrollTop();
     const scrollLeft = editorInstance.getScrollLeft();
 
-    model.setValue(value);
+    isApplyingExternalValueRef.current = true;
+    try {
+      editorInstance.executeEdits('citadel.external-sync', [
+        { range: model.getFullModelRange(), text: value, forceMoveMarkers: true },
+      ]);
+    } finally {
+      isApplyingExternalValueRef.current = false;
+    }
 
     if (selections) {
       editorInstance.setSelections(selections);
@@ -248,9 +256,14 @@ export const MonacoEditor = ({
     return basename ? `file:///${basename}` : undefined;
   }, [filename]);
   const handleEditorChange = useCallback(
-    (nextValue: string | undefined) => {
+    (nextValue: string | undefined, ev: monaco.editor.IModelContentChangedEvent | undefined) => {
       const next = nextValue ?? '';
       lastEditorValueRef.current = next;
+
+      if (isApplyingExternalValueRef.current || ev?.isFlush) {
+        return;
+      }
+
       onValueChange?.(next);
     },
     [onValueChange],

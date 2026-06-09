@@ -23,6 +23,7 @@ import {
   ActivityEventInfoGitRepoPulled,
   ActivityEventInfoGitRepoCloned,
   ActivityEventInfoDeploymentApplied,
+  ActivityEventInfoStackApplied,
 } from '@/api/generated/api.types';
 import { formatActivityEvent, serializeData } from '@/lib/utils';
 import Loader from '../ui/loader';
@@ -251,6 +252,43 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   DeploymentStopped: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
   DeploymentPaused: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
 
+  StackCreated: (info, activity) => (
+    <SpecViewer spec={info.stack} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+
+  StackUpdated: (info) => (
+    <MonacoDiff
+      original={info.oldStack}
+      modified={info.newStack}
+      format="yaml"
+      title="Configuration changes"
+    />
+  ),
+
+  StackApplied: (info, activity) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <SpecViewer spec={info.stack} resourceId={activity.resourceId} title="Applied configuration" />
+      {activity.status === ActivityStatus.Success && (
+        <KeyValueBlock label="Container id" value={info.result.containerIds ?? []} />
+      )}
+      <ActivityAlertZone info={info} activity={activity} />
+    </div>
+  ),
+  StackDegraded: (info) => <span className="text-sm text-muted-foreground">{info.reason}</span>,
+
+  StackStarted:(info) => <KeyValueBlock label="Output" value={info.result} />,
+  StackStopped:(info) => <KeyValueBlock label="Output" value={info.result} />,
+  StackPaused:(info) => <KeyValueBlock label="Output" value={info.result} />,
+
+  StackRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Deployment renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+   StackDeleted: (info, activity) => (
+    <SpecViewer spec={info.stack} resourceId={activity.resourceId} title="Deleted configuration" />
+  ),
+
   AlertRuleUpdated: (info) => (
     <MonacoDiff original={info.oldRule} modified={info.newRule} format="json" title="Configuration changes" />
   ),
@@ -326,7 +364,7 @@ export function ActivityAlertZone({
   title,
   date,
 }: {
-  info: ActivityEventInfoGitRepoPulled | ActivityEventInfoGitRepoCloned | ActivityEventInfoDeploymentApplied;
+  info: ActivityEventInfoGitRepoPulled | ActivityEventInfoGitRepoCloned | ActivityEventInfoDeploymentApplied | ActivityEventInfoStackApplied;
   activity: ActivityView;
   title?: string;
   date?: any;

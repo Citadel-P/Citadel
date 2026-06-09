@@ -14099,6 +14099,33 @@
             "$ref": "#/components/schemas/ActivityEventInfoDeploymentDegraded"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoStackCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackStarted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackStopped"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackPaused"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackApplied"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackDegraded"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoAlertRuleCreated"
           },
           {
@@ -14153,6 +14180,15 @@
             "DeploymentPaused": "#/components/schemas/ActivityEventInfoDeploymentPaused",
             "DeploymentApplied": "#/components/schemas/ActivityEventInfoDeploymentApplied",
             "DeploymentDegraded": "#/components/schemas/ActivityEventInfoDeploymentDegraded",
+            "StackCreated": "#/components/schemas/ActivityEventInfoStackCreated",
+            "StackUpdated": "#/components/schemas/ActivityEventInfoStackUpdated",
+            "StackRenamed": "#/components/schemas/ActivityEventInfoStackRenamed",
+            "StackDeleted": "#/components/schemas/ActivityEventInfoStackDeleted",
+            "StackStarted": "#/components/schemas/ActivityEventInfoStackStarted",
+            "StackStopped": "#/components/schemas/ActivityEventInfoStackStopped",
+            "StackPaused": "#/components/schemas/ActivityEventInfoStackPaused",
+            "StackApplied": "#/components/schemas/ActivityEventInfoStackApplied",
+            "StackDegraded": "#/components/schemas/ActivityEventInfoStackDegraded",
             "AlertRuleCreated": "#/components/schemas/ActivityEventInfoAlertRuleCreated",
             "AlertRuleUpdated": "#/components/schemas/ActivityEventInfoAlertRuleUpdated",
             "AlertRuleDeleted": "#/components/schemas/ActivityEventInfoAlertRuleDeleted",
@@ -14598,6 +14634,169 @@
           }
         }
       },
+      "ActivityEventInfoStackApplied": {
+        "required": [
+          "stack",
+          "result"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackApplied"
+            ],
+            "type": "string"
+          },
+          "stack": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackSnapshot"
+              }
+            ]
+          },
+          "result": {
+            "$ref": "#/components/schemas/StackResultSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoStackCreated": {
+        "required": [
+          "stack"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackCreated"
+            ],
+            "type": "string"
+          },
+          "stack": {
+            "$ref": "#/components/schemas/StackSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoStackDegraded": {
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackDegraded"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoStackDeleted": {
+        "required": [
+          "stack"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackDeleted"
+            ],
+            "type": "string"
+          },
+          "stack": {
+            "$ref": "#/components/schemas/StackSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoStackPaused": {
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackPaused"
+            ],
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoStackRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoStackStarted": {
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackStarted"
+            ],
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoStackStopped": {
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackStopped"
+            ],
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoStackUpdated": {
+        "required": [
+          "oldStack",
+          "newStack"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackUpdated"
+            ],
+            "type": "string"
+          },
+          "oldStack": {
+            "$ref": "#/components/schemas/StackSnapshot"
+          },
+          "newStack": {
+            "$ref": "#/components/schemas/StackSnapshot"
+          }
+        }
+      },
       "ActivityEventType": {
         "enum": [
           "DeploymentCreated",
@@ -14625,7 +14824,16 @@
           "GitRepoDeleted",
           "GitRepoRenamed",
           "GitRepoPulled",
-          "GitRepoCloned"
+          "GitRepoCloned",
+          "StackCreated",
+          "StackUpdated",
+          "StackRenamed",
+          "StackDeleted",
+          "StackStarted",
+          "StackStopped",
+          "StackPaused",
+          "StackApplied",
+          "StackDegraded"
         ]
       },
       "ActivityResourceType": {
@@ -23339,6 +23547,34 @@
           }
         }
       },
+      "StackReleaseSnapshot": {
+        "required": [
+          "platformId",
+          "spec",
+          "createdByActorId",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StackSpec"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "StackReleaseStatus": {
         "enum": [
           "Unknown",
@@ -23414,6 +23650,64 @@
             "items": {
               "$ref": "#/components/schemas/StackReleaseView"
             }
+          }
+        }
+      },
+      "StackResultSnapshot": {
+        "type": "object",
+        "properties": {
+          "containerIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StackSnapshot": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "stackSource",
+          "stackRelease"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stackSource": {
+            "$ref": "#/components/schemas/StackSource"
+          },
+          "stackRelease": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackReleaseSnapshot"
+              }
+            ]
           }
         }
       },

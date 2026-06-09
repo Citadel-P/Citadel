@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Hosting.Common;
@@ -87,6 +88,44 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         Assert.Equal("2", stack.CurrentStackRelease!.Version);
         Assert.Equal(otherPlatformId, stack.CurrentStackRelease.PlatformId);
         Assert.Equal(stack.CurrentStackReleaseId, stack.CurrentStackRelease.Id);
+    }
+
+    [Fact]
+    public async Task Patch_Stack_Should_Record_Distinct_Old_And_New_Snapshots_In_Update_Activity()
+    {
+        var patchJson = $$"""
+        {
+          "platformId": "{{otherPlatformId}}",
+          "spec": {
+            "$type": "WebEditor",
+            "composeFile": "compose.updated.yml"
+          }
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/stacks/{stackId}", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var activities = await uow.ActivityEventRepository.GetPagedAsync(
+            stackId,
+            ActivityResourceType.Stack,
+            ActivityEventType.StackUpdated,
+            1,
+            10,
+            TestContext.Current.CancellationToken);
+
+        var activitySummary = Assert.Single(activities.Items);
+        var activity = await uow.ActivityEventRepository.GetByIdAsync(activitySummary.Id, TestContext.Current.CancellationToken);
+        var update = Assert.IsType<StackUpdated>(activity?.Info);
+
+        Assert.Equal(platformId, update.OldStack.StackRelease!.PlatformId);
+        Assert.Equal(otherPlatformId, update.NewStack.StackRelease!.PlatformId);
+        Assert.Equal("docker-compose.yml", Assert.IsType<ManualStack>(update.OldStack.StackRelease.Spec).ComposeFile);
+        Assert.Equal("compose.updated.yml", Assert.IsType<ManualStack>(update.NewStack.StackRelease.Spec).ComposeFile);
     }
 
     [Fact]
