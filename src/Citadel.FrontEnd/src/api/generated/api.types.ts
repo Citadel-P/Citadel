@@ -341,6 +341,15 @@ export enum ActivityEventType {
   GitRepoRenamed = "GitRepoRenamed",
   GitRepoPulled = "GitRepoPulled",
   GitRepoCloned = "GitRepoCloned",
+  StackCreated = "StackCreated",
+  StackUpdated = "StackUpdated",
+  StackRenamed = "StackRenamed",
+  StackDeleted = "StackDeleted",
+  StackStarted = "StackStarted",
+  StackStopped = "StackStopped",
+  StackPaused = "StackPaused",
+  StackApplied = "StackApplied",
+  StackDegraded = "StackDegraded",
 }
 
 export type StackUpdateState = BaseStackUpdateState &
@@ -541,6 +550,42 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoDeploymentDegraded
       >
     | BaseActivityEventInfoTypeMapping<
+        "StackCreated",
+        ActivityEventInfoStackCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackUpdated",
+        ActivityEventInfoStackUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackRenamed",
+        ActivityEventInfoStackRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackDeleted",
+        ActivityEventInfoStackDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackStarted",
+        ActivityEventInfoStackStarted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackStopped",
+        ActivityEventInfoStackStopped
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackPaused",
+        ActivityEventInfoStackPaused
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackApplied",
+        ActivityEventInfoStackApplied
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackDegraded",
+        ActivityEventInfoStackDegraded
+      >
+    | BaseActivityEventInfoTypeMapping<
         "AlertRuleCreated",
         ActivityEventInfoAlertRuleCreated
       >
@@ -730,6 +775,54 @@ export interface ActivityEventInfoRegistryUpdated {
   $type?: "RegistryUpdated";
   oldRegistry: RegistrySnapshot;
   newRegistry: RegistrySnapshot;
+}
+
+export interface ActivityEventInfoStackApplied {
+  $type?: "StackApplied";
+  stack: null | StackSnapshot;
+  result: StackResultSnapshot;
+}
+
+export interface ActivityEventInfoStackCreated {
+  $type?: "StackCreated";
+  stack: StackSnapshot;
+}
+
+export interface ActivityEventInfoStackDegraded {
+  $type?: "StackDegraded";
+  reason: string;
+}
+
+export interface ActivityEventInfoStackDeleted {
+  $type?: "StackDeleted";
+  stack: StackSnapshot;
+}
+
+export interface ActivityEventInfoStackPaused {
+  $type?: "StackPaused";
+  result: string;
+}
+
+export interface ActivityEventInfoStackRenamed {
+  $type?: "StackRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoStackStarted {
+  $type?: "StackStarted";
+  result: string;
+}
+
+export interface ActivityEventInfoStackStopped {
+  $type?: "StackStopped";
+  result: string;
+}
+
+export interface ActivityEventInfoStackUpdated {
+  $type?: "StackUpdated";
+  oldStack: StackSnapshot;
+  newStack: StackSnapshot;
 }
 
 export interface ActivityView {
@@ -2960,6 +3053,15 @@ export interface StackConfigView {
   stackUpdateState: StackUpdateState;
 }
 
+export interface StackReleaseSnapshot {
+  /** @format uuid */
+  platformId: string;
+  spec: StackSpec;
+  /** @format uuid */
+  createdByActorId: string;
+  version: null | string;
+}
+
 export interface StackReleaseView {
   /** @format uuid */
   id: string;
@@ -2980,6 +3082,20 @@ export interface StackReleaseView {
 
 export interface StackReleasesView {
   releases: StackReleaseView[];
+}
+
+export interface StackResultSnapshot {
+  containerIds?: null | string[];
+  message?: null | string;
+}
+
+export interface StackSnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  stackSource: StackSource;
+  stackRelease: null | StackReleaseSnapshot;
 }
 
 export interface StackSpecGitStack {

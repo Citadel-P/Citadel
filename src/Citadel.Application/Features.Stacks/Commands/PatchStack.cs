@@ -1,25 +1,19 @@
-using Application.Features.Deployments.Commands;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
-using Domain.Entities.Deployments;
 using Domain.Entities.Stacks;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Stacks.Commands;
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Write)]
 public sealed record PatchStack(Guid Id, JsonMergePatchDocument<StackPatchModel> Patch) : ICommand<Result<Stack>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchStack, StackPatchModel>
@@ -96,22 +90,11 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
             }
         }
 
-        // Add activity
-        var activity = new ActivityEvent(
-                actorId: actorId,
-                resourceId: stack.Id,
-                resourceName: stack.Name,
-                status: ActivityStatus.Success,
-                platformId: stack.CurrentStackRelease.PlatformId,
-                eventType: ActivityEventType.StackUpdated,
-                info: new StackUpdated(stack.ToSnapshot(), patched.ToSnapshot(stack.CurrentStackRelease, command.Id))
-            );
-        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        var oldSnapshot = stack.ToSnapshot();
 
         var releaseChanged = patched.PlatformId.Value != stack.CurrentStackRelease.PlatformId
             || !Equals(patched.Spec, stack.CurrentStackRelease.Spec);
-        
-        // Patch stack 
+
         if (releaseChanged)
         {
             var nextRelease = StackRelease.Create(
@@ -123,6 +106,16 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
 
             stack.SetCurrentStackRelease(nextRelease);
         }
+
+        var activity = new ActivityEvent(
+            actorId: actorId,
+            resourceId: stack.Id,
+            resourceName: stack.Name,
+            status: ActivityStatus.Success,
+            platformId: stack.CurrentStackRelease.PlatformId,
+            eventType: ActivityEventType.StackUpdated,
+            info: new StackUpdated(oldSnapshot, stack.ToSnapshot()));
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 
         await unitOfWork.Stacks.UpdateAsync(stack, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
