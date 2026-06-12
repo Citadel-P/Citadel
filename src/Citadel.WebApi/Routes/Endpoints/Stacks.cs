@@ -1,6 +1,7 @@
 using Application.Features.Stacks.Commands;
 using Application.Features.Stacks.Queries;
 using Application.Permissions;
+using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Stacks;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
@@ -8,7 +9,9 @@ using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 
 namespace WebApi.Routes.Endpoints;
@@ -80,5 +83,13 @@ public static class Stacks
     {
         var result = await mediator.Send(new RenameStack(renameResource.Id, renameResource.Name), cancellationToken);
         return EndpointHandlers.HandleResult(result, StackView.Map);
+    }
+
+    public static async IAsyncEnumerable<DeploymentStreamItem> ApplyDeployment(IMediator mediator, ApplyDeploymentInput applyDeploymentInput, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var reply in mediator.CreateStream(applyDeploymentInput.ToCommand(), cancellationToken))
+        {
+            yield return reply;
+        }
     }
 }

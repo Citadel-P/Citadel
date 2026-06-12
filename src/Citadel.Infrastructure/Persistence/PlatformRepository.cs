@@ -88,15 +88,31 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public Task<IEnumerable<ResourceInfo>> GetDeploymentLookupAsync(Guid platformId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT d.Id, d.Name
-            FROM Deployments d
-            WHERE d.PlatformId = @PlatformId
-            ORDER BY d.Name
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT d.Id, d.Name
+                FROM Deployments d
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}d.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT d.Id, d.Name
+                FROM Deployments d
+                WHERE d.PlatformId = @PlatformId
+            ) lookup
+            ORDER BY lookup.Name
          """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.Deployment,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             PlatformId = platformId,
             cancellationToken
         }, transaction: tx());
@@ -104,16 +120,32 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public Task<IEnumerable<ResourceInfo>> GetStackLookupAsync(Guid platformId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT s.Id, s.Name
-            FROM Stacks s
-            JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
-            WHERE sr.PlatformId = @PlatformId
-            ORDER BY s.Name
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT s.Id, s.Name
+                FROM Stacks s
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}s.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT s.Id, s.Name
+                FROM Stacks s
+                JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+                WHERE sr.PlatformId = @PlatformId
+            ) lookup
+            ORDER BY lookup.Name
          """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.Stack,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             PlatformId = platformId,
             cancellationToken
         }, transaction: tx());
@@ -121,16 +153,32 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid platformId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT DISTINCT r.Id, r.Name
-            FROM Images i
-            JOIN Registries r ON r.Id = i.RegistryId
-            WHERE i.PlatformId = @PlatformId
-            ORDER BY r.Name
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT r.Id, r.Name
+                FROM Registries r
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}r.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT r.Id, r.Name
+                FROM Images i
+                JOIN Registries r ON r.Id = i.RegistryId
+                WHERE i.PlatformId = @PlatformId
+            ) lookup
+            ORDER BY lookup.Name
          """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.Registry,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             PlatformId = platformId,
             cancellationToken
         }, transaction: tx());

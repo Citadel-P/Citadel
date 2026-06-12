@@ -370,6 +370,32 @@ export const StackForm = ({
                     }),
                   ],
                 }),
+                defineField<StackInput, 'spec.registryId'>({
+                  key: 'spec.registryId',
+                  label: 'Registry',
+                  required: true,
+                  description: 'Select the registry to pull the images from.',
+                  render: (val, set) => {
+                    return (
+                      <ResourceSelectorField
+                        sourceType={LookupResourceType.Stack}
+                        targetType={LookupResourceType.Registry}
+                        sourceResourceId={id}
+                        selected={val}
+                        onSelect={(v: any) =>
+                          set((prev) => ({
+                            spec: {
+                              ...prev.spec!,
+                              registryId: v.id,
+                            },
+                          }))
+                        }
+                        placeholder="Select Registry"
+                        className="sm:min-w-100"
+                      />
+                    );
+                  },
+                }),
                 defineField<StackInput, 'spec.updateBehavior'>({
                   key: 'spec.updateBehavior',
                   label: 'Auto Update',

@@ -190,17 +190,33 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public Task<IEnumerable<ResourceInfo>> GetUserRoleLookupAsync(Guid sourceUserId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT r.Id, r.Name
-            FROM Users u
-            JOIN ActorRoles ar ON ar.ActorId = u.ActorId
-            JOIN Roles r ON r.Id = ar.RoleId
-            WHERE u.Id = @SourceUserId
-            ORDER BY r.Name
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT r.Id, r.Name
+                FROM Roles r
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}r.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT r.Id, r.Name
+                FROM Users u
+                JOIN ActorRoles ar ON ar.ActorId = u.ActorId
+                JOIN Roles r ON r.Id = ar.RoleId
+                WHERE u.Id = @SourceUserId
+            ) lookup
+            ORDER BY lookup.Name
             """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.Role,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             SourceUserId = sourceUserId,
             cancellationToken
         }, transaction: tx());

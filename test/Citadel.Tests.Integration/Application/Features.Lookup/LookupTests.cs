@@ -6,6 +6,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
+using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
 using Hosting.Common;
@@ -16,26 +17,53 @@ namespace Tests.Integration.Application.Features.Lookup;
 public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid _platformId;
+    private Guid _otherPlatformId;
     private Guid _visibleDeploymentId;
     private Guid _hiddenDeploymentId;
+    private Guid _otherPlatformDeploymentId;
     private Guid _visibleRegistryId;
     private Guid _hiddenRegistryId;
+    private Guid _extraRegistryId;
     private Guid _visibleGitRepositoryId;
     private Guid _hiddenGitRepositoryId;
+    private Guid _extraGitRepositoryId;
     private Guid _gitStackId;
+    private Guid _otherPlatformStackId;
     private Guid _visibleImageId;
     private Guid _hiddenImageId;
     private Guid _userLookupSourceId;
     private Guid _visibleTeamId;
     private Guid _hiddenTeamId;
+    private Guid _extraTeamId;
     private Guid _visibleRoleId;
     private Guid _hiddenRoleId;
+    private Guid _extraRoleId;
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var platform = Fakes.GetDummyPlatform();
+        var otherPlatform = new Platform(
+            name: "platform-other",
+            address: "https://platform-other.local",
+            networkCount: 1,
+            volumeCount: 2,
+            imageCount: 3,
+            cpuCount: 4,
+            memTotal: 500,
+            serverVersion: "1.0.0",
+            agentVersion: "1.0.0",
+            status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Agent,
+            platformDescriptor: new DockerPlatformDescriptor(
+                DaemonId: "other-daemon",
+                ContainerCount: 5,
+                ContainersRunning: 2,
+                ContainersPaused: 2,
+                ContainersStopped: 1));
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(otherPlatform, TestContext.Current.CancellationToken);
         _platformId = platform.Id;
+        _otherPlatformId = otherPlatform.Id;
 
         var visibleRegistry = new Registry(
             name: "registry-visible",
@@ -49,10 +77,18 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             status: RegistryStatus.Active,
             createdByActorId: Constants.SystemId,
             configuration: DockerHubRegistry.Create("hidden", "token-hidden"));
+        var extraRegistry = new Registry(
+            name: "registry-extra",
+            registryHost: "registry-extra.local",
+            status: RegistryStatus.Active,
+            createdByActorId: Constants.SystemId,
+            configuration: DockerHubRegistry.Create("extra", "token-extra"));
         await uow.Registries.AddAsync(visibleRegistry, TestContext.Current.CancellationToken);
         await uow.Registries.AddAsync(hiddenRegistry, TestContext.Current.CancellationToken);
+        await uow.Registries.AddAsync(extraRegistry, TestContext.Current.CancellationToken);
         _visibleRegistryId = visibleRegistry.Id;
         _hiddenRegistryId = hiddenRegistry.Id;
+        _extraRegistryId = extraRegistry.Id;
 
         var visibleDeployment = new Deployment(
             name: "deployment-visible",
@@ -64,10 +100,17 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             createdByActorId: Constants.SystemId,
             platformId: _platformId,
             spec: new DeploymentSpec(new ExternalImage(_hiddenRegistryId, "nginx:hidden"), UpdateBehavior.Notify));
+        var otherPlatformDeployment = new Deployment(
+            name: "deployment-other-platform",
+            createdByActorId: Constants.SystemId,
+            platformId: _otherPlatformId,
+            spec: new DeploymentSpec(new ExternalImage(_extraRegistryId, "nginx:other"), UpdateBehavior.Notify));
         await uow.Deployments.AddAsync(visibleDeployment, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(hiddenDeployment, TestContext.Current.CancellationToken);
+        await uow.Deployments.AddAsync(otherPlatformDeployment, TestContext.Current.CancellationToken);
         _visibleDeploymentId = visibleDeployment.Id;
         _hiddenDeploymentId = hiddenDeployment.Id;
+        _otherPlatformDeploymentId = otherPlatformDeployment.Id;
 
         var visibleGitRepository = new GitRepository(
             name: "git-visible",
@@ -83,10 +126,19 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
             defaultBranch: "main",
             gitAccountId: null,
             createdByActorId: Constants.SystemId);
+        var extraGitRepository = new GitRepository(
+            name: "git-extra",
+            description: null,
+            url: "https://github.com/citadel-p/git-extra.git",
+            defaultBranch: "main",
+            gitAccountId: null,
+            createdByActorId: Constants.SystemId);
         await uow.GitRepositories.AddAsync(visibleGitRepository, TestContext.Current.CancellationToken);
         await uow.GitRepositories.AddAsync(hiddenGitRepository, TestContext.Current.CancellationToken);
+        await uow.GitRepositories.AddAsync(extraGitRepository, TestContext.Current.CancellationToken);
         _visibleGitRepositoryId = visibleGitRepository.Id;
         _hiddenGitRepositoryId = hiddenGitRepository.Id;
+        _extraGitRepositoryId = extraGitRepository.Id;
 
         var gitStack = Stack.Create(
             name: "stack-git-visible",
@@ -97,9 +149,23 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
                 GitRepoId: _visibleGitRepositoryId,
                 CommitSha: "abc123",
                 Branch: "main",
-                UpdateBehavior: StackUpdateBehavior.Notify));
+                UpdateBehavior: StackUpdateBehavior.Notify,
+                RegistryName: "registry-visible"));
+        var otherPlatformStack = Stack.Create(
+            name: "stack-other-platform",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.Git,
+            platformId: _otherPlatformId,
+            spec: new GitStack(
+                GitRepoId: _extraGitRepositoryId,
+                CommitSha: "def456",
+                Branch: "main",
+                UpdateBehavior: StackUpdateBehavior.Notify,
+                RegistryName: "registry-extra"));
         await uow.Stacks.AddAsync(gitStack, TestContext.Current.CancellationToken);
+        await uow.Stacks.AddAsync(otherPlatformStack, TestContext.Current.CancellationToken);
         _gitStackId = gitStack.Id;
+        _otherPlatformStackId = otherPlatformStack.Id;
 
         var visibleImage = new Domain.Entities.Image(
             name: "image-visible",
@@ -134,23 +200,31 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         var hiddenTeamActor = Actor.Create(ActorType.Team, new ActorMetadata("team-hidden"));
         var visibleTeam = Team.Create("team-visible", visibleTeamActor.Id);
         var hiddenTeam = Team.Create("team-hidden", hiddenTeamActor.Id);
+        var extraTeamActor = Actor.Create(ActorType.Team, new ActorMetadata("team-extra"));
+        var extraTeam = Team.Create("team-extra", extraTeamActor.Id);
         await uow.Actors.AddAsync(visibleTeamActor, TestContext.Current.CancellationToken);
         await uow.Actors.AddAsync(hiddenTeamActor, TestContext.Current.CancellationToken);
+        await uow.Actors.AddAsync(extraTeamActor, TestContext.Current.CancellationToken);
         await uow.Teams.AddAsync(visibleTeam, TestContext.Current.CancellationToken);
         await uow.Teams.AddAsync(hiddenTeam, TestContext.Current.CancellationToken);
+        await uow.Teams.AddAsync(extraTeam, TestContext.Current.CancellationToken);
         await uow.Teams.AddMemberAsync(visibleTeam.Id, lookupUser.Id, TestContext.Current.CancellationToken);
         await uow.Teams.AddMemberAsync(hiddenTeam.Id, lookupUser.Id, TestContext.Current.CancellationToken);
         _visibleTeamId = visibleTeam.Id;
         _hiddenTeamId = hiddenTeam.Id;
+        _extraTeamId = extraTeam.Id;
 
         var visibleRole = Role.Create("role-visible", RoleType.Custom);
         var hiddenRole = Role.Create("role-hidden", RoleType.Custom);
+        var extraRole = Role.Create("role-extra", RoleType.Custom);
         await uow.Roles.AddAsync(visibleRole, TestContext.Current.CancellationToken);
         await uow.Roles.AddAsync(hiddenRole, TestContext.Current.CancellationToken);
+        await uow.Roles.AddAsync(extraRole, TestContext.Current.CancellationToken);
         await uow.Roles.AddActorRoleAsync(lookupUser.ActorId, visibleRole.Id, TestContext.Current.CancellationToken);
         await uow.Roles.AddActorRoleAsync(lookupUser.ActorId, hiddenRole.Id, TestContext.Current.CancellationToken);
         _visibleRoleId = visibleRole.Id;
         _hiddenRoleId = hiddenRole.Id;
+        _extraRoleId = extraRole.Id;
 
         await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
@@ -210,6 +284,35 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     }
 
     [Fact]
+    public async Task Lookup_Platform_To_Deployment_Should_Return_Authorized_Deployments_And_Linked_Deployments_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Platform, _platformId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Deployment, _otherPlatformDeploymentId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Platform&sourceResourceId={_platformId}&targetResourceType=Deployment", TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(3, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleDeploymentId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenDeploymentId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _otherPlatformDeploymentId);
+        Assert.Equal(3, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+    }
+
+    [Fact]
     public async Task Lookup_Deployment_To_Registry_Should_Return_Only_Visible_Registries()
     {
         var subject = await CreateAuthorizationSubjectAsync(
@@ -263,6 +366,35 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     }
 
     [Fact]
+    public async Task Lookup_Deployment_To_Registry_Should_Return_Authorized_Registries_And_The_Referenced_Registry_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Deployment, _visibleDeploymentId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Registry, _hiddenRegistryId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Deployment&sourceResourceId={_visibleDeploymentId}&targetResourceType=Registry", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleRegistryId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenRegistryId);
+        Assert.Equal(2, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+    }
+
+    [Fact]
     public async Task Lookup_Deployment_To_Platform_Should_Preserve_Referenced_Platform_Without_Direct_Target_Access()
     {
         var subject = await CreateAuthorizationSubjectAsync(
@@ -286,6 +418,35 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         var items = document.RootElement;
         Assert.Single(items.EnumerateArray());
         Assert.Equal(_platformId, items[0].GetProperty("id").GetGuid());
+    }
+
+    [Fact]
+    public async Task Lookup_Deployment_To_Platform_Should_Return_Authorized_Platforms_And_Referenced_Platform_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Deployment, _visibleDeploymentId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Platform, _otherPlatformId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Deployment&sourceResourceId={_visibleDeploymentId}&targetResourceType=Platform", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _platformId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _otherPlatformId);
+        Assert.Equal(2, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
     }
 
     [Fact]
@@ -392,6 +553,93 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     }
 
     [Fact]
+    public async Task Lookup_Stack_To_GitRepository_Should_Return_Authorized_GitRepositories_And_Referenced_GitRepository_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Stack, _gitStackId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.GitRepository, _hiddenGitRepositoryId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Stack&sourceResourceId={_gitStackId}&targetResourceType=GitRepository", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleGitRepositoryId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenGitRepositoryId);
+        Assert.Equal(2, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Lookup_Stack_To_Platform_Should_Return_Authorized_Platforms_And_Referenced_Platform_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Stack, _gitStackId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Platform, _otherPlatformId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Stack&sourceResourceId={_gitStackId}&targetResourceType=Platform", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _platformId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _otherPlatformId);
+        Assert.Equal(2, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Lookup_Stack_To_Registry_Should_Return_Authorized_Registries_And_Referenced_Registry_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Stack, _gitStackId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Registry, _hiddenRegistryId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Stack&sourceResourceId={_gitStackId}&targetResourceType=Registry", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleRegistryId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenRegistryId);
+        Assert.Equal(2, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+    }
+
+    [Fact]
     public async Task Lookup_User_To_Team_Should_Preserve_Linked_Teams_When_Source_Is_Accessible()
     {
         var subject = await CreateAuthorizationSubjectAsync(
@@ -417,6 +665,36 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         Assert.Equal(2, items.GetArrayLength());
         Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _visibleTeamId);
         Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _hiddenTeamId);
+    }
+
+    [Fact]
+    public async Task Lookup_User_To_Team_Should_Return_Authorized_Teams_And_Linked_Teams_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.User, _userLookupSourceId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Team, _extraTeamId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=User&sourceResourceId={_userLookupSourceId}&targetResourceType=Team", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(3, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleTeamId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenTeamId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _extraTeamId);
+        Assert.Equal(3, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
     }
 
     [Fact]
@@ -472,6 +750,95 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         Assert.Equal(2, items.GetArrayLength());
         Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _visibleRoleId);
         Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _hiddenRoleId);
+    }
+
+    [Fact]
+    public async Task Lookup_User_To_Role_Should_Return_Authorized_Roles_And_Linked_Roles_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.User, _userLookupSourceId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Role, _extraRoleId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=User&sourceResourceId={_userLookupSourceId}&targetResourceType=Role", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(3, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleRoleId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenRoleId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _extraRoleId);
+        Assert.Equal(3, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Lookup_Platform_To_Stack_Should_Return_Authorized_Stacks_And_Linked_Stacks_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Platform, _platformId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Stack, _otherPlatformStackId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Platform&sourceResourceId={_platformId}&targetResourceType=Stack", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _gitStackId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _otherPlatformStackId);
+        Assert.Equal(2, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Lookup_Platform_To_Registry_Should_Return_Authorized_Registries_And_Linked_Registries_Without_Duplicates()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Platform, _platformId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.Registry, _extraRegistryId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Platform&sourceResourceId={_platformId}&targetResourceType=Registry", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(3, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleRegistryId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenRegistryId);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _extraRegistryId);
+        Assert.Equal(3, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
     }
 
     [Fact]
