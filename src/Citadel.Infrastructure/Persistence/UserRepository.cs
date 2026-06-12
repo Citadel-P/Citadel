@@ -426,16 +426,32 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
 
     public Task<IEnumerable<ResourceInfo>> GetTeamsLookupAsync(Guid sourceUserId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT t.Id, t.Name
-            FROM UsersTeams ut
-            JOIN Teams t ON t.Id = ut.TeamId
-            WHERE ut.UserId = @SourceUserId
-            ORDER BY t.Name
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT t.Id, t.Name
+                FROM Teams t
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}t.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT t.Id, t.Name
+                FROM UsersTeams ut
+                JOIN Teams t ON t.Id = ut.TeamId
+                WHERE ut.UserId = @SourceUserId
+            ) lookup
+            ORDER BY lookup.Name
             """;
+
+        var grantedPermissionMask = GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.Team,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             SourceUserId = sourceUserId,
             cancellationToken
         }, transaction: tx());

@@ -8,6 +8,7 @@ namespace Domain.Entities.Stacks;
 /// <param name="PostDeploy">A list of commands to run after deploying the stack. Useful for things like running database migrations, or seeding data.</param>
 /// <param name="EnvVars"></param>
 /// <param name="EnvFilePath">The path to write the file to, relative to the 'Run Directory'. </param>
+/// <param name="RegistryId">The Id of the container registry to use for the stack.</param>
 [JsonPolymorphic]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 [JsonDerivedType(typeof(ManualStack), nameof(StackSource.WebEditor))]
@@ -17,7 +18,8 @@ public abstract record StackSpec(
     StackCommand? PreDeploy,
     StackCommand? PostDeploy,
     List<string>? EnvVars = null,
-    string? EnvFilePath = null
+    string? EnvFilePath = null,
+    string? RegistryId = null
     );
 
 public sealed record ManualStack(
@@ -27,8 +29,8 @@ public sealed record ManualStack(
     string? EnvFilePath = null,
     string? ProjectName = null,
     StackCommand? PreDeploy = null,
-    StackCommand? PostDeploy = null
-    ) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath);
+    StackCommand? PostDeploy = null,
+    string? RegistryName = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryName);
 
 /// <param name="GitRepoId">Reference to an existing Repo to attach to, <see cref="Git.GitRepository"/></param>
 /// <param name="ProjectName"></param>
@@ -42,7 +44,8 @@ public sealed record ManualStack(
 /// <param name="UpdateBehavior"> How to handle updates when a new image digest is detected for the currently defined tags in the compose file.</param>
 /// <param name="WebHookForceDeploy">Usually the Stack won't deploy unless there are changes to the files. Use this to force deploy.param>
 /// <param name="WebHookSecret">A secret token to validate incoming webhooks from the Git provider. Default to the linked repos.</param>
-public sealed record GitStack(
+/// <param name="RegistryName">The name of the container registry to use for the stack.</param>
+public sealed record GitStack(  
     Guid GitRepoId,
     string Branch,
     string? CommitSha, 
@@ -56,7 +59,8 @@ public sealed record GitStack(
     StackCommand? PostDeploy = null,
     List<string>? EnvVars = null,
     List<string>? AdditionalEnvFileFromRepo = null,
-    string? EnvFilePath = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath);
+    string? EnvFilePath = null,
+    string? RegistryName = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryName);
 
 public sealed record ImageUpdateState(
     string ServiceName,

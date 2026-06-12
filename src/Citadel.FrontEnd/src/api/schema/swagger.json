@@ -23806,6 +23806,12 @@
               "type": "string"
             }
           },
+          "registryName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "projectName": {
             "type": [
               "null",
@@ -23842,6 +23848,12 @@
             }
           },
           "envFilePath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "registryId": {
             "type": [
               "null",
               "string"
@@ -23867,6 +23879,12 @@
           "updateBehavior": {
             "$ref": "#/components/schemas/StackUpdateBehavior"
           },
+          "registryName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "projectName": {
             "type": [
               "null",
@@ -23903,6 +23921,12 @@
             }
           },
           "envFilePath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "registryId": {
             "type": [
               "null",
               "string"

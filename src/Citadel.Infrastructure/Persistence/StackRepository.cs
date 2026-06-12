@@ -168,17 +168,33 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
     public Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT p.Id, p.Name
-            FROM Stacks s
-            JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
-            JOIN Platforms p ON p.Id = sr.PlatformId
-            WHERE s.Id = @StackId
-            LIMIT 1
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT p.Id, p.Name
+                FROM Platforms p
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT p.Id, p.Name
+                FROM Stacks s
+                JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+                JOIN Platforms p ON p.Id = sr.PlatformId
+                WHERE s.Id = @StackId
+            ) lookup
+            ORDER BY lookup.Name
          """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.Platform,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             StackId = stackId,
             cancellationToken
         }, transaction: tx());
@@ -186,19 +202,33 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
     public Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT DISTINCT r.Id, r.Name
-            FROM Stacks s
-            JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
-            JOIN Containers c ON c.PlatformId = sr.PlatformId AND c.Stack = s.Name
-            JOIN Images i ON i.Id = c.ImageId
-            JOIN Registries r ON r.Id = i.RegistryId
-            WHERE s.Id = @StackId
-            ORDER BY r.Name
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT r.Id, r.Name
+                FROM Registries r
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}r.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT r.Id, r.Name
+                FROM Stacks s
+                JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+                JOIN Registries r ON r.Name = CAST(sr.Spec ->> 'RegistryName' AS text)
+                WHERE s.Id = @StackId
+            ) lookup
+            ORDER BY lookup.Name
          """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.Registry,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             StackId = stackId,
             cancellationToken
         }, transaction: tx());
@@ -206,18 +236,34 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
     public Task<IEnumerable<ResourceInfo>> GetGitRepositoryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT gr.Id, gr.Name
-            FROM Stacks s
-            JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
-            JOIN GitRepositories gr ON gr.Id = CAST(sr.Spec ->> 'GitRepoId' AS uuid)
-            WHERE s.Id = @StackId
-              AND s.StackSource = @StackSource
-            LIMIT 1
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT gr.Id, gr.Name
+                FROM GitRepositories gr
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}gr.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT gr.Id, gr.Name
+                FROM Stacks s
+                JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+                JOIN GitRepositories gr ON gr.Id = CAST(sr.Spec ->> 'GitRepoId' AS uuid)
+                WHERE s.Id = @StackId
+                  AND s.StackSource = @StackSource
+            ) lookup
+            ORDER BY lookup.Name
          """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.GitRepository,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             StackId = stackId,
             StackSource = EnumFormatter<StackSource>.GetValue(StackSource.Git),
             cancellationToken

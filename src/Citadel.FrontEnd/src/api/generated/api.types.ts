@@ -3112,22 +3112,26 @@ export interface StackSpecGitStack {
   webHookSecret?: null | string;
   composePaths?: null | string[];
   additionalEnvFileFromRepo?: null | string[];
+  registryName?: null | string;
   projectName?: null | string;
   preDeploy?: null | StackCommand;
   postDeploy?: null | StackCommand;
   envVars?: null | string[];
   envFilePath?: null | string;
+  registryId?: null | string;
 }
 
 export interface StackSpecManualStack {
   $type?: "WebEditor";
   composeFile: string;
   updateBehavior: StackUpdateBehavior;
+  registryName?: null | string;
   projectName?: null | string;
   preDeploy?: null | StackCommand;
   postDeploy?: null | StackCommand;
   envVars?: null | string[];
   envFilePath?: null | string;
+  registryId?: null | string;
 }
 
 export interface StackUpdateStateGitStackUpdateState {

@@ -316,16 +316,32 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
     public Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid deploymentId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT p.Id, p.Name
-            FROM Deployments d
-            JOIN Platforms p ON p.Id = d.PlatformId
-            WHERE d.Id = @DeploymentId
-            LIMIT 1
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT p.Id, p.Name
+                FROM Platforms p
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT p.Id, p.Name
+                FROM Deployments d
+                JOIN Platforms p ON p.Id = d.PlatformId
+                WHERE d.Id = @DeploymentId
+            ) lookup
+            ORDER BY lookup.Name
          """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.Platform,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             DeploymentId = deploymentId,
             cancellationToken
         }, transaction: tx());
@@ -333,17 +349,33 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
     public Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid deploymentId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT DISTINCT r.Id, r.Name
-            FROM Deployments d
-            JOIN Registries r ON r.Id = CAST(d.Spec -> 'Image' ->> 'RegistryId' AS uuid)
-            WHERE d.Id = @DeploymentId
-              AND d.Spec -> 'Image' ->> '$type' = 'External'
-            ORDER BY r.Name
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT lookup.Id, lookup.Name
+            FROM (
+                SELECT r.Id, r.Name
+                FROM Registries r
+                WHERE {{AuthorizationSql.ResourcePredicatePrefix}}r.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+
+                UNION
+
+                SELECT r.Id, r.Name
+                FROM Deployments d
+                JOIN Registries r ON r.Id = CAST(d.Spec -> 'Image' ->> 'RegistryId' AS uuid)
+                WHERE d.Id = @DeploymentId
+                  AND d.Spec -> 'Image' ->> '$type' = 'External'
+            ) lookup
+            ORDER BY lookup.Name
          """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read);
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
+            UserId = userId,
+            ResourceType = (int)ResourceType.Registry,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)SpecificPermission.None,
             DeploymentId = deploymentId,
             cancellationToken
         }, transaction: tx());
