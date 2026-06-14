@@ -9,6 +9,7 @@ using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Registries;
+using Domain.Contracts.Resources.Stacks;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Deployments;
@@ -194,6 +195,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(CreateDeploymentInput))]
 [JsonSerializable(typeof(DeploymentConfigView))]
 [JsonSerializable(typeof(IAsyncEnumerable<DeploymentStreamItem>))]
+[JsonSerializable(typeof(IAsyncEnumerable<StackStreamItem>))]
 [JsonSerializable(typeof(ApplyDeploymentInput))]
 [JsonSerializable(typeof(StackInput))]
 [JsonSerializable(typeof(CreateStackInput))]
@@ -294,6 +296,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(ResourceInfo))]
 [JsonSerializable(typeof(ResourceCapabilities))]
 [JsonSerializable(typeof(ContainerDataView))]
+[JsonSerializable(typeof(ApplyStackInput))]
+
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

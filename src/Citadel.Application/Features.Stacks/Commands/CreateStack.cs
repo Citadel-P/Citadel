@@ -62,7 +62,7 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IUserContextAcc
             }
         }
 
-        // Add Stack
+        // Add DockerStack
         var stack = Stack.Create(
             name: command.Name,
             createdByActorId: actorId,

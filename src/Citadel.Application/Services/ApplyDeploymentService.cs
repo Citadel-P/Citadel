@@ -11,6 +11,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using System.Runtime.CompilerServices;
 
 namespace Application.Services;
 
@@ -31,8 +32,9 @@ internal sealed class ApplyDeploymentService(
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IConnectorFactory<IDeploymentConnector> deploymentConnectorFactory) : IApplyDeploymentService
 {
-    public async IAsyncEnumerable<DeploymentStreamItem> ApplyAsync(Guid deploymentId, Guid actorId, bool recreate, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    public async IAsyncEnumerable<DeploymentStreamItem> ApplyAsync(Guid deploymentId, Guid actorId, bool recreate, [EnumeratorCancellation] CancellationToken ct)
     {
+       
         var deployment = await LoadDeployment(deploymentId, ct);
         if (deployment is null)
         {

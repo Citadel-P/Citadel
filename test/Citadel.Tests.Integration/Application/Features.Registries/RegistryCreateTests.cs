@@ -187,7 +187,7 @@ public class RegistryCreateTests(PostgresTestFixture fixture) : IntegrationTestB
     //    var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
 
     //    var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-    //    Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+    //    Assert.Equal(SystemMessage.Net.HttpStatusCode.BadRequest, response.StatusCode);
     //    await VerifyJson(responseBody);
     //}
 

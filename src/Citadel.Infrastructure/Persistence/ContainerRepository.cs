@@ -144,10 +144,13 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             s.TxBytes as Stat_TxBytes,
             d.Id as Deployment_DeploymentId,
             d.Name as Deployment_DeploymentName,
-            d.status as Deployment_DeploymentStatus
+            d.status as Deployment_DeploymentStatus,
+            ss.Id as Stack_StackId,
+            ss.Name as Stack_StackName
         FROM Containers c
         LEFT JOIN Images i ON c.ImageId = i.Id
         LEFT JOIN Deployments d ON c.DeploymentId = d.Id
+        LEFT JOIN Stacks ss ON c.StackId = ss.Id
         LEFT JOIN ContainerStats s ON s.ContainerId = c.Id
           AND s.Id = (
               SELECT Id FROM ContainerStats 
@@ -182,7 +185,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Created = container.Created,
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
-            Stack = container.Stack,
+            Stack = container.DockerStack,
             ImageId = container.ImageId,
             DeploymentId = container.DeploymentId,
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
@@ -209,7 +212,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Created = container.Created,
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
-            Stack = container.Stack,
+            Stack = container.DockerStack,
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }
@@ -240,7 +243,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Created = c.Created,
             Updated = c.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(c.State),
-            Stack = c.Stack,
+            Stack = c.DockerStack,
             ImageId = c.ImageId,
             Ports = JsonSerializer.Serialize(
                 c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding

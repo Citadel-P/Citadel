@@ -344,13 +344,15 @@ CREATE TABLE containers (
     ports json NOT NULL,
     rowversion bigint NOT NULL DEFAULT 0,
     stack text,
+    stackid uuid,
     state text NOT NULL,
     updated bigint NOT NULL,
     CONSTRAINT pk_containers PRIMARY KEY (id),
     CONSTRAINT fk_containers_actors_controltriggeredby FOREIGN KEY (controltriggeredby) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_containers_deployments_deploymentid FOREIGN KEY (deploymentid) REFERENCES deployments (id) ON DELETE SET NULL,
     CONSTRAINT fk_containers_images_imageid FOREIGN KEY (imageid) REFERENCES images (id) ON DELETE SET NULL,
-    CONSTRAINT fk_containers_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+    CONSTRAINT fk_containers_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE,
+    CONSTRAINT fk_containers_stacks_stackid FOREIGN KEY (stackid) REFERENCES stacks (id) ON DELETE SET NULL
 );
 
 CREATE TABLE containerstats (
@@ -537,6 +539,8 @@ CREATE INDEX ix_containers_imageid ON containers (imageid);
 
 CREATE INDEX ix_containers_platformid ON containers (platformid);
 
+CREATE INDEX ix_containers_stackid ON containers (stackid);
+
 CREATE UNIQUE INDEX ix_containerstats_containerid_created ON containerstats (containerid, created);
 
 CREATE INDEX ix_deployments_controltriggeredby ON deployments (controltriggeredby);
@@ -612,7 +616,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260516081638_migration0001', '10.0.7');
+VALUES ('20260614091211_migration0001', '10.0.8');
 
 COMMIT;
 

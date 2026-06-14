@@ -150,7 +150,7 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
                 CommitSha: "abc123",
                 Branch: "main",
                 UpdateBehavior: StackUpdateBehavior.Notify,
-                RegistryName: "registry-visible"));
+                RegistryId: _visibleRegistryId));
         var otherPlatformStack = Stack.Create(
             name: "stack-other-platform",
             createdByActorId: Constants.SystemId,
@@ -161,7 +161,7 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
                 CommitSha: "def456",
                 Branch: "main",
                 UpdateBehavior: StackUpdateBehavior.Notify,
-                RegistryName: "registry-extra"));
+                RegistryId: _extraRegistryId));
         await uow.Stacks.AddAsync(gitStack, TestContext.Current.CancellationToken);
         await uow.Stacks.AddAsync(otherPlatformStack, TestContext.Current.CancellationToken);
         _gitStackId = gitStack.Id;

@@ -1,7 +1,7 @@
 using Application.Features.Stacks.Commands;
 using Application.Features.Stacks.Queries;
 using Application.Permissions;
-using Domain.Contracts.Resources.Deployments;
+using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Stacks;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using WebApi.Routes.Endpoints.Resources;
-using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 
 namespace WebApi.Routes.Endpoints;
@@ -85,9 +84,9 @@ public static class Stacks
         return EndpointHandlers.HandleResult(result, StackView.Map);
     }
 
-    public static async IAsyncEnumerable<DeploymentStreamItem> ApplyDeployment(IMediator mediator, ApplyDeploymentInput applyDeploymentInput, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public static async IAsyncEnumerable<StackStreamItem> ApplyStack(IMediator mediator, ApplyStackInput applyStackInput, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var reply in mediator.CreateStream(applyDeploymentInput.ToCommand(), cancellationToken))
+        await foreach (var reply in mediator.CreateStream(applyStackInput.ToCommand(), cancellationToken))
         {
             yield return reply;
         }

@@ -88,6 +88,12 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         };
     }
 
+    public void PartialUpdate(
+        StackReleaseStatus status)
+    {
+        CurrentStackRelease?.UpdateStackStatus(status);
+    }
+
     public bool MarkProcessing(Guid controlTriggeredBy)
     {
         if (ControlState == ResourceControlState.Processing || CurrentStackRelease is null) return false;

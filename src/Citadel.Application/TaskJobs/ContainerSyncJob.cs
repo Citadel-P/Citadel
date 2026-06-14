@@ -235,7 +235,7 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                         imageId: imageId,
                         dockerImageId: freshContainer.ImageId,
                         state: freshContainer.State,
-                        stack: freshContainer.Stack,
+                        dockerStack: freshContainer.Stack,
                         created: freshContainer.Created,
                         ports: freshContainer.Ports);
 
