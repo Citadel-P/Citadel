@@ -645,3 +645,11 @@ public enum LookupResourceType
     Team,
     Role,
 }
+
+public enum StackApplyEventType
+{
+    StdOut = 1,
+    StdErr,
+    SystemMessage,
+    CommandCompleted
+}

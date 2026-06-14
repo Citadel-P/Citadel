@@ -215,7 +215,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 SELECT r.Id, r.Name
                 FROM Stacks s
                 JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
-                JOIN Registries r ON r.Name = CAST(sr.Spec ->> 'RegistryName' AS text)
+                JOIN Registries r ON r.Id = CAST(sr.Spec ->> 'RegistryId' AS uuid)
                 WHERE s.Id = @StackId
             ) lookup
             ORDER BY lookup.Name
@@ -350,7 +350,10 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 Description = @Description,
                 CurrentStackReleaseId = @CurrentStackReleaseId,
                 StackSource = @StackSource,
-                StackUpdateState = @StackUpdateState::json
+                StackUpdateState = @StackUpdateState::json,
+                ControlState = @ControlState,
+                ControlStartedAt = @ControlStartedAt,
+                ControlTriggeredBy = @ControlTriggeredBy
             WHERE Id = @Id
         """;
 
@@ -358,8 +361,12 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             INSERT INTO StackReleases (
                 Id, StackId, PlatformId, Status, Version, Spec, CreatedAt, CreatedByActorId
             )
-            SELECT @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
-            WHERE NOT EXISTS (SELECT 1 FROM StackReleases WHERE Id = @ReleaseId)
+            VALUES (@ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId)
+            ON CONFLICT (Id) DO UPDATE
+            SET PlatformId = EXCLUDED.PlatformId,
+                Status = EXCLUDED.Status,
+                Version = EXCLUDED.Version,
+                Spec = EXCLUDED.Spec
         """;
 
         var currentStackRelease = stack.CurrentStackRelease ?? throw new InvalidOperationException("Stack must have a current stack release.");
@@ -372,6 +379,9 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             CurrentStackReleaseId = stack.CurrentStackReleaseId,
             StackSource = EnumFormatter<StackSource>.GetValue(stack.StackSource),
             StackUpdateState = JsonSerializer.Serialize(stack.StackUpdateState, StackJsonContext.Default.StackUpdateState),
+            ControlState = EnumFormatter<ResourceControlState>.GetValue(stack.ControlState),
+            ControlStartedAt = stack.ControlStartedAt,
+            ControlTriggeredBy = stack.ControlTriggeredBy,
             ReleaseId = currentStackRelease.Id,
             ReleaseStackId = currentStackRelease.StackId,
             ReleasePlatformId = currentStackRelease.PlatformId,

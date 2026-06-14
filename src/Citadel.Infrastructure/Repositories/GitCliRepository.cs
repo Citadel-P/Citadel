@@ -15,7 +15,7 @@ using System.Text;
 namespace Infrastructure.Repositories;
 
 /// <inheritdoc/>
-internal class GitCliRepository(IProcessService processService) : IGitCliRepository
+internal class GitCliRepository(ICommandExecutor processService) : IGitCliRepository
 {
     private const string GitExecutable = "git";
 

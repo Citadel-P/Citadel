@@ -1,4 +1,5 @@
 ﻿using Domain;
+using Domain.Entities.Deployments;
 using Hosting.Common;
 using Hosting.OpenApi;
 using WebApi.Routes.Endpoints;
@@ -1035,6 +1036,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteStacks");
+
+        stacks.MapPost("/apply", Stacks.ApplyStack)
+            .WithSummary("Apply a stack and streams execution logs in real time.")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("applyStack");
     }
 
     private static void MapActivityEndpoints(RouteGroupBuilder activities)

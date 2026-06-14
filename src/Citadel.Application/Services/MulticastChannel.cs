@@ -71,7 +71,7 @@ internal class MulticastChannel<T>
         }
     }
 
-    // Complete all subscribers
+    // CommandCompleted all subscribers
     public void Complete()
     {
         Channel<T>[] snapshot;

@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Domain.Entities;
+using Domain.Entities.Stacks;
 using Domain.Entities.Deployments;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
@@ -24,14 +25,15 @@ internal static class ContainerMappers
             updated: container.Updated,
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-            stack: container.Stack,
+            dockerStack: container.Stack,
             imageId: container.ImageId,
+            stackId: container.StackId,
             deploymentId: container.DeploymentId,
             rowVersion: container.RowVersion,
             controlStartedAt: container.ControlStartedAt,
             controlTriggeredBy: container.ControlTriggeredBy,
             controlState: Enum.Parse<ResourceControlState>(container.ControlState),
-            stats: container.Stats?.Select(ToDomain).ToList());
+            stats: container.Stats?.Select(ToDomain).ToList()); 
     }
 
     internal static Container? ToDomain(this ContainerWithImageDto? container)
@@ -51,8 +53,9 @@ internal static class ContainerMappers
             controlState: Enum.Parse<ResourceControlState>(container.ControlState),
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-            stack: container.Stack,
+            dockerStack: container.Stack,
             imageId: container.ImageId,
+            stackId: container.StackId,
             deploymentId: container.DeploymentId,
             deployment: container.Deployment_DeploymentId == null ? null : Deployment.FromPersistence
             (
@@ -104,8 +107,9 @@ internal static class ContainerMappers
             controlState: Enum.Parse<ResourceControlState>(container.ControlState),
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-            stack: container.Stack,
+            dockerStack: container.Stack,
             imageId: container.ImageId,
+            stackId: container.StackId,
             deploymentId: container.DeploymentId,
             image: container.Image_ImageId == null ? null : Image.FromPersistence
             (
@@ -122,6 +126,21 @@ internal static class ContainerMappers
                 rowVersion: 0,
                 controlStartedAt: null,
                 controlState: ResourceControlState.Idle
+            ),
+            stack : container.Stack_StackId == null ? null : Stack.FromPersistence
+            (
+                id : container.Stack_StackId ?? Guid.Empty,
+                name: container.Stack_StackName,
+                description: string.Empty,
+                stackUpdateState: null,
+                currentStackReleaseId : Guid.Empty,
+                stackSource: StackSource.WebEditor,
+                createdAt: DateTime.MinValue,
+                createdByActorId: Guid.Empty,
+                rowVersion: 0,
+                controlState: ResourceControlState.Idle,
+                controlStartedAt: 0,
+                controlTriggeredBy: null
             ),
             deployment: container.Deployment_DeploymentId == null ? null : Deployment.FromPersistence
             (

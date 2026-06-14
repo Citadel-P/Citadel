@@ -1,5 +1,4 @@
-﻿using Application.Permissions;
-using Application.Services.Abstractions;
+﻿using Application.Services.Abstractions;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Platforms;
@@ -9,6 +8,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
+using Domain.Entities.Stacks;
 using Domain.Entities.Platforms;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Activities;
@@ -19,6 +19,7 @@ using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using static Hosting.Common.Constants;
+using WebApi.Routes.Endpoints.Resources.Stacks;
 
 namespace WebApi.Hubs;
 
@@ -127,6 +128,21 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         return Task.CompletedTask;
     }
 
+    #endregion
+
+    #region Stacks
+    public Task SendStackInfo(Stack stack, string action)
+    {
+        var map = StackView.Map(stack);
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.StackGroup(stack.Id))
+            .SendAsync("StackInfoUpdated", map, action);
+
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.StacksGroup)
+            .SendAsync("StacksInfoUpdated", map, action);
+        return Task.CompletedTask;
+    }
     #endregion
 
     #region Exec Sessions

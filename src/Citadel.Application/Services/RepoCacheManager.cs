@@ -57,7 +57,7 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
                     return new RepoSyncResult(Operation: operation, Error: error.Message);
             }
 
-            // Execute System Hooks
+            // Execute SystemMessage Hooks
             var hookResult = await ExecuteHooksInternalAsync(repo, targetPath, operation, ct);
             if (hookResult.IsFailure(out var hookError))
                 return new RepoSyncResult(Operation: operation, Error: hookError.Message);

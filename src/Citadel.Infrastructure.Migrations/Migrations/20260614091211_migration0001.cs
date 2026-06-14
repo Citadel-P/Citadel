@@ -674,6 +674,7 @@ namespace Infrastructure.Migrations.Migrations
                     ports = table.Column<string>(type: "json", nullable: false),
                     rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
                     stack = table.Column<string>(type: "text", nullable: true),
+                    stackid = table.Column<Guid>(type: "uuid", nullable: true),
                     state = table.Column<string>(type: "text", nullable: false),
                     updated = table.Column<long>(type: "bigint", nullable: false)
                 },
@@ -704,6 +705,12 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "platforms",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_containers_stacks_stackid",
+                        column: x => x.stackid,
+                        principalTable: "stacks",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -951,6 +958,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_containers_platformid",
                 table: "containers",
                 column: "platformid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_containers_stackid",
+                table: "containers",
+                column: "stackid");
 
             migrationBuilder.CreateIndex(
                 name: "ix_containerstats_containerid_created",
@@ -1209,9 +1221,6 @@ namespace Infrastructure.Migrations.Migrations
                 name: "roles");
 
             migrationBuilder.DropTable(
-                name: "stacks");
-
-            migrationBuilder.DropTable(
                 name: "teams");
 
             migrationBuilder.DropTable(
@@ -1222,6 +1231,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "images");
+
+            migrationBuilder.DropTable(
+                name: "stacks");
 
             migrationBuilder.DropTable(
                 name: "platforms");

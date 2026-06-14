@@ -81,7 +81,8 @@ public static class ApplicationModule
             .AddScoped<IActorRoleService, ActorRoleService>()
             .AddScoped<IActorResourceAccessService, ActorResourceAccessService>()
             .AddScoped<INetworkService, NetworkService>()
-            .AddScoped<IUserContextAccessor, UserContextAccessor>();
+            .AddScoped<IUserContextAccessor, UserContextAccessor>()
+            .AddScoped<IApplyStackService, ApplyStackService>();
 
     private static IServiceCollection AddLookups(this IServiceCollection services)
         => services
@@ -92,6 +93,7 @@ public static class ApplicationModule
             .AddSingleton<IStreamSubscriptionResolver, StreamSubscriptionResolver>()
             .AddSingleton<ContainerInfoStreamManager>()
             .AddSingleton<ContainerLogStreamManager>()
+            .AddSingleton<StackStreamManager>()
             .AddSingleton<DeploymentStreamManager>()
             .AddSingleton<ActivityStreamManager>()
             .AddSingleton<AlertEventStreamManager>()
@@ -110,7 +112,8 @@ public static class ApplicationModule
             .AddSingleton<IDeploymentStreamManager>(s => s.GetRequiredService<DeploymentStreamManager>())
             .AddSingleton<IDockerDaemonStreamManager>(s => s.GetRequiredService<DockerDaemonStreamManager>())
             .AddSingleton<IContainerLogStreamManager>(s => s.GetRequiredService<ContainerLogStreamManager>())
-            .AddSingleton<IGitRepositoryStreamManager>(s => s.GetRequiredService<GitRepositoryStreamManager>());
+            .AddSingleton<IGitRepositoryStreamManager>(s => s.GetRequiredService<GitRepositoryStreamManager>())
+            .AddSingleton<IStackStreamManager>(s => s.GetRequiredService<StackStreamManager>());
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
     {

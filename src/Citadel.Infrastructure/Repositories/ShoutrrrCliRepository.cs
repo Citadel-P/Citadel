@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Repositories;
 
-internal class ShoutrrrCliRepository(IProcessService processService, ILogger<ShoutrrrCliRepository> logger) : IShoutrrrCliRepository
+internal class ShoutrrrCliRepository(ICommandExecutor processService, ILogger<ShoutrrrCliRepository> logger) : IShoutrrrCliRepository
 {
     private readonly string shoutrrrCliPath = "shoutrrr";
 

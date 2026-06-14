@@ -1,5 +1,6 @@
 ﻿using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
+using Domain.Entities.Stacks;
 
 namespace Domain.Entities;
 
@@ -10,8 +11,9 @@ public class Container(
     string dockerContainerId,
     ContainerStateStatus state,
     long? created = null,
-    string? stack = null,
+    string? dockerStack = null,
     Guid? deploymentId = null,
+    Guid? stackId = null,
     Guid? imageId = null,
     IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null) : IReconcilableResource
 {
@@ -22,6 +24,7 @@ public class Container(
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
     public Guid? DeploymentId { get; private set; } = deploymentId;
+    public Guid? StackId { get; private set; } = stackId;
     public Guid? ImageId { get; private set; } = imageId;
     public string DockerContainerId { get; private set; } = dockerContainerId;
     public string? DockerImageId { get; private set; } = dockerImageId;
@@ -29,7 +32,7 @@ public class Container(
     public long Created { get; private set; } = created is not null ? created.Value : (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
     public long Updated { get; private set; }
     public ContainerStateStatus State { get; set; } = state;
-    public string? Stack { get; private set; } = stack;
+    public string? DockerStack { get; private set; } = dockerStack;
 
     #region IReconcilableResource Members
     public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
@@ -43,26 +46,29 @@ public class Container(
     public Platform? Platform { get; private set; } = null!;
     public Image? Image { get; private set; } = null!;
     public Deployment? Deployment { get; private set; } = null!;
+    public Stack? Stack { get; private set; } = null!;
 
     public Container PartialUpdate(
         string? name = null,
         string ? dockerImageId = null,
         ContainerStateStatus? state = null,
-        string? stack = null,
+        string? dockerStack = null,
         long? created = null,
         Guid? platformId = null,
         Guid? imageId = null,
         Guid? deploymentId = null,
+        Guid? stackId = null,
         IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
     {
         if (name != null) Name = name;
         if (dockerImageId != null) DockerImageId = dockerImageId;
         if (state != null) State = state.Value;
-        if (stack != null) Stack = stack;
+        if (dockerStack != null) DockerStack = dockerStack;
         if (created != null) Created = created.Value;
         if (platformId != null) PlatformId = platformId.Value;
         if (imageId is not null) ImageId = imageId;
         if (deploymentId is not null) DeploymentId = deploymentId;
+        if (stackId is not null) StackId = stackId;
         if (ports != null)
         {
             this.ports.Clear();
@@ -107,10 +113,12 @@ public class Container(
         ResourceControlState controlState,
         ContainerStateStatus state,
         IDictionary<string, IReadOnlyList<HostPortBinding>> ports,
-        string? stack = null,
+        string? dockerStack = null,
         Guid? imageId = null,
         Guid? deploymentId = null,
+        Guid? stackId = null,
         Image? image = null,
+        Stack? stack = null,
         Deployment? deployment = null,
         IReadOnlyCollection<ContainerStat>? stats = null
         )
@@ -122,13 +130,15 @@ public class Container(
             platformId: platformId,
             state: state,
             created: created,
-            stack: stack,
+            dockerStack: dockerStack,
             ports: ports,
             imageId: imageId,
+            stackId: stackId,
             deploymentId: deploymentId)
         {
             Id = id,
             Image = image,
+            Stack = stack,
             Updated = updated,
             Deployment = deployment,
             RowVersion = rowVersion,

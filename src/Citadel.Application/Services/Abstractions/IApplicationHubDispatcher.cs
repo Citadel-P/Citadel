@@ -2,6 +2,7 @@
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Volumes;
+using Domain.Entities.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
@@ -48,6 +49,10 @@ public interface IApplicationHubDispatcher
 
     #region Deployments
     Task SendDeploymentInfo(Deployment deployment, string action);
+    #endregion
+
+    #region Stacks
+    Task SendStackInfo(Stack stack, string action = "update");
     #endregion
 
     #region Activities

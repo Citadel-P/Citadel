@@ -17,7 +17,7 @@ namespace Infrastructure.Migrations.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.7")
+                .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -688,6 +688,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("stack");
 
+                    b.Property<Guid?>("StackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stackid");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasColumnType("text")
@@ -714,6 +718,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("ix_containers_platformid");
+
+                    b.HasIndex("StackId")
+                        .HasDatabaseName("ix_containers_stackid");
 
                     b.HasIndex("DockerContainerId", "PlatformId")
                         .IsUnique()
@@ -2111,6 +2118,12 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_containers_platforms_platformid");
+
+                    b.HasOne("Stack", null)
+                        .WithMany()
+                        .HasForeignKey("StackId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_containers_stacks_stackid");
                 });
 
             modelBuilder.Entity("ContainerStat", b =>

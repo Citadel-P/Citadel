@@ -56,7 +56,7 @@ public class MulticastChannelTests
         var r1 = mc.AddSubscriber();
         var r2 = mc.AddSubscriber();
 
-        // Complete all subscribers
+        // CommandCompleted all subscribers
         mc.Complete();
 
         // Both readers should be completed

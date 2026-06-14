@@ -39,7 +39,7 @@ internal class GetDockerContainerHandler(
             State: container.State,
             ControlState: container.ControlState,
             Created: container.Created,
-            Stack: container.Stack,
+            Stack: container.DockerStack,
             ContainerStat: null,
             Ports: container.Ports) : null;
         return dockerContainer is not null ? Result.Success((dockerContainer, container?.PlatformId ?? Guid.Empty)) : Result.Failure<(DockerContainer, Guid)>(new NotFoundError("Container does not exist"));

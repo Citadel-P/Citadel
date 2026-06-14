@@ -55,7 +55,7 @@ public sealed record ContainerView(
             State: container.State,
             ControlState: container.ControlState,
             Updated: container.Updated,
-            Stack: container.Stack,
+            Stack: container.DockerStack,
             LastStats: container.Stats is not null && container.Stats.Count > 0 ? ContainerStatView.Map(container.Stats.First()) : null,
             Ports: container.Ports,
             ImageView: container.Image is not null ? ImagesView.Map(container.Image) : null,

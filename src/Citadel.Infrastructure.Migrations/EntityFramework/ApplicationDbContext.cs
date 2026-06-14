@@ -170,7 +170,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000007"), Name = "Auto Deploy Failed - Deployment", Type = "DeploymentAutoDeployFailed", Severity = "Critical", CooldownSeconds = (int?)null, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000008"), Name = "Deployment Auto Updated", Type = "DeploymentAutoUpdated", Severity = "Info", CooldownSeconds = (int?)null, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
 
-            // Stack event alerts
+            // DockerStack event alerts
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000009"), Name = "Image Update Available - Stack", Type = "StackImageUpdateAvailable", Severity = "Info", CooldownSeconds = 60 * 60 * 24, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-00000000000a"), Name = "Auto Deploy Failed - Stack", Type = "StackAutoDeployFailed", Severity = "Critical", CooldownSeconds = (int?)null, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-00000000000b"), Name = "Stack Auto Updated", Type = "StackAutoUpdated", Severity = "Info", CooldownSeconds = (int?)null, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate }
@@ -253,6 +253,7 @@ internal static class Configuration
 
         container.Property<Guid>("PlatformId").IsRequired();
         container.Property<Guid?>("DeploymentId").IsRequired(false);
+        container.Property<Guid?>("StackId").IsRequired(false);
         container.Property<Guid?>("ImageId").IsRequired(false);
         container.Property<string>("DockerContainerId").HasColumnType(Text).IsRequired().HasMaxLength(64);
         container.Property<string>("DockerImageId").HasColumnType(Text).IsRequired();
@@ -283,6 +284,13 @@ internal static class Configuration
             .WithMany()
             .IsRequired(false)
             .HasForeignKey("DeploymentId")
+            .OnDelete(DeleteBehavior.SetNull);
+
+        container
+            .HasOne("Stack")
+            .WithMany()
+            .IsRequired(false)
+            .HasForeignKey("StackId")
             .OnDelete(DeleteBehavior.SetNull);
 
         container.HasIndex("DockerContainerId", "PlatformId").IsUnique().HasDatabaseName($"IX__{tableName}_DockerContainerId_PlatformId");

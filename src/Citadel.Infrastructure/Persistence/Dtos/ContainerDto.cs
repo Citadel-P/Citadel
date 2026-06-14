@@ -8,19 +8,20 @@ internal record ContainerDto(
     string DockerImageId,
     long Created,
     long Updated,
-    string State, // ContainerStateStatus
-    string Ports, // List<ContainerPort> 
+    string State,
+    string Ports, 
     string? Stack,
     long RowVersion,
     string ControlState,
     long? ControlStartedAt,
     Guid? ControlTriggeredBy,
     Guid? ImageId = null,
+    Guid? StackId = null,
     Guid? DeploymentId = null)
 {
     public ICollection<ContainerStatDto> Stats { get; init; } = [];
 
-    public ContainerDto() : this(Guid.Empty, Guid.Empty, string.Empty, string.Empty, string.Empty, 0, 0, string.Empty, string.Empty, string.Empty, 0, string.Empty, null, null)
+    public ContainerDto() : this(Guid.Empty, Guid.Empty, string.Empty, string.Empty, string.Empty, 0, 0, string.Empty, string.Empty, string.Empty, 0, string.Empty, null, null, null)
     {
         
     }
@@ -45,6 +46,13 @@ internal record ContainerWithDeploymentDto
     string? Deployment_DeploymentStatus = null
 ) : ContainerDto;
 
+internal record ContainerWithStackDto
+(
+    Guid? Stack_StackId = null,
+    string? Stack_StackName = null,
+    string? Stack_StackStatus = null
+) : ContainerWithDeploymentDto;
+
 internal record ContainerWithImageDto(
      Guid? Image_ImageId = null,
      Guid? Image_platformId = null,
@@ -56,7 +64,7 @@ internal record ContainerWithImageDto(
      int? Image_Containers = null,
      DateTime? Image_CreatedAt = null,
      DateTime? Image_UpdatedAt = null
-    ) : ContainerWithDeploymentDto;
+    ) : ContainerWithStackDto;
 
 internal record ContainerWithLastStatDto(
      long? Stat_Created,

@@ -19,7 +19,7 @@ internal static class ContainerMapper
         (
             name: container.Name,
             dockerImageId: container.ImageId,
-            stack: container.Stack,
+            dockerStack: container.Stack,
             platformId: platformId,
             dockerContainerId: container.Id,
             created: container.Created,

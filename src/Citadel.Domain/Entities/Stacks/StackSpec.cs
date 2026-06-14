@@ -19,7 +19,7 @@ public abstract record StackSpec(
     StackCommand? PostDeploy,
     List<string>? EnvVars = null,
     string? EnvFilePath = null,
-    string? RegistryId = null
+    Guid? RegistryId = null
     );
 
 public sealed record ManualStack(
@@ -30,7 +30,7 @@ public sealed record ManualStack(
     string? ProjectName = null,
     StackCommand? PreDeploy = null,
     StackCommand? PostDeploy = null,
-    string? RegistryName = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryName);
+    Guid? RegistryId = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryId);
 
 /// <param name="GitRepoId">Reference to an existing Repo to attach to, <see cref="Git.GitRepository"/></param>
 /// <param name="ProjectName"></param>
@@ -42,7 +42,7 @@ public sealed record ManualStack(
 /// <param name="EnvFilePath"></param>
 /// <param name="CommitSha">Optionally specify a commit sha to deploy from. If not specified, will deploy from the default branch and track new commits based on the update behavior.</param>
 /// <param name="UpdateBehavior"> How to handle updates when a new image digest is detected for the currently defined tags in the compose file.</param>
-/// <param name="WebHookForceDeploy">Usually the Stack won't deploy unless there are changes to the files. Use this to force deploy.param>
+/// <param name="WebHookForceDeploy">Usually the DockerStack won't deploy unless there are changes to the files. Use this to force deploy.param>
 /// <param name="WebHookSecret">A secret token to validate incoming webhooks from the Git provider. Default to the linked repos.</param>
 /// <param name="RegistryName">The name of the container registry to use for the stack.</param>
 public sealed record GitStack(  
@@ -60,7 +60,7 @@ public sealed record GitStack(
     List<string>? EnvVars = null,
     List<string>? AdditionalEnvFileFromRepo = null,
     string? EnvFilePath = null,
-    string? RegistryName = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryName);
+    Guid? RegistryId = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryId);
 
 public sealed record ImageUpdateState(
     string ServiceName,

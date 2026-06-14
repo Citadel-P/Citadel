@@ -14,6 +14,7 @@ using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
+using WebApi.Routes.Endpoints.Resources.Stacks;
 
 namespace WebApi.Hubs;
 
@@ -46,6 +47,8 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<DockerVolumeResult>]
 [GenerateShapeFor<DeploymentsView>]
 [GenerateShapeFor<DeploymentView>]
+[GenerateShapeFor<StacksView>]
+[GenerateShapeFor<StackView>]
 [GenerateShapeFor<ActivityView>]
 [GenerateShapeFor<AlertEventView>]
 [GenerateShapeFor<List<AlertEventView>>]
@@ -61,6 +64,15 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<DeploymentPaused>]
 [GenerateShapeFor<DeploymentApplied>]
 [GenerateShapeFor<DeploymentDegraded>]
+[GenerateShapeFor<StackCreated>]
+[GenerateShapeFor<StackUpdated>]
+[GenerateShapeFor<StackRenamed>]
+[GenerateShapeFor<StackDeleted>]
+[GenerateShapeFor<StackStarted>]
+[GenerateShapeFor<StackStopped>]
+[GenerateShapeFor<StackPaused>]
+[GenerateShapeFor<StackApplied>]
+[GenerateShapeFor<StackDegraded>]
 [GenerateShapeFor<AlertRuleCreated>]
 [GenerateShapeFor<AlertRuleUpdated>]
 [GenerateShapeFor<AlertRuleDeleted>]
@@ -90,6 +102,15 @@ internal static class DerivedTypesMapping
 
     internal static DerivedTypeMapping<ActivityEventInfo> ActivityEventInfoMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
     {
+        [nameof(ActivityEventType.StackCreated)] = typeof(StackCreated),
+        [nameof(ActivityEventType.StackUpdated)] = typeof(StackUpdated),
+        [nameof(ActivityEventType.StackRenamed)] = typeof(StackRenamed),
+        [nameof(ActivityEventType.StackDeleted)] = typeof(StackDeleted),
+        [nameof(ActivityEventType.StackStarted)] = typeof(StackStarted),
+        [nameof(ActivityEventType.StackStopped)] = typeof(StackStopped),
+        [nameof(ActivityEventType.StackPaused)] = typeof(StackPaused),
+        [nameof(ActivityEventType.StackApplied)] = typeof(StackApplied),
+        [nameof(ActivityEventType.StackDegraded)] = typeof(StackDegraded),
         [nameof(ActivityEventType.DeploymentCreated)] = typeof(DeploymentCreated),
         [nameof(ActivityEventType.DeploymentUpdated)] = typeof(DeploymentUpdated),
         [nameof(ActivityEventType.DeploymentRenamed)] = typeof(DeploymentRenamed),
