@@ -10,6 +10,8 @@ public sealed record StackApplyCommand(
     string? EnvironmentFilePath,
     string? RegistryAuth,
     string? RegistryName,
+    string? RegistryHost,
+    bool DestroyBeforeDeploy,
     IReadOnlyList<string>? EnvironmentVariables,
     StackCommand? PreDeploy,
     StackCommand? PostDeploy,

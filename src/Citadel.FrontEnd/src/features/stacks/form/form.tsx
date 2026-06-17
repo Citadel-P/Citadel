@@ -16,6 +16,7 @@ import {
   FieldInput,
   FieldTextArea,
   ItemSelector,
+  FieldSwitch,
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -554,6 +555,27 @@ export const StackForm = ({
                     ),
                   }),
                 ],
+              }),
+
+              defineField({
+                key: 'spec.destroyBeforeDeploy',
+                label: 'Destroy',
+                description: `Ensure 'docker compose down' is run before redeploying the Stack.`,
+                required: false,
+                render: (value, set) => (
+                  <FieldSwitch
+                    checked={value ?? false}
+                    id="spec.destroyBeforeDeploy"
+                    onChange={(value) =>
+                      set((prev) => ({
+                        spec: {
+                          ...prev.spec!,
+                          destroyBeforeDeploy: value,
+                        },
+                      }))
+                    }
+                  />
+                ),
               }),
             ]
           : [],

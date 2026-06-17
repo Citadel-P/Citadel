@@ -140,7 +140,7 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.StacksGroup)
-            .SendAsync("StacksInfoUpdated", map, action);
+            .SendAsync("StackInfoUpdated", map, action);
         return Task.CompletedTask;
     }
     #endregion

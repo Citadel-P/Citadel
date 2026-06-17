@@ -9,6 +9,7 @@ namespace Domain.Entities.Stacks;
 /// <param name="EnvVars"></param>
 /// <param name="EnvFilePath">The path to write the file to, relative to the 'Run Directory'. </param>
 /// <param name="RegistryId">The Id of the container registry to use for the stack.</param>
+/// <param name="DestroyBeforeDeploy">Whether to destroy the stack before deploying it. This is useful for stacks that don't support rolling updates, or if you want to ensure a clean slate before deploying.</param>
 [JsonPolymorphic]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 [JsonDerivedType(typeof(ManualStack), nameof(StackSource.WebEditor))]
@@ -19,7 +20,8 @@ public abstract record StackSpec(
     StackCommand? PostDeploy,
     List<string>? EnvVars = null,
     string? EnvFilePath = null,
-    Guid? RegistryId = null
+    Guid? RegistryId = null,
+    bool DestroyBeforeDeploy = true
     );
 
 public sealed record ManualStack(
@@ -30,7 +32,9 @@ public sealed record ManualStack(
     string? ProjectName = null,
     StackCommand? PreDeploy = null,
     StackCommand? PostDeploy = null,
-    Guid? RegistryId = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryId);
+    Guid? RegistryId = null,
+    bool DestroyBeforeDeploy = true
+) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryId, DestroyBeforeDeploy);
 
 /// <param name="GitRepoId">Reference to an existing Repo to attach to, <see cref="Git.GitRepository"/></param>
 /// <param name="ProjectName"></param>
@@ -60,7 +64,8 @@ public sealed record GitStack(
     List<string>? EnvVars = null,
     List<string>? AdditionalEnvFileFromRepo = null,
     string? EnvFilePath = null,
-    Guid? RegistryId = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryId);
+    Guid? RegistryId = null,
+    bool DestroyBeforeDeploy = true) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryId, DestroyBeforeDeploy);
 
 public sealed record ImageUpdateState(
     string ServiceName,

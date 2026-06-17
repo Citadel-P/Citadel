@@ -57,6 +57,13 @@ export enum StackReleaseStatus {
   Stopped = "Stopped",
 }
 
+export enum StackApplyEventType {
+  StdOut = "StdOut",
+  StdErr = "StdErr",
+  SystemMessage = "SystemMessage",
+  CommandCompleted = "CommandCompleted",
+}
+
 export enum SpecificPermission {
   None = "None",
   Logs = "Logs",
@@ -1167,6 +1174,13 @@ export interface AlertRulesView {
 }
 
 export interface ApplyDeploymentInput {
+  /** @format uuid */
+  id: string;
+  /** @default false */
+  recreate?: null | boolean;
+}
+
+export interface ApplyStackInput {
   /** @format uuid */
   id: string;
   /** @default false */
@@ -3112,26 +3126,42 @@ export interface StackSpecGitStack {
   webHookSecret?: null | string;
   composePaths?: null | string[];
   additionalEnvFileFromRepo?: null | string[];
-  registryName?: null | string;
   projectName?: null | string;
   preDeploy?: null | StackCommand;
   postDeploy?: null | StackCommand;
   envVars?: null | string[];
   envFilePath?: null | string;
+  /** @format uuid */
   registryId?: null | string;
+  /** @default true */
+  destroyBeforeDeploy?: boolean;
 }
 
 export interface StackSpecManualStack {
   $type?: "WebEditor";
   composeFile: string;
   updateBehavior: StackUpdateBehavior;
-  registryName?: null | string;
   projectName?: null | string;
   preDeploy?: null | StackCommand;
   postDeploy?: null | StackCommand;
   envVars?: null | string[];
   envFilePath?: null | string;
+  /** @format uuid */
   registryId?: null | string;
+  /** @default true */
+  destroyBeforeDeploy?: boolean;
+}
+
+export interface StackStreamItem {
+  type: StackApplyEventType;
+  /** @format date-time */
+  timestamp: any;
+  message?: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode?: null | number | string;
 }
 
 export interface StackUpdateStateGitStackUpdateState {
@@ -7124,6 +7154,35 @@ export class Api<
       this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/${id}/_metadata`,
         method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name ApplyStack
+     * @summary Apply a stack and streams execution logs in real time.
+     * @request POST:/api/v1/stacks/apply
+     * @secure
+     * @response `200` `(StackStreamItem)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    applyStack: (data: ApplyStackInput, params: RequestParams = {}) =>
+      this.request<
+        StackStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/apply`,
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
