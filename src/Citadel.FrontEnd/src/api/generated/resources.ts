@@ -119,6 +119,7 @@ export const resources = {
   renameStack: { method: "POST", key: "renameStack", params: ["data","params"], requiredParams: [], queryParams: [] },
   updateStack: { method: "PATCH", key: "updateStack", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   updateStackMetadata: { method: "PATCH", key: "updateStackMetadata", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
+  applyStack: { method: "POST", key: "applyStack", params: ["data","params"], requiredParams: [], queryParams: [] },
   getActivity: { method: "GET", key: "getActivity", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   listActivities: { method: "GET", key: "listActivities", params: ["query","params"], requiredParams: [], queryParams: ["ResourceId","ResourceType","EventType","Page","PageSize"] },
   getAlertEvent: { method: "GET", key: "getAlertEvent", params: ["id","params"], requiredParams: ["id"], queryParams: [] },

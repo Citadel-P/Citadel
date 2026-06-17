@@ -661,13 +661,19 @@ export const LogViewer = memo(
 
     const normalizedLogs = useMemo((): LogEntry[] => {
       if (!deferredLogs) return [];
+
+      let rawString = '';
       if (typeof deferredLogs === 'string') {
-        return deferredLogs.split('\n').map((line) => ({ message: line }));
+        rawString = deferredLogs;
+      } else {
+        rawString = deferredLogs
+          .map((log) => (typeof log === 'object' && log !== null ? log.message : String(log)))
+          .join('\n');
       }
-      return deferredLogs.map((log) => {
-        if (typeof log === 'object' && log !== null) return log as LogEntry;
-        return { message: log as string };
-      });
+
+      const processedLines = parseAnsiTerminalStream(rawString);
+
+      return processedLines.map((line) => ({ message: line }));
     }, [deferredLogs]);
 
     // Convert ANSI once per unique message, then cache.
@@ -767,7 +773,54 @@ export const LogViewer = memo(
     );
   },
 );
+function parseAnsiTerminalStream(rawText: string): string[] {
+  if (!rawText) return [];
 
+  let cleanText = rawText.replace(/\x1b\[\?25[lh]/g, '').replace(/\?25[lh]/g, '');
+
+  // Heal stripped Docker Compose cursor controls (e.g., AG[+] or G[+])
+  // We capture any number of 'A' tokens (Cursor Up) followed by 'G' (Carriage Return)
+  // right before the '[+]' progress block, and restore them to standard terminal controls.
+  cleanText = cleanText.replace(/(A*)(G)(?=\s*\[\+\])/g, (_, cursorUpChars) => {
+    const structuralUps = '\x1b[A'.repeat(cursorUpChars.length);
+    return structuralUps + '\r';
+  });
+
+  const lines: string[] = [];
+  let cursorLine = 0;
+
+  const tokens = cleanText.split(/(\r|\n|\x1b\[\d*A|\x1b\[G)/);
+
+  for (const token of tokens) {
+    if (!token) continue;
+
+    if (token === '\n') {
+      cursorLine++;
+      if (cursorLine >= lines.length) {
+        lines.push('');
+      }
+    } else if (token === '\r' || token === '\x1b[G') {
+      if (lines[cursorLine] !== undefined) {
+        lines[cursorLine] = '';
+      }
+    } else if (token.startsWith('\x1b[') && token.endsWith('A')) {
+      const match = token.match(/\x1b\[(\d+)A/);
+      const count = match ? parseInt(match[1], 10) : 1;
+      cursorLine = Math.max(0, cursorLine - count);
+    } else {
+      if (lines[cursorLine] === undefined) {
+        while (lines.length <= cursorLine) lines.push('');
+      }
+      lines[cursorLine] = token;
+    }
+  }
+
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+    lines.pop();
+  }
+
+  return lines.map((line) => line.trimEnd());
+}
 export const MemoryUsageCell = ({
   state,
   stats,

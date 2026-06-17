@@ -16255,6 +16255,13 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "recreate": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
           }
         }
       },
@@ -19320,13 +19327,6 @@
             }
           }
         }
-      },
-      "ExecutionStreamType": {
-        "enum": [
-          "StdOut",
-          "StdErr",
-          "System"
-        ]
       },
       "ExposedPortsResult": {
         "required": [
@@ -23558,6 +23558,14 @@
           "Terminal"
         ]
       },
+      "StackApplyEventType": {
+        "enum": [
+          "StdOut",
+          "StdErr",
+          "SystemMessage",
+          "CommandCompleted"
+        ]
+      },
       "StackCapabilities": {
         "required": [
           "canViewLogs",
@@ -23961,6 +23969,10 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "destroyBeforeDeploy": {
+            "type": "boolean",
+            "default": true
           }
         }
       },
@@ -24029,28 +24041,31 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "destroyBeforeDeploy": {
+            "type": "boolean",
+            "default": true
           }
         }
       },
       "StackStreamItem": {
         "required": [
-          "message",
           "type",
           "timestamp"
         ],
         "type": "object",
         "properties": {
+          "type": {
+            "$ref": "#/components/schemas/StackApplyEventType"
+          },
+          "timestamp": {
+            "format": "date-time"
+          },
           "message": {
             "type": [
               "null",
               "string"
             ]
-          },
-          "type": {
-            "$ref": "#/components/schemas/ExecutionStreamType"
-          },
-          "timestamp": {
-            "format": "date-time"
           },
           "exitCode": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",

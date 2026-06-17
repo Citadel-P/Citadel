@@ -24,6 +24,8 @@ import {
   ActivityEventInfoGitRepoCloned,
   ActivityEventInfoDeploymentApplied,
   ActivityEventInfoStackApplied,
+  ApplyStackInput,
+  StackStreamItem,
 } from '@/api/generated/api.types';
 import { formatActivityEvent, serializeData } from '@/lib/utils';
 import Loader from '../ui/loader';
@@ -37,6 +39,7 @@ interface PullImageParams {
 }
 
 type DeployParams = { name: string } & ApplyDeploymentInput;
+type StackDeployParams = { name: string } & ApplyStackInput;
 
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
@@ -257,12 +260,7 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   ),
 
   StackUpdated: (info) => (
-    <MonacoDiff
-      original={info.oldStack}
-      modified={info.newStack}
-      format="yaml"
-      title="Configuration changes"
-    />
+    <MonacoDiff original={info.oldStack} modified={info.newStack} format="yaml" title="Configuration changes" />
   ),
 
   StackApplied: (info, activity) => (
@@ -276,16 +274,16 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   ),
   StackDegraded: (info) => <span className="text-sm text-muted-foreground">{info.reason}</span>,
 
-  StackStarted:(info) => <KeyValueBlock label="Output" value={info.result} />,
-  StackStopped:(info) => <KeyValueBlock label="Output" value={info.result} />,
-  StackPaused:(info) => <KeyValueBlock label="Output" value={info.result} />,
+  StackStarted: (info) => <KeyValueBlock label="Output" value={info.result} />,
+  StackStopped: (info) => <KeyValueBlock label="Output" value={info.result} />,
+  StackPaused: (info) => <KeyValueBlock label="Output" value={info.result} />,
 
   StackRenamed: (info) => (
     <span className="text-sm text-muted-foreground">
       Deployment renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
     </span>
   ),
-   StackDeleted: (info, activity) => (
+  StackDeleted: (info, activity) => (
     <SpecViewer spec={info.stack} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
 
@@ -364,7 +362,11 @@ export function ActivityAlertZone({
   title,
   date,
 }: {
-  info: ActivityEventInfoGitRepoPulled | ActivityEventInfoGitRepoCloned | ActivityEventInfoDeploymentApplied | ActivityEventInfoStackApplied;
+  info:
+    | ActivityEventInfoGitRepoPulled
+    | ActivityEventInfoGitRepoCloned
+    | ActivityEventInfoDeploymentApplied
+    | ActivityEventInfoStackApplied;
   activity: ActivityView;
   title?: string;
   date?: any;
@@ -470,6 +472,11 @@ function ApplyDeployTaskRenderer({ payload, type }: { payload: DeployParams; typ
   return <TaskStreamLayout title="Deploy" refName={payload.name} type={type} state={state as any} />;
 }
 
+function ApplyStackTaskRenderer({ payload, type }: { payload: StackDeployParams; type: ResourceType }) {
+  const state = useApplyStackProgress(payload);
+  return <TaskStreamLayout title="Stack" refName={payload.name} type={type} state={state as any} />;
+}
+
 function ActivityTaskRenderer({ payload }: { payload: ActivityView; type: ResourceType }) {
   return <TaskActivityLayout activityId={payload.id} />;
 }
@@ -481,6 +488,7 @@ function AlertEventTaskRenderer({ payload }: { payload: AlertEventView; type: Re
 const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }) => ReactNode> = {
   pull: PullImageTaskRenderer,
   deploy: ApplyDeployTaskRenderer,
+  stack: ApplyStackTaskRenderer,
   activity: ActivityTaskRenderer,
   alertEvent: AlertEventTaskRenderer,
 };
@@ -557,5 +565,19 @@ function useApplyDeploymentProgress(params: DeployParams) {
     successMessage: 'Deployment applied successfully',
     errorMessageDefault: 'Failed to deploy',
     getError: (item) => item.errorMessage,
+  });
+}
+
+function useApplyStackProgress(params: StackDeployParams) {
+  const { id, recreate } = params;
+
+  const request: ApplyStackInput = useMemo(() => ({ id, recreate }), [id, recreate]);
+
+  return useStreamProgress<ApplyStackInput, StackStreamItem>({
+    endpoint: 'api/v1/stacks/apply',
+    request,
+    successMessage: 'Stack applied successfully',
+    errorMessageDefault: 'Failed to deploy',
+    getError: (item) => (item.exitCode != 0 ? item.message : undefined),
   });
 }
