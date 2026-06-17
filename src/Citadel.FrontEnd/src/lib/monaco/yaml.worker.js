@@ -7,7 +7,6 @@ self.addEventListener(
   /** @param {MessageEvent} e */
   function onYamlPreInit(e) {
     if (e.data && typeof e.data === 'object' && e.data.type === 'yaml-init') {
-      // eslint-disable-next-line no-undef
       globalThis._yamlCreateData = e.data.createData;
       self.removeEventListener('message', onYamlPreInit);
     }
