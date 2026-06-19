@@ -203,14 +203,13 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     {
         var sql = """
             SELECT * FROM Images c
-            WHERE ControlState = @ControlState
+            WHERE ControlState = 'Processing'
               AND ControlStartedAt IS NOT NULL
               AND ControlStartedAt < @TimeoutThreshold
             """;
         var timeoutThreshold = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s;
         var result = await db.QueryAsync<ImageDto>(sql, new
         {
-            ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
             TimeoutThreshold = timeoutThreshold
         }, transaction: tx());
         return result?.ToDomain() ?? [];

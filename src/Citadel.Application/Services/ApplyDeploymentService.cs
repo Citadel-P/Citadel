@@ -361,11 +361,11 @@ internal sealed class DeploymentSucceededWorkItem(
                         );
 
         await uow.ActivityEventRepository.AddAsync(activity, ct);
+        deployment.AssignActivityEvent(activity);
 
         await uow.CommitAsync(ct);
 
         // Push notifications
-        deployment.AssignActivityEvent(activity);
         var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
         await notificationQueue.EnqueueAsync(deploymentWorkItem, ct);
 

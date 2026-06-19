@@ -135,6 +135,8 @@ public interface IStackRepository
     Task<int> AddAsync(Stack stack, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Stack stack, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<Stack>> GetStuckStacksAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<bool> UpdateProcessingAsync(Guid id, StackReleaseStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
 }
 
 public interface IGitReposRepository

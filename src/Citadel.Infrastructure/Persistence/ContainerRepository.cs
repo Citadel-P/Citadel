@@ -53,14 +53,13 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         var sql = """
             SELECT * FROM Containers c
-            WHERE ControlState = @ControlState
+            WHERE ControlState = 'Processing'
               AND ControlStartedAt IS NOT NULL
               AND ControlStartedAt < @TimeoutThreshold
             """;
         var timeoutThreshold = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s;
         var result = await db.QueryAsync<ContainerDto>(sql, new 
         { 
-            ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
             TimeoutThreshold = timeoutThreshold
         }, transaction: tx());
         return result?.ToDomain() ?? [];

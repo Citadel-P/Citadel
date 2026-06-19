@@ -14,37 +14,6 @@ namespace Infrastructure.Persistence;
 
 internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx) : IStackRepository
 {
-    private const string BaseSelect = """
-    SELECT
-        s.Id,
-        s.CurrentStackReleaseId,
-        s.Name,
-        s.Description,
-        s.StackSource,
-        s.StackUpdateState,
-        s.CreatedAt,
-        s.CreatedByActorId,
-        s.ControlState,
-        s.ControlStartedAt,
-        s.RowVersion,
-        s.ControlTriggeredBy,
-        sr.Id AS CurrentRelease_Id,
-        sr.StackId AS CurrentRelease_StackId,
-        sr.PlatformId AS CurrentRelease_PlatformId,
-        sr.Status AS CurrentRelease_Status,
-        sr.Version AS CurrentRelease_Version,
-        sr.Spec AS CurrentRelease_Spec,
-        sr.CreatedAt AS CurrentRelease_CreatedAt,
-        sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
-        p.Name AS Platform_Name,
-        p.Status AS Platform_Status
-    FROM Stacks s
-    LEFT JOIN StackReleases sr
-        ON s.CurrentStackReleaseId = sr.Id
-    LEFT JOIN Platforms p
-        ON sr.PlatformId = p.Id
-    """;
-
     private const string InfoSelect = """
     SELECT
         s.Id,
@@ -94,7 +63,52 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
     public async Task<Stack?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = BaseSelect + " " + "WHERE s.Id = @Id LIMIT 1";
+        const string sql = """
+            SELECT
+                s.Id,
+                s.CurrentStackReleaseId,
+                s.Name,
+                s.Description,
+                s.StackSource,
+                s.StackUpdateState,
+                s.CreatedAt,
+                s.CreatedByActorId,
+                s.ControlState,
+                s.ControlStartedAt,
+                s.RowVersion,
+                s.ControlTriggeredBy,
+                sr.Id AS CurrentRelease_Id,
+                sr.StackId AS CurrentRelease_StackId,
+                sr.PlatformId AS CurrentRelease_PlatformId,
+                sr.Status AS CurrentRelease_Status,
+                sr.Version AS CurrentRelease_Version,
+                sr.Spec AS CurrentRelease_Spec,
+                sr.CreatedAt AS CurrentRelease_CreatedAt,
+                sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
+                p.Name AS Platform_Name,
+                p.Status AS Platform_Status,
+                ei.Info AS ActivityEvent_ActivityEventInfo,
+                ei.EventType AS ActivityEvent_EventType,
+                ei.Status AS ActivityEvent_Status,
+                ei.Id AS ActivityEvent_Id,
+                ei.CreatedAt AS ActivityEvent_CreatedAt
+            FROM Stacks s
+            LEFT JOIN StackReleases sr
+                ON s.CurrentStackReleaseId = sr.Id
+            LEFT JOIN Platforms p
+                ON sr.PlatformId = p.Id
+            LEFT JOIN LATERAL (
+                SELECT e.Id, e.EventType, e.Status, e.Info, e.CreatedAt
+                FROM ActivityEvents e
+                WHERE e.ResourceId = s.Id 
+                AND e.ResourceType = 'Stack'
+                AND e.EventType NOT IN ('StackUpdated', 'StackRenamed')
+                ORDER BY e.CreatedAt DESC
+                LIMIT 1
+            ) ei ON TRUE
+            WHERE s.Id = @Id LIMIT 1
+            """;
+
         var result = await db.QuerySingleOrDefaultAsync<StackDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
@@ -402,5 +416,60 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             sql,
             new { Ids = idArray, cancellationToken },
             transaction: tx());
+    }
+
+    public async Task<IEnumerable<Stack>> GetStuckStacksAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    {
+        const string sql = InfoSelect + " " + """
+            WHERE 
+                s.ControlState = 'Processing'
+                AND s.ControlStartedAt < @ControlStartedAt
+            ORDER BY 
+                s.ControlStartedAt ASC
+            """;
+        var result = await db.QueryAsync<StackDto>(sql, new
+        {
+            ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
+            cancellationToken
+        }, transaction: tx());
+
+        return result.ToDomain();
+    }
+
+    public Task<bool> UpdateProcessingAsync(Guid id, StackReleaseStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken)
+    {
+        var sql = $"""
+            WITH updated_stack AS (
+                UPDATE Stacks
+                SET
+                    ControlState = @State,
+                    ControlStartedAt = @StartedAt,
+                    ControlTriggeredBy = @ControlTriggeredBy,
+                    RowVersion = RowVersion + 1
+                WHERE Id = @Id
+                  AND (@CheckRowVersion = false OR RowVersion = @RowVersion)
+                RETURNING Id, CurrentStackReleaseId
+            ),
+            updated_release AS (
+                UPDATE StackReleases sr
+                SET Status = @Status
+                FROM updated_stack us
+                WHERE sr.StackId = us.Id
+                  AND sr.Id = us.CurrentStackReleaseId
+                RETURNING sr.Id
+            )
+            SELECT EXISTS(SELECT 1 FROM updated_stack);
+        """;
+
+        return db.ExecuteScalarAsync<bool>(sql, new
+        {
+            Id = id,
+            Status = EnumFormatter<StackReleaseStatus>.GetValue(status),
+            State = EnumFormatter<ResourceControlState>.GetValue(state),
+            StartedAt = startedAt,
+            RowVersion = rowVersion,
+            CheckRowVersion = checkRowVersion,
+            ControlTriggeredBy = controlTriggeredBy
+        }, tx());
     }
 }

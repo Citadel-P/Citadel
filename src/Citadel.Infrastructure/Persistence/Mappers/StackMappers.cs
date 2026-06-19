@@ -1,5 +1,5 @@
 using Domain;
-using Domain.Entities;
+using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Infrastructure.Persistence.Dtos;
@@ -44,6 +44,19 @@ internal static class StackMappers
                 createdByActorId: dto.CurrentRelease_CreatedByActorId!.Value,
                 platform: platform);
 
+        var latestActivityEvent = string.IsNullOrEmpty(dto.ActivityEvent_ActivityEventInfo) ? null : ActivityEvent.FromPersistence(
+                id: dto.ActivityEvent_Id.Value,
+                platformId: Guid.CreateVersion7(),
+                resourceId: Guid.CreateVersion7(),
+                resourceName: "N/A",
+                createdAt: dto.ActivityEvent_CreatedAt.Value,
+                createdByActorId: Guid.CreateVersion7(),
+                resourceType: ActivityResourceType.Stack,
+                info: JsonSerializer.Deserialize(dto.ActivityEvent_ActivityEventInfo, EventInfoJsonContext.Default.ActivityEventInfo),
+                status: Enum.Parse<ActivityStatus>(dto.ActivityEvent_Status),
+                eventType: Enum.Parse<ActivityEventType>(dto.ActivityEvent_EventType)
+                );
+
         return Stack.FromPersistence(
             id: dto.Id,
             currentStackReleaseId: dto.CurrentStackReleaseId,
@@ -57,7 +70,8 @@ internal static class StackMappers
             controlTriggeredBy: dto.ControlTriggeredBy,
             controlStartedAt: dto.ControlStartedAt,
             rowVersion: dto.RowVersion,
-            currentStackRelease: currentRelease);
+            currentStackRelease: currentRelease,
+            latestActivityEvent: latestActivityEvent);
     }
 
     internal static IEnumerable<StackRelease> ToDomain(this IEnumerable<StackReleaseDto> dtos)

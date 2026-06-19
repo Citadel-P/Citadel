@@ -4,9 +4,11 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StackActions } from './actions';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useStackGroup } from './hooks/useStackGroup';
-import { StackView, ResourceControlState } from '@/api/generated/api.types';
+import { StackView, ResourceControlState, LatestActivityView, ActivityStatus } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
+import { AlertMessage } from '@/components/custom/alert-message';
+import { ActivityAlertZone } from '@/components/custom/task-sheet';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -28,8 +30,8 @@ export const StackFormComponents: RequiredFormComponents = {
         return <GenericActionBarButtons resource={resource} actions={Object.values(StackActions)} />;
       },
     },
-    SubHeader: ({ resource: _resource }: { resource: StackView }) => {
-      return <></>; //<DeploymentSubHeader latestActivity={resource.latestActivityView ?? null} deployment={resource} />;
+    SubHeader: ({ resource }: { resource: StackView }) => {
+      return <StackSubHeader latestActivity={resource.latestActivityView ?? null} stack={resource} />;
     },
     Tabs: [
       {
@@ -52,4 +54,34 @@ export const StackFormComponents: RequiredFormComponents = {
       return { item: stack, isLoading };
     },
   },
+};
+
+const StackSubHeader = ({ stack, latestActivity }: { stack: StackView; latestActivity: LatestActivityView | null }) => {
+  return (
+    <>
+      <StackLatestActivity latestActivity={latestActivity} />
+      {/* <StackUpdateNotice stack={stack} /> */}
+    </>
+  );
+};
+const StackLatestActivity = ({ latestActivity }: { latestActivity: LatestActivityView | null }) => {
+  if (!latestActivity) return;
+  if (latestActivity?.status === ActivityStatus.Success) {
+    return;
+  }
+  if (latestActivity?.info.$type === 'StackDegraded') {
+    return (
+      <AlertMessage date={latestActivity?.createdAt} type={'warning'}>
+        <div className="flex flex-wrap gap-2 items-center ">{latestActivity?.info.reason}</div>
+      </AlertMessage>
+    );
+  }
+  return (
+    <ActivityAlertZone
+      info={latestActivity?.info as any}
+      activity={latestActivity as any}
+      title="Error"
+      date={latestActivity?.createdAt}
+    />
+  );
 };

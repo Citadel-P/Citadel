@@ -114,16 +114,15 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
     public async Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
     {
-        const string sql = BaseSelect + " " +"""
+        const string sql = BaseSelect + " " + """
             WHERE 
-                d.ControlState = @ControlState
+                d.ControlState = 'Processing'
                 AND d.ControlStartedAt < @ControlStartedAt
             ORDER BY 
                 d.ControlStartedAt ASC
             """;
         var result = await db.QueryAsync<DeploymentDto>(sql, new 
         {
-            ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
             ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
             cancellationToken 
         }, transaction: tx());

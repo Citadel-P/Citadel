@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using Domain.Entities.Activities;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
 namespace Domain.Entities.Stacks;
@@ -25,6 +26,7 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
     #endregion
     
     public StackRelease? CurrentStackRelease { get; private set; }
+    public ActivityEvent? LatestActivityEvent { get; private set; } = null;
 
     public static Stack Create(
         string name,
@@ -68,7 +70,8 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         Guid? controlTriggeredBy,
         long? controlStartedAt,
         long rowVersion,
-        StackRelease? currentStackRelease = null)
+        StackRelease? currentStackRelease = null,
+        ActivityEvent? latestActivityEvent = null)
     {
         return new Stack
         {
@@ -84,7 +87,8 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
             ControlTriggeredBy = controlTriggeredBy,
             ControlStartedAt = controlStartedAt,
             RowVersion = rowVersion,
-            CurrentStackRelease = currentStackRelease
+            CurrentStackRelease = currentStackRelease,
+            LatestActivityEvent = latestActivityEvent,
         };
     }
 
@@ -92,6 +96,11 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         StackReleaseStatus status)
     {
         CurrentStackRelease?.UpdateStackStatus(status);
+    }
+
+    public void AssignActivityEvent(ActivityEvent activityEvent)
+    {
+        LatestActivityEvent = activityEvent;
     }
 
     public bool MarkProcessing(Guid controlTriggeredBy)

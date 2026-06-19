@@ -3196,6 +3196,7 @@ export interface StackView {
   spec?: null | StackSpec;
   platformStatus?: PlatformStatus;
   platformName?: null | string;
+  latestActivityView?: null | LatestActivityView;
   capabilities?: null | StackCapabilities;
 }
 

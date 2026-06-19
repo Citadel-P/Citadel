@@ -6,6 +6,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Deployments;
+using Domain.Entities.Stacks;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,7 +70,20 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
                 Ports: new List<string> { "80:80" },
                 EnvVars: new List<string> { "ENV=production" }
             )
-
+        );
+        var stack = Stack.Create
+        (
+            name: "Test Stack",
+            description: "A stack for testing",
+            platformId: platform.Id,
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.WebEditor,
+            spec: new ManualStack
+            (
+                ComposeFile: "",
+                UpdateBehavior: StackUpdateBehavior.Notify,
+                RegistryId: Constants.DefaultRegistryId
+            )
         );
         var container = new Container(
             platformId: platformId,
@@ -94,6 +108,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
         await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
         await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
         await uow.Images.AddOrUpdateAsync(image, TestContext.Current.CancellationToken);
+        await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken); 
         await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
 
@@ -114,6 +129,26 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
 
         notificationMock.Verify(
            nq => nq.EnqueueAsync(It.IsAny<DeploymentNotificationWorkItem>(), It.IsAny<CancellationToken>()),
+           Times.Once);
+    }
+
+    [Fact]
+    public async Task RunPeriodicJanitor_Clean_Stuck_Stack()
+    {
+        // Arrange
+        await MarkStackAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var stack = (await uow.Stacks.GetAllAsync(TestContext.Current.CancellationToken)).First();
+        Assert.Equal(ResourceControlState.Idle, stack.ControlState);
+
+        notificationMock.Verify(
+           nq => nq.EnqueueAsync(It.IsAny<StackNotificationWorkItem>(), It.IsAny<CancellationToken>()),
            Times.Once);
     }
 
@@ -212,6 +247,25 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
             rowVersion: deployment.RowVersion,
             checkRowVersion: false,
             controlTriggeredBy: deployment.ControlTriggeredBy,
+            TestContext.Current.CancellationToken);
+
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task MarkStackAsync(ResourceControlState state, long? startedAt)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = (await uow.Stacks.GetAllAsync(TestContext.Current.CancellationToken)).First();
+
+        await uow.Stacks.UpdateProcessingAsync(
+            id: stack.Id,
+            status: stack.CurrentStackRelease!.Status,
+            state: state,
+            startedAt: startedAt,
+            rowVersion: stack.RowVersion,
+            checkRowVersion: false,
+            controlTriggeredBy: stack.ControlTriggeredBy,
             TestContext.Current.CancellationToken);
 
         await uow.CommitAsync(TestContext.Current.CancellationToken);

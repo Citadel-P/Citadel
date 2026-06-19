@@ -15,10 +15,10 @@ export const useStackGroup = (stackId: string) => {
   }, [data, stackUpdate]);
 
   const handleStackInfoUpdated = useCallback((stack: StackView) => {
-    // const info = (stack?.latestActivityView?.info as any)?.[1];
-    // if (info) {
-    //   info.$type = (stack?.latestActivityView?.info as any)?.[0];
-    // }
+    const info = (stack?.latestActivityView?.info as any)?.[1];
+    if (info) {
+      info.$type = (stack?.latestActivityView?.info as any)?.[0];
+    }
 
     setStackUpdate({
       name: stack.name,
@@ -27,7 +27,7 @@ export const useStackGroup = (stackId: string) => {
       controlState: stack.controlState,
       platformStatus: stack.platformStatus,
       platformName: stack.platformName,
-      //latestActivityView: stack.latestActivityView ? { ...stack.latestActivityView, info } : null,
+      latestActivityView: stack.latestActivityView ? { ...stack.latestActivityView, info } : null,
     });
   }, []);
 

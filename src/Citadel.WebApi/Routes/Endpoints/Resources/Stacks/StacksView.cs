@@ -1,8 +1,10 @@
 using Application.Permissions;
 using Domain;
+using Domain.Entities.Deployments;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.Attributes;
+using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Identity;
 
 namespace WebApi.Routes.Endpoints.Resources.Stacks;
@@ -63,6 +65,7 @@ public sealed record StackView(
     StackSpec? Spec = null,
     PlatformStatus PlatformStatus = PlatformStatus.Offline,
     string? PlatformName = null,
+    LatestActivityView? LatestActivityView = null,
     StackCapabilities? Capabilities = null)
 {
     internal static StackView Map(Stack stack) => new(
@@ -80,7 +83,8 @@ public sealed record StackView(
         Version: stack.CurrentStackRelease?.Version,
         Spec: stack.CurrentStackRelease?.Spec,
         PlatformStatus: stack.CurrentStackRelease?.Platform?.Status ?? PlatformStatus.Offline,
-        PlatformName: stack.CurrentStackRelease?.Platform?.Name);
+        PlatformName: stack.CurrentStackRelease?.Platform?.Name,
+        LatestActivityView: stack.LatestActivityEvent?.Map());
 
     internal static async Task<StackView> Map(Stack stack, IPermissionEvaluator permissionEvaluator)
     {

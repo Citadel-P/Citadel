@@ -10,7 +10,6 @@ using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
-using static Google.Rpc.Help.Types;
 
 namespace Application.Services;
 
@@ -311,6 +310,7 @@ internal sealed class UpdateStackStatusWorkItem(Guid stackId, Guid actorId, Stac
                             );
 
             await uow.ActivityEventRepository.AddAsync(activity, ct);
+            stack.AssignActivityEvent(activity);
         }
 
         await uow.CommitAsync(ct);
@@ -358,6 +358,7 @@ internal sealed class StackSucceededWorkItem(
         // Todo: attach containers
         await uow.CommitAsync(ct);
 
+        stack.AssignActivityEvent(activity);
         await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, stack), ct);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, ct)), ct);
     }

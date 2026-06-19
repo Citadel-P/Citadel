@@ -24226,6 +24226,16 @@
               "string"
             ]
           },
+          "latestActivityView": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LatestActivityView"
+              }
+            ]
+          },
           "capabilities": {
             "oneOf": [
               {

@@ -22,7 +22,12 @@ internal sealed record StackDto(
     DateTime? CurrentRelease_CreatedAt = null,
     Guid? CurrentRelease_CreatedByActorId = null,
     string? Platform_Name = null,
-    string? Platform_Status = null
+    string? Platform_Status = null,
+    Guid? ActivityEvent_Id = null,
+    string? ActivityEvent_Status = null,
+    string? ActivityEvent_EventType = null,
+    string? ActivityEvent_ActivityEventInfo = null,
+    DateTime? ActivityEvent_CreatedAt = null
     )
 {
     internal bool HasCurrentReleaseIdentity

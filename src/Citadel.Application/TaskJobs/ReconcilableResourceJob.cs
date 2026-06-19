@@ -10,11 +10,13 @@ using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Domain.Entities.Stacks;
 
 namespace Application.TaskJobs;
 
 internal class ReconcilableResourceJob(
     IDbWorkQueue dbWorkQueue,
+    IStackStreamManager stackHub,
     INotificationQueue notifQueue,
     IServiceScopeFactory scopeFactory,
     IDeploymentStreamManager deploymentHub,
@@ -44,6 +46,14 @@ internal class ReconcilableResourceJob(
                     if (stuckDeployments.Any())
                     {
                         var workItem = new StuckDeploymentsSyncWorkItem(deploymentHub, notifQueue, stuckDeployments);
+                        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                    }
+
+                    // Stacks
+                    var stuckStacks = await uow.Stacks.GetStuckStacksAsync(cancellationToken: cancellationToken);
+                    if (stuckStacks.Any())
+                    {
+                        var workItem = new StuckStacksSyncWorkItem(notifQueue, stackHub, stuckStacks);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
 
@@ -106,6 +116,43 @@ internal class ReconcilableResourceJob(
             foreach (var deployment in successfullyUpdated)
             {
                 await notificationQueue.EnqueueAsync(new DeploymentNotificationWorkItem(deploymentHub, deployment), cancellationToken);
+            }
+        }
+    }
+
+    internal sealed class StuckStacksSyncWorkItem(
+        INotificationQueue notificationQueue,
+        IStackStreamManager stackHub,
+        IEnumerable<Stack> stacks)
+        : IDbWorkItem
+    {
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            var successfullyUpdated = new List<Stack>();
+
+            foreach (var stack in stacks)
+            {
+                stack.ReleaseProcessing(StackReleaseStatus.Unknown);
+                var row = await uow.Stacks.UpdateProcessingAsync(
+                                    id: stack.Id,
+                                    status: stack.CurrentStackRelease?.Status ?? StackReleaseStatus.Unknown,
+                                    state: stack.ControlState,
+                                    startedAt: null,
+                                    rowVersion: stack.RowVersion,
+                                    checkRowVersion: true,
+                                    controlTriggeredBy: stack.ControlTriggeredBy ?? Constants.SystemId,
+                                    cancellationToken);
+                if (row)
+                {
+                    successfullyUpdated.Add(stack);
+                }
+            }
+
+            await uow.CommitAsync(cancellationToken);
+
+            foreach (var stack in successfullyUpdated)
+            {
+                await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, stack), cancellationToken);
             }
         }
     }
