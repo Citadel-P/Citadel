@@ -101,7 +101,7 @@ const StackLatestActivity = ({ latestActivity }: { latestActivity: LatestActivit
 };
 
 const StackRuntime = ({ deployment }: { deployment: StackView }) => {
-  const { containerInfo, isLoading, error } = useContainerInfoGroup(
+  const { containerInfo, isLoading, error } = useStackInfoGroup(
     deployment.dockerContainerId ?? undefined,
     deployment.platformId,
   );

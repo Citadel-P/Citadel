@@ -113,6 +113,13 @@ public sealed record ContainerInfoView(
     }
 }
 
+public sealed record ContainersDataView(IEnumerable<ContainerDataView> Containers)
+{
+    internal static ContainersDataView Map(IEnumerable<DockerContainer> containers) =>
+        new(containers.Select(ContainerDataView.Map));
+
+}
+
 public sealed record ContainerDataView(
     string Name,
     string Image,

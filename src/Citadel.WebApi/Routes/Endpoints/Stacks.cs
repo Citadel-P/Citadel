@@ -1,3 +1,4 @@
+using Application.Features.Containers.Queries;
 using Application.Features.Stacks.Commands;
 using Application.Features.Stacks.Queries;
 using Application.Permissions;
@@ -11,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 
 namespace WebApi.Routes.Endpoints;
@@ -82,6 +84,12 @@ public static class Stacks
     {
         var result = await mediator.Send(new RenameStack(renameResource.Id, renameResource.Name), cancellationToken);
         return EndpointHandlers.HandleResult(result, StackView.Map);
+    }
+
+    public static async Task<Results<Ok<ContainersDataView>, ProblemHttpResult>> GetContainersData(IMediator mediator, Guid stackId, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetContainersData(stackId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ContainersDataView.Map);
     }
 
     public static async IAsyncEnumerable<StackStreamItem> ApplyStack(IMediator mediator, ApplyStackInput applyStackInput, [EnumeratorCancellation] CancellationToken cancellationToken)

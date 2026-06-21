@@ -18,7 +18,7 @@ public sealed record GetContainerData(string ContainerId) : IQuery<Result<(Docke
     }
 }
 
-internal class GetDockerContainerHandler(
+internal sealed class GetDockerContainerHandler(
     IUnitOfWork unitOfWork,
     IContainerAuthorizationService containerAuthorizationService) : IQueryHandler<GetContainerData, Result<(DockerContainer, Guid)>>
 {

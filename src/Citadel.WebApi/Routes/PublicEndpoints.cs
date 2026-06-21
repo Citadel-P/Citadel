@@ -1043,6 +1043,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("applyStack");
+
+        stacks.MapGet("{stackId}/data", Stacks.GetContainersData)
+            .WithSummary("Get containers data")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getContainersData");
     }
 
     private static void MapActivityEndpoints(RouteGroupBuilder activities)

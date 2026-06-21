@@ -1453,6 +1453,10 @@ export interface ContainerVolumeResult {
   ports: Record<string, HostPortBinding[]>;
 }
 
+export interface ContainersDataView {
+  containers: ContainerDataView[];
+}
+
 export interface ContainersView {
   containers: ContainerView[];
   capabilities: PlatformCapabilities;
@@ -3156,6 +3160,7 @@ export interface StackStreamItem {
   type: StackApplyEventType;
   /** @format date-time */
   timestamp: any;
+  progressMessage?: null | string;
   message?: null | string;
   /**
    * @format int32
@@ -7187,6 +7192,34 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name GetContainersData
+     * @summary Get containers data
+     * @request GET:/api/v1/stacks/{stackId}/data
+     * @secure
+     * @response `200` `ContainersDataView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getContainersData: (stackId: string, params: RequestParams = {}) =>
+      this.request<
+        ContainersDataView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/${stackId}/data`,
+        method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),

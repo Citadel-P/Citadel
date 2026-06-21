@@ -297,6 +297,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(ResourceCapabilities))]
 [JsonSerializable(typeof(ContainerDataView))]
 [JsonSerializable(typeof(ApplyStackInput))]
+[JsonSerializable(typeof(ContainersDataView))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
