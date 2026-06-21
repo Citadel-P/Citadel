@@ -2,7 +2,6 @@
 using Application.Features.Containers.Queries;
 using Application.Permissions;
 using Domain;
-using Domain.Contracts.Resources.Containers;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;

@@ -807,7 +807,7 @@ export interface ActivityEventInfoStackDeleted {
 
 export interface ActivityEventInfoStackPaused {
   $type?: "StackPaused";
-  result: string;
+  containerIds: string[];
 }
 
 export interface ActivityEventInfoStackRenamed {
@@ -818,12 +818,12 @@ export interface ActivityEventInfoStackRenamed {
 
 export interface ActivityEventInfoStackStarted {
   $type?: "StackStarted";
-  result: string;
+  containerIds: string[];
 }
 
 export interface ActivityEventInfoStackStopped {
   $type?: "StackStopped";
-  result: string;
+  containerIds: string[];
 }
 
 export interface ActivityEventInfoStackUpdated {

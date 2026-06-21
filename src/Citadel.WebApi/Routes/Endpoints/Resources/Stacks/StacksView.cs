@@ -1,6 +1,5 @@
 using Application.Permissions;
 using Domain;
-using Domain.Entities.Deployments;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.Attributes;

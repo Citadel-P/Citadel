@@ -237,7 +237,7 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     <div className="flex flex-col gap-4 text-sm text-muted-foreground">
       <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Applied configuration" />
       {activity.status === ActivityStatus.Success && (
-        <KeyValueBlock label="Container id" value={info.result.containerIds ?? []} />
+        <KeyValueBlock label="Container ID" value={info.result.containerIds ?? []} />
       )}
       <ActivityAlertZone info={info} activity={activity} />
     </div>
@@ -263,20 +263,24 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     <MonacoDiff original={info.oldStack} modified={info.newStack} format="yaml" title="Configuration changes" />
   ),
 
-  StackApplied: (info, activity) => (
-    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-      <SpecViewer spec={info.stack} resourceId={activity.resourceId} title="Applied configuration" />
-      {activity.status === ActivityStatus.Success && (
-        <KeyValueBlock label="Container id" value={info.result.containerIds ?? []} />
-      )}
-      <ActivityAlertZone info={info} activity={activity} />
-    </div>
-  ),
+  StackApplied: (info, activity) => {
+    const containerIds = info.result.containerIds ?? [];
+    const label = containerIds.length <= 1 ? 'Container ID' : 'Container IDs';
+    return (
+      <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+        <SpecViewer spec={info.stack} resourceId={activity.resourceId} title="Applied configuration" />
+        {activity.status === ActivityStatus.Success && (
+          <KeyValueBlock label={label} value={info.result.containerIds ?? []} />
+        )}
+        <ActivityAlertZone info={info} activity={activity} />
+      </div>
+    );
+  },
   StackDegraded: (info) => <span className="text-sm text-muted-foreground">{info.reason}</span>,
 
-  StackStarted: (info) => <KeyValueBlock label="Output" value={info.result} />,
-  StackStopped: (info) => <KeyValueBlock label="Output" value={info.result} />,
-  StackPaused: (info) => <KeyValueBlock label="Output" value={info.result} />,
+  StackStarted: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
+  StackStopped: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
+  StackPaused: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
 
   StackRenamed: (info) => (
     <span className="text-sm text-muted-foreground">
@@ -382,12 +386,25 @@ export function ActivityAlertZone({
   );
 }
 
-function KeyValueBlock({ label, value }: { label: string; value: string | any[] }) {
+function KeyValueBlock({ label, value }: { label: string; value: string | string[] }) {
   return (
     <div className="flex flex-col gap-2 text-sm text-muted-foreground">
       <span className="text-sm font-medium text-foreground">{label}</span>
+
       <div className="border p-2 rounded-lg">
-        <span>{value}</span>
+        {Array.isArray(value) ? (
+          value.length > 0 ? (
+            <ul className="list-disc pl-4 space-y-1">
+              {value.map((item, index) => (
+                <li key={`${item}-${index}`}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <span>-</span>
+          )
+        ) : (
+          <span>{value}</span>
+        )}
       </div>
     </div>
   );
@@ -578,6 +595,6 @@ function useApplyStackProgress(params: StackDeployParams) {
     request,
     successMessage: 'Stack applied successfully',
     errorMessageDefault: 'Failed to deploy',
-    getError: (item) => (item.exitCode != 0 ? item.message : undefined),
+    getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
   });
 }

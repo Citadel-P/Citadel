@@ -22,6 +22,7 @@ internal sealed class DockerDaemonEventJob(
     IContainerEventBroadcaster containerEventBroadcaster,
     INotificationQueue notificationQueue,
     ChannelWriter<UnmanagedContainerAlertRequest> unmanagedContainerAlertWriter,
+    IStackStreamManager stackHub,
     IImageStreamManager imageStream,
     IDeploymentStreamManager deploymentHub,
     IDbWorkQueue dbWorkQueue) : BackgroundService
@@ -150,7 +151,7 @@ internal sealed class DockerDaemonEventJob(
 
     private ValueTask OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
     {
-        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, activityHub, deploymentHub, dockerDaemonHub, containerEventBroadcaster, logger);
+        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, activityHub, deploymentHub, dockerDaemonHub, containerEventBroadcaster, stackHub, logger);
 
         return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }
@@ -161,6 +162,7 @@ internal sealed class DockerDaemonEventJob(
             platformId,
             eventInfo,
             notificationQueue,
+            stackHub,
             activityHub,
             deploymentHub,
             dockerDaemonHub,

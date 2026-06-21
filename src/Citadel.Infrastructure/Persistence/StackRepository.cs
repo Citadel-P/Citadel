@@ -2,6 +2,7 @@ using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Domain.Entities;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
@@ -131,6 +132,13 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
     {
         const string sql = InfoSelect + " " + "ORDER BY s.CreatedAt DESC, s.Name ASC";
         var result = await db.QueryAsync<StackDto>(sql, transaction: tx());
+        return result.ToDomain();
+    }
+
+    public async Task<IEnumerable<Container>> GetContainersAsync(Guid stackId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT * FROM Containers WHERE StackId = @StackId";
+        var result = await db.QueryAsync<ContainerDto>(sql, new { StackId = stackId, cancellationToken }, transaction: tx());
         return result.ToDomain();
     }
 

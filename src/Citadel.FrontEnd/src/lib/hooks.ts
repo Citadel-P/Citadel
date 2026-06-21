@@ -523,13 +523,13 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
                 continue;
               }
 
-              // 2. Handle simple log messages
+              // Handle simple log messages
               if (progressMessage) {
                 newHistory.push(progressMessage.trim());
                 continue;
               }
 
-              // 3. Handle Docker/Progress items
+              // Handle Docker/Progress items
               if (id) {
                 const lowerStatus = (status || '').toLowerCase();
                 const progressCurrent = progress?.current ?? 0;

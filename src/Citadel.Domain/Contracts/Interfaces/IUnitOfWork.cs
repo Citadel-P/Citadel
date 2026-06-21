@@ -122,6 +122,7 @@ public interface IStackRepository
     Task<Stack?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Container>> GetContainersAsync(Guid stackId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<bool> CanAccessAsync(Guid userId, Guid stackId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
@@ -173,6 +174,7 @@ public interface IContainerRepository
 {
     Task<Container?> GetByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<Container?> GetContainerInfoAsync(string dockerContainerId, CancellationToken cancellationToken);
+    Task<IEnumerable<Container>> GetByIdsAsync(string[] dockerContainerIds, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetStuckContainersAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
     Task<Container?> GetByDeploymentIdAsync(Guid deploymentId, CancellationToken cancellationToken);

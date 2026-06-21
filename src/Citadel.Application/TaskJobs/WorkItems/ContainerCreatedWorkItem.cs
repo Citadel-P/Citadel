@@ -74,13 +74,9 @@ internal sealed class ContainerCreatedWorkItem(
 
             await notificationQueue.EnqueueAsync(notificationItem, cancellationToken);
 
-            if (container.DeploymentId is null) // Todo: && container.StackId is null
-            {
-                await unmanagedContainerAlertWriter.WriteAsync(
+            await unmanagedContainerAlertWriter.WriteAsync(
                     new UnmanagedContainerAlertRequest(platformId, container.DockerContainerId),
                     cancellationToken);
-            }
-
         }
         catch (Exception ex)
         {

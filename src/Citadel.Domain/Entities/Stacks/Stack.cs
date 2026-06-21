@@ -139,6 +139,37 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         CurrentStackReleaseId = stackRelease.Id;
     }
 
+    public static StackReleaseStatus ToStackStatus(IEnumerable<ContainerStateStatus> states)
+    {
+        var containerStates = states.ToList();
+
+        if (containerStates.Count == 0)
+            return StackReleaseStatus.Unknown;
+
+        if (containerStates.All(x => x == ContainerStateStatus.Running))
+            return StackReleaseStatus.Healthy;
+
+        if (containerStates.All(x =>
+                x is ContainerStateStatus.Exited or ContainerStateStatus.Offline))
+            return StackReleaseStatus.Stopped;
+
+        if (containerStates.Any(x =>
+                x is ContainerStateStatus.Created
+                or ContainerStateStatus.Restarting
+                or ContainerStateStatus.Removing))
+            return StackReleaseStatus.Pending;
+
+        var runningCount = containerStates.Count(x => x == ContainerStateStatus.Running);
+
+        if (runningCount == 0)
+            return StackReleaseStatus.Failed;
+
+        if (runningCount < containerStates.Count)
+            return StackReleaseStatus.Degraded;
+
+        return StackReleaseStatus.Unknown;
+    }
+
     private static StackUpdateState CreateDefaultUpdateState(StackSource stackSource, StackSpec spec)
     {
         var recreateOnNewImage = new RecreateStackOnNewImageState([]);

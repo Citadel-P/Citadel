@@ -59,9 +59,9 @@ public sealed record StackCreated(StackSnapshot Stack) : ActivityEventInfo;
 public sealed record StackUpdated(StackSnapshot OldStack, StackSnapshot NewStack) : ActivityEventInfo;
 public sealed record StackRenamed(string OldName, string NewName) : ActivityEventInfo;
 public sealed record StackDeleted(StackSnapshot Stack) : ActivityEventInfo;
-public sealed record StackStarted(string Result) : ActivityEventInfo;
-public sealed record StackStopped(string Result) : ActivityEventInfo;
-public sealed record StackPaused(string Result) : ActivityEventInfo;
+public sealed record StackStarted(IEnumerable<string> ContainerIds) : ActivityEventInfo;
+public sealed record StackStopped(IEnumerable<string> ContainerIds) : ActivityEventInfo;
+public sealed record StackPaused(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record StackDegraded(string Reason) : ActivityEventInfo;
 public sealed record StackApplied(StackSnapshot? Stack, StackResultSnapshot Result) : ActivityEventInfo;
 

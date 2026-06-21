@@ -7,6 +7,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
+using Domain.Entities.Stacks;
 using Hosting.Common;
 using Microsoft.Extensions.Logging;
 
@@ -17,6 +18,7 @@ internal sealed class ContainerDestroyedWorkItem(
     Guid platformId,
     DaemonContainerEventInfo eventInfo,
     INotificationQueue notificationQueue,
+    IStackStreamManager stackHub,
     IActivityStreamManager activityHub,
     IDeploymentStreamManager deploymentHub,
     IDockerDaemonStreamManager dockerDaemonHub,
@@ -30,6 +32,7 @@ internal sealed class ContainerDestroyedWorkItem(
         {
             ActivityEvent? activityEvent = null;
             Deployment? deployment = null;
+            Stack? stack = null;
             Image? image = null;
             var existing = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
             if (existing is null) return;
@@ -44,6 +47,11 @@ internal sealed class ContainerDestroyedWorkItem(
             if (existing.DeploymentId != null)
             {
                 (deployment, activityEvent) = await UpdateDeploymentStatus(uow, existing.DeploymentId.Value, DeploymentStatus.Degraded, existing.DockerContainerId, cancellationToken);
+            }
+
+            if (existing.StackId != null)
+            {
+                (stack, activityEvent) = await UpdateStackStatus(uow, existing.StackId.Value, StackReleaseStatus.Degraded, eventInfo.Container?.State ?? ContainerStateStatus.Unknown, existing.DockerContainerId, cancellationToken);
             }
 
             await uow.Containers.DeleteAsync([existing.Id], cancellationToken);
@@ -61,11 +69,19 @@ internal sealed class ContainerDestroyedWorkItem(
                 var deploymentNotification = new DeploymentNotificationWorkItem(deploymentHub, deployment);
                 await notificationQueue.EnqueueAsync(deploymentNotification, cancellationToken);
             }
+
+            if (stack != null)
+            {
+                var stackNotification = new StackNotificationWorkItem(stackHub, stack);
+                await notificationQueue.EnqueueAsync(stackNotification, cancellationToken);
+            }
+
             if (image != null)
             {
                 var imageNotificationItem = new ImageNotificationWorkItem(dockerDaemonHub, image, "update");
                 await notificationQueue.EnqueueAsync(imageNotificationItem, cancellationToken);
             }
+
             if (activityEvent != null)
             {
                 await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activityEvent.AssignActor(uow, cancellationToken)), cancellationToken);
@@ -88,7 +104,74 @@ internal sealed class ContainerDestroyedWorkItem(
         return image;
     }
 
-    internal static async Task<(Deployment?, ActivityEvent?)> UpdateDeploymentStatus(IUnitOfWork uow, Guid deploymentId, 
+    internal static async Task<(Stack?, ActivityEvent?)> UpdateStackStatus(IUnitOfWork uow,
+        Guid stackId, StackReleaseStatus status, ContainerStateStatus state, string containerId, CancellationToken cancellationToken)
+    {
+        var stack = await uow.Stacks.GetInfoAsync(stackId, cancellationToken);
+        if (stack is null) return (null, null);
+        // Docker daemon may emit multiple container events for a stack, resulting in duplicate activity entries.
+        // Todo: Aggregate events and only create one activity event per stack per status change.
+        var previousState = stack.CurrentStackRelease?.Status;
+        if (previousState == status) return (stack, null);
+
+        ActivityEventInfo? eventInfo = status switch
+        {
+            StackReleaseStatus.Healthy => new StackStarted([containerId]),
+            StackReleaseStatus.Stopped => new StackStopped([containerId]),
+            StackReleaseStatus.Pending => new StackPaused([containerId]),
+            StackReleaseStatus.Degraded => new StackDegraded(state != ContainerStateStatus.Running 
+                ? $"Container {containerId} changed state to {state}, causing the stack to become degraded."
+                : "One or more associated containers are not running normally."),
+            _ => null
+        };
+        
+        ActivityEventType type = status switch
+        {
+            StackReleaseStatus.Healthy => ActivityEventType.StackStarted,
+            StackReleaseStatus.Stopped => ActivityEventType.StackStopped,
+            StackReleaseStatus.Pending => ActivityEventType.StackPaused,
+            StackReleaseStatus.Degraded => ActivityEventType.StackDegraded,
+            _ => ActivityEventType.StackDegraded
+        };
+
+        if (eventInfo == null)
+        {
+            return (stack, null);
+        }
+
+        // When a stack is applying, we don't want to update the status & log the activities
+        ActivityEvent? activity = null;
+        var inProgress = stack.CurrentStackRelease?.Status == StackReleaseStatus.Applying;
+        if (!inProgress)
+        {
+            activity = new ActivityEvent(
+                    info: eventInfo,
+                    eventType: type,
+                    resourceId: stack.Id,
+                    platformId: stack.CurrentStackRelease?.PlatformId,
+                    resourceName: stack.Name,
+                    status: eventInfo is StackDegraded ? ActivityStatus.Warning : ActivityStatus.Success,
+                    actorId: stack.ControlTriggeredBy ?? Constants.SystemId
+                    );
+
+            await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        }
+
+        stack.ReleaseProcessing(status);
+        await uow.Stacks.UpdateProcessingAsync(
+            id: stack.Id,
+            status: inProgress ? StackReleaseStatus.Applying : (stack.CurrentStackRelease?.Status ?? StackReleaseStatus.Unknown),
+            state: stack.ControlState,
+            startedAt: stack.ControlStartedAt,
+            rowVersion: stack.RowVersion,
+            checkRowVersion: false,
+            controlTriggeredBy: stack.ControlTriggeredBy,
+            cancellationToken);
+
+        return (stack, activity);
+    }
+
+    internal static async Task<(Deployment?, ActivityEvent?)> UpdateDeploymentStatus(IUnitOfWork uow, Guid deploymentId,
         DeploymentStatus status, string containerId, CancellationToken cancellationToken)
     {
         var deployment = await uow.Deployments.GetInfoAsync(deploymentId, cancellationToken);
@@ -134,7 +217,7 @@ internal sealed class ContainerDestroyedWorkItem(
 
             await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
         }
-        
+
 
         deployment.ReleaseProcessing(status);
         await uow.Deployments.UpdateProcessingAsync(

@@ -36,6 +36,16 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain();
     }
 
+    public async Task<IEnumerable<Container>> GetByIdsAsync(string[] dockerContainerIds, CancellationToken cancellationToken)
+    {
+        var sql = $"""
+            SELECT * FROM Containers c
+            WHERE DockerContainerId = ANY(@Ids)
+            """;
+        var result = await db.QueryAsync<ContainerDto>(sql, new { Ids = dockerContainerIds }, transaction: tx());
+        return result?.ToDomain() ?? [];
+    }
+
     public async Task<IEnumerable<Container>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         var sql = """
@@ -169,9 +179,9 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             INSERT INTO Containers (
-                Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId, deploymentId
+                Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId, deploymentId, StackId
             ) VALUES (
-                @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId, @DeploymentId
+                @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId, @DeploymentId, @StackId
             )
         """;
         return db.ExecuteAsync(sql, new 
@@ -187,6 +197,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Stack = container.DockerStack,
             ImageId = container.ImageId,
             DeploymentId = container.DeploymentId,
+            StackId = container.StackId,
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }
@@ -195,7 +206,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             UPDATE Containers
-            SET Name = @Name, DockerImageId = @DockerImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports::json, Created = @Created, ImageId = @ImageId, DeploymentId = @DeploymentId, PlatformId = @PlatformId
+            SET Name = @Name, DockerImageId = @DockerImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports::json, Created = @Created, ImageId = @ImageId, DeploymentId = @DeploymentId, PlatformId = @PlatformId, StackId = @StackId
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -205,6 +216,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             PlatformId = container.PlatformId,
             ImageId = container.ImageId,
             DeploymentId = container.DeploymentId,
+            StackId = container.StackId,
             Name = container.Name,
             Image = container.Image,
             DockerImageId = container.DockerImageId,
@@ -219,8 +231,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     public Task<int> BulkUpsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)
     {
         const string sql = """
-        INSERT INTO Containers (Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId)
-        VALUES (@Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId)
+        INSERT INTO Containers (Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId, StackId)
+        VALUES (@Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId, @StackId)
         ON CONFLICT(Id) DO UPDATE SET
             Name = excluded.Name,
             DockerImageId = excluded.DockerImageId,
@@ -229,7 +241,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Updated = excluded.Updated,
             State = excluded.State,
             Stack = excluded.Stack,
-            Ports = excluded.Ports;
+            Ports = excluded.Ports,
+            StackId = excluded.StackId;
     """;
 
         return db.ExecuteAsync(sql, containers.Select(c => new
@@ -244,6 +257,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             State = EnumFormatter<ContainerStateStatus>.GetValue(c.State),
             Stack = c.DockerStack,
             ImageId = c.ImageId,
+            StackId = c.StackId,
             Ports = JsonSerializer.Serialize(
                 c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding
             )

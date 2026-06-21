@@ -14800,7 +14800,7 @@
       },
       "ActivityEventInfoStackPaused": {
         "required": [
-          "result"
+          "containerIds"
         ],
         "properties": {
           "$type": {
@@ -14809,8 +14809,11 @@
             ],
             "type": "string"
           },
-          "result": {
-            "type": "string"
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -14836,7 +14839,7 @@
       },
       "ActivityEventInfoStackStarted": {
         "required": [
-          "result"
+          "containerIds"
         ],
         "properties": {
           "$type": {
@@ -14845,14 +14848,17 @@
             ],
             "type": "string"
           },
-          "result": {
-            "type": "string"
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
       "ActivityEventInfoStackStopped": {
         "required": [
-          "result"
+          "containerIds"
         ],
         "properties": {
           "$type": {
@@ -14861,8 +14867,11 @@
             ],
             "type": "string"
           },
-          "result": {
-            "type": "string"
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -24060,6 +24069,12 @@
           },
           "timestamp": {
             "format": "date-time"
+          },
+          "progressMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "message": {
             "type": [

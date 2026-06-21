@@ -2,6 +2,7 @@
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Registries;
@@ -26,7 +27,8 @@ internal class ApplyStackService(
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformCache,
-    IConnectorFactory<IStackConnector> stackConnectorFactory) : IApplyStackService
+    IConnectorFactory<IStackConnector> stackConnectorFactory,
+    IConnectorFactory<IContainerConnector> containerConnectorFactory) : IApplyStackService
 {
     public async IAsyncEnumerable<StackStreamItem> ApplyAsync(Guid stackId, [EnumeratorCancellation] CancellationToken ct)
     {
@@ -35,7 +37,7 @@ internal class ApplyStackService(
 
         if (stack is null)
         {
-            yield return StackStreamItem.FromStdErr($"❌ Stack with ID {stackId} not found.");
+            yield return StackStreamItem.FromStdErr($"❌ Stack with ID {stackId} not found.", 1);
             yield break;
         }
 
@@ -43,7 +45,7 @@ internal class ApplyStackService(
         {
             var message = $"❌ Stack with ID {stackId} has no spec defined.";
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
-            yield return StackStreamItem.FromStdErr(message);
+            yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
 
@@ -51,7 +53,7 @@ internal class ApplyStackService(
         {
             var message = "❌ Platform not found or disconnected.";
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
-            yield return StackStreamItem.FromStdErr(message);
+            yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
 
@@ -61,7 +63,7 @@ internal class ApplyStackService(
         {
             var message = "Only manual stack specs are currently supported for stack apply.";
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
-            yield return StackStreamItem.FromStdErr(message);
+            yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
 
@@ -69,7 +71,7 @@ internal class ApplyStackService(
         {
             var message = "❌ Manual stack compose file is required.";
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
-            yield return StackStreamItem.FromStdErr(message);
+            yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
 
@@ -83,7 +85,7 @@ internal class ApplyStackService(
             {
                 var message = $"❌ Registry with ID {registryId} not found.";
                 await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
-                yield return StackStreamItem.FromStdErr(message);
+                yield return StackStreamItem.FromStdErr(message, 1);
                 yield break;
             }
 
@@ -100,7 +102,7 @@ internal class ApplyStackService(
         if (!markResult.IsSuccess)
         {
             var message = markResult.ErrorMessage ?? "❌ Stack is already being processed.";
-            yield return StackStreamItem.FromStdErr(message);
+            yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
 
@@ -123,7 +125,7 @@ internal class ApplyStackService(
                 if (next.ErrorMessage is not null)
                 {
                     await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, next.ErrorMessage, ct: ct);
-                    yield return StackStreamItem.FromStdErr(next.ErrorMessage);
+                    yield return StackStreamItem.FromStdErr(next.ErrorMessage, exitCode ?? 1);
                     yield break;
                 }
 
@@ -138,7 +140,7 @@ internal class ApplyStackService(
                 {
                     if (result.Type == StackApplyEventType.SystemMessage)
                     {
-                        yield return StackStreamItem.SystemMessage(result.Message);
+                        yield return StackStreamItem.SystemMessage(result.Message, result.ExitCode ?? 0);
                     }
                     else
                     {
@@ -168,7 +170,7 @@ internal class ApplyStackService(
                             : $"❌ Pipeline command failed with exit code {result.ExitCode}.";
 
                         await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, ct: ct);
-                        yield return StackStreamItem.FromStdErr($"❌ {explicitFailure}");
+                        yield return StackStreamItem.FromStdErr($"❌ {explicitFailure}", result.ExitCode.Value);
                         yield break;
                     }
                 }
@@ -181,16 +183,25 @@ internal class ApplyStackService(
 
         if (exitCode == 0)
         {
+            var (errorMessage, containerIds) = await GetContainerIds(stack, platform, ct);
+            if (!string.IsNullOrEmpty(errorMessage))
+            {
+                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, ct: ct);
+                yield return StackStreamItem.FromStdErr($"❌ {errorMessage}", exitCode ?? 1 );
+                yield break;
+            }
+        
             await dbWorkQueue.EnqueueAsync(
                 new StackSucceededWorkItem(
                     stack.Id,
                     actorId,
+                    containerIds ?? [],
                     stackHub,
                     activityHub,
                     notificationQueue),
                 ct);
 
-            yield return StackStreamItem.SystemMessage("✅ Stack apply completed successfully.");
+            yield return StackStreamItem.SystemMessage("✅ Stack is now running.", 0);
             yield break;
         }
 
@@ -200,9 +211,28 @@ internal class ApplyStackService(
 
         await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, ct: ct);
 
-        yield return StackStreamItem.FromStdErr(finalFailureMessage);
+        yield return StackStreamItem.FromStdErr(finalFailureMessage, exitCode ?? 1);
     }
 
+    private async Task<(string? ErrorMessage, string[]? ContainerIds)> GetContainerIds(Stack stack, Domain.Contracts.Resources.PlatformCacheEntry platform, CancellationToken ct)
+    {
+        var filter = new ContainerFilterCommand(
+                        PlatformAddress: platform.Address,
+                        Filters: new Dictionary<string, IDictionary<string, bool>>()
+                        {
+                            ["label"] = new Dictionary<string, bool>()
+                            {
+                                [$"com.docker.compose.project={stack.Name}"] = true,
+                            }
+                        });
+
+        var containerConnector = containerConnectorFactory.GetConnector(platform.ConnectorType);
+        var containerListResult = await containerConnector.ListContainersAsync(filter, ct);
+
+        return containerListResult.IsFailure(out var error, out var containerDic)
+            ? (error.Message, null)
+            : (null, containerDic.Keys.ToArray());
+    }
     private static StackApplyCommand BuildApplyCommand(Stack stack, string platformAddress, ManualStack manualStack, 
         string? registryAuth, string? registryName, string? registryHost)
         => new(
@@ -331,6 +361,7 @@ internal sealed class UpdateStackStatusWorkItem(Guid stackId, Guid actorId, Stac
 internal sealed class StackSucceededWorkItem(
     Guid stackId,
     Guid actorId,
+    string[] containerIds,
     IStackStreamManager stackHub,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue) : IDbWorkItem
@@ -338,9 +369,17 @@ internal sealed class StackSucceededWorkItem(
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var stack = await uow.Stacks.GetAsync(stackId, ct);
-        if (stack is null) return;
+        var containers = await uow.Containers.GetByIdsAsync(containerIds, ct);
+        if (stack is null || containers is null) return;
 
         stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+
+        foreach (var container in containers)
+        {
+            container.PartialUpdate(stackId: stack.Id);
+        }
+
+        await uow.Containers.BulkUpsertAsync(containers, ct);
         await uow.Stacks.UpdateAsync(stack, ct);
 
         var activity = new ActivityEvent(
@@ -350,12 +389,11 @@ internal sealed class StackSucceededWorkItem(
                         resourceName: stack.Name,
                         status: ActivityStatus.Success,
                         eventType: ActivityEventType.StackApplied,
-                        info: new StackApplied(stack.ToSnapshot(), new StackResultSnapshot(Message: "Stack applied successfully."))
+                        info: new StackApplied(stack.ToSnapshot(), new StackResultSnapshot(containerIds, "Stack applied successfully."))
                         );
 
         await uow.ActivityEventRepository.AddAsync(activity, ct);
 
-        // Todo: attach containers
         await uow.CommitAsync(ct);
 
         stack.AssignActivityEvent(activity);

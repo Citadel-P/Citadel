@@ -10,7 +10,7 @@ namespace Infrastructure.Persistence.Mappers;
 internal static class ContainerMappers
 {
     internal static IEnumerable<Container> ToDomain(this IEnumerable<ContainerDto> containers)
-        => containers.Select(ToDomain);
+        => [.. containers.Select(ToDomain)];
 
     internal static Container ToDomain(this ContainerDto container)
     {

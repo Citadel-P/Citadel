@@ -45,22 +45,22 @@ internal sealed class PatchContainerHandler(
         }
 
         var containerIds = platforms.SelectMany(p => p.Containers.Values).ToArray();
-        var containers = await containerService.MarkProcessingAsync(containerIds, actorId, ct);
+        var resources = await containerService.MarkProcessingAsync(containerIds, actorId, ct);
 
-        if (containers.Count == 0)
+        if (resources.Containers.Count == 0)
         {
             return Result.Failure(new NotFoundError(
                 "No containers found for the provided ID(s)."));
         }
 
-        await containerService.NotifyProcessingAsync(containers, ct);
+        await containerService.NotifyProcessingAsync(resources, ct);
 
         foreach (var platform in platforms)
         {
             var result = await PatchPlatformAsync(platform, request.Action, ct);
             if (result.IsFailure())
             {
-                await containerService.RollbackProcessingAsync(containers, actorId, ct);
+                await containerService.RollbackProcessingAsync(resources, actorId, ct);
                 return result;
             }
         }

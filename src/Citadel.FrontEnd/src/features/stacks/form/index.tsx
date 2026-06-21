@@ -4,7 +4,13 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StackActions } from './actions';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useStackGroup } from './hooks/useStackGroup';
-import { StackView, ResourceControlState, LatestActivityView, ActivityStatus } from '@/api/generated/api.types';
+import {
+  StackView,
+  ResourceControlState,
+  LatestActivityView,
+  ActivityStatus,
+  StackReleaseStatus,
+} from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { AlertMessage } from '@/components/custom/alert-message';
@@ -40,6 +46,14 @@ export const StackFormComponents: RequiredFormComponents = {
           return (
             <StackForm mode="edit" metadataChanged={metadataChanged} disabled={!hasCapability(resource, 'canWrite')} />
           );
+        },
+      },
+      {
+        label: 'Containers',
+        disabled: (resource: StackView): boolean =>
+          resource.status === StackReleaseStatus.Degraded || resource.status === StackReleaseStatus.Created,
+        Content: ({ resource }: { resource: StackView }) => {
+          return <StackRuntime key={resource.id} stack={resource} />;
         },
       },
       {
@@ -82,6 +96,39 @@ const StackLatestActivity = ({ latestActivity }: { latestActivity: LatestActivit
       activity={latestActivity as any}
       title="Error"
       date={latestActivity?.createdAt}
+    />
+  );
+};
+
+const StackRuntime = ({ deployment }: { deployment: StackView }) => {
+  const { containerInfo, isLoading, error } = useContainerInfoGroup(
+    deployment.dockerContainerId ?? undefined,
+    deployment.platformId,
+  );
+
+  if (deployment.status === DeploymentStatus.Degraded) return null;
+  const disabled = deployment.status !== DeploymentStatus.Healthy;
+
+  if (!deployment.dockerContainerId)
+    return <div className="text-sm text-muted-foreground mb-2">No container assigned</div>;
+
+  if (error)
+    return (
+      <div className="mb-2">
+        <AlertMessage type="warning">
+          <div className="truncate">{(error as any)?.error?.detail ?? 'Platform unavailable'}</div>
+        </AlertMessage>
+      </div>
+    );
+
+  return (
+    <RuntimeView
+      containerInfo={containerInfo}
+      containerId={deployment.dockerContainerId}
+      deploymentId={deployment.id}
+      deployment={deployment}
+      containerLoading={isLoading}
+      disabled={disabled}
     />
   );
 };

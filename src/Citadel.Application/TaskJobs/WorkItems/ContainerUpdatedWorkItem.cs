@@ -5,6 +5,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Domain.Entities.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,7 @@ internal sealed class ContainerUpdatedWorkItem(
     IDeploymentStreamManager deploymentHub,
     IDockerDaemonStreamManager dockerDaemonHub,
     IContainerEventBroadcaster containerEventBroadcaster,
+    IStackStreamManager stackHub,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
@@ -27,9 +29,9 @@ internal sealed class ContainerUpdatedWorkItem(
             ActivityEvent? activityEvent = null;
             Deployment? deployment = null;
             Container? container = null;
-            var existing = await uow.Containers.GetContainerInfoAsync(
-                eventInfo.ContainerId,
-                cancellationToken);
+            Stack? stack = null;
+
+            var existing = await uow.Containers.GetContainerInfoAsync(eventInfo.ContainerId, cancellationToken);
 
             if (existing is null) return;
 
@@ -37,6 +39,20 @@ internal sealed class ContainerUpdatedWorkItem(
             {
                 var status = Deployment.ToDeploymentStatus(eventInfo.Container?.State ?? ContainerStateStatus.Unknown);
                 (deployment, activityEvent) = await ContainerDestroyedWorkItem.UpdateDeploymentStatus(uow, existing.DeploymentId.Value, status, existing.DockerContainerId, cancellationToken);
+            }
+
+            if (existing.StackId != null)
+            {
+                var containers = await uow.Stacks.GetContainersAsync(existing.StackId.Value, cancellationToken);
+
+                var states = containers
+                    .Where(x => x.DockerContainerId != eventInfo.Container?.Id)
+                    .Select(x => x.State)
+                    .Append(eventInfo.Container?.State ?? ContainerStateStatus.Unknown);
+
+                var status = Stack.ToStackStatus(states);
+
+                (stack, activityEvent) = await ContainerDestroyedWorkItem.UpdateStackStatus(uow, existing.StackId.Value, status, eventInfo.Container?.State ?? ContainerStateStatus.Unknown, existing.DockerContainerId, cancellationToken);
             }
 
             container = await UpdateContainer(uow, existing, cancellationToken);
@@ -51,6 +67,13 @@ internal sealed class ContainerUpdatedWorkItem(
             {
                 var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
                 await notificationQueue.EnqueueAsync(deploymentWorkItem, cancellationToken);
+            }
+
+            // Notify Stack
+            if (stack != null)
+            {
+                var stackWorkItem = new StackNotificationWorkItem(stackHub, stack);
+                await notificationQueue.EnqueueAsync(stackWorkItem, cancellationToken);
             }
 
             // Notify Activity
