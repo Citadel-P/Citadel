@@ -36,6 +36,8 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<PlatformStatsBatchView>]
 [GenerateShapeFor<PlatformStatView>]
 [GenerateShapeFor<DockerContainer>]
+[GenerateShapeFor<List<DockerContainer>>]
+[GenerateShapeFor<IEnumerable<DockerContainer>>]
 [GenerateShapeFor<DockerContainerStat>]
 [GenerateShapeFor<byte[]>]
 [GenerateShapeFor<ReadOnlyMemory<byte>>]
@@ -90,6 +92,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<TargetResource>]
 [GenerateShapeFor<ContainerDataView>]
 [GenerateShapeFor<ContainersDataView>]
+[GenerateShapeFor<List<ContainerDataView>>]
 partial class SignalRMessagePackContext;
 
 internal static class DerivedTypesMapping

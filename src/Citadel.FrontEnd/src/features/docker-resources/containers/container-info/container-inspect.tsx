@@ -2,10 +2,13 @@ import { useMemo } from 'react';
 import { useRead } from '@/lib/hooks';
 import { MonacoEditor } from '@/lib/monaco';
 import { KnownResourceName } from '@/api/types';
+import { serializeData } from '@/lib/utils';
 
 type InspectProps = {
   readKey: KnownResourceName;
   id?: string | undefined;
+  stackId?: string | undefined;
+  containerId?: string | undefined;
   filename?: string | undefined;
   loadingMessage?: string;
   noDataMessage?: string;
@@ -14,22 +17,25 @@ type InspectProps = {
 function Inspect({
   readKey,
   id,
+  stackId,
+  containerId,
   filename,
   loadingMessage = '// Loading container inspection data...',
   noDataMessage = '// No data available',
 }: InspectProps) {
-  const { data, isSuccess, isLoading } = useRead(readKey, { id });
+  const readArgs = stackId && containerId ? { stackId, containerId } : { id };
+  const { data, isSuccess, isLoading } = useRead(readKey, readArgs as any);
 
   const code = useMemo(() => {
-    if (isLoading) return loadingMessage;
-
-    if (isSuccess && data?.data) {
-      return JSON.stringify(data.data, null, 2);
+    if (isSuccess && data?.data != null) {
+      return serializeData(data.data, 'json');
     }
+
+    if (isLoading) return loadingMessage;
 
     return noDataMessage;
   }, [isLoading, isSuccess, data, loadingMessage, noDataMessage]);
-  
+
   return (
     <div className="flex-1 w-full border rounded-md overflow-hidden bg-slate-50 dark:bg-zinc-950">
       <MonacoEditor
@@ -50,4 +56,21 @@ export const ContainerInspect = ({ containerId }: { containerId: string | undefi
 
 export const DeploymentInspect = ({ deploymentId }: { deploymentId: string | undefined }) => {
   return <Inspect readKey="inspectDeployment" id={deploymentId} filename={`inspect-${deploymentId}.json`} />;
+};
+
+export const StackInspect = ({
+  stackId,
+  containerId,
+}: {
+  stackId: string | undefined;
+  containerId: string | undefined;
+}) => {
+  return (
+    <Inspect
+      readKey="inspectStackContainer"
+      stackId={stackId}
+      containerId={containerId}
+      filename={`inspect-${stackId}-${containerId}.json`}
+    />
+  );
 };

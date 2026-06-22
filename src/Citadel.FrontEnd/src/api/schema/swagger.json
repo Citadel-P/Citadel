@@ -12108,6 +12108,225 @@
         ]
       }
     },
+    "/api/v1/stacks/{stackId}/stats": {
+      "get": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Get stack stats",
+        "operationId": "getStackStats",
+        "parameters": [
+          {
+            "name": "stackId",
+            "in": "path",
+            "description": "The stack id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "description": "Stats lookback window in hours. Supported values: 24, 48, 72.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 24
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackStatsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/{stackId}/containers/{containerId}/inspect": {
+      "get": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Inspect a stack container",
+        "operationId": "inspectStackContainer",
+        "parameters": [
+          {
+            "name": "stackId",
+            "in": "path",
+            "description": "The stack id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "containerId",
+            "in": "path",
+            "description": "The container id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerInspectView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/activities/{id}": {
       "get": {
         "tags": [
@@ -23783,6 +24002,28 @@
           }
         }
       },
+      "StackContainerStatsView": {
+        "required": [
+          "containerId",
+          "containerName",
+          "stats"
+        ],
+        "type": "object",
+        "properties": {
+          "containerId": {
+            "type": "string"
+          },
+          "containerName": {
+            "type": "string"
+          },
+          "stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerStatView"
+            }
+          }
+        }
+      },
       "StackReleaseSnapshot": {
         "required": [
           "platformId",
@@ -24165,6 +24406,20 @@
           "destroyBeforeDeploy": {
             "type": "boolean",
             "default": true
+          }
+        }
+      },
+      "StackStatsView": {
+        "required": [
+          "containers"
+        ],
+        "type": "object",
+        "properties": {
+          "containers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackContainerStatsView"
+            }
           }
         }
       },

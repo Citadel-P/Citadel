@@ -26,7 +26,7 @@ import {
 import { useGetValidationErrors, getValidationErrors } from '@/hooks/useGetValidationErrors';
 import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router';
-import { ApplyDeploymentInput, ProblemDetails, PullImageInput } from '@/api/generated/api.types';
+import { ApplyDeploymentInput, ApplyStackInput, ProblemDetails, PullImageInput } from '@/api/generated/api.types';
 import { useAuthContext } from '@/features/auth/auth-context';
 
 const EMPTY_ARGS = Object.freeze({});
@@ -370,7 +370,7 @@ export const useWindowDimensions = () => {
   return dimensions;
 };
 
-type PulledStreamProps = PullImageInput | ApplyDeploymentInput;
+type PulledStreamProps = PullImageInput | ApplyDeploymentInput | ApplyStackInput;
 
 const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: string, onMutate?: () => void) => {
   const { apiClient } = useApiClientContext();
@@ -414,6 +414,11 @@ const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: str
           const chunk = decoder.decode(value, { stream: true });
           onChunkReceived(chunk);
         }
+      }
+
+      const finalChunk = decoder.decode();
+      if (finalChunk) {
+        onChunkReceived(finalChunk);
       }
     } catch (error) {
       console.error('Error while reading stream:', error);
@@ -491,11 +496,39 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
       const newHistory: string[] = [];
       const updatedActive = new Map<string, string>();
       let processedIndex = 0;
+      let inString = false;
+      let isEscaped = false;
+      const addText = (value: string | undefined | null) => {
+        if (!value) return false;
+        newHistory.push(value.trimEnd());
+        return true;
+      };
 
       for (let i = 0; i < bufferRef.current.length; i++) {
         const char = bufferRef.current[i];
-        if (char === '{') {
-          if (braceCount === 0) startIndex = i;
+
+        if (startIndex === -1) {
+          if (char === '{') {
+            startIndex = i;
+            braceCount = 1;
+          }
+          continue;
+        }
+
+        if (inString) {
+          if (isEscaped) {
+            isEscaped = false;
+          } else if (char === '\\') {
+            isEscaped = true;
+          } else if (char === '"') {
+            inString = false;
+          }
+          continue;
+        }
+
+        if (char === '"') {
+          inString = true;
+        } else if (char === '{') {
           braceCount++;
         } else if (char === '}') {
           braceCount--;
@@ -513,8 +546,10 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
                   units?: string;
                 };
                 progressMessage?: string;
+                stream?: string;
+                message?: string;
               };
-              const { id, status, progress, progressMessage } = item;
+              const { id, status, progress, progressMessage, stream, message } = item;
               const errorMessage = getError?.(item);
 
               if (errorMessage) {
@@ -524,8 +559,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
               }
 
               // Handle simple log messages
-              if (progressMessage) {
-                newHistory.push(progressMessage.trim());
+              if (addText(progressMessage) || addText(stream) || addText(message)) {
                 continue;
               }
 
@@ -574,6 +608,8 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
               // If parse fails, we just skip this object
             }
             startIndex = -1;
+            inString = false;
+            isEscaped = false;
           }
         }
       }

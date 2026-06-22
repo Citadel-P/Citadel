@@ -93,6 +93,8 @@ public static class ApplicationModule
             .AddSingleton<IStreamSubscriptionResolver, StreamSubscriptionResolver>()
             .AddSingleton<ContainerInfoStreamManager>()
             .AddSingleton<ContainerLogStreamManager>()
+            .AddSingleton<StackInfoStreamManager>()
+            .AddSingleton<StackLogStreamManager>()
             .AddSingleton<StackStreamManager>()
             .AddSingleton<DeploymentStreamManager>()
             .AddSingleton<ActivityStreamManager>()
@@ -112,6 +114,7 @@ public static class ApplicationModule
             .AddSingleton<IDeploymentStreamManager>(s => s.GetRequiredService<DeploymentStreamManager>())
             .AddSingleton<IDockerDaemonStreamManager>(s => s.GetRequiredService<DockerDaemonStreamManager>())
             .AddSingleton<IContainerLogStreamManager>(s => s.GetRequiredService<ContainerLogStreamManager>())
+            .AddSingleton<IStackLogStreamManager>(s => s.GetRequiredService<StackLogStreamManager>())
             .AddSingleton<IGitRepositoryStreamManager>(s => s.GetRequiredService<GitRepositoryStreamManager>())
             .AddSingleton<IStackStreamManager>(s => s.GetRequiredService<StackStreamManager>());
 

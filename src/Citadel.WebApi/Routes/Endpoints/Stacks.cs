@@ -1,4 +1,3 @@
-using Application.Features.Containers.Queries;
 using Application.Features.Stacks.Commands;
 using Application.Features.Stacks.Queries;
 using Application.Permissions;
@@ -90,6 +89,26 @@ public static class Stacks
     {
         var result = await mediator.Send(new GetContainersData(stackId), cancellationToken);
         return EndpointHandlers.HandleResult(result, ContainersDataView.Map);
+    }
+
+    public static async Task<Results<Ok<StackStatsView>, ProblemHttpResult>> GetStats(
+        IMediator mediator,
+        [Description("The stack id")] Guid stackId,
+        [FromQuery][Description("Stats lookback window in hours. Supported values: 24, 48, 72.")] int hours = 24,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new GetStackStats(stackId, hours), cancellationToken);
+        return EndpointHandlers.HandleResult(result, StackStatsView.Map);
+    }
+
+    public static async Task<Results<Ok<ContainerInspectView>, ProblemHttpResult>> InspectContainer(
+        IMediator mediator,
+        [Description("The stack id")] Guid stackId,
+        [Description("The container id")] string containerId,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new InspectStackContainer(stackId, containerId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ContainerInspectView.Map);
     }
 
     public static async IAsyncEnumerable<StackStreamItem> ApplyStack(IMediator mediator, ApplyStackInput applyStackInput, [EnumeratorCancellation] CancellationToken cancellationToken)

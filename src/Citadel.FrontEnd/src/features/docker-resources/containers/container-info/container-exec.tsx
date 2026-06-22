@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HubConnection, HubConnectionState } from '@microsoft/signalr';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -25,6 +25,7 @@ interface ExecTerminalProps {
   isLoading: boolean;
   isConnected: boolean;
   disabled?: boolean;
+  toolbarStart?: ReactNode;
   toggleConnection: () => void;
 }
 
@@ -32,6 +33,7 @@ interface UseContainerExecOptions {
   containerId?: string;
   disabled?: boolean;
   deploymentId?: string;
+  stackId?: string;
   methodNames?: {
     sendExecInput?: string;
     resizeExec?: string;
@@ -66,14 +68,16 @@ const ExecTerminal: React.FC<ExecTerminalProps> = ({
   isLoading,
   isConnected,
   disabled,
+  toolbarStart,
   toggleConnection,
 }) => {
   return (
     <div className="flex flex-col w-full h-[60vh]">
       <div className="flex items-center justify-between bg-secondary/20 p-2 rounded-t-md">
         <div className="flex flex-row gap-4">
+          {toolbarStart}
           <Select value={shell} disabled={isConnected || isLoading} onValueChange={(value) => setShell(value as Shell)}>
-            <SelectTrigger className="w-full min-w-32 max-h-8 bg-background rounded-sm shadow-xs">
+            <SelectTrigger className="w-32 max-h-8 bg-background rounded-sm shadow-xs">
               <SelectValue placeholder="Select a shell" />
             </SelectTrigger>
             <SelectContent className="bg-background">
@@ -88,11 +92,10 @@ const ExecTerminal: React.FC<ExecTerminalProps> = ({
           </Select>
 
           <Button
-            disabled={isLoading}
+            disabled={disabled || isLoading}
             variant="outline"
             className="rounded-sm h-8 shadow-xs text-sm font-normal"
-            onClick={toggleConnection}
-          >
+            onClick={toggleConnection}>
             {isConnected ? (
               <span className="flex items-center gap-2">
                 Disconnect
@@ -113,7 +116,7 @@ const ExecTerminal: React.FC<ExecTerminalProps> = ({
 };
 
 export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
-  const { containerId, disabled = false, deploymentId, methodNames = {} } = options;
+  const { containerId, disabled = false, deploymentId, stackId, methodNames = {} } = options;
 
   const {
     sendExecInput = 'SendExecInput',
@@ -127,7 +130,10 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
 
   const sessionId = useMemo(() => nanoid(), []);
   const groupId = containerId ? `container-exec:${containerId}:${sessionId}` : undefined;
-  const targetId = deploymentId ?? containerId;
+  const targetIds = useMemo(() => {
+    if (stackId && containerId) return [stackId, containerId];
+    return [deploymentId ?? containerId];
+  }, [containerId, deploymentId, stackId]);
 
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -157,10 +163,10 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
     const dataDisposable = term.onData((data) => {
       if (!execStartedRef.current) return;
       if (hubRef.current?.state !== HubConnectionState.Connected) return;
-      if (!groupId || !targetId) return;
+      if (!groupId || targetIds.some((targetId) => !targetId)) return;
 
       const bytes = new TextEncoder().encode(data);
-      hubRef.current.invoke(sendExecInput, targetId, sessionId, bytes).catch(console.error);
+      hubRef.current.invoke(sendExecInput, ...targetIds, sessionId, bytes).catch(console.error);
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -168,10 +174,10 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
 
       if (!execStartedRef.current) return;
       if (hubRef.current?.state !== HubConnectionState.Connected) return;
-      if (!groupId || !targetId || !termRef.current) return;
+      if (!groupId || targetIds.some((targetId) => !targetId) || !termRef.current) return;
 
       hubRef.current
-        .invoke(resizeExec, targetId, sessionId, termRef.current.cols, termRef.current.rows)
+        .invoke(resizeExec, ...targetIds, sessionId, termRef.current.cols, termRef.current.rows)
         .catch(console.error);
     });
 
@@ -184,7 +190,7 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
       termRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [containerId, disabled, groupId, sessionId, targetId, sendExecInput, resizeExec, theme.mode]);
+  }, [containerId, disabled, groupId, sessionId, targetIds, sendExecInput, resizeExec, theme.mode]);
 
   useEffect(() => {
     if (!disabled) return;
@@ -222,20 +228,20 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
 
   const onJoinedGroup = useCallback(
     async (hub: HubConnection) => {
-      if (!groupId || !targetId) return;
+      if (!groupId || targetIds.some((targetId) => !targetId)) return;
 
       try {
-        await hub.invoke(startExecProcess, targetId, sessionId, shell);
+        await hub.invoke(startExecProcess, ...targetIds, sessionId, shell);
         execStartedRef.current = true;
 
         if (termRef.current) {
-          await hub.invoke(resizeExec, targetId, sessionId, termRef.current.cols, termRef.current.rows);
+          await hub.invoke(resizeExec, ...targetIds, sessionId, termRef.current.cols, termRef.current.rows);
         }
       } catch {
         termRef.current?.writeln('\r\n\x1b[31m[failed to start process]\x1b[0m');
       }
     },
-    [groupId, targetId, sessionId, shell, startExecProcess, resizeExec],
+    [groupId, targetIds, sessionId, shell, startExecProcess, resizeExec],
   );
 
   const { isLoading, isConnected } = useSignalRGroup({
@@ -298,4 +304,25 @@ export const ContainerExec: React.FC<{
   const terminal = useContainerExecTerminal({ containerId: nid, disabled });
 
   return <ExecTerminal {...terminal} disabled={disabled} />;
+};
+
+export const StackExec: React.FC<{
+  stackId: string;
+  containerId?: string;
+  disabled?: boolean;
+  toolbarStart?: ReactNode;
+}> = ({ stackId, containerId, disabled, toolbarStart }) => {
+  const nid = normalizeDockerId(containerId);
+  const terminal = useContainerExecTerminal({
+    containerId: nid,
+    disabled,
+    stackId,
+    methodNames: {
+      sendExecInput: 'SendStackExecInput',
+      resizeExec: 'ResizeStackExec',
+      startExecProcess: 'StartStackExecProcess',
+    },
+  });
+
+  return <ExecTerminal {...terminal} disabled={disabled} toolbarStart={toolbarStart} />;
 };

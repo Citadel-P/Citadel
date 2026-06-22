@@ -6,32 +6,58 @@ import { normalizeDockerId } from '@/lib/utils';
 
 const MAX_LOGS = 5000;
 const decoder = new TextDecoder('utf-8');
+const DOCKER_TIMESTAMP_ONLY_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 
 type LogsProps = {
   hubMethodName: string;
   containerId?: string | undefined;
   deploymentId?: string | undefined;
+  stackId?: string | undefined;
+  groupName?: string | undefined;
+  logEventName?: string;
+  logBatchEventName?: string;
+  containerFilters?: string[];
 };
 
-const Logs = memo(({ hubMethodName, containerId, deploymentId }: LogsProps) => {
-  const nid = normalizeDockerId(containerId);
-  const { containerLogs: logs, clearLogs } = useContainerLogGroup(hubMethodName, nid, deploymentId);
+const Logs = memo(
+  ({
+    hubMethodName,
+    containerId,
+    deploymentId,
+    stackId,
+    groupName,
+    logEventName = 'SendContainerLogs',
+    logBatchEventName = 'SendContainerLogsBatch',
+    containerFilters,
+  }: LogsProps) => {
+    const nid = normalizeDockerId(containerId);
+    const effectiveGroupName = groupName ?? (nid ? `container-log:${nid}` : undefined);
+    const hubMethodArg = deploymentId ?? stackId ?? nid;
+    const { containerLogs: logs, clearLogs } = useContainerLogGroup({
+      hubMethodName,
+      hubMethodArg,
+      groupName: effectiveGroupName,
+      logEventName,
+      logBatchEventName,
+    });
 
-  return (
-    <div className="flex flex-col gap-3">
-      <LogViewer
-        logs={logs}
-        autoScroll={true}
-        timeStamps={true}
-        allowWrap={true}
-        showTimestamps={false}
-        wrapLines={false}
-        onClear={clearLogs}
-        className="pb-[20vh]"
-      />
-    </div>
-  );
-});
+    return (
+      <div className="flex flex-col gap-3">
+        <LogViewer
+          logs={logs}
+          autoScroll={true}
+          timeStamps={true}
+          allowWrap={true}
+          showTimestamps={false}
+          wrapLines={false}
+          onClear={clearLogs}
+          containerFilters={containerFilters}
+          className="pb-[20vh]"
+        />
+      </div>
+    );
+  },
+);
 Logs.displayName = 'Logs';
 
 export const ContainerLogs = memo(({ containerId }: { containerId: string }) => (
@@ -46,27 +72,47 @@ export const DeploymentLogs = memo(
 );
 DeploymentLogs.displayName = 'DeploymentLogs';
 
+export const StackLogs = memo(({ stackId, containers }: { stackId: string; containers?: string[] }) => (
+  <Logs
+    hubMethodName="StartStackLogs"
+    stackId={stackId}
+    groupName={`stack-log:${stackId}`}
+    logEventName="SendStackLogs"
+    logBatchEventName="SendStackLogsBatch"
+    containerFilters={containers}
+  />
+));
+StackLogs.displayName = 'StackLogs';
+
 interface LogEntry {
   timestamp: string;
   message: string;
 }
 
-export const useContainerLogGroup = (
-  hubMethodName: string,
-  containerId: string | undefined,
-  deploymentId?: string | undefined,
-) => {
+export const useContainerLogGroup = ({
+  hubMethodName,
+  hubMethodArg,
+  groupName,
+  logEventName,
+  logBatchEventName,
+}: {
+  hubMethodName: string;
+  hubMethodArg?: string | undefined;
+  groupName?: string | undefined;
+  logEventName: string;
+  logBatchEventName: string;
+}) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
-  const logsMapRef = useRef<Map<string, string>>(new Map());
+  const logsMapRef = useRef<Map<string, LogEntry>>(new Map());
   const bufferRef = useRef<string[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevContainerIdRef = useRef<string | undefined>(containerId);
+  const prevGroupNameRef = useRef<string | undefined>(groupName);
 
   // Safe reset when the resource ID actually changes
   useEffect(() => {
-    if (containerId !== prevContainerIdRef.current) {
-      prevContainerIdRef.current = containerId;
+    if (groupName !== prevGroupNameRef.current) {
+      prevGroupNameRef.current = groupName;
 
       logsMapRef.current = new Map();
       bufferRef.current = [];
@@ -77,7 +123,7 @@ export const useContainerLogGroup = (
 
       setLogs([]);
     }
-  }, [containerId]);
+  }, [groupName]);
 
   const flush = useCallback(() => {
     flushTimerRef.current = null;
@@ -85,18 +131,27 @@ export const useContainerLogGroup = (
     if (batch.length === 0) return;
 
     const next = new Map(logsMapRef.current);
+    let sequence = next.size;
 
     for (const rawText of batch) {
       for (const line of rawText.split('\n')) {
         if (!line) continue;
+        const trimmedLine = line.trim();
+        if (DOCKER_TIMESTAMP_ONLY_RE.test(trimmedLine)) continue;
+
         const firstSpaceIndex = line.indexOf(' ');
-        if (firstSpaceIndex !== -1) {
+        const firstToken = firstSpaceIndex !== -1 ? line.substring(0, firstSpaceIndex) : '';
+        const hasTimestampPrefix = firstToken.includes('T') || /^\d{2}:\d{2}:\d{2}/.test(firstToken);
+
+        if (firstSpaceIndex !== -1 && hasTimestampPrefix) {
           const timestamp = line.substring(0, firstSpaceIndex);
           const message = line.substring(firstSpaceIndex + 1);
-          next.set(timestamp, message);
+          if (!message.trim()) continue;
+
+          next.set(`${timestamp}-${sequence++}`, { timestamp, message });
         } else {
           // Fallback for malformed lines
-          next.set(`${Date.now()}-${Math.random()}`, line);
+          next.set(`${Date.now()}-${sequence++}`, { timestamp: `${Date.now()}`, message: line });
         }
       }
     }
@@ -110,11 +165,7 @@ export const useContainerLogGroup = (
     }
 
     // Build sorted array
-    const arr = new Array<LogEntry>(logsMapRef.current.size);
-    let i = 0;
-    for (const [ts, msg] of logsMapRef.current) {
-      arr[i++] = { timestamp: ts, message: msg };
-    }
+    const arr = Array.from(logsMapRef.current.values());
     arr.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
     setLogs(arr);
@@ -135,36 +186,36 @@ export const useContainerLogGroup = (
   const startLogs = useCallback(
     async (hub: HubConnection) => {
       try {
-        await hub.invoke(hubMethodName, deploymentId ?? containerId);
+        await hub.invoke(hubMethodName, hubMethodArg);
       } catch (error) {
         console.error('Failed to start container logs stream', error);
       }
     },
-    [containerId, hubMethodName, deploymentId],
+    [hubMethodArg, hubMethodName],
   );
 
   const setupEventListeners = useCallback(
     (hub: HubConnection) => {
-      hub.on('SendContainerLogs', handleLogs);
-      hub.on('SendContainerLogsBatch', handleLogs);
+      hub.on(logEventName, handleLogs);
+      hub.on(logBatchEventName, handleLogs);
     },
-    [handleLogs],
+    [handleLogs, logBatchEventName, logEventName],
   );
 
   const removeEventListeners = useCallback(
     (hub: HubConnection) => {
-      hub.off('SendContainerLogs', handleLogs);
-      hub.off('SendContainerLogsBatch', handleLogs);
+      hub.off(logEventName, handleLogs);
+      hub.off(logBatchEventName, handleLogs);
     },
-    [handleLogs],
+    [handleLogs, logBatchEventName, logEventName],
   );
 
   useSignalRGroup({
-    groupName: `container-log:${containerId}`,
+    groupName,
     setupEventListeners,
     removeEventListeners,
     onJoinedGroup: startLogs,
-    skip: !containerId,
+    skip: !groupName || !hubMethodArg,
   });
 
   const clearLogs = useCallback(() => {

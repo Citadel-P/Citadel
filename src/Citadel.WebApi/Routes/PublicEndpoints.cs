@@ -1051,6 +1051,22 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getContainersData");
+
+        stacks.MapGet("{stackId}/stats", Stacks.GetStats)
+            .WithSummary("Get stack stats")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getStackStats");
+
+        stacks.MapGet("{stackId}/containers/{containerId}/inspect", Stacks.InspectContainer)
+            .WithSummary("Inspect a stack container")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("inspectStackContainer");
     }
 
     private static void MapActivityEndpoints(RouteGroupBuilder activities)

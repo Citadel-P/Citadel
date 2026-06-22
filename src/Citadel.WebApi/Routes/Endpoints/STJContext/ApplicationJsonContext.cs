@@ -298,6 +298,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(ContainerDataView))]
 [JsonSerializable(typeof(ApplyStackInput))]
 [JsonSerializable(typeof(ContainersDataView))]
+[JsonSerializable(typeof(StackStatsView))]
+[JsonSerializable(typeof(StackContainerStatsView))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

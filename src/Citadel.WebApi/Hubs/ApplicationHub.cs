@@ -1,5 +1,6 @@
-﻿using Application.Features.Containers.Commands;
+using Application.Features.Containers.Commands;
 using Application.Features.Deployments.Commands;
+using Application.Features.Stacks.Commands;
 using Application.Services.SignalR;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
@@ -60,6 +61,11 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         await mediator.Send(new StartDeploymentLogs(deploymentId), Context.ConnectionAborted);
     }
 
+    public async Task StartStackLogs(Guid stackId)
+    {
+        await mediator.Send(new StartStackLogs(stackId), Context.ConnectionAborted);
+    }
+
     public async Task StartExecProcess(string containerId, string sessionId, string shell)
     {
         await mediator.Send(new StartContainerShellSession(containerId, sessionId, shell), Context.ConnectionAborted);
@@ -88,6 +94,21 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
     public async Task SendDeploymentExecInput(Guid deploymentId, string sessionId, byte[] data)
     {
         await mediator.Send(new SendDeploymentExecInput(deploymentId, sessionId, data), Context.ConnectionAborted);
+    }
+
+    public async Task StartStackExecProcess(Guid stackId, string containerId, string sessionId, string shell)
+    {
+        await mediator.Send(new StartStackShellSession(stackId, containerId, sessionId, shell), Context.ConnectionAborted);
+    }
+
+    public async Task ResizeStackExec(Guid stackId, string containerId, string sessionId, int cols, int rows)
+    {
+        await mediator.Send(new ResizeStackExecSession(stackId, containerId, sessionId, cols, rows), Context.ConnectionAborted);
+    }
+
+    public async Task SendStackExecInput(Guid stackId, string containerId, string sessionId, byte[] data)
+    {
+        await mediator.Send(new SendStackExecInput(stackId, containerId, sessionId, data), Context.ConnectionAborted);
     }
 
     #endregion

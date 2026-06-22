@@ -5,16 +5,37 @@ import { StackActions } from './actions';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useStackGroup } from './hooks/useStackGroup';
 import {
+  ContainerDataView,
   StackView,
   ResourceControlState,
   LatestActivityView,
   ActivityStatus,
   StackReleaseStatus,
+  ContainerStateStatus,
 } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ActivityAlertZone } from '@/components/custom/task-sheet';
+import { useStackInfoGroup } from './hooks/useStackInfoGroup';
+import { DataTable } from '@/components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
+import { useMemo, useState } from 'react';
+import { PortsDisplay } from '@/components/custom/ports-display';
+import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
+import { CPUCell, DockerContainerCell, DockerImageCell, MemoryUsageCell } from '@/components/custom/common';
+import { truncate } from '@/lib/truncate';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { StackLogs } from '@/features/docker-resources/containers/container-info/container-logs';
+import { StackInspect } from '@/features/docker-resources/containers/container-info/container-inspect';
+import { StackExec } from '@/features/docker-resources/containers/container-info/container-exec';
+import { StackStats } from '@/features/docker-resources/containers/container-info/stack-stats';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Check, Funnel } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -50,8 +71,7 @@ export const StackFormComponents: RequiredFormComponents = {
       },
       {
         label: 'Containers',
-        disabled: (resource: StackView): boolean =>
-          resource.status === StackReleaseStatus.Degraded || resource.status === StackReleaseStatus.Created,
+        disabled: (resource: StackView): boolean => resource.status === StackReleaseStatus.Created,
         Content: ({ resource }: { resource: StackView }) => {
           return <StackRuntime key={resource.id} stack={resource} />;
         },
@@ -70,7 +90,7 @@ export const StackFormComponents: RequiredFormComponents = {
   },
 };
 
-const StackSubHeader = ({ stack, latestActivity }: { stack: StackView; latestActivity: LatestActivityView | null }) => {
+const StackSubHeader = ({ latestActivity }: { stack: StackView; latestActivity: LatestActivityView | null }) => {
   return (
     <>
       <StackLatestActivity latestActivity={latestActivity} />
@@ -100,17 +120,8 @@ const StackLatestActivity = ({ latestActivity }: { latestActivity: LatestActivit
   );
 };
 
-const StackRuntime = ({ deployment }: { deployment: StackView }) => {
-  const { containerInfo, isLoading, error } = useStackInfoGroup(
-    deployment.dockerContainerId ?? undefined,
-    deployment.platformId,
-  );
-
-  if (deployment.status === DeploymentStatus.Degraded) return null;
-  const disabled = deployment.status !== DeploymentStatus.Healthy;
-
-  if (!deployment.dockerContainerId)
-    return <div className="text-sm text-muted-foreground mb-2">No container assigned</div>;
+const StackRuntime = ({ stack }: { stack: StackView }) => {
+  const { containersInfo, isLoading, error } = useStackInfoGroup(stack.id, stack.platformId ?? undefined, stack.name);
 
   if (error)
     return (
@@ -122,13 +133,321 @@ const StackRuntime = ({ deployment }: { deployment: StackView }) => {
     );
 
   return (
-    <RuntimeView
-      containerInfo={containerInfo}
-      containerId={deployment.dockerContainerId}
-      deploymentId={deployment.id}
-      deployment={deployment}
-      containerLoading={isLoading}
-      disabled={disabled}
-    />
+    <div className="flex w-full flex-col gap-4">
+      <StackContainersTable
+        containers={containersInfo}
+        isLoading={isLoading}
+        platformId={stack.platformId ?? undefined}
+      />
+      <StackRuntimeTabs stack={stack} containers={containersInfo} />
+    </div>
   );
 };
+
+const StackRuntimeTabs = ({ stack, containers }: { stack: StackView; containers: ContainerDataView[] }) => {
+  const canViewLogs = hasCapability(stack, 'canViewLogs');
+  const canInspect = hasCapability(stack, 'canInspect');
+  const canOpenTerminal = hasCapability(stack, 'canOpenTerminal');
+  const [inspectContainerId, setInspectContainerId] = useState<string | undefined>();
+  const [terminalContainerId, setTerminalContainerId] = useState<string | undefined>();
+  const containerNames = useMemo(
+    () =>
+      containers.map((container) => container.name?.replace(/^\//, '')).filter((name): name is string => Boolean(name)),
+    [containers],
+  );
+  const hasContainers = containers.length > 0;
+  const inspectContainer = getSelectedStackContainer(containers, inspectContainerId);
+  const terminalContainer = getSelectedStackContainer(containers, terminalContainerId);
+  const terminalDisabled =
+    !canOpenTerminal ||
+    !terminalContainer ||
+    terminalContainer.state !== ContainerStateStatus.Running ||
+    !hasCapability(terminalContainer, 'canOpenTerminal');
+  const defaultValue = canViewLogs
+    ? 'logs'
+    : canInspect && hasContainers
+      ? 'inspect'
+      : canOpenTerminal && hasContainers
+        ? 'terminal'
+        : 'stats';
+
+  return (
+    <Tabs defaultValue={defaultValue} className="w-full">
+      <TabsList className="w-fit justify-start">
+        <TabsTrigger className="text-xs" value="logs" disabled={!canViewLogs}>
+          Logs
+        </TabsTrigger>
+        <TabsTrigger className="text-xs" value="inspect" disabled={!canInspect || !hasContainers}>
+          Inspect
+        </TabsTrigger>
+        <TabsTrigger className="text-xs" value="terminal" disabled={!canOpenTerminal || !hasContainers}>
+          Terminal
+        </TabsTrigger>
+        <TabsTrigger className="text-xs" value="stats">
+          Stats
+        </TabsTrigger>
+      </TabsList>
+      {canViewLogs && (
+        <TabsContent value="logs" className="mt-2 w-full">
+          <StackLogs key={stack.id} stackId={stack.id} containers={containerNames} />
+        </TabsContent>
+      )}
+      {canInspect && (
+        <TabsContent value="inspect" className="mt-2 w-full">
+          <StackContainerInspect
+            stackId={stack.id}
+            containers={containers}
+            selectedContainer={inspectContainer}
+            onSelectContainer={setInspectContainerId}
+          />
+        </TabsContent>
+      )}
+      {canOpenTerminal && (
+        <TabsContent value="terminal" className="mt-2 w-full">
+          <StackContainerTerminal
+            stackId={stack.id}
+            containers={containers}
+            selectedContainer={terminalContainer}
+            onSelectContainer={setTerminalContainerId}
+            disabled={terminalDisabled}
+          />
+        </TabsContent>
+      )}
+      <TabsContent value="stats" className="mt-2 w-full">
+        <StackStats key={stack.id} stackId={stack.id} containers={containers} />
+      </TabsContent>
+    </Tabs>
+  );
+};
+
+const StackContainerInspect = ({
+  stackId,
+  containers,
+  selectedContainer,
+  onSelectContainer,
+}: {
+  stackId: string;
+  containers: ContainerDataView[];
+  selectedContainer?: ContainerDataView;
+  onSelectContainer: (containerId: string) => void;
+}) => {
+  if (!selectedContainer) {
+    return <div className="text-sm text-muted-foreground">No containers available</div>;
+  }
+
+  return (
+    <div className="relative">
+      <StackInspectContainerFilter
+        containers={containers}
+        selectedContainer={selectedContainer}
+        onSelectContainer={onSelectContainer}
+      />
+      <StackInspect key={`${stackId}-${selectedContainer.id}`} stackId={stackId} containerId={selectedContainer.id} />
+    </div>
+  );
+};
+
+const StackContainerTerminal = ({
+  stackId,
+  containers,
+  selectedContainer,
+  onSelectContainer,
+  disabled,
+}: {
+  stackId: string;
+  containers: ContainerDataView[];
+  selectedContainer?: ContainerDataView;
+  onSelectContainer: (containerId: string) => void;
+  disabled?: boolean;
+}) => {
+  if (!selectedContainer) {
+    return <div className="text-sm text-muted-foreground">No containers available</div>;
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {selectedContainer.state !== ContainerStateStatus.Running && (
+        <AlertMessage type="warning">
+          <div className="truncate">Selected container is not running</div>
+        </AlertMessage>
+      )}
+      <StackExec
+        key={`${stackId}-${selectedContainer.id}`}
+        stackId={stackId}
+        containerId={selectedContainer.id}
+        disabled={disabled}
+        toolbarStart={
+          <StackTerminalContainerSelect
+            containers={containers}
+            selectedContainer={selectedContainer}
+            onSelectContainer={onSelectContainer}
+          />
+        }
+      />
+    </div>
+  );
+};
+
+const StackTerminalContainerSelect = ({
+  containers,
+  selectedContainer,
+  onSelectContainer,
+}: {
+  containers: ContainerDataView[];
+  selectedContainer: ContainerDataView;
+  onSelectContainer: (containerId: string) => void;
+}) => {
+  return (
+    <Select value={selectedContainer.id} onValueChange={onSelectContainer}>
+      <SelectTrigger className="h-8 min-w-42 rounded-sm bg-background shadow-xs">
+        <SelectValue placeholder="Select a container" />
+      </SelectTrigger>
+      <SelectContent className="bg-background">
+        <SelectGroup>
+          {containers.map((container) => (
+            <SelectItem key={container.id} value={container.id}>
+              {getStackContainerLabel(container)}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+};
+
+const StackInspectContainerFilter = ({
+  containers,
+  selectedContainer,
+  onSelectContainer,
+}: {
+  containers: ContainerDataView[];
+  selectedContainer: ContainerDataView;
+  onSelectContainer: (containerId: string) => void;
+}) => {
+  return (
+    <div className="absolute top-4 right-6 z-10">
+      <Popover>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button size="icon-sm" variant="outline" className="h-7 w-7 rounded-full bg-background shadow-sm">
+                  <Funnel className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="left">Container</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <PopoverContent align="end" side="left" className="w-64 p-2 bg-background">
+          <div className="px-2 pb-2 text-xs font-medium text-muted-foreground">Inspect container</div>
+          <div className="max-h-64 overflow-auto">
+            {containers.map((container) => {
+              const selected = selectedContainer.id === container.id;
+              return (
+                <button
+                  type="button"
+                  key={container.id}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                  onClick={() => onSelectContainer(container.id)}>
+                  <span
+                    className={cn(
+                      'flex size-4 shrink-0 items-center justify-center border',
+                      selected && 'bg-primary text-primary-foreground',
+                    )}>
+                    {selected && <Check className="size-3" />}
+                  </span>
+                  <span className="truncate" title={getStackContainerLabel(container)}>
+                    {getStackContainerLabel(container)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+};
+
+const getSelectedStackContainer = (containers: ContainerDataView[], selectedContainerId?: string) => {
+  return containers.find((container) => container.id === selectedContainerId) ?? containers[0];
+};
+
+const getStackContainerLabel = (container: ContainerDataView) => {
+  const name = container.name?.replace(/^\//, '');
+  if (name) return name;
+
+  return container.id?.slice(0, 12) ?? 'Container';
+};
+
+const StackContainersTable = ({
+  containers,
+  isLoading,
+  platformId,
+}: {
+  containers: ContainerDataView[];
+  isLoading: boolean;
+  platformId?: string;
+}) => {
+  const columns = useMemo(() => getStackContainerColumns(platformId), [platformId]);
+
+  return (
+    <div className="rounded-sm border p-1 shadow-xs">
+      <DataTable columns={columns} data={containers} isLoading={isLoading} />
+    </div>
+  );
+};
+
+const getStackContainerColumns = (platformId?: string): ColumnDef<ContainerDataView>[] => [
+  {
+    accessorKey: 'name',
+    header: () => <span>Name</span>,
+    cell: ({ row }) =>
+      platformId ? (
+        <DockerContainerCell
+          name={row.original.name}
+          id={row.original.id}
+          state={row.original.state}
+          platformId={platformId}
+        />
+      ) : (
+        <span>{truncate(row.original.name?.replace(/^\//, '') ?? '', 24)}</span>
+      ),
+  },
+  {
+    accessorKey: 'image',
+    header: () => <span>Image</span>,
+    cell: ({ row }) => (
+      <DockerImageCell>
+        <span title={row.original.image}>{truncate(row.original.image || row.original.imageId, 32)}</span>
+      </DockerImageCell>
+    ),
+  },
+  {
+    accessorKey: 'id',
+    header: () => <span>ID</span>,
+    cell: ({ row }) => (
+      <CopyToClipboard
+        textToCopy={row.original.id}
+        transform={() => row.original.id?.slice(0, 12)}
+        groupClassName="rowid"
+      />
+    ),
+  },
+  {
+    accessorKey: 'ports',
+    header: () => <span>Ports</span>,
+    cell: ({ row }) => <PortsDisplay ports={row.original.ports ?? {}} />,
+  },
+  {
+    accessorKey: 'cpu',
+    header: () => <span>Cpu</span>,
+    cell: ({ row }) => <CPUCell state={row.original.state} stats={row.original.containerStat} />,
+  },
+  {
+    accessorKey: 'memory',
+    header: () => <span>Memory</span>,
+    cell: ({ row }) => <MemoryUsageCell state={row.original.state} stats={row.original.containerStat} />,
+  },
+];

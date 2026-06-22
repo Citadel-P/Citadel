@@ -194,6 +194,7 @@ public interface IContainerRepository
 
 public interface IContainerStatRepository
 {
+    Task<IEnumerable<ContainerStat>> GetStatsAggregatedAsync(string containerId, int hours, CancellationToken cancellationToken);
     Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string containerId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<ContainerStat> stats, CancellationToken cancellationToken);
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);

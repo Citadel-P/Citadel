@@ -10,10 +10,14 @@ namespace Infrastructure.Persistence;
 internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx) : IContainerStatRepository 
 {
     public async Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string dockerContainerId, CancellationToken cancellationToken)
+        => await GetStatsAggregatedAsync(dockerContainerId, 24, cancellationToken);
+
+    public async Task<IEnumerable<ContainerStat>> GetStatsAggregatedAsync(string dockerContainerId, int hours, CancellationToken cancellationToken)
     {
         // We don't retrieve the full stats, but rather aggregate them to reduce the amount of data transferred and processed.
         const string sql = """
             SELECT 
+              C.Id AS ContainerId,
               MIN(S.Created) AS Created, 
               AVG(S.CpuUsage) AS CpuUsage, 
               AVG(S.MemoryActive) AS MemoryActive,
@@ -24,13 +28,21 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
             FROM ContainerStats S
             INNER JOIN Containers C ON C.Id = S.ContainerId 
             WHERE C.DockerContainerId LIKE @DockerContainerIdPrefix || '%'
-              AND S.Created > @Last24h
-            GROUP BY (S.Created / 60)
+              AND S.Created > @Since
+            GROUP BY C.Id, (S.Created / @BucketSeconds)
             ORDER BY MIN(S.Created)
             """;
       
-        var last24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeSeconds();
-        var result = await db.QueryAsync<ContainerStatDto>(sql, new { DockerContainerIdPrefix = dockerContainerId, Last24h = last24h }, transaction: tx());
+        var normalizedHours = Math.Clamp(hours, 1, 72);
+        var bucketSeconds = normalizedHours > 24 ? 300 : 60;
+        var since = DateTimeOffset.UtcNow.AddHours(-normalizedHours).ToUnixTimeSeconds();
+        var result = await db.QueryAsync<ContainerStatDto>(sql, new
+        {
+            DockerContainerIdPrefix = dockerContainerId,
+            Since = since,
+            BucketSeconds = bucketSeconds
+        }, transaction: tx());
+
         return result?.ToDomain() ?? [];
     }
 

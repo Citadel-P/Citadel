@@ -300,7 +300,7 @@ export const MonacoEditor = ({
 
         <Editor
           language={language}
-          defaultValue={value}
+          value={value}
           theme={currentTheme}
           path={editorPath}
           height="100%"

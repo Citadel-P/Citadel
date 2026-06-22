@@ -42,6 +42,16 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients
             .Client(connectionId)
             .SendAsync("SendContainerLogsBatch", recentLogs);
+
+    public Task SendStackLogs(Guid stackId, ReadOnlyMemory<byte> buffer) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.StackLogGroup(stackId))
+            .SendAsync("SendStackLogs", buffer);
+
+    public Task SendStackLogsBatchToConnection(string connectionId, byte[] recentLogs) =>
+        hubContext.Clients
+            .Client(connectionId)
+            .SendAsync("SendStackLogsBatch", recentLogs);
     #endregion
 
     #region Containers
@@ -143,6 +153,11 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
             .SendAsync("StackInfoUpdated", map, action);
         return Task.CompletedTask;
     }
+
+    public Task SendStackContainersInfo(Guid stackId, IEnumerable<DockerContainer> containers, CancellationToken cancellationToken) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.StackInfoGroup(stackId))
+            .SendAsync("ReceiveStackContainersInfo", containers, cancellationToken);
     #endregion
 
     #region Exec Sessions

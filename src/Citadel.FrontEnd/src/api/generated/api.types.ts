@@ -1412,6 +1412,16 @@ export interface ContainerStatsView {
   stats: ContainerStatView[];
 }
 
+export interface StackContainerStatsView {
+  containerId: string;
+  containerName: string;
+  stats: ContainerStatView[];
+}
+
+export interface StackStatsView {
+  containers: StackContainerStatsView[];
+}
+
 export interface ContainerView {
   /** @format uuid */
   id: string;
@@ -7218,6 +7228,73 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/stacks/${stackId}/data`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name GetStackStats
+     * @summary Get stack stats
+     * @request GET:/api/v1/stacks/{stackId}/stats
+     * @secure
+     * @response `200` `StackStatsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getStackStats: (
+      stackId: string,
+      query?: {
+        hours?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        StackStatsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/${stackId}/stats`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name InspectStackContainer
+     * @summary Inspect a stack container
+     * @request GET:/api/v1/stacks/{stackId}/containers/{containerId}/inspect
+     * @secure
+     * @response `200` `ContainerInspectView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    inspectStackContainer: (
+      stackId: string,
+      containerId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ContainerInspectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/${stackId}/containers/${containerId}/inspect`,
         method: "GET",
         secure: true,
         format: "json",

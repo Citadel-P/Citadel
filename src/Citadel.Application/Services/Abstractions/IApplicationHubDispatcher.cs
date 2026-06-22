@@ -28,6 +28,8 @@ public interface IApplicationHubDispatcher
     #region Container Logs
     Task SendContainerLogs(string containerId, ReadOnlyMemory<byte> buffer);
     Task SendContainerLogsBatchToConnection(string connectionId, byte[] recentLogs);
+    Task SendStackLogs(Guid stackId, ReadOnlyMemory<byte> buffer);
+    Task SendStackLogsBatchToConnection(string connectionId, byte[] recentLogs);
     #endregion
 
     #region Containers
@@ -53,6 +55,7 @@ public interface IApplicationHubDispatcher
 
     #region Stacks
     Task SendStackInfo(Stack stack, string action = "update");
+    Task SendStackContainersInfo(Guid stackId, IEnumerable<DockerContainer> containers, CancellationToken cancellationToken);
     #endregion
 
     #region Activities
