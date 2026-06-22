@@ -7,48 +7,58 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/components/ui/card';
+import { StatsPanelHeader, StatsSummaryItem } from '@/components/custom/common';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMemo } from 'react';
+import { ReactNode, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { ContainerStatView, ContainerDataView } from '@/api/generated/api.types';
 import { byteTransform } from '@/lib/bytes.helper';
 
-const NetworkUsageHeader = ({ container }: { container: ContainerDataView | undefined }) => (
-  <CardHeader className="flex flex-col items-stretch border-b p-0! sm:flex-row">
-    <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
-      <CardTitle>Network Usage</CardTitle>
-      <CardDescription>Showing total network usage for the past 24 hours</CardDescription>
-    </div>
-    <div className="flex">
-      <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
-        <span className="text-xs text-muted-foreground">Received</span>
-        <span className="text-sm text-foreground font-medium leading-none">
-          {container?.state === 'Running' && container?.containerStat
-            ? byteTransform(container.containerStat.rxBytes, 2)
-            : '-'}
-        </span>
-      </div>
-      <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
-        <span className="text-xs text-muted-foreground">Sent</span>
-        <span className="text-sm text-foreground font-medium leading-none">
-          {container?.state === 'Running' && container?.containerStat
-            ? byteTransform(container.containerStat.txBytes, 2)
-            : '-'}
-        </span>
-      </div>
-    </div>
-  </CardHeader>
+const NetworkUsageHeader = ({
+  container,
+  windowHours,
+  controls,
+}: {
+  container: ContainerDataView | undefined;
+  windowHours: number;
+  controls?: ReactNode;
+}) => (
+  <StatsPanelHeader
+    title="Network Usage"
+    description={`Showing total network usage for the past ${windowHours} hours`}
+    controls={controls}>
+    <StatsSummaryItem
+      label="Received"
+      value={
+        container?.state === 'Running' && container?.containerStat
+          ? byteTransform(container.containerStat.rxBytes, 2)
+          : '-'
+      }
+    />
+    <StatsSummaryItem
+      label="Sent"
+      value={
+        container?.state === 'Running' && container?.containerStat
+          ? byteTransform(container.containerStat.txBytes, 2)
+          : '-'
+      }
+    />
+  </StatsPanelHeader>
 );
 
 const NetworkUsage = ({
   stats,
   container,
   isLoading,
+  windowHours,
+  controls,
 }: {
   stats: ContainerStatView[];
   container: ContainerDataView | undefined;
   isLoading: boolean;
+  windowHours: number;
+  controls?: ReactNode;
 }) => {
   const chartConfig = useMemo(
     () =>
@@ -135,7 +145,7 @@ const NetworkUsage = ({
     <Skeleton className="h-56.25 w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs py-0">
-      <NetworkUsageHeader container={container} />
+      <NetworkUsageHeader container={container} windowHours={windowHours} controls={controls} />
       <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
           {memoizedChart}

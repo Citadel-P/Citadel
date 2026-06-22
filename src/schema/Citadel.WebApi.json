@@ -3918,6 +3918,20 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "description": "Stats lookback window in hours. Supported values: 24, 48, 72.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 24
+            }
           }
         ],
         "responses": {
@@ -9724,6 +9738,20 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "description": "Stats lookback window in hours. Supported values: 24, 48, 72.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 24
             }
           }
         ],

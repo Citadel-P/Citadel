@@ -1,6 +1,7 @@
 import { ContainerDataView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
+import { StatsPanelHeader, StatsSummaryItem, StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
 import { getContainerSeriesColor } from '@/components/custom/container-series-colors';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,7 +12,6 @@ import dayjs from 'dayjs';
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
 
-type StatsWindowHours = 24 | 48 | 72;
 type ContainerSelection = 'all' | string;
 type StatField = keyof Pick<
   ContainerStatView,
@@ -51,12 +51,6 @@ type ChartDatum = {
 } & Partial<Record<StatField, number>>;
 
 const ALL_CONTAINERS = 'all';
-
-const STACK_STATS_WINDOWS = [
-  { value: 24, label: 'Last 24 hours' },
-  { value: 48, label: 'Last 48 hours' },
-  { value: 72, label: 'Last 72 hours' },
-] as const satisfies readonly { value: StatsWindowHours; label: string }[];
 
 const STACK_STAT_METRICS: MetricConfig[] = [
   {
@@ -232,12 +226,10 @@ const StackMetricCard = ({
     <Skeleton className="h-72 w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs py-0">
-      <CardHeader className="flex flex-col items-stretch gap-0 border-b p-0! xl:flex-row">
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-3 px-6 py-4 lg:flex-row lg:items-center lg:justify-between lg:gap-4 xl:py-0">
-          <div className="min-w-0 space-y-1">
-            <CardTitle>{metric.title}</CardTitle>
-            <CardDescription>{metric.description}</CardDescription>
-          </div>
+      <StatsPanelHeader
+        title={metric.title}
+        description={metric.description}
+        controls={
           <StackMetricControls
             windowHours={windowHours}
             onWindowHoursChange={setWindowHours}
@@ -245,20 +237,15 @@ const StackMetricCard = ({
             onSelectedContainerChange={setSelectedContainer}
             containers={series}
           />
-        </div>
-        <div className="flex flex-wrap xl:shrink-0">
-          {metric.summaryFields.map((field) => (
-            <div
-              key={field.key}
-              className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l xl:border-t-0 xl:border-l xl:px-8 xl:py-6">
-              <span className="text-xs text-muted-foreground">{field.label}</span>
-              <span className="text-sm text-foreground font-medium leading-none">
-                {latest?.[field.key] !== undefined ? field.formatter(Number(latest[field.key])) : '-'}
-              </span>
-            </div>
-          ))}
-        </div>
-      </CardHeader>
+        }>
+        {metric.summaryFields.map((field) => (
+          <StatsSummaryItem
+            key={field.key}
+            label={field.label}
+            value={latest?.[field.key] !== undefined ? field.formatter(Number(latest[field.key])) : '-'}
+          />
+        ))}
+      </StatsPanelHeader>
       <CardContent className="px-2 sm:px-6">
         {chartData.length > 0 ? (
           <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
@@ -358,20 +345,7 @@ const StackMetricControls = ({
 }) => {
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-      <Select
-        value={String(windowHours)}
-        onValueChange={(value) => onWindowHoursChange(Number(value) as StatsWindowHours)}>
-        <SelectTrigger className="h-8 w-36 rounded-sm bg-background shadow-none">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent className="bg-background">
-          {STACK_STATS_WINDOWS.map((option) => (
-            <SelectItem key={option.value} value={String(option.value)}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <StatsWindowSelect value={windowHours} onChange={onWindowHoursChange} />
       <Select value={selectedContainer} onValueChange={onSelectedContainerChange}>
         <SelectTrigger className="h-8 w-48 rounded-sm bg-background shadow-none">
           <SelectValue />

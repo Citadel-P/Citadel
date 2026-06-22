@@ -31,7 +31,7 @@ public static class Containers
         return await EndpointHandlers.HandleResult(result, permissionService, ContainerDataView.Map);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> StartContainers(IMediator mediator, [FromBody]string[] containerIds, CancellationToken cancellationToken)
+    public static async Task<Results<NoContent, ProblemHttpResult>> StartContainers(IMediator mediator, [FromBody] string[] containerIds, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new PatchContainer(containerIds, ContainerAction.START), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
@@ -67,9 +67,13 @@ public static class Containers
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<Ok<ContainerStatsView>, ProblemHttpResult>> GetStats(IMediator mediator, [Description("The container id")] string id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ContainerStatsView>, ProblemHttpResult>> GetStats(
+        IMediator mediator,
+        [Description("The container id")] string id,
+        [FromQuery][Description("Stats lookback window in hours. Supported values: 24, 48, 72.")] int hours = 24,
+        CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetContainerStats(id), cancellationToken);
+        var result = await mediator.Send(new GetContainerStats(id, hours), cancellationToken);
         return EndpointHandlers.HandleResult(result, ContainerStatsView.Map);
     }
 

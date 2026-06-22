@@ -1412,16 +1412,6 @@ export interface ContainerStatsView {
   stats: ContainerStatView[];
 }
 
-export interface StackContainerStatsView {
-  containerId: string;
-  containerName: string;
-  stats: ContainerStatView[];
-}
-
-export interface StackStatsView {
-  containers: StackContainerStatsView[];
-}
-
 export interface ContainerView {
   /** @format uuid */
   id: string;
@@ -3081,6 +3071,12 @@ export interface StackConfigView {
   stackUpdateState: StackUpdateState;
 }
 
+export interface StackContainerStatsView {
+  containerId: string;
+  containerName: string;
+  stats: ContainerStatView[];
+}
+
 export interface StackReleaseSnapshot {
   /** @format uuid */
   platformId: string;
@@ -3164,6 +3160,10 @@ export interface StackSpecManualStack {
   registryId?: null | string;
   /** @default true */
   destroyBeforeDeploy?: boolean;
+}
+
+export interface StackStatsView {
+  containers: StackContainerStatsView[];
 }
 
 export interface StackStreamItem {
@@ -4885,13 +4885,26 @@ export class Api<
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getContainerStats: (id: string, params: RequestParams = {}) =>
+    getContainerStats: (
+      id: string,
+      query?: {
+        /**
+         * Stats lookback window in hours. Supported values: 24, 48, 72.
+         * @format int32
+         * @default 24
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        hours?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<
         ContainerStatsView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/containers/${id}/stats`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -6570,13 +6583,26 @@ export class Api<
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getDeploymentStats: (id: string, params: RequestParams = {}) =>
+    getDeploymentStats: (
+      id: string,
+      query?: {
+        /**
+         * Stats lookback window in hours. Supported values: 24, 48, 72.
+         * @format int32
+         * @default 24
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        hours?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<
         ContainerStatsView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/deployments/${id}/stats`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -7253,6 +7279,12 @@ export class Api<
     getStackStats: (
       stackId: string,
       query?: {
+        /**
+         * Stats lookback window in hours. Supported values: 24, 48, 72.
+         * @format int32
+         * @default 24
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
         hours?: number | string;
       },
       params: RequestParams = {},

@@ -126,9 +126,13 @@ public static class Deployments
         return EndpointHandlers.HandleResult(result, ContainerInspectView.Map);
     }
 
-    public static async Task<Results<Ok<ContainerStatsView>, ProblemHttpResult>> GetStats(IMediator mediator, [Description("Deployment id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ContainerStatsView>, ProblemHttpResult>> GetStats(
+        IMediator mediator,
+        [Description("Deployment id")] Guid id,
+        [FromQuery][Description("Stats lookback window in hours. Supported values: 24, 48, 72.")] int hours = 24,
+        CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetDeploymentStats(id), cancellationToken);
+        var result = await mediator.Send(new GetDeploymentStats(id, hours), cancellationToken);
         return EndpointHandlers.HandleResult(result, ContainerStatsView.Map);
     }
 }

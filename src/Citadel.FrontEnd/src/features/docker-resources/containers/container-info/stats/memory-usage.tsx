@@ -7,9 +7,10 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/components/ui/card';
+import { StatsPanelHeader, StatsSummaryItem } from '@/components/custom/common';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMemo } from 'react';
+import { ReactNode, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { byteTransform } from '@/lib/bytes.helper';
 import { ContainerStatView, ContainerDataView } from '@/api/generated/api.types';
@@ -18,10 +19,14 @@ const MemoryUsage = ({
   stats,
   container,
   isLoading,
+  windowHours,
+  controls,
 }: {
   stats: ContainerStatView[];
   container: ContainerDataView | undefined;
   isLoading: boolean;
+  windowHours: number;
+  controls?: ReactNode;
 }) => {
   const chartConfig = useMemo(
     () =>
@@ -122,7 +127,7 @@ const MemoryUsage = ({
     <Skeleton className="h-56.26 w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs py-0">
-      <MemoryUsageHeader container={container} />
+      <MemoryUsageHeader container={container} windowHours={windowHours} controls={controls} />
       <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
           {memoizedChart}
@@ -133,30 +138,27 @@ const MemoryUsage = ({
 };
 interface MemoryUsageHeaderProps {
   container: ContainerDataView | undefined;
+  windowHours: number;
+  controls?: ReactNode;
 }
 
-const MemoryUsageHeader = ({ container }: MemoryUsageHeaderProps) => {
+const MemoryUsageHeader = ({ container, windowHours, controls }: MemoryUsageHeaderProps) => {
   const renderStat = (label: string, value: string | number | null | undefined) => (
-    <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm text-foreground font-medium leading-none">
-        {container?.state === 'Running' && value !== undefined ? byteTransform(value, 2) : '-'}
-      </span>
-    </div>
+    <StatsSummaryItem
+      label={label}
+      value={container?.state === 'Running' && value !== undefined ? byteTransform(value, 2) : '-'}
+    />
   );
 
   return (
-    <CardHeader className="flex flex-col items-stretch border-b p-0! sm:flex-row">
-      <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
-        <CardTitle>Memory Usage</CardTitle>
-        <CardDescription>Showing total memory usage for the past 24 hours</CardDescription>
-      </div>
-      <div className="flex">
-        {renderStat('Active', container?.containerStat?.memoryActive)}
-        {renderStat('Cache', container?.containerStat?.memoryCache)}
-        {renderStat('Limit', container?.containerStat?.memoryLimit)}
-      </div>
-    </CardHeader>
+    <StatsPanelHeader
+      title="Memory Usage"
+      description={`Showing total memory usage for the past ${windowHours} hours`}
+      controls={controls}>
+      {renderStat('Active', container?.containerStat?.memoryActive)}
+      {renderStat('Cache', container?.containerStat?.memoryCache)}
+      {renderStat('Limit', container?.containerStat?.memoryLimit)}
+    </StatsPanelHeader>
   );
 };
 

@@ -10,12 +10,17 @@ using Mediator;
 
 namespace Application.Features.Containers.Queries;
 
-public sealed record GetContainerStats(string ContainerId) : IQuery<Result<IEnumerable<ContainerStat>>>
+public sealed record GetContainerStats(string ContainerId, int Hours = 24) : IQuery<Result<IEnumerable<ContainerStat>>>
 {
-    internal class Validator : AbstractValidator<GetContainerById>
+    internal class Validator : AbstractValidator<GetContainerStats>
     {
         public Validator()
-            => RuleFor(s => s.ContainerId).ValidContainerId();
+        {
+            RuleFor(s => s.ContainerId).ValidContainerId();
+            RuleFor(s => s.Hours)
+                .Must(hours => hours is 24 or 48 or 72)
+                .WithMessage("Hours must be one of: 24, 48, 72.");
+        }
     }
 }
 
@@ -31,7 +36,7 @@ internal sealed class GetContainerStatsHandler(
             return Result.Failure<IEnumerable<ContainerStat>>(new ForbiddenError("Missing permission [Read] on [Platform]"));
         }
 
-        var result = await unitOfWork.ContainerStats.GetStatsAggregatedLast24HoursAsync(query.ContainerId, cancellationToken);
+        var result = await unitOfWork.ContainerStats.GetStatsAggregatedAsync(query.ContainerId, query.Hours, cancellationToken);
         return Result.Success(result);
     }
 }

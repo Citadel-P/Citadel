@@ -1,4 +1,4 @@
-import { useMemo, useState, useLayoutEffect, useRef, useCallback, useDeferredValue, memo } from 'react';
+import { useMemo, useState, useLayoutEffect, useRef, useCallback, useDeferredValue, memo, type ReactNode } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -38,6 +38,7 @@ import { PluralResourceMap } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
 import Convert from 'ansi-to-html';
 import { Badge } from '../ui/badge';
+import { CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { ContentCard } from './content-card';
 import { MultiSelect, MultiSelectOption } from '../ui/multi-select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -73,6 +74,65 @@ import { truncate } from '@/lib/truncate';
 import { formatId } from '@/lib/utils';
 import { StateIndicator } from './state-indicator';
 import { getContainerSeriesColor } from './container-series-colors';
+
+export type StatsWindowHours = 24 | 48 | 72;
+
+export const STATS_WINDOWS = [
+  { value: 24, label: 'Last 24 hours' },
+  { value: 48, label: 'Last 48 hours' },
+  { value: 72, label: 'Last 72 hours' },
+] as const satisfies readonly { value: StatsWindowHours; label: string }[];
+
+export const StatsWindowSelect = ({
+  value,
+  onChange,
+}: {
+  value: StatsWindowHours;
+  onChange: (hours: StatsWindowHours) => void;
+}) => (
+  <Select value={String(value)} onValueChange={(nextValue) => onChange(Number(nextValue) as StatsWindowHours)}>
+    <SelectTrigger className="h-8 w-36 rounded-sm bg-background shadow-none">
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent className="bg-background">
+      {STATS_WINDOWS.map((option) => (
+        <SelectItem key={option.value} value={String(option.value)}>
+          {option.label}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+);
+
+export const StatsPanelHeader = ({
+  title,
+  description,
+  controls,
+  children,
+}: {
+  title: ReactNode;
+  description: ReactNode;
+  controls?: ReactNode;
+  children?: ReactNode;
+}) => (
+  <CardHeader className="flex flex-col items-stretch border-b p-0! xl:flex-row">
+    <div className="flex min-w-0 flex-1 flex-col justify-center gap-3 px-6 py-4 lg:flex-row lg:items-center lg:justify-between lg:gap-4 xl:py-0">
+      <div className="min-w-0 space-y-1">
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </div>
+      {controls && <div className="shrink-0">{controls}</div>}
+    </div>
+    {children && <div className="flex flex-wrap xl:shrink-0">{children}</div>}
+  </CardHeader>
+);
+
+export const StatsSummaryItem = ({ label, value }: { label: ReactNode; value: ReactNode }) => (
+  <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l xl:border-t-0 xl:border-l xl:px-8 xl:py-6">
+    <span className="text-xs text-muted-foreground">{label}</span>
+    <span className="text-sm text-foreground font-medium leading-none">{value}</span>
+  </div>
+);
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
   sourceType,
