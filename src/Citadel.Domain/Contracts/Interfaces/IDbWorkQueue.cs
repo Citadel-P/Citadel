@@ -8,6 +8,7 @@ namespace Domain.Contracts.Interfaces;
 public interface IDbWorkQueue
 {
     ValueTask EnqueueAsync(IDbWorkItem item, CancellationToken cancellationToken);
+    ValueTask EnqueueAndWaitAsync(IDbWorkItem item, CancellationToken cancellationToken);
     ChannelReader<IDbWorkItem> Reader { get; }
 }
 

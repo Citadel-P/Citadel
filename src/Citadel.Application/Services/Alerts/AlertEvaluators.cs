@@ -267,4 +267,38 @@ public sealed class StackAutoUpdatedEvaluator : IAlertEvaluator
         }
     }
 }
+
+[AlertEvaluator(AlertType.StackDriftDetected)]
+public sealed class StackDriftDetectedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.StackDriftDetected;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.StackDrifts is null)
+            yield break;
+
+        foreach (var stack in context.StackDrifts)
+        {
+            if (!stack.Report.HasDrift)
+                continue;
+
+            yield return new AlertMatch(
+                stack.Id,
+                stack.Name,
+                AlertResourceType.Stack,
+                new StackDriftDetectedAlertInfo(
+                    StackId: stack.Id,
+                    StackName: stack.Name,
+                    PlatformId: stack.PlatformId,
+                    PlatformName: stack.PlatformName,
+                    DriftCount: stack.Report.Drifts.Count,
+                    HasAutoFixableDrift: stack.Report.HasAutoFixableDrift,
+                    HasStructuralDrift: stack.Report.HasStructuralDrift,
+                    DriftSummaries: stack.DriftSummaries),
+                DeduplicationComponent: stack.Fingerprint,
+                Severity: stack.Severity);
+        }
+    }
+}
 #endregion

@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260614091211_migration0001")]
+    [Migration("20260623141446_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -20,7 +20,7 @@ namespace Infrastructure.Migrations.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.8")
+                .HasAnnotation("ProductVersion", "10.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -561,6 +561,18 @@ namespace Infrastructure.Migrations.Migrations
                             QuietHours = "[]",
                             Severity = "Info",
                             Type = "StackAutoUpdated"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-00000000000c"),
+                            CooldownSeconds = 300,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Stack Drift Detected",
+                            QuietHours = "[]",
+                            Severity = "Warning",
+                            Type = "StackDriftDetected"
                         });
                 });
 
@@ -1786,6 +1798,11 @@ namespace Infrastructure.Migrations.Migrations
                         .HasMaxLength(600)
                         .HasColumnType("text")
                         .HasColumnName("description");
+
+                    b.Property<string>("DriftPolicy")
+                        .IsRequired()
+                        .HasColumnType("json")
+                        .HasColumnName("driftpolicy");
 
                     b.Property<string>("Name")
                         .IsRequired()

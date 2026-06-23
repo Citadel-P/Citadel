@@ -12,6 +12,8 @@ import {
   ActivityStatus,
   StackReleaseStatus,
   ContainerStateStatus,
+  StackDriftMode,
+  StackDrift,
 } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
@@ -33,9 +35,11 @@ import { StackStats } from '@/features/docker-resources/containers/container-inf
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Check, Funnel } from 'lucide-react';
+import { Check, Funnel, Loader2, RefreshCw } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { useMutate, useRead } from '@/lib/hooks';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -103,7 +107,7 @@ const StackLatestActivity = ({ latestActivity }: { latestActivity: LatestActivit
   if (latestActivity?.status === ActivityStatus.Success) {
     return;
   }
-  if (latestActivity?.info.$type === 'StackDegraded') {
+  if (latestActivity?.info.$type === 'StackDegraded' || latestActivity?.info.$type === 'StackDriftDetected') {
     return (
       <AlertMessage date={latestActivity?.createdAt} type={'warning'}>
         <div className="flex flex-wrap gap-2 items-center ">{latestActivity?.info.reason}</div>
@@ -134,6 +138,7 @@ const StackRuntime = ({ stack }: { stack: StackView }) => {
 
   return (
     <div className="flex w-full flex-col gap-4">
+      <StackDriftPanel stack={stack} />
       <StackContainersTable
         containers={containersInfo}
         isLoading={isLoading}
@@ -141,6 +146,92 @@ const StackRuntime = ({ stack }: { stack: StackView }) => {
       />
       <StackRuntimeTabs stack={stack} containers={containersInfo} />
     </div>
+  );
+};
+
+const StackDriftPanel = ({ stack }: { stack: StackView }) => {
+  const queryClient = useQueryClient();
+  const driftDetectionDisabled = stack.driftPolicy?.mode === StackDriftMode.Disabled;
+  const queryEnabled = !driftDetectionDisabled && stack.status !== StackReleaseStatus.Created;
+  const { data, isLoading, isFetching, error, refetch } = useRead(
+    'getStackDrift',
+    { stackId: stack.id },
+    { enabled: queryEnabled },
+  );
+  const { mutateAsync: reconcileStack, isPending } = useMutate('reconcileStack', {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: stack.id }] });
+      refetch();
+    },
+  });
+  const report = data?.data;
+
+  if (driftDetectionDisabled) {
+    return (
+      <AlertMessage type="info" title="Drift detection disabled" className="my-0">
+        Enable drift management in Config to compare the compose file with the running stack containers.
+      </AlertMessage>
+    );
+  }
+
+  if (!queryEnabled) return null;
+
+  if (error) {
+    return (
+      <AlertMessage type="warning" title="Drift check failed" className="my-0">
+        {(error as any)?.error?.detail ?? 'Unable to check stack drift.'}
+      </AlertMessage>
+    );
+  }
+
+  if (isLoading && !report) {
+    return (
+      <div className="flex items-center gap-2 rounded-sm border px-3 py-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Checking stack drift...
+      </div>
+    );
+  }
+
+  if (!report?.hasDrift) {
+    return (
+      <AlertMessage type="success" title="No drift detected" className="my-0">
+        Running containers match the stack compose state.
+      </AlertMessage>
+    );
+  }
+
+  const actionable = report.drifts.some(
+    (drift) =>
+      (drift.$type === 'ContainerStopped' && stack.driftPolicy.autoStartStoppedContainers) ||
+      (drift.$type === 'ContainerPaused' && stack.driftPolicy.autoResumePausedContainers),
+  );
+  const canReconcile = actionable && !report.hasStructuralDrift && hasCapability(stack, 'canWrite');
+  const details = report.drifts.map(formatStackDrift).join('; ');
+
+  return (
+    <AlertMessage type="warning" title={`${report.drifts.length} drift item${report.drifts.length === 1 ? '' : 's'}`} className="my-0">
+      <div className="flex w-full flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <span className="min-w-0">{details}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          {report.hasStructuralDrift && <span className="text-xs">Reapply required</span>}
+          {report.hasAutoFixableDrift && !actionable && (
+            <span className="text-xs">Enable safe auto-fix in Config to reconcile</span>
+          )}
+          {canReconcile && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 bg-background"
+              disabled={isPending || isFetching}
+              onClick={() => reconcileStack({ stackId: stack.id })}>
+              {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+              Reconcile
+            </Button>
+          )}
+        </div>
+      </div>
+    </AlertMessage>
   );
 };
 
@@ -368,6 +459,27 @@ const StackInspectContainerFilter = ({
       </Popover>
     </div>
   );
+};
+
+const formatStackDrift = (drift: StackDrift) => {
+  switch (drift.$type) {
+    case 'MissingContainer':
+      return `${drift.serviceName} is missing`;
+    case 'ExtraContainer':
+      return `${drift.serviceName} has an extra container`;
+    case 'ContainerStopped':
+      return `${drift.serviceName} is stopped`;
+    case 'ContainerPaused':
+      return `${drift.serviceName} is paused`;
+    case 'ContainerUnhealthy':
+      return `${drift.serviceName} is unhealthy${drift.healthStatus ? ` (${drift.healthStatus})` : ''}`;
+    case 'ImageMismatch':
+      return `${drift.serviceName} image changed`;
+    case 'ConfigHashMismatch':
+      return `${drift.serviceName} config changed`;
+    default:
+      return 'Unknown drift';
+  }
 };
 
 const getSelectedStackContainer = (containers: ContainerDataView[], selectedContainerId?: string) => {

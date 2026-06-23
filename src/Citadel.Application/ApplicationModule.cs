@@ -60,10 +60,10 @@ public static class ApplicationModule
             .AddSingleton<IRepoCacheManager, RepoCacheManager>()
             .AddSingleton<ImageDigestCache>()
             .AddSingleton<IImageScanScheduler, ImageScanScheduler>()
-            .AddScoped<IApplyDeploymentService, ApplyDeploymentService>()
+            .AddSingleton<IApplyDeploymentService, ApplyDeploymentService>()
             .AddSingleton<IAlertRuleProvider>(sp => sp.GetRequiredService<AlertRuleCache>())
-            .AddScoped<IContainerProcessingService, ContainerProcessingService>()
-            .AddScoped<IDeploymentProcessingService, DeploymentProcessingService>()
+            .AddSingleton<IContainerProcessingService, ContainerProcessingService>()
+            .AddSingleton<IDeploymentProcessingService, DeploymentProcessingService>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
@@ -73,16 +73,20 @@ public static class ApplicationModule
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<CustomRegistryConnectorStrategy>()
-            .AddScoped<IPullImageService, PullImageService>()
-            .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>()
+            .AddSingleton<IPullImageService, PullImageService>()
+            .AddSingleton<IRegistryConnectorResolver, RegistryConnectorResolver>()
             .AddSingleton<IDelayWithJitterService, DelayWithJitterService>()
             .AddScoped<IPermissionService, PermissionService>()
             .AddScoped<IContainerAuthorizationService, ContainerAuthorizationService>()
             .AddScoped<IActorRoleService, ActorRoleService>()
             .AddScoped<IActorResourceAccessService, ActorResourceAccessService>()
-            .AddScoped<INetworkService, NetworkService>()
+            .AddSingleton<INetworkService, NetworkService>()
             .AddScoped<IUserContextAccessor, UserContextAccessor>()
-            .AddScoped<IApplyStackService, ApplyStackService>();
+            .AddSingleton<IStackDesiredStateProvider, ManualStackDesiredStateProvider>()
+            .AddSingleton<IStackRuntimeStateProvider, DockerStackRuntimeStateProvider>()
+            .AddSingleton<IStackDriftChecker, ManualStackDriftChecker>()
+            .AddSingleton<IStackReconciler, StackReconciler>()
+            .AddSingleton<IApplyStackService, ApplyStackService>();
 
     private static IServiceCollection AddLookups(this IServiceCollection services)
         => services
@@ -138,6 +142,7 @@ public static class ApplicationModule
             .AddHostedService<ImageSyncJob>()
             .AddHostedService<AlertRuleCacheWarmup>()
             .AddHostedService<ReconcilableResourceJob>()
+            .AddHostedService<StackDriftMonitorJob>()
             .AddHostedService<GitRepoSyncJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services

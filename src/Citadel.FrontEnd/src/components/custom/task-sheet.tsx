@@ -3,7 +3,6 @@ import { Calendar, Check, CheckCheck, Clock, LoaderCircle, NotepadText } from 'l
 import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
-import { ResourceComponents } from '@/features';
 import { useAppContext } from '@/lib/context/app-context';
 import { ActorCell, AlertEventStatusCell, LogViewer, TargetCell } from '@/components/custom/common';
 import { useMutate, useRead, useStreamProgress } from '@/lib/hooks';
@@ -32,6 +31,7 @@ import Loader from '../ui/loader';
 import { MonacoDiff, MonacoEditor } from '@/lib/monaco';
 import { Button } from '@/components/ui/button';
 import { AlertMessage } from './alert-message';
+import { CitadelIcons } from '@/lib/icons';
 
 interface PullImageParams {
   imageTag: string;
@@ -63,7 +63,7 @@ interface TaskStreamLayoutProps {
 
 function TaskStreamLayout({ title, refName, type, state }: TaskStreamLayoutProps) {
   const { status, elapsedLabel, text } = state;
-  const Icon = ResourceComponents[type].Icon;
+  const Icon = CitadelIcons[type];
 
   return (
     <>
@@ -277,6 +277,22 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     );
   },
   StackDegraded: (info) => <span className="text-sm text-muted-foreground">{info.reason}</span>,
+  StackDriftDetected: (info) => <span className="text-sm text-muted-foreground">{info.reason}</span>,
+  StackDriftResolved: (info) => <KeyValueBlock label="Resolved drift fingerprint" value={info.previousFingerprint} />,
+  StackReconciliationAttempted: (info) => {
+    const actions = info.actions.map((action) => {
+      const result = action.succeeded ? 'succeeded' : `failed${action.errorMessage ? `: ${action.errorMessage}` : ''}`;
+      return `${action.action} ${action.serviceName} (${action.containerId}) ${result}`;
+    });
+
+    return (
+      <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+        <span>Reconciliation status: {info.status}</span>
+        <KeyValueBlock label="Drift fingerprint" value={info.driftFingerprint} />
+        {actions.length > 0 && <KeyValueBlock label="Actions" value={actions} />}
+      </div>
+    );
+  },
 
   StackStarted: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
   StackStopped: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,

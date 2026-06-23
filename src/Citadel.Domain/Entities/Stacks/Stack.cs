@@ -12,6 +12,7 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
     public string? Description { get; private set; }
     public StackSource StackSource { get; private set; }
     public StackUpdateState StackUpdateState { get; private set; } = new ManualStackUpdateState(new RecreateStackOnNewImageState([]));
+    public StackDriftPolicy DriftPolicy { get; private set; } = StackDriftPolicy.Default;
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -34,7 +35,8 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         StackSource StackSource,
         Guid platformId,
         StackSpec spec,
-        string? description = null)
+        string? description = null,
+        StackDriftPolicy? driftPolicy = null)
     {
         var stack = new Stack
         {
@@ -43,6 +45,7 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
             StackSource = StackSource,
             CreatedByActorId = createdByActorId,
             StackUpdateState = CreateDefaultUpdateState(StackSource, spec),
+            DriftPolicy = (driftPolicy ?? StackDriftPolicy.Default).Normalize(),
         };
 
         stack.CurrentStackRelease = StackRelease.Create(
@@ -64,6 +67,7 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         string? description,
         StackSource stackSource,
         StackUpdateState stackUpdateState,
+        StackDriftPolicy driftPolicy,
         DateTime createdAt,
         Guid createdByActorId,
         ResourceControlState controlState,
@@ -81,6 +85,7 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
             Description = description,
             StackSource = stackSource,
             StackUpdateState = stackUpdateState,
+            DriftPolicy = driftPolicy.Normalize(),
             CreatedAt = createdAt,
             CreatedByActorId = createdByActorId,
             ControlState = controlState,
@@ -127,10 +132,12 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
 
     public void UpdateDetails(
         string? name = null,
-        string? description = null)
+        string? description = null,
+        StackDriftPolicy? driftPolicy = null)
     {
         if (name != null) Name = name;
         if(description != null) Description = description;
+        if (driftPolicy != null) DriftPolicy = driftPolicy.Normalize();
     }
 
     public void SetCurrentStackRelease(StackRelease stackRelease)
@@ -209,6 +216,7 @@ public sealed record StackPatchModel(
     Guid? PlatformId = null,
     string? Description = null,
     StackSource? StackSource = null,
-    StackSpec? Spec = null);
+    StackSpec? Spec = null,
+    StackDriftPolicy? DriftPolicy = null);
 
 

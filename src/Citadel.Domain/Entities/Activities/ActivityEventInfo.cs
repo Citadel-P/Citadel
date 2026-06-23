@@ -3,6 +3,7 @@ using Domain.Contracts.Resources.Deployments;
 using Domain.Contracts.Resources.Git;
 using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
+using Domain.Entities.Stacks;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
@@ -28,6 +29,9 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(StackPaused), nameof(ActivityEventType.StackPaused))]
 [JsonDerivedType(typeof(StackApplied), nameof(ActivityEventType.StackApplied))]
 [JsonDerivedType(typeof(StackDegraded), nameof(ActivityEventType.StackDegraded))]
+[JsonDerivedType(typeof(StackDriftDetected), nameof(ActivityEventType.StackDriftDetected))]
+[JsonDerivedType(typeof(StackDriftResolved), nameof(ActivityEventType.StackDriftResolved))]
+[JsonDerivedType(typeof(StackReconciliationAttempted), nameof(ActivityEventType.StackReconciliationAttempted))]
 [JsonDerivedType(typeof(AlertRuleCreated), nameof(ActivityEventType.AlertRuleCreated))]
 [JsonDerivedType(typeof(AlertRuleUpdated), nameof(ActivityEventType.AlertRuleUpdated))]
 [JsonDerivedType(typeof(AlertRuleDeleted), nameof(ActivityEventType.AlertRuleDeleted))]
@@ -63,6 +67,12 @@ public sealed record StackStarted(IEnumerable<string> ContainerIds) : ActivityEv
 public sealed record StackStopped(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record StackPaused(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record StackDegraded(string Reason) : ActivityEventInfo;
+public sealed record StackDriftDetected(string Reason, string Fingerprint) : ActivityEventInfo;
+public sealed record StackDriftResolved(string PreviousFingerprint) : ActivityEventInfo;
+public sealed record StackReconciliationAttempted(
+    StackReconciliationStatus Status,
+    IReadOnlyList<StackReconciliationAction> Actions,
+    string DriftFingerprint) : ActivityEventInfo;
 public sealed record StackApplied(StackSnapshot? Stack, StackResultSnapshot Result) : ActivityEventInfo;
 
 

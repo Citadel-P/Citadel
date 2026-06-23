@@ -7,6 +7,8 @@ import {
   LookupResourceType,
   StackUpdateBehavior,
   StackSource,
+  StackDriftMode,
+  StackDriftPolicy,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -53,6 +55,50 @@ const stack_source = {
 
 type StackInput = CreateStackInput | PatchStackInput;
 
+const DEFAULT_DRIFT_POLICY: StackDriftPolicy = {
+  mode: StackDriftMode.DetectOnly,
+  alertOnDrift: true,
+  markDegraded: true,
+  autoStartStoppedContainers: false,
+  autoResumePausedContainers: false,
+  removeExtraContainers: false,
+};
+
+const drift_modes = {
+  [StackDriftMode.Disabled]: {
+    label: 'Disabled',
+    description: 'Do not check this stack for runtime drift.',
+  },
+  [StackDriftMode.DetectOnly]: {
+    label: 'Detect only',
+    description: 'Detect drift and leave remediation manual.',
+  },
+  [StackDriftMode.AutoFix]: {
+    label: 'Auto-fix safe drift',
+    description: 'Allow safe runtime fixes for stopped or paused containers.',
+  },
+};
+
+const normalizeDriftPolicy = (policy?: Partial<StackDriftPolicy> | null): StackDriftPolicy => {
+  const next = {
+    ...DEFAULT_DRIFT_POLICY,
+    ...(policy ?? {}),
+  };
+
+  if (next.mode === StackDriftMode.Disabled) {
+    return {
+      ...next,
+      alertOnDrift: false,
+      markDegraded: false,
+      autoStartStoppedContainers: false,
+      autoResumePausedContainers: false,
+      removeExtraContainers: false,
+    };
+  }
+
+  return next;
+};
+
 export const StackForm = ({
   mode,
   metadataChanged,
@@ -73,6 +119,10 @@ export const StackForm = ({
   const resource: StackConfigView | undefined = stackCfg?.data;
   const original = resource ?? ({} as StackConfigView);
   const currentStackSource = (update as Partial<CreateStackInput>).stackSource ?? original.stackSource;
+  const currentDriftPolicy = normalizeDriftPolicy({
+    ...(original.driftPolicy ?? {}),
+    ...((update as Partial<StackInput>).driftPolicy ?? {}),
+  });
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`stack:${id ?? 'new'}`);
@@ -95,10 +145,22 @@ export const StackForm = ({
         data: {
           platformId: payload.platformId,
           spec: payload.spec,
+          driftPolicy: payload.driftPolicy,
         } as PatchStackInput,
       }),
     onRefresh: refreshData,
   });
+
+  const patchDriftPolicy = useCallback(
+    (prev: Partial<StackInput>, patch: Partial<StackDriftPolicy>): Partial<StackInput> => ({
+      driftPolicy: normalizeDriftPolicy({
+        ...(original.driftPolicy ?? {}),
+        ...(prev.driftPolicy ?? {}),
+        ...patch,
+      }),
+    }),
+    [original.driftPolicy],
+  );
 
   const schema = useMemo(
     () => ({
@@ -450,6 +512,109 @@ export const StackForm = ({
                   ),
                 }),
                 defineGroupField<StackInput>({
+                  id: 'drift_policy',
+                  label: 'Drift Management',
+                  title: 'Drift Management',
+                  description:
+                    'Detect runtime differences between the compose file and the containers currently running on the platform.',
+                  items: [
+                    defineField({
+                      key: 'driftPolicy.mode',
+                      label: 'Mode',
+                      description: 'Choose how this stack handles drift checks.',
+                      render: (value, set) => (
+                        <ItemSelector
+                          collection={drift_modes}
+                          value={value ?? StackDriftMode.DetectOnly}
+                          disabled={disabled}
+                          onChange={(mode: StackDriftMode) => set((prev) => patchDriftPolicy(prev, { mode }))}
+                        />
+                      ),
+                    }),
+                    ...(currentDriftPolicy.mode !== StackDriftMode.Disabled
+                      ? [
+                          defineField<StackInput, 'driftPolicy.alertOnDrift'>({
+                            key: 'driftPolicy.alertOnDrift',
+                            label: 'Alert On Drift',
+                            description: 'Emit a StackDriftDetected alert when drift is detected.',
+                            render: (value, set) => (
+                              <FieldSwitch
+                                id="stack-drift-alert-on-drift"
+                                checked={value ?? currentDriftPolicy.alertOnDrift}
+                                disabled={disabled}
+                                onChange={(alertOnDrift) => set((prev) => patchDriftPolicy(prev, { alertOnDrift }))}
+                              />
+                            ),
+                          }),
+                          defineField<StackInput, 'driftPolicy.markDegraded'>({
+                            key: 'driftPolicy.markDegraded',
+                            label: 'Mark Degraded',
+                            description: 'Mark the stack degraded and record an activity event when drift is detected.',
+                            render: (value, set) => (
+                              <FieldSwitch
+                                id="stack-drift-mark-degraded"
+                                checked={value ?? currentDriftPolicy.markDegraded}
+                                disabled={disabled}
+                                onChange={(markDegraded) => set((prev) => patchDriftPolicy(prev, { markDegraded }))}
+                              />
+                            ),
+                          }),
+                        ]
+                      : []),
+                    ...(currentDriftPolicy.mode === StackDriftMode.AutoFix
+                      ? [
+                          defineField<StackInput, 'driftPolicy.autoStartStoppedContainers'>({
+                            key: 'driftPolicy.autoStartStoppedContainers',
+                            label: 'Auto Start Stopped Containers',
+                            description:
+                              'When auto-fix is enabled, start containers that belong to this stack but are stopped.',
+                            render: (value, set) => (
+                              <FieldSwitch
+                                id="stack-drift-auto-start"
+                                checked={value ?? currentDriftPolicy.autoStartStoppedContainers}
+                                disabled={disabled}
+                                onChange={(autoStartStoppedContainers) =>
+                                  set((prev) => patchDriftPolicy(prev, { autoStartStoppedContainers }))
+                                }
+                              />
+                            ),
+                          }),
+                          defineField<StackInput, 'driftPolicy.autoResumePausedContainers'>({
+                            key: 'driftPolicy.autoResumePausedContainers',
+                            label: 'Auto Resume Paused Containers',
+                            description:
+                              'When auto-fix is enabled, resume containers that belong to this stack but are paused.',
+                            render: (value, set) => (
+                              <FieldSwitch
+                                id="stack-drift-auto-resume"
+                                checked={value ?? currentDriftPolicy.autoResumePausedContainers}
+                                disabled={disabled}
+                                onChange={(autoResumePausedContainers) =>
+                                  set((prev) => patchDriftPolicy(prev, { autoResumePausedContainers }))
+                                }
+                              />
+                            ),
+                          }),
+                          defineField<StackInput, 'driftPolicy.removeExtraContainers'>({
+                            key: 'driftPolicy.removeExtraContainers',
+                            label: 'Remove Extra Containers',
+                            description: 'Reserved for destructive cleanup. It stays off unless explicitly enabled for auto-fix.',
+                            render: (value, set) => (
+                              <FieldSwitch
+                                id="stack-drift-remove-extra"
+                                checked={value ?? currentDriftPolicy.removeExtraContainers}
+                                disabled={disabled}
+                                onChange={(removeExtraContainers) =>
+                                  set((prev) => patchDriftPolicy(prev, { removeExtraContainers }))
+                                }
+                              />
+                            ),
+                          }),
+                        ]
+                      : []),
+                  ],
+                }),
+                defineGroupField<StackInput>({
                   id: 'spec.preDeploy',
                   label: 'Pre Deploy',
                   title: 'Pre Deploy',
@@ -583,7 +748,7 @@ export const StackForm = ({
           }
         : {}),
     }),
-    [disabled, mode, id, currentStackSource],
+    [disabled, mode, id, currentStackSource, currentDriftPolicy, patchDriftPolicy],
   );
 
   return (

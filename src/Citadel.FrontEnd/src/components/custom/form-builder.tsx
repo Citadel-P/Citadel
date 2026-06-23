@@ -253,17 +253,23 @@ export const FieldSwitch = ({
   checked,
   id,
   onChange,
+  disabled,
 }: {
   checked: boolean;
   id: string;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) => (
   <div className="flex items-center gap-2">
-    <Switch checked={checked ?? false} id={id} onCheckedChange={onChange} />
+    <Switch checked={checked ?? false} id={id} onCheckedChange={onChange} disabled={disabled} />
 
     <Label
       htmlFor={id}
-      className={cn('text-sm transition-colors font-normal', checked ? 'text-green-600/80' : 'text-muted-foreground')}>
+      className={cn(
+        'text-sm transition-colors font-normal',
+        disabled && 'opacity-60',
+        checked ? 'text-green-600/80' : 'text-muted-foreground',
+      )}>
       {checked ? 'On' : 'Off'}
     </Label>
   </div>

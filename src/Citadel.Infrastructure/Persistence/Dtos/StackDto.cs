@@ -6,6 +6,7 @@ internal sealed record StackDto(
     string Name,
     string StackSource,
     string StackUpdateState,
+    string? DriftPolicy,
     long RowVersion,
     DateTime CreatedAt,
     Guid CreatedByActorId,

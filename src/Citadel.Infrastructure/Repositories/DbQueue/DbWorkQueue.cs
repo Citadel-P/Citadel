@@ -27,4 +27,33 @@ internal sealed class DbWorkQueue : IDbWorkQueue
         }
         return ValueTask.CompletedTask;
     }
+
+    public async ValueTask EnqueueAndWaitAsync(IDbWorkItem item, CancellationToken cancellationToken)
+    {
+        var awaitable = new AwaitableDbWorkItem(item);
+        await EnqueueAsync(awaitable, cancellationToken);
+        await awaitable.WaitAsync(cancellationToken);
+    }
+
+    private sealed class AwaitableDbWorkItem(IDbWorkItem inner) : IDbWorkItem
+    {
+        private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await inner.ExecuteAsync(uow, cancellationToken);
+                _completion.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                _completion.TrySetException(ex);
+                throw;
+            }
+        }
+
+        public Task WaitAsync(CancellationToken cancellationToken)
+            => _completion.Task.WaitAsync(cancellationToken);
+    }
 }

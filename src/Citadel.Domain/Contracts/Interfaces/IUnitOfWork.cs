@@ -1,6 +1,7 @@
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
@@ -120,6 +121,9 @@ public interface IStackRepository
 {
     Task<Stack?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Stack?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
+    Task<StackDriftStack?> GetDriftStackAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<StackDriftStack>> GetDriftMonitorStacksAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<string>> GetContainerIdsAsync(Guid stackId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetContainersAsync(Guid stackId, CancellationToken cancellationToken);

@@ -22,7 +22,6 @@ internal interface IApplyStackService
 internal class ApplyStackService(
     IDbWorkQueue dbWorkQueue,
     IStackStreamManager stackHub,
-    IUserContextAccessor userContext,
     IServiceScopeFactory scopeFactory,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
@@ -32,8 +31,7 @@ internal class ApplyStackService(
 {
     public async IAsyncEnumerable<StackStreamItem> ApplyAsync(Guid stackId, [EnumeratorCancellation] CancellationToken ct)
     {
-        var actorId = userContext.Current.ActorId;
-        var stack = await LoadStack(stackId, ct);
+        var (stack, actorId) = await LoadStack(stackId, ct);
 
         if (stack is null)
         {
@@ -75,6 +73,28 @@ internal class ApplyStackService(
             yield break;
         }
 
+        string projectName;
+        string composeFileContent;
+        string? projectSetupError = null;
+        try
+        {
+            projectName = StackProjectNameResolver.Resolve(stack);
+            composeFileContent = StackComposeLabelInjector.Inject(manualStack.ComposeFile, stack.Id, currentRelease.Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            projectName = string.Empty;
+            composeFileContent = string.Empty;
+            projectSetupError = $"❌ {ex.Message}";
+        }
+
+        if (projectSetupError is not null)
+        {
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, projectSetupError, ct: ct);
+            yield return StackStreamItem.FromStdErr(projectSetupError, 1);
+            yield break;
+        }
+
         string? registryAuth = null;
         string? registryName = null;
         string? registryHost = null;
@@ -98,6 +118,15 @@ internal class ApplyStackService(
             registryName = registry.Name;
         }
 
+        var knownStackContainerIds = await LoadStackContainerIds(stack.Id, ct);
+        var collisionMessage = await ValidateProjectContainerOwnershipAsync(stack, platform, projectName, knownStackContainerIds, ct);
+        if (!string.IsNullOrWhiteSpace(collisionMessage))
+        {
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, collisionMessage, ct: ct);
+            yield return StackStreamItem.FromStdErr($"❌ {collisionMessage}", 1);
+            yield break;
+        }
+
         var markResult = await MarkProcessingAsync(stack.Id, actorId, ct);
         if (!markResult.IsSuccess)
         {
@@ -111,7 +140,7 @@ internal class ApplyStackService(
         yield return StackStreamItem.FromStdOut($"Applying stack to {platform.Address}...");
 
         var connector = stackConnectorFactory.GetConnector(platform.ConnectorType);
-        var command = BuildApplyCommand(stack, platform.Address, manualStack, registryAuth, registryName, registryHost);
+        var command = BuildApplyCommand(stack, platform.Address, manualStack, composeFileContent, projectName, registryAuth, registryName, registryHost);
 
         int? exitCode = null;
         var errorLogs = new List<string>(); 
@@ -216,15 +245,10 @@ internal class ApplyStackService(
 
     private async Task<(string? ErrorMessage, string[]? ContainerIds)> GetContainerIds(Stack stack, Domain.Contracts.Resources.PlatformCacheEntry platform, CancellationToken ct)
     {
-        var filter = new ContainerFilterCommand(
-                        PlatformAddress: platform.Address,
-                        Filters: new Dictionary<string, IDictionary<string, bool>>()
-                        {
-                            ["label"] = new Dictionary<string, bool>()
-                            {
-                                [$"com.docker.compose.project={stack.Name}"] = true,
-                            }
-                        });
+        var filter = StackContainerOwnership.CreateOwnedContainerFilter(
+            platform.Address,
+            StackProjectNameResolver.Resolve(stack),
+            stack.Id);
 
         var containerConnector = containerConnectorFactory.GetConnector(platform.ConnectorType);
         var containerListResult = await containerConnector.ListContainersAsync(filter, ct);
@@ -233,13 +257,84 @@ internal class ApplyStackService(
             ? (error.Message, null)
             : (null, containerDic.Keys.ToArray());
     }
-    private static StackApplyCommand BuildApplyCommand(Stack stack, string platformAddress, ManualStack manualStack, 
+
+    private async Task<string?> ValidateProjectContainerOwnershipAsync(
+        Stack stack,
+        Domain.Contracts.Resources.PlatformCacheEntry platform,
+        string projectName,
+        HashSet<string> knownStackContainerIds,
+        CancellationToken ct)
+    {
+        var filter = new ContainerFilterCommand(
+            PlatformAddress: platform.Address,
+            All: true,
+            Filters: new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["label"] = new Dictionary<string, bool>
+                {
+                    [$"{ComposeLabels.Project}={projectName}"] = true
+                }
+            });
+
+        var containerConnector = containerConnectorFactory.GetConnector(platform.ConnectorType);
+        var containerListResult = await containerConnector.ListContainersAsync(filter, ct);
+        if (containerListResult.IsFailure(out var listError, out var containers))
+        {
+            return listError.Message;
+        }
+
+        foreach (var container in containers.Values)
+        {
+            var inspectResult = await containerConnector.InspectAsync(
+                new InspectContainerCommand(platform.Address, container.Id),
+                ct);
+
+            if (inspectResult.IsFailure(out var inspectError, out var inspect))
+            {
+                return $"Unable to inspect existing compose project container '{container.Name}' ({container.Id}): {inspectError.Message}";
+            }
+
+            var labels = inspect.Config?.Labels ?? new Dictionary<string, string>();
+            if (StackContainerOwnership.IsOwnedByStack(labels, stack.Id))
+            {
+                continue;
+            }
+
+            if (knownStackContainerIds.Contains(container.Id))
+            {
+                continue;
+            }
+
+            if (StackContainerOwnership.IsCitadelManaged(labels))
+            {
+                labels.TryGetValue(CitadelLabels.StackId, out var ownerStackId);
+                return string.IsNullOrWhiteSpace(ownerStackId)
+                    ? $"Docker Compose project '{projectName}' is already managed by another Citadel stack."
+                    : $"Docker Compose project '{projectName}' is already managed by Citadel stack {ownerStackId}.";
+            }
+
+            return $"Docker Compose project '{projectName}' already has unmanaged containers on {platform.Address}. Choose another project name or remove container '{container.Name}'.";
+        }
+
+        return null;
+    }
+
+    private async Task<HashSet<string>> LoadStackContainerIds(Guid stackId, CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var containers = await uow.Stacks.GetContainerIdsAsync(stackId, ct);
+        return containers.ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static StackApplyCommand BuildApplyCommand(Stack stack, string platformAddress, ManualStack manualStack,
+        string composeFileContent, string projectName,
         string? registryAuth, string? registryName, string? registryHost)
         => new(
             PlatformAddress: platformAddress,
             StackName: stack.Name,
-            ComposeFileContent: manualStack.ComposeFile,
-            ProjectName: manualStack.ProjectName ?? stack.Name,
+            ComposeFileContent: composeFileContent,
+            ProjectName: projectName,
             EnvironmentFilePath: manualStack.EnvFilePath,
             EnvironmentVariables: manualStack.EnvVars,
             PreDeploy: manualStack.PreDeploy,
@@ -287,11 +382,12 @@ internal class ApplyStackService(
         return (true, stack, null);
     }
 
-    private async Task<Stack?> LoadStack(Guid id, CancellationToken ct)
+    private async Task<(Stack?, Guid)> LoadStack(Guid id, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        return await uow.Stacks.GetAsync(id, ct);
+        var uca = scope.ServiceProvider.GetRequiredService<IUserContextAccessor>();
+        return (await uow.Stacks.GetAsync(id, ct), uca.Current.ActorId);
     }
 
     private async Task<Registry?> LoadRegistry(Guid registryId, CancellationToken ct)

@@ -7,6 +7,7 @@ public sealed record StackSnapshot(
     string Name,
     string? Description,
     StackSource StackSource,
+    StackDriftPolicy DriftPolicy,
     StackReleaseSnapshot? StackRelease);
 
 public sealed record StackReleaseSnapshot(
@@ -23,6 +24,7 @@ public static class StackSnapshotExtensions
             Name: stack.Name,
             Description: stack.Description,
             StackSource: stack.StackSource,
+            DriftPolicy: stack.DriftPolicy,
             StackRelease: stack.CurrentStackRelease?.ToSnapshot());
 
     public static StackSnapshot ToSnapshot(this StackPatchModel stack, StackRelease stackRelease, Guid? id = null)
@@ -31,6 +33,7 @@ public static class StackSnapshotExtensions
             Name: stack.Name,
             Description: stack.Description,
             StackSource: stack.StackSource ?? StackSource.WebEditor,
+            DriftPolicy: stack.DriftPolicy ?? StackDriftPolicy.Default,
             StackRelease: stackRelease?.ToSnapshot());
 
     public static StackReleaseSnapshot ToSnapshot(this StackRelease stackRelease)

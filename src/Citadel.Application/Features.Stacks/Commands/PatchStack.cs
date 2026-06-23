@@ -31,7 +31,14 @@ public sealed record PatchStack(Guid Id, JsonMergePatchDocument<StackPatchModel>
     {
         public StackPatchModelValidator()
         {
+            RuleFor(x => x.DriftPolicy).Must(BeSafePolicy)
+                .WithMessage("RemoveExtraContainers can only be enabled when drift mode is AutoFix.");
         }
+
+        private static bool BeSafePolicy(StackDriftPolicy? policy)
+            => policy is null
+            || !policy.RemoveExtraContainers
+            || policy.Mode == StackDriftMode.AutoFix;
     }
 }
 
@@ -51,7 +58,8 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
             PlatformId: stack.CurrentStackRelease.PlatformId,
             Description: stack.Description,
             StackSource: stack.StackSource,
-            Spec: stack.CurrentStackRelease.Spec);
+            Spec: stack.CurrentStackRelease.Spec,
+            DriftPolicy: stack.DriftPolicy);
 
         var patched = command.Patch.ApplyTo(current, StackJsonContext.Default.StackPatchModel);
 
@@ -107,6 +115,8 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
 
             stack.SetCurrentStackRelease(nextRelease);
         }
+
+        stack.UpdateDetails(driftPolicy: patched.DriftPolicy);
 
         var activity = new ActivityEvent(
             actorId: actorId,
