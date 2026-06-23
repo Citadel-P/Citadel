@@ -9,7 +9,8 @@ public sealed record StackInput(
     Guid PlatformId,
     string? Description,
     StackSource StackSource,
-    StackSpec Spec)
+    StackSpec Spec,
+    StackDriftPolicy? DriftPolicy = null)
 {
-    internal CreateStack ToCommand() => new(Name, PlatformId, Description, StackSource, Spec);
+    internal CreateStack ToCommand() => new(Name, PlatformId, Description, StackSource, Spec, DriftPolicy);
 }

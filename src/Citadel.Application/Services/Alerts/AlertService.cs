@@ -143,10 +143,10 @@ internal sealed class AlertStateWorkItem(
                 }
             }
 
-            var evt = new AlertEvent(
+                var evt = new AlertEvent(
                 alertRuleId: rule.Id,
                 type: rule.Type,
-                severity: rule.Severity,
+                severity: match.Severity ?? rule.Severity,
                 info: match.Info!,
                 resourceId: match.ResourceId,
                 resourceName: match.ResourceName,

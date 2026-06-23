@@ -133,6 +133,7 @@ internal static class ContainerMappers
                 name: container.Stack_StackName,
                 description: string.Empty,
                 stackUpdateState: null,
+                driftPolicy: StackDriftPolicy.Default,
                 currentStackReleaseId : Guid.Empty,
                 stackSource: StackSource.WebEditor,
                 createdAt: DateTime.MinValue,

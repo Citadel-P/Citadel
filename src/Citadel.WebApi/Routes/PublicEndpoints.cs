@@ -1092,6 +1092,32 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getStackStats");
 
+        stacks.MapGet("{stackId}/drift", Stacks.GetDrift)
+            .WithSummary("Get stack drift report")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getStackDrift");
+
+        stacks.MapPut("{stackId}/drift-policy", Stacks.UpdateDriftPolicy)
+            .WithSummary("Update stack drift policy")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("updateStackDriftPolicy");
+
+        stacks.MapPost("{stackId}/reconcile", Stacks.Reconcile)
+            .WithSummary("Reconcile safe stack drift")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("reconcileStack");
+
         stacks.MapGet("{stackId}/containers/{containerId}/inspect", Stacks.InspectContainer)
             .WithSummary("Inspect a stack container")
             .ProducesValidationProblem()

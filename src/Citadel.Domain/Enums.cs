@@ -286,6 +286,29 @@ public enum StackSource
     Git
 }
 
+public enum StackDriftMode
+{
+    Disabled = 0,
+    DetectOnly = 1,
+    AutoFix = 2
+}
+
+public enum StackReconciliationStatus
+{
+    NoDrift = 0,
+    Reconciled = 1,
+    Partial = 2,
+    RequiresReapply = 3,
+    Disabled = 4,
+    Failed = 5
+}
+
+public enum StackReconciliationActionType
+{
+    StartContainer = 0,
+    ResumeContainer = 1
+}
+
 public enum DeploymentSource 
 {
     UI,
@@ -502,6 +525,9 @@ public enum ActivityEventType
     StackPaused,
     StackApplied,
     StackDegraded,
+    StackDriftDetected,
+    StackDriftResolved,
+    StackReconciliationAttempted,
     #endregion
 }
 
@@ -525,6 +551,7 @@ public enum AlertType
     StackImageUpdateAvailable,
     StackAutoDeployFailed,
     StackAutoUpdated,
+    StackDriftDetected,
     #endregion
 }
 

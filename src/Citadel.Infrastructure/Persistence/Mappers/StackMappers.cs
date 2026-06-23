@@ -64,6 +64,9 @@ internal static class StackMappers
             description: dto.Description,
             stackSource: Enum.Parse<StackSource>(dto.StackSource),
             stackUpdateState: JsonSerializer.Deserialize(dto.StackUpdateState, StackJsonContext.Default.StackUpdateState)!,
+            driftPolicy: string.IsNullOrWhiteSpace(dto.DriftPolicy)
+                ? StackDriftPolicy.Default
+                : JsonSerializer.Deserialize(dto.DriftPolicy, StackJsonContext.Default.StackDriftPolicy) ?? StackDriftPolicy.Default,
             createdAt: dto.CreatedAt,
             createdByActorId: dto.CreatedByActorId,
             controlState: Enum.Parse<ResourceControlState>(dto.ControlState),

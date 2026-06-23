@@ -190,6 +190,7 @@ namespace Infrastructure.Migrations.Migrations
                     createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
                     currentstackreleaseid = table.Column<Guid>(type: "uuid", nullable: true),
                     description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
+                    driftpolicy = table.Column<string>(type: "json", nullable: false),
                     name = table.Column<string>(type: "text", nullable: false),
                     rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
                     stacksource = table.Column<string>(type: "text", nullable: false),
@@ -783,6 +784,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("019d0000-0001-7000-8001-000000000009"), 86400, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Image Update Available - Stack", "[]", null, "Info", null, "StackImageUpdateAvailable" },
                     { new Guid("019d0000-0001-7000-8001-00000000000a"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Auto Deploy Failed - Stack", "[]", null, "Critical", null, "StackAutoDeployFailed" },
                     { new Guid("019d0000-0001-7000-8001-00000000000b"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Stack Auto Updated", "[]", null, "Info", null, "StackAutoUpdated" },
+                    { new Guid("019d0000-0001-7000-8001-00000000000c"), 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Stack Drift Detected", "[]", null, "Warning", null, "StackDriftDetected" },
                     { new Guid("019d0000-0001-7000-8001-000000000011"), 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "CPU > 80% - Platform", "[]", 3, "Warning", 80.0, "PlatformCpuHigh" },
                     { new Guid("019d0000-0001-7000-8001-000000000022"), 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "RAM > 80% - Platform", "[]", 3, "Warning", 80.0, "PlatformRamHigh" }
                 });

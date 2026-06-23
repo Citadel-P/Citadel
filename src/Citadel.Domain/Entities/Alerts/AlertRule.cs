@@ -360,6 +360,7 @@ public static class AlertTypeMetadata
         { AlertType.StackImageUpdateAvailable, AlertResourceType.Stack },
         { AlertType.StackAutoUpdated, AlertResourceType.Stack },
         { AlertType.StackAutoDeployFailed, AlertResourceType.Stack },
+        { AlertType.StackDriftDetected, AlertResourceType.Stack },
     };
 
     private static readonly HashSet<AlertType> ThresholdTypes =
@@ -388,6 +389,7 @@ public static class AlertTypeMetadata
             (AlertType.StackImageUpdateAvailable, StackImageUpdateAvailableAlertInfo) => true,
             (AlertType.StackAutoUpdated, StackAutoUpdatedAlertInfo) => true,
             (AlertType.StackAutoDeployFailed, StackDeployFailedAlertInfo) => true,
+            (AlertType.StackDriftDetected, StackDriftDetectedAlertInfo) => true,
             _ => false
         };
 }

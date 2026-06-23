@@ -58,6 +58,26 @@ export enum StackReleaseStatus {
   Stopped = "Stopped",
 }
 
+export enum StackReconciliationStatus {
+  NoDrift = "NoDrift",
+  Reconciled = "Reconciled",
+  Partial = "Partial",
+  RequiresReapply = "RequiresReapply",
+  Disabled = "Disabled",
+  Failed = "Failed",
+}
+
+export enum StackReconciliationActionType {
+  StartContainer = "StartContainer",
+  ResumeContainer = "ResumeContainer",
+}
+
+export enum StackDriftMode {
+  Disabled = "Disabled",
+  DetectOnly = "DetectOnly",
+  AutoFix = "AutoFix",
+}
+
 export enum StackApplyEventType {
   StdOut = "StdOut",
   StdErr = "StdErr",
@@ -249,6 +269,7 @@ export enum AlertType {
   StackImageUpdateAvailable = "StackImageUpdateAvailable",
   StackAutoDeployFailed = "StackAutoDeployFailed",
   StackAutoUpdated = "StackAutoUpdated",
+  StackDriftDetected = "StackDriftDetected",
 }
 
 export enum AlertSeverity {
@@ -358,6 +379,9 @@ export enum ActivityEventType {
   StackPaused = "StackPaused",
   StackApplied = "StackApplied",
   StackDegraded = "StackDegraded",
+  StackDriftDetected = "StackDriftDetected",
+  StackDriftResolved = "StackDriftResolved",
+  StackReconciliationAttempted = "StackReconciliationAttempted",
 }
 
 export type StackUpdateState = BaseStackUpdateState &
@@ -376,6 +400,23 @@ export type StackSpec = BaseStackSpec &
   (
     | BaseStackSpecTypeMapping<"WebEditor", StackSpecManualStack>
     | BaseStackSpecTypeMapping<"Git", StackSpecGitStack>
+  );
+
+export type StackDrift = BaseStackDrift &
+  (
+    | BaseStackDriftTypeMapping<"MissingContainer", StackDriftMissingContainer>
+    | BaseStackDriftTypeMapping<"ExtraContainer", StackDriftExtraContainer>
+    | BaseStackDriftTypeMapping<"ContainerStopped", StackDriftContainerStopped>
+    | BaseStackDriftTypeMapping<"ContainerPaused", StackDriftContainerPaused>
+    | BaseStackDriftTypeMapping<
+        "ContainerUnhealthy",
+        StackDriftContainerUnhealthy
+      >
+    | BaseStackDriftTypeMapping<"ImageMismatch", StackDriftImageMismatch>
+    | BaseStackDriftTypeMapping<
+        "ConfigHashMismatch",
+        StackDriftConfigHashMismatch
+      >
   );
 
 export type RegistryConfiguration = BaseRegistryConfiguration &
@@ -517,6 +558,10 @@ export type AlertEventInfo = BaseAlertEventInfo &
         "StackAutoDeployFailed",
         AlertEventInfoStackDeployFailedAlertInfo
       >
+    | BaseAlertEventInfoTypeMapping<
+        "StackDriftDetected",
+        AlertEventInfoStackDriftDetectedAlertInfo
+      >
   );
 
 export type ActivityEventInfo = BaseActivityEventInfo &
@@ -592,6 +637,18 @@ export type ActivityEventInfo = BaseActivityEventInfo &
     | BaseActivityEventInfoTypeMapping<
         "StackDegraded",
         ActivityEventInfoStackDegraded
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackDriftDetected",
+        ActivityEventInfoStackDriftDetected
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackDriftResolved",
+        ActivityEventInfoStackDriftResolved
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackReconciliationAttempted",
+        ActivityEventInfoStackReconciliationAttempted
       >
     | BaseActivityEventInfoTypeMapping<
         "AlertRuleCreated",
@@ -806,9 +863,27 @@ export interface ActivityEventInfoStackDeleted {
   stack: StackSnapshot;
 }
 
+export interface ActivityEventInfoStackDriftDetected {
+  $type?: "StackDriftDetected";
+  reason: string;
+  fingerprint: string;
+}
+
+export interface ActivityEventInfoStackDriftResolved {
+  $type?: "StackDriftResolved";
+  previousFingerprint: string;
+}
+
 export interface ActivityEventInfoStackPaused {
   $type?: "StackPaused";
   containerIds: string[];
+}
+
+export interface ActivityEventInfoStackReconciliationAttempted {
+  $type?: "StackReconciliationAttempted";
+  status: StackReconciliationStatus;
+  actions: StackReconciliationAction[];
+  driftFingerprint: string;
 }
 
 export interface ActivityEventInfoStackRenamed {
@@ -993,6 +1068,25 @@ export interface AlertEventInfoStackDeployFailedAlertInfo {
   $type?: "StackAutoDeployFailed";
   stackName: string;
   reason: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackDriftDetectedAlertInfo {
+  $type?: "StackDriftDetected";
+  /** @format uuid */
+  stackId: string;
+  stackName: string;
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  driftCount: number | string;
+  hasAutoFixableDrift: boolean;
+  hasStructuralDrift: boolean;
+  driftSummaries: string[];
   humanMessage?: null | string;
 }
 
@@ -1547,6 +1641,7 @@ export interface CreateStackInput {
   description: null | string;
   stackSource: StackSource;
   spec: StackSpec;
+  driftPolicy?: null | StackDriftPolicy;
 }
 
 export interface CreateTeamInput {
@@ -2603,6 +2698,7 @@ export interface PatchStackInput {
   /** @format uuid */
   platformId: string;
   spec: StackSpec;
+  driftPolicy?: null | StackDriftPolicy;
 }
 
 export interface PatchTeamInput {
@@ -3070,12 +3166,103 @@ export interface StackConfigView {
   stackSource: StackSource;
   spec: StackSpec;
   stackUpdateState: StackUpdateState;
+  driftPolicy: StackDriftPolicy;
 }
 
 export interface StackContainerStatsView {
   containerId: string;
   containerName: string;
   stats: ContainerStatView[];
+}
+
+export interface StackDriftConfigHashMismatch {
+  $type?: "ConfigHashMismatch";
+  serviceName: string;
+  expectedHash: null | string;
+  actualHash: null | string;
+}
+
+export interface StackDriftContainerPaused {
+  $type?: "ContainerPaused";
+  containerId: string;
+  serviceName: string;
+}
+
+export interface StackDriftContainerStopped {
+  $type?: "ContainerStopped";
+  containerId: string;
+  serviceName: string;
+}
+
+export interface StackDriftContainerUnhealthy {
+  $type?: "ContainerUnhealthy";
+  containerId: string;
+  serviceName: string;
+  healthStatus: null | string;
+}
+
+export interface StackDriftExtraContainer {
+  $type?: "ExtraContainer";
+  containerId: string;
+  serviceName: string;
+}
+
+export interface StackDriftImageMismatch {
+  $type?: "ImageMismatch";
+  serviceName: string;
+  expectedImage: string;
+  actualImage: string;
+}
+
+export interface StackDriftMissingContainer {
+  $type?: "MissingContainer";
+  serviceName: string;
+}
+
+export interface StackDriftPolicy {
+  mode: StackDriftMode;
+  alertOnDrift: boolean;
+  markDegraded: boolean;
+  autoStartStoppedContainers: boolean;
+  autoResumePausedContainers: boolean;
+  removeExtraContainers: boolean;
+}
+
+export interface StackDriftPolicyInput {
+  mode?: any;
+  alertOnDrift?: null | boolean;
+  markDegraded?: null | boolean;
+  autoStartStoppedContainers?: null | boolean;
+  autoResumePausedContainers?: null | boolean;
+  removeExtraContainers?: null | boolean;
+}
+
+export interface StackDriftReport {
+  /** @format uuid */
+  stackId: string;
+  /** @format uuid */
+  platformId: string;
+  hasDrift: boolean;
+  hasAutoFixableDrift: boolean;
+  hasStructuralDrift: boolean;
+  drifts: StackDrift[];
+}
+
+export interface StackReconciliationAction {
+  containerId: string;
+  serviceName: string;
+  action: StackReconciliationActionType;
+  succeeded: boolean;
+  errorMessage?: null | string;
+}
+
+export interface StackReconciliationResult {
+  /** @format uuid */
+  stackId: string;
+  status: StackReconciliationStatus;
+  beforeReport: StackDriftReport;
+  afterReport: null | StackDriftReport;
+  actions: StackReconciliationAction[];
 }
 
 export interface StackReleaseSnapshot {
@@ -3120,6 +3307,7 @@ export interface StackSnapshot {
   name: string;
   description: null | string;
   stackSource: StackSource;
+  driftPolicy: StackDriftPolicy;
   stackRelease: null | StackReleaseSnapshot;
 }
 
@@ -3198,6 +3386,7 @@ export interface StackView {
   description: null | string;
   stackSource: StackSource;
   stackUpdateState: StackUpdateState;
+  driftPolicy: StackDriftPolicy;
   status: StackReleaseStatus;
   /** @format date-time */
   createdAt: any;
@@ -3424,6 +3613,12 @@ type BaseStackUpdateStateTypeMapping<Key, Type> = {
 type BaseStackSpec = object;
 
 type BaseStackSpecTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseStackDrift = object;
+
+type BaseStackDriftTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -7401,6 +7596,90 @@ export class Api<
         path: `/api/v1/stacks/${stackId}/stats`,
         method: "GET",
         query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name GetStackDrift
+     * @summary Get stack drift report
+     * @request GET:/api/v1/stacks/{stackId}/drift
+     * @secure
+     * @response `200` `StackDriftReport` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getStackDrift: (stackId: string, params: RequestParams = {}) =>
+      this.request<
+        StackDriftReport,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/${stackId}/drift`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name UpdateStackDriftPolicy
+     * @summary Update stack drift policy
+     * @request PUT:/api/v1/stacks/{stackId}/drift-policy
+     * @secure
+     * @response `200` `StackView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateStackDriftPolicy: (
+      stackId: string,
+      data: StackDriftPolicyInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<StackView, ProblemDetails>({
+        path: `/api/v1/stacks/${stackId}/drift-policy`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name ReconcileStack
+     * @summary Reconcile safe stack drift
+     * @request POST:/api/v1/stacks/{stackId}/reconcile
+     * @secure
+     * @response `200` `StackReconciliationResult` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    reconcileStack: (stackId: string, params: RequestParams = {}) =>
+      this.request<StackReconciliationResult, ProblemDetails>({
+        path: `/api/v1/stacks/${stackId}/reconcile`,
+        method: "POST",
         secure: true,
         format: "json",
         ...params,

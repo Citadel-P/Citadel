@@ -111,6 +111,7 @@ CREATE TABLE stacks (
     createdbyactorid uuid NOT NULL,
     currentstackreleaseid uuid,
     description text,
+    driftpolicy json NOT NULL,
     name text NOT NULL,
     rowversion bigint NOT NULL DEFAULT 0,
     stacksource text NOT NULL,
@@ -411,6 +412,8 @@ VALUES ('019d0000-0001-7000-8001-00000000000a', NULL, TIMESTAMPTZ '2026-01-01T00
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
 VALUES ('019d0000-0001-7000-8001-00000000000b', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Stack Auto Updated', '[]', NULL, 'Info', NULL, 'StackAutoUpdated');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
+VALUES ('019d0000-0001-7000-8001-00000000000c', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Stack Drift Detected', '[]', NULL, 'Warning', NULL, 'StackDriftDetected');
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000011', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'CPU > 80% - Platform', '[]', 3, 'Warning', 80.0, 'PlatformCpuHigh');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000022', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'RAM > 80% - Platform', '[]', 3, 'Warning', 80.0, 'PlatformRamHigh');
@@ -616,7 +619,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260614091211_migration0001', '10.0.8');
+VALUES ('20260623141446_migration0001', '10.0.9');
 
 COMMIT;
 

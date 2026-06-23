@@ -2,6 +2,7 @@ using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Stacks;
 using Hosting.Common;
@@ -23,6 +24,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         s.Description,
         s.StackSource,
         s.StackUpdateState,
+        s.DriftPolicy,
         s.CreatedAt,
         s.CreatedByActorId,
         s.ControlState,
@@ -72,6 +74,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 s.Description,
                 s.StackSource,
                 s.StackUpdateState,
+                s.DriftPolicy,
                 s.CreatedAt,
                 s.CreatedByActorId,
                 s.ControlState,
@@ -121,6 +124,66 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         return result?.ToDomain();
     }
 
+    public async Task<StackDriftStack?> GetDriftStackAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                s.Id,
+                s.CurrentStackReleaseId,
+                s.Name,
+                s.StackSource,
+                s.ControlState,
+                s.DriftPolicy,
+                sr.PlatformId,
+                sr.Status,
+                sr.Spec,
+                p.Name AS PlatformName
+            FROM Stacks s
+            INNER JOIN StackReleases sr
+                ON s.CurrentStackReleaseId = sr.Id
+            LEFT JOIN Platforms p
+                ON sr.PlatformId = p.Id
+            WHERE s.Id = @Id
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<StackDriftStackDto>(sql, new { Id = id }, transaction: tx());
+
+        return result?.ToDriftStack();
+    }
+
+    public async Task<IEnumerable<StackDriftStack>> GetDriftMonitorStacksAsync(CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                s.Id,
+                s.CurrentStackReleaseId,
+                s.Name,
+                s.StackSource,
+                s.ControlState,
+                s.DriftPolicy,
+                sr.PlatformId,
+                sr.Status,
+                sr.Spec,
+                p.Name AS PlatformName
+            FROM Stacks s
+            INNER JOIN StackReleases sr
+                ON s.CurrentStackReleaseId = sr.Id
+            LEFT JOIN Platforms p
+                ON sr.PlatformId = p.Id
+            WHERE COALESCE(s.DriftPolicy ->> 'Mode', @DetectOnlyMode) <> @DisabledMode
+            ORDER BY s.Id
+            """;
+
+        var result = await db.QueryAsync<StackDriftStackDto>(sql, new
+        {
+            DetectOnlyMode = EnumFormatter<StackDriftMode>.GetValue(StackDriftMode.DetectOnly),
+            DisabledMode = EnumFormatter<StackDriftMode>.GetValue(StackDriftMode.Disabled)
+        }, transaction: tx());
+
+        return [.. result.Select(x => x.ToDriftStack())];
+    }
+
     public async Task<IEnumerable<Stack>> GetAllAsync(CancellationToken cancellationToken)
     {
         const string sql = InfoSelect + " " + "ORDER BY s.CreatedAt DESC, s.Name ASC";
@@ -140,6 +203,13 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         const string sql = "SELECT * FROM Containers WHERE StackId = @StackId";
         var result = await db.QueryAsync<ContainerDto>(sql, new { StackId = stackId, cancellationToken }, transaction: tx());
         return result.ToDomain();
+    }
+
+    public Task<IEnumerable<string>> GetContainerIdsAsync(Guid stackId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT DockerContainerId FROM Containers WHERE StackId = @StackId";
+        var result = db.QueryAsync<string>(sql, new { StackId = stackId, cancellationToken }, transaction: tx());
+        return result;
     }
 
     public async Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
@@ -322,10 +392,10 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         const string stackSql = """
             INSERT INTO Stacks (
                 Id, CurrentStackReleaseId, Name, Description, StackSource, StackUpdateState,
-                CreatedAt, CreatedByActorId, ControlState, ControlStartedAt, RowVersion, ControlTriggeredBy
+                DriftPolicy, CreatedAt, CreatedByActorId, ControlState, ControlStartedAt, RowVersion, ControlTriggeredBy
             ) VALUES (
                 @Id, @CurrentStackReleaseId, @Name, @Description, @StackSource, @StackUpdateState::json,
-                @CreatedAt, @CreatedByActorId, @ControlState, @ControlStartedAt, @RowVersion, @ControlTriggeredBy
+                @DriftPolicy::json, @CreatedAt, @CreatedByActorId, @ControlState, @ControlStartedAt, @RowVersion, @ControlTriggeredBy
             )
         """;
 
@@ -347,6 +417,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             Description = stack.Description,
             StackSource = EnumFormatter<StackSource>.GetValue(stack.StackSource),
             StackUpdateState = JsonSerializer.Serialize(stack.StackUpdateState, StackJsonContext.Default.StackUpdateState),
+            DriftPolicy = JsonSerializer.Serialize(stack.DriftPolicy, StackJsonContext.Default.StackDriftPolicy),
             CreatedAt = stack.CreatedAt,
             CreatedByActorId = stack.CreatedByActorId,
             ControlState = EnumFormatter<ResourceControlState>.GetValue(stack.ControlState),
@@ -373,6 +444,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 CurrentStackReleaseId = @CurrentStackReleaseId,
                 StackSource = @StackSource,
                 StackUpdateState = @StackUpdateState::json,
+                DriftPolicy = @DriftPolicy::json,
                 ControlState = @ControlState,
                 ControlStartedAt = @ControlStartedAt,
                 ControlTriggeredBy = @ControlTriggeredBy
@@ -401,6 +473,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             CurrentStackReleaseId = stack.CurrentStackReleaseId,
             StackSource = EnumFormatter<StackSource>.GetValue(stack.StackSource),
             StackUpdateState = JsonSerializer.Serialize(stack.StackUpdateState, StackJsonContext.Default.StackUpdateState),
+            DriftPolicy = JsonSerializer.Serialize(stack.DriftPolicy, StackJsonContext.Default.StackDriftPolicy),
             ControlState = EnumFormatter<ResourceControlState>.GetValue(stack.ControlState),
             ControlStartedAt = stack.ControlStartedAt,
             ControlTriggeredBy = stack.ControlTriggeredBy,

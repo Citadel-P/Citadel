@@ -227,6 +227,9 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             await item.ExecuteAsync(uow, cancellationToken);
         }
+
+        public ValueTask EnqueueAndWaitAsync(IDbWorkItem item, CancellationToken cancellationToken)
+            => EnqueueAsync(item, cancellationToken);
     }
 
     private sealed class TestGitRepoSyncJob(

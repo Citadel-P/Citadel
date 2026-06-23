@@ -48,7 +48,8 @@ internal sealed class PatchStackMetadataHandler(IUnitOfWork unitOfWork) : IComma
             PlatformId: stack.CurrentStackRelease.PlatformId,
             Description: stack.Description,
             StackSource: stack.StackSource,
-            Spec: stack.CurrentStackRelease.Spec);
+            Spec: stack.CurrentStackRelease.Spec,
+            DriftPolicy: stack.DriftPolicy);
 
         var patched = command.Patch.ApplyTo(current, StackJsonContext.Default.StackPatchModel);
 

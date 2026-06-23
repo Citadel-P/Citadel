@@ -12620,6 +12620,310 @@
         ]
       }
     },
+    "/api/v1/stacks/{stackId}/drift": {
+      "get": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Get stack drift report",
+        "operationId": "getStackDrift",
+        "parameters": [
+          {
+            "name": "stackId",
+            "in": "path",
+            "description": "The stack id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackDriftReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/{stackId}/drift-policy": {
+      "put": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Update stack drift policy",
+        "operationId": "updateStackDriftPolicy",
+        "parameters": [
+          {
+            "name": "stackId",
+            "in": "path",
+            "description": "The stack id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackDriftPolicyInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/{stackId}/reconcile": {
+      "post": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Reconcile safe stack drift",
+        "operationId": "reconcileStack",
+        "parameters": [
+          {
+            "name": "stackId",
+            "in": "path",
+            "description": "The stack id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackReconciliationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/stacks/{stackId}/containers/{containerId}/inspect": {
       "get": {
         "tags": [
@@ -14931,6 +15235,15 @@
             "$ref": "#/components/schemas/ActivityEventInfoStackDegraded"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoStackDriftDetected"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackDriftResolved"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackReconciliationAttempted"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoAlertRuleCreated"
           },
           {
@@ -14994,6 +15307,9 @@
             "StackPaused": "#/components/schemas/ActivityEventInfoStackPaused",
             "StackApplied": "#/components/schemas/ActivityEventInfoStackApplied",
             "StackDegraded": "#/components/schemas/ActivityEventInfoStackDegraded",
+            "StackDriftDetected": "#/components/schemas/ActivityEventInfoStackDriftDetected",
+            "StackDriftResolved": "#/components/schemas/ActivityEventInfoStackDriftResolved",
+            "StackReconciliationAttempted": "#/components/schemas/ActivityEventInfoStackReconciliationAttempted",
             "AlertRuleCreated": "#/components/schemas/ActivityEventInfoAlertRuleCreated",
             "AlertRuleUpdated": "#/components/schemas/ActivityEventInfoAlertRuleUpdated",
             "AlertRuleDeleted": "#/components/schemas/ActivityEventInfoAlertRuleDeleted",
@@ -15514,6 +15830,42 @@
           }
         }
       },
+      "ActivityEventInfoStackDriftDetected": {
+        "required": [
+          "reason",
+          "fingerprint"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackDriftDetected"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoStackDriftResolved": {
+        "required": [
+          "previousFingerprint"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackDriftResolved"
+            ],
+            "type": "string"
+          },
+          "previousFingerprint": {
+            "type": "string"
+          }
+        }
+      },
       "ActivityEventInfoStackPaused": {
         "required": [
           "containerIds"
@@ -15530,6 +15882,33 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ActivityEventInfoStackReconciliationAttempted": {
+        "required": [
+          "status",
+          "actions",
+          "driftFingerprint"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackReconciliationAttempted"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StackReconciliationStatus"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackReconciliationAction"
+            }
+          },
+          "driftFingerprint": {
+            "type": "string"
           }
         }
       },
@@ -15647,7 +16026,10 @@
           "StackStopped",
           "StackPaused",
           "StackApplied",
-          "StackDegraded"
+          "StackDegraded",
+          "StackDriftDetected",
+          "StackDriftResolved",
+          "StackReconciliationAttempted"
         ]
       },
       "ActivityResourceType": {
@@ -16011,6 +16393,9 @@
           },
           {
             "$ref": "#/components/schemas/AlertEventInfoStackDeployFailedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo"
           }
         ],
         "discriminator": {
@@ -16026,7 +16411,8 @@
             "DeploymentAutoDeployFailed": "#/components/schemas/AlertEventInfoDeploymentAutoDeployFailedAlertInfo",
             "StackImageUpdateAvailable": "#/components/schemas/AlertEventInfoStackImageUpdateAvailableAlertInfo",
             "StackAutoUpdated": "#/components/schemas/AlertEventInfoStackAutoUpdatedAlertInfo",
-            "StackAutoDeployFailed": "#/components/schemas/AlertEventInfoStackDeployFailedAlertInfo"
+            "StackAutoDeployFailed": "#/components/schemas/AlertEventInfoStackDeployFailedAlertInfo",
+            "StackDriftDetected": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo"
           }
         }
       },
@@ -16286,6 +16672,66 @@
           },
           "reason": {
             "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackDriftDetectedAlertInfo": {
+        "required": [
+          "stackId",
+          "stackName",
+          "platformId",
+          "platformName",
+          "driftCount",
+          "hasAutoFixableDrift",
+          "hasStructuralDrift",
+          "driftSummaries"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackDriftDetected"
+            ],
+            "type": "string"
+          },
+          "stackId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "driftCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasAutoFixableDrift": {
+            "type": "boolean"
+          },
+          "hasStructuralDrift": {
+            "type": "boolean"
+          },
+          "driftSummaries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "humanMessage": {
             "type": [
@@ -16949,7 +17395,8 @@
           "DeploymentAutoUpdated",
           "StackImageUpdateAvailable",
           "StackAutoDeployFailed",
-          "StackAutoUpdated"
+          "StackAutoUpdated",
+          "StackDriftDetected"
         ]
       },
       "ApplyDeploymentInput": {
@@ -18539,6 +18986,16 @@
           },
           "spec": {
             "$ref": "#/components/schemas/StackSpec"
+          },
+          "driftPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackDriftPolicy"
+              }
+            ]
           }
         }
       },
@@ -22680,6 +23137,16 @@
           },
           "spec": {
             "$ref": "#/components/schemas/StackSpec"
+          },
+          "driftPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackDriftPolicy"
+              }
+            ]
           }
         }
       },
@@ -24370,7 +24837,8 @@
           "description",
           "stackSource",
           "spec",
-          "stackUpdateState"
+          "stackUpdateState",
+          "driftPolicy"
         ],
         "type": "object",
         "properties": {
@@ -24399,6 +24867,9 @@
           },
           "stackUpdateState": {
             "$ref": "#/components/schemas/StackUpdateState"
+          },
+          "driftPolicy": {
+            "$ref": "#/components/schemas/StackDriftPolicy"
           }
         }
       },
@@ -24423,6 +24894,397 @@
             }
           }
         }
+      },
+      "StackDrift": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/StackDriftMissingContainer"
+          },
+          {
+            "$ref": "#/components/schemas/StackDriftExtraContainer"
+          },
+          {
+            "$ref": "#/components/schemas/StackDriftContainerStopped"
+          },
+          {
+            "$ref": "#/components/schemas/StackDriftContainerPaused"
+          },
+          {
+            "$ref": "#/components/schemas/StackDriftContainerUnhealthy"
+          },
+          {
+            "$ref": "#/components/schemas/StackDriftImageMismatch"
+          },
+          {
+            "$ref": "#/components/schemas/StackDriftConfigHashMismatch"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "MissingContainer": "#/components/schemas/StackDriftMissingContainer",
+            "ExtraContainer": "#/components/schemas/StackDriftExtraContainer",
+            "ContainerStopped": "#/components/schemas/StackDriftContainerStopped",
+            "ContainerPaused": "#/components/schemas/StackDriftContainerPaused",
+            "ContainerUnhealthy": "#/components/schemas/StackDriftContainerUnhealthy",
+            "ImageMismatch": "#/components/schemas/StackDriftImageMismatch",
+            "ConfigHashMismatch": "#/components/schemas/StackDriftConfigHashMismatch"
+          }
+        }
+      },
+      "StackDriftConfigHashMismatch": {
+        "required": [
+          "serviceName",
+          "expectedHash",
+          "actualHash"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ConfigHashMismatch"
+            ],
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "expectedHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "actualHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StackDriftContainerPaused": {
+        "required": [
+          "containerId",
+          "serviceName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ContainerPaused"
+            ],
+            "type": "string"
+          },
+          "containerId": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          }
+        }
+      },
+      "StackDriftContainerStopped": {
+        "required": [
+          "containerId",
+          "serviceName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ContainerStopped"
+            ],
+            "type": "string"
+          },
+          "containerId": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          }
+        }
+      },
+      "StackDriftContainerUnhealthy": {
+        "required": [
+          "containerId",
+          "serviceName",
+          "healthStatus"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ContainerUnhealthy"
+            ],
+            "type": "string"
+          },
+          "containerId": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "healthStatus": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StackDriftExtraContainer": {
+        "required": [
+          "containerId",
+          "serviceName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ExtraContainer"
+            ],
+            "type": "string"
+          },
+          "containerId": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          }
+        }
+      },
+      "StackDriftImageMismatch": {
+        "required": [
+          "serviceName",
+          "expectedImage",
+          "actualImage"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ImageMismatch"
+            ],
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "expectedImage": {
+            "type": "string"
+          },
+          "actualImage": {
+            "type": "string"
+          }
+        }
+      },
+      "StackDriftMissingContainer": {
+        "required": [
+          "serviceName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "MissingContainer"
+            ],
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          }
+        }
+      },
+      "StackDriftMode": {
+        "enum": [
+          "Disabled",
+          "DetectOnly",
+          "AutoFix"
+        ]
+      },
+      "StackDriftPolicy": {
+        "required": [
+          "mode",
+          "alertOnDrift",
+          "markDegraded",
+          "autoStartStoppedContainers",
+          "autoResumePausedContainers",
+          "removeExtraContainers"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/StackDriftMode"
+          },
+          "alertOnDrift": {
+            "type": "boolean"
+          },
+          "markDegraded": {
+            "type": "boolean"
+          },
+          "autoStartStoppedContainers": {
+            "type": "boolean"
+          },
+          "autoResumePausedContainers": {
+            "type": "boolean"
+          },
+          "removeExtraContainers": {
+            "type": "boolean"
+          }
+        }
+      },
+      "StackDriftPolicyInput": {
+        "type": "object",
+        "properties": {
+          "mode": { },
+          "alertOnDrift": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "markDegraded": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "autoStartStoppedContainers": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "autoResumePausedContainers": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "removeExtraContainers": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "StackDriftReport": {
+        "required": [
+          "stackId",
+          "platformId",
+          "hasDrift",
+          "hasAutoFixableDrift",
+          "hasStructuralDrift",
+          "drifts"
+        ],
+        "type": "object",
+        "properties": {
+          "stackId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hasDrift": {
+            "type": "boolean"
+          },
+          "hasAutoFixableDrift": {
+            "type": "boolean"
+          },
+          "hasStructuralDrift": {
+            "type": "boolean"
+          },
+          "drifts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackDrift"
+            }
+          }
+        }
+      },
+      "StackReconciliationAction": {
+        "required": [
+          "containerId",
+          "serviceName",
+          "action",
+          "succeeded"
+        ],
+        "type": "object",
+        "properties": {
+          "containerId": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "action": {
+            "$ref": "#/components/schemas/StackReconciliationActionType"
+          },
+          "succeeded": {
+            "type": "boolean"
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StackReconciliationActionType": {
+        "enum": [
+          "StartContainer",
+          "ResumeContainer"
+        ]
+      },
+      "StackReconciliationResult": {
+        "required": [
+          "stackId",
+          "status",
+          "beforeReport",
+          "afterReport",
+          "actions"
+        ],
+        "type": "object",
+        "properties": {
+          "stackId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StackReconciliationStatus"
+          },
+          "beforeReport": {
+            "$ref": "#/components/schemas/StackDriftReport"
+          },
+          "afterReport": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackDriftReport"
+              }
+            ]
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackReconciliationAction"
+            }
+          }
+        }
+      },
+      "StackReconciliationStatus": {
+        "enum": [
+          "NoDrift",
+          "Reconciled",
+          "Partial",
+          "RequiresReapply",
+          "Disabled",
+          "Failed"
+        ]
       },
       "StackReleaseSnapshot": {
         "required": [
@@ -24557,6 +25419,7 @@
           "name",
           "description",
           "stackSource",
+          "driftPolicy",
           "stackRelease"
         ],
         "type": "object",
@@ -24576,6 +25439,9 @@
           },
           "stackSource": {
             "$ref": "#/components/schemas/StackSource"
+          },
+          "driftPolicy": {
+            "$ref": "#/components/schemas/StackDriftPolicy"
           },
           "stackRelease": {
             "oneOf": [
@@ -24932,6 +25798,7 @@
           "description",
           "stackSource",
           "stackUpdateState",
+          "driftPolicy",
           "status",
           "createdAt",
           "createdByActorId",
@@ -24958,6 +25825,9 @@
           },
           "stackUpdateState": {
             "$ref": "#/components/schemas/StackUpdateState"
+          },
+          "driftPolicy": {
+            "$ref": "#/components/schemas/StackDriftPolicy"
           },
           "status": {
             "$ref": "#/components/schemas/StackReleaseStatus"

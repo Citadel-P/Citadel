@@ -17,6 +17,7 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(StackImageUpdateAvailableAlertInfo), nameof(AlertType.StackImageUpdateAvailable))]
 [JsonDerivedType(typeof(StackAutoUpdatedAlertInfo), nameof(AlertType.StackAutoUpdated))]
 [JsonDerivedType(typeof(StackDeployFailedAlertInfo), nameof(AlertType.StackAutoDeployFailed))]
+[JsonDerivedType(typeof(StackDriftDetectedAlertInfo), nameof(AlertType.StackDriftDetected))]
 public abstract record AlertEventInfo
 {
     /// <summary>
@@ -83,4 +84,30 @@ public record StackAutoUpdatedAlertInfo(string StackName, string PreviousImage, 
 public record StackDeployFailedAlertInfo(string StackName, string Reason) : AlertEventInfo
 {
     public override string HumanMessage => $"Stack '{StackName}' deployment failed: {Reason}";
+}
+
+public sealed record StackDriftDetectedAlertInfo(
+    Guid StackId,
+    string StackName,
+    Guid PlatformId,
+    string PlatformName,
+    int DriftCount,
+    bool HasAutoFixableDrift,
+    bool HasStructuralDrift,
+    IReadOnlyList<string> DriftSummaries) : AlertEventInfo
+{
+    public override string HumanMessage
+    {
+        get
+        {
+            var issueText = DriftCount == 1 ? "1 issue found" : $"{DriftCount} issues found";
+            var actionText = HasStructuralDrift
+                ? " Re-apply is required."
+                : HasAutoFixableDrift
+                    ? " Safe reconciliation is available."
+                    : string.Empty;
+
+            return $"Drift detected on stack '{StackName}': {issueText}.{actionText}";
+        }
+    }
 }

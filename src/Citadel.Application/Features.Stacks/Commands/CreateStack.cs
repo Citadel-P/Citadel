@@ -19,7 +19,8 @@ public sealed record CreateStack(
     Guid PlatformId,
     string? Description,
     StackSource StackSource,
-    StackSpec Spec) : ICommand<Result<Stack>>
+    StackSpec Spec,
+    StackDriftPolicy? DriftPolicy = null) : ICommand<Result<Stack>>
 {
     internal sealed class Validator : AbstractValidator<CreateStack>
     {
@@ -28,7 +29,14 @@ public sealed record CreateStack(
             RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier();
             RuleFor(x => x.Description).MaximumLength(600);
             RuleFor(x => x.Spec).NotNull();
+            RuleFor(x => x.DriftPolicy).Must(BeSafePolicy)
+                .WithMessage("RemoveExtraContainers can only be enabled when drift mode is AutoFix.");
         }
+
+        private static bool BeSafePolicy(StackDriftPolicy? policy)
+            => policy is null
+            || !policy.RemoveExtraContainers
+            || policy.Mode == StackDriftMode.AutoFix;
     }
 }
 
@@ -69,7 +77,8 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IUserContextAcc
             StackSource: command.StackSource,
             platformId: command.PlatformId,
             spec: command.Spec,
-            description: command.Description);
+            description: command.Description,
+            driftPolicy: command.DriftPolicy);
 
         await unitOfWork.Stacks.AddAsync(stack, cancellationToken);
 

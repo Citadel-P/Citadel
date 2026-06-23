@@ -4,4 +4,5 @@ namespace WebApi.Routes.Endpoints.Resources.Stacks;
 
 public sealed record PatchStackInput(
     Guid PlatformId,
-    StackSpec Spec);
+    StackSpec Spec,
+    StackDriftPolicy? DriftPolicy = null);

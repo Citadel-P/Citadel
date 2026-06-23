@@ -350,6 +350,9 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
 
         public ValueTask EnqueueAsync(IDbWorkItem item, CancellationToken cancellationToken)
             => new(item.ExecuteAsync(uow, cancellationToken));
+
+        public ValueTask EnqueueAndWaitAsync(IDbWorkItem item, CancellationToken cancellationToken)
+            => EnqueueAsync(item, cancellationToken);
     }
 
     [Fact]

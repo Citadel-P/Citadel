@@ -54,6 +54,7 @@ public sealed record StackView(
     string? Description,
     StackSource StackSource,
     StackUpdateState StackUpdateState,
+    StackDriftPolicy DriftPolicy,
     StackReleaseStatus Status,
     DateTime CreatedAt,
     Guid CreatedByActorId,
@@ -73,6 +74,7 @@ public sealed record StackView(
         Description: stack.Description,
         StackSource: stack.StackSource,
         StackUpdateState: stack.StackUpdateState,
+        DriftPolicy: stack.DriftPolicy,
         CreatedAt: stack.CreatedAt,
         CreatedByActorId: stack.CreatedByActorId,
         ControlState: stack.ControlState,
@@ -102,7 +104,8 @@ public sealed record StackConfigView(
     string? Description,
     StackSource StackSource,
     StackSpec Spec,
-    StackUpdateState StackUpdateState)
+    StackUpdateState StackUpdateState,
+    StackDriftPolicy DriftPolicy)
 {
     internal static StackConfigView Map(Stack stack) => new(
         Id: stack.Id,
@@ -111,7 +114,8 @@ public sealed record StackConfigView(
         Description: stack.Description,
         StackSource: stack.StackSource,
         Spec: stack.CurrentStackRelease?.Spec!,
-        StackUpdateState: stack.StackUpdateState);
+        StackUpdateState: stack.StackUpdateState,
+        DriftPolicy: stack.DriftPolicy);
 }
 
 public sealed record StackReleasesView(IEnumerable<StackReleaseView> Releases)

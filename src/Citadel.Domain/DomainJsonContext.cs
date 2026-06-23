@@ -104,6 +104,18 @@ public partial class DeploymentJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(DeploymentPaused))]
 [JsonSerializable(typeof(DeploymentDegraded))]
 [JsonSerializable(typeof(DeploymentApplied))]
+[JsonSerializable(typeof(StackCreated))]
+[JsonSerializable(typeof(StackUpdated))]
+[JsonSerializable(typeof(StackDeleted))]
+[JsonSerializable(typeof(StackRenamed))]
+[JsonSerializable(typeof(StackStarted))]
+[JsonSerializable(typeof(StackStopped))]
+[JsonSerializable(typeof(StackPaused))]
+[JsonSerializable(typeof(StackDegraded))]
+[JsonSerializable(typeof(StackDriftDetected))]
+[JsonSerializable(typeof(StackDriftResolved))]
+[JsonSerializable(typeof(StackReconciliationAttempted))]
+[JsonSerializable(typeof(StackApplied))]
 [JsonSerializable(typeof(AlertRuleCreated))]
 [JsonSerializable(typeof(AlertRuleUpdated))]
 [JsonSerializable(typeof(AlertRuleDeleted))]
@@ -134,6 +146,7 @@ public partial class EventInfoJsonContext : JsonSerializerContext
     })]
 [JsonSerializable(typeof(AlertEvent))]
 [JsonSerializable(typeof(AlertEventInfo))]
+[JsonSerializable(typeof(StackDriftDetectedAlertInfo))]
 public partial class AlertEventJsonContext : JsonSerializerContext
 {
 }
@@ -191,12 +204,27 @@ public partial class GitJsonContext : JsonSerializerContext
     {
         typeof(JsonStringEnumConverter<StackSource>),
         typeof(JsonStringEnumConverter<StackReleaseStatus>),
+        typeof(JsonStringEnumConverter<StackDriftMode>),
+        typeof(JsonStringEnumConverter<StackReconciliationStatus>),
+        typeof(JsonStringEnumConverter<StackReconciliationActionType>),
         typeof(JsonStringEnumConverter<StackUpdateBehavior>),
         typeof(JsonStringEnumConverter<ResourceControlState>)
     })]
 [JsonSerializable(typeof(IEnumerable<Guid>))]
 [JsonSerializable(typeof(Stack))]
 [JsonSerializable(typeof(StackPatchModel))]
+[JsonSerializable(typeof(StackDriftPolicy))]
+[JsonSerializable(typeof(StackDriftReport))]
+[JsonSerializable(typeof(StackDrift))]
+[JsonSerializable(typeof(MissingContainer))]
+[JsonSerializable(typeof(ExtraContainer))]
+[JsonSerializable(typeof(ContainerStopped))]
+[JsonSerializable(typeof(ContainerPaused))]
+[JsonSerializable(typeof(ContainerUnhealthy))]
+[JsonSerializable(typeof(ImageMismatch))]
+[JsonSerializable(typeof(ConfigHashMismatch))]
+[JsonSerializable(typeof(StackReconciliationResult))]
+[JsonSerializable(typeof(StackReconciliationAction))]
 [JsonSerializable(typeof(StackRelease))]
 [JsonSerializable(typeof(StackSpec))]
 [JsonSerializable(typeof(ManualStack))]

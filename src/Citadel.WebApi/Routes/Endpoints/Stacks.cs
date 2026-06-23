@@ -101,6 +101,35 @@ public static class Stacks
         return EndpointHandlers.HandleResult(result, StackStatsView.Map);
     }
 
+    public static async Task<Results<Ok<StackDriftReport>, ProblemHttpResult>> GetDrift(
+        IMediator mediator,
+        [Description("The stack id")] Guid stackId,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetStackDrift(stackId), cancellationToken);
+        return EndpointHandlers.HandleResult(result);
+    }
+
+    public static async Task<Results<Ok<StackView>, ProblemHttpResult>> UpdateDriftPolicy(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [Description("The stack id")] Guid stackId,
+        [FromBody] StackDriftPolicyInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new UpdateStackDriftPolicy(stackId, input.ToPolicy()), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, StackView.Map);
+    }
+
+    public static async Task<Results<Ok<StackReconciliationResult>, ProblemHttpResult>> Reconcile(
+        IMediator mediator,
+        [Description("The stack id")] Guid stackId,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ReconcileStack(stackId), cancellationToken);
+        return EndpointHandlers.HandleResult(result);
+    }
+
     public static async Task<Results<Ok<ContainerInspectView>, ProblemHttpResult>> InspectContainer(
         IMediator mediator,
         [Description("The stack id")] Guid stackId,

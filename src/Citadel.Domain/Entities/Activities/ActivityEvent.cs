@@ -83,6 +83,9 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.StackPaused
             or ActivityEventType.StackApplied
             or ActivityEventType.StackDegraded
+            or ActivityEventType.StackDriftDetected
+            or ActivityEventType.StackDriftResolved
+            or ActivityEventType.StackReconciliationAttempted
                 => ActivityResourceType.Stack,
 
             ActivityEventType.PlatformConnected
@@ -181,6 +184,9 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.StackApplied, StackApplied) => true,
             (ActivityEventType.StackPaused, StackPaused) => true,
             (ActivityEventType.StackDegraded, StackDegraded) => true,
+            (ActivityEventType.StackDriftDetected, StackDriftDetected) => true,
+            (ActivityEventType.StackDriftResolved, StackDriftResolved) => true,
+            (ActivityEventType.StackReconciliationAttempted, StackReconciliationAttempted) => true,
 
             (ActivityEventType.AlertRuleCreated, AlertRuleCreated) => true,
             (ActivityEventType.AlertRuleUpdated, AlertRuleUpdated) => true,
