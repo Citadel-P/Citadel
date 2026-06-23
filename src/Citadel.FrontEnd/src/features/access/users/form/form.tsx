@@ -75,7 +75,13 @@ export const UserForm = ({
 }) => {
   const id = useParams().id;
   const [update, setUpdate] = useState<Partial<UserInput>>({});
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const formKey = `${mode}:${id ?? 'new'}`;
+  const [confirmPasswordState, setConfirmPasswordState] = useState({ key: formKey, value: '' });
+  const confirmPassword = confirmPasswordState.key === formKey ? confirmPasswordState.value : '';
+  const setConfirmPassword = useCallback(
+    (value: string) => setConfirmPasswordState({ key: formKey, value }),
+    [formKey],
+  );
   const queryClient = useQueryClient();
 
   const { mutateAsync: createUser } = useMutate('createUser');
@@ -117,7 +123,15 @@ export const UserForm = ({
       if (confirmPassword !== pwd) return;
     }
 
-    return handleSave(sanitizedPayload);
+    if (mode === 'edit') {
+      const pwd = String((payload as PatchUserInput).password ?? '');
+      if (pwd && confirmPassword !== pwd) return;
+    }
+
+    const result = await handleSave(sanitizedPayload);
+    delete (payload as Partial<CreateUserInput>).password;
+    setConfirmPassword('');
+    return result;
   };
 
   const original = useMemo(() => normalizeUserResource(resource), [resource]);
@@ -202,37 +216,36 @@ export const UserForm = ({
                   />
                 ),
               }),
-              ...(mode === 'add'
-                ? [
-                    {
-                      kind: 'field' as const,
-                      field: {
-                        key: 'confirmPassword' as any,
-                        label: 'Confirm Password',
-                        validate: () => {
-                          const pwd = (update as Partial<CreateUserInput>).password ?? '';
-                          if (confirmPassword.length === 0) return 'Required';
-                          return confirmPassword !== pwd ? 'Passwords do not match' : null;
-                        },
-                        render: (_value: any, _set: FieldChange<UserInput>) => {
-                          const pwd = (update as Partial<CreateUserInput>).password ?? '';
-                          const mismatch = confirmPassword.length > 0 && confirmPassword !== pwd;
-                          return (
-                            <div className="flex flex-col gap-1">
-                              <FieldInput
-                                type="password"
-                                value={confirmPassword}
-                                onChange={setConfirmPassword}
-                                placeholder="Repeat password"
-                              />
-                              {mismatch && <p className="text-xs text-destructive">Passwords do not match</p>}
-                            </div>
-                          );
-                        },
-                      },
-                    } as FieldItemConfig<UserInput>,
-                  ]
-                : []),
+              {
+                kind: 'field' as const,
+                field: {
+                  key: 'confirmPassword' as any,
+                  label: 'Repeat Password',
+                  validate: () => {
+                    const pwd = String((update as Partial<UserInput>).password ?? '');
+
+                    if (mode === 'edit' && !pwd) return null;
+                    if (confirmPassword.length === 0) return 'Required';
+
+                    return confirmPassword !== pwd ? 'Passwords do not match' : null;
+                  },
+                  render: (_value: any, _set: FieldChange<UserInput>) => {
+                    const pwd = String((update as Partial<UserInput>).password ?? '');
+                    const mismatch = pwd.length > 0 && confirmPassword.length > 0 && confirmPassword !== pwd;
+                    return (
+                      <div className="flex flex-col gap-1">
+                        <FieldInput
+                          type="password"
+                          value={confirmPassword}
+                          onChange={setConfirmPassword}
+                          placeholder="Repeat password"
+                        />
+                        {mismatch && <p className="text-xs text-destructive">Passwords do not match</p>}
+                      </div>
+                    );
+                  },
+                },
+              } as FieldItemConfig<UserInput>,
             ],
           }),
           defineGroupField<UserInput>({
@@ -294,7 +307,7 @@ export const UserForm = ({
         ],
       }),
     }),
-    [mode, roleOptions, rolesLoading, confirmPassword, update],
+    [mode, roleOptions, rolesLoading, confirmPassword, setConfirmPassword, update],
   );
 
   return (

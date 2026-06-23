@@ -44,15 +44,22 @@ internal sealed class ContainerUpdatedWorkItem(
             if (existing.StackId != null)
             {
                 var containers = await uow.Stacks.GetContainersAsync(existing.StackId.Value, cancellationToken);
+                var changedState = eventInfo.Container?.State ?? ContainerStateStatus.Unknown;
+                var containerStates = containers.Select(container =>
+                    new StackContainerState(
+                        container.DockerContainerId,
+                        string.Equals(container.DockerContainerId, existing.DockerContainerId, StringComparison.OrdinalIgnoreCase)
+                            ? changedState
+                            : container.State));
 
-                var states = containers
-                    .Where(x => x.DockerContainerId != eventInfo.Container?.Id)
-                    .Select(x => x.State)
-                    .Append(eventInfo.Container?.State ?? ContainerStateStatus.Unknown);
-
-                var status = Stack.ToStackStatus(states);
-
-                (stack, activityEvent) = await ContainerDestroyedWorkItem.UpdateStackStatus(uow, existing.StackId.Value, status, eventInfo.Container?.State ?? ContainerStateStatus.Unknown, existing.DockerContainerId, cancellationToken);
+                (stack, activityEvent) = await ContainerDestroyedWorkItem.UpdateStackStatus(
+                    uow,
+                    existing.StackId.Value,
+                    containerStates,
+                    changedState,
+                    existing.DockerContainerId,
+                    forcedStatus: null,
+                    cancellationToken: cancellationToken);
             }
 
             container = await UpdateContainer(uow, existing, cancellationToken);

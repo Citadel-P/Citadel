@@ -11,6 +11,14 @@ export const useVariables = (resources: StackView | StackView[]) =>
 
 export const isProcessing = (resource: StackView) => resource.controlState === ResourceControlState.Processing;
 
+const everyStack = (resources: StackView | StackView[], predicate: (resource: StackView) => boolean) =>
+  Array.isArray(resources) ? resources.every(predicate) : predicate(resources);
+
+const hasStatus = (resource: StackView, ...statuses: StackReleaseStatus[]) => statuses.includes(resource.status);
+
+const canControl = (resource: StackView, ...statuses: StackReleaseStatus[]) =>
+  hasStatus(resource, ...statuses) && !isProcessing(resource);
+
 export const deployAction: ActionConfig<StackView, any> = {
   key: 'deployToggle',
   type: 'toggle',
@@ -53,51 +61,48 @@ export const deployAction: ActionConfig<StackView, any> = {
   },
 };
 
-export const startAction: ActionConfig<StackView, 'startDeployments'> = {
+export const startAction: ActionConfig<StackView, 'startStacks'> = {
   key: 'start',
   type: 'command',
   icon: Play,
-  mutateKey: 'startDeployments',
+  mutateKey: 'startStacks',
   useVariables,
   canExecute: (r) => {
-    const can = (x: StackView) => x.status === StackReleaseStatus.Stopped && !isProcessing(x);
-    return Array.isArray(r) ? r.every(can) : can(r);
+    return everyStack(r, (x) => canControl(x, StackReleaseStatus.Stopped, StackReleaseStatus.Degraded));
   },
 };
 
-export const stopAction: ActionConfig<StackView, 'stopDeployments'> = {
+export const stopAction: ActionConfig<StackView, 'stopStacks'> = {
   key: 'stop',
   type: 'command',
   icon: Ban,
-  mutateKey: 'stopDeployments',
+  mutateKey: 'stopStacks',
   useVariables,
   canExecute: (r) => {
-    const can = (x: StackView) => x.status === StackReleaseStatus.Healthy && !isProcessing(x);
-    return Array.isArray(r) ? r.every(can) : can(r);
+    return everyStack(r, (x) =>
+      canControl(x, StackReleaseStatus.Healthy, StackReleaseStatus.Paused, StackReleaseStatus.Degraded));
   },
 };
 
-export const pauseAction: ActionConfig<StackView, 'pauseDeployments' | 'resumeDeployments'> = {
+export const pauseAction: ActionConfig<StackView, 'pauseStacks' | 'resumeStacks'> = {
   key: 'pauseToggle',
   type: 'toggle',
   primary: {
     title: 'Pause',
     icon: Pause,
-    mutateKey: 'pauseDeployments',
+    mutateKey: 'pauseStacks',
     useVariables,
     canExecute: (r) => {
-      const can = (x: StackView) => x.status === StackReleaseStatus.Healthy && !isProcessing(x);
-      return Array.isArray(r) ? r.every(can) : can(r);
+      return everyStack(r, (x) => canControl(x, StackReleaseStatus.Healthy, StackReleaseStatus.Degraded));
     },
   },
   secondary: {
     title: 'Resume',
     icon: StepForward,
-    mutateKey: 'resumeDeployments',
+    mutateKey: 'resumeStacks',
     useVariables,
     canExecute: (r) => {
-      const can = (x: StackView) => x.status === StackReleaseStatus.Pending && !isProcessing(x);
-      return Array.isArray(r) ? r.every(can) : can(r);
+      return everyStack(r, (x) => canControl(x, StackReleaseStatus.Paused));
     },
   },
 };

@@ -13,7 +13,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs.WorkItems;
 
-
 internal sealed class ContainerDestroyedWorkItem(
     Guid platformId,
     DaemonContainerEventInfo eventInfo,
@@ -51,7 +50,14 @@ internal sealed class ContainerDestroyedWorkItem(
 
             if (existing.StackId != null)
             {
-                (stack, activityEvent) = await UpdateStackStatus(uow, existing.StackId.Value, StackReleaseStatus.Degraded, eventInfo.Container?.State ?? ContainerStateStatus.Unknown, existing.DockerContainerId, cancellationToken);
+                (stack, activityEvent) = await UpdateStackStatus(
+                    uow,
+                    existing.StackId.Value,
+                    [new StackContainerState(existing.DockerContainerId, eventInfo.Container?.State ?? ContainerStateStatus.Unknown)],
+                    eventInfo.Container?.State ?? ContainerStateStatus.Unknown,
+                    existing.DockerContainerId,
+                    StackReleaseStatus.Degraded,
+                    cancellationToken);
             }
 
             await uow.Containers.DeleteAsync([existing.Id], cancellationToken);
@@ -105,52 +111,35 @@ internal sealed class ContainerDestroyedWorkItem(
     }
 
     internal static async Task<(Stack?, ActivityEvent?)> UpdateStackStatus(IUnitOfWork uow,
-        Guid stackId, StackReleaseStatus status, ContainerStateStatus state, string containerId, CancellationToken cancellationToken)
+        Guid stackId,
+        IEnumerable<StackContainerState> containers,
+        ContainerStateStatus changedState,
+        string changedContainerId,
+        StackReleaseStatus? forcedStatus,
+        CancellationToken cancellationToken)
     {
         var stack = await uow.Stacks.GetInfoAsync(stackId, cancellationToken);
         if (stack is null) return (null, null);
-        // Docker daemon may emit multiple container events for a stack, resulting in duplicate activity entries.
-        // Todo: Aggregate events and only create one activity event per stack per status change.
-        var previousState = stack.CurrentStackRelease?.Status;
-        if (previousState == status) return (stack, null);
 
-        ActivityEventInfo? eventInfo = status switch
-        {
-            StackReleaseStatus.Healthy => new StackStarted([containerId]),
-            StackReleaseStatus.Stopped => new StackStopped([containerId]),
-            StackReleaseStatus.Pending => new StackPaused([containerId]),
-            StackReleaseStatus.Degraded => new StackDegraded(state != ContainerStateStatus.Running 
-                ? $"Container {containerId} changed state to {state}, causing the stack to become degraded."
-                : "One or more associated containers are not running normally."),
-            _ => null
-        };
-        
-        ActivityEventType type = status switch
-        {
-            StackReleaseStatus.Healthy => ActivityEventType.StackStarted,
-            StackReleaseStatus.Stopped => ActivityEventType.StackStopped,
-            StackReleaseStatus.Pending => ActivityEventType.StackPaused,
-            StackReleaseStatus.Degraded => ActivityEventType.StackDegraded,
-            _ => ActivityEventType.StackDegraded
-        };
+        var containerStates = containers.ToArray();
+        var status = forcedStatus ?? Stack.ToStackStatus(containerStates.Select(x => x.State));
 
-        if (eventInfo == null)
+        if (ShouldSkipStackStatusChange(stack, status))
         {
             return (stack, null);
         }
 
-        // When a stack is applying, we don't want to update the status & log the activities
         ActivityEvent? activity = null;
-        var inProgress = stack.CurrentStackRelease?.Status == StackReleaseStatus.Applying;
-        if (!inProgress)
+        var activityDescriptor = CreateStackActivity(status, containerStates, changedState, changedContainerId);
+        if (activityDescriptor is not null)
         {
             activity = new ActivityEvent(
-                    info: eventInfo,
-                    eventType: type,
+                    info: activityDescriptor.Info,
+                    eventType: activityDescriptor.EventType,
                     resourceId: stack.Id,
                     platformId: stack.CurrentStackRelease?.PlatformId,
                     resourceName: stack.Name,
-                    status: eventInfo is StackDegraded ? ActivityStatus.Warning : ActivityStatus.Success,
+                    status: activityDescriptor.Status,
                     actorId: stack.ControlTriggeredBy ?? Constants.SystemId
                     );
 
@@ -160,7 +149,7 @@ internal sealed class ContainerDestroyedWorkItem(
         stack.ReleaseProcessing(status);
         await uow.Stacks.UpdateProcessingAsync(
             id: stack.Id,
-            status: inProgress ? StackReleaseStatus.Applying : (stack.CurrentStackRelease?.Status ?? StackReleaseStatus.Unknown),
+            status: stack.CurrentStackRelease?.Status ?? StackReleaseStatus.Unknown,
             state: stack.ControlState,
             startedAt: stack.ControlStartedAt,
             rowVersion: stack.RowVersion,
@@ -169,6 +158,60 @@ internal sealed class ContainerDestroyedWorkItem(
             cancellationToken);
 
         return (stack, activity);
+    }
+
+    private static bool ShouldSkipStackStatusChange(Stack stack, StackReleaseStatus status)
+    {
+        var currentStatus = stack.CurrentStackRelease?.Status;
+        if (currentStatus == status) return true;
+        if (currentStatus == StackReleaseStatus.Applying) return true;
+
+        return stack.ControlState == ResourceControlState.Processing
+            && status is StackReleaseStatus.Pending or StackReleaseStatus.Degraded;
+    }
+
+    private static StackActivityDescriptor? CreateStackActivity(
+        StackReleaseStatus status,
+        IEnumerable<StackContainerState> containers,
+        ContainerStateStatus changedState,
+        string changedContainerId)
+    {
+        return status switch
+        {
+            StackReleaseStatus.Healthy => new StackActivityDescriptor(
+                new StackStarted(GetContainerIds(containers, ContainerStateStatus.Running)),
+                ActivityEventType.StackStarted,
+                ActivityStatus.Success),
+            StackReleaseStatus.Stopped => new StackActivityDescriptor(
+                new StackStopped(GetContainerIds(containers, ContainerStateStatus.Exited, ContainerStateStatus.Offline)),
+                ActivityEventType.StackStopped,
+                ActivityStatus.Success),
+            StackReleaseStatus.Paused => new StackActivityDescriptor(
+                new StackPaused(GetContainerIds(containers, ContainerStateStatus.Paused)),
+                ActivityEventType.StackPaused,
+                ActivityStatus.Success),
+            StackReleaseStatus.Degraded => new StackActivityDescriptor(
+                new StackDegraded(GetDegradedReason(changedState, changedContainerId)),
+                ActivityEventType.StackDegraded,
+                ActivityStatus.Warning),
+            _ => null
+        };
+    }
+
+    private static string GetDegradedReason(ContainerStateStatus changedState, string changedContainerId)
+    {
+        return changedState != ContainerStateStatus.Running
+            ? $"Container {changedContainerId} changed state to {changedState}, causing the stack to become degraded."
+            : "One or more associated containers are not running normally.";
+    }
+
+    private static string[] GetContainerIds(IEnumerable<StackContainerState> containers, params ContainerStateStatus[] states)
+    {
+        var acceptedStates = states.ToHashSet();
+        return [.. containers
+            .Where(container => acceptedStates.Contains(container.State))
+            .Select(container => container.ContainerId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
     internal static async Task<(Deployment?, ActivityEvent?)> UpdateDeploymentStatus(IUnitOfWork uow, Guid deploymentId,
@@ -233,3 +276,10 @@ internal sealed class ContainerDestroyedWorkItem(
         return (deployment, activity);
     }
 }
+
+internal sealed record StackContainerState(string ContainerId, ContainerStateStatus State);
+
+internal sealed record StackActivityDescriptor(
+    ActivityEventInfo Info,
+    ActivityEventType EventType,
+    ActivityStatus Status);

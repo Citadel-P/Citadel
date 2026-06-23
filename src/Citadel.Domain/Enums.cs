@@ -274,6 +274,7 @@ public enum StackReleaseStatus
     Applying,
     Healthy,
     Pending,
+    Paused,
     Degraded,
     Failed,
     Stopped

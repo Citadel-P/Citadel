@@ -49,6 +49,8 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
     case DeploymentStatus.Degraded:
     case StackReleaseStatus.Degraded:
       return { colorClass: 'bg-orange-500', tooltip: 'Degraded' };
+    case StackReleaseStatus.Paused:
+      return { colorClass: 'bg-orange-500', tooltip: 'Paused' };
     case DeploymentStatus.Applying:
     case DeploymentStatus.Pending:
     case StackReleaseStatus.Applying:

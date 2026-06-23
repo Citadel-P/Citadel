@@ -1044,6 +1044,38 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("applyStack");
 
+        stacks.MapPost("/stop", Stacks.Stop)
+            .WithSummary("Stop stacks")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("stopStacks");
+
+        stacks.MapPost("/start", Stacks.Start)
+            .WithSummary("Start stacks")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("startStacks");
+
+        stacks.MapPost("/pause", Stacks.Pause)
+            .WithSummary("Pause stacks")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("pauseStacks");
+
+        stacks.MapPost("/resume", Stacks.Resume)
+            .WithSummary("Resume stacks")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("resumeStacks");
+
         stacks.MapGet("{stackId}/data", Stacks.GetContainersData)
             .WithSummary("Get containers data")
             .ProducesValidationProblem()

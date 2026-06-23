@@ -425,161 +425,163 @@ export const StackForm = ({
             : []),
         ],
       }),
-      Advanced: defineSection<StackInput>({
-        title: 'Advanced',
-        items: currentStackSource
-          ? [
-              defineField<StackInput, 'spec.projectName'>({
-                key: 'spec.projectName',
-                label: 'Project Name',
-                description: 'Optional Docker Compose project name override.',
-                render: (value, set) => (
-                  <FieldInput
-                    value={value}
-                    onChange={(v) =>
-                      set((prev) => ({
-                        spec: {
-                          ...prev.spec!,
-                          projectName: v || null,
-                        },
-                      }))
-                    }
-                    placeholder="Optional project name"
-                  />
-                ),
-              }),
-              defineGroupField<StackInput>({
-                id: 'spec.preDeploy',
-                label: 'Pre Deploy',
-                title: 'Pre Deploy',
-                description:
-                  "Execute a shell command before running docker compose up. The 'path' is relative to the Run Directory",
-                items: [
-                  defineField({
-                    key: 'spec.preDeploy.path',
-                    label: 'Path',
-                    render: (val, set) => (
-                      <FieldInput
-                        value={val}
-                        onChange={(v) =>
-                          set((prev) => ({
-                            spec: {
-                              ...prev.spec!,
-                              preDeploy: {
-                                ...(prev.spec?.preDeploy ?? {}),
-                                path: v,
-                                commands: prev.spec?.preDeploy?.commands ?? [],
+      ...(currentStackSource
+        ? {
+            Advanced: defineSection<StackInput>({
+              title: 'Advanced',
+              items: [
+                defineField<StackInput, 'spec.projectName'>({
+                  key: 'spec.projectName',
+                  label: 'Project Name',
+                  description: 'Optional Docker Compose project name override.',
+                  render: (value, set) => (
+                    <FieldInput
+                      value={value}
+                      onChange={(v) =>
+                        set((prev) => ({
+                          spec: {
+                            ...prev.spec!,
+                            projectName: v || null,
+                          },
+                        }))
+                      }
+                      placeholder="Optional project name"
+                    />
+                  ),
+                }),
+                defineGroupField<StackInput>({
+                  id: 'spec.preDeploy',
+                  label: 'Pre Deploy',
+                  title: 'Pre Deploy',
+                  description:
+                    "Execute a shell command before running docker compose up. The 'path' is relative to the Run Directory",
+                  items: [
+                    defineField({
+                      key: 'spec.preDeploy.path',
+                      label: 'Path',
+                      render: (val, set) => (
+                        <FieldInput
+                          value={val}
+                          onChange={(v) =>
+                            set((prev) => ({
+                              spec: {
+                                ...prev.spec!,
+                                preDeploy: {
+                                  ...(prev.spec?.preDeploy ?? {}),
+                                  path: v,
+                                  commands: prev.spec?.preDeploy?.commands ?? [],
+                                },
                               },
-                            },
-                          }))
-                        }
-                        placeholder="Command working directory"
-                      />
-                    ),
-                  }),
-                  defineField({
-                    key: 'spec.preDeploy.commands',
-                    label: 'Commands',
-                    required: false,
-                    render: (value, set) => (
-                      <MonacoToArrayEditor
-                        value={value}
-                        helperText="# Add multiple commands on new lines"
-                        language="string_list"
-                        onChange={(v: string[] | undefined) =>
-                          set((prev) => ({
-                            spec: {
-                              ...prev.spec!,
-                              preDeploy: {
-                                ...(prev.spec?.preDeploy ?? {}),
-                                commands: v ?? [],
+                            }))
+                          }
+                          placeholder="Command working directory"
+                        />
+                      ),
+                    }),
+                    defineField({
+                      key: 'spec.preDeploy.commands',
+                      label: 'Commands',
+                      required: false,
+                      render: (value, set) => (
+                        <MonacoToArrayEditor
+                          value={value}
+                          helperText="# Add multiple commands on new lines"
+                          language="string_list"
+                          onChange={(v: string[] | undefined) =>
+                            set((prev) => ({
+                              spec: {
+                                ...prev.spec!,
+                                preDeploy: {
+                                  ...(prev.spec?.preDeploy ?? {}),
+                                  commands: v ?? [],
+                                },
                               },
-                            },
-                          }))
-                        }
-                      />
-                    ),
-                  }),
-                ],
-              }),
-              defineGroupField<StackInput>({
-                id: 'spec.postDeploy',
-                label: 'Post Deploy',
-                title: 'Post Deploy',
-                description:
-                  "Execute a shell command after running docker compose up. The 'path' is relative to the Run Directory",
-                items: [
-                  defineField({
-                    key: 'spec.postDeploy.path',
-                    label: 'Path',
-                    render: (val, set) => (
-                      <FieldInput
-                        value={val}
-                        onChange={(v) =>
-                          set((prev) => ({
-                            spec: {
-                              ...prev.spec!,
-                              postDeploy: {
-                                ...(prev.spec?.postDeploy ?? {}),
-                                path: v,
-                                commands: prev.spec?.postDeploy?.commands ?? [],
+                            }))
+                          }
+                        />
+                      ),
+                    }),
+                  ],
+                }),
+                defineGroupField<StackInput>({
+                  id: 'spec.postDeploy',
+                  label: 'Post Deploy',
+                  title: 'Post Deploy',
+                  description:
+                    "Execute a shell command after running docker compose up. The 'path' is relative to the Run Directory",
+                  items: [
+                    defineField({
+                      key: 'spec.postDeploy.path',
+                      label: 'Path',
+                      render: (val, set) => (
+                        <FieldInput
+                          value={val}
+                          onChange={(v) =>
+                            set((prev) => ({
+                              spec: {
+                                ...prev.spec!,
+                                postDeploy: {
+                                  ...(prev.spec?.postDeploy ?? {}),
+                                  path: v,
+                                  commands: prev.spec?.postDeploy?.commands ?? [],
+                                },
                               },
-                            },
-                          }))
-                        }
-                        placeholder="Command working directory"
-                      />
-                    ),
-                  }),
-                  defineField({
-                    key: 'spec.postDeploy.commands',
-                    label: 'Commands',
-                    required: false,
-                    render: (value, set) => (
-                      <MonacoToArrayEditor
-                        value={value}
-                        helperText="# Add multiple commands on new lines"
-                        language="string_list"
-                        onChange={(v: string[] | undefined) =>
-                          set((prev) => ({
-                            spec: {
-                              ...prev.spec!,
-                              postDeploy: {
-                                ...(prev.spec?.postDeploy ?? {}),
-                                commands: v ?? [],
+                            }))
+                          }
+                          placeholder="Command working directory"
+                        />
+                      ),
+                    }),
+                    defineField({
+                      key: 'spec.postDeploy.commands',
+                      label: 'Commands',
+                      required: false,
+                      render: (value, set) => (
+                        <MonacoToArrayEditor
+                          value={value}
+                          helperText="# Add multiple commands on new lines"
+                          language="string_list"
+                          onChange={(v: string[] | undefined) =>
+                            set((prev) => ({
+                              spec: {
+                                ...prev.spec!,
+                                postDeploy: {
+                                  ...(prev.spec?.postDeploy ?? {}),
+                                  commands: v ?? [],
+                                },
                               },
-                            },
-                          }))
-                        }
-                      />
-                    ),
-                  }),
-                ],
-              }),
+                            }))
+                          }
+                        />
+                      ),
+                    }),
+                  ],
+                }),
 
-              defineField({
-                key: 'spec.destroyBeforeDeploy',
-                label: 'Destroy',
-                description: `Ensure 'docker compose down' is run before redeploying the Stack.`,
-                required: false,
-                render: (value, set) => (
-                  <FieldSwitch
-                    checked={value ?? false}
-                    id="spec.destroyBeforeDeploy"
-                    onChange={(value) =>
-                      set((prev) => ({
-                        spec: {
-                          ...prev.spec!,
-                          destroyBeforeDeploy: value,
-                        },
-                      }))
-                    }
-                  />
-                ),
-              }),
-            ]
-          : [],
-      }),
+                defineField({
+                  key: 'spec.destroyBeforeDeploy',
+                  label: 'Destroy',
+                  description: `Ensure 'docker compose down' is run before redeploying the Stack.`,
+                  required: false,
+                  render: (value, set) => (
+                    <FieldSwitch
+                      checked={value ?? false}
+                      id="spec.destroyBeforeDeploy"
+                      onChange={(value) =>
+                        set((prev) => ({
+                          spec: {
+                            ...prev.spec!,
+                            destroyBeforeDeploy: value,
+                          },
+                        }))
+                      }
+                    />
+                  ),
+                }),
+              ],
+            }),
+          }
+        : {}),
     }),
     [disabled, mode, id, currentStackSource],
   );

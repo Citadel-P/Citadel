@@ -118,4 +118,28 @@ public static class Stacks
             yield return reply;
         }
     }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Stop(IMediator mediator, [FromBody] Guid[] stackIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeStackState(stackIds, StackAction.STOP), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Start(IMediator mediator, [FromBody] Guid[] stackIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeStackState(stackIds, StackAction.START), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Pause(IMediator mediator, [FromBody] Guid[] stackIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeStackState(stackIds, StackAction.PAUSE), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Resume(IMediator mediator, [FromBody] Guid[] stackIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeStackState(stackIds, StackAction.UNPAUSE), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
 }

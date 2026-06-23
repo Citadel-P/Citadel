@@ -149,6 +149,9 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         if (containerStates.All(x => x == ContainerStateStatus.Running))
             return StackReleaseStatus.Healthy;
 
+        if (containerStates.All(x => x == ContainerStateStatus.Paused))
+            return StackReleaseStatus.Paused;
+
         if (containerStates.All(x =>
                 x is ContainerStateStatus.Exited or ContainerStateStatus.Offline))
             return StackReleaseStatus.Stopped;
@@ -159,15 +162,13 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
                 or ContainerStateStatus.Removing))
             return StackReleaseStatus.Pending;
 
-        var runningCount = containerStates.Count(x => x == ContainerStateStatus.Running);
-
-        if (runningCount == 0)
+        if (containerStates.All(x => x == ContainerStateStatus.Dead))
             return StackReleaseStatus.Failed;
 
-        if (runningCount < containerStates.Count)
-            return StackReleaseStatus.Degraded;
+        if (containerStates.All(x => x == ContainerStateStatus.Unknown))
+            return StackReleaseStatus.Unknown;
 
-        return StackReleaseStatus.Unknown;
+        return StackReleaseStatus.Degraded;
     }
 
     private static StackUpdateState CreateDefaultUpdateState(StackSource stackSource, StackSpec spec)
