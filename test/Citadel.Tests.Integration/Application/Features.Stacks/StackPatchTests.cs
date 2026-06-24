@@ -49,6 +49,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
             platform.Id,
             new ManualStack("docker-compose.yml", StackUpdateBehavior.ServiceAutoDeploy),
             description: "original-description");
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
 
         await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
@@ -59,7 +60,7 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
     }
 
     [Fact]
-    public async Task Patch_Stack_Should_Update_Details_And_Create_New_Release()
+    public async Task Patch_Stack_Should_Update_Current_Release_Definition_Without_Creating_New_Release()
     {
         var patchJson = $$"""
         {
@@ -84,10 +85,74 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         Assert.NotNull(stack);
         Assert.Equal("stack-1", stack.Name);
         Assert.Equal("original-description", stack.Description);
-        Assert.Equal(2, releases.Count);
-        Assert.Equal("2", stack.CurrentStackRelease!.Version);
+        Assert.Single(releases);
+        Assert.Equal("1", stack.CurrentStackRelease!.Version);
+        Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease.Status);
         Assert.Equal(otherPlatformId, stack.CurrentStackRelease.PlatformId);
         Assert.Equal(stack.CurrentStackReleaseId, stack.CurrentStackRelease.Id);
+        Assert.Equal("compose.updated.yml", Assert.IsType<ManualStack>(stack.CurrentStackRelease.Spec).ComposeFile);
+    }
+
+    [Fact]
+    public async Task Patch_Stack_DriftPolicy_Should_Not_Create_New_Release_Or_Reset_Status()
+    {
+        var patchJson = """
+        {
+          "driftPolicy": {
+            "mode": "AutoFix",
+            "alertOnDrift": true,
+            "markDegraded": true,
+            "autoStartStoppedContainers": true,
+            "autoResumePausedContainers": false,
+            "removeExtraContainers": false
+          }
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/stacks/{stackId}", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = await uow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+        var releases = (await uow.Stacks.GetReleasesByStackIdAsync(stackId, TestContext.Current.CancellationToken)).ToList();
+
+        Assert.NotNull(stack);
+        Assert.Single(releases);
+        Assert.Equal("1", stack.CurrentStackRelease!.Version);
+        Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease.Status);
+        Assert.Equal(StackDriftMode.AutoFix, stack.DriftPolicy.Mode);
+        Assert.True(stack.DriftPolicy.AutoStartStoppedContainers);
+    }
+
+    [Fact]
+    public async Task Patch_Stack_With_Partial_Spec_Should_Not_Require_Type_Discriminator()
+    {
+        var patchJson = """
+        {
+          "spec": {
+            "envFilePath": ".env"
+          }
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/stacks/{stackId}", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = await uow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+        var releases = (await uow.Stacks.GetReleasesByStackIdAsync(stackId, TestContext.Current.CancellationToken)).ToList();
+
+        Assert.NotNull(stack);
+        Assert.Single(releases);
+        Assert.Equal("1", stack.CurrentStackRelease!.Version);
+        Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease.Status);
+        Assert.Equal(".env", Assert.IsType<ManualStack>(stack.CurrentStackRelease.Spec).EnvFilePath);
     }
 
     [Fact]

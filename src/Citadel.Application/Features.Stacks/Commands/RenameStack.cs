@@ -2,6 +2,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
+using Application.Services;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -41,6 +42,8 @@ internal sealed class RenameStackHandler(IUnitOfWork unitOfWork, IUserContextAcc
             return Result.Failure<Stack>(new ConflictError("Name already exists"));
         }
 
+        var currentProjectName = StackProjectNameResolver.Resolve(stack);
+
         var activity = new ActivityEvent(
             actorId: actorId,
             resourceId: stack.Id,
@@ -51,6 +54,7 @@ internal sealed class RenameStackHandler(IUnitOfWork unitOfWork, IUserContextAcc
             info: new StackRenamed(stack.Name, command.Name)
            );
 
+        stack.PinCurrentStackProjectName(currentProjectName);
         stack.UpdateDetails(name: command.Name);
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);

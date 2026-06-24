@@ -102,6 +102,24 @@ const normalizeDriftPolicy = (policy?: Partial<StackDriftPolicy> | null): StackD
   return next;
 };
 
+const specTypeForSource = (stackSource?: StackSource): 'Git' | 'WebEditor' | undefined =>
+  stackSource === StackSource.Git ? 'Git' : stackSource === StackSource.WebEditor ? 'WebEditor' : undefined;
+
+const toPatchStackInput = (patch: Partial<StackInput>, original: StackConfigView): PatchStackInput => {
+  const data: Partial<PatchStackInput> = {};
+
+  if ('platformId' in patch) data.platformId = patch.platformId;
+  if ('spec' in patch && patch.spec) {
+    data.spec = {
+      ...patch.spec,
+      $type: (patch.spec as any).$type ?? (original.spec as any)?.$type ?? specTypeForSource(original.stackSource),
+    } as PatchStackInput['spec'];
+  }
+  if ('driftPolicy' in patch) data.driftPolicy = patch.driftPolicy;
+
+  return data as PatchStackInput;
+};
+
 export const StackForm = ({
   mode,
   metadataChanged,
@@ -144,14 +162,10 @@ export const StackForm = ({
     basePath: 'stacks',
     entityName: 'Stack',
     onCreate: (payload) => createStack({ data: payload as CreateStackInput }),
-    onUpdate: (payload) =>
+    onUpdate: () =>
       updateStack({
         id,
-        data: {
-          platformId: payload.platformId,
-          spec: payload.spec,
-          driftPolicy: payload.driftPolicy,
-        } as PatchStackInput,
+        data: toPatchStackInput(update, original),
       }),
     onRefresh: refreshData,
   });

@@ -72,6 +72,17 @@ public sealed class StackRelease : IAuditedEntity
         Status = status;
     }
 
+    public void UpdateSpec(StackSpec spec)
+    {
+        Spec = spec;
+    }
+
+    public void UpdateDefinition(Guid platformId, StackSpec spec)
+    {
+        PlatformId = platformId;
+        Spec = spec;
+    }
+
     public static string GetNextVersion(string currentVersion)
     {
         if (int.TryParse(currentVersion, out var currentVersionNumber))
