@@ -140,10 +140,53 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         if (driftPolicy != null) DriftPolicy = driftPolicy.Normalize();
     }
 
+    public void PinCurrentStackProjectName(string projectName)
+    {
+        if (CurrentStackRelease?.Spec is null || string.IsNullOrWhiteSpace(projectName))
+            return;
+
+        if (!string.IsNullOrWhiteSpace(CurrentStackRelease.Spec.ProjectName))
+            return;
+
+        var spec = CurrentStackRelease.Spec switch
+        {
+            ManualStack manual => manual with { ProjectName = projectName },
+            GitStack git => git with { ProjectName = projectName },
+            _ => CurrentStackRelease.Spec
+        };
+
+        CurrentStackRelease.UpdateSpec(spec);
+    }
+
     public void SetCurrentStackRelease(StackRelease stackRelease)
     {
         CurrentStackRelease = stackRelease;
         CurrentStackReleaseId = stackRelease.Id;
+    }
+
+    public bool UpdateCurrentStackReleaseDefinition(Guid platformId, StackSpec spec)
+    {
+        if (CurrentStackRelease is null) return false;
+
+        CurrentStackRelease.UpdateDefinition(platformId, spec);
+        return true;
+    }
+
+    public bool PrepareReleaseForApply(Guid actorId)
+    {
+        if (CurrentStackRelease is null) return false;
+
+        if (CurrentStackRelease.Status == StackReleaseStatus.Created)
+            return true;
+
+        SetCurrentStackRelease(StackRelease.Create(
+            stackId: Id,
+            platformId: CurrentStackRelease.PlatformId,
+            spec: CurrentStackRelease.Spec,
+            createdByActorId: actorId,
+            version: StackRelease.GetNextVersion(CurrentStackRelease.Version)));
+
+        return true;
     }
 
     public void SetStackUpdateState(StackUpdateState stackUpdateState)

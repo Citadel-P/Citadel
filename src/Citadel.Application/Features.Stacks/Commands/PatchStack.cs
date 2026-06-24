@@ -11,34 +11,26 @@ using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using System.Text.Json;
 
 namespace Application.Features.Stacks.Commands;
 
 [RequirePermission(ResourceType.Stack, PermissionLevel.Write)]
 public sealed record PatchStack(Guid Id, JsonMergePatchDocument<StackPatchModel> Patch) : ICommand<Result<Stack>>
 {
-    internal sealed class Validator : PatchCommandValidator<PatchStack, StackPatchModel>
+    internal sealed class Validator : AbstractValidator<PatchStack>
     {
         public Validator()
-            : base(
-                patchSelector: x => x.Patch,
-                jsonTypeInfo: StackJsonContext.Default.StackPatchModel,
-                modelValidator: new StackPatchModelValidator())
-        { }
-    }
-
-    internal sealed class StackPatchModelValidator : AbstractValidator<StackPatchModel>
-    {
-        public StackPatchModelValidator()
         {
-            RuleFor(x => x.DriftPolicy).Must(BeSafePolicy)
-                .WithMessage("RemoveExtraContainers can only be enabled when drift mode is AutoFix.");
-        }
+            RuleFor(x => x.Patch)
+                .NotNull()
+                .WithMessage("Patch cannot be null.");
 
-        private static bool BeSafePolicy(StackDriftPolicy? policy)
-            => policy is null
-            || !policy.RemoveExtraContainers
-            || policy.Mode == StackDriftMode.AutoFix;
+            RuleFor(x => x.Patch.Patch)
+                .Must(patch => patch.ValueKind == JsonValueKind.Object)
+                .WithMessage("Patch must be a JSON object.")
+                .When(x => x.Patch is not null);
+        }
     }
 }
 
@@ -62,6 +54,11 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
             DriftPolicy: stack.DriftPolicy);
 
         var patched = command.Patch.ApplyTo(current, StackJsonContext.Default.StackPatchModel);
+
+        if (patched.DriftPolicy is { RemoveExtraContainers: true, Mode: not StackDriftMode.AutoFix })
+        {
+            return Result.Failure<Stack>(new BadRequestError("RemoveExtraContainers can only be enabled when drift mode is AutoFix."));
+        }
 
         if (patched.PlatformId == null || patched.PlatformId == Guid.Empty)
         {
@@ -101,19 +98,9 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
 
         var oldSnapshot = stack.ToSnapshot();
 
-        var releaseChanged = patched.PlatformId.Value != stack.CurrentStackRelease.PlatformId
-            || !Equals(patched.Spec, stack.CurrentStackRelease.Spec);
-
-        if (releaseChanged)
+        if (PatchTouchesReleaseDefinition(command.Patch.Patch))
         {
-            var nextRelease = StackRelease.Create(
-                stackId: stack.Id,
-                platformId: patched.PlatformId.Value,
-                spec: patched.Spec,
-                createdByActorId: actorId,
-                version: StackRelease.GetNextVersion(stack.CurrentStackRelease.Version));
-
-            stack.SetCurrentStackRelease(nextRelease);
+            stack.UpdateCurrentStackReleaseDefinition(patched.PlatformId.Value, patched.Spec);
         }
 
         stack.UpdateDetails(driftPolicy: patched.DriftPolicy);
@@ -148,4 +135,23 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
             (StackSource.Git, GitStackUpdateState) => true,
             _ => false
         };
+
+    private static bool PatchTouchesReleaseDefinition(JsonElement patch)
+    {
+        if (patch.ValueKind != JsonValueKind.Object)
+            return false;
+
+        foreach (var property in patch.EnumerateObject())
+        {
+            if (property.NameEquals(nameof(StackPatchModel.PlatformId))
+                || property.NameEquals("platformId")
+                || property.NameEquals(nameof(StackPatchModel.Spec))
+                || property.NameEquals("spec"))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

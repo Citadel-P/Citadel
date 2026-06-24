@@ -85,17 +85,14 @@ internal class ApplyStackService(
         }
 
         string projectName;
-        string composeFileContent;
         string? projectSetupError = null;
         try
         {
             projectName = StackProjectNameResolver.Resolve(stack);
-            composeFileContent = StackComposeLabelInjector.Inject(manualStack.ComposeFile, stack.Id, currentRelease.Id);
         }
         catch (InvalidOperationException ex)
         {
             projectName = string.Empty;
-            composeFileContent = string.Empty;
             projectSetupError = $"❌ {ex.Message}";
         }
 
@@ -147,6 +144,10 @@ internal class ApplyStackService(
         }
 
         await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, markResult.Stack!), ct);
+        stack = markResult.Stack!;
+        currentRelease = stack.CurrentStackRelease!;
+        manualStack = (ManualStack)currentRelease.Spec;
+        var composeFileContent = StackComposeLabelInjector.Inject(manualStack.ComposeFile, stack.Id, currentRelease.Id);
 
         var isServiceScopedApply = serviceNames is { Count: > 0 };
         yield return StackStreamItem.FromStdOut(isServiceScopedApply
@@ -397,6 +398,11 @@ internal class ApplyStackService(
         if (stack is null)
         {
             return (false, null, $"Stack with ID {stackId} not found.");
+        }
+
+        if (!stack.PrepareReleaseForApply(actorId))
+        {
+            return (false, null, "Stack has no release to apply.");
         }
 
         if (!stack.MarkProcessing(actorId))
