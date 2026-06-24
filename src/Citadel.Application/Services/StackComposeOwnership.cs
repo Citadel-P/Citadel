@@ -13,7 +13,8 @@ internal static class ComposeLabels
 
 internal static class CitadelLabels
 {
-    public const string Prefix = "x-citadel.";
+    public const string Prefix = "com.citadel.";
+    public const string LegacyExtensionPrefix = "x-citadel.";
     public const string Managed = Prefix + "managed";
     public const string StackId = Prefix + "stack-id";
     public const string ReleaseId = Prefix + "release-id";
@@ -22,6 +23,8 @@ internal static class CitadelLabels
 
 internal static class StackContainerOwnership
 {
+    private const string ComposeExtensionsLabel = "#extensions";
+
     public static ContainerFilterCommand CreateOwnedContainerFilter(
         string platformAddress,
         string projectName,
@@ -41,16 +44,72 @@ internal static class StackContainerOwnership
             });
 
     public static bool IsOwnedByStack(IReadOnlyDictionary<string, string> labels, Guid stackId)
-        => labels.TryGetValue(CitadelLabels.Managed, out var managed)
+        => TryGetLabelValue(labels, CitadelLabels.Managed, CitadelLabels.LegacyExtensionPrefix + "managed", out var managed)
            && string.Equals(managed, "true", StringComparison.OrdinalIgnoreCase)
-           && labels.TryGetValue(CitadelLabels.StackId, out var owner)
+           && TryGetLabelValue(labels, CitadelLabels.StackId, CitadelLabels.LegacyExtensionPrefix + "stack-id", out var owner)
            && string.Equals(owner, FormatStackId(stackId), StringComparison.OrdinalIgnoreCase);
 
     public static bool IsCitadelManaged(IReadOnlyDictionary<string, string> labels)
-        => labels.TryGetValue(CitadelLabels.Managed, out var managed)
+        => TryGetLabelValue(labels, CitadelLabels.Managed, CitadelLabels.LegacyExtensionPrefix + "managed", out var managed)
            && string.Equals(managed, "true", StringComparison.OrdinalIgnoreCase);
 
     public static string FormatStackId(Guid stackId) => stackId.ToString("D");
+
+    private static bool TryGetLabelValue(
+        IReadOnlyDictionary<string, string> labels,
+        string key,
+        string legacyExtensionKey,
+        out string value)
+    {
+        if (labels.TryGetValue(key, out value!))
+        {
+            return true;
+        }
+
+        if (labels.TryGetValue(legacyExtensionKey, out value!))
+        {
+            return true;
+        }
+
+        if (labels.TryGetValue(ComposeExtensionsLabel, out var extensions)
+            && TryGetExtensionValue(extensions, legacyExtensionKey, out value))
+        {
+            return true;
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
+    private static bool TryGetExtensionValue(string extensions, string key, out string value)
+    {
+        value = string.Empty;
+        var prefix = "map[";
+        if (!extensions.StartsWith(prefix, StringComparison.Ordinal) || !extensions.EndsWith(']'))
+        {
+            return false;
+        }
+
+        var content = extensions[prefix.Length..^1];
+        foreach (var item in content.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separatorIndex = item.IndexOf(':', StringComparison.Ordinal);
+            if (separatorIndex <= 0)
+            {
+                continue;
+            }
+
+            if (!string.Equals(item[..separatorIndex], key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            value = item[(separatorIndex + 1)..];
+            return true;
+        }
+
+        return false;
+    }
 }
 
 internal static class StackComposeLabelInjector
@@ -148,7 +207,8 @@ internal static class StackComposeLabelInjector
     private static void RejectReservedLabel(string? key)
     {
         if (!string.IsNullOrWhiteSpace(key)
-            && key.StartsWith(CitadelLabels.Prefix, StringComparison.OrdinalIgnoreCase))
+            && (key.StartsWith(CitadelLabels.Prefix, StringComparison.OrdinalIgnoreCase)
+                || key.StartsWith(CitadelLabels.LegacyExtensionPrefix, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException($"Compose service label '{key}' is reserved by Citadel.");
         }

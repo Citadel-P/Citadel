@@ -296,8 +296,7 @@ internal sealed class StackReconciliationResultWorkItem(
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
-        if (result.Actions.Count == 0
-            && result.Status is StackReconciliationStatus.NoDrift or StackReconciliationStatus.Disabled)
+        if (result.Actions.Count == 0)
         {
             return;
         }

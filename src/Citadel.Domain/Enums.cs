@@ -306,7 +306,8 @@ public enum StackReconciliationStatus
 public enum StackReconciliationActionType
 {
     StartContainer = 0,
-    ResumeContainer = 1
+    ResumeContainer = 1,
+    RemoveContainer = 2
 }
 
 public enum DeploymentSource 

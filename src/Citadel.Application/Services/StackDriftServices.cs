@@ -3,6 +3,9 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Stacks;
+using Application.Services.SignalR;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Microsoft.Extensions.DependencyInjection;
 using System.Security.Cryptography;
 using System.Text;
@@ -242,13 +245,12 @@ internal sealed class ManualStackDriftChecker(
     {
         if (stack.StackSource != StackSource.WebEditor)
         {
-            return new StackDriftReport(
-                StackId: stack.Id,
-                PlatformId: stack.PlatformId,
-                HasDrift: false,
-                HasAutoFixableDrift: false,
-                HasStructuralDrift: false,
-                Drifts: []);
+            return NoDrift(stack);
+        }
+
+        if (stack.Status is StackReleaseStatus.Stopped or StackReleaseStatus.Paused)
+        {
+            return NoDrift(stack);
         }
 
         var desired = await desiredStateProvider.GetDesiredStateAsync(stack, cancellationToken);
@@ -263,6 +265,15 @@ internal sealed class ManualStackDriftChecker(
             HasStructuralDrift: drifts.Any(StackDriftHelpers.IsStructural),
             Drifts: drifts);
     }
+
+    private static StackDriftReport NoDrift(StackDriftStack stack)
+        => new(
+            StackId: stack.Id,
+            PlatformId: stack.PlatformId,
+            HasDrift: false,
+            HasAutoFixableDrift: false,
+            HasStructuralDrift: false,
+            Drifts: []);
 
     private async Task<StackDriftStack> LoadStackAsync(Guid stackId, CancellationToken cancellationToken)
     {
@@ -334,6 +345,8 @@ internal sealed class StackReconciler(
     IServiceScopeFactory scopeFactory,
     IStackDriftChecker driftChecker,
     IPlatformContainerCache platformCache,
+    INotificationQueue notificationQueue,
+    IStackStreamManager stackHub,
     IConnectorFactory<IContainerConnector> connectorFactory) : IStackReconciler
 {
     public async Task<StackReconciliationResult> ReconcileAsync(Guid stackId, CancellationToken cancellationToken)
@@ -345,12 +358,21 @@ internal sealed class StackReconciler(
 
         if (stack.DriftPolicy.Mode != StackDriftMode.AutoFix)
         {
-            return new StackReconciliationResult(stack.Id, StackReconciliationStatus.Disabled, beforeReport, AfterReport: null, []);
+            throw new InvalidOperationException("Stack sync failed because drift auto-fix is not enabled for this stack.");
         }
 
         if (!beforeReport.HasDrift)
         {
             return new StackReconciliationResult(stack.Id, StackReconciliationStatus.NoDrift, beforeReport, AfterReport: null, []);
+        }
+
+        if (!beforeReport.Drifts.Any(drift => CanApply(stack.DriftPolicy, drift)))
+        {
+            var status = beforeReport.HasStructuralDrift
+                ? StackReconciliationStatus.RequiresReapply
+                : StackReconciliationStatus.Partial;
+
+            return new StackReconciliationResult(stack.Id, status, beforeReport, AfterReport: null, []);
         }
 
         if (!platformCache.TryGetCacheEntry(beforeReport.PlatformId, out var platform, out var error))
@@ -360,25 +382,40 @@ internal sealed class StackReconciler(
 
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
         var actions = new List<StackReconciliationAction>();
+        var processedStack = await MarkProcessingAsync(stack.Id, cancellationToken);
+        await NotifyProcessingAsync(processedStack, cancellationToken);
 
-        foreach (var drift in beforeReport.Drifts)
+        try
         {
-            if (drift is ContainerStopped stopped && stack.DriftPolicy.AutoStartStoppedContainers)
+            foreach (var drift in beforeReport.Drifts)
             {
-                actions.Add(await PatchContainer(connector, platform.Address, stopped.ContainerId, stopped.ServiceName, StackReconciliationActionType.StartContainer, ContainerAction.START, cancellationToken));
+                if (drift is ContainerStopped stopped && stack.DriftPolicy.AutoStartStoppedContainers)
+                {
+                    actions.Add(await PatchContainer(connector, platform.Address, stopped.ContainerId, stopped.ServiceName, StackReconciliationActionType.StartContainer, ContainerAction.START, cancellationToken));
+                }
+                else if (drift is ContainerPaused paused && stack.DriftPolicy.AutoResumePausedContainers)
+                {
+                    actions.Add(await PatchContainer(connector, platform.Address, paused.ContainerId, paused.ServiceName, StackReconciliationActionType.ResumeContainer, ContainerAction.UNPAUSE, cancellationToken));
+                }
+                else if (drift is ExtraContainer extra && stack.DriftPolicy.RemoveExtraContainers)
+                {
+                    actions.Add(await RemoveContainer(connector, platform.Address, extra.ContainerId, extra.ServiceName, cancellationToken));
+                }
             }
-            else if (drift is ContainerPaused paused && stack.DriftPolicy.AutoResumePausedContainers)
-            {
-                actions.Add(await PatchContainer(connector, platform.Address, paused.ContainerId, paused.ServiceName, StackReconciliationActionType.ResumeContainer, ContainerAction.UNPAUSE, cancellationToken));
-            }
+
+            var afterReport = actions.Count == 0
+                ? null
+                : await driftChecker.CheckAsync(stack.Id, cancellationToken);
+            var status = GetStatus(beforeReport, afterReport, actions);
+            await ReleaseProcessingAsync(processedStack, GetReleaseStatus(stack, processedStack.PreviousStatus, afterReport), cancellationToken);
+
+            return new StackReconciliationResult(stack.Id, status, beforeReport, afterReport, actions);
         }
-
-        var afterReport = actions.Count == 0
-            ? null
-            : await driftChecker.CheckAsync(stack.Id, cancellationToken);
-        var status = GetStatus(beforeReport, afterReport, actions);
-
-        return new StackReconciliationResult(stack.Id, status, beforeReport, afterReport, actions);
+        catch
+        {
+            await ReleaseProcessingAsync(processedStack, processedStack.PreviousStatus, cancellationToken);
+            throw;
+        }
 
         static async Task<StackReconciliationAction> PatchContainer(
             IContainerConnector connector,
@@ -397,6 +434,22 @@ internal sealed class StackReconciler(
                 ? new StackReconciliationAction(containerId, serviceName, actionType, Succeeded: false, patchError.Message)
                 : new StackReconciliationAction(containerId, serviceName, actionType, Succeeded: true);
         }
+
+        static async Task<StackReconciliationAction> RemoveContainer(
+            IContainerConnector connector,
+            string platformAddress,
+            string containerId,
+            string serviceName,
+            CancellationToken cancellationToken)
+        {
+            var result = await connector.DeleteAsync(
+                new DeleteContainerCommand([containerId], platformAddress, Volume: false, Force: true, Link: false),
+                cancellationToken);
+
+            return result.IsFailure(out var deleteError)
+                ? new StackReconciliationAction(containerId, serviceName, StackReconciliationActionType.RemoveContainer, Succeeded: false, deleteError.Message)
+                : new StackReconciliationAction(containerId, serviceName, StackReconciliationActionType.RemoveContainer, Succeeded: true);
+        }
     }
 
     private async Task<StackDriftStack> LoadStackAsync(Guid stackId, CancellationToken cancellationToken)
@@ -406,6 +459,80 @@ internal sealed class StackReconciler(
         return await unitOfWork.Stacks.GetDriftStackAsync(stackId, cancellationToken)
             ?? throw new InvalidOperationException("The provided stack does not exist.");
     }
+
+    private async Task<ProcessedStack> MarkProcessingAsync(Guid stackId, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var userContext = scope.ServiceProvider.GetRequiredService<IUserContextAccessor>();
+        var actorId = userContext.Current.ActorId == Guid.Empty
+            ? Constants.SystemId
+            : userContext.Current.ActorId;
+
+        var stack = await unitOfWork.Stacks.GetAsync(stackId, cancellationToken)
+            ?? throw new InvalidOperationException("The provided stack does not exist.");
+
+        if (stack.CurrentStackRelease is null)
+        {
+            throw new InvalidOperationException("The provided stack does not have a current release.");
+        }
+
+        var previousStatus = stack.CurrentStackRelease.Status;
+        if (!stack.MarkProcessing(actorId))
+        {
+            throw new InvalidOperationException("The stack is already being processed.");
+        }
+
+        var affectedRow = await unitOfWork.Stacks.UpdateProcessingAsync(
+            stack.Id,
+            stack.CurrentStackRelease.Status,
+            stack.ControlState,
+            stack.ControlStartedAt,
+            stack.RowVersion,
+            checkRowVersion: true,
+            actorId,
+            cancellationToken);
+
+        if (!affectedRow)
+        {
+            throw new InvalidOperationException("The stack is already being processed.");
+        }
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        return new ProcessedStack(stack, previousStatus, actorId);
+    }
+
+    private async Task ReleaseProcessingAsync(ProcessedStack processedStack, StackReleaseStatus status, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        processedStack.Stack.ReleaseProcessing(status);
+        await unitOfWork.Stacks.UpdateProcessingAsync(
+            processedStack.Stack.Id,
+            status,
+            processedStack.Stack.ControlState,
+            processedStack.Stack.ControlStartedAt,
+            processedStack.Stack.RowVersion,
+            checkRowVersion: false,
+            processedStack.ActorId,
+            cancellationToken);
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        await NotifyProcessingAsync(processedStack, cancellationToken);
+    }
+
+    private Task NotifyProcessingAsync(ProcessedStack processedStack, CancellationToken cancellationToken)
+        => notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, processedStack.Stack), cancellationToken).AsTask();
+
+    private static bool CanApply(StackDriftPolicy policy, StackDrift drift)
+        => drift switch
+        {
+            ContainerStopped => policy.AutoStartStoppedContainers,
+            ContainerPaused => policy.AutoResumePausedContainers,
+            ExtraContainer => policy.RemoveExtraContainers,
+            _ => false
+        };
 
     private static void ValidateCanReconcile(StackDriftStack stack)
     {
@@ -439,16 +566,31 @@ internal sealed class StackReconciler(
             ? StackReconciliationStatus.Reconciled
             : StackReconciliationStatus.Partial;
     }
+
+    private static StackReleaseStatus GetReleaseStatus(
+        StackDriftStack stack,
+        StackReleaseStatus previousStatus,
+        StackDriftReport? afterReport)
+    {
+        if (afterReport is { HasDrift: false })
+            return StackReleaseStatus.Healthy;
+
+        if (afterReport is { HasDrift: true } && stack.DriftPolicy.MarkDegraded)
+            return StackReleaseStatus.Degraded;
+
+        return previousStatus;
+    }
+
+    private sealed record ProcessedStack(Stack Stack, StackReleaseStatus PreviousStatus, Guid ActorId);
 }
 
 internal static class StackDriftHelpers
 {
     public static bool IsAutoFixable(StackDrift drift)
-        => drift is ContainerStopped or ContainerPaused;
+        => drift is ContainerStopped or ContainerPaused or ExtraContainer;
 
     public static bool IsStructural(StackDrift drift)
         => drift is MissingContainer
-            or ExtraContainer
             or ImageMismatch
             or ConfigHashMismatch;
 
