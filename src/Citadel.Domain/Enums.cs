@@ -552,6 +552,8 @@ public enum AlertType
     StackImageUpdateAvailable,
     StackAutoDeployFailed,
     StackAutoUpdated,
+    StackServiceAutoDeployFailed,
+    StackServiceAutoUpdated,
     StackDriftDetected,
     #endregion
 }

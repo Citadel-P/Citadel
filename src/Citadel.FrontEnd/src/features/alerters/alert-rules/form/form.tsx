@@ -96,6 +96,8 @@ export const AlertRuleForm = ({
     AlertType.UnmanagedContainerCreated,
     AlertType.StackAutoUpdated,
     AlertType.StackAutoDeployFailed,
+    AlertType.StackServiceAutoUpdated,
+    AlertType.StackServiceAutoDeployFailed,
     AlertType.DeploymentAutoUpdated,
     AlertType.DeploymentAutoDeployFailed,
   ];

@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { StackView, ResourceControlState } from '@/api/generated/api.types';
+import { AutoUpdateStatus, ImageUpdateState, ResourceControlState, StackView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -10,8 +10,11 @@ import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
-import { PlatformStatusCell } from '@/components/custom/common';
+import { PlatformStatusCell, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
 import { truncate } from '@/lib/truncate';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { fromNow } from '@/lib/dayjs.helper';
+import { formatId } from '@/lib/utils';
 
 export const StacksTable = ({
   items,
@@ -66,6 +69,13 @@ const columns = (
     cell: ({ row }) => <StackNameRow stack={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
+  {
+    accessorKey: 'updateStatus',
+    header: ({ column }) => <SortableCell cellName="Update Status" column={column} />,
+    cell: ({ row }) => <StackUpdateStatusCell stack={row.original} />,
+    sortingFn: (rowA, rowB) =>
+      getStackUpdateStatus(rowA.original).localeCompare(getStackUpdateStatus(rowB.original)),
+  },
 
   {
     accessorKey: 'platform',
@@ -111,4 +121,83 @@ const StackNameRow = ({ stack }: { stack: StackView }) => {
       </span>
     </div>
   );
+};
+
+const StackUpdateStatusCell = ({ stack }: { stack: StackView }) => {
+  const states = getStackImageUpdateStates(stack);
+  const status = getStackUpdateStatus(stack);
+  const { label } = UPDATE_STATUS_UI[status];
+
+  if (status === AutoUpdateStatus.Unknown) {
+    return <span className="text-muted-foreground text-sm">{'<none>'}</span>;
+  }
+
+  const updatedAt = states
+    .map((state) => new Date(state.lastCheckedAt).getTime())
+    .filter((value) => !Number.isNaN(value))
+    .sort((a, b) => b - a)[0];
+
+  return (
+    <HoverCard openDelay={150} closeDelay={150}>
+      <HoverCardTrigger asChild>
+        <div className="inline-flex cursor-default items-center gap-2">
+          <UpdateStatusIcon updateStatus={status} />
+          <span>{label}</span>
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" className="w-96 p-4 shadow-lg border-border bg-background">
+        <div className="flex justify-between items-start mb-4">
+          <div className="space-y-1">
+            <h4 className="text-sm font-medium leading-none text-foreground">{stack.name}</h4>
+            {updatedAt && <p className="text-xs text-muted-foreground">Checked {fromNow(new Date(updatedAt))}</p>}
+          </div>
+          <UpdateStatusIcon updateStatus={status} />
+        </div>
+
+        <div className="space-y-3">
+          {states.slice(0, 4).map((state) => (
+            <StackUpdateStateRow key={`${state.serviceName}:${state.imageName}`} state={state} />
+          ))}
+          {states.length > 4 && <p className="text-xs text-muted-foreground">+{states.length - 4} more services</p>}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+};
+
+const StackUpdateStateRow = ({ state }: { state: ImageUpdateState }) => {
+  return (
+    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <span className="text-muted-foreground text-xs">Service</span>
+      <span className="truncate" title={state.serviceName}>
+        {state.serviceName}
+      </span>
+      <span className="text-muted-foreground text-xs">Image</span>
+      <span className="truncate text-xs" title={state.imageName}>
+        {truncate(state.imageName, 36)}
+      </span>
+      <span className="text-muted-foreground text-xs">Current</span>
+      <span className="font-mono text-xs text-foreground/80 truncate" title={state.currentDigest}>
+        {formatId(state.currentDigest)}
+      </span>
+      {state.updateAvailable && (
+        <>
+          <span className="text-muted-foreground text-xs">Available</span>
+          <span className="font-mono text-xs text-amber-600 dark:text-amber-500 truncate" title={state.remoteDigest ?? undefined}>
+            {formatId(state.remoteDigest ?? undefined)}
+          </span>
+        </>
+      )}
+    </div>
+  );
+};
+
+const getStackImageUpdateStates = (stack: StackView): ImageUpdateState[] =>
+  stack.stackUpdateState?.recreateStackOnNewImageState?.autoUpdateStates ?? [];
+
+const getStackUpdateStatus = (stack: StackView): AutoUpdateStatus => {
+  const states = getStackImageUpdateStates(stack);
+  if (states.length === 0) return AutoUpdateStatus.Unknown;
+  if (states.some((state) => state.updateAvailable)) return AutoUpdateStatus.UpdateAvailable;
+  return AutoUpdateStatus.UpToDate;
 };

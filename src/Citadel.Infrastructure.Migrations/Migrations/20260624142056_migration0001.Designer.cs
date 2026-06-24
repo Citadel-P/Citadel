@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260623141446_migration0001")]
+    [Migration("20260624142056_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -573,6 +573,28 @@ namespace Infrastructure.Migrations.Migrations
                             QuietHours = "[]",
                             Severity = "Warning",
                             Type = "StackDriftDetected"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-00000000000d"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Stack Service Auto Updated",
+                            QuietHours = "[]",
+                            Severity = "Info",
+                            Type = "StackServiceAutoUpdated"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-00000000000e"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Auto Deploy Failed - Stack Service",
+                            QuietHours = "[]",
+                            Severity = "Critical",
+                            Type = "StackServiceAutoDeployFailed"
                         });
                 });
 

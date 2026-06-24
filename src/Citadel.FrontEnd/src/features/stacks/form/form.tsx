@@ -1,6 +1,5 @@
 import {
   PlatformView,
-  UpdateBehavior,
   StackConfigView,
   CreateStackInput,
   PatchStackInput,
@@ -28,17 +27,21 @@ import { ResourceSelectorField } from '@/components/custom/common';
 import { MonacoEditor, MonacoToArrayEditor } from '@/lib/monaco';
 
 const update_behaviors = {
-  [UpdateBehavior.Disabled]: {
+  [StackUpdateBehavior.Disabled]: {
     label: 'Disabled',
     description: 'Do not check for updates.',
   },
-  [UpdateBehavior.Notify]: {
+  [StackUpdateBehavior.Notify]: {
     label: 'Notify Only',
     description: 'Periodically check for updates and alert me, but do not redeploy.',
   },
-  [UpdateBehavior.AutoDeploy]: {
-    label: 'Auto Deploy',
-    description: 'Periodically check and automatically redeploy when a new image is found.',
+  [StackUpdateBehavior.ServiceAutoDeploy]: {
+    label: 'Auto Deploy Services',
+    description: 'Automatically redeploy only services with new images.',
+  },
+  [StackUpdateBehavior.StackAutoDeploy]: {
+    label: 'Auto Deploy Stack',
+    description: 'Automatically redeploy the entire stack when a new image is found.',
   },
 };
 
@@ -127,6 +130,8 @@ export const StackForm = ({
   const refreshData = useCallback(() => {
     localStorage.removeItem(`stack:${id ?? 'new'}`);
     queryClient.invalidateQueries({ queryKey: ['getStackConfig', { stackId: id }] });
+    queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: id }] });
+    queryClient.invalidateQueries({ queryKey: ['getStackDrift', { stackId: id }] });
   }, [id, queryClient]);
 
   useEffect(() => {

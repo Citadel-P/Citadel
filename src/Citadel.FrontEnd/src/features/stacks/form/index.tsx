@@ -35,11 +35,11 @@ import { StackStats } from '@/features/docker-resources/containers/container-inf
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Check, Funnel, Loader2, RefreshCw } from 'lucide-react';
+import { Check, Funnel, Loader2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { useMutate, useRead } from '@/lib/hooks';
-import { useQueryClient } from '@tanstack/react-query';
+import { useRead } from '@/lib/hooks';
+import { hasActionableStackDrift } from '../drift';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -74,7 +74,7 @@ export const StackFormComponents: RequiredFormComponents = {
         },
       },
       {
-        label: 'Containers',
+        label: 'Services',
         disabled: (resource: StackView): boolean => resource.status === StackReleaseStatus.Created,
         Content: ({ resource }: { resource: StackView }) => {
           return <StackRuntime key={resource.id} stack={resource} />;
@@ -94,20 +94,51 @@ export const StackFormComponents: RequiredFormComponents = {
   },
 };
 
-const StackSubHeader = ({ latestActivity }: { stack: StackView; latestActivity: LatestActivityView | null }) => {
+const StackSubHeader = ({ latestActivity, stack }: { stack: StackView; latestActivity: LatestActivityView | null }) => {
   return (
     <>
-      <StackLatestActivity latestActivity={latestActivity} />
-      {/* <StackUpdateNotice stack={stack} /> */}
+      <StackLatestActivity latestActivity={latestActivity} stack={stack} />
+      <StackUpdateNotice stack={stack} />
     </>
   );
 };
-const StackLatestActivity = ({ latestActivity }: { latestActivity: LatestActivityView | null }) => {
+
+const StackUpdateNotice = ({ stack }: { stack: StackView }) => {
+  const updates = stack.stackUpdateState?.recreateStackOnNewImageState?.autoUpdateStates?.filter(
+    (state) => state.updateAvailable,
+  );
+
+  if (!updates?.length) return null;
+
+  const summary = updates
+    .slice(0, 3)
+    .map((state) => `${state.serviceName} (${truncate(state.imageName, 32)})`)
+    .join(', ');
+  const suffix = updates.length > 3 ? `, +${updates.length - 3} more` : '';
+
+  return (
+    <AlertMessage type="info" title="Image update available">
+      <div className="flex flex-wrap gap-2 items-center">
+        {summary}
+        {suffix}
+      </div>
+    </AlertMessage>
+  );
+};
+const StackLatestActivity = ({
+  latestActivity,
+  stack,
+}: {
+  latestActivity: LatestActivityView | null;
+  stack: StackView;
+}) => {
   if (!latestActivity) return;
   if (latestActivity?.status === ActivityStatus.Success) {
     return;
   }
   if (latestActivity?.info.$type === 'StackDegraded' || latestActivity?.info.$type === 'StackDriftDetected') {
+    if (stack.status !== StackReleaseStatus.Degraded) return null;
+
     return (
       <AlertMessage date={latestActivity?.createdAt} type={'warning'}>
         <div className="flex flex-wrap gap-2 items-center ">{latestActivity?.info.reason}</div>
@@ -150,21 +181,15 @@ const StackRuntime = ({ stack }: { stack: StackView }) => {
 };
 
 const StackDriftPanel = ({ stack }: { stack: StackView }) => {
-  const queryClient = useQueryClient();
   const driftDetectionDisabled = stack.driftPolicy?.mode === StackDriftMode.Disabled;
-  const driftEligibleStatus = stack.status === StackReleaseStatus.Healthy || stack.status === StackReleaseStatus.Degraded;
+  const driftEligibleStatus =
+    stack.status === StackReleaseStatus.Healthy || stack.status === StackReleaseStatus.Degraded;
   const queryEnabled = !driftDetectionDisabled && driftEligibleStatus;
-  const { data, isLoading, isFetching, error, refetch } = useRead(
+  const { data, isLoading, error } = useRead(
     'getStackDrift',
     { stackId: stack.id },
     { enabled: queryEnabled },
   );
-  const { mutateAsync: reconcileStack, isPending } = useMutate('reconcileStack', {
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: stack.id }] });
-      refetch();
-    },
-  });
   const report = data?.data;
 
   if (driftDetectionDisabled) {
@@ -202,34 +227,20 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
     );
   }
 
-  const actionable = report.drifts.some(
-    (drift) =>
-      (drift.$type === 'ContainerStopped' && stack.driftPolicy.autoStartStoppedContainers) ||
-      (drift.$type === 'ContainerPaused' && stack.driftPolicy.autoResumePausedContainers) ||
-      (drift.$type === 'ExtraContainer' && stack.driftPolicy.removeExtraContainers),
-  );
-  const canReconcile = actionable && !report.hasStructuralDrift && hasCapability(stack, 'canWrite');
+  const actionable = hasActionableStackDrift(stack, report);
   const details = report.drifts.map(formatStackDrift).join('; ');
 
   return (
-    <AlertMessage type="warning" title={`${report.drifts.length} drift item${report.drifts.length === 1 ? '' : 's'}`} className="my-0">
+    <AlertMessage
+      type="warning"
+      title={`${report.drifts.length} drift item${report.drifts.length === 1 ? '' : 's'}`}
+      className="my-0">
       <div className="flex w-full flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <span className="min-w-0">{details}</span>
         <div className="flex shrink-0 items-center gap-2">
           {report.hasStructuralDrift && <span className="text-xs">Reapply required</span>}
           {report.hasAutoFixableDrift && !actionable && (
             <span className="text-xs">Enable safe auto-fix in Config to reconcile</span>
-          )}
-          {canReconcile && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 bg-background"
-              disabled={isPending || isFetching}
-              onClick={() => reconcileStack({ stackId: stack.id })}>
-              {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-              Reconcile
-            </Button>
           )}
         </div>
       </div>

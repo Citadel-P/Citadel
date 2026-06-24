@@ -360,6 +360,8 @@ public static class AlertTypeMetadata
         { AlertType.StackImageUpdateAvailable, AlertResourceType.Stack },
         { AlertType.StackAutoUpdated, AlertResourceType.Stack },
         { AlertType.StackAutoDeployFailed, AlertResourceType.Stack },
+        { AlertType.StackServiceAutoUpdated, AlertResourceType.Stack },
+        { AlertType.StackServiceAutoDeployFailed, AlertResourceType.Stack },
         { AlertType.StackDriftDetected, AlertResourceType.Stack },
     };
 
@@ -389,6 +391,8 @@ public static class AlertTypeMetadata
             (AlertType.StackImageUpdateAvailable, StackImageUpdateAvailableAlertInfo) => true,
             (AlertType.StackAutoUpdated, StackAutoUpdatedAlertInfo) => true,
             (AlertType.StackAutoDeployFailed, StackDeployFailedAlertInfo) => true,
+            (AlertType.StackServiceAutoUpdated, StackServiceAutoUpdatedAlertInfo) => true,
+            (AlertType.StackServiceAutoDeployFailed, StackServiceAutoDeployFailedAlertInfo) => true,
             (AlertType.StackDriftDetected, StackDriftDetectedAlertInfo) => true,
             _ => false
         };

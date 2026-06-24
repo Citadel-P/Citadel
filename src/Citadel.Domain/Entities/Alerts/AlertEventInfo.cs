@@ -17,6 +17,8 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(StackImageUpdateAvailableAlertInfo), nameof(AlertType.StackImageUpdateAvailable))]
 [JsonDerivedType(typeof(StackAutoUpdatedAlertInfo), nameof(AlertType.StackAutoUpdated))]
 [JsonDerivedType(typeof(StackDeployFailedAlertInfo), nameof(AlertType.StackAutoDeployFailed))]
+[JsonDerivedType(typeof(StackServiceAutoUpdatedAlertInfo), nameof(AlertType.StackServiceAutoUpdated))]
+[JsonDerivedType(typeof(StackServiceAutoDeployFailedAlertInfo), nameof(AlertType.StackServiceAutoDeployFailed))]
 [JsonDerivedType(typeof(StackDriftDetectedAlertInfo), nameof(AlertType.StackDriftDetected))]
 public abstract record AlertEventInfo
 {
@@ -71,19 +73,42 @@ public record DeploymentAutoDeployFailedAlertInfo(string DeploymentName, string 
     public override string HumanMessage => $"Deployment '{DeploymentName}' failed: {Reason}";
 }
 
-public record StackImageUpdateAvailableAlertInfo(string StackName, string CurrentImage, string LatestImage) : AlertEventInfo
+public sealed record StackImageUpdateItem(
+    string ServiceName,
+    string ImageName,
+    string CurrentDigest,
+    string LatestDigest);
+
+public record StackImageUpdateAvailableAlertInfo(string StackName, IReadOnlyList<StackImageUpdateItem> Updates) : AlertEventInfo
 {
-    public override string HumanMessage => $"New image available for stack '{StackName}': {CurrentImage} → {LatestImage}";
+    public override string HumanMessage => StackAlertMessageFormatter.FormatStackUpdateMessage($"New image available for stack '{StackName}'", Updates);
 }
 
-public record StackAutoUpdatedAlertInfo(string StackName, string PreviousImage, string UpdatedImage) : AlertEventInfo
+public record StackAutoUpdatedAlertInfo(string StackName, IReadOnlyList<StackImageUpdateItem> Updates) : AlertEventInfo
 {
-    public override string HumanMessage => $"Stack '{StackName}' auto-updated: {PreviousImage} → {UpdatedImage}";
+    public override string HumanMessage => StackAlertMessageFormatter.FormatStackUpdateMessage($"Stack '{StackName}' auto-updated", Updates);
+}
+
+public record StackServiceAutoUpdatedAlertInfo(string StackName, IReadOnlyList<StackImageUpdateItem> Updates) : AlertEventInfo
+{
+    public override string HumanMessage => StackAlertMessageFormatter.FormatStackUpdateMessage($"Stack '{StackName}' services auto-updated", Updates);
 }
 
 public record StackDeployFailedAlertInfo(string StackName, string Reason) : AlertEventInfo
 {
     public override string HumanMessage => $"Stack '{StackName}' deployment failed: {Reason}";
+}
+
+public record StackServiceAutoDeployFailedAlertInfo(string StackName, IReadOnlyList<string> ServiceNames, string Reason) : AlertEventInfo
+{
+    public override string HumanMessage
+    {
+        get
+        {
+            var services = ServiceNames.Count == 0 ? "selected services" : string.Join(", ", ServiceNames);
+            return $"Stack '{StackName}' service deployment failed for {services}: {Reason}";
+        }
+    }
 }
 
 public sealed record StackDriftDetectedAlertInfo(
@@ -109,5 +134,20 @@ public sealed record StackDriftDetectedAlertInfo(
 
             return $"Drift detected on stack '{StackName}': {issueText}.{actionText}";
         }
+    }
+}
+
+file static class StackAlertMessageFormatter
+{
+    public static string FormatStackUpdateMessage(string prefix, IReadOnlyList<StackImageUpdateItem> updates)
+    {
+        if (updates.Count == 0)
+            return prefix;
+
+        var suffix = string.Join(
+            ", ",
+            updates.Select(update => $"{update.ServiceName}: {update.CurrentDigest} → {update.LatestDigest}"));
+
+        return $"{prefix}: {suffix}";
     }
 }

@@ -26,7 +26,16 @@ public sealed record AlertMatch(
 public sealed record ContainerAlertSnapshot(Guid Id, Guid PlatformId, string Name, string PlatformName, string PlatformAddress, string ContainerId);
 public sealed record PlatformAlertSnapshot(Guid Id, string Name, double CpuUsage, double RamUsage, string AgentVersion, string Address = "", bool IsOnline = true);
 public sealed record DeploymentAlertSnapshot(Guid Id, string Name, string CurrentImage, string PreviousImage, string LatestImage, bool Failed, string? Raison = null);
-public sealed record StackAlertSnapshot(Guid Id, string Name, string CurrentImage, string PreviousImage, string LatestImage, bool Failed, string? Raison = null);
+public sealed record StackAlertSnapshot(
+    Guid Id,
+    string Name,
+    string CurrentImage,
+    string PreviousImage,
+    string LatestImage,
+    bool Failed,
+    string? Raison = null,
+    IReadOnlyList<StackImageUpdateItem>? Updates = null,
+    IReadOnlyList<string>? ServiceNames = null);
 public sealed record StackDriftAlertSnapshot(
     Guid Id,
     string Name,

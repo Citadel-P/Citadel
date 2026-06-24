@@ -135,6 +135,7 @@ public static class ApplicationModule
             .AddHostedService<UnmanagedContainerAlertJob>()
             .AddHostedService<DeploymentImageScannerJob>()
             .AddHostedService<DeploymentAutoUpdateJob>()
+            .AddHostedService<ManualStackAutoUpdateJob>()
             .AddHostedService<PlatformStatsWriterJob>()
             .AddHostedService<ContainerStatsWriterJob>()
             .AddHostedService<ContainerSyncJob>()

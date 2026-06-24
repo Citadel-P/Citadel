@@ -7,6 +7,8 @@ import { useTaskSheet } from '@/lib/atoms';
 import { ActionConfig } from '@/components/custom/actions-builder';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { getStackReconciliationToast, hasActionableStackDrift } from './drift';
 
 export const useVariables = (resources: StackView | StackView[]) =>
   Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];
@@ -96,22 +98,16 @@ export const syncAction: ActionConfig<StackView, any> = {
       { stackId: selected?.id ?? '' },
       { enabled: queryEnabled },
     );
-    const { mutateAsync, isPending } = useMutate('reconcileStack', {
-      onSuccess: () => {
-        if (!selected) return;
-        queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: selected.id }] });
-        queryClient.invalidateQueries({ queryKey: ['getStackConfig', { stackId: selected.id }] });
-        refetch();
-      },
-    });
+    const { mutateAsync, isPending } = useMutate('reconcileStack');
+    const report = data?.data;
+    const hasActionableDrift = hasActionableStackDrift(selected, report);
 
     const canExecute =
       !!selected &&
       queryEnabled &&
       !isProcessing(selected) &&
       !isLoading &&
-      data?.data?.hasDrift === true &&
-      data.data.hasStructuralDrift !== true;
+      hasActionableDrift;
 
     return {
       canExecute,
@@ -123,11 +119,15 @@ export const syncAction: ActionConfig<StackView, any> = {
           !queryEnabled ||
           isProcessing(selected) ||
           isLoading ||
-          data?.data?.hasDrift !== true ||
-          data.data.hasStructuralDrift === true
+          !hasActionableDrift
         )
           return;
-        await mutateAsync({ stackId: selected.id });
+        const result = await mutateAsync({ stackId: selected.id });
+        const message = getStackReconciliationToast(result.data);
+        toast[message.kind](message.title, { description: message.description });
+        queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: selected.id }] });
+        queryClient.invalidateQueries({ queryKey: ['getStackConfig', { stackId: selected.id }] });
+        refetch();
       },
     };
   },

@@ -9,7 +9,6 @@ using Hosting.Common.Abstraction;
 using Microsoft.Extensions.DependencyInjection;
 using System.Security.Cryptography;
 using System.Text;
-using YamlDotNet.RepresentationModel;
 
 namespace Application.Services;
 
@@ -50,120 +49,23 @@ internal sealed class ManualStackDesiredStateProvider : IStackDesiredStateProvid
 
     private static StackDesiredState Parse(StackDriftStack stack, ManualStack manualStack)
     {
-        var services = new Dictionary<string, StackDesiredService>(StringComparer.OrdinalIgnoreCase);
-
         if (string.IsNullOrWhiteSpace(manualStack.ComposeFile))
         {
-            return new StackDesiredState(StackProjectNameResolver.Resolve(stack), services);
+            return new StackDesiredState(
+                StackProjectNameResolver.Resolve(stack),
+                new Dictionary<string, StackDesiredService>(StringComparer.OrdinalIgnoreCase));
         }
 
-        var managedComposeFile = StackComposeLabelInjector.Inject(
-            manualStack.ComposeFile,
-            stack.Id,
-            stack.CurrentStackReleaseId);
-
-        using var reader = new StringReader(managedComposeFile);
-        var yaml = new YamlStream();
-        yaml.Load(reader);
-
-        if (yaml.Documents.Count == 0 || yaml.Documents[0].RootNode is not YamlMappingNode root)
-        {
-            return new StackDesiredState(StackProjectNameResolver.Resolve(stack), services);
-        }
-
-        if (!TryGetMapping(root, "services", out var servicesNode))
-        {
-            return new StackDesiredState(StackProjectNameResolver.Resolve(stack), services);
-        }
-
-        foreach (var (key, value) in servicesNode.Children)
-        {
-            if (key is not YamlScalarNode serviceKey || string.IsNullOrWhiteSpace(serviceKey.Value))
-                continue;
-
-            var image = value is YamlMappingNode serviceNode
-                ? TryGetScalar(serviceNode, "image")
-                : null;
-
-            var expectedConfigHash = value is YamlMappingNode node
-                ? TryGetServiceLabel(node, CitadelLabels.ServiceHash)
-                : null;
-
-            services[serviceKey.Value] = new StackDesiredService(
-                ServiceName: serviceKey.Value,
-                Image: image,
-                ExpectedConfigHash: expectedConfigHash);
-        }
+        var services = StackComposeParser.ParseServices(stack.Id, stack.CurrentStackReleaseId, manualStack.ComposeFile)
+            .ToDictionary(
+                item => item.Key,
+                item => new StackDesiredService(
+                    item.Value.ServiceName,
+                    item.Value.Image,
+                    item.Value.ExpectedConfigHash),
+                StringComparer.OrdinalIgnoreCase);
 
         return new StackDesiredState(StackProjectNameResolver.Resolve(stack), services);
-    }
-
-    private static bool TryGetMapping(YamlMappingNode node, string key, out YamlMappingNode value)
-    {
-        foreach (var (childKey, childValue) in node.Children)
-        {
-            if (childKey is YamlScalarNode scalar
-                && string.Equals(scalar.Value, key, StringComparison.OrdinalIgnoreCase)
-                && childValue is YamlMappingNode mapping)
-            {
-                value = mapping;
-                return true;
-            }
-        }
-
-        value = null!;
-        return false;
-    }
-
-    private static string? TryGetScalar(YamlMappingNode node, string key)
-    {
-        foreach (var (childKey, childValue) in node.Children)
-        {
-            if (childKey is YamlScalarNode scalar
-                && string.Equals(scalar.Value, key, StringComparison.OrdinalIgnoreCase)
-                && childValue is YamlScalarNode value)
-            {
-                return value.Value;
-            }
-        }
-
-        return null;
-    }
-
-    private static string? TryGetServiceLabel(YamlMappingNode serviceNode, string labelName)
-    {
-        foreach (var (key, value) in serviceNode.Children)
-        {
-            if (key is not YamlScalarNode scalar || !string.Equals(scalar.Value, "labels", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            return value switch
-            {
-                YamlMappingNode mapping => TryGetScalar(mapping, labelName),
-                YamlSequenceNode sequence => TryGetSequenceLabel(sequence, labelName),
-                _ => null
-            };
-        }
-
-        return null;
-    }
-
-    private static string? TryGetSequenceLabel(YamlSequenceNode sequence, string labelName)
-    {
-        foreach (var child in sequence.Children.OfType<YamlScalarNode>())
-        {
-            var value = child.Value;
-            if (value is null || !value.StartsWith(labelName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (value.Length == labelName.Length)
-                return string.Empty;
-
-            if (value[labelName.Length] == '=')
-                return value[(labelName.Length + 1)..];
-        }
-
-        return null;
     }
 }
 

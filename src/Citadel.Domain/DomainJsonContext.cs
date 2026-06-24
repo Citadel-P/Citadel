@@ -147,6 +147,10 @@ public partial class EventInfoJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(AlertEvent))]
 [JsonSerializable(typeof(AlertEventInfo))]
 [JsonSerializable(typeof(StackDriftDetectedAlertInfo))]
+[JsonSerializable(typeof(StackImageUpdateItem))]
+[JsonSerializable(typeof(IReadOnlyList<StackImageUpdateItem>))]
+[JsonSerializable(typeof(StackServiceAutoUpdatedAlertInfo))]
+[JsonSerializable(typeof(StackServiceAutoDeployFailedAlertInfo))]
 public partial class AlertEventJsonContext : JsonSerializerContext
 {
 }

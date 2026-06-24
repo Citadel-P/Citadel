@@ -20,7 +20,9 @@ internal static class StackMappers
             RegistryName: cmd.RegistryName,
             RegistryHost: cmd.RegistryHost,
             PreDeploy: cmd.PreDeploy?.Map(),
-            PostDeploy: cmd.PostDeploy?.Map());
+            PostDeploy: cmd.PostDeploy?.Map(),
+            ServiceNames: cmd.ServiceNames,
+            PullImages: cmd.PullImages);
     }
 
     public static StackApplyResult Map(this Hosting.DockerClient.Models.Stacks.StackApplyResult result)
