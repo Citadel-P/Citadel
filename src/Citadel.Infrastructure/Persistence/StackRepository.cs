@@ -172,13 +172,19 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             LEFT JOIN Platforms p
                 ON sr.PlatformId = p.Id
             WHERE COALESCE(s.DriftPolicy ->> 'Mode', @DetectOnlyMode) <> @DisabledMode
+              AND sr.Status = ANY(@MonitorStatuses)
             ORDER BY s.Id
             """;
 
         var result = await db.QueryAsync<StackDriftStackDto>(sql, new
         {
             DetectOnlyMode = EnumFormatter<StackDriftMode>.GetValue(StackDriftMode.DetectOnly),
-            DisabledMode = EnumFormatter<StackDriftMode>.GetValue(StackDriftMode.Disabled)
+            DisabledMode = EnumFormatter<StackDriftMode>.GetValue(StackDriftMode.Disabled),
+            MonitorStatuses = new[]
+            {
+                EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Healthy),
+                EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Degraded)
+            }
         }, transaction: tx());
 
         return [.. result.Select(x => x.ToDriftStack())];

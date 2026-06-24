@@ -21,6 +21,9 @@ const hasStatus = (resource: StackView, ...statuses: StackReleaseStatus[]) => st
 const canControl = (resource: StackView, ...statuses: StackReleaseStatus[]) =>
   hasStatus(resource, ...statuses) && !isProcessing(resource);
 
+const canCheckDrift = (resource: StackView) =>
+  resource.status === StackReleaseStatus.Healthy || resource.status === StackReleaseStatus.Degraded;
+
 export const deployAction: ActionConfig<StackView, any> = {
   key: 'deployToggle',
   type: 'toggle',
@@ -86,7 +89,7 @@ export const syncAction: ActionConfig<StackView, any> = {
     const queryEnabled =
       !!selected &&
       !multiSelect &&
-      selected.status !== StackReleaseStatus.Created &&
+      canCheckDrift(selected) &&
       selected.driftPolicy?.mode !== StackDriftMode.Disabled;
     const { data, isLoading, isFetching, refetch } = useRead(
       'getStackDrift',
@@ -107,13 +110,23 @@ export const syncAction: ActionConfig<StackView, any> = {
       queryEnabled &&
       !isProcessing(selected) &&
       !isLoading &&
-      data?.data?.hasDrift === true;
+      data?.data?.hasDrift === true &&
+      data.data.hasStructuralDrift !== true;
 
     return {
       canExecute,
       isPending: isPending || isFetching,
       run: async () => {
-        if (!selected || !canExecute) return;
+        if (
+          !selected ||
+          multiSelect ||
+          !queryEnabled ||
+          isProcessing(selected) ||
+          isLoading ||
+          data?.data?.hasDrift !== true ||
+          data.data.hasStructuralDrift === true
+        )
+          return;
         await mutateAsync({ stackId: selected.id });
       },
     };

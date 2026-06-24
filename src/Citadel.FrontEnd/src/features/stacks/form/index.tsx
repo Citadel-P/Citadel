@@ -152,7 +152,8 @@ const StackRuntime = ({ stack }: { stack: StackView }) => {
 const StackDriftPanel = ({ stack }: { stack: StackView }) => {
   const queryClient = useQueryClient();
   const driftDetectionDisabled = stack.driftPolicy?.mode === StackDriftMode.Disabled;
-  const queryEnabled = !driftDetectionDisabled && stack.status !== StackReleaseStatus.Created;
+  const driftEligibleStatus = stack.status === StackReleaseStatus.Healthy || stack.status === StackReleaseStatus.Degraded;
+  const queryEnabled = !driftDetectionDisabled && driftEligibleStatus;
   const { data, isLoading, isFetching, error, refetch } = useRead(
     'getStackDrift',
     { stackId: stack.id },
@@ -204,7 +205,8 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
   const actionable = report.drifts.some(
     (drift) =>
       (drift.$type === 'ContainerStopped' && stack.driftPolicy.autoStartStoppedContainers) ||
-      (drift.$type === 'ContainerPaused' && stack.driftPolicy.autoResumePausedContainers),
+      (drift.$type === 'ContainerPaused' && stack.driftPolicy.autoResumePausedContainers) ||
+      (drift.$type === 'ExtraContainer' && stack.driftPolicy.removeExtraContainers),
   );
   const canReconcile = actionable && !report.hasStructuralDrift && hasCapability(stack, 'canWrite');
   const details = report.drifts.map(formatStackDrift).join('; ');

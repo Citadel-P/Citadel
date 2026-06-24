@@ -1,9 +1,11 @@
 ﻿using Application.Features.Deployments.Notifications;
+using Application.Mappers;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
+using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
@@ -212,7 +214,7 @@ internal class ApplyStackService(
 
         if (exitCode == 0)
         {
-            var (errorMessage, containerIds) = await GetContainerIds(stack, platform, ct);
+            var (errorMessage, containers) = await GetContainers(stack, platform, ct);
             if (!string.IsNullOrEmpty(errorMessage))
             {
                 await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, ct: ct);
@@ -224,7 +226,7 @@ internal class ApplyStackService(
                 new StackSucceededWorkItem(
                     stack.Id,
                     actorId,
-                    containerIds ?? [],
+                    containers ?? [],
                     stackHub,
                     activityHub,
                     notificationQueue),
@@ -243,7 +245,7 @@ internal class ApplyStackService(
         yield return StackStreamItem.FromStdErr(finalFailureMessage, exitCode ?? 1);
     }
 
-    private async Task<(string? ErrorMessage, string[]? ContainerIds)> GetContainerIds(Stack stack, Domain.Contracts.Resources.PlatformCacheEntry platform, CancellationToken ct)
+    private async Task<(string? ErrorMessage, DockerContainer[]? Containers)> GetContainers(Stack stack, Domain.Contracts.Resources.PlatformCacheEntry platform, CancellationToken ct)
     {
         var filter = StackContainerOwnership.CreateOwnedContainerFilter(
             platform.Address,
@@ -255,7 +257,7 @@ internal class ApplyStackService(
 
         return containerListResult.IsFailure(out var error, out var containerDic)
             ? (error.Message, null)
-            : (null, containerDic.Keys.ToArray());
+            : (null, containerDic.Values.Where(container => !string.IsNullOrWhiteSpace(container.Id)).ToArray());
     }
 
     private async Task<string?> ValidateProjectContainerOwnershipAsync(
@@ -457,7 +459,7 @@ internal sealed class UpdateStackStatusWorkItem(Guid stackId, Guid actorId, Stac
 internal sealed class StackSucceededWorkItem(
     Guid stackId,
     Guid actorId,
-    string[] containerIds,
+    DockerContainer[] dockerContainers,
     IStackStreamManager stackHub,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue) : IDbWorkItem
@@ -465,19 +467,50 @@ internal sealed class StackSucceededWorkItem(
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var stack = await uow.Stacks.GetAsync(stackId, ct);
-        var containers = await uow.Containers.GetByIdsAsync(containerIds, ct);
-        if (stack is null || containers is null) return;
+        if (stack?.CurrentStackRelease is null) return;
 
         stack.ReleaseProcessing(StackReleaseStatus.Healthy);
 
-        foreach (var container in containers)
+        var platformId = stack.CurrentStackRelease.PlatformId;
+        var images = await uow.Images.GetByPlatformIdAsync(platformId, ct);
+        var existingContainers = (await uow.Containers.GetByPlatformIdAsync(platformId, ct))
+            .ToDictionary(
+                container => container.DockerContainerId,
+                container => container,
+                StringComparer.OrdinalIgnoreCase);
+
+        var upserts = new List<Container>();
+        foreach (var dockerContainer in dockerContainers)
         {
+            var imageId = images.FirstOrDefault(image =>
+                image.DockerImageId == dockerContainer.ImageId &&
+                image.PlatformId == platformId)?.Id;
+
+            if (existingContainers.TryGetValue(dockerContainer.Id, out var existingContainer))
+            {
+                existingContainer.PartialUpdate(
+                    name: dockerContainer.Name,
+                    imageId: imageId,
+                    dockerImageId: dockerContainer.ImageId,
+                    state: dockerContainer.State,
+                    dockerStack: dockerContainer.Stack,
+                    created: dockerContainer.Created,
+                    ports: dockerContainer.Ports,
+                    stackId: stack.Id);
+
+                upserts.Add(existingContainer);
+                continue;
+            }
+
+            var container = dockerContainer.Map(platformId, imageId);
             container.PartialUpdate(stackId: stack.Id);
+            upserts.Add(container);
         }
 
-        await uow.Containers.BulkUpsertAsync(containers, ct);
+        await uow.Containers.BulkUpsertAsync(upserts, ct);
         await uow.Stacks.UpdateAsync(stack, ct);
 
+        var containerIds = upserts.Select(container => container.DockerContainerId).ToArray();
         var activity = new ActivityEvent(
                         actorId: actorId,
                         resourceId: stack.Id,

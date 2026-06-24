@@ -70,6 +70,7 @@ export enum StackReconciliationStatus {
 export enum StackReconciliationActionType {
   StartContainer = "StartContainer",
   ResumeContainer = "ResumeContainer",
+  RemoveContainer = "RemoveContainer",
 }
 
 export enum StackDriftMode {

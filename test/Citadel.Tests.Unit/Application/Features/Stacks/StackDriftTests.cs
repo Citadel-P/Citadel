@@ -11,6 +11,7 @@ using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -88,6 +89,41 @@ public class StackDriftTests
         Assert.IsType<ContainerPaused>(report.Drifts[0]);
     }
 
+    [Theory]
+    [InlineData(StackReleaseStatus.Paused, ContainerStateStatus.Paused)]
+    [InlineData(StackReleaseStatus.Stopped, ContainerStateStatus.Exited)]
+    public async Task CheckAsync_ignores_intentionally_non_running_stack_statuses(
+        StackReleaseStatus stackStatus,
+        ContainerStateStatus containerStatus)
+    {
+        var platformId = Guid.CreateVersion7();
+        var stack = CreateStack(platformId);
+        stack.PartialUpdate(stackStatus);
+        var checker = CreateChecker(
+            stack,
+            new StackDesiredState(
+                "demo",
+                new Dictionary<string, StackDesiredService>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["api"] = new("api", "nginx:latest", null),
+                }),
+            new StackRuntimeState(
+                platformId,
+                "http://docker.local",
+                PlatformConnectorType.Local,
+                "demo",
+                [
+                    Container("api-container", "api", containerStatus),
+                ]));
+
+        var report = await checker.CheckAsync(stack.Id, CancellationToken.None);
+
+        Assert.False(report.HasDrift);
+        Assert.False(report.HasAutoFixableDrift);
+        Assert.False(report.HasStructuralDrift);
+        Assert.Empty(report.Drifts);
+    }
+
     [Fact]
     public async Task ReconcileAsync_starts_stopped_and_resumes_paused_containers_when_policy_allows()
     {
@@ -163,7 +199,41 @@ public class StackDriftTests
         Assert.Equal(StackReconciliationStatus.Partial, result.Status);
         Assert.Empty(result.Actions);
         Assert.Null(result.AfterReport);
+        Assert.Equal(1, driftChecker.CheckByStackCount);
+        Assert.Equal(0, driftChecker.CheckByIdCount);
         connector.Verify(x => x.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ReconcileAsync_structural_drift_without_enabled_action_does_not_mark_processing()
+    {
+        var platformId = Guid.CreateVersion7();
+        var stack = CreateStack(
+            platformId,
+            new StackDriftPolicy(
+                StackDriftMode.AutoFix,
+                AlertOnDrift: true,
+                MarkDegraded: true,
+                AutoStartStoppedContainers: false,
+                AutoResumePausedContainers: false,
+                RemoveExtraContainers: false));
+        stack.PartialUpdate(StackReleaseStatus.Healthy);
+        var before = Report(stack.Id, platformId, new MissingContainer("worker"));
+        var driftChecker = new TestStackDriftChecker(before);
+        var connector = new Mock<IContainerConnector>();
+        var reconciler = CreateReconciler(stack, driftChecker, connector.Object, platformId);
+
+        var result = await reconciler.ReconcileAsync(stack.Id, CancellationToken.None);
+
+        Assert.Equal(StackReconciliationStatus.RequiresReapply, result.Status);
+        Assert.Empty(result.Actions);
+        Assert.Null(result.AfterReport);
+        Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease?.Status);
+        Assert.Equal(ResourceControlState.Idle, stack.ControlState);
+        Assert.Equal(1, driftChecker.CheckByStackCount);
+        Assert.Equal(0, driftChecker.CheckByIdCount);
+        connector.Verify(x => x.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        connector.Verify(x => x.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -231,6 +301,45 @@ public class StackDriftTests
         Assert.False(action.Succeeded);
         Assert.Equal("start failed", action.ErrorMessage);
         Assert.Same(after, result.AfterReport);
+    }
+
+    [Fact]
+    public async Task ReconcileAsync_removes_extra_container_when_policy_allows()
+    {
+        var platformId = Guid.CreateVersion7();
+        var stack = CreateStack(
+            platformId,
+            new StackDriftPolicy(
+                StackDriftMode.AutoFix,
+                AlertOnDrift: true,
+                MarkDegraded: true,
+                AutoStartStoppedContainers: false,
+                AutoResumePausedContainers: false,
+                RemoveExtraContainers: true));
+        var before = Report(stack.Id, platformId, new ExtraContainer("orphan-container", "orphan"));
+        var after = Report(stack.Id, platformId);
+        var driftChecker = new TestStackDriftChecker(before, after);
+        var connector = new Mock<IContainerConnector>();
+        connector
+            .Setup(x => x.DeleteAsync(
+                It.Is<DeleteContainerCommand>(command =>
+                    command.PlatformAddress == "http://docker.local" &&
+                    command.ContainerIds.SequenceEqual(new[] { "orphan-container" }) &&
+                    command.Force == true &&
+                    command.Volume == false),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var reconciler = CreateReconciler(stack, driftChecker, connector.Object, platformId);
+
+        var result = await reconciler.ReconcileAsync(stack.Id, CancellationToken.None);
+
+        Assert.Equal(StackReconciliationStatus.Reconciled, result.Status);
+        var action = Assert.Single(result.Actions);
+        Assert.Equal(StackReconciliationActionType.RemoveContainer, action.Action);
+        Assert.True(action.Succeeded);
+        Assert.Same(after, result.AfterReport);
+        connector.Verify(x => x.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()), Times.Once);
+        connector.Verify(x => x.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -396,6 +505,34 @@ public class StackDriftTests
     }
 
     [Fact]
+    public async Task ReconciliationResultWorkItem_without_actions_does_not_record_attempt_activity()
+    {
+        var platformId = Guid.CreateVersion7();
+        var stack = CreateStack(platformId);
+        stack.PartialUpdate(StackReleaseStatus.Degraded);
+        var report = Report(stack.Id, platformId, new MissingContainer("worker"));
+        var result = new StackReconciliationResult(
+            stack.Id,
+            StackReconciliationStatus.RequiresReapply,
+            report,
+            AfterReport: null,
+            Actions: []);
+        var context = CreateStatusWorkItemContext(stack);
+        var workItem = new StackReconciliationResultWorkItem(
+            stack.Id,
+            result,
+            "fp",
+            context.NotificationQueue,
+            Mock.Of<IActivityStreamManager>());
+
+        await workItem.ExecuteAsync(context.UnitOfWork.Object, CancellationToken.None);
+
+        context.ActivityEvents.Verify(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()), Times.Never);
+        context.UnitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Empty(context.NotificationQueue.Items);
+    }
+
+    [Fact]
     public void StackComposeLabelInjector_injects_ownership_labels_and_service_hashes()
     {
         var stackId = Guid.CreateVersion7();
@@ -424,10 +561,28 @@ public class StackDriftTests
         Assert.Equal(releaseId.ToString("D"), apiLabels[CitadelLabels.ReleaseId]);
         Assert.False(string.IsNullOrWhiteSpace(apiLabels[CitadelLabels.ServiceHash]));
         Assert.NotEqual(apiLabels[CitadelLabels.ServiceHash], workerLabels[CitadelLabels.ServiceHash]);
+        Assert.DoesNotContain(apiLabels.Keys, key => key.StartsWith("x-", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
     public void StackComposeLabelInjector_rejects_reserved_user_labels()
+    {
+        const string compose = """
+            services:
+              api:
+                image: nginx:latest
+                labels:
+                  com.citadel.stack-id: user-value
+            """;
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            StackComposeLabelInjector.Inject(compose, Guid.CreateVersion7(), Guid.CreateVersion7()));
+
+        Assert.Contains("reserved by Citadel", error.Message);
+    }
+
+    [Fact]
+    public void StackComposeLabelInjector_rejects_legacy_extension_reserved_user_labels()
     {
         const string compose = """
             services:
@@ -441,6 +596,19 @@ public class StackDriftTests
             StackComposeLabelInjector.Inject(compose, Guid.CreateVersion7(), Guid.CreateVersion7()));
 
         Assert.Contains("reserved by Citadel", error.Message);
+    }
+
+    [Fact]
+    public void StackContainerOwnership_reads_legacy_extension_metadata()
+    {
+        var stackId = Guid.CreateVersion7();
+        var labels = new Dictionary<string, string>
+        {
+            ["#extensions"] = $"map[x-citadel.managed:true x-citadel.release-id:{Guid.CreateVersion7():D} x-citadel.stack-id:{stackId:D}]"
+        };
+
+        Assert.True(StackContainerOwnership.IsCitadelManaged(labels));
+        Assert.True(StackContainerOwnership.IsOwnedByStack(labels, stackId));
     }
 
     [Fact]
@@ -480,6 +648,15 @@ public class StackDriftTests
         Assert.Equal($"stack-{stack.Id:N}", projectName);
     }
 
+    [Fact]
+    public void StackDriftHelpers_treats_extra_container_as_auto_fixable_runtime_drift()
+    {
+        var drift = new ExtraContainer("orphan-container", "orphan");
+
+        Assert.True(StackDriftHelpers.IsAutoFixable(drift));
+        Assert.False(StackDriftHelpers.IsStructural(drift));
+    }
+
     private static ManualStackDriftChecker CreateChecker(
         Stack stack,
         StackDesiredState desired,
@@ -511,6 +688,8 @@ public class StackDriftTests
             CreateScopeFactory(stack),
             driftChecker,
             new TestPlatformContainerCache(platform),
+            new TestNotificationQueue(),
+            Mock.Of<IStackStreamManager>(),
             connectorFactory.Object);
     }
 
@@ -610,11 +789,34 @@ public class StackDriftTests
         stackRepository
             .Setup(x => x.GetDriftStackAsync(stack.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ToDriftStack(stack));
+        stackRepository
+            .Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stackRepository
+            .Setup(x => x.UpdateProcessingAsync(
+                stack.Id,
+                It.IsAny<StackReleaseStatus>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                It.IsAny<bool?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.Setup(x => x.Stacks).Returns(stackRepository.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var userContext = new Mock<IUserContextAccessor>();
+        userContext
+            .Setup(x => x.Current)
+            .Returns(Mock.Of<IUserContext>(x => x.ActorId == Constants.SystemId));
 
         return new ServiceCollection()
             .AddScoped(_ => unitOfWork.Object)
+            .AddScoped(_ => userContext.Object)
             .BuildServiceProvider()
             .GetRequiredService<IServiceScopeFactory>();
     }
