@@ -269,6 +269,8 @@ CREATE TABLE gitrepositories (
     onpull text,
     rowversion bigint NOT NULL DEFAULT 0,
     status text NOT NULL,
+    syncintervalminutes integer DEFAULT 5,
+    syncmode text NOT NULL DEFAULT 'PullInterval',
     url text NOT NULL,
     webhookenabled boolean NOT NULL DEFAULT FALSE,
     webhooksecret text,
@@ -304,6 +306,7 @@ CREATE TABLE stackreleases (
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     createdbyactorid uuid NOT NULL,
     platformid uuid NOT NULL,
+    source json,
     spec json NOT NULL,
     stackid uuid NOT NULL,
     status text NOT NULL,
@@ -328,6 +331,18 @@ CREATE TABLE usersteams (
     CONSTRAINT pk_usersteams PRIMARY KEY (userid, teamid),
     CONSTRAINT fk_usersteams_teams_teamid FOREIGN KEY (teamid) REFERENCES teams (id) ON DELETE CASCADE,
     CONSTRAINT fk_usersteams_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE gitrepositoryrefs (
+    id uuid NOT NULL,
+    branch text NOT NULL,
+    gitrepositoryid uuid NOT NULL,
+    lasterror text,
+    lastsyncedat timestamp with time zone NOT NULL,
+    resolvedcommitsha text,
+    status text NOT NULL,
+    CONSTRAINT pk_gitrepositoryrefs PRIMARY KEY (id),
+    CONSTRAINT fk_gitrepositoryrefs_gitrepositories_gitrepositoryid FOREIGN KEY (gitrepositoryid) REFERENCES gitrepositories (id) ON DELETE CASCADE
 );
 
 CREATE TABLE containers (
@@ -570,6 +585,8 @@ CREATE INDEX ix_gitrepositories_gitaccountid ON gitrepositories (gitaccountid);
 
 CREATE UNIQUE INDEX ix_gitrepositories_name ON gitrepositories (name);
 
+CREATE UNIQUE INDEX ix_gitrepositoryrefs_gitrepositoryid_branch ON gitrepositoryrefs (gitrepositoryid, branch);
+
 CREATE INDEX ix_images_controltriggeredby ON images (controltriggeredby);
 
 CREATE UNIQUE INDEX ix_images_dockerimageid_platformid ON images (dockerimageid, platformid);
@@ -623,7 +640,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260624142056_migration0001', '10.0.9');
+VALUES ('20260624213240_migration0001', '10.0.9');
 
 COMMIT;
 

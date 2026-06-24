@@ -86,6 +86,7 @@ public static class ApplicationModule
             .AddSingleton<IStackRuntimeStateProvider, DockerStackRuntimeStateProvider>()
             .AddSingleton<IStackDriftChecker, ManualStackDriftChecker>()
             .AddSingleton<IStackReconciler, StackReconciler>()
+            .AddSingleton<IGitStackMaterializer, GitStackMaterializer>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 
     private static IServiceCollection AddLookups(this IServiceCollection services)
@@ -144,6 +145,7 @@ public static class ApplicationModule
             .AddHostedService<AlertRuleCacheWarmup>()
             .AddHostedService<ReconcilableResourceJob>()
             .AddHostedService<StackDriftMonitorJob>()
+            .AddHostedService<GitRepositoryPollingJob>()
             .AddHostedService<GitRepoSyncJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services

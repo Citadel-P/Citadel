@@ -1,15 +1,18 @@
 ﻿using Application.Services;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
+using Domain.Entities.Stacks;
 using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using System.Threading.Channels;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
@@ -19,10 +22,14 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     private readonly Mock<IRepoCacheManager> _repoCacheManagerMock = new();
     private readonly Mock<IActivityStreamManager> _activityStreamManagerMock = new();
     private readonly Mock<IGitRepositoryStreamManager> _gitRepositoryStreamManagerMock = new();
+    private readonly Mock<IStackStreamManager> _stackStreamManagerMock = new();
+    private readonly Mock<IAlertService> _alertServiceMock = new();
+    private readonly Mock<IApplyStackService> _applyStackServiceMock = new();
     private readonly Mock<INotificationQueue> _notificationQueueMock = new();
 
     private Guid _repoId;
     private Guid _repoWithoutAccountId;
+    private Guid _platformId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
@@ -31,6 +38,10 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
+        var platform = Fakes.GetDummyPlatform();
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        _platformId = platform.Id;
+
         var gitAccount = new GitAccount(
             name: "GA-TEST",
             domain: "github.com",
@@ -90,7 +101,7 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal("github.com", gitAccount!.Domain);
 
         _repoCacheManagerMock.Verify(
-            x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()),
+            x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -104,8 +115,8 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             .ReturnsAsync(Result.Success());
 
         _repoCacheManagerMock
-            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
-            .Callback<GitRepository, GitAccount?, CancellationToken>((_, account, _) => gitAccount = account)
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback<GitRepository, GitAccount?, string?, CancellationToken>((_, account, _, _) => gitAccount = account)
             .ReturnsAsync(new RepoSyncResult(GitOperation.Clone, "hash", true));
 
         await RunJobOnceAsync();
@@ -117,9 +128,13 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal(ResourceControlState.Idle, repo.ControlState);
         Assert.NotNull(gitAccount);
         Assert.Equal("github.com", gitAccount!.Domain);
+        var gitRef = await GetRepoRefAsync(_repoId, "main");
+        Assert.NotNull(gitRef);
+        Assert.Equal(GitReposStatus.Healthy, gitRef!.Status);
+        Assert.Equal("hash", gitRef.ResolvedCommitSha);
 
         _repoCacheManagerMock.Verify(
-            x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()),
+            x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -131,7 +146,7 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             .ReturnsAsync(Result.Success());
 
         _repoCacheManagerMock
-            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Error: "sync failed"));
 
         await RunJobOnceAsync();
@@ -141,6 +156,10 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.NotNull(repo);
         Assert.Equal(GitReposStatus.Degraded, repo.Status);
         Assert.Equal(ResourceControlState.Idle, repo.ControlState);
+        var gitRef = await GetRepoRefAsync(_repoId, "main");
+        Assert.NotNull(gitRef);
+        Assert.Equal(GitReposStatus.Degraded, gitRef!.Status);
+        Assert.Equal("sync failed", gitRef.LastError);
     }
 
     [Fact]
@@ -155,8 +174,8 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             .ReturnsAsync(Result.Success());
 
         _repoCacheManagerMock
-            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
-            .Callback<GitRepository, GitAccount?, CancellationToken>((_, account, _) => syncAccount = account)
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback<GitRepository, GitAccount?, string?, CancellationToken>((_, account, _, _) => syncAccount = account)
             .ReturnsAsync(new RepoSyncResult(GitOperation.Clone, "hash", true));
 
         await RunJobOnceAsync(_repoWithoutAccountId);
@@ -168,11 +187,53 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal(ResourceControlState.Idle, repo.ControlState);
         Assert.Null(testConnectionAccount);
         Assert.Null(syncAccount);
+        var gitRef = await GetRepoRefAsync(_repoWithoutAccountId, "main");
+        Assert.NotNull(gitRef);
+        Assert.Equal("hash", gitRef!.ResolvedCommitSha);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenBranchTrackingGitStackHasOlderSource_MarksStackUpdateAvailable()
+    {
+        var stackId = await CreateTrackedGitStackAsync("old-commit");
+
+        _gitCliRepositoryMock
+            .Setup(x => x.TestConnectionAsync(It.IsAny<string>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        _repoCacheManagerMock
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "new-commit", true));
+
+        await RunJobOnceAsync();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = await uow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(stack);
+        var updateState = Assert.IsType<GitStackUpdateState>(stack!.StackUpdateState);
+        Assert.Equal("old-commit", updateState.RecreateStackOnNewCommitState.CurrentCommitSha);
+        Assert.Equal("new-commit", updateState.RecreateStackOnNewCommitState.RemoteCommitSha);
+        Assert.Equal(ActivityEventType.StackGitUpdateAvailable, stack.LatestActivityEvent?.EventType);
+
+        _alertServiceMock.Verify(
+            x => x.ProcessAsync(AlertType.StackGitUpdateAvailable, It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        _applyStackServiceMock.Verify(
+            x => x.ApplyAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     private async Task RunJobOnceAsync(Guid repoId)
     {
         var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        _repoCacheManagerMock
+            .Setup(x => x.GetRemoteUrl(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>()))
+            .Returns<GitRepository, GitAccount?>((repo, _) => repo.Url);
+        _alertServiceMock
+            .Setup(x => x.ProcessAsync(It.IsAny<AlertType>(), It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         var job = new TestGitRepoSyncJob(
             new InlineDbWorkQueue(Services.GetRequiredService<IServiceScopeFactory>()),
@@ -183,6 +244,9 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             _notificationQueueMock.Object,
             channel.Reader,
             _gitRepositoryStreamManagerMock.Object,
+            _stackStreamManagerMock.Object,
+            _alertServiceMock.Object,
+            _applyStackServiceMock.Object,
             Mock.Of<Microsoft.Extensions.Logging.ILogger<GitRepoSyncJob>>());
 
         var runTask = job.RunAsync(TestContext.Current.CancellationToken);
@@ -192,6 +256,38 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     }
 
     private Task RunJobOnceAsync() => RunJobOnceAsync(_repoId);
+
+    private async Task<Guid> CreateTrackedGitStackAsync(string deployedCommit)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = Stack.Create(
+            name: $"git-stack-{Guid.NewGuid():N}",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.Git,
+            platformId: _platformId,
+            spec: new GitStack(
+                GitRepoId: _repoId,
+                Branch: "main",
+                CommitSha: null,
+                UpdateBehavior: StackUpdateBehavior.Notify,
+                ComposePaths: ["compose.yml"]));
+
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        stack.CurrentStackRelease!.UpdateSource(new StackReleaseSource(
+            SourceType: StackSource.Git,
+            GitRepositoryId: _repoId,
+            GitRepositoryName: "GR-TEST",
+            Branch: "main",
+            RequestedCommitSha: null,
+            ResolvedCommitSha: deployedCommit,
+            ComposePaths: ["compose.yml"],
+            EnvFilePaths: []));
+
+        await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+        return stack.Id;
+    }
 
     private async Task<GitRepository?> WaitForRepoStatusAsync(Guid repoId, GitReposStatus expectedStatus)
     {
@@ -214,6 +310,13 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
 
     private Task<GitRepository?> WaitForRepoStatusAsync(GitReposStatus expectedStatus)
         => WaitForRepoStatusAsync(_repoId, expectedStatus);
+
+    private async Task<GitRepositoryRef?> GetRepoRefAsync(Guid repoId, string branch)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return await uow.GitRepositories.GetRefAsync(repoId, branch, TestContext.Current.CancellationToken);
+    }
 
     private sealed class InlineDbWorkQueue(IServiceScopeFactory scopeFactory) : IDbWorkQueue
     {
@@ -241,8 +344,11 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         INotificationQueue notificationQueue,
         ChannelReader<GitRepoSyncRequest> gitSyncReader,
         IGitRepositoryStreamManager gitRepoStreamManager,
+        IStackStreamManager stackStreamManager,
+        IAlertService alertService,
+        IApplyStackService applyStackService,
         Microsoft.Extensions.Logging.ILogger<GitRepoSyncJob> logger)
-        : GitRepoSyncJob(dbWorkQueue, scopeFactory, gitCliRepository, repoCacheManager, activityHub, notificationQueue, gitSyncReader, gitRepoStreamManager, logger)
+        : GitRepoSyncJob(dbWorkQueue, scopeFactory, gitCliRepository, repoCacheManager, activityHub, notificationQueue, gitSyncReader, gitRepoStreamManager, stackStreamManager, alertService, applyStackService, logger)
     {
         public Task RunAsync(CancellationToken cancellationToken) => ExecuteAsync(cancellationToken);
     }

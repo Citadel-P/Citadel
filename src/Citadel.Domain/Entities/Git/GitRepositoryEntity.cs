@@ -1,4 +1,4 @@
-﻿using Domain.Entities.Activities;
+using Domain.Entities.Activities;
 
 namespace Domain.Entities.Git;
 
@@ -30,6 +30,8 @@ public class GitRepository(
     public string WebHookSecret { get; private set; } = webHookSecret ?? string.Empty;
     public RepoCommand? OnClone { get; private set; } = onClone;
     public RepoCommand? OnPull { get; private set; } = onPull;
+    public GitRepositorySyncMode SyncMode { get; private set; } = GitRepositorySyncMode.PullInterval;
+    public int? SyncIntervalMinutes { get; private set; } = 5;
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -116,6 +118,13 @@ public class GitRepository(
         LatestActivityEvent = activityEvent;
     }
 
+    public void UpdateSyncPolicy(GitRepositorySyncMode syncMode, int? syncIntervalMinutes)
+    {
+        SyncMode = syncMode;
+        SyncIntervalMinutes = NormalizeSyncInterval(syncMode, syncIntervalMinutes);
+        WebHookEnabled = syncMode == GitRepositorySyncMode.Webhook;
+    }
+
     public void UpdateSource(string url, Guid? gitAccountId)
     {
         Url = Normalize(url);
@@ -152,6 +161,8 @@ public class GitRepository(
         string? webHookSecret = null,
         RepoCommand? onClone = null,
         RepoCommand? onPull = null,
+        GitRepositorySyncMode syncMode = GitRepositorySyncMode.PullInterval,
+        int? syncIntervalMinutes = 5,
         ResourceControlState controlState = ResourceControlState.Idle,
         long? controlStartedAt = null,
         Guid? controlTriggeredBy = null,
@@ -168,6 +179,8 @@ public class GitRepository(
             WebHookSecret = webHookSecret ?? string.Empty,
             OnClone = onClone,
             OnPull = onPull,
+            SyncMode = syncMode,
+            SyncIntervalMinutes = NormalizeSyncInterval(syncMode, syncIntervalMinutes),
             Status = status,
             ControlState = controlState,
             ControlStartedAt = controlStartedAt,
@@ -186,6 +199,14 @@ public class GitRepository(
         return normalizedUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase)
             ? normalizedUrl[..^4]
             : normalizedUrl;
+    }
+
+    private static int? NormalizeSyncInterval(GitRepositorySyncMode syncMode, int? syncIntervalMinutes)
+    {
+        if (syncMode != GitRepositorySyncMode.PullInterval)
+            return null;
+
+        return Math.Max(1, syncIntervalMinutes ?? 5);
     }
 
     private static string ExtractRepositoryName(string url)

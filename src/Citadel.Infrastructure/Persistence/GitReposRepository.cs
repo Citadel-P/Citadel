@@ -23,9 +23,11 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
     {
         const string sql = """
             INSERT INTO GitRepositories (
-                Id, Name, Description, Url, DefaultBranch, Status, GitAccountId, CreatedAt, CreatedByActorId, WebHookEnabled, WebHookSecret, OnClone, OnPull)
+                Id, Name, Description, Url, DefaultBranch, Status, SyncMode, SyncIntervalMinutes, GitAccountId, CreatedAt, CreatedByActorId, WebHookEnabled, WebHookSecret, OnClone, OnPull,
+                ControlState, ControlStartedAt, ControlTriggeredBy, RowVersion)
             VALUES (
-                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @GitAccountId, @CreatedAt, @CreatedByActorId, @WebHookEnabled, @WebHookSecret, @OnClone::json, @OnPull::json)
+                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @SyncMode, @SyncIntervalMinutes, @GitAccountId, @CreatedAt, @CreatedByActorId, @WebHookEnabled, @WebHookSecret, @OnClone::json, @OnPull::json,
+                @ControlState, @ControlStartedAt, @ControlTriggeredBy, @RowVersion)
         """;
 
         return db.ExecuteAsync(sql, new
@@ -36,6 +38,8 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             Url = gitRepository.Url,
             DefaultBranch = gitRepository.DefaultBranch,
             Status = EnumFormatter<GitReposStatus>.GetValue(gitRepository.Status),
+            SyncMode = EnumFormatter<GitRepositorySyncMode>.GetValue(gitRepository.SyncMode),
+            gitRepository.SyncIntervalMinutes,
             GitAccountId = gitRepository.GitAccountId,
             CreatedAt = gitRepository.CreatedAt,
             CreatedByActorId = gitRepository.CreatedByActorId,
@@ -152,6 +156,8 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
                 Url = @Url,
                 DefaultBranch = @DefaultBranch,
                 Status = @Status,
+                SyncMode = @SyncMode,
+                SyncIntervalMinutes = @SyncIntervalMinutes,
                 GitAccountId = @GitAccountId,
                 WebHookEnabled = @WebHookEnabled,
                 WebHookSecret = @WebHookSecret,
@@ -172,6 +178,8 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             Url = gitRepository.Url,
             DefaultBranch = gitRepository.DefaultBranch,
             Status = EnumFormatter<GitReposStatus>.GetValue(gitRepository.Status),
+            SyncMode = EnumFormatter<GitRepositorySyncMode>.GetValue(gitRepository.SyncMode),
+            gitRepository.SyncIntervalMinutes,
             GitAccountId = gitRepository.GitAccountId,
             WebHookEnabled = gitRepository.WebHookEnabled,
             WebHookSecret = gitRepository.WebHookSecret,
@@ -195,5 +203,69 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             sql,
             new { Ids = ids.ToArray() },
             transaction: tx());
+    }
+
+    public async Task<GitRepositoryRef?> GetRefAsync(Guid gitRepositoryId, string branch, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT *
+            FROM GitRepositoryRefs
+            WHERE GitRepositoryId = @GitRepositoryId
+              AND Branch = @Branch
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryRefDto>(
+            sql,
+            new { GitRepositoryId = gitRepositoryId, Branch = branch, cancellationToken },
+            transaction: tx());
+
+        return result?.ToDomain();
+    }
+
+    public async Task<IEnumerable<GitRepositoryRef>> GetRefsByRepositoryIdAsync(Guid gitRepositoryId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT *
+            FROM GitRepositoryRefs
+            WHERE GitRepositoryId = @GitRepositoryId
+            ORDER BY Branch
+            """;
+
+        var result = await db.QueryAsync<GitRepositoryRefDto>(
+            sql,
+            new { GitRepositoryId = gitRepositoryId, cancellationToken },
+            transaction: tx());
+
+        return result.ToDomain();
+    }
+
+    public Task<int> UpsertRefAsync(GitRepositoryRef gitRepositoryRef, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT INTO GitRepositoryRefs (
+                Id, GitRepositoryId, Branch, ResolvedCommitSha, Status, LastError, LastSyncedAt
+            )
+            VALUES (
+                @Id, @GitRepositoryId, @Branch, @ResolvedCommitSha, @Status, @LastError, @LastSyncedAt
+            )
+            ON CONFLICT (GitRepositoryId, Branch) DO UPDATE
+            SET ResolvedCommitSha = EXCLUDED.ResolvedCommitSha,
+                Status = EXCLUDED.Status,
+                LastError = EXCLUDED.LastError,
+                LastSyncedAt = EXCLUDED.LastSyncedAt
+            """;
+
+        return db.ExecuteAsync(sql, new
+        {
+            gitRepositoryRef.Id,
+            gitRepositoryRef.GitRepositoryId,
+            gitRepositoryRef.Branch,
+            gitRepositoryRef.ResolvedCommitSha,
+            Status = EnumFormatter<GitReposStatus>.GetValue(gitRepositoryRef.Status),
+            gitRepositoryRef.LastError,
+            gitRepositoryRef.LastSyncedAt,
+            cancellationToken
+        }, transaction: tx());
     }
 }

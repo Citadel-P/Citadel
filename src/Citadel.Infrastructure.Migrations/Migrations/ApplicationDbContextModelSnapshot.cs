@@ -1039,6 +1039,19 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("status");
 
+                    b.Property<int?>("SyncIntervalMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(5)
+                        .HasColumnName("syncintervalminutes");
+
+                    b.Property<string>("SyncMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("PullInterval")
+                        .HasColumnName("syncmode");
+
                     b.Property<string>("Url")
                         .IsRequired()
                         .HasColumnType("text")
@@ -1071,6 +1084,49 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_gitrepositories_name");
 
                     b.ToTable("gitrepositories", (string)null);
+                });
+
+            modelBuilder.Entity("GitRepositoryRef", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("branch");
+
+                    b.Property<Guid>("GitRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("gitrepositoryid");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("lasterror");
+
+                    b.Property<DateTime>("LastSyncedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastsyncedat");
+
+                    b.Property<string>("ResolvedCommitSha")
+                        .HasColumnType("text")
+                        .HasColumnName("resolvedcommitsha");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_gitrepositoryrefs");
+
+                    b.HasIndex("GitRepositoryId", "Branch")
+                        .IsUnique()
+                        .HasDatabaseName("ix_gitrepositoryrefs_gitrepositoryid_branch");
+
+                    b.ToTable("gitrepositoryrefs", (string)null);
                 });
 
             modelBuilder.Entity("Image", b =>
@@ -1880,6 +1936,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("platformid");
 
+                    b.Property<string>("Source")
+                        .HasColumnType("json")
+                        .HasColumnName("source");
+
                     b.Property<string>("Spec")
                         .IsRequired()
                         .HasColumnType("json")
@@ -2228,6 +2288,16 @@ namespace Infrastructure.Migrations.Migrations
                         .HasForeignKey("GitAccountId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_gitrepositories_gitaccounts_gitaccountid");
+                });
+
+            modelBuilder.Entity("GitRepositoryRef", b =>
+                {
+                    b.HasOne("GitRepository", null)
+                        .WithMany()
+                        .HasForeignKey("GitRepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_gitrepositoryrefs_gitrepositories_gitrepositoryid");
                 });
 
             modelBuilder.Entity("Image", b =>

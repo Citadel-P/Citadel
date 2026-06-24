@@ -27,7 +27,9 @@ public sealed record CreateGitRepository(
     bool WebHookEnabled = false,
     string? WebHookSecret = null,
     RepoCommand? OnClone = null,
-    RepoCommand? OnPull = null) : ICommand<Result<GitRepository>>
+    RepoCommand? OnPull = null,
+    GitRepositorySyncMode SyncMode = GitRepositorySyncMode.PullInterval,
+    int? SyncIntervalMinutes = 5) : ICommand<Result<GitRepository>>
 {
     internal sealed class Validator : AbstractValidator<CreateGitRepository>
     {
@@ -36,6 +38,8 @@ public sealed record CreateGitRepository(
             RuleFor(x => x.Name).ValidNameIdentifier();
             RuleFor(x => x.Url).NotEmpty();
             RuleFor(x => x.DefaultBranch).NotEmpty();
+            When(x => x.SyncMode == GitRepositorySyncMode.PullInterval, () =>
+                RuleFor(x => x.SyncIntervalMinutes).NotNull().GreaterThanOrEqualTo(1));
         }
     }
 }
@@ -78,6 +82,8 @@ internal sealed class CreateGitRepositoryHandler(
             command.WebHookSecret ?? string.Empty,
             command.OnClone,
             command.OnPull);
+
+        gitRepository.UpdateSyncPolicy(command.SyncMode, command.SyncIntervalMinutes);
 
         gitRepository.MarkProcessing(actorId);
 

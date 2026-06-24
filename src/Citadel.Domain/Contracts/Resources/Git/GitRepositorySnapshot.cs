@@ -10,14 +10,20 @@ public sealed record GitRepositorySnapshot(
     string Url,
     string DefaultBranch,
     Guid? GitAccountId,
+    GitRepositorySyncMode SyncMode,
+    int? SyncIntervalMinutes,
     bool WebHookEnabled,
     string? WebHookSecret,
     RepoCommand? OnClone,
-    RepoCommand? OnPull);
+    RepoCommand? OnPull,
+    string? ResolvedCommitSha = null);
 
 public static class GitRepositorySnapshotExtensions
 {
-    public static GitRepositorySnapshot ToSnapshot(this GitRepository repository, Guid? id = null) 
+    public static GitRepositorySnapshot ToSnapshot(
+        this GitRepository repository,
+        Guid? id = null,
+        string? resolvedCommitSha = null)
         => new (
             Id: id ?? repository.Id,
             repository.Name,
@@ -25,10 +31,13 @@ public static class GitRepositorySnapshotExtensions
             repository.Url,
             repository.DefaultBranch ?? string.Empty,
             repository.GitAccountId,
+            repository.SyncMode,
+            repository.SyncIntervalMinutes,
             repository.WebHookEnabled,
             repository.WebHookSecret.MaskValue(),
             repository.OnClone,
-            repository.OnPull);
+            repository.OnPull,
+            resolvedCommitSha);
 }
 
 public sealed record RepoSyncResultSnapshot(string? CommitSha = null, string? Message = null);

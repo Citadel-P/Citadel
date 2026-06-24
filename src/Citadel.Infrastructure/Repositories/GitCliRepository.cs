@@ -51,6 +51,7 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
     {
         var candidates = new[]
         {
+            branch,
             $"refs/heads/{branch}",
             $"refs/remotes/origin/{branch}",
             "HEAD"
@@ -85,6 +86,47 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
 
         var result = await processService.ExecuteAsync(GitExecutable, args, env, "", ct);
         return result.Map();
+    }
+
+    public async Task<Result> FetchAsync(string repoPath, string branch, GitAccount? account, CancellationToken ct = default)
+    {
+        var (args, env) = PrepareRemoteCmd(account);
+        args.AddRange(["-C", repoPath, "fetch", "origin", $"{branch}:refs/remotes/origin/{branch}"]);
+
+        var result = await processService.ExecuteAsync(GitExecutable, args, env, "", ct);
+        return result.Map();
+    }
+
+    public async Task<Result> CommitExistsAsync(string repoPath, string commitSha, CancellationToken ct = default)
+    {
+        var args = new[] { "-C", repoPath, "cat-file", "-e", $"{commitSha}^{{commit}}" };
+        var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, "", ct);
+        return result.Map();
+    }
+
+    public async Task<Result> MaterializeSnapshotAsync(string repoPath, string commitSha, string targetPath, CancellationToken ct = default)
+    {
+        if (Directory.Exists(targetPath))
+            Directory.Delete(targetPath, recursive: true);
+
+        var clone = await processService.ExecuteAsync(
+            GitExecutable,
+            ["clone", "--no-checkout", "--no-hardlinks", repoPath, targetPath],
+            GitEnv,
+            "",
+            ct);
+
+        if (!clone.IsSuccess)
+            return clone.Map();
+
+        var checkout = await processService.ExecuteAsync(
+            GitExecutable,
+            ["-C", targetPath, "checkout", "--detach", commitSha],
+            GitEnv,
+            "",
+            ct);
+
+        return checkout.Map();
     }
 
     public async Task<Result> ExecuteShellCommandAsync(string workingDir, string command, CancellationToken ct = default)

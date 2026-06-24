@@ -400,6 +400,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("updateGitRepositoryMetadata");
 
+        gitRepositories.MapPost("{id}/sync", GitRepositories.Sync)
+            .WithSummary("Sync a git repository")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("syncGitRepository");
+
         gitRepositories.MapPost("/rename", GitRepositories.Rename)
             .WithSummary("Rename a git repository")
             .ProducesValidationProblem()

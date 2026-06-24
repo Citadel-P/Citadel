@@ -22,5 +22,8 @@ public interface IGitCliRepository
     Task<Result<string>> ResolveSnapshotCommitAsync(string repoPath, string branch, CancellationToken ct = default);
     Task<Result> CloneAsync(string url, string targetPath, string branch, GitAccount? account, CancellationToken ct = default);
     Task<Result> PullAsync(string repoPath, string branch, GitAccount? account, CancellationToken ct = default);
+    Task<Result> FetchAsync(string repoPath, string branch, GitAccount? account, CancellationToken ct = default);
+    Task<Result> CommitExistsAsync(string repoPath, string commitSha, CancellationToken ct = default);
+    Task<Result> MaterializeSnapshotAsync(string repoPath, string commitSha, string targetPath, CancellationToken ct = default);
     Task<Result> ExecuteShellCommandAsync(string workingDir, string command, CancellationToken ct = default);
 }

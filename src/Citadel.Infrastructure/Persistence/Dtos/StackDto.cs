@@ -20,6 +20,7 @@ internal sealed record StackDto(
     string? CurrentRelease_Status = null,
     string? CurrentRelease_Version = null,
     string? CurrentRelease_Spec = null,
+    string? CurrentRelease_Source = null,
     DateTime? CurrentRelease_CreatedAt = null,
     Guid? CurrentRelease_CreatedByActorId = null,
     string? Platform_Name = null,

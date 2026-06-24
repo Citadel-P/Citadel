@@ -20,6 +20,9 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(StackServiceAutoUpdatedAlertInfo), nameof(AlertType.StackServiceAutoUpdated))]
 [JsonDerivedType(typeof(StackServiceAutoDeployFailedAlertInfo), nameof(AlertType.StackServiceAutoDeployFailed))]
 [JsonDerivedType(typeof(StackDriftDetectedAlertInfo), nameof(AlertType.StackDriftDetected))]
+[JsonDerivedType(typeof(StackGitUpdateAvailableAlertInfo), nameof(AlertType.StackGitUpdateAvailable))]
+[JsonDerivedType(typeof(StackGitAutoUpdatedAlertInfo), nameof(AlertType.StackGitAutoUpdated))]
+[JsonDerivedType(typeof(StackGitAutoDeployFailedAlertInfo), nameof(AlertType.StackGitAutoDeployFailed))]
 public abstract record AlertEventInfo
 {
     /// <summary>
@@ -135,6 +138,40 @@ public sealed record StackDriftDetectedAlertInfo(
             return $"Drift detected on stack '{StackName}': {issueText}.{actionText}";
         }
     }
+}
+
+public sealed record StackGitUpdateAvailableAlertInfo(
+    string StackName,
+    string GitRepositoryName,
+    string Branch,
+    string CurrentCommitSha,
+    string RemoteCommitSha) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Git update available for stack '{StackName}' from {GitRepositoryName}/{Branch}: {CurrentCommitSha} → {RemoteCommitSha}";
+}
+
+public sealed record StackGitAutoUpdatedAlertInfo(
+    string StackName,
+    string GitRepositoryName,
+    string Branch,
+    string PreviousCommitSha,
+    string UpdatedCommitSha) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Git stack '{StackName}' auto-updated from {GitRepositoryName}/{Branch}: {PreviousCommitSha} → {UpdatedCommitSha}";
+}
+
+public sealed record StackGitAutoDeployFailedAlertInfo(
+    string StackName,
+    string GitRepositoryName,
+    string Branch,
+    string CurrentCommitSha,
+    string RemoteCommitSha,
+    string Reason) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Git stack '{StackName}' auto-deploy failed from {GitRepositoryName}/{Branch}: {Reason}";
 }
 
 file static class StackAlertMessageFormatter

@@ -343,4 +343,95 @@ public sealed class StackDriftDetectedEvaluator : IAlertEvaluator
         }
     }
 }
+
+[AlertEvaluator(AlertType.StackGitUpdateAvailable)]
+public sealed class StackGitUpdateAvailableEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.StackGitUpdateAvailable;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.StackGitUpdates is null)
+            yield break;
+
+        foreach (var stack in context.StackGitUpdates)
+        {
+            if (stack.Failed)
+                continue;
+
+            yield return new AlertMatch(
+                stack.Id,
+                stack.Name,
+                AlertResourceType.Stack,
+                new StackGitUpdateAvailableAlertInfo(
+                    stack.Name,
+                    stack.GitRepositoryName,
+                    stack.Branch,
+                    stack.CurrentCommitSha,
+                    stack.RemoteCommitSha),
+                DeduplicationComponent: $"{stack.GitRepositoryName}:{stack.Branch}:{stack.RemoteCommitSha}");
+        }
+    }
+}
+
+[AlertEvaluator(AlertType.StackGitAutoUpdated)]
+public sealed class StackGitAutoUpdatedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.StackGitAutoUpdated;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.StackGitUpdates is null)
+            yield break;
+
+        foreach (var stack in context.StackGitUpdates)
+        {
+            if (stack.Failed)
+                continue;
+
+            yield return new AlertMatch(
+                stack.Id,
+                stack.Name,
+                AlertResourceType.Stack,
+                new StackGitAutoUpdatedAlertInfo(
+                    stack.Name,
+                    stack.GitRepositoryName,
+                    stack.Branch,
+                    stack.CurrentCommitSha,
+                    stack.RemoteCommitSha),
+                DeduplicationComponent: $"{stack.GitRepositoryName}:{stack.Branch}:{stack.RemoteCommitSha}");
+        }
+    }
+}
+
+[AlertEvaluator(AlertType.StackGitAutoDeployFailed)]
+public sealed class StackGitAutoDeployFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.StackGitAutoDeployFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.StackGitUpdates is null)
+            yield break;
+
+        foreach (var stack in context.StackGitUpdates)
+        {
+            if (!stack.Failed)
+                continue;
+
+            yield return new AlertMatch(
+                stack.Id,
+                stack.Name,
+                AlertResourceType.Stack,
+                new StackGitAutoDeployFailedAlertInfo(
+                    stack.Name,
+                    stack.GitRepositoryName,
+                    stack.Branch,
+                    stack.CurrentCommitSha,
+                    stack.RemoteCommitSha,
+                    stack.Reason ?? "Auto-deploy failed."),
+                DeduplicationComponent: $"{stack.GitRepositoryName}:{stack.Branch}:{stack.RemoteCommitSha}");
+        }
+    }
+}
 #endregion

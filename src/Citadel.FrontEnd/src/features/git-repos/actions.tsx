@@ -1,10 +1,49 @@
 import { GitRepositoryView } from '@/api/generated/api.types';
-import { Pencil, Trash } from 'lucide-react';
+import { Pencil, RefreshCw, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import { createActionsBuilder } from '@/components/custom/actions-builder';
+import { ActionConfig, createActionsBuilder } from '@/components/custom/actions-builder';
+import { ResourceControlState } from '@/api/generated/api.types';
+import { useMutate } from '@/lib/hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
+const isProcessing = (resource: GitRepositoryView) => resource.controlState === ResourceControlState.Processing;
+
+export const syncGitRepositoryAction: ActionConfig<GitRepositoryView, 'syncGitRepository'> = {
+  key: 'sync',
+  type: 'command',
+  icon: RefreshCw,
+  requiredCapabilities: ['canExecute'],
+  useHandler: ({ resources }) => {
+    const queryClient = useQueryClient();
+    const { mutateAsync, isPending } = useMutate('syncGitRepository');
+    const selected = Array.isArray(resources) ? resources[0] : resources;
+    const multiSelect = Array.isArray(resources) && resources.length > 1;
+    const canExecute = !!selected && !multiSelect && !isProcessing(selected);
+
+    return {
+      canExecute,
+      isPending,
+      run: async () => {
+        if (!canExecute || !selected) return;
+
+        await mutateAsync({
+          id: selected.id,
+          query: selected.defaultBranch ? { branch: selected.defaultBranch } : undefined,
+        });
+
+        toast.success(`Sync queued for ${selected.name}`);
+        queryClient.invalidateQueries({ queryKey: ['listGitRepositories'] });
+        queryClient.invalidateQueries({ queryKey: ['getGitRepository', { id: selected.id }] });
+        queryClient.invalidateQueries({ queryKey: ['getGitRepositoryConfig', { id: selected.id }] });
+      },
+    };
+  },
+};
 
 export const { dropdown: GitRepoDropdownActions, group: GitRepoGroupActions } =
   createActionsBuilder<GitRepositoryView>()
+    .addAction(syncGitRepositoryAction)
     .addAction({
       key: 'edit',
       type: 'command',

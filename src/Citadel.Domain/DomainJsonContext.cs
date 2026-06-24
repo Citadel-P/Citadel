@@ -115,6 +115,9 @@ public partial class DeploymentJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackDriftDetected))]
 [JsonSerializable(typeof(StackDriftResolved))]
 [JsonSerializable(typeof(StackReconciliationAttempted))]
+[JsonSerializable(typeof(StackGitUpdateAvailable))]
+[JsonSerializable(typeof(StackGitAutoUpdated))]
+[JsonSerializable(typeof(StackGitAutoDeployFailed))]
 [JsonSerializable(typeof(StackApplied))]
 [JsonSerializable(typeof(AlertRuleCreated))]
 [JsonSerializable(typeof(AlertRuleUpdated))]
@@ -151,6 +154,9 @@ public partial class EventInfoJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(IReadOnlyList<StackImageUpdateItem>))]
 [JsonSerializable(typeof(StackServiceAutoUpdatedAlertInfo))]
 [JsonSerializable(typeof(StackServiceAutoDeployFailedAlertInfo))]
+[JsonSerializable(typeof(StackGitUpdateAvailableAlertInfo))]
+[JsonSerializable(typeof(StackGitAutoUpdatedAlertInfo))]
+[JsonSerializable(typeof(StackGitAutoDeployFailedAlertInfo))]
 public partial class AlertEventJsonContext : JsonSerializerContext
 {
 }
@@ -188,7 +194,8 @@ public partial class AlertRuleJsonContext : JsonSerializerContext
     {
         typeof(JsonStringEnumConverter<GitTransport>),
         typeof(JsonStringEnumConverter<GitAuthType>),
-        typeof(JsonStringEnumConverter<GitReposStatus>)
+        typeof(JsonStringEnumConverter<GitReposStatus>),
+        typeof(JsonStringEnumConverter<GitRepositorySyncMode>)
     })]
 [JsonSerializable(typeof(GitAccount))]
 [JsonSerializable(typeof(BasicAuth))]
@@ -230,6 +237,7 @@ public partial class GitJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackReconciliationResult))]
 [JsonSerializable(typeof(StackReconciliationAction))]
 [JsonSerializable(typeof(StackRelease))]
+[JsonSerializable(typeof(StackReleaseSource))]
 [JsonSerializable(typeof(StackSpec))]
 [JsonSerializable(typeof(ManualStack))]
 [JsonSerializable(typeof(GitStack))]

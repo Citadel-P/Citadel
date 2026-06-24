@@ -40,6 +40,9 @@ internal static class StackMappers
                 spec: dto.CurrentRelease_Spec == null
                     ? new ManualStack(string.Empty, StackUpdateBehavior.Disabled)
                     : JsonSerializer.Deserialize(dto.CurrentRelease_Spec, StackJsonContext.Default.StackSpec)!,
+                source: string.IsNullOrWhiteSpace(dto.CurrentRelease_Source)
+                    ? null
+                    : JsonSerializer.Deserialize(dto.CurrentRelease_Source, StackJsonContext.Default.StackReleaseSource),
                 createdAt: dto.CurrentRelease_CreatedAt!.Value,
                 createdByActorId: dto.CurrentRelease_CreatedByActorId!.Value,
                 platform: platform);
@@ -104,6 +107,9 @@ internal static class StackMappers
             status: Enum.Parse<StackReleaseStatus>(dto.Status),
             version: dto.Version,
             spec: JsonSerializer.Deserialize(dto.Spec, StackJsonContext.Default.StackSpec)!,
+            source: string.IsNullOrWhiteSpace(dto.Source)
+                ? null
+                : JsonSerializer.Deserialize(dto.Source, StackJsonContext.Default.StackReleaseSource),
             createdAt: dto.CreatedAt,
             createdByActorId: dto.CreatedByActorId,
             platform: platform);

@@ -4,6 +4,7 @@ import {
   GitRepositoryConfigView,
   CreateGitRepositoryInput,
   PatchGitRepositoryInput,
+  GitRepositorySyncMode,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -87,7 +88,15 @@ export const GitRepoForm = ({
 
   const resource: GitRepositoryConfigView | undefined = gitRepoCfg?.data;
 
-  const original = resource ?? ({} as GitRepositoryConfigView);
+  const original =
+    resource ??
+    ({
+      syncMode: GitRepositorySyncMode.PullInterval,
+      syncIntervalMinutes: 5,
+      webHookEnabled: false,
+    } as GitRepositoryConfigView);
+  const currentSyncMode =
+    update.syncMode ?? original.syncMode ?? GitRepositorySyncMode.PullInterval;
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`GitRepo:${id ?? 'new'}`);
@@ -191,6 +200,77 @@ export const GitRepoForm = ({
           }),
 
           defineGroupField<GitRepositoryInput>({
+            id: 'sync',
+            label: 'Sync',
+            description: 'Choose how Citadel refreshes the local repository cache.',
+            items: [
+              defineField({
+                key: 'syncMode',
+                label: 'Sync mode',
+                render: (val, set) => (
+                  <Select
+                    value={val ?? GitRepositorySyncMode.PullInterval}
+                    onValueChange={(v) => {
+                      const syncMode = v as GitRepositorySyncMode;
+                      set({
+                        syncMode,
+                        webHookEnabled: syncMode === GitRepositorySyncMode.Webhook,
+                        syncIntervalMinutes:
+                          syncMode === GitRepositorySyncMode.PullInterval
+                            ? (update.syncIntervalMinutes ?? original.syncIntervalMinutes ?? 5)
+                            : null,
+                      });
+                    }}>
+                    <SelectTrigger className="w-full max-w-100">
+                      <SelectValue placeholder="Select sync mode" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background">
+                      <SelectItem value={GitRepositorySyncMode.PullInterval}>Pull on interval</SelectItem>
+                      <SelectItem value={GitRepositorySyncMode.Webhook}>Webhook</SelectItem>
+                      <SelectItem value={GitRepositorySyncMode.Manual}>Manual only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ),
+              }),
+              ...(currentSyncMode === GitRepositorySyncMode.PullInterval
+                ? [
+                    defineField<GitRepositoryInput, 'syncIntervalMinutes'>({
+                      key: 'syncIntervalMinutes',
+                      label: 'Pull interval',
+                      required: true,
+                      description: 'How often Citadel checks this repository for changes, in minutes.',
+                      validate: (v) => (v === undefined || v === null || v < 1 ? 'Interval must be at least 1 minute' : null),
+                      render: (val, set) => (
+                        <FieldInput
+                          type="number"
+                          value={val ?? 5}
+                          onChange={(v) => set({ syncIntervalMinutes: v ?? 5 })}
+                          placeholder="5"
+                        />
+                      ),
+                    }),
+                  ]
+                : []),
+              ...(currentSyncMode === GitRepositorySyncMode.Webhook
+                ? [
+                    defineField<GitRepositoryInput, 'webHookSecret'>({
+                      key: 'webHookSecret',
+                      label: 'Webhook secret',
+                      description: 'Optional shared secret for future webhook signature validation.',
+                      render: (val, set) => (
+                        <FieldInput
+                          value={val ?? ''}
+                          onChange={(v) => set({ webHookSecret: v || null })}
+                          placeholder="Optional webhook secret"
+                        />
+                      ),
+                    }),
+                  ]
+                : []),
+            ],
+          }),
+
+          defineGroupField<GitRepositoryInput>({
             id: 'on_pull',
             label: 'On Pull',
             title: 'On Pull',
@@ -286,7 +366,7 @@ export const GitRepoForm = ({
         ],
       }),
     }),
-    [mode],
+    [mode, currentSyncMode, original.syncIntervalMinutes, update.syncIntervalMinutes],
   );
 
   return (

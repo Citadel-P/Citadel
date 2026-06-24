@@ -141,6 +141,8 @@ public interface IStackRepository
     Task<int> UpdateAsync(Stack stack, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetStuckStacksAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<IEnumerable<GitStackBranchSubscription>> GetGitStackBranchSubscriptionsAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Stack>> GetBranchTrackingGitStacksAsync(Guid gitRepositoryId, string branch, CancellationToken cancellationToken);
     Task<bool> UpdateProcessingAsync(Guid id, StackReleaseStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
 }
 
@@ -157,6 +159,9 @@ public interface IGitReposRepository
     Task<int> AddAsync(GitRepository gitRepository, CancellationToken cancellationToken);
     Task<int> UpdateAsync(GitRepository gitRepository, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<GitRepositoryRef?> GetRefAsync(Guid gitRepositoryId, string branch, CancellationToken cancellationToken);
+    Task<IEnumerable<GitRepositoryRef>> GetRefsByRepositoryIdAsync(Guid gitRepositoryId, CancellationToken cancellationToken);
+    Task<int> UpsertRefAsync(GitRepositoryRef gitRepositoryRef, CancellationToken cancellationToken);
 }
 
 public interface IGitAccountRepository

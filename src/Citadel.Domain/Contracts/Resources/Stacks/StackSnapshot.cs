@@ -10,6 +10,11 @@ public sealed record StackSnapshot(
     StackDriftPolicy DriftPolicy,
     StackReleaseSnapshot? StackRelease);
 
+public sealed record GitStackBranchSubscription(
+    Guid StackId,
+    Guid GitRepositoryId,
+    string Branch);
+
 public sealed record StackReleaseSnapshot(
     Guid PlatformId,
     StackSpec Spec,

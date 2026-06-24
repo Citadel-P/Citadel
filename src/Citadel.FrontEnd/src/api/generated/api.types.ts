@@ -186,6 +186,12 @@ export enum GitTransport {
   Ssh = "Ssh",
 }
 
+export enum GitRepositorySyncMode {
+  Manual = "Manual",
+  PullInterval = "PullInterval",
+  Webhook = "Webhook",
+}
+
 export enum GitReposStatus {
   Unknown = "Unknown",
   Pending = "Pending",
@@ -273,6 +279,9 @@ export enum AlertType {
   StackServiceAutoDeployFailed = "StackServiceAutoDeployFailed",
   StackServiceAutoUpdated = "StackServiceAutoUpdated",
   StackDriftDetected = "StackDriftDetected",
+  StackGitUpdateAvailable = "StackGitUpdateAvailable",
+  StackGitAutoUpdated = "StackGitAutoUpdated",
+  StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
 }
 
 export enum AlertSeverity {
@@ -385,6 +394,9 @@ export enum ActivityEventType {
   StackDriftDetected = "StackDriftDetected",
   StackDriftResolved = "StackDriftResolved",
   StackReconciliationAttempted = "StackReconciliationAttempted",
+  StackGitUpdateAvailable = "StackGitUpdateAvailable",
+  StackGitAutoUpdated = "StackGitAutoUpdated",
+  StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
 }
 
 export type StackUpdateState = BaseStackUpdateState &
@@ -573,6 +585,18 @@ export type AlertEventInfo = BaseAlertEventInfo &
         "StackDriftDetected",
         AlertEventInfoStackDriftDetectedAlertInfo
       >
+    | BaseAlertEventInfoTypeMapping<
+        "StackGitUpdateAvailable",
+        AlertEventInfoStackGitUpdateAvailableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackGitAutoUpdated",
+        AlertEventInfoStackGitAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackGitAutoDeployFailed",
+        AlertEventInfoStackGitAutoDeployFailedAlertInfo
+      >
   );
 
 export type ActivityEventInfo = BaseActivityEventInfo &
@@ -660,6 +684,18 @@ export type ActivityEventInfo = BaseActivityEventInfo &
     | BaseActivityEventInfoTypeMapping<
         "StackReconciliationAttempted",
         ActivityEventInfoStackReconciliationAttempted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackGitUpdateAvailable",
+        ActivityEventInfoStackGitUpdateAvailable
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackGitAutoUpdated",
+        ActivityEventInfoStackGitAutoUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackGitAutoDeployFailed",
+        ActivityEventInfoStackGitAutoDeployFailed
       >
     | BaseActivityEventInfoTypeMapping<
         "AlertRuleCreated",
@@ -885,6 +921,31 @@ export interface ActivityEventInfoStackDriftResolved {
   previousFingerprint: string;
 }
 
+export interface ActivityEventInfoStackGitAutoDeployFailed {
+  $type?: "StackGitAutoDeployFailed";
+  gitRepositoryName: string;
+  branch: string;
+  currentCommitSha: string;
+  remoteCommitSha: string;
+  reason: string;
+}
+
+export interface ActivityEventInfoStackGitAutoUpdated {
+  $type?: "StackGitAutoUpdated";
+  gitRepositoryName: string;
+  branch: string;
+  previousCommitSha: string;
+  updatedCommitSha: string;
+}
+
+export interface ActivityEventInfoStackGitUpdateAvailable {
+  $type?: "StackGitUpdateAvailable";
+  gitRepositoryName: string;
+  branch: string;
+  currentCommitSha: string;
+  remoteCommitSha: string;
+}
+
 export interface ActivityEventInfoStackPaused {
   $type?: "StackPaused";
   containerIds: string[];
@@ -1097,6 +1158,37 @@ export interface AlertEventInfoStackDriftDetectedAlertInfo {
   hasAutoFixableDrift: boolean;
   hasStructuralDrift: boolean;
   driftSummaries: string[];
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackGitAutoDeployFailedAlertInfo {
+  $type?: "StackGitAutoDeployFailed";
+  stackName: string;
+  gitRepositoryName: string;
+  branch: string;
+  currentCommitSha: string;
+  remoteCommitSha: string;
+  reason: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackGitAutoUpdatedAlertInfo {
+  $type?: "StackGitAutoUpdated";
+  stackName: string;
+  gitRepositoryName: string;
+  branch: string;
+  previousCommitSha: string;
+  updatedCommitSha: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackGitUpdateAvailableAlertInfo {
+  $type?: "StackGitUpdateAvailable";
+  stackName: string;
+  gitRepositoryName: string;
+  branch: string;
+  currentCommitSha: string;
+  remoteCommitSha: string;
   humanMessage?: null | string;
 }
 
@@ -1622,6 +1714,12 @@ export interface CreateGitRepositoryInput {
   defaultBranch: string;
   /** @format uuid */
   gitAccountId: null | string;
+  syncMode: GitRepositorySyncMode;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  syncIntervalMinutes: null | number | string;
   webHookEnabled: boolean;
   webHookSecret: null | string;
   onClone: null | RepoCommand;
@@ -2122,6 +2220,12 @@ export interface GitRepositoryConfigView {
   defaultBranch: string;
   /** @format uuid */
   gitAccountId: null | string;
+  syncMode: GitRepositorySyncMode;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  syncIntervalMinutes: null | number | string;
   webHookEnabled: boolean;
   webHookSecret: null | string;
   onClone: null | RepoCommand;
@@ -2137,10 +2241,17 @@ export interface GitRepositorySnapshot {
   defaultBranch: string;
   /** @format uuid */
   gitAccountId: null | string;
+  syncMode: GitRepositorySyncMode;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  syncIntervalMinutes: null | number | string;
   webHookEnabled: boolean;
   webHookSecret: null | string;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
+  resolvedCommitSha?: null | string;
 }
 
 export interface GitRepositoryView {
@@ -2155,6 +2266,12 @@ export interface GitRepositoryView {
   defaultBranch: null | string;
   /** @format uuid */
   gitAccountId: null | string;
+  syncMode: GitRepositorySyncMode;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  syncIntervalMinutes: null | number | string;
   webHookEnabled: boolean;
   webHookSecret: null | string;
   onClone: null | RepoCommand;
@@ -2697,6 +2814,12 @@ export interface PatchGitRepositoryInput {
   defaultBranch: string;
   /** @format uuid */
   gitAccountId: null | string;
+  syncMode: GitRepositorySyncMode;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  syncIntervalMinutes: null | number | string;
   webHookEnabled: boolean;
   webHookSecret: null | string;
   onClone: null | RepoCommand;
@@ -3305,6 +3428,18 @@ export interface StackReleaseSnapshot {
   version: null | string;
 }
 
+export interface StackReleaseSource {
+  sourceType: StackSource;
+  /** @format uuid */
+  gitRepositoryId: null | string;
+  gitRepositoryName: null | string;
+  branch: null | string;
+  requestedCommitSha: null | string;
+  resolvedCommitSha: string;
+  composePaths: string[];
+  envFilePaths: string[];
+}
+
 export interface StackReleaseView {
   /** @format uuid */
   id: string;
@@ -3315,6 +3450,7 @@ export interface StackReleaseView {
   status: StackReleaseStatus;
   version: string;
   spec: StackSpec;
+  source: null | StackReleaseSource;
   /** @format date-time */
   createdAt: any;
   /** @format uuid */
@@ -3430,6 +3566,7 @@ export interface StackView {
   platformId?: null | string;
   version?: null | string;
   spec?: null | StackSpec;
+  source?: null | StackReleaseSource;
   platformStatus?: PlatformStatus;
   platformName?: null | string;
   latestActivityView?: null | LatestActivityView;
@@ -6128,6 +6265,41 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name SyncGitRepository
+     * @summary Sync a git repository
+     * @request POST:/api/v1/gitRepositories/{id}/sync
+     * @secure
+     * @response `200` `GitRepositoryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    syncGitRepository: (
+      id: string,
+      query?: {
+        branch?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/${id}/sync`,
+        method: "POST",
+        query: query,
+        secure: true,
         format: "json",
         ...params,
       }),

@@ -27,6 +27,7 @@ import { PortsDisplay } from '@/components/custom/ports-display';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { CPUCell, DockerContainerCell, DockerImageCell, MemoryUsageCell } from '@/components/custom/common';
 import { truncate } from '@/lib/truncate';
+import { formatId } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StackLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { StackInspect } from '@/features/docker-resources/containers/container-info/container-inspect';
@@ -35,7 +36,7 @@ import { StackStats } from '@/features/docker-resources/containers/container-inf
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Check, Funnel, Loader2 } from 'lucide-react';
+import { Check, Dot, Funnel, Loader2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useRead } from '@/lib/hooks';
@@ -104,6 +105,26 @@ const StackSubHeader = ({ latestActivity, stack }: { stack: StackView; latestAct
 };
 
 const StackUpdateNotice = ({ stack }: { stack: StackView }) => {
+  const updateState = stack.stackUpdateState;
+  const gitState =
+    updateState && 'recreateStackOnNewCommitState' in updateState ? updateState.recreateStackOnNewCommitState : null;
+
+  if (
+    gitState?.remoteCommitSha &&
+    gitState.currentCommitSha &&
+    gitState.remoteCommitSha !== gitState.currentCommitSha
+  ) {
+    return (
+      <AlertMessage type="info" title="Git update available">
+        <div className="flex flex-wrap gap-2 items-center">
+          {stack.source?.gitRepositoryName ?? 'Repository'}
+          {stack.source?.branch ? `/${stack.source.branch}` : ''}: {formatId(gitState.currentCommitSha)} {'->'}{' '}
+          {formatId(gitState.remoteCommitSha)}
+        </div>
+      </AlertMessage>
+    );
+  }
+
   const updates = stack.stackUpdateState?.recreateStackOnNewImageState?.autoUpdateStates?.filter(
     (state) => state.updateAvailable,
   );
@@ -185,11 +206,7 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
   const driftEligibleStatus =
     stack.status === StackReleaseStatus.Healthy || stack.status === StackReleaseStatus.Degraded;
   const queryEnabled = !driftDetectionDisabled && driftEligibleStatus;
-  const { data, isLoading, error } = useRead(
-    'getStackDrift',
-    { stackId: stack.id },
-    { enabled: queryEnabled },
-  );
+  const { data, isLoading, error } = useRead('getStackDrift', { stackId: stack.id }, { enabled: queryEnabled });
   const report = data?.data;
 
   if (driftDetectionDisabled) {
@@ -221,8 +238,10 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
 
   if (!report?.hasDrift) {
     return (
-      <AlertMessage type="success" title="No drift detected" className="my-0">
-        Running containers match the stack compose state.
+      <AlertMessage type="success" className="my-0">
+        <div className="flex flex-wrap gap-2 items-center ">
+          No drift detected <Dot width={13} height={13} /> Running containers match the stack compose state.
+        </div>
       </AlertMessage>
     );
   }

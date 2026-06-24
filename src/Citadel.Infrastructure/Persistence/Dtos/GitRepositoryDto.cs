@@ -7,6 +7,8 @@ internal sealed record GitRepositoryDto(
     string Url,
     string DefaultBranch,
     string Status,
+    string SyncMode,
+    int? SyncIntervalMinutes,
     Guid? GitAccountId,
     DateTime CreatedAt,
     Guid CreatedByActorId,

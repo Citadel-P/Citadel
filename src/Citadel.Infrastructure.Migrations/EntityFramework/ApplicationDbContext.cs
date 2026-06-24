@@ -22,6 +22,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .RegistryConfiguration()
             .GitAccountConfiguration()
             .GitRepositoryConfiguration()
+            .GitRepositoryRefConfiguration()
             .RefreshTokenConfiguration()
             .ActorConfiguration()
             .UserConfiguration()
@@ -319,6 +320,8 @@ internal static class Configuration
         gitRepository.Property<string>("Url").HasColumnType(Text).IsRequired();
         gitRepository.Property<string>("DefaultBranch").HasColumnType(Text).IsRequired();
         gitRepository.Property<string>("Status").HasColumnType(Text).IsRequired();
+        gitRepository.Property<string>("SyncMode").HasColumnType(Text).IsRequired().HasDefaultValue("PullInterval");
+        gitRepository.Property<int?>("SyncIntervalMinutes").HasColumnType(Integer).HasDefaultValue(5).IsRequired(false);
         gitRepository.Property<Guid?>("GitAccountId").IsRequired(false);
         gitRepository.Property<bool>("WebHookEnabled").HasColumnType("boolean").IsRequired().HasDefaultValue(false);
         gitRepository.Property<string>("WebHookSecret").HasColumnType(Text).IsRequired(false);
@@ -338,6 +341,35 @@ internal static class Configuration
 
         gitRepository.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
         gitRepository.HasIndex("GitAccountId").HasDatabaseName($"IX_{tableName}_GitAccountId");
+
+        return builder;
+    }
+
+    public static ModelBuilder GitRepositoryRefConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "GitRepositoryRefs";
+        var gitRepositoryRef = builder.Entity("GitRepositoryRef");
+
+        gitRepositoryRef.ToTable(tableName);
+
+        gitRepositoryRef.Property<Guid>("Id").IsRequired();
+        gitRepositoryRef.HasKey("Id");
+
+        gitRepositoryRef.Property<Guid>("GitRepositoryId").IsRequired();
+        gitRepositoryRef.Property<string>("Branch").HasColumnType(Text).IsRequired();
+        gitRepositoryRef.Property<string>("ResolvedCommitSha").HasColumnType(Text).IsRequired(false);
+        gitRepositoryRef.Property<string>("Status").HasColumnType(Text).IsRequired();
+        gitRepositoryRef.Property<string>("LastError").HasColumnType(Text).IsRequired(false);
+        gitRepositoryRef.Property<DateTime>("LastSyncedAt").HasColumnType(Timestamp).IsRequired();
+
+        gitRepositoryRef
+            .HasOne("GitRepository")
+            .WithMany()
+            .HasForeignKey("GitRepositoryId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        gitRepositoryRef.HasIndex("GitRepositoryId", "Branch").IsUnique()
+            .HasDatabaseName($"IX_{tableName}_GitRepositoryId_Branch");
 
         return builder;
     }
@@ -932,6 +964,7 @@ internal static class Configuration
         release.Property<string>("Status").HasColumnType(Text).IsRequired();
         release.Property<string>("Version").HasColumnType(Text).IsRequired();
         release.Property<string>("Spec").HasColumnType(Json).IsRequired();
+        release.Property<string>("Source").HasColumnType(Json).IsRequired(false);
 
         release.AddAuditedMemebers();
 

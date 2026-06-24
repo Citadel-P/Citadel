@@ -7,6 +7,7 @@ internal sealed record StackReleaseDto(
     string Status,
     string Version,
     string Spec,
+    string? Source,
     DateTime CreatedAt,
     Guid CreatedByActorId,
     string? Platform_Name = null,

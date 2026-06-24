@@ -78,6 +78,9 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<StackDriftDetected>]
 [GenerateShapeFor<StackDriftResolved>]
 [GenerateShapeFor<StackReconciliationAttempted>]
+[GenerateShapeFor<StackGitUpdateAvailable>]
+[GenerateShapeFor<StackGitAutoUpdated>]
+[GenerateShapeFor<StackGitAutoDeployFailed>]
 [GenerateShapeFor<AlertRuleCreated>]
 [GenerateShapeFor<AlertRuleUpdated>]
 [GenerateShapeFor<AlertRuleDeleted>]
@@ -121,6 +124,9 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.StackDriftDetected)] = typeof(StackDriftDetected),
         [nameof(ActivityEventType.StackDriftResolved)] = typeof(StackDriftResolved),
         [nameof(ActivityEventType.StackReconciliationAttempted)] = typeof(StackReconciliationAttempted),
+        [nameof(ActivityEventType.StackGitUpdateAvailable)] = typeof(StackGitUpdateAvailable),
+        [nameof(ActivityEventType.StackGitAutoUpdated)] = typeof(StackGitAutoUpdated),
+        [nameof(ActivityEventType.StackGitAutoDeployFailed)] = typeof(StackGitAutoDeployFailed),
         [nameof(ActivityEventType.DeploymentCreated)] = typeof(DeploymentCreated),
         [nameof(ActivityEventType.DeploymentUpdated)] = typeof(DeploymentUpdated),
         [nameof(ActivityEventType.DeploymentRenamed)] = typeof(DeploymentRenamed),

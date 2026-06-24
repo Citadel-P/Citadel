@@ -36,6 +36,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         sr.PlatformId AS CurrentRelease_PlatformId,
         sr.Status AS CurrentRelease_Status,
         sr.Version AS CurrentRelease_Version,
+        sr.Source AS CurrentRelease_Source,
         sr.CreatedAt AS CurrentRelease_CreatedAt,
         sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
         p.Name AS Platform_Name,
@@ -55,6 +56,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         sr.Status,
         sr.Version,
         sr.Spec,
+        sr.Source,
         sr.CreatedAt,
         sr.CreatedByActorId,
         p.Name AS Platform_Name,
@@ -87,6 +89,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.Status AS CurrentRelease_Status,
                 sr.Version AS CurrentRelease_Version,
                 sr.Spec AS CurrentRelease_Spec,
+                sr.Source AS CurrentRelease_Source,
                 sr.CreatedAt AS CurrentRelease_CreatedAt,
                 sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
                 p.Name AS Platform_Name,
@@ -407,9 +410,9 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
         const string stackReleaseSql = """
             INSERT INTO StackReleases (
-                Id, StackId, PlatformId, Status, Version, Spec, CreatedAt, CreatedByActorId
+                Id, StackId, PlatformId, Status, Version, Spec, Source, CreatedAt, CreatedByActorId
             ) VALUES (
-                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
+                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
             )
         """;
 
@@ -436,6 +439,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ReleaseStatus = EnumFormatter<StackReleaseStatus>.GetValue(currentStackRelease.Status),
             ReleaseVersion = currentStackRelease.Version,
             ReleaseSpec = JsonSerializer.Serialize(currentStackRelease.Spec, StackJsonContext.Default.StackSpec),
+            ReleaseSource = currentStackRelease.Source is null ? null : JsonSerializer.Serialize(currentStackRelease.Source, StackJsonContext.Default.StackReleaseSource),
             ReleaseCreatedAt = currentStackRelease.CreatedAt,
             ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId
         }, transaction: tx());
@@ -459,14 +463,15 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
         const string stackReleaseSql = """
             INSERT INTO StackReleases (
-                Id, StackId, PlatformId, Status, Version, Spec, CreatedAt, CreatedByActorId
+                Id, StackId, PlatformId, Status, Version, Spec, Source, CreatedAt, CreatedByActorId
             )
-            VALUES (@ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId)
+            VALUES (@ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId)
             ON CONFLICT (Id) DO UPDATE
             SET PlatformId = EXCLUDED.PlatformId,
                 Status = EXCLUDED.Status,
                 Version = EXCLUDED.Version,
-                Spec = EXCLUDED.Spec
+                Spec = EXCLUDED.Spec,
+                Source = EXCLUDED.Source
         """;
 
         var currentStackRelease = stack.CurrentStackRelease ?? throw new InvalidOperationException("Stack must have a current stack release.");
@@ -489,6 +494,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ReleaseStatus = EnumFormatter<StackReleaseStatus>.GetValue(currentStackRelease.Status),
             ReleaseVersion = currentStackRelease.Version,
             ReleaseSpec = JsonSerializer.Serialize(currentStackRelease.Spec, StackJsonContext.Default.StackSpec),
+            ReleaseSource = currentStackRelease.Source is null ? null : JsonSerializer.Serialize(currentStackRelease.Source, StackJsonContext.Default.StackReleaseSource),
             ReleaseCreatedAt = currentStackRelease.CreatedAt,
             ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId
         }, transaction: tx());
@@ -519,6 +525,100 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
             cancellationToken
         }, transaction: tx());
+
+        return result.ToDomain();
+    }
+
+    public Task<IEnumerable<GitStackBranchSubscription>> GetGitStackBranchSubscriptionsAsync(CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                s.Id AS StackId,
+                CAST(sr.Spec ->> 'GitRepoId' AS uuid) AS GitRepositoryId,
+                COALESCE(NULLIF(sr.Spec ->> 'Branch', ''), gr.DefaultBranch) AS Branch
+            FROM Stacks s
+            INNER JOIN StackReleases sr
+                ON s.CurrentStackReleaseId = sr.Id
+            INNER JOIN GitRepositories gr
+                ON gr.Id = CAST(sr.Spec ->> 'GitRepoId' AS uuid)
+            WHERE s.StackSource = @StackSource
+              AND COALESCE(sr.Spec ->> 'CommitSha', '') = ''
+              AND COALESCE(NULLIF(sr.Spec ->> 'Branch', ''), gr.DefaultBranch) <> ''
+            ORDER BY s.Id
+            """;
+
+        return db.QueryAsync<GitStackBranchSubscription>(
+            sql,
+            new
+            {
+                StackSource = EnumFormatter<StackSource>.GetValue(StackSource.Git),
+                cancellationToken
+            },
+            transaction: tx());
+    }
+
+    public async Task<IEnumerable<Stack>> GetBranchTrackingGitStacksAsync(Guid gitRepositoryId, string branch, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                s.Id,
+                s.CurrentStackReleaseId,
+                s.Name,
+                s.Description,
+                s.StackSource,
+                s.StackUpdateState,
+                s.DriftPolicy,
+                s.CreatedAt,
+                s.CreatedByActorId,
+                s.ControlState,
+                s.ControlStartedAt,
+                s.RowVersion,
+                s.ControlTriggeredBy,
+                sr.Id AS CurrentRelease_Id,
+                sr.StackId AS CurrentRelease_StackId,
+                sr.PlatformId AS CurrentRelease_PlatformId,
+                sr.Status AS CurrentRelease_Status,
+                sr.Version AS CurrentRelease_Version,
+                sr.Spec AS CurrentRelease_Spec,
+                sr.Source AS CurrentRelease_Source,
+                sr.CreatedAt AS CurrentRelease_CreatedAt,
+                sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
+                p.Name AS Platform_Name,
+                p.Status AS Platform_Status
+            FROM Stacks s
+            INNER JOIN StackReleases sr
+                ON s.CurrentStackReleaseId = sr.Id
+            INNER JOIN GitRepositories gr
+                ON gr.Id = CAST(sr.Spec ->> 'GitRepoId' AS uuid)
+            LEFT JOIN Platforms p
+                ON sr.PlatformId = p.Id
+            WHERE s.StackSource = @StackSource
+              AND s.ControlState <> @ProcessingState
+              AND CAST(sr.Spec ->> 'GitRepoId' AS uuid) = @GitRepositoryId
+              AND COALESCE(sr.Spec ->> 'CommitSha', '') = ''
+              AND COALESCE(NULLIF(sr.Spec ->> 'Branch', ''), gr.DefaultBranch) = @Branch
+              AND sr.Status <> ALL(@ExcludedStatuses)
+            ORDER BY s.Id
+            """;
+
+        var result = await db.QueryAsync<StackDto>(
+            sql,
+            new
+            {
+                GitRepositoryId = gitRepositoryId,
+                Branch = branch,
+                StackSource = EnumFormatter<StackSource>.GetValue(StackSource.Git),
+                ProcessingState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ExcludedStatuses = new[]
+                {
+                    EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Unknown),
+                    EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Created),
+                    EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Applying),
+                    EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Pending)
+                },
+                cancellationToken
+            },
+            transaction: tx());
 
         return result.ToDomain();
     }

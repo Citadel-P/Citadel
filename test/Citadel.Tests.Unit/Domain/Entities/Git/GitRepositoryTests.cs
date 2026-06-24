@@ -1,4 +1,8 @@
+using Domain;
+using Domain.Contracts.Resources.Git;
+using Domain.Entities.Activities;
 using Domain.Entities.Git;
+using System.Text.Json;
 
 namespace Tests.Unit.Domain.Entities.Git;
 
@@ -38,4 +42,58 @@ public class GitRepositoryTests
 
         Assert.Equal("/app/data/repos/My-Repo", cachePath);
     }
+
+    [Fact]
+    public void ToSnapshot_IncludesResolvedCommitSha_WhenProvided()
+    {
+        var repository = CreateRepository();
+
+        var snapshot = repository.ToSnapshot(resolvedCommitSha: "abc123");
+
+        Assert.Equal("abc123", snapshot.ResolvedCommitSha);
+    }
+
+    [Fact]
+    public void GitRepoClonedActivity_SerializesResolvedCommitShaInRepositorySnapshot()
+    {
+        var repository = CreateRepository();
+        var info = new GitRepoCloned(
+            repository.ToSnapshot(resolvedCommitSha: "abc123"),
+            new RepoSyncResultSnapshot(CommitSha: "abc123"));
+
+        var json = JsonSerializer.Serialize<ActivityEventInfo>(info, EventInfoJsonContext.Default.ActivityEventInfo);
+
+        Assert.Contains("\"ResolvedCommitSha\":\"abc123\"", json);
+        Assert.Contains("\"CommitSha\":\"abc123\"", json);
+    }
+
+    [Theory]
+    [InlineData(GitRepositorySyncMode.PullInterval, 10, false, 10)]
+    [InlineData(GitRepositorySyncMode.PullInterval, 0, false, 1)]
+    [InlineData(GitRepositorySyncMode.PullInterval, null, false, 5)]
+    [InlineData(GitRepositorySyncMode.Webhook, 10, true, null)]
+    [InlineData(GitRepositorySyncMode.Manual, 10, false, null)]
+    public void UpdateSyncPolicy_NormalizesSyncMode(
+        GitRepositorySyncMode syncMode,
+        int? syncIntervalMinutes,
+        bool expectedWebHookEnabled,
+        int? expectedSyncIntervalMinutes)
+    {
+        var repository = CreateRepository();
+
+        repository.UpdateSyncPolicy(syncMode, syncIntervalMinutes);
+
+        Assert.Equal(syncMode, repository.SyncMode);
+        Assert.Equal(expectedSyncIntervalMinutes, repository.SyncIntervalMinutes);
+        Assert.Equal(expectedWebHookEnabled, repository.WebHookEnabled);
+    }
+
+    private static GitRepository CreateRepository()
+        => new(
+            name: "GR-TEST",
+            description: null,
+            url: "https://github.com/citadel-p/citadel",
+            defaultBranch: "main",
+            gitAccountId: null,
+            createdByActorId: Guid.NewGuid());
 }

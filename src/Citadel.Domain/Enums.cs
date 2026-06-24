@@ -529,6 +529,9 @@ public enum ActivityEventType
     StackDriftDetected,
     StackDriftResolved,
     StackReconciliationAttempted,
+    StackGitUpdateAvailable,
+    StackGitAutoUpdated,
+    StackGitAutoDeployFailed,
     #endregion
 }
 
@@ -555,6 +558,9 @@ public enum AlertType
     StackServiceAutoDeployFailed,
     StackServiceAutoUpdated,
     StackDriftDetected,
+    StackGitUpdateAvailable,
+    StackGitAutoUpdated,
+    StackGitAutoDeployFailed,
     #endregion
 }
 
@@ -637,6 +643,13 @@ public enum GitReposStatus
     Created,
     Healthy,
     Degraded
+}
+
+public enum GitRepositorySyncMode
+{
+    Manual,
+    PullInterval,
+    Webhook
 }
 
 public enum GitOperation

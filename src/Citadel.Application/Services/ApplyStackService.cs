@@ -7,6 +7,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
+using Domain.Entities.Git;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
 using Hosting.Common;
@@ -33,7 +34,8 @@ internal class ApplyStackService(
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformCache,
     IConnectorFactory<IStackConnector> stackConnectorFactory,
-    IConnectorFactory<IContainerConnector> containerConnectorFactory) : IApplyStackService
+    IConnectorFactory<IContainerConnector> containerConnectorFactory,
+    IGitStackMaterializer gitStackMaterializer) : IApplyStackService
 {
     public async IAsyncEnumerable<StackStreamItem> ApplyAsync(
         Guid stackId,
@@ -68,15 +70,15 @@ internal class ApplyStackService(
 
         var currentRelease = stack.CurrentStackRelease;
 
-        if (currentRelease.Spec is not ManualStack manualStack)
+        if (currentRelease.Spec is not ManualStack and not GitStack)
         {
-            var message = "Only manual stack specs are currently supported for stack apply.";
+            var message = "Unsupported stack source.";
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
 
-        if (string.IsNullOrWhiteSpace(manualStack.ComposeFile))
+        if (currentRelease.Spec is ManualStack manualStack && string.IsNullOrWhiteSpace(manualStack.ComposeFile))
         {
             var message = "❌ Manual stack compose file is required.";
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
@@ -146,8 +148,58 @@ internal class ApplyStackService(
         await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, markResult.Stack!), ct);
         stack = markResult.Stack!;
         currentRelease = stack.CurrentStackRelease!;
-        manualStack = (ManualStack)currentRelease.Spec;
-        var composeFileContent = StackComposeLabelInjector.Inject(manualStack.ComposeFile, stack.Id, currentRelease.Id);
+        var stackSpec = currentRelease.Spec;
+        string composeFileContent;
+        string? environmentFilePath;
+        IReadOnlyList<string>? environmentVariables;
+        StackReleaseSource? releaseSource = null;
+
+        if (stackSpec is ManualStack currentManualStack)
+        {
+            composeFileContent = StackComposeLabelInjector.Inject(currentManualStack.ComposeFile, stack.Id, currentRelease.Id);
+            environmentFilePath = currentManualStack.EnvFilePath;
+            environmentVariables = currentManualStack.EnvVars;
+        }
+        else if (stackSpec is GitStack gitStack)
+        {
+            var gitRepository = await LoadGitRepository(gitStack.GitRepoId, ct);
+            if (gitRepository is null)
+            {
+                var message = $"❌ Git repository with ID {gitStack.GitRepoId} not found.";
+                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
+                yield return StackStreamItem.FromStdErr(message, 1);
+                yield break;
+            }
+
+            var materialization = await gitStackMaterializer.MaterializeAsync(stack, gitStack, gitRepository, ct);
+            if (materialization.IsFailure(out var materializationError, out var payload))
+            {
+                var message = $"❌ {materializationError.Message}";
+                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
+                yield return StackStreamItem.FromStdErr(message, 1);
+                yield break;
+            }
+
+            composeFileContent = StackComposeLabelInjector.Inject(payload.ComposeContent, stack.Id, currentRelease.Id);
+            environmentFilePath = payload.EnvFilePath;
+            environmentVariables = payload.EnvironmentVariables;
+            releaseSource = new StackReleaseSource(
+                SourceType: StackSource.Git,
+                GitRepositoryId: gitRepository.Id,
+                GitRepositoryName: gitRepository.Name,
+                Branch: payload.SourceBranch,
+                RequestedCommitSha: gitStack.CommitSha,
+                ResolvedCommitSha: payload.ResolvedCommitSha,
+                ComposePaths: payload.ComposePaths,
+                EnvFilePaths: payload.EnvFilePaths);
+        }
+        else
+        {
+            var message = "Unsupported stack source.";
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, ct: ct);
+            yield return StackStreamItem.FromStdErr(message, 1);
+            yield break;
+        }
 
         var isServiceScopedApply = serviceNames is { Count: > 0 };
         yield return StackStreamItem.FromStdOut(isServiceScopedApply
@@ -158,9 +210,11 @@ internal class ApplyStackService(
         var command = BuildApplyCommand(
             stack,
             platform.Address,
-            manualStack,
+            stackSpec,
             composeFileContent,
             projectName,
+            environmentFilePath,
+            environmentVariables,
             registryAuth,
             registryName,
             registryHost,
@@ -178,7 +232,7 @@ internal class ApplyStackService(
                 var next = await TryReadNextAsync(enumerator);
                 if (next.ErrorMessage is not null)
                 {
-                    await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, next.ErrorMessage, ct: ct);
+                    await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, next.ErrorMessage, releaseSource, ct);
                     yield return StackStreamItem.FromStdErr(next.ErrorMessage, exitCode ?? 1);
                     yield break;
                 }
@@ -223,7 +277,7 @@ internal class ApplyStackService(
                             ? string.Join(Environment.NewLine, errorLogs)
                             : $"❌ Pipeline command failed with exit code {result.ExitCode}.";
 
-                        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, ct: ct);
+                        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, releaseSource, ct);
                         yield return StackStreamItem.FromStdErr($"❌ {explicitFailure}", result.ExitCode.Value);
                         yield break;
                     }
@@ -240,7 +294,7 @@ internal class ApplyStackService(
             var (errorMessage, containers) = await GetContainers(stack, platform, ct);
             if (!string.IsNullOrEmpty(errorMessage))
             {
-                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, ct: ct);
+                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, releaseSource, ct);
                 yield return StackStreamItem.FromStdErr($"❌ {errorMessage}", exitCode ?? 1 );
                 yield break;
             }
@@ -252,7 +306,8 @@ internal class ApplyStackService(
                     containers ?? [],
                     stackHub,
                     activityHub,
-                    notificationQueue),
+                    notificationQueue,
+                    releaseSource),
                 ct);
 
             yield return StackStreamItem.SystemMessage("✅ Stack is now running.", 0);
@@ -263,7 +318,7 @@ internal class ApplyStackService(
             ? string.Join(Environment.NewLine, errorLogs)
             : (exitCode is int code ? $"❌ docker compose exited with code {code}." : "❌ Stack apply did not report a completion exit code.");
 
-        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, ct: ct);
+        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, releaseSource, ct);
 
         yield return StackStreamItem.FromStdErr(finalFailureMessage, exitCode ?? 1);
     }
@@ -352,8 +407,13 @@ internal class ApplyStackService(
         return containers.ToHashSet(StringComparer.Ordinal);
     }
 
-    private StackApplyCommand BuildApplyCommand(Stack stack, string platformAddress, ManualStack manualStack,
+    private StackApplyCommand BuildApplyCommand(
+        Stack stack,
+        string platformAddress,
+        StackSpec stackSpec,
         string composeFileContent, string projectName,
+        string? environmentFilePath,
+        IReadOnlyList<string>? environmentVariables,
         string? registryAuth, string? registryName, string? registryHost,
         IReadOnlyList<string>? serviceNames,
         bool pullImages)
@@ -362,15 +422,15 @@ internal class ApplyStackService(
             StackName: stack.Name,
             ComposeFileContent: composeFileContent,
             ProjectName: projectName,
-            EnvironmentFilePath: manualStack.EnvFilePath,
-            EnvironmentVariables: manualStack.EnvVars,
-            PreDeploy: manualStack.PreDeploy,
-            PostDeploy: manualStack.PostDeploy,
+            EnvironmentFilePath: environmentFilePath,
+            EnvironmentVariables: environmentVariables,
+            PreDeploy: stackSpec.PreDeploy,
+            PostDeploy: stackSpec.PostDeploy,
             RegistryAuth: registryAuth,
             RegistryName: registryName,
             RegistryHost: registryHost,
-            DestroyBeforeDeploy: manualStack.DestroyBeforeDeploy && serviceNames is not { Count: > 0 },
-            Spec: manualStack,
+            DestroyBeforeDeploy: stackSpec.DestroyBeforeDeploy && serviceNames is not { Count: > 0 },
+            Spec: stackSpec,
             ServiceNames: serviceNames,
             PullImages: pullImages);
 
@@ -430,7 +490,14 @@ internal class ApplyStackService(
         return await uow.Registries.GetAsync(registryId, ct);
     }
 
-    private ValueTask EnqueueStatus(Guid stackId, Guid actorId, StackReleaseStatus status, string? message, CancellationToken ct = default)
+    private async Task<GitRepository?> LoadGitRepository(Guid gitRepositoryId, CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return await uow.GitRepositories.GetWithAccountAsync(gitRepositoryId, ct);
+    }
+
+    private ValueTask EnqueueStatus(Guid stackId, Guid actorId, StackReleaseStatus status, string? message, StackReleaseSource? source = null, CancellationToken ct = default)
         => dbWorkQueue.EnqueueAsync(
             new UpdateStackStatusWorkItem(
                 stackId,
@@ -439,17 +506,23 @@ internal class ApplyStackService(
                 message,
                 stackHub,
                 activityHub,
-                notificationQueue),
+                notificationQueue,
+                source),
             ct);
 }
 
 internal sealed class UpdateStackStatusWorkItem(Guid stackId, Guid actorId, StackReleaseStatus status, string? message, IStackStreamManager stackHub,
-    IActivityStreamManager activityHub, INotificationQueue notificationQueue) : IDbWorkItem
+    IActivityStreamManager activityHub, INotificationQueue notificationQueue, StackReleaseSource? source = null) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var stack = await uow.Stacks.GetAsync(stackId, ct);
         if (stack is null) return;
+
+        if (source is not null)
+        {
+            stack.CurrentStackRelease?.UpdateSource(source);
+        }
 
         stack.ReleaseProcessing(status);
         await uow.Stacks.UpdateAsync(stack, ct);
@@ -493,12 +566,31 @@ internal sealed class StackSucceededWorkItem(
     DockerContainer[] dockerContainers,
     IStackStreamManager stackHub,
     IActivityStreamManager activityHub,
-    INotificationQueue notificationQueue) : IDbWorkItem
+    INotificationQueue notificationQueue,
+    StackReleaseSource? source = null) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var stack = await uow.Stacks.GetAsync(stackId, ct);
         if (stack?.CurrentStackRelease is null) return;
+
+        if (source is not null)
+        {
+            stack.CurrentStackRelease.UpdateSource(source);
+
+            if (stack.StackUpdateState is GitStackUpdateState gitState)
+            {
+                stack.SetStackUpdateState(gitState with
+                {
+                    RecreateStackOnNewCommitState = gitState.RecreateStackOnNewCommitState with
+                    {
+                        CurrentCommitSha = source.ResolvedCommitSha,
+                        RemoteCommitSha = null,
+                        LastCheckedAt = DateTime.UtcNow
+                    }
+                });
+            }
+        }
 
         stack.ReleaseProcessing(StackReleaseStatus.Healthy);
 

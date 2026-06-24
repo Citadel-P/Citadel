@@ -39,6 +39,8 @@ public sealed record PatchGitRepository(Guid Id, JsonMergePatchDocument<GitRepos
         {
             RuleFor(x => x.Id).NotEmpty();
             When(s => s.Url != null, () => RuleFor(x => x.Url).NotEmpty());
+            When(x => x.SyncMode == GitRepositorySyncMode.PullInterval, () =>
+                RuleFor(x => x.SyncIntervalMinutes).NotNull().GreaterThanOrEqualTo(1));
         }
     }
 }
@@ -96,6 +98,8 @@ internal sealed class PatchGitRepositoryHandler(
             webHookSecret: patchedGitRepository.WebHookSecret,
             onClone: patchedGitRepository.OnClone,
             onPull: patchedGitRepository.OnPull);
+
+        gitRepository.UpdateSyncPolicy(patchedGitRepository.SyncMode, patchedGitRepository.SyncIntervalMinutes);
 
         gitRepository.UpdateSource(patchedGitRepository.Url, patchedGitRepository.GitAccountId);
 

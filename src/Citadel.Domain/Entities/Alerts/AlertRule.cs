@@ -363,6 +363,9 @@ public static class AlertTypeMetadata
         { AlertType.StackServiceAutoUpdated, AlertResourceType.Stack },
         { AlertType.StackServiceAutoDeployFailed, AlertResourceType.Stack },
         { AlertType.StackDriftDetected, AlertResourceType.Stack },
+        { AlertType.StackGitUpdateAvailable, AlertResourceType.Stack },
+        { AlertType.StackGitAutoUpdated, AlertResourceType.Stack },
+        { AlertType.StackGitAutoDeployFailed, AlertResourceType.Stack },
     };
 
     private static readonly HashSet<AlertType> ThresholdTypes =
@@ -394,6 +397,9 @@ public static class AlertTypeMetadata
             (AlertType.StackServiceAutoUpdated, StackServiceAutoUpdatedAlertInfo) => true,
             (AlertType.StackServiceAutoDeployFailed, StackServiceAutoDeployFailedAlertInfo) => true,
             (AlertType.StackDriftDetected, StackDriftDetectedAlertInfo) => true,
+            (AlertType.StackGitUpdateAvailable, StackGitUpdateAvailableAlertInfo) => true,
+            (AlertType.StackGitAutoUpdated, StackGitAutoUpdatedAlertInfo) => true,
+            (AlertType.StackGitAutoDeployFailed, StackGitAutoDeployFailedAlertInfo) => true,
             _ => false
         };
 }

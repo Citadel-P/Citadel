@@ -509,6 +509,8 @@ namespace Infrastructure.Migrations.Migrations
                     onpull = table.Column<string>(type: "text", nullable: true),
                     rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
                     status = table.Column<string>(type: "text", nullable: false),
+                    syncintervalminutes = table.Column<int>(type: "integer", nullable: true, defaultValue: 5),
+                    syncmode = table.Column<string>(type: "text", nullable: false, defaultValue: "PullInterval"),
                     url = table.Column<string>(type: "text", nullable: false),
                     webhookenabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     webhooksecret = table.Column<string>(type: "text", nullable: true)
@@ -586,6 +588,7 @@ namespace Infrastructure.Migrations.Migrations
                     createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    source = table.Column<string>(type: "json", nullable: true),
                     spec = table.Column<string>(type: "json", nullable: false),
                     stackid = table.Column<Guid>(type: "uuid", nullable: false),
                     status = table.Column<string>(type: "text", nullable: false),
@@ -653,6 +656,29 @@ namespace Infrastructure.Migrations.Migrations
                         name: "fk_usersteams_users_userid",
                         column: x => x.userid,
                         principalTable: "users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "gitrepositoryrefs",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    branch = table.Column<string>(type: "text", nullable: false),
+                    gitrepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    lasterror = table.Column<string>(type: "text", nullable: true),
+                    lastsyncedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    resolvedcommitsha = table.Column<string>(type: "text", nullable: true),
+                    status = table.Column<string>(type: "text", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_gitrepositoryrefs", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_gitrepositoryrefs_gitrepositories_gitrepositoryid",
+                        column: x => x.gitrepositoryid,
+                        principalTable: "gitrepositories",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -1028,6 +1054,12 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_gitrepositoryrefs_gitrepositoryid_branch",
+                table: "gitrepositoryrefs",
+                columns: new[] { "gitrepositoryid", "branch" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_images_controltriggeredby",
                 table: "images",
                 column: "controltriggeredby");
@@ -1189,7 +1221,7 @@ namespace Infrastructure.Migrations.Migrations
                 name: "containerstats");
 
             migrationBuilder.DropTable(
-                name: "gitrepositories");
+                name: "gitrepositoryrefs");
 
             migrationBuilder.DropTable(
                 name: "permissions");
@@ -1219,7 +1251,7 @@ namespace Infrastructure.Migrations.Migrations
                 name: "containers");
 
             migrationBuilder.DropTable(
-                name: "gitaccounts");
+                name: "gitrepositories");
 
             migrationBuilder.DropTable(
                 name: "roles");
@@ -1238,6 +1270,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "stacks");
+
+            migrationBuilder.DropTable(
+                name: "gitaccounts");
 
             migrationBuilder.DropTable(
                 name: "platforms");

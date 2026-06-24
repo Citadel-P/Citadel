@@ -16,16 +16,17 @@ internal interface IRepoCacheManager
     /// Ensures the local bare repository is cloned and updated.
     /// </summary>
     /// <returns>The resolved commit hash (SHA)</returns>
-    Task<RepoSyncResult> SynchronizeAsync(GitRepository repo, GitAccount? account, CancellationToken ct = default);
+    Task<RepoSyncResult> SynchronizeAsync(GitRepository repo, GitAccount? account, string? branch = null, CancellationToken ct = default);
     Task DeleteCacheAsync(GitRepository repo, CancellationToken ct = default);
     Task DeleteCacheAsync(string path, CancellationToken ct = default);
+    string GetRemoteUrl(GitRepository repo, GitAccount? account);
 }
 
 internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCacheManager> logger) : IRepoCacheManager
 {
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _repoLocks = new();
 
-    public async Task<RepoSyncResult> SynchronizeAsync(GitRepository repo, GitAccount? account, CancellationToken ct = default)
+    public async Task<RepoSyncResult> SynchronizeAsync(GitRepository repo, GitAccount? account, string? branch = null, CancellationToken ct = default)
     {
         var semaphore = _repoLocks.GetOrAdd(repo.Id, _ => new SemaphoreSlim(1, 1));
         await semaphore.WaitAsync(ct);
@@ -34,14 +35,14 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
         {
             var targetPath = repo.GetCachePath();
             var url = GetRemoteUrl(repo, account);
-            var branch = repo.DefaultBranch ?? "main";
+            var syncBranch = string.IsNullOrWhiteSpace(branch) ? repo.DefaultBranch ?? "main" : branch;
             GitOperation operation = GitOperation.Pull;
 
             // Ensure Local Source Exists
             if (!Directory.Exists(Path.Combine(targetPath, ".git")))
             {
                 await EnsureDeletedAsync(targetPath, ct);
-                var cloneResult = await gitCli.CloneAsync(url, targetPath, branch, account, ct);
+                var cloneResult = await gitCli.CloneAsync(url, targetPath, syncBranch, account, ct);
 
                 operation = GitOperation.Clone;
                 
@@ -51,9 +52,9 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
             }
             else
             {
-                // Pull latest changes
-                var pullResult = await gitCli.PullAsync(targetPath, branch, account, ct);
-                if (pullResult.IsFailure(out var error))
+                // Fetch the requested branch without relying on the current working-tree branch.
+                var fetchResult = await gitCli.FetchAsync(targetPath, syncBranch, account, ct);
+                if (fetchResult.IsFailure(out var error))
                     return new RepoSyncResult(Operation: operation, Error: error.Message);
             }
 
@@ -63,7 +64,7 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
                 return new RepoSyncResult(Operation: operation, Error: hookError.Message);
 
             // Resolve the SHA for the state tracker
-            var hashResult = await gitCli.ResolveSnapshotCommitAsync(targetPath, branch, ct);
+            var hashResult = await gitCli.ResolveSnapshotCommitAsync(targetPath, syncBranch, ct);
             if (hashResult.IsFailure(out var hashError, out var hash))
                 return new RepoSyncResult(Operation: operation, Error: hashError.Message);
 
@@ -157,7 +158,7 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
         }
     }
 
-    private static string GetRemoteUrl(GitRepository repo, GitAccount? account)
+    public string GetRemoteUrl(GitRepository repo, GitAccount? account)
     {
         if (repo.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ||
             repo.Url.StartsWith("git@", StringComparison.OrdinalIgnoreCase))

@@ -1,5 +1,11 @@
 import { DataTable } from '@/components/ui/data-table';
-import { AutoUpdateStatus, ImageUpdateState, ResourceControlState, StackView } from '@/api/generated/api.types';
+import {
+  AutoUpdateStatus,
+  ImageUpdateState,
+  RecreateStackOnNewCommitState,
+  ResourceControlState,
+  StackView,
+} from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -125,6 +131,7 @@ const StackNameRow = ({ stack }: { stack: StackView }) => {
 
 const StackUpdateStatusCell = ({ stack }: { stack: StackView }) => {
   const states = getStackImageUpdateStates(stack);
+  const gitState = getStackGitUpdateState(stack);
   const status = getStackUpdateStatus(stack);
   const { label } = UPDATE_STATUS_UI[status];
 
@@ -155,6 +162,7 @@ const StackUpdateStatusCell = ({ stack }: { stack: StackView }) => {
         </div>
 
         <div className="space-y-3">
+          {gitState && <StackGitUpdateStateRow stack={stack} state={gitState} />}
           {states.slice(0, 4).map((state) => (
             <StackUpdateStateRow key={`${state.serviceName}:${state.imageName}`} state={state} />
           ))}
@@ -162,6 +170,42 @@ const StackUpdateStatusCell = ({ stack }: { stack: StackView }) => {
         </div>
       </HoverCardContent>
     </HoverCard>
+  );
+};
+
+const StackGitUpdateStateRow = ({
+  stack,
+  state,
+}: {
+  stack: StackView;
+  state: RecreateStackOnNewCommitState;
+}) => {
+  const source = stack.source;
+  const remoteCommit = state.remoteCommitSha ?? undefined;
+
+  return (
+    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <span className="text-muted-foreground text-xs">Repository</span>
+      <span className="truncate" title={source?.gitRepositoryName ?? undefined}>
+        {source?.gitRepositoryName ?? '-'}
+      </span>
+      <span className="text-muted-foreground text-xs">Branch</span>
+      <span className="truncate" title={source?.branch ?? undefined}>
+        {source?.branch ?? '-'}
+      </span>
+      <span className="text-muted-foreground text-xs">Current</span>
+      <span className="font-mono text-xs text-foreground/80 truncate" title={state.currentCommitSha}>
+        {formatId(state.currentCommitSha)}
+      </span>
+      {remoteCommit && (
+        <>
+          <span className="text-muted-foreground text-xs">Available</span>
+          <span className="font-mono text-xs text-amber-600 dark:text-amber-500 truncate" title={remoteCommit}>
+            {formatId(remoteCommit)}
+          </span>
+        </>
+      )}
+    </div>
   );
 };
 
@@ -195,7 +239,22 @@ const StackUpdateStateRow = ({ state }: { state: ImageUpdateState }) => {
 const getStackImageUpdateStates = (stack: StackView): ImageUpdateState[] =>
   stack.stackUpdateState?.recreateStackOnNewImageState?.autoUpdateStates ?? [];
 
+const getStackGitUpdateState = (stack: StackView): RecreateStackOnNewCommitState | null => {
+  const state = stack.stackUpdateState;
+  if (!state || !('recreateStackOnNewCommitState' in state)) return null;
+
+  const gitState = state.recreateStackOnNewCommitState;
+  return gitState?.currentCommitSha ? gitState : null;
+};
+
 const getStackUpdateStatus = (stack: StackView): AutoUpdateStatus => {
+  const gitState = getStackGitUpdateState(stack);
+  if (gitState?.remoteCommitSha && gitState.remoteCommitSha !== gitState.currentCommitSha) {
+    return AutoUpdateStatus.UpdateAvailable;
+  }
+
+  if (gitState?.currentCommitSha) return AutoUpdateStatus.UpToDate;
+
   const states = getStackImageUpdateStates(stack);
   if (states.length === 0) return AutoUpdateStatus.Unknown;
   if (states.some((state) => state.updateAvailable)) return AutoUpdateStatus.UpdateAvailable;

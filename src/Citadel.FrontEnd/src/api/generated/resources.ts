@@ -75,6 +75,7 @@ export const resources = {
   updateGitRepository: { method: "PATCH", key: "updateGitRepository", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   getGitRepositoryConfig: { method: "GET", key: "getGitRepositoryConfig", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   updateGitRepositoryMetadata: { method: "PATCH", key: "updateGitRepositoryMetadata", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
+  syncGitRepository: { method: "POST", key: "syncGitRepository", params: ["id","query","params"], requiredParams: ["id"], queryParams: ["branch"] },
   renameGitRepository: { method: "POST", key: "renameGitRepository", params: ["data","params"], requiredParams: [], queryParams: [] },
   listImages: { method: "GET", key: "listImages", params: ["platformId","params"], requiredParams: ["platformId"], queryParams: [] },
   getExternalRepositories: { method: "GET", key: "getExternalRepositories", params: ["registryName","params"], requiredParams: ["registryName"], queryParams: [] },

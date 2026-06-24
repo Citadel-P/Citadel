@@ -75,4 +75,14 @@ public static class GitRepositories
         var result = await mediator.Send(new RenameGitRepository(renameResource.Id, renameResource.Name), cancellationToken);
         return EndpointHandlers.HandleResult(result, GitRepositoryView.Map);
     }
+
+    public static async Task<Results<Ok<GitRepositoryView>, ProblemHttpResult>> Sync(
+        IMediator mediator,
+        [FromRoute][Description("Git repository ID")] Guid id,
+        [FromQuery] string? branch,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new SyncGitRepository(id, branch), cancellationToken);
+        return EndpointHandlers.HandleResult(result, GitRepositoryView.Map);
+    }
 }

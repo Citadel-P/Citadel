@@ -32,6 +32,9 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(StackDriftDetected), nameof(ActivityEventType.StackDriftDetected))]
 [JsonDerivedType(typeof(StackDriftResolved), nameof(ActivityEventType.StackDriftResolved))]
 [JsonDerivedType(typeof(StackReconciliationAttempted), nameof(ActivityEventType.StackReconciliationAttempted))]
+[JsonDerivedType(typeof(StackGitUpdateAvailable), nameof(ActivityEventType.StackGitUpdateAvailable))]
+[JsonDerivedType(typeof(StackGitAutoUpdated), nameof(ActivityEventType.StackGitAutoUpdated))]
+[JsonDerivedType(typeof(StackGitAutoDeployFailed), nameof(ActivityEventType.StackGitAutoDeployFailed))]
 [JsonDerivedType(typeof(AlertRuleCreated), nameof(ActivityEventType.AlertRuleCreated))]
 [JsonDerivedType(typeof(AlertRuleUpdated), nameof(ActivityEventType.AlertRuleUpdated))]
 [JsonDerivedType(typeof(AlertRuleDeleted), nameof(ActivityEventType.AlertRuleDeleted))]
@@ -74,6 +77,22 @@ public sealed record StackReconciliationAttempted(
     IReadOnlyList<StackReconciliationAction> Actions,
     string DriftFingerprint) : ActivityEventInfo;
 public sealed record StackApplied(StackSnapshot? Stack, StackResultSnapshot Result) : ActivityEventInfo;
+public sealed record StackGitUpdateAvailable(
+    string GitRepositoryName,
+    string Branch,
+    string CurrentCommitSha,
+    string RemoteCommitSha) : ActivityEventInfo;
+public sealed record StackGitAutoUpdated(
+    string GitRepositoryName,
+    string Branch,
+    string PreviousCommitSha,
+    string UpdatedCommitSha) : ActivityEventInfo;
+public sealed record StackGitAutoDeployFailed(
+    string GitRepositoryName,
+    string Branch,
+    string CurrentCommitSha,
+    string RemoteCommitSha,
+    string Reason) : ActivityEventInfo;
 
 
 public sealed record AlertRuleCreated(AlertRuleSnapshot AlertRule) : ActivityEventInfo;

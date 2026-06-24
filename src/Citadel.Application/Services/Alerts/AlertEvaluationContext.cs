@@ -10,7 +10,8 @@ public sealed record AlertEvaluationContext(
     IReadOnlyCollection<DeploymentAlertSnapshot> Deployments,
     IReadOnlyCollection<StackAlertSnapshot> Stacks,
     IReadOnlyCollection<ContainerAlertSnapshot>? Containers = null,
-    IReadOnlyCollection<StackDriftAlertSnapshot>? StackDrifts = null);
+    IReadOnlyCollection<StackDriftAlertSnapshot>? StackDrifts = null,
+    IReadOnlyCollection<StackGitUpdateAlertSnapshot>? StackGitUpdates = null);
 
 public sealed record AlertMatch(
     Guid ResourceId,
@@ -45,3 +46,12 @@ public sealed record StackDriftAlertSnapshot(
     AlertSeverity Severity,
     string Fingerprint,
     IReadOnlyList<string> DriftSummaries);
+public sealed record StackGitUpdateAlertSnapshot(
+    Guid Id,
+    string Name,
+    string GitRepositoryName,
+    string Branch,
+    string CurrentCommitSha,
+    string RemoteCommitSha,
+    bool Failed,
+    string? Reason = null);

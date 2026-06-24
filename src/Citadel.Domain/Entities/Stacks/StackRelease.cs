@@ -10,6 +10,7 @@ public sealed class StackRelease : IAuditedEntity
     public StackReleaseStatus Status { get; private set; } = StackReleaseStatus.Created;
     public string Version { get; private set; } = string.Empty;
     public StackSpec Spec { get; private set; } = null!;
+    public StackReleaseSource? Source { get; private set; }
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -45,6 +46,7 @@ public sealed class StackRelease : IAuditedEntity
         StackReleaseStatus status,
         string version,
         StackSpec spec,
+        StackReleaseSource? source,
         DateTime createdAt,
         Guid createdByActorId,
         Platform? platform = null,
@@ -59,6 +61,7 @@ public sealed class StackRelease : IAuditedEntity
             Status = status,
             Version = version,
             Spec = spec,
+            Source = source,
             CreatedAt = createdAt,
             CreatedByActorId = createdByActorId,
             Platform = platform,
@@ -75,12 +78,19 @@ public sealed class StackRelease : IAuditedEntity
     public void UpdateSpec(StackSpec spec)
     {
         Spec = spec;
+        Source = null;
     }
 
     public void UpdateDefinition(Guid platformId, StackSpec spec)
     {
         PlatformId = platformId;
         Spec = spec;
+        Source = null;
+    }
+
+    public void UpdateSource(StackReleaseSource source)
+    {
+        Source = source;
     }
 
     public static string GetNextVersion(string currentVersion)
@@ -93,3 +103,13 @@ public sealed class StackRelease : IAuditedEntity
         return $"{currentVersion}.1";
     }
 }
+
+public sealed record StackReleaseSource(
+    StackSource SourceType,
+    Guid? GitRepositoryId,
+    string? GitRepositoryName,
+    string? Branch,
+    string? RequestedCommitSha,
+    string ResolvedCommitSha,
+    IReadOnlyList<string> ComposePaths,
+    IReadOnlyList<string> EnvFilePaths);

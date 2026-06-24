@@ -7565,6 +7565,111 @@
         ]
       }
     },
+    "/api/v1/gitRepositories/{id}/sync": {
+      "post": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Sync a git repository",
+        "operationId": "syncGitRepository",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git repository ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "branch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/gitRepositories/rename": {
       "post": {
         "tags": [
@@ -15244,6 +15349,15 @@
             "$ref": "#/components/schemas/ActivityEventInfoStackReconciliationAttempted"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoStackGitUpdateAvailable"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackGitAutoUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackGitAutoDeployFailed"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoAlertRuleCreated"
           },
           {
@@ -15310,6 +15424,9 @@
             "StackDriftDetected": "#/components/schemas/ActivityEventInfoStackDriftDetected",
             "StackDriftResolved": "#/components/schemas/ActivityEventInfoStackDriftResolved",
             "StackReconciliationAttempted": "#/components/schemas/ActivityEventInfoStackReconciliationAttempted",
+            "StackGitUpdateAvailable": "#/components/schemas/ActivityEventInfoStackGitUpdateAvailable",
+            "StackGitAutoUpdated": "#/components/schemas/ActivityEventInfoStackGitAutoUpdated",
+            "StackGitAutoDeployFailed": "#/components/schemas/ActivityEventInfoStackGitAutoDeployFailed",
             "AlertRuleCreated": "#/components/schemas/ActivityEventInfoAlertRuleCreated",
             "AlertRuleUpdated": "#/components/schemas/ActivityEventInfoAlertRuleUpdated",
             "AlertRuleDeleted": "#/components/schemas/ActivityEventInfoAlertRuleDeleted",
@@ -15866,6 +15983,94 @@
           }
         }
       },
+      "ActivityEventInfoStackGitAutoDeployFailed": {
+        "required": [
+          "gitRepositoryName",
+          "branch",
+          "currentCommitSha",
+          "remoteCommitSha",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackGitAutoDeployFailed"
+            ],
+            "type": "string"
+          },
+          "gitRepositoryName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "currentCommitSha": {
+            "type": "string"
+          },
+          "remoteCommitSha": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoStackGitAutoUpdated": {
+        "required": [
+          "gitRepositoryName",
+          "branch",
+          "previousCommitSha",
+          "updatedCommitSha"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackGitAutoUpdated"
+            ],
+            "type": "string"
+          },
+          "gitRepositoryName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "previousCommitSha": {
+            "type": "string"
+          },
+          "updatedCommitSha": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoStackGitUpdateAvailable": {
+        "required": [
+          "gitRepositoryName",
+          "branch",
+          "currentCommitSha",
+          "remoteCommitSha"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackGitUpdateAvailable"
+            ],
+            "type": "string"
+          },
+          "gitRepositoryName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "currentCommitSha": {
+            "type": "string"
+          },
+          "remoteCommitSha": {
+            "type": "string"
+          }
+        }
+      },
       "ActivityEventInfoStackPaused": {
         "required": [
           "containerIds"
@@ -16029,7 +16234,10 @@
           "StackDegraded",
           "StackDriftDetected",
           "StackDriftResolved",
-          "StackReconciliationAttempted"
+          "StackReconciliationAttempted",
+          "StackGitUpdateAvailable",
+          "StackGitAutoUpdated",
+          "StackGitAutoDeployFailed"
         ]
       },
       "ActivityResourceType": {
@@ -16402,6 +16610,15 @@
           },
           {
             "$ref": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoStackGitUpdateAvailableAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoStackGitAutoUpdatedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoStackGitAutoDeployFailedAlertInfo"
           }
         ],
         "discriminator": {
@@ -16420,7 +16637,10 @@
             "StackAutoDeployFailed": "#/components/schemas/AlertEventInfoStackDeployFailedAlertInfo",
             "StackServiceAutoUpdated": "#/components/schemas/AlertEventInfoStackServiceAutoUpdatedAlertInfo",
             "StackServiceAutoDeployFailed": "#/components/schemas/AlertEventInfoStackServiceAutoDeployFailedAlertInfo",
-            "StackDriftDetected": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo"
+            "StackDriftDetected": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo",
+            "StackGitUpdateAvailable": "#/components/schemas/AlertEventInfoStackGitUpdateAvailableAlertInfo",
+            "StackGitAutoUpdated": "#/components/schemas/AlertEventInfoStackGitAutoUpdatedAlertInfo",
+            "StackGitAutoDeployFailed": "#/components/schemas/AlertEventInfoStackGitAutoDeployFailedAlertInfo"
           }
         }
       },
@@ -16739,6 +16959,124 @@
             "items": {
               "type": "string"
             }
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackGitAutoDeployFailedAlertInfo": {
+        "required": [
+          "stackName",
+          "gitRepositoryName",
+          "branch",
+          "currentCommitSha",
+          "remoteCommitSha",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackGitAutoDeployFailed"
+            ],
+            "type": "string"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "gitRepositoryName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "currentCommitSha": {
+            "type": "string"
+          },
+          "remoteCommitSha": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackGitAutoUpdatedAlertInfo": {
+        "required": [
+          "stackName",
+          "gitRepositoryName",
+          "branch",
+          "previousCommitSha",
+          "updatedCommitSha"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackGitAutoUpdated"
+            ],
+            "type": "string"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "gitRepositoryName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "previousCommitSha": {
+            "type": "string"
+          },
+          "updatedCommitSha": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackGitUpdateAvailableAlertInfo": {
+        "required": [
+          "stackName",
+          "gitRepositoryName",
+          "branch",
+          "currentCommitSha",
+          "remoteCommitSha"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackGitUpdateAvailable"
+            ],
+            "type": "string"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "gitRepositoryName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "currentCommitSha": {
+            "type": "string"
+          },
+          "remoteCommitSha": {
+            "type": "string"
           },
           "humanMessage": {
             "type": [
@@ -17466,7 +17804,10 @@
           "StackAutoUpdated",
           "StackServiceAutoDeployFailed",
           "StackServiceAutoUpdated",
-          "StackDriftDetected"
+          "StackDriftDetected",
+          "StackGitUpdateAvailable",
+          "StackGitAutoUpdated",
+          "StackGitAutoDeployFailed"
         ]
       },
       "ApplyDeploymentInput": {
@@ -18824,6 +19165,8 @@
           "url",
           "defaultBranch",
           "gitAccountId",
+          "syncMode",
+          "syncIntervalMinutes",
           "webHookEnabled",
           "webHookSecret",
           "onClone",
@@ -18852,6 +19195,18 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "syncMode": {
+            "$ref": "#/components/schemas/GitRepositorySyncMode"
+          },
+          "syncIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "webHookEnabled": {
             "type": "boolean"
@@ -20967,6 +21322,8 @@
           "url",
           "defaultBranch",
           "gitAccountId",
+          "syncMode",
+          "syncIntervalMinutes",
           "webHookEnabled",
           "webHookSecret",
           "onClone",
@@ -20999,6 +21356,18 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "syncMode": {
+            "$ref": "#/components/schemas/GitRepositorySyncMode"
+          },
+          "syncIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "webHookEnabled": {
             "type": "boolean"
@@ -21039,6 +21408,8 @@
           "url",
           "defaultBranch",
           "gitAccountId",
+          "syncMode",
+          "syncIntervalMinutes",
           "webHookEnabled",
           "webHookSecret",
           "onClone",
@@ -21072,6 +21443,18 @@
             ],
             "format": "uuid"
           },
+          "syncMode": {
+            "$ref": "#/components/schemas/GitRepositorySyncMode"
+          },
+          "syncIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
           "webHookEnabled": {
             "type": "boolean"
           },
@@ -21100,8 +21483,21 @@
                 "$ref": "#/components/schemas/RepoCommand"
               }
             ]
+          },
+          "resolvedCommitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
+      },
+      "GitRepositorySyncMode": {
+        "enum": [
+          "Manual",
+          "PullInterval",
+          "Webhook"
+        ]
       },
       "GitRepositoryView": {
         "required": [
@@ -21113,6 +21509,8 @@
           "url",
           "defaultBranch",
           "gitAccountId",
+          "syncMode",
+          "syncIntervalMinutes",
           "webHookEnabled",
           "webHookSecret",
           "onClone",
@@ -21158,6 +21556,18 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "syncMode": {
+            "$ref": "#/components/schemas/GitRepositorySyncMode"
+          },
+          "syncIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "webHookEnabled": {
             "type": "boolean"
@@ -23092,6 +23502,8 @@
           "url",
           "defaultBranch",
           "gitAccountId",
+          "syncMode",
+          "syncIntervalMinutes",
           "webHookEnabled",
           "webHookSecret",
           "onClone",
@@ -23111,6 +23523,18 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "syncMode": {
+            "$ref": "#/components/schemas/GitRepositorySyncMode"
+          },
+          "syncIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "webHookEnabled": {
             "type": "boolean"
@@ -25408,6 +25832,64 @@
           }
         }
       },
+      "StackReleaseSource": {
+        "required": [
+          "sourceType",
+          "gitRepositoryId",
+          "gitRepositoryName",
+          "branch",
+          "requestedCommitSha",
+          "resolvedCommitSha",
+          "composePaths",
+          "envFilePaths"
+        ],
+        "type": "object",
+        "properties": {
+          "sourceType": {
+            "$ref": "#/components/schemas/StackSource"
+          },
+          "gitRepositoryId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "gitRepositoryName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requestedCommitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resolvedCommitSha": {
+            "type": "string"
+          },
+          "composePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "envFilePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "StackReleaseStatus": {
         "enum": [
           "Unknown",
@@ -25429,6 +25911,7 @@
           "status",
           "version",
           "spec",
+          "source",
           "createdAt",
           "createdByActorId"
         ],
@@ -25454,6 +25937,16 @@
           },
           "spec": {
             "$ref": "#/components/schemas/StackSpec"
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackReleaseSource"
+              }
+            ]
           },
           "createdAt": {
             "format": "date-time"
@@ -25960,6 +26453,16 @@
               },
               {
                 "$ref": "#/components/schemas/StackSpec"
+              }
+            ]
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackReleaseSource"
               }
             ]
           },

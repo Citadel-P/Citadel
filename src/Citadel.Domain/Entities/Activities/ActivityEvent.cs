@@ -86,6 +86,9 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.StackDriftDetected
             or ActivityEventType.StackDriftResolved
             or ActivityEventType.StackReconciliationAttempted
+            or ActivityEventType.StackGitUpdateAvailable
+            or ActivityEventType.StackGitAutoUpdated
+            or ActivityEventType.StackGitAutoDeployFailed
                 => ActivityResourceType.Stack,
 
             ActivityEventType.PlatformConnected
@@ -187,6 +190,9 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.StackDriftDetected, StackDriftDetected) => true,
             (ActivityEventType.StackDriftResolved, StackDriftResolved) => true,
             (ActivityEventType.StackReconciliationAttempted, StackReconciliationAttempted) => true,
+            (ActivityEventType.StackGitUpdateAvailable, StackGitUpdateAvailable) => true,
+            (ActivityEventType.StackGitAutoUpdated, StackGitAutoUpdated) => true,
+            (ActivityEventType.StackGitAutoDeployFailed, StackGitAutoDeployFailed) => true,
 
             (ActivityEventType.AlertRuleCreated, AlertRuleCreated) => true,
             (ActivityEventType.AlertRuleUpdated, AlertRuleUpdated) => true,

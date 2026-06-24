@@ -2,8 +2,10 @@ import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { GitRepositoryView } from '@/api/generated/api.types';
+import { syncGitRepositoryAction } from '../actions';
 
 export const { info: GitRepoActions } = createActionsBuilder<GitRepositoryView>()
+  .addAction(syncGitRepositoryAction)
   .addAction({
     key: 'delete',
     type: 'command',

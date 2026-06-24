@@ -35,6 +35,8 @@ internal static class GitRepositoryMappers
             webHookSecret: dto.WebHookSecret,
             onClone: string.IsNullOrWhiteSpace(dto.OnClone) ? null : JsonSerializer.Deserialize(dto.OnClone, GitJsonContext.Default.RepoCommand),
             onPull: string.IsNullOrWhiteSpace(dto.OnPull) ? null : JsonSerializer.Deserialize(dto.OnPull, GitJsonContext.Default.RepoCommand),
+            syncMode: string.IsNullOrWhiteSpace(dto.SyncMode) ? GitRepositorySyncMode.PullInterval : Enum.Parse<GitRepositorySyncMode>(dto.SyncMode),
+            syncIntervalMinutes: dto.SyncIntervalMinutes,
             controlState: string.IsNullOrWhiteSpace(dto.ControlState) ? ResourceControlState.Idle : Enum.Parse<ResourceControlState>(dto.ControlState),
             controlStartedAt: dto.ControlStartedAt,
             controlTriggeredBy: dto.ControlTriggeredBy,
@@ -61,4 +63,17 @@ internal static class GitRepositoryMappers
                 createdByActorId: Guid.Empty,
                 configuration: JsonSerializer.Deserialize(dto.GitAccount_Configuration!, GitJsonContext.Default.GitAuthConfiguration)));
     }
+
+    internal static IEnumerable<GitRepositoryRef> ToDomain(this IEnumerable<GitRepositoryRefDto> dtos)
+        => dtos.Select(ToDomain);
+
+    internal static GitRepositoryRef ToDomain(this GitRepositoryRefDto dto)
+        => GitRepositoryRef.FromPersistence(
+            id: dto.Id,
+            gitRepositoryId: dto.GitRepositoryId,
+            branch: dto.Branch,
+            resolvedCommitSha: dto.ResolvedCommitSha,
+            status: Enum.Parse<GitReposStatus>(dto.Status),
+            lastError: dto.LastError,
+            lastSyncedAt: dto.LastSyncedAt);
 }
