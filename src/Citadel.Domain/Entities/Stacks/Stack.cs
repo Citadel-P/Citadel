@@ -146,6 +146,11 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         CurrentStackReleaseId = stackRelease.Id;
     }
 
+    public void SetStackUpdateState(StackUpdateState stackUpdateState)
+    {
+        StackUpdateState = stackUpdateState;
+    }
+
     public static StackReleaseStatus ToStackStatus(IEnumerable<ContainerStateStatus> states)
     {
         var containerStates = states.ToList();

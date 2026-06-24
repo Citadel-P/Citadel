@@ -10,7 +10,6 @@ using Domain.Entities.Activities;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
 using Hosting.Common;
-using Hosting.Common.Abstraction;
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
 
@@ -18,7 +17,12 @@ namespace Application.Services;
 
 internal interface IApplyStackService
 {
-    IAsyncEnumerable<StackStreamItem> ApplyAsync(Guid stackId, CancellationToken ct);
+    IAsyncEnumerable<StackStreamItem> ApplyAsync(
+        Guid stackId,
+        Guid actorId,
+        IReadOnlyList<string>? serviceNames,
+        bool pullImages,
+        CancellationToken ct);
 }
 
 internal class ApplyStackService(
@@ -31,9 +35,14 @@ internal class ApplyStackService(
     IConnectorFactory<IStackConnector> stackConnectorFactory,
     IConnectorFactory<IContainerConnector> containerConnectorFactory) : IApplyStackService
 {
-    public async IAsyncEnumerable<StackStreamItem> ApplyAsync(Guid stackId, [EnumeratorCancellation] CancellationToken ct)
+    public async IAsyncEnumerable<StackStreamItem> ApplyAsync(
+        Guid stackId,
+        Guid actorId,
+        IReadOnlyList<string>? serviceNames,
+        bool pullImages,
+        [EnumeratorCancellation] CancellationToken ct)
     {
-        var (stack, actorId) = await LoadStack(stackId, ct);
+        var stack = await LoadStack(stackId, ct);
 
         if (stack is null)
         {
@@ -139,10 +148,23 @@ internal class ApplyStackService(
 
         await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, markResult.Stack!), ct);
 
-        yield return StackStreamItem.FromStdOut($"Applying stack to {platform.Address}...");
+        var isServiceScopedApply = serviceNames is { Count: > 0 };
+        yield return StackStreamItem.FromStdOut(isServiceScopedApply
+            ? $"Applying stack services to {platform.Address}..."
+            : $"Applying stack to {platform.Address}...");
 
         var connector = stackConnectorFactory.GetConnector(platform.ConnectorType);
-        var command = BuildApplyCommand(stack, platform.Address, manualStack, composeFileContent, projectName, registryAuth, registryName, registryHost);
+        var command = BuildApplyCommand(
+            stack,
+            platform.Address,
+            manualStack,
+            composeFileContent,
+            projectName,
+            registryAuth,
+            registryName,
+            registryHost,
+            serviceNames,
+            pullImages);
 
         int? exitCode = null;
         var errorLogs = new List<string>(); 
@@ -329,9 +351,11 @@ internal class ApplyStackService(
         return containers.ToHashSet(StringComparer.Ordinal);
     }
 
-    private static StackApplyCommand BuildApplyCommand(Stack stack, string platformAddress, ManualStack manualStack,
+    private StackApplyCommand BuildApplyCommand(Stack stack, string platformAddress, ManualStack manualStack,
         string composeFileContent, string projectName,
-        string? registryAuth, string? registryName, string? registryHost)
+        string? registryAuth, string? registryName, string? registryHost,
+        IReadOnlyList<string>? serviceNames,
+        bool pullImages)
         => new(
             PlatformAddress: platformAddress,
             StackName: stack.Name,
@@ -344,8 +368,10 @@ internal class ApplyStackService(
             RegistryAuth: registryAuth,
             RegistryName: registryName,
             RegistryHost: registryHost,
-            DestroyBeforeDeploy: manualStack.DestroyBeforeDeploy,
-            Spec: manualStack);
+            DestroyBeforeDeploy: manualStack.DestroyBeforeDeploy && serviceNames is not { Count: > 0 },
+            Spec: manualStack,
+            ServiceNames: serviceNames,
+            PullImages: pullImages);
 
 
     private static async Task<(bool HasItem, StackApplyResult? Result, string? ErrorMessage)> TryReadNextAsync(IAsyncEnumerator<StackApplyResult> enumerator)
@@ -384,12 +410,11 @@ internal class ApplyStackService(
         return (true, stack, null);
     }
 
-    private async Task<(Stack?, Guid)> LoadStack(Guid id, CancellationToken ct)
+    private async Task<Stack?> LoadStack(Guid id, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var uca = scope.ServiceProvider.GetRequiredService<IUserContextAccessor>();
-        return (await uow.Stacks.GetAsync(id, ct), uca.Current.ActorId);
+        return await uow.Stacks.GetAsync(id, ct);
     }
 
     private async Task<Registry?> LoadRegistry(Guid registryId, CancellationToken ct)

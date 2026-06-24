@@ -241,8 +241,7 @@ public sealed class StackImageUpdateAvailableEvaluator : IAlertEvaluator
                 AlertResourceType.Stack,
                 new StackImageUpdateAvailableAlertInfo(
                     stack.Name,
-                    stack.CurrentImage,
-                    stack.LatestImage));
+                    stack.Updates ?? []));
         }
     }
 }
@@ -262,8 +261,51 @@ public sealed class StackAutoUpdatedEvaluator : IAlertEvaluator
                 AlertResourceType.Stack,
                 new StackAutoUpdatedAlertInfo(
                     stack.Name,
-                    stack.PreviousImage,
-                    stack.CurrentImage));
+                    stack.Updates ?? []));
+        }
+    }
+}
+
+[AlertEvaluator(AlertType.StackServiceAutoDeployFailed)]
+public sealed class StackServiceDeployFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.StackServiceAutoDeployFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        foreach (var stack in context.Stacks)
+        {
+            if (!stack.Failed)
+                continue;
+
+            yield return new AlertMatch(
+                stack.Id,
+                stack.Name,
+                AlertResourceType.Stack,
+                new StackServiceAutoDeployFailedAlertInfo(
+                    stack.Name,
+                    stack.ServiceNames ?? [],
+                    $"Stack service deployment failed: {stack.Raison}"));
+        }
+    }
+}
+
+[AlertEvaluator(AlertType.StackServiceAutoUpdated)]
+public sealed class StackServiceAutoUpdatedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.StackServiceAutoUpdated;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        foreach (var stack in context.Stacks)
+        {
+            yield return new AlertMatch(
+                stack.Id,
+                stack.Name,
+                AlertResourceType.Stack,
+                new StackServiceAutoUpdatedAlertInfo(
+                    stack.Name,
+                    stack.Updates ?? []));
         }
     }
 }

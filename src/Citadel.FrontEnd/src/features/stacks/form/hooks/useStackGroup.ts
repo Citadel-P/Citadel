@@ -25,6 +25,8 @@ export const useStackGroup = (stackId: string) => {
       status: stack.status,
       description: stack.description,
       controlState: stack.controlState,
+      driftPolicy: stack.driftPolicy,
+      stackUpdateState: stack.stackUpdateState,
       platformStatus: stack.platformStatus,
       platformName: stack.platformName,
       latestActivityView: stack.latestActivityView ? { ...stack.latestActivityView, info } : null,

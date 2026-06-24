@@ -16395,6 +16395,12 @@
             "$ref": "#/components/schemas/AlertEventInfoStackDeployFailedAlertInfo"
           },
           {
+            "$ref": "#/components/schemas/AlertEventInfoStackServiceAutoUpdatedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoStackServiceAutoDeployFailedAlertInfo"
+          },
+          {
             "$ref": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo"
           }
         ],
@@ -16412,6 +16418,8 @@
             "StackImageUpdateAvailable": "#/components/schemas/AlertEventInfoStackImageUpdateAvailableAlertInfo",
             "StackAutoUpdated": "#/components/schemas/AlertEventInfoStackAutoUpdatedAlertInfo",
             "StackAutoDeployFailed": "#/components/schemas/AlertEventInfoStackDeployFailedAlertInfo",
+            "StackServiceAutoUpdated": "#/components/schemas/AlertEventInfoStackServiceAutoUpdatedAlertInfo",
+            "StackServiceAutoDeployFailed": "#/components/schemas/AlertEventInfoStackServiceAutoDeployFailedAlertInfo",
             "StackDriftDetected": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo"
           }
         }
@@ -16628,8 +16636,7 @@
       "AlertEventInfoStackAutoUpdatedAlertInfo": {
         "required": [
           "stackName",
-          "previousImage",
-          "updatedImage"
+          "updates"
         ],
         "properties": {
           "$type": {
@@ -16641,11 +16648,11 @@
           "stackName": {
             "type": "string"
           },
-          "previousImage": {
-            "type": "string"
-          },
-          "updatedImage": {
-            "type": "string"
+          "updates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackImageUpdateItem"
+            }
           },
           "humanMessage": {
             "type": [
@@ -16744,8 +16751,7 @@
       "AlertEventInfoStackImageUpdateAvailableAlertInfo": {
         "required": [
           "stackName",
-          "currentImage",
-          "latestImage"
+          "updates"
         ],
         "properties": {
           "$type": {
@@ -16757,11 +16763,73 @@
           "stackName": {
             "type": "string"
           },
-          "currentImage": {
+          "updates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackImageUpdateItem"
+            }
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackServiceAutoDeployFailedAlertInfo": {
+        "required": [
+          "stackName",
+          "serviceNames",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackServiceAutoDeployFailed"
+            ],
             "type": "string"
           },
-          "latestImage": {
+          "stackName": {
             "type": "string"
+          },
+          "serviceNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackServiceAutoUpdatedAlertInfo": {
+        "required": [
+          "stackName",
+          "updates"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackServiceAutoUpdated"
+            ],
+            "type": "string"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "updates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackImageUpdateItem"
+            }
           },
           "humanMessage": {
             "type": [
@@ -17396,6 +17464,8 @@
           "StackImageUpdateAvailable",
           "StackAutoDeployFailed",
           "StackAutoUpdated",
+          "StackServiceAutoDeployFailed",
+          "StackServiceAutoUpdated",
           "StackDriftDetected"
         ]
       },
@@ -25200,6 +25270,29 @@
             "items": {
               "$ref": "#/components/schemas/StackDrift"
             }
+          }
+        }
+      },
+      "StackImageUpdateItem": {
+        "required": [
+          "serviceName",
+          "imageName",
+          "currentDigest",
+          "latestDigest"
+        ],
+        "type": "object",
+        "properties": {
+          "serviceName": {
+            "type": "string"
+          },
+          "imageName": {
+            "type": "string"
+          },
+          "currentDigest": {
+            "type": "string"
+          },
+          "latestDigest": {
+            "type": "string"
           }
         }
       },

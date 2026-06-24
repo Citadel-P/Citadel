@@ -15,4 +15,6 @@ public sealed record StackApplyCommand(
     IReadOnlyList<string>? EnvironmentVariables,
     StackCommand? PreDeploy,
     StackCommand? PostDeploy,
-    StackSpec Spec);
+    StackSpec Spec,
+    IReadOnlyList<string>? ServiceNames = null,
+    bool PullImages = false);

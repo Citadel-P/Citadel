@@ -270,6 +270,8 @@ export enum AlertType {
   StackImageUpdateAvailable = "StackImageUpdateAvailable",
   StackAutoDeployFailed = "StackAutoDeployFailed",
   StackAutoUpdated = "StackAutoUpdated",
+  StackServiceAutoDeployFailed = "StackServiceAutoDeployFailed",
+  StackServiceAutoUpdated = "StackServiceAutoUpdated",
   StackDriftDetected = "StackDriftDetected",
 }
 
@@ -558,6 +560,14 @@ export type AlertEventInfo = BaseAlertEventInfo &
     | BaseAlertEventInfoTypeMapping<
         "StackAutoDeployFailed",
         AlertEventInfoStackDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackServiceAutoUpdated",
+        AlertEventInfoStackServiceAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackServiceAutoDeployFailed",
+        AlertEventInfoStackServiceAutoDeployFailedAlertInfo
       >
     | BaseAlertEventInfoTypeMapping<
         "StackDriftDetected",
@@ -1060,8 +1070,7 @@ export interface AlertEventInfoPlatformVersionMismatchAlertInfo {
 export interface AlertEventInfoStackAutoUpdatedAlertInfo {
   $type?: "StackAutoUpdated";
   stackName: string;
-  previousImage: string;
-  updatedImage: string;
+  updates: StackImageUpdateItem[];
   humanMessage?: null | string;
 }
 
@@ -1094,8 +1103,22 @@ export interface AlertEventInfoStackDriftDetectedAlertInfo {
 export interface AlertEventInfoStackImageUpdateAvailableAlertInfo {
   $type?: "StackImageUpdateAvailable";
   stackName: string;
-  currentImage: string;
-  latestImage: string;
+  updates: StackImageUpdateItem[];
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackServiceAutoDeployFailedAlertInfo {
+  $type?: "StackServiceAutoDeployFailed";
+  stackName: string;
+  serviceNames: string[];
+  reason: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackServiceAutoUpdatedAlertInfo {
+  $type?: "StackServiceAutoUpdated";
+  stackName: string;
+  updates: StackImageUpdateItem[];
   humanMessage?: null | string;
 }
 
@@ -3247,6 +3270,13 @@ export interface StackDriftReport {
   hasAutoFixableDrift: boolean;
   hasStructuralDrift: boolean;
   drifts: StackDrift[];
+}
+
+export interface StackImageUpdateItem {
+  serviceName: string;
+  imageName: string;
+  currentDigest: string;
+  latestDigest: string;
 }
 
 export interface StackReconciliationAction {
