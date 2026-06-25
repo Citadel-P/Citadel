@@ -163,6 +163,35 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenPollSyncFailsForNonDefaultBranch_DoesNotMarkRepositoryAsDegraded()
+    {
+        var repoId = await CreateHealthyRepositoryAsync("GR-MASTER", "master");
+
+        _gitCliRepositoryMock
+            .Setup(x => x.TestConnectionAsync(It.IsAny<string>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        _repoCacheManagerMock
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Error: "fatal: couldn't find remote ref main"));
+
+        await RunJobOnceAsync(new GitRepoSyncRequest(repoId, "main", GitRepoSyncTrigger.Poll));
+
+        var repo = await WaitForRepoStatusAsync(repoId, GitReposStatus.Healthy);
+
+        Assert.NotNull(repo);
+        Assert.Equal("master", repo!.DefaultBranch);
+        Assert.Equal(GitReposStatus.Healthy, repo.Status);
+        Assert.Equal(ResourceControlState.Idle, repo.ControlState);
+
+        var gitRef = await GetRepoRefAsync(repoId, "main");
+        Assert.NotNull(gitRef);
+        Assert.Equal(GitReposStatus.Degraded, gitRef!.Status);
+        Assert.Equal("fatal: couldn't find remote ref main", gitRef.LastError);
+        Assert.Null(repo.LatestActivityEvent);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenRepositoryHasNoLinkedAccount_PassesNullAccount_AndMarksRepositoryAsHealthy()
     {
         GitAccount? testConnectionAccount = null;
@@ -225,7 +254,10 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             Times.Never);
     }
 
-    private async Task RunJobOnceAsync(Guid repoId)
+    private Task RunJobOnceAsync(Guid repoId)
+        => RunJobOnceAsync(new GitRepoSyncRequest(repoId));
+
+    private async Task RunJobOnceAsync(GitRepoSyncRequest request)
     {
         var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
         _repoCacheManagerMock
@@ -250,12 +282,31 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             Mock.Of<Microsoft.Extensions.Logging.ILogger<GitRepoSyncJob>>());
 
         var runTask = job.RunAsync(TestContext.Current.CancellationToken);
-        await channel.Writer.WriteAsync(new GitRepoSyncRequest(repoId), TestContext.Current.CancellationToken);
+        await channel.Writer.WriteAsync(request, TestContext.Current.CancellationToken);
         channel.Writer.Complete();
         await runTask;
     }
 
     private Task RunJobOnceAsync() => RunJobOnceAsync(_repoId);
+
+    private async Task<Guid> CreateHealthyRepositoryAsync(string name, string defaultBranch)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var repository = new GitRepository(
+            name: name,
+            description: null,
+            url: $"https://github.com/citadel-p/{name}.git",
+            defaultBranch: defaultBranch,
+            gitAccountId: null,
+            createdByActorId: Constants.SystemId);
+
+        repository.ReleaseProcessing(GitReposStatus.Healthy);
+
+        await uow.GitRepositories.AddAsync(repository, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+        return repository.Id;
+    }
 
     private async Task<Guid> CreateTrackedGitStackAsync(string deployedCommit)
     {

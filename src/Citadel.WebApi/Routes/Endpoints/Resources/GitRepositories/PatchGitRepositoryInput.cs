@@ -9,7 +9,6 @@ public sealed record PatchGitRepositoryInput(
     Guid? GitAccountId,
     GitRepositorySyncMode SyncMode,
     int? SyncIntervalMinutes,
-    bool WebHookEnabled,
-    string? WebHookSecret,
+    RepoWebhookConfig? Webhook,
     RepoCommand? OnClone,
     RepoCommand? OnPull);

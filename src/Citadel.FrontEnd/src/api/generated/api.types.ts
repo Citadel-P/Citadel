@@ -10,6 +10,19 @@
  * ---------------------------------------------------------------
  */
 
+/** @default "GitHub" */
+export enum WebhookProvider {
+  GitHub = "GitHub",
+  GitLab = "GitLab",
+}
+
+/** @default "GitHubHmacSha256" */
+export enum WebhookAuthScheme {
+  GitHubHmacSha256 = "GitHubHmacSha256",
+  GitLabSignedToken = "GitLabSignedToken",
+  GitLabLegacyToken = "GitLabLegacyToken",
+}
+
 export enum VolumeSharing {
   None = "None",
   ReadOnly = "ReadOnly",
@@ -189,7 +202,6 @@ export enum GitTransport {
 export enum GitRepositorySyncMode {
   Manual = "Manual",
   PullInterval = "PullInterval",
-  Webhook = "Webhook",
 }
 
 export enum GitReposStatus {
@@ -1720,8 +1732,7 @@ export interface CreateGitRepositoryInput {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   syncIntervalMinutes: null | number | string;
-  webHookEnabled: boolean;
-  webHookSecret: null | string;
+  webhook: null | RepoWebhookConfig;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
 }
@@ -2226,8 +2237,7 @@ export interface GitRepositoryConfigView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   syncIntervalMinutes: null | number | string;
-  webHookEnabled: boolean;
-  webHookSecret: null | string;
+  webhook: null | RepoWebhookConfig;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
 }
@@ -2247,8 +2257,7 @@ export interface GitRepositorySnapshot {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   syncIntervalMinutes: null | number | string;
-  webHookEnabled: boolean;
-  webHookSecret: null | string;
+  webhook: null | RepoWebhookConfig;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
   resolvedCommitSha?: null | string;
@@ -2272,8 +2281,7 @@ export interface GitRepositoryView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   syncIntervalMinutes: null | number | string;
-  webHookEnabled: boolean;
-  webHookSecret: null | string;
+  webhook: null | RepoWebhookConfig;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
   /** @format date-time */
@@ -2820,8 +2828,7 @@ export interface PatchGitRepositoryInput {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   syncIntervalMinutes: null | number | string;
-  webHookEnabled: boolean;
-  webHookSecret: null | string;
+  webhook: null | RepoWebhookConfig;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
 }
@@ -3220,6 +3227,15 @@ export interface RepoSyncResultSnapshot {
   message?: null | string;
 }
 
+export interface RepoWebhookConfig {
+  /** @default false */
+  enabled?: boolean;
+  provider?: WebhookProvider;
+  authScheme?: WebhookAuthScheme;
+  secret?: null | string;
+  branchFilter?: null | string;
+}
+
 export interface ResolveAlertEventsInput {
   ids: string[];
   resolutionNote: null | string;
@@ -3485,11 +3501,7 @@ export interface StackSpecGitStack {
   branch: string;
   commitSha: null | string;
   updateBehavior: StackUpdateBehavior;
-  /** @default true */
-  webHookEnabled?: null | boolean;
-  /** @default false */
-  webHookForceDeploy?: null | boolean;
-  webHookSecret?: null | string;
+  webhook?: null | StackWebhookConfig;
   composePaths?: null | string[];
   additionalEnvFileFromRepo?: null | string[];
   projectName?: null | string;
@@ -3571,6 +3583,17 @@ export interface StackView {
   platformName?: null | string;
   latestActivityView?: null | LatestActivityView;
   capabilities?: null | StackCapabilities;
+}
+
+export interface StackWebhookConfig {
+  /** @default false */
+  forceDeploy?: boolean;
+  /** @default false */
+  enabled?: boolean;
+  provider?: WebhookProvider;
+  authScheme?: WebhookAuthScheme;
+  secret?: null | string;
+  branchFilter?: null | string;
 }
 
 export interface StacksView {
@@ -8597,6 +8620,30 @@ export class Api<
         query: query,
         secure: true,
         format: "json",
+        ...params,
+      }),
+  };
+  listener = {
+    /**
+     * No description
+     *
+     * @tags WebhookListener
+     * @name ReceiveWebhook
+     * @summary Receive a provider webhook delivery
+     * @request POST:/listener/{authType}/{resourceType}/{id}/{execution}
+     * @response `200` `void` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     */
+    receiveWebhook: (
+      authType: string,
+      resourceType: string,
+      id: string,
+      execution: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/listener/${authType}/${resourceType}/${id}/${execution}`,
+        method: "POST",
         ...params,
       }),
   };

@@ -13,10 +13,11 @@ public class GitRepository(
     string defaultBranch,
     Guid? gitAccountId,
     Guid createdByActorId,
-    bool webHookEnabled = false,
-    string webHookSecret = "",
+    RepoWebhookConfig? webhook = null,
     RepoCommand? onClone = null,
-    RepoCommand? onPull = null) : IAuditedEntity, IReconcilableResource
+    RepoCommand? onPull = null,
+    GitRepositorySyncMode syncMode = GitRepositorySyncMode.PullInterval,
+    int? syncIntervalMinutes = 5) : IAuditedEntity, IReconcilableResource
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = name;
@@ -26,12 +27,11 @@ public class GitRepository(
     public string? DefaultBranch { get; private set; } = defaultBranch;
     public Guid? GitAccountId { get; private set; } = gitAccountId;
     public GitAccount? GitAccount { get; private set; } = null!;
-    public bool WebHookEnabled { get; private set; } = webHookEnabled;
-    public string WebHookSecret { get; private set; } = webHookSecret ?? string.Empty;
+    public RepoWebhookConfig? Webhook { get; private set; } = webhook;
     public RepoCommand? OnClone { get; private set; } = onClone;
     public RepoCommand? OnPull { get; private set; } = onPull;
-    public GitRepositorySyncMode SyncMode { get; private set; } = GitRepositorySyncMode.PullInterval;
-    public int? SyncIntervalMinutes { get; private set; } = 5;
+    public GitRepositorySyncMode SyncMode { get; private set; } = syncMode;
+    public int? SyncIntervalMinutes { get; private set; } = NormalizeSyncInterval(syncMode, syncIntervalMinutes);
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -61,41 +61,44 @@ public class GitRepository(
         return $"/app/data/repos/{Id}";
     }
 
-
     public void PartialUpdate(
-        string? name = null, 
-        string? description = null, 
+        string? name = null,
+        string? description = null,
         string? defaultBranch = null,
-        bool? webHookEnabled = null,
-        string? webHookSecret = null,
+        RepoWebhookConfig? webhook = null,
         RepoCommand? onClone = null,
         RepoCommand? onPull = null,
+        GitRepositorySyncMode? syncMode = null,
+        int? syncIntervalMinutes = null,
         GitReposStatus? status = null,
         ResourceControlState? resourceControlState = null,
         long? controlStartedAt = null,
         Guid? controlTriggeredBy = null,
         long? rowVersion = null)
     {
-        if (name is not null) 
+        if (name is not null)
             Name = name;
 
-        if (description is not null) 
+        if (description is not null)
             Description = description;
 
-        if (defaultBranch is not null) 
+        if (defaultBranch is not null)
             DefaultBranch = defaultBranch;
 
-        if (webHookEnabled.HasValue)
-            WebHookEnabled = webHookEnabled.Value;
-
-        if (webHookSecret is not null)
-            WebHookSecret = webHookSecret;
+        if (webhook is not null)
+            Webhook = webhook;
 
         if (onClone is not null)
             OnClone = onClone;
 
         if (onPull is not null)
             OnPull = onPull;
+
+        if (syncMode is not null)
+        {
+            SyncMode = syncMode.Value;
+            SyncIntervalMinutes = NormalizeSyncInterval(syncMode.Value, syncIntervalMinutes);
+        }
 
         if (resourceControlState is not null)
             ControlState = resourceControlState.Value;
@@ -122,7 +125,6 @@ public class GitRepository(
     {
         SyncMode = syncMode;
         SyncIntervalMinutes = NormalizeSyncInterval(syncMode, syncIntervalMinutes);
-        WebHookEnabled = syncMode == GitRepositorySyncMode.Webhook;
     }
 
     public void UpdateSource(string url, Guid? gitAccountId)
@@ -157,8 +159,7 @@ public class GitRepository(
         Guid? gitAccountId,
         DateTime createdAt,
         Guid createdByActorId,
-        bool webHookEnabled = false,
-        string? webHookSecret = null,
+        RepoWebhookConfig? webhook = null,
         RepoCommand? onClone = null,
         RepoCommand? onPull = null,
         GitRepositorySyncMode syncMode = GitRepositorySyncMode.PullInterval,
@@ -170,17 +171,22 @@ public class GitRepository(
         GitAccount? gitAccount = null,
         ActivityEvent? latestActivityEvent = null)
     {
-        return new GitRepository(name, description, url, defaultBranch, gitAccountId, createdByActorId)
+        return new GitRepository(
+            name,
+            description,
+            url,
+            defaultBranch,
+            gitAccountId,
+            createdByActorId,
+            webhook,
+            onClone,
+            onPull,
+            syncMode,
+            syncIntervalMinutes)
         {
             Id = id,
             CreatedAt = createdAt,
             GitAccount = gitAccount,
-            WebHookEnabled = webHookEnabled,
-            WebHookSecret = webHookSecret ?? string.Empty,
-            OnClone = onClone,
-            OnPull = onPull,
-            SyncMode = syncMode,
-            SyncIntervalMinutes = NormalizeSyncInterval(syncMode, syncIntervalMinutes),
             Status = status,
             ControlState = controlState,
             ControlStartedAt = controlStartedAt,

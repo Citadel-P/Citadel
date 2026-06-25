@@ -25,6 +25,7 @@ import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useParams } from 'react-router';
 import { ResourceSelectorField } from '@/components/custom/common';
 import { MonacoEditor, MonacoToArrayEditor } from '@/lib/monaco';
+import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -530,6 +531,42 @@ export const StackForm = ({
                     />
                   ),
                 }),
+                ...(currentStackSource === StackSource.Git
+                  ? [
+                      defineGroupField<StackInput>({
+                        id: 'webhook',
+                        label: 'Webhook',
+                        title: 'Webhook',
+                        description: 'Trigger a deploy from your Git provider when this branch receives a push.',
+                        items: [
+                          defineField<StackInput, 'spec'>({
+                            key: 'spec',
+                            label: 'Enabled',
+                            render: (value, set) => (
+                              <WebhookConfigField
+                                resourceType="stack"
+                                resourceId={id}
+                                execution="deploy"
+                                value={(value as any)?.webhook ?? null}
+                                defaultBranch={(value as any)?.branch ?? null}
+                                disabled={disabled}
+                                onChange={(webhook) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...(original.spec as any),
+                                      ...(prev.spec as any),
+                                      $type: 'Git',
+                                      webhook,
+                                    } as any,
+                                  }))
+                                }
+                              />
+                            ),
+                          }),
+                        ],
+                      }),
+                    ]
+                  : []),
                 defineGroupField<StackInput>({
                   id: 'drift_policy',
                   label: 'Drift Management',
@@ -767,7 +804,7 @@ export const StackForm = ({
           }
         : {}),
     }),
-    [disabled, mode, id, currentStackSource, currentDriftPolicy, patchDriftPolicy],
+    [disabled, mode, id, currentStackSource, currentDriftPolicy, patchDriftPolicy, original.spec],
   );
 
   return (

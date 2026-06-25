@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
+using Domain.Entities;
 
 namespace Domain.Entities.Stacks;
 
@@ -46,18 +47,15 @@ public sealed record ManualStack(
 /// <param name="EnvFilePath"></param>
 /// <param name="CommitSha">Optionally specify a commit sha to deploy from. If not specified, will deploy from the default branch and track new commits based on the update behavior.</param>
 /// <param name="UpdateBehavior"> How to handle updates when a new image digest is detected for the currently defined tags in the compose file.</param>
-/// <param name="WebHookForceDeploy">Usually the DockerStack won't deploy unless there are changes to the files. Use this to force deploy.param>
-/// <param name="WebHookSecret">A secret token to validate incoming webhooks from the Git provider. Default to the linked repos.</param>
+/// <param name="Webhook">Webhook settings used to deploy this stack from Git provider push events.</param>
 /// <param name="RegistryName">The name of the container registry to use for the stack.</param>
-public sealed record GitStack(  
+public sealed record GitStack(
     Guid GitRepoId,
     string Branch,
-    string? CommitSha, 
+    string? CommitSha,
     StackUpdateBehavior UpdateBehavior,
     string? ProjectName = null,
-    bool? WebHookEnabled = true,
-    bool? WebHookForceDeploy = false,
-    string? WebHookSecret = null,
+    StackWebhookConfig? Webhook = null,
     List<string>? ComposePaths = null,
     StackCommand? PreDeploy = null,
     StackCommand? PostDeploy = null,
@@ -66,6 +64,14 @@ public sealed record GitStack(
     string? EnvFilePath = null,
     Guid? RegistryId = null,
     bool DestroyBeforeDeploy = true) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvVars, EnvFilePath, RegistryId, DestroyBeforeDeploy);
+
+public sealed record StackWebhookConfig(
+    bool Enabled = false,
+    WebhookProvider Provider = WebhookProvider.GitHub,
+    WebhookAuthScheme AuthScheme = WebhookAuthScheme.GitHubHmacSha256,
+    string? Secret = null,
+    string? BranchFilter = null,
+    bool ForceDeploy = false) : WebhookConfig(Enabled, Provider, AuthScheme, Secret, BranchFilter);
 
 public sealed record ImageUpdateState(
     string ServiceName,

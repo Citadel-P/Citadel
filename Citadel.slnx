@@ -4,7 +4,6 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
     <File Path="install-server-deps.sh" />
-    <File Path="notes.md" />
     <File Path="nuget.config" />
     <File Path="version.json" />
   </Folder>

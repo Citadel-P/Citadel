@@ -187,6 +187,7 @@ export const FieldInput = ({
   placeholder,
   type,
   disabled,
+  readOnly,
   className,
   ref,
   id,
@@ -198,12 +199,14 @@ export const FieldInput = ({
   placeholder?: string;
   type?: string;
   disabled?: boolean;
+  readOnly?: boolean;
   className?: string;
   ref?: Ref<HTMLInputElement> | undefined;
   id?: string;
 }) => (
   <Input
     disabled={disabled}
+    readOnly={readOnly}
     type={type}
     ref={ref}
     autoFocus={autoFocus}
@@ -273,6 +276,35 @@ export const FieldSwitch = ({
       {checked ? 'On' : 'Off'}
     </Label>
   </div>
+);
+
+export const FieldSelect = <TValue extends string>({
+  value,
+  onChange,
+  options,
+  disabled,
+  placeholder,
+  className,
+}: {
+  value?: TValue | null;
+  onChange: (v: TValue) => void;
+  options: Array<{ value: TValue; label: React.ReactNode }>;
+  disabled?: boolean;
+  placeholder?: string;
+  className?: string;
+}) => (
+  <Select value={value ?? undefined} onValueChange={(next) => onChange(next as TValue)} disabled={disabled}>
+    <SelectTrigger className={cn('w-full max-w-100', className)}>
+      <SelectValue placeholder={placeholder} />
+    </SelectTrigger>
+    <SelectContent className="bg-background">
+      {options.map((option) => (
+        <SelectItem key={option.value} value={option.value}>
+          {option.label}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
 );
 
 export const FieldSlider = ({
@@ -648,7 +680,7 @@ export function FormShell<T>({
     [effectiveOriginal, merged, fieldMap],
   );
 
-  const hasChanges = useMemo(() => Object.values(dirty).some(Boolean), [dirty]);
+  const hasChanges = useMemo(() => !areValuesEqual(effectiveOriginal, merged), [effectiveOriginal, merged]);
   const isValid = useMemo(() => Object.values(errors).every((v) => !v), [errors]);
   const canSave = hasChanges;
 

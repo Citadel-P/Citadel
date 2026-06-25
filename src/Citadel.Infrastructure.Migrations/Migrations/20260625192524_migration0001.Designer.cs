@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260624213240_migration0001")]
+    [Migration("20260625192524_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -1060,15 +1060,9 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("url");
 
-                    b.Property<bool>("WebHookEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("webhookenabled");
-
-                    b.Property<string>("WebHookSecret")
-                        .HasColumnType("text")
-                        .HasColumnName("webhooksecret");
+                    b.Property<string>("Webhook")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("webhook");
 
                     b.HasKey("Id")
                         .HasName("pk_gitrepositories");

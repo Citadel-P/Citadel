@@ -29,7 +29,6 @@ export const syncGitRepositoryAction: ActionConfig<GitRepositoryView, 'syncGitRe
 
         await mutateAsync({
           id: selected.id,
-          query: selected.defaultBranch ? { branch: selected.defaultBranch } : undefined,
         });
 
         toast.success(`Sync queued for ${selected.name}`);

@@ -31,7 +31,7 @@ public class GitRepositoryCreateTests(PostgresTestFixture fixture) : Integration
           "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "webHookEnabled": true,
+          "webhook": { "enabled": true },
           "gitAccountId": null
         }
         """;
@@ -76,7 +76,7 @@ public class GitRepositoryCreateTests(PostgresTestFixture fixture) : Integration
           "description": "A linked repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "WebHookEnabled": true,
+          "webhook": { "enabled": true },
           "gitAccountId": "{{gitAccountId}}"
         }
         """;
@@ -104,7 +104,7 @@ public class GitRepositoryCreateTests(PostgresTestFixture fixture) : Integration
           "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "webHookEnabled": true,
+          "webhook": { "enabled": true },
           "gitAccountId": null
         }
         """;
@@ -126,7 +126,7 @@ public class GitRepositoryCreateTests(PostgresTestFixture fixture) : Integration
           "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "",
-          "webHookEnabled": true,
+          "webhook": { "enabled": true },
           "gitAccountId": null
         }
         """;
@@ -163,7 +163,7 @@ public class GitRepositoryCreateTests(PostgresTestFixture fixture) : Integration
           "url": "https://github.com/citadel-p/other.git",
           "defaultBranch": "main",
           "status": "Valid",
-          "webHookEnabled": true,
+          "webhook": { "enabled": true },
           "gitAccountId": null
         }
         """;
@@ -185,7 +185,7 @@ public class GitRepositoryCreateTests(PostgresTestFixture fixture) : Integration
           "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "webHookEnabled": true,
+          "webhook": { "enabled": true },
           "gitAccountId": "{{Guid.NewGuid()}}"
         }
         """;
@@ -224,7 +224,7 @@ public class GitRepositoryCreateTests(PostgresTestFixture fixture) : Integration
           "description": "A git repository",
           "url": "https://gitlab.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "webHookEnabled": true,
+          "webhook": { "enabled": true },
           "gitAccountId": "{{gitAccountId}}"
         }
         """;

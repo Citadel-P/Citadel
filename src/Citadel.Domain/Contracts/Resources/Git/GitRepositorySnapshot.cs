@@ -12,8 +12,7 @@ public sealed record GitRepositorySnapshot(
     Guid? GitAccountId,
     GitRepositorySyncMode SyncMode,
     int? SyncIntervalMinutes,
-    bool WebHookEnabled,
-    string? WebHookSecret,
+    RepoWebhookConfig? Webhook,
     RepoCommand? OnClone,
     RepoCommand? OnPull,
     string? ResolvedCommitSha = null);
@@ -33,8 +32,7 @@ public static class GitRepositorySnapshotExtensions
             repository.GitAccountId,
             repository.SyncMode,
             repository.SyncIntervalMinutes,
-            repository.WebHookEnabled,
-            repository.WebHookSecret.MaskValue(),
+            repository.Webhook is null ? null : repository.Webhook with { Secret = repository.Webhook.Secret.MaskValue() },
             repository.OnClone,
             repository.OnPull,
             resolvedCommitSha);

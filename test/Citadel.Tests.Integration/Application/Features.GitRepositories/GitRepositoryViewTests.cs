@@ -55,7 +55,7 @@ public class GitRepositoryViewTests(PostgresTestFixture fixture) : IntegrationTe
           "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "webHookEnabled": true,
+          "webhook": { "enabled": true },
           "gitAccountId": null
         }
         """;

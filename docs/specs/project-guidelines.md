@@ -35,12 +35,23 @@ This file holds project-wide guidance that does not belong to a specific domain 
 - Model schema changes in `src\Citadel.Infrastructure.Migrations\EntityFramework\ApplicationDbContext.cs`.
 - Generate EF migrations under `src\Citadel.Infrastructure.Migrations\Migrations`.
 - Regenerate the SQL script from `src\Citadel.Infrastructure.Migrations` with:
+- Update ef if needed (dotnet tool update --global dotnet-ef)
+
+### Init
+
+```powershell
+dotnet ef migrations add migration0001 -o .\Migrations\
+```
 
 ```powershell
 dotnet ef migrations script -o "../Citadel.Infrastructure/Scripts/script0001.sql"
 ```
 
-- Keep `script0001.sql` as generated output. Do not add follow-up files such as `script0002.sql` unless the migration strategy is intentionally changed.
+### For diff
+
+```powershell
+dotnet ef migrations script 20250911211455_migration0001 20250911215953_migration0002  -o "../Citadel.Infrastructure/Scripts/script0002.sql"
+```
 
 ## Release Workflow
 
@@ -102,7 +113,7 @@ git push origin v1.0.0
 docker build -t citadel.dev -f src/Citadel.WebApi/Dockerfile .
 ```
 
-## Run the image: 
+## Run the image:
 
 ```powershell
 docker run -d -p 8000:8000 -p 8001:8001 -v "citadel_data:/app/data" -v "/var/run/docker.sock:/var/run/docker.sock" --name citadel.dev citadel.dev

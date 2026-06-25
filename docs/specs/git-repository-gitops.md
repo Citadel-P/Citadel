@@ -6,7 +6,7 @@ This spec describes the current Git repository implementation and the intended p
 
 The goal is to let users define reusable Git repositories, keep a local synchronized cache, and link stacks to repository paths so stack releases can be applied from version-controlled compose files.
 
-Webhook ingestion is out of scope for the first implementation pass. The repository model still records whether sync is manual, interval-polled, or webhook-driven so the UI and persistence shape do not need to be redesigned later.
+Repository sync mode describes Citadel-initiated sync only. Webhook ingestion is configured separately on the repository and can coexist with manual or interval polling.
 
 ## Main Files
 
@@ -77,7 +77,13 @@ Repository sync modes:
 
 - `Manual`: only syncs when the user clicks Sync or another explicit workflow enqueues a sync.
 - `PullInterval`: background polling syncs the default branch and linked stack branches when the branch ref is older than `SyncIntervalMinutes`.
-- `Webhook`: stores webhook intent and secret, and disables polling. Actual webhook ingestion is still a later slice.
+
+Repository webhook settings are independent from sync mode:
+
+- `WebHookEnabled`
+- `WebHookSecret`
+
+When enabled, incoming provider webhooks enqueue repository sync through the listener route without disabling manual sync or polling.
 
 ## Current Repository Sync Flow
 
@@ -149,9 +155,7 @@ Current shape:
 - `CommitSha`
 - `UpdateBehavior`
 - `ProjectName`
-- `WebHookEnabled`
-- `WebHookForceDeploy`
-- `WebHookSecret`
+- `Webhook`
 - `ComposePaths`
 - `PreDeploy`
 - `PostDeploy`
@@ -165,13 +169,7 @@ Stack create and patch validate that the referenced repository exists.
 
 The stack lookup endpoint includes the currently selected Git repository even if normal permissions would otherwise filter it out, matching the existing platform/registry lookup pattern.
 
-The major missing piece is apply support. `ApplyStackService` currently rejects every non-`ManualStack` spec:
-
-```text
-Only manual stack specs are currently supported for stack apply.
-```
-
-So Git-backed stacks can be configured, but they cannot yet be materialized into compose content and deployed.
+Git-backed stacks can be materialized into immutable commit snapshots and deployed through the existing stack apply path.
 
 ## GitOps Semantics
 
@@ -448,7 +446,7 @@ Recommended order:
 8. Add a background job that reacts to successful repository syncs and marks linked Git stacks with source updates.
 9. Add Git stack update alerts.
 10. Add optional auto-apply for branch-tracking Git stacks.
-11. Add webhook ingestion later as another way to enqueue repository sync for repositories whose `SyncMode` is `Webhook`.
+11. Add webhook ingestion as another way to enqueue repository sync for repositories whose webhook settings are enabled.
 
 ## Tests
 

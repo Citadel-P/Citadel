@@ -23,10 +23,10 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
     {
         const string sql = """
             INSERT INTO GitRepositories (
-                Id, Name, Description, Url, DefaultBranch, Status, SyncMode, SyncIntervalMinutes, GitAccountId, CreatedAt, CreatedByActorId, WebHookEnabled, WebHookSecret, OnClone, OnPull,
+                Id, Name, Description, Url, DefaultBranch, Status, SyncMode, SyncIntervalMinutes, GitAccountId, CreatedAt, CreatedByActorId, Webhook, OnClone, OnPull,
                 ControlState, ControlStartedAt, ControlTriggeredBy, RowVersion)
             VALUES (
-                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @SyncMode, @SyncIntervalMinutes, @GitAccountId, @CreatedAt, @CreatedByActorId, @WebHookEnabled, @WebHookSecret, @OnClone::json, @OnPull::json,
+                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @SyncMode, @SyncIntervalMinutes, @GitAccountId, @CreatedAt, @CreatedByActorId, @Webhook::jsonb, @OnClone::json, @OnPull::json,
                 @ControlState, @ControlStartedAt, @ControlTriggeredBy, @RowVersion)
         """;
 
@@ -43,8 +43,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             GitAccountId = gitRepository.GitAccountId,
             CreatedAt = gitRepository.CreatedAt,
             CreatedByActorId = gitRepository.CreatedByActorId,
-            WebHookEnabled = gitRepository.WebHookEnabled,
-            WebHookSecret = gitRepository.WebHookSecret,
+            Webhook = gitRepository.Webhook is null ? null : JsonSerializer.Serialize(gitRepository.Webhook, GitJsonContext.Default.RepoWebhookConfig),
             OnClone = gitRepository.OnClone is null ? null : JsonSerializer.Serialize(gitRepository.OnClone, GitJsonContext.Default.RepoCommand),
             OnPull = gitRepository.OnPull is null ? null : JsonSerializer.Serialize(gitRepository.OnPull, GitJsonContext.Default.RepoCommand),
             ControlState = EnumFormatter<ResourceControlState>.GetValue(gitRepository.ControlState),
@@ -159,8 +158,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
                 SyncMode = @SyncMode,
                 SyncIntervalMinutes = @SyncIntervalMinutes,
                 GitAccountId = @GitAccountId,
-                WebHookEnabled = @WebHookEnabled,
-                WebHookSecret = @WebHookSecret,
+                Webhook = @Webhook::jsonb,
                 OnClone = @OnClone,
                 OnPull = @OnPull,
                 ControlState = @ControlState,
@@ -181,8 +179,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             SyncMode = EnumFormatter<GitRepositorySyncMode>.GetValue(gitRepository.SyncMode),
             gitRepository.SyncIntervalMinutes,
             GitAccountId = gitRepository.GitAccountId,
-            WebHookEnabled = gitRepository.WebHookEnabled,
-            WebHookSecret = gitRepository.WebHookSecret,
+            Webhook = gitRepository.Webhook is null ? null : JsonSerializer.Serialize(gitRepository.Webhook, GitJsonContext.Default.RepoWebhookConfig),
             OnClone = gitRepository.OnClone is null ? null : JsonSerializer.Serialize(gitRepository.OnClone, GitJsonContext.Default.RepoCommand),
             OnPull = gitRepository.OnPull is null ? null : JsonSerializer.Serialize(gitRepository.OnPull, GitJsonContext.Default.RepoCommand),
             ControlState = EnumFormatter<ResourceControlState>.GetValue(gitRepository.ControlState),

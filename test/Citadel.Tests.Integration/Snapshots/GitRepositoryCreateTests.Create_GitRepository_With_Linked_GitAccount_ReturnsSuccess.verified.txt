@@ -7,8 +7,12 @@
   url: https://github.com/citadel-p/citadel,
   defaultBranch: main,
   gitAccountId: Guid_3,
-  webHookEnabled: true,
-  webHookSecret: ,
+  syncMode: Manual,
+  webhook: {
+    enabled: true,
+    provider: GitHub,
+    authScheme: GitHubHmacSha256
+  },
   createdAt: DateTimeOffset_1,
   controlState: Processing
 }

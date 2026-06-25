@@ -125,6 +125,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(SshKeyAuth))]
 [JsonSerializable(typeof(GitRepositorySyncMode))]
 [JsonSerializable(typeof(GitRepository))]
+[JsonSerializable(typeof(RepoWebhookConfig))]
 [JsonSerializable(typeof(CreateGitRepositoryInput))]
 [JsonSerializable(typeof(GitRepositoryInputPatchDocument))]
 [JsonSerializable(typeof(DeleteGitRepositoriesInput))]
@@ -226,6 +227,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(StackSpec))]
 [JsonSerializable(typeof(ManualStack))]
 [JsonSerializable(typeof(GitStack))]
+[JsonSerializable(typeof(WebhookConfig))]
+[JsonSerializable(typeof(StackWebhookConfig))]
 [JsonSerializable(typeof(StackUpdateState))]
 [JsonSerializable(typeof(ManualStackUpdateState))]
 [JsonSerializable(typeof(GitStackUpdateState))]
@@ -315,6 +318,9 @@ namespace Application.Models;
 [JsonSerializable(typeof(ContainersDataView))]
 [JsonSerializable(typeof(StackStatsView))]
 [JsonSerializable(typeof(StackContainerStatsView))]
+[JsonSerializable(typeof(WebhookProvider))]
+[JsonSerializable(typeof(WebhookAuthScheme))]
+[JsonSerializable(typeof(WebhookExecution))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

@@ -2,6 +2,7 @@ using Domain;
 using Domain.Contracts.Resources.Git;
 using Domain.Entities.Activities;
 using Domain.Entities.Git;
+using Hosting.Common.MergePatch;
 using System.Text.Json;
 
 namespace Tests.Unit.Domain.Entities.Git;
@@ -68,24 +69,47 @@ public class GitRepositoryTests
     }
 
     [Theory]
-    [InlineData(GitRepositorySyncMode.PullInterval, 10, false, 10)]
-    [InlineData(GitRepositorySyncMode.PullInterval, 0, false, 1)]
-    [InlineData(GitRepositorySyncMode.PullInterval, null, false, 5)]
-    [InlineData(GitRepositorySyncMode.Webhook, 10, true, null)]
-    [InlineData(GitRepositorySyncMode.Manual, 10, false, null)]
+    [InlineData(GitRepositorySyncMode.PullInterval, 10, 10)]
+    [InlineData(GitRepositorySyncMode.PullInterval, 0, 1)]
+    [InlineData(GitRepositorySyncMode.PullInterval, null, 5)]
+    [InlineData(GitRepositorySyncMode.Manual, 10, null)]
     public void UpdateSyncPolicy_NormalizesSyncMode(
         GitRepositorySyncMode syncMode,
         int? syncIntervalMinutes,
-        bool expectedWebHookEnabled,
         int? expectedSyncIntervalMinutes)
     {
-        var repository = CreateRepository();
+        var repository = new GitRepository(
+            name: "GR-TEST",
+            description: null,
+            url: "https://github.com/citadel-p/citadel",
+            defaultBranch: "main",
+            gitAccountId: null,
+            createdByActorId: Guid.NewGuid(),
+            webhook: new RepoWebhookConfig(Enabled: true, Secret: "secret"));
 
         repository.UpdateSyncPolicy(syncMode, syncIntervalMinutes);
 
         Assert.Equal(syncMode, repository.SyncMode);
         Assert.Equal(expectedSyncIntervalMinutes, repository.SyncIntervalMinutes);
-        Assert.Equal(expectedWebHookEnabled, repository.WebHookEnabled);
+        Assert.True(repository.Webhook?.Enabled);
+        Assert.Equal("secret", repository.Webhook?.Secret);
+    }
+
+    [Fact]
+    public void ApplyMergePatch_PreservesPatchedSyncPolicy()
+    {
+        var repository = CreateRepository();
+        var patch = JsonMergePatchDocument<GitRepository>.FromJson("""
+        {
+          "syncMode": "PullInterval",
+          "syncIntervalMinutes": 10
+        }
+        """);
+
+        var patched = patch.ApplyTo(repository, GitJsonContext.Default.GitRepository);
+
+        Assert.Equal(GitRepositorySyncMode.PullInterval, patched.SyncMode);
+        Assert.Equal(10, patched.SyncIntervalMinutes);
     }
 
     private static GitRepository CreateRepository()

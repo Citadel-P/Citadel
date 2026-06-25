@@ -31,11 +31,10 @@ internal static class GitRepositoryMappers
             gitAccountId: dto.GitAccountId,
             createdAt: dto.CreatedAt,
             createdByActorId: dto.CreatedByActorId,
-            webHookEnabled: dto.WebHookEnabled == 1,
-            webHookSecret: dto.WebHookSecret,
+            webhook: string.IsNullOrWhiteSpace(dto.Webhook) ? null : JsonSerializer.Deserialize(dto.Webhook, GitJsonContext.Default.RepoWebhookConfig),
             onClone: string.IsNullOrWhiteSpace(dto.OnClone) ? null : JsonSerializer.Deserialize(dto.OnClone, GitJsonContext.Default.RepoCommand),
             onPull: string.IsNullOrWhiteSpace(dto.OnPull) ? null : JsonSerializer.Deserialize(dto.OnPull, GitJsonContext.Default.RepoCommand),
-            syncMode: string.IsNullOrWhiteSpace(dto.SyncMode) ? GitRepositorySyncMode.PullInterval : Enum.Parse<GitRepositorySyncMode>(dto.SyncMode),
+            syncMode: ParseSyncMode(dto.SyncMode),
             syncIntervalMinutes: dto.SyncIntervalMinutes,
             controlState: string.IsNullOrWhiteSpace(dto.ControlState) ? ResourceControlState.Idle : Enum.Parse<ResourceControlState>(dto.ControlState),
             controlStartedAt: dto.ControlStartedAt,
@@ -62,6 +61,16 @@ internal static class GitRepositoryMappers
                 createdAt: DateTime.MinValue,
                 createdByActorId: Guid.Empty,
                 configuration: JsonSerializer.Deserialize(dto.GitAccount_Configuration!, GitJsonContext.Default.GitAuthConfiguration)));
+    }
+
+    private static GitRepositorySyncMode ParseSyncMode(string? syncMode)
+    {
+        if (string.IsNullOrWhiteSpace(syncMode))
+            return GitRepositorySyncMode.PullInterval;
+
+        return syncMode.Equals("Webhook", StringComparison.OrdinalIgnoreCase)
+            ? GitRepositorySyncMode.Manual
+            : Enum.Parse<GitRepositorySyncMode>(syncMode);
     }
 
     internal static IEnumerable<GitRepositoryRef> ToDomain(this IEnumerable<GitRepositoryRefDto> dtos)

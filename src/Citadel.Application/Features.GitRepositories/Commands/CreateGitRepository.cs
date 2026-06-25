@@ -24,8 +24,7 @@ public sealed record CreateGitRepository(
     string Url,
     string DefaultBranch,
     Guid? GitAccountId,
-    bool WebHookEnabled = false,
-    string? WebHookSecret = null,
+    RepoWebhookConfig? Webhook = null,
     RepoCommand? OnClone = null,
     RepoCommand? OnPull = null,
     GitRepositorySyncMode SyncMode = GitRepositorySyncMode.PullInterval,
@@ -78,8 +77,7 @@ internal sealed class CreateGitRepositoryHandler(
             command.DefaultBranch,
             command.GitAccountId,
             actorId,
-            command.WebHookEnabled,
-            command.WebHookSecret ?? string.Empty,
+            command.Webhook,
             command.OnClone,
             command.OnPull);
 

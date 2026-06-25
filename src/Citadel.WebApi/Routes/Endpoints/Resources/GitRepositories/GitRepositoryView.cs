@@ -18,8 +18,7 @@ public sealed record GitRepositoryView(
     Guid? GitAccountId,
     GitRepositorySyncMode SyncMode,
     int? SyncIntervalMinutes,
-    bool WebHookEnabled,
-    string? WebHookSecret,
+    RepoWebhookConfig? Webhook,
     RepoCommand? OnClone,
     RepoCommand? OnPull,
     DateTime CreatedAt,
@@ -38,8 +37,7 @@ public sealed record GitRepositoryView(
         gitRepository.GitAccountId,
         gitRepository.SyncMode,
         gitRepository.SyncIntervalMinutes,
-        gitRepository.WebHookEnabled,
-        gitRepository.WebHookSecret,
+        gitRepository.Webhook,
         gitRepository.OnClone,
         gitRepository.OnPull,
         gitRepository.CreatedAt,
@@ -66,8 +64,7 @@ public sealed record GitRepositoryConfigView(
     Guid? GitAccountId,
     GitRepositorySyncMode SyncMode,
     int? SyncIntervalMinutes,
-    bool WebHookEnabled,
-    string? WebHookSecret,
+    RepoWebhookConfig? Webhook,
     RepoCommand? OnClone,
     RepoCommand? OnPull)
 {
@@ -80,8 +77,7 @@ public sealed record GitRepositoryConfigView(
         gitRepository.GitAccountId,
         gitRepository.SyncMode,
         gitRepository.SyncIntervalMinutes,
-        gitRepository.WebHookEnabled,
-        gitRepository.WebHookSecret,
+        gitRepository.Webhook,
         gitRepository.OnClone,
         gitRepository.OnPull);
 }

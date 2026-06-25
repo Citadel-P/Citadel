@@ -323,8 +323,7 @@ internal static class Configuration
         gitRepository.Property<string>("SyncMode").HasColumnType(Text).IsRequired().HasDefaultValue("PullInterval");
         gitRepository.Property<int?>("SyncIntervalMinutes").HasColumnType(Integer).HasDefaultValue(5).IsRequired(false);
         gitRepository.Property<Guid?>("GitAccountId").IsRequired(false);
-        gitRepository.Property<bool>("WebHookEnabled").HasColumnType("boolean").IsRequired().HasDefaultValue(false);
-        gitRepository.Property<string>("WebHookSecret").HasColumnType(Text).IsRequired(false);
+        gitRepository.Property<string>("Webhook").HasColumnType("jsonb").IsRequired(false);
         gitRepository.Property<string>("OnClone").HasColumnType(Text).IsRequired(false);
         gitRepository.Property<string>("OnPull").HasColumnType(Text).IsRequired(false);
 

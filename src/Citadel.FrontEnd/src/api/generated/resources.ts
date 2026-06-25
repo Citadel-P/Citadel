@@ -153,6 +153,7 @@ export const resources = {
   deleteAlertChannels: { method: "DELETE", key: "deleteAlertChannels", params: ["params"], requiredParams: [], queryParams: [] },
   verifyAlertChannel: { method: "POST", key: "verifyAlertChannel", params: ["data","params"], requiredParams: [], queryParams: [] },
   lookup: { method: "GET", key: "lookup", params: ["query","params"], requiredParams: ["TargetResourceType"], queryParams: ["TargetResourceType","SourceResourceType","SourceResourceId","PlatformId"] },
+  receiveWebhook: { method: "POST", key: "receiveWebhook", params: ["authType","resourceType","id","execution","params"], requiredParams: ["authType","resourceType","id","execution"], queryParams: [] },
 } as const;
 
 export type ResourceName = keyof typeof resources;

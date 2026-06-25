@@ -16,7 +16,7 @@ using System.Runtime.CompilerServices;
 
 namespace Application.Services;
 
-internal interface IApplyStackService
+public interface IApplyStackService
 {
     IAsyncEnumerable<StackStreamItem> ApplyAsync(
         Guid stackId,

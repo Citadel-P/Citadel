@@ -195,7 +195,9 @@ public partial class AlertRuleJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<GitTransport>),
         typeof(JsonStringEnumConverter<GitAuthType>),
         typeof(JsonStringEnumConverter<GitReposStatus>),
-        typeof(JsonStringEnumConverter<GitRepositorySyncMode>)
+        typeof(JsonStringEnumConverter<GitRepositorySyncMode>),
+        typeof(JsonStringEnumConverter<WebhookProvider>),
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>)
     })]
 [JsonSerializable(typeof(GitAccount))]
 [JsonSerializable(typeof(BasicAuth))]
@@ -204,6 +206,7 @@ public partial class AlertRuleJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(GitAuthConfiguration))]
 [JsonSerializable(typeof(GitRepository))]
 [JsonSerializable(typeof(RepoCommand))]
+[JsonSerializable(typeof(RepoWebhookConfig))]
 public partial class GitJsonContext : JsonSerializerContext
 {
 }
@@ -219,7 +222,9 @@ public partial class GitJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<StackReconciliationStatus>),
         typeof(JsonStringEnumConverter<StackReconciliationActionType>),
         typeof(JsonStringEnumConverter<StackUpdateBehavior>),
-        typeof(JsonStringEnumConverter<ResourceControlState>)
+        typeof(JsonStringEnumConverter<ResourceControlState>),
+        typeof(JsonStringEnumConverter<WebhookProvider>),
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>)
     })]
 [JsonSerializable(typeof(IEnumerable<Guid>))]
 [JsonSerializable(typeof(Stack))]
@@ -241,6 +246,8 @@ public partial class GitJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackSpec))]
 [JsonSerializable(typeof(ManualStack))]
 [JsonSerializable(typeof(GitStack))]
+[JsonSerializable(typeof(WebhookConfig))]
+[JsonSerializable(typeof(StackWebhookConfig))]
 [JsonSerializable(typeof(StackUpdateState))]
 [JsonSerializable(typeof(ManualStackUpdateState))]
 [JsonSerializable(typeof(GitStackUpdateState))]

@@ -26,7 +26,10 @@ export const ResourceTabs = ({
 
   const [activeTab, setActiveTab] = useLocalStorage(localKey, tabs[0]?.label ?? 'default');
   const { sentinelRef, isStuck } = useStickySentinel();
-  const enabledTabs = useMemo(() => tabs.filter((tab) => !(tab.disabled?.(resource) ?? false)), [tabs, resource]);
+  const enabledTabs = useMemo(
+    () => tabs.filter((tab) => !(tab.disabled?.(resource) ?? false)),
+    [tabs, resource],
+  );
   const currentTabEnabled = useMemo(
     () => tabs.some((tab) => tab.label === activeTab && !(tab.disabled?.(resource) ?? false)),
     [activeTab, resource, tabs],

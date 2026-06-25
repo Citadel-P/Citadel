@@ -62,7 +62,6 @@ internal sealed class PatchGitRepositoryHandler(
             return Result.Failure<GitRepository>(new NotFoundError("The provided git repository does not exist"));
 
         var patchedGitRepository = command.Patch.ApplyTo(gitRepository, GitJsonContext.Default.GitRepository);
-        
 
         var validation = await GitRepositoryUrlValidation.ValidateAsync(unitOfWork, patchedGitRepository.GitAccountId, patchedGitRepository.Url, cancellationToken);
         if (validation.IsFailure())
@@ -79,9 +78,10 @@ internal sealed class PatchGitRepositoryHandler(
             || !string.Equals(gitRepository.DefaultBranch, patchedGitRepository.DefaultBranch, StringComparison.OrdinalIgnoreCase)
             || gitRepository.GitAccountId != patchedGitRepository.GitAccountId;
 
+        var previousCachePath = gitRepository.GetCachePath();
 
         // Add Activity
-        ActivityEvent? activity = activity = new ActivityEvent(
+        var activity = new ActivityEvent(
             actorId: actorId,
             resourceId: gitRepository.Id,
             platformId: null,
@@ -90,22 +90,20 @@ internal sealed class PatchGitRepositoryHandler(
             status: ActivityStatus.Success,
             info: new GitRepoUpdated(gitRepository.ToSnapshot(), patchedGitRepository.ToSnapshot(command.Id)));
 
-        // Patch Repo
         gitRepository.PartialUpdate(
             defaultBranch: patchedGitRepository.DefaultBranch!,
             status: sourceChanged ? GitReposStatus.Pending : gitRepository.Status,
-            webHookEnabled: patchedGitRepository.WebHookEnabled,
-            webHookSecret: patchedGitRepository.WebHookSecret,
+            webhook: patchedGitRepository.Webhook,
             onClone: patchedGitRepository.OnClone,
-            onPull: patchedGitRepository.OnPull);
-
-        gitRepository.UpdateSyncPolicy(patchedGitRepository.SyncMode, patchedGitRepository.SyncIntervalMinutes);
+            onPull: patchedGitRepository.OnPull,
+            syncMode: patchedGitRepository.SyncMode,
+            syncIntervalMinutes: patchedGitRepository.SyncIntervalMinutes);
 
         gitRepository.UpdateSource(patchedGitRepository.Url, patchedGitRepository.GitAccountId);
 
-        if (sourceChanged && !string.Equals(gitRepository.GetCachePath(), gitRepository.GetCachePath(), StringComparison.OrdinalIgnoreCase))
+        if (sourceChanged && !string.Equals(previousCachePath, gitRepository.GetCachePath(), StringComparison.OrdinalIgnoreCase))
         {
-            await repoCacheManager.DeleteCacheAsync(gitRepository.GetCachePath(), cancellationToken);
+            await repoCacheManager.DeleteCacheAsync(previousCachePath, cancellationToken);
         }
 
         if (sourceChanged)

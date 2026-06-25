@@ -15249,6 +15249,65 @@
           }
         ]
       }
+    },
+    "/listener/{authType}/{resourceType}/{id}/{execution}": {
+      "post": {
+        "tags": [
+          "WebhookListener"
+        ],
+        "summary": "Receive a provider webhook delivery",
+        "operationId": "receiveWebhook",
+        "parameters": [
+          {
+            "name": "authType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -19167,8 +19226,7 @@
           "gitAccountId",
           "syncMode",
           "syncIntervalMinutes",
-          "webHookEnabled",
-          "webHookSecret",
+          "webhook",
           "onClone",
           "onPull"
         ],
@@ -19208,13 +19266,14 @@
             ],
             "format": "int32"
           },
-          "webHookEnabled": {
-            "type": "boolean"
-          },
-          "webHookSecret": {
-            "type": [
-              "null",
-              "string"
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoWebhookConfig"
+              }
             ]
           },
           "onClone": {
@@ -21324,8 +21383,7 @@
           "gitAccountId",
           "syncMode",
           "syncIntervalMinutes",
-          "webHookEnabled",
-          "webHookSecret",
+          "webhook",
           "onClone",
           "onPull"
         ],
@@ -21369,13 +21427,14 @@
             ],
             "format": "int32"
           },
-          "webHookEnabled": {
-            "type": "boolean"
-          },
-          "webHookSecret": {
-            "type": [
-              "null",
-              "string"
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoWebhookConfig"
+              }
             ]
           },
           "onClone": {
@@ -21410,8 +21469,7 @@
           "gitAccountId",
           "syncMode",
           "syncIntervalMinutes",
-          "webHookEnabled",
-          "webHookSecret",
+          "webhook",
           "onClone",
           "onPull"
         ],
@@ -21455,13 +21513,14 @@
             ],
             "format": "int32"
           },
-          "webHookEnabled": {
-            "type": "boolean"
-          },
-          "webHookSecret": {
-            "type": [
-              "null",
-              "string"
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoWebhookConfig"
+              }
             ]
           },
           "onClone": {
@@ -21495,8 +21554,7 @@
       "GitRepositorySyncMode": {
         "enum": [
           "Manual",
-          "PullInterval",
-          "Webhook"
+          "PullInterval"
         ]
       },
       "GitRepositoryView": {
@@ -21511,8 +21569,7 @@
           "gitAccountId",
           "syncMode",
           "syncIntervalMinutes",
-          "webHookEnabled",
-          "webHookSecret",
+          "webhook",
           "onClone",
           "onPull",
           "createdAt",
@@ -21569,13 +21626,14 @@
             ],
             "format": "int32"
           },
-          "webHookEnabled": {
-            "type": "boolean"
-          },
-          "webHookSecret": {
-            "type": [
-              "null",
-              "string"
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoWebhookConfig"
+              }
             ]
           },
           "onClone": {
@@ -23504,8 +23562,7 @@
           "gitAccountId",
           "syncMode",
           "syncIntervalMinutes",
-          "webHookEnabled",
-          "webHookSecret",
+          "webhook",
           "onClone",
           "onPull"
         ],
@@ -23536,13 +23593,14 @@
             ],
             "format": "int32"
           },
-          "webHookEnabled": {
-            "type": "boolean"
-          },
-          "webHookSecret": {
-            "type": [
-              "null",
-              "string"
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoWebhookConfig"
+              }
             ]
           },
           "onClone": {
@@ -25007,6 +25065,33 @@
           }
         }
       },
+      "RepoWebhookConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "provider": {
+            "$ref": "#/components/schemas/WebhookProvider"
+          },
+          "authScheme": {
+            "$ref": "#/components/schemas/WebhookAuthScheme"
+          },
+          "secret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branchFilter": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ResolveAlertEventsInput": {
         "required": [
           "ids",
@@ -26099,24 +26184,14 @@
           "updateBehavior": {
             "$ref": "#/components/schemas/StackUpdateBehavior"
           },
-          "webHookEnabled": {
-            "type": [
-              "null",
-              "boolean"
-            ],
-            "default": true
-          },
-          "webHookForceDeploy": {
-            "type": [
-              "null",
-              "boolean"
-            ],
-            "default": false
-          },
-          "webHookSecret": {
-            "type": [
-              "null",
-              "string"
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackWebhookConfig"
+              }
             ]
           },
           "composePaths": {
@@ -26493,6 +26568,37 @@
               {
                 "$ref": "#/components/schemas/StackCapabilities"
               }
+            ]
+          }
+        }
+      },
+      "StackWebhookConfig": {
+        "type": "object",
+        "properties": {
+          "forceDeploy": {
+            "type": "boolean",
+            "default": false
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "provider": {
+            "$ref": "#/components/schemas/WebhookProvider"
+          },
+          "authScheme": {
+            "$ref": "#/components/schemas/WebhookAuthScheme"
+          },
+          "secret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branchFilter": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }
@@ -27176,6 +27282,21 @@
             "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
+      },
+      "WebhookAuthScheme": {
+        "enum": [
+          "GitHubHmacSha256",
+          "GitLabSignedToken",
+          "GitLabLegacyToken"
+        ],
+        "default": "GitHubHmacSha256"
+      },
+      "WebhookProvider": {
+        "enum": [
+          "GitHub",
+          "GitLab"
+        ],
+        "default": "GitHub"
       }
     },
     "securitySchemes": {
@@ -27243,6 +27364,9 @@
     },
     {
       "name": "Lookup"
+    },
+    {
+      "name": "WebhookListener"
     }
   ]
 }

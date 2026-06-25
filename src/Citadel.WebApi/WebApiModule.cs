@@ -194,6 +194,22 @@ internal static class WebApiModule
                     });
             });
 
+            options.AddPolicy("webhook-listener", context =>
+            {
+                var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+                return RateLimitPartition.GetSlidingWindowLimiter(
+                    partitionKey: $"webhook:{ip}",
+                    factory: _ => new SlidingWindowRateLimiterOptions
+                    {
+                        PermitLimit = 120,
+                        Window = TimeSpan.FromMinutes(1),
+                        SegmentsPerWindow = 6,
+                        QueueLimit = 20,
+                        AutoReplenishment = true
+                    });
+            });
+
             options.OnRejected = async (context, token) =>
             {
                 var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retry)

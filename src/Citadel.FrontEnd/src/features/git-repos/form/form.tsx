@@ -5,6 +5,7 @@ import {
   CreateGitRepositoryInput,
   PatchGitRepositoryInput,
   GitRepositorySyncMode,
+  RepoWebhookConfig,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -20,6 +21,7 @@ import { useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MonacoToArrayEditor } from '@/lib/monaco';
+import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 
 const GitAccountSelector = ({
   value,
@@ -93,13 +95,14 @@ export const GitRepoForm = ({
     ({
       syncMode: GitRepositorySyncMode.PullInterval,
       syncIntervalMinutes: 5,
-      webHookEnabled: false,
+      webhook: { enabled: false },
     } as GitRepositoryConfigView);
   const currentSyncMode =
     update.syncMode ?? original.syncMode ?? GitRepositorySyncMode.PullInterval;
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`GitRepo:${id ?? 'new'}`);
+    queryClient.invalidateQueries({ queryKey: ['listGitRepositories'] });
     queryClient.invalidateQueries({ queryKey: ['getGitRepositoryConfig', { id }] });
   }, [id, queryClient]);
 
@@ -214,7 +217,6 @@ export const GitRepoForm = ({
                       const syncMode = v as GitRepositorySyncMode;
                       set({
                         syncMode,
-                        webHookEnabled: syncMode === GitRepositorySyncMode.Webhook,
                         syncIntervalMinutes:
                           syncMode === GitRepositorySyncMode.PullInterval
                             ? (update.syncIntervalMinutes ?? original.syncIntervalMinutes ?? 5)
@@ -226,7 +228,6 @@ export const GitRepoForm = ({
                     </SelectTrigger>
                     <SelectContent className="bg-background">
                       <SelectItem value={GitRepositorySyncMode.PullInterval}>Pull on interval</SelectItem>
-                      <SelectItem value={GitRepositorySyncMode.Webhook}>Webhook</SelectItem>
                       <SelectItem value={GitRepositorySyncMode.Manual}>Manual only</SelectItem>
                     </SelectContent>
                   </Select>
@@ -246,22 +247,6 @@ export const GitRepoForm = ({
                           value={val ?? 5}
                           onChange={(v) => set({ syncIntervalMinutes: v ?? 5 })}
                           placeholder="5"
-                        />
-                      ),
-                    }),
-                  ]
-                : []),
-              ...(currentSyncMode === GitRepositorySyncMode.Webhook
-                ? [
-                    defineField<GitRepositoryInput, 'webHookSecret'>({
-                      key: 'webHookSecret',
-                      label: 'Webhook secret',
-                      description: 'Optional shared secret for future webhook signature validation.',
-                      render: (val, set) => (
-                        <FieldInput
-                          value={val ?? ''}
-                          onChange={(v) => set({ webHookSecret: v || null })}
-                          placeholder="Optional webhook secret"
                         />
                       ),
                     }),
@@ -365,8 +350,49 @@ export const GitRepoForm = ({
           }),
         ],
       }),
+      Advanced: defineSection<GitRepositoryInput>({
+        title: 'Advanced',
+        items: [
+          defineGroupField<GitRepositoryInput>({
+            id: 'webhook',
+            label: 'Webhook',
+            title: 'Webhook',
+            description: 'Trigger a repository pull from your Git provider.',
+            items: [
+              defineField<GitRepositoryInput, 'webhook'>({
+                key: 'webhook',
+                label: 'Enabled',
+                render: (value, set) => (
+                  <WebhookConfigField
+                    resourceType="repo"
+                    resourceId={id}
+                    execution="pull"
+                    value={(value as RepoWebhookConfig | null) ?? null}
+                    defaultBranch={original.defaultBranch}
+                    showBranchFilter={false}
+                    disabled={disabled}
+                    onChange={(webhook) =>
+                      set({
+                        webhook,
+                      })
+                    }
+                  />
+                ),
+              }),
+            ],
+          }),
+        ],
+      }),
     }),
-    [mode, currentSyncMode, original.syncIntervalMinutes, update.syncIntervalMinutes],
+    [
+      mode,
+      currentSyncMode,
+      original.syncIntervalMinutes,
+      original.defaultBranch,
+      update.syncIntervalMinutes,
+      id,
+      disabled,
+    ],
   );
 
   return (

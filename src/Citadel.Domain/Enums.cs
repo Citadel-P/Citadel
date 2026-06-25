@@ -442,6 +442,25 @@ public enum WebHookAuthStyle
     Gitlab
 }
 
+public enum WebhookProvider
+{
+    GitHub = 1,
+    GitLab = 2
+}
+
+public enum WebhookAuthScheme
+{
+    GitHubHmacSha256 = 1,
+    GitLabSignedToken = 2,
+    GitLabLegacyToken = 3
+}
+
+public enum WebhookExecution
+{
+    RepoPull = 1,
+    StackDeploy = 2
+}
+
 public enum DeployedContainerState
 {
     Running,
@@ -648,8 +667,7 @@ public enum GitReposStatus
 public enum GitRepositorySyncMode
 {
     Manual,
-    PullInterval,
-    Webhook
+    PullInterval
 }
 
 public enum GitOperation

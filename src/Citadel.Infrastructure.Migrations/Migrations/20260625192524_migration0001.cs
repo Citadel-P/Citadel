@@ -512,8 +512,7 @@ namespace Infrastructure.Migrations.Migrations
                     syncintervalminutes = table.Column<int>(type: "integer", nullable: true, defaultValue: 5),
                     syncmode = table.Column<string>(type: "text", nullable: false, defaultValue: "PullInterval"),
                     url = table.Column<string>(type: "text", nullable: false),
-                    webhookenabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    webhooksecret = table.Column<string>(type: "text", nullable: true)
+                    webhook = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {

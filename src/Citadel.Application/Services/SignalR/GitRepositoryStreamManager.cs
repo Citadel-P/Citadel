@@ -4,7 +4,7 @@ using Domain.Entities.Git;
 
 namespace Application.Services.SignalR;
 
-internal interface IGitRepositoryStreamManager : IStreamGroupManager
+public interface IGitRepositoryStreamManager : IStreamGroupManager
 {
     Task SendGitRepoInfo(GitRepository repository, string action = "update");
 }

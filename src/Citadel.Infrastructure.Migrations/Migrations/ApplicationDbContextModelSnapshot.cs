@@ -1057,15 +1057,9 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("url");
 
-                    b.Property<bool>("WebHookEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("webhookenabled");
-
-                    b.Property<string>("WebHookSecret")
-                        .HasColumnType("text")
-                        .HasColumnName("webhooksecret");
+                    b.Property<string>("Webhook")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("webhook");
 
                     b.HasKey("Id")
                         .HasName("pk_gitrepositories");

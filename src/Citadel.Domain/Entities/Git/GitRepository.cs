@@ -13,8 +13,7 @@ public class GitRepository(
     string defaultBranch,
     Guid? gitAccountId,
     Guid createdByActorId,
-    bool webHookEnabled = false,
-    string webHookSecret = "",
+    RepoWebhookConfig? webhook = null,
     RepoCommand? onClone = null,
     RepoCommand? onPull = null) : IAuditedEntity, IReconcilableResource
 {
@@ -26,8 +25,7 @@ public class GitRepository(
     public string? DefaultBranch { get; private set; } = defaultBranch;
     public Guid? GitAccountId { get; private set; } = gitAccountId;
     public GitAccount? GitAccount { get; private set; } = null!;
-    public bool WebHookEnabled { get; private set; } = webHookEnabled;
-    public string WebHookSecret { get; private set; } = webHookSecret ?? string.Empty;
+    public RepoWebhookConfig? Webhook { get; private set; } = webhook;
     public RepoCommand? OnClone { get; private set; } = onClone;
     public RepoCommand? OnPull { get; private set; } = onPull;
 
@@ -64,8 +62,7 @@ public class GitRepository(
         string? name = null, 
         string? description = null, 
         string? defaultBranch = null,
-        bool? webHookEnabled = null,
-        string? webHookSecret = null,
+        RepoWebhookConfig? webhook = null,
         RepoCommand? onClone = null,
         RepoCommand? onPull = null,
         GitReposStatus? status = null,
@@ -83,11 +80,8 @@ public class GitRepository(
         if (defaultBranch is not null) 
             DefaultBranch = defaultBranch;
 
-        if (webHookEnabled.HasValue)
-            WebHookEnabled = webHookEnabled.Value;
-
-        if (webHookSecret is not null)
-            WebHookSecret = webHookSecret;
+        if (webhook is not null)
+            Webhook = webhook;
 
         if (onClone is not null)
             OnClone = onClone;
@@ -148,8 +142,7 @@ public class GitRepository(
         Guid? gitAccountId,
         DateTime createdAt,
         Guid createdByActorId,
-        bool webHookEnabled = false,
-        string? webHookSecret = null,
+        RepoWebhookConfig? webhook = null,
         RepoCommand? onClone = null,
         RepoCommand? onPull = null,
         ResourceControlState controlState = ResourceControlState.Idle,
@@ -159,15 +152,11 @@ public class GitRepository(
         GitAccount? gitAccount = null,
         ActivityEvent? latestActivityEvent = null)
     {
-        return new GitRepository(name, description, url, defaultBranch, gitAccountId, createdByActorId)
+        return new GitRepository(name, description, url, defaultBranch, gitAccountId, createdByActorId, webhook, onClone, onPull)
         {
             Id = id,
             CreatedAt = createdAt,
             GitAccount = gitAccount,
-            WebHookEnabled = webHookEnabled,
-            WebHookSecret = webHookSecret ?? string.Empty,
-            OnClone = onClone,
-            OnPull = onPull,
             Status = status,
             ControlState = controlState,
             ControlStartedAt = controlStartedAt,

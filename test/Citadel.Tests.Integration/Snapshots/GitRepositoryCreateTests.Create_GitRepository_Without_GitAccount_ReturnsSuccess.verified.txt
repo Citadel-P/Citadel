@@ -6,8 +6,12 @@
   status: Pending,
   url: https://github.com/citadel-p/citadel,
   defaultBranch: main,
-  webHookEnabled: true,
-  webHookSecret: ,
+  syncMode: Manual,
+  webhook: {
+    enabled: true,
+    provider: GitHub,
+    authScheme: GitHubHmacSha256
+  },
   createdAt: DateTimeOffset_1,
   controlState: Processing
 }

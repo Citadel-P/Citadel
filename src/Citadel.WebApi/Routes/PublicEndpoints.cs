@@ -122,6 +122,13 @@ public static class PublicEndpoints
         }
 
         group.ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        app.MapPost("/listener/{authType}/{resourceType}/{id:guid}/{execution}", WebhookListener.Receive)
+            .WithTags("WebhookListener")
+            .WithSummary("Receive a provider webhook delivery")
+            .AllowAnonymous()
+            .RequireRateLimiting("webhook-listener")
+            .WithName("receiveWebhook");
     }
 
     private static void MapActorEndpoints(RouteGroupBuilder actors)

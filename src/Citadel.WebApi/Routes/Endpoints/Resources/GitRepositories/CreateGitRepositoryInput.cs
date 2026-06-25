@@ -12,12 +12,11 @@ public sealed record CreateGitRepositoryInput(
     Guid? GitAccountId,
     GitRepositorySyncMode SyncMode,
     int? SyncIntervalMinutes,
-    bool WebHookEnabled,
-    string? WebHookSecret,
+    RepoWebhookConfig? Webhook,
     RepoCommand? OnClone,
     RepoCommand? OnPull)
 {
     internal CreateGitRepository ToCommand()
-        => new(Name, Description, Url, DefaultBranch, GitAccountId, WebHookEnabled, WebHookSecret, OnClone, OnPull, SyncMode, SyncIntervalMinutes);
+        => new(Name, Description, Url, DefaultBranch, GitAccountId, Webhook, OnClone, OnPull, SyncMode, SyncIntervalMinutes);
 
 }

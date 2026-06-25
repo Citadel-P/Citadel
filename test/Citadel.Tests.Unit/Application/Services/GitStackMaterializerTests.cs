@@ -40,7 +40,7 @@ public class GitStackMaterializerTests
             repository,
             TestContext.Current.CancellationToken);
 
-        Assert.True(result.IsSuccess(out var payload, out var error), error.Message);
+        Assert.True(result.IsSuccess(out var payload, out var error), error?.Message);
         Assert.Equal("abc123", payload.ResolvedCommitSha);
         Assert.Equal("main", payload.SourceBranch);
         Assert.Contains("image: nginx", payload.ComposeContent);

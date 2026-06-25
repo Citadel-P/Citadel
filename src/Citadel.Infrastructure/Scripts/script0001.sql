@@ -272,8 +272,7 @@ CREATE TABLE gitrepositories (
     syncintervalminutes integer DEFAULT 5,
     syncmode text NOT NULL DEFAULT 'PullInterval',
     url text NOT NULL,
-    webhookenabled boolean NOT NULL DEFAULT FALSE,
-    webhooksecret text,
+    webhook jsonb,
     CONSTRAINT pk_gitrepositories PRIMARY KEY (id),
     CONSTRAINT fk_gitrepositories_actors_controltriggeredby FOREIGN KEY (controltriggeredby) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_gitrepositories_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
@@ -640,7 +639,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260624213240_migration0001', '10.0.9');
+VALUES ('20260625192524_migration0001', '10.0.9');
 
 COMMIT;
 
