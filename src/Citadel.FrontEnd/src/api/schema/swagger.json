@@ -12144,6 +12144,95 @@
         ]
       }
     },
+    "/api/v1/stacks/rollback": {
+      "post": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Rollback a stack to a previous release and stream execution logs in real time.",
+        "operationId": "rollbackStack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackStackInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StackStreamItem"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/stacks/stop": {
       "post": {
         "tags": [
@@ -25721,6 +25810,23 @@
           }
         }
       },
+      "RollbackStackInput": {
+        "required": [
+          "stackId",
+          "releaseId"
+        ],
+        "type": "object",
+        "properties": {
+          "stackId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "releaseId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "ScheduleType": {
         "enum": [
           "Daily",
@@ -26366,6 +26472,42 @@
             "items": {
               "type": "string"
             }
+          },
+          "gitRepositoryUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "workingDirectory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "watchPaths": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "composeEnvFilesFromRepo": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "composeDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -26589,6 +26731,30 @@
             ]
           },
           "composePaths": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "workingDirectory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "composeEnvFilesFromRepo": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "watchPaths": {
             "type": [
               "null",
               "array"

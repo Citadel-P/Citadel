@@ -176,13 +176,28 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
     {
         if (CurrentStackRelease is null) return false;
 
-        if (CurrentStackRelease.Status == StackReleaseStatus.Created)
+        if (CurrentStackRelease.Status is StackReleaseStatus.Created or StackReleaseStatus.Failed)
             return true;
 
         SetCurrentStackRelease(StackRelease.Create(
             stackId: Id,
             platformId: CurrentStackRelease.PlatformId,
             spec: CurrentStackRelease.Spec,
+            createdByActorId: actorId,
+            version: StackRelease.GetNextVersion(CurrentStackRelease.Version)));
+
+        return true;
+    }
+
+    public bool PrepareRollbackRelease(StackRelease release, StackSpec spec, Guid actorId)
+    {
+        if (CurrentStackRelease is null || release.StackId != Id)
+            return false;
+
+        SetCurrentStackRelease(StackRelease.Create(
+            stackId: Id,
+            platformId: release.PlatformId,
+            spec: spec,
             createdByActorId: actorId,
             version: StackRelease.GetNextVersion(CurrentStackRelease.Version)));
 

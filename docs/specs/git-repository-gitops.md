@@ -8,6 +8,8 @@ The goal is to let users define reusable Git repositories, keep a local synchron
 
 Repository sync mode describes Citadel-initiated sync only. Webhook ingestion is configured separately on the repository and can coexist with manual or interval polling.
 
+Detailed Git stack product and implementation design lives in `git-stack-integration.md`. Keep this file focused on repository sync, cache, and existing integration notes.
+
 ## Main Files
 
 - `src/Citadel.Domain/Entities/Git/GitAccount.cs`

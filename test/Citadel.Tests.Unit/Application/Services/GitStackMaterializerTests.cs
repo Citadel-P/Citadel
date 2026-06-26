@@ -17,6 +17,7 @@ public class GitStackMaterializerTests
         var repository = CreateRepository();
         var repoCache = new Mock<IRepoCacheManager>();
         var gitCli = new Mock<IGitCliRepository>();
+        using var temp = new TempDirectory();
 
         repoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
@@ -32,7 +33,7 @@ public class GitStackMaterializerTests
             })
             .ReturnsAsync(Result.Success());
 
-        var materializer = new GitStackMaterializer(repoCache.Object, gitCli.Object);
+        var materializer = new GitStackMaterializer(repoCache.Object, gitCli.Object, new TestStackStoragePathProvider(temp.Path));
 
         var result = await materializer.MaterializeAsync(
             stack,
@@ -43,10 +44,79 @@ public class GitStackMaterializerTests
         Assert.True(result.IsSuccess(out var payload, out var error), error?.Message);
         Assert.Equal("abc123", payload.ResolvedCommitSha);
         Assert.Equal("main", payload.SourceBranch);
-        Assert.Contains("image: nginx", payload.ComposeContent);
+        Assert.Equal(Path.Combine(payload.SnapshotRoot, "compose.yml"), payload.SourceComposeFilePaths.Single());
+        Assert.Equal(payload.SnapshotRoot, payload.SourceWorkingDirectory);
+        Assert.True(File.Exists(payload.LabelsOverrideFilePath));
+        Assert.Contains("com.citadel.managed", await File.ReadAllTextAsync(payload.LabelsOverrideFilePath, TestContext.Current.CancellationToken));
         Assert.Contains("APP_ENV=prod", payload.EnvironmentVariables);
         Assert.Equal(["compose.yml"], payload.ComposePaths);
         Assert.Equal([".env"], payload.EnvFilePaths);
+    }
+
+    [Fact]
+    public async Task MaterializeAsync_Should_Use_First_Compose_Parent_As_Working_Directory()
+    {
+        var stack = CreateGitStack(["apps/beszel/compose.yml"], ["apps/beszel/.env"]);
+        var repository = CreateRepository();
+        var repoCache = new Mock<IRepoCacheManager>();
+        var gitCli = new Mock<IGitCliRepository>();
+        using var temp = new TempDirectory();
+
+        repoCache
+            .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abc123", true));
+
+        gitCli
+            .Setup(x => x.MaterializeSnapshotAsync(repository.GetCachePath(), "abc123", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, string, CancellationToken>((_, _, targetPath, _) =>
+            {
+                var appPath = Path.Combine(targetPath, "apps", "beszel");
+                Directory.CreateDirectory(appPath);
+                File.WriteAllText(Path.Combine(appPath, "compose.yml"), "services:\n  app:\n    image: nginx");
+                File.WriteAllText(Path.Combine(appPath, ".env"), "APP_ENV=prod");
+            })
+            .ReturnsAsync(Result.Success());
+
+        var materializer = new GitStackMaterializer(repoCache.Object, gitCli.Object, new TestStackStoragePathProvider(temp.Path));
+
+        var result = await materializer.MaterializeAsync(
+            stack,
+            (GitStack)stack.CurrentStackRelease!.Spec,
+            repository,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var payload, out var error), error?.Message);
+        Assert.Equal(Path.Combine(payload.SnapshotRoot, "apps", "beszel"), payload.SourceWorkingDirectory);
+        Assert.Equal(Path.Combine(payload.SourceWorkingDirectory, "compose.yml"), payload.SourceComposeFilePaths.Single());
+        Assert.Equal(["apps/beszel/compose.yml"], payload.ComposePaths);
+        Assert.Equal(["apps/beszel/.env"], payload.EnvFilePaths);
+    }
+
+    [Fact]
+    public async Task ActivateCurrentAsync_Should_Update_Source_Pointer()
+    {
+        using var temp = new TempDirectory();
+        var stackId = Guid.CreateVersion7();
+        var snapshotRoot = Path.Combine(temp.Path, stackId.ToString("D"), "releases", Guid.CreateVersion7().ToString("D"), "source");
+        Directory.CreateDirectory(snapshotRoot);
+        File.WriteAllText(Path.Combine(snapshotRoot, "compose.yml"), "services: {}");
+
+        var materializer = new GitStackMaterializer(
+            Mock.Of<IRepoCacheManager>(),
+            Mock.Of<IGitCliRepository>(),
+            new TestStackStoragePathProvider(temp.Path));
+
+        await materializer.ActivateCurrentAsync(stackId, snapshotRoot, TestContext.Current.CancellationToken);
+
+        var stackRoot = Path.Combine(temp.Path, stackId.ToString("D"));
+        var currentPath = Path.Combine(stackRoot, "current");
+        var pointerPath = Path.Combine(stackRoot, "current.source");
+
+        Assert.True(Directory.Exists(currentPath) || File.Exists(pointerPath));
+        if (File.Exists(pointerPath))
+        {
+            Assert.Equal(snapshotRoot, await File.ReadAllTextAsync(pointerPath, TestContext.Current.CancellationToken));
+        }
     }
 
     [Fact]
@@ -56,6 +126,7 @@ public class GitStackMaterializerTests
         var repository = CreateRepository();
         var repoCache = new Mock<IRepoCacheManager>();
         var gitCli = new Mock<IGitCliRepository>();
+        using var temp = new TempDirectory();
 
         repoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
@@ -66,7 +137,7 @@ public class GitStackMaterializerTests
             .Callback<string, string, string, CancellationToken>((_, _, targetPath, _) => Directory.CreateDirectory(targetPath))
             .ReturnsAsync(Result.Success());
 
-        var materializer = new GitStackMaterializer(repoCache.Object, gitCli.Object);
+        var materializer = new GitStackMaterializer(repoCache.Object, gitCli.Object, new TestStackStoragePathProvider(temp.Path));
 
         var result = await materializer.MaterializeAsync(
             stack,
@@ -102,4 +173,25 @@ public class GitStackMaterializerTests
             defaultBranch: "main",
             gitAccountId: null,
             createdByActorId: Guid.CreateVersion7());
+
+    private sealed class TestStackStoragePathProvider(string path) : IStackStoragePathProvider
+    {
+        public string StacksRoot { get; } = path;
+    }
+
+    private sealed class TempDirectory : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+        public TempDirectory()
+        {
+            Directory.CreateDirectory(Path);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+                Directory.Delete(Path, recursive: true);
+        }
+    }
 }

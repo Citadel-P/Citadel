@@ -22,6 +22,6 @@ internal sealed class GetStackReleasesHandler(IUnitOfWork unitOfWork) : IQueryHa
         }
 
         var releases = await unitOfWork.Stacks.GetReleasesByStackIdAsync(query.StackId, cancellationToken);
-        return Result.Success(releases);
+        return Result.Success(releases.Where(release => release.Id != stack.CurrentStackReleaseId && release.IsRollbackCandidate()));
     }
 }

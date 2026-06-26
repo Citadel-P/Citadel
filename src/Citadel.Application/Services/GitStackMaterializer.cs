@@ -12,11 +12,14 @@ internal interface IGitStackMaterializer
         GitStack spec,
         GitRepository repository,
         CancellationToken cancellationToken);
+
+    Task ActivateCurrentAsync(Guid stackId, string snapshotRoot, CancellationToken cancellationToken);
 }
 
 internal sealed class GitStackMaterializer(
     IRepoCacheManager repoCacheManager,
-    IGitCliRepository gitCliRepository) : IGitStackMaterializer
+    IGitCliRepository gitCliRepository,
+    IStackStoragePathProvider stackStoragePathProvider) : IGitStackMaterializer
 {
     public async Task<Result<GitStackMaterializationResult>> MaterializeAsync(
         Stack stack,
@@ -60,12 +63,15 @@ internal sealed class GitStackMaterializer(
             resolvedCommit = sync.Hash.Trim();
         }
 
-        var snapshotRoot = CreateSnapshotDirectory(stack.Id, stack.CurrentStackReleaseId, resolvedCommit);
+        var releaseRoot = CreateReleaseDirectory(stack.Id, stack.CurrentStackReleaseId);
+        var snapshotRoot = Path.Combine(releaseRoot, "source");
+        var generatedFilesDirectory = Path.Combine(releaseRoot, "citadel");
         var materialize = await gitCliRepository.MaterializeSnapshotAsync(repoPath, resolvedCommit, snapshotRoot, cancellationToken);
         if (materialize.IsFailure(out var materializeError))
             return Result.Failure<GitStackMaterializationResult>(materializeError.Message);
 
         var composePaths = new List<string>(spec.ComposePaths.Count);
+        var composeFilePaths = new List<string>(spec.ComposePaths.Count);
         var composeContents = new List<string>(spec.ComposePaths.Count);
         foreach (var composePath in spec.ComposePaths)
         {
@@ -73,16 +79,23 @@ internal sealed class GitStackMaterializer(
             if (resolvedPath.IsFailure(out var pathError, out var fullPath))
                 return Result.Failure<GitStackMaterializationResult>(pathError.Message);
 
-            composePaths.Add(NormalizeRepositoryPath(composePath));
+            var normalizedPath = NormalizeRepositoryPath(composePath);
+            composePaths.Add(normalizedPath);
+            composeFilePaths.Add(fullPath);
             composeContents.Add(await File.ReadAllTextAsync(fullPath, cancellationToken));
         }
 
+        var workingDirectory = ResolveWorkingDirectory(snapshotRoot, spec.ComposePaths[0], spec.WorkingDirectory);
+        if (workingDirectory.IsFailure(out var workingDirectoryError, out var sourceWorkingDirectory))
+            return Result.Failure<GitStackMaterializationResult>(workingDirectoryError.Message);
+
         var envVars = new List<string>();
         var envFilePaths = new List<string>();
+        var repoEnvFiles = spec.ComposeEnvFilesFromRepo ?? spec.AdditionalEnvFileFromRepo;
 
-        if (spec.AdditionalEnvFileFromRepo is { Count: > 0 })
+        if (repoEnvFiles is { Count: > 0 })
         {
-            foreach (var envPath in spec.AdditionalEnvFileFromRepo)
+            foreach (var envPath in repoEnvFiles)
             {
                 var resolvedPath = ResolveRepositoryFile(snapshotRoot, envPath, "Environment file path");
                 if (resolvedPath.IsFailure(out var pathError, out var fullPath))
@@ -98,23 +111,111 @@ internal sealed class GitStackMaterializer(
             envVars.AddRange(spec.EnvVars.Where(value => !string.IsNullOrWhiteSpace(value)));
         }
 
+        var watchPaths = NormalizeWatchPaths(snapshotRoot, spec.WatchPaths);
+        if (watchPaths.IsFailure(out var watchPathError, out var normalizedWatchPaths))
+            return Result.Failure<GitStackMaterializationResult>(watchPathError.Message);
+
+        Directory.CreateDirectory(generatedFilesDirectory);
+        var labelsOverrideFilePath = Path.Combine(generatedFilesDirectory, "citadel.labels.yml");
+        await File.WriteAllTextAsync(
+            labelsOverrideFilePath,
+            StackComposeLabelInjector.CreateLabelsOverride(composeContents, stack.Id, stack.CurrentStackReleaseId),
+            cancellationToken);
+
         return Result.Success(new GitStackMaterializationResult(
             ResolvedCommitSha: resolvedCommit,
             SourceBranch: spec.Branch,
-            WorkingDirectory: snapshotRoot,
-            ComposeContent: string.Join(Environment.NewLine, composeContents),
+            SnapshotRoot: snapshotRoot,
+            SourceWorkingDirectory: sourceWorkingDirectory,
+            GeneratedFilesDirectory: generatedFilesDirectory,
+            LabelsOverrideFilePath: labelsOverrideFilePath,
             EnvFilePath: spec.EnvFilePath,
             EnvironmentVariables: envVars,
+            SourceComposeFilePaths: composeFilePaths,
             ComposePaths: composePaths,
-            EnvFilePaths: envFilePaths));
+            EnvFilePaths: envFilePaths,
+            WatchPaths: normalizedWatchPaths));
     }
 
-    private static string CreateSnapshotDirectory(Guid stackId, Guid releaseId, string commitSha)
+    public async Task ActivateCurrentAsync(Guid stackId, string snapshotRoot, CancellationToken cancellationToken)
     {
-        var safeCommit = commitSha.Length > 12 ? commitSha[..12] : commitSha;
-        var root = Path.Combine(Path.GetTempPath(), "citadel", "git-stacks", stackId.ToString("N"));
-        Directory.CreateDirectory(root);
-        return Path.Combine(root, $"{releaseId:N}-{safeCommit}-{Guid.CreateVersion7():N}");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var stackRoot = GetStackRoot(stackId);
+        Directory.CreateDirectory(stackRoot);
+        var currentPath = Path.Combine(stackRoot, "current");
+        var pointerPath = Path.Combine(stackRoot, "current.source");
+        var tempLinkPath = Path.Combine(stackRoot, $".current-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateSymbolicLink(tempLinkPath, snapshotRoot);
+            ReplacePath(currentPath, tempLinkPath);
+            DeletePath(pointerPath);
+            return;
+        }
+        catch
+        {
+            DeletePath(tempLinkPath);
+        }
+
+        var tempPointerPath = Path.Combine(stackRoot, $".current.source-{Guid.NewGuid():N}.tmp");
+
+        DeletePath(currentPath);
+        await File.WriteAllTextAsync(tempPointerPath, snapshotRoot, cancellationToken);
+        File.Move(tempPointerPath, pointerPath, overwrite: true);
+    }
+
+    private string CreateReleaseDirectory(Guid stackId, Guid releaseId)
+    {
+        var releaseRoot = Path.Combine(GetStackRoot(stackId), "releases", releaseId.ToString("D"));
+        if (Directory.Exists(releaseRoot))
+            Directory.Delete(releaseRoot, recursive: true);
+
+        Directory.CreateDirectory(releaseRoot);
+        return releaseRoot;
+    }
+
+    private string GetStackRoot(Guid stackId)
+        => Path.Combine(stackStoragePathProvider.StacksRoot, stackId.ToString("D"));
+
+    private static Result<string> ResolveWorkingDirectory(string snapshotRoot, string firstComposePath, string? configuredWorkingDirectory)
+    {
+        var workingDirectory = string.IsNullOrWhiteSpace(configuredWorkingDirectory)
+            ? Path.GetDirectoryName(NormalizeRepositoryPath(firstComposePath)) ?? string.Empty
+            : configuredWorkingDirectory;
+
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            return Result.Success(Path.GetFullPath(snapshotRoot));
+        }
+
+        var resolved = ResolveRepositoryDirectory(snapshotRoot, workingDirectory, "Working directory");
+        return resolved;
+    }
+
+    private static void ReplacePath(string currentPath, string replacementPath)
+    {
+        DeletePath(currentPath);
+        Directory.Move(replacementPath, currentPath);
+    }
+
+    private static void DeletePath(string path)
+    {
+        if (!Directory.Exists(path) && !File.Exists(path))
+        {
+            return;
+        }
+
+        var attributes = File.GetAttributes(path);
+        if ((attributes & FileAttributes.Directory) != 0)
+        {
+            var isSymlink = (attributes & FileAttributes.ReparsePoint) != 0;
+            Directory.Delete(path, recursive: !isSymlink);
+            return;
+        }
+
+        File.Delete(path);
     }
 
     private static Result<string> ResolveRepositoryFile(string snapshotRoot, string relativePath, string fieldName)
@@ -145,6 +246,75 @@ internal sealed class GitStackMaterializer(
         return Result.Success(fullPath);
     }
 
+    private static Result<string> ResolveRepositoryDirectory(string snapshotRoot, string relativePath, string fieldName)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath) || relativePath == ".")
+            return Result.Success(Path.GetFullPath(snapshotRoot));
+
+        if (Path.IsPathRooted(relativePath))
+            return Result.Failure<string>($"{fieldName} '{relativePath}' must be relative to the repository root.");
+
+        var normalizedRoot = Path.GetFullPath(snapshotRoot);
+        var fullPath = Path.GetFullPath(Path.Combine(normalizedRoot, relativePath));
+
+        if (!IsUnderRoot(normalizedRoot, fullPath))
+            return Result.Failure<string>($"{fieldName} '{relativePath}' escapes the repository root.");
+
+        if (!Directory.Exists(fullPath))
+            return Result.Failure<string>($"{fieldName} '{relativePath}' does not exist.");
+
+        var directoryInfo = new DirectoryInfo(fullPath);
+        var target = directoryInfo.ResolveLinkTarget(returnFinalTarget: true);
+        if (target is not null && !IsUnderRoot(normalizedRoot, target.FullName))
+            return Result.Failure<string>($"{fieldName} '{relativePath}' points outside the repository root.");
+
+        return Result.Success(fullPath);
+    }
+
+    private static Result<IReadOnlyList<string>> NormalizeWatchPaths(string snapshotRoot, IReadOnlyList<string>? watchPaths)
+    {
+        if (watchPaths is not { Count: > 0 })
+            return Result.Success<IReadOnlyList<string>>([]);
+
+        var normalized = new List<string>(watchPaths.Count);
+        foreach (var watchPath in watchPaths)
+        {
+            if (string.IsNullOrWhiteSpace(watchPath))
+                continue;
+
+            var hasWildcardSuffix = watchPath.EndsWith("/**", StringComparison.Ordinal)
+                || watchPath.EndsWith("\\**", StringComparison.Ordinal);
+            var pathToValidate = hasWildcardSuffix ? watchPath[..^3] : watchPath;
+
+            if (Path.IsPathRooted(pathToValidate))
+                return Result.Failure<IReadOnlyList<string>>($"Watch path '{watchPath}' must be relative to the repository root.");
+
+            var normalizedRoot = Path.GetFullPath(snapshotRoot);
+            var fullPath = Path.GetFullPath(Path.Combine(normalizedRoot, pathToValidate));
+            if (!IsUnderRoot(normalizedRoot, fullPath))
+                return Result.Failure<IReadOnlyList<string>>($"Watch path '{watchPath}' escapes the repository root.");
+
+            if (Directory.Exists(fullPath))
+            {
+                var directoryInfo = new DirectoryInfo(fullPath);
+                var target = directoryInfo.ResolveLinkTarget(returnFinalTarget: true);
+                if (target is not null && !IsUnderRoot(normalizedRoot, target.FullName))
+                    return Result.Failure<IReadOnlyList<string>>($"Watch path '{watchPath}' points outside the repository root.");
+            }
+            else if (File.Exists(fullPath))
+            {
+                var fileInfo = new FileInfo(fullPath);
+                var target = fileInfo.ResolveLinkTarget(returnFinalTarget: true);
+                if (target is not null && !IsUnderRoot(normalizedRoot, target.FullName))
+                    return Result.Failure<IReadOnlyList<string>>($"Watch path '{watchPath}' points outside the repository root.");
+            }
+
+            normalized.Add(NormalizeRepositoryPath(watchPath));
+        }
+
+        return Result.Success<IReadOnlyList<string>>(normalized);
+    }
+
     private static bool IsUnderRoot(string root, string path)
     {
         var normalizedRoot = Path.GetFullPath(root);
@@ -162,9 +332,13 @@ internal sealed class GitStackMaterializer(
 internal sealed record GitStackMaterializationResult(
     string ResolvedCommitSha,
     string SourceBranch,
-    string WorkingDirectory,
-    string ComposeContent,
+    string SnapshotRoot,
+    string SourceWorkingDirectory,
+    string GeneratedFilesDirectory,
+    string LabelsOverrideFilePath,
     string? EnvFilePath,
     IReadOnlyList<string> EnvironmentVariables,
+    IReadOnlyList<string> SourceComposeFilePaths,
     IReadOnlyList<string> ComposePaths,
-    IReadOnlyList<string> EnvFilePaths);
+    IReadOnlyList<string> EnvFilePaths,
+    IReadOnlyList<string> WatchPaths);

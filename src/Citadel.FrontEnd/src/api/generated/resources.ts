@@ -121,6 +121,7 @@ export const resources = {
   updateStack: { method: "PATCH", key: "updateStack", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   updateStackMetadata: { method: "PATCH", key: "updateStackMetadata", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   applyStack: { method: "POST", key: "applyStack", params: ["data","params"], requiredParams: [], queryParams: [] },
+  rollbackStack: { method: "POST", key: "rollbackStack", params: ["data","params"], requiredParams: [], queryParams: [] },
   stopStacks: { method: "POST", key: "stopStacks", params: ["data","params"], requiredParams: [], queryParams: [] },
   startStacks: { method: "POST", key: "startStacks", params: ["data","params"], requiredParams: [], queryParams: [] },
   pauseStacks: { method: "POST", key: "pauseStacks", params: ["data","params"], requiredParams: [], queryParams: [] },

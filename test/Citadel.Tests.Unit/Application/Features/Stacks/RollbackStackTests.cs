@@ -1,0 +1,126 @@
+using Application.Features.Stacks.Commands;
+using Application.Services;
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Stacks;
+using Domain.Entities.Stacks;
+using Hosting.Common.Abstraction;
+using Moq;
+
+namespace Tests.Unit.Application.Features.Stacks;
+
+public class RollbackStackTests
+{
+    [Fact]
+    public async Task RollbackStack_Should_Prepare_Git_Release_From_Historical_Source_And_Invoke_Apply()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platformId = Guid.CreateVersion7();
+        var repositoryId = Guid.CreateVersion7();
+        var oldReleaseSpec = new GitStack(
+            GitRepoId: repositoryId,
+            Branch: "main",
+            CommitSha: null,
+            UpdateBehavior: StackUpdateBehavior.Notify,
+            ComposePaths: ["stacks/app/compose.yml"],
+            WorkingDirectory: "stacks/app",
+            ComposeEnvFilesFromRepo: ["stacks/app/.env"],
+            WatchPaths: ["stacks/app/**"]);
+
+        var stack = Stack.Create(
+            name: "git-stack",
+            createdByActorId: actorId,
+            StackSource: StackSource.Git,
+            platformId: platformId,
+            spec: oldReleaseSpec);
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+
+        var oldRelease = stack.CurrentStackRelease!;
+        oldRelease.UpdateSource(new StackReleaseSource(
+            SourceType: StackSource.Git,
+            GitRepositoryId: repositoryId,
+            GitRepositoryName: "homelab",
+            Branch: "main",
+            RequestedCommitSha: null,
+            ResolvedCommitSha: "abc123",
+            ComposePaths: ["stacks/app/compose.yml", "stacks/app/compose.prod.yml"],
+            EnvFilePaths: ["stacks/app/.env"],
+            WorkingDirectory: "stacks/app",
+            WatchPaths: ["stacks/app/**", "shared/network.yml"],
+            ComposeEnvFilesFromRepo: ["stacks/app/.env"]));
+
+        Assert.True(stack.PrepareReleaseForApply(actorId));
+        stack.UpdateCurrentStackReleaseDefinition(
+            platformId,
+            oldReleaseSpec with
+            {
+                ComposePaths = ["stacks/app-v2/compose.yml"],
+                WorkingDirectory = "stacks/app-v2"
+            });
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+
+        Stack? updatedStack = null;
+        var stackRepository = new Mock<IStackRepository>();
+        stackRepository
+            .Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stackRepository
+            .Setup(x => x.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([stack.CurrentStackRelease!, oldRelease]);
+        stackRepository
+            .Setup(x => x.UpdateAsync(It.IsAny<Stack>(), It.IsAny<CancellationToken>()))
+            .Callback<Stack, CancellationToken>((item, _) => updatedStack = item)
+            .ReturnsAsync(1);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stackRepository.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var applyStackService = new Mock<IApplyStackService>();
+        applyStackService
+            .Setup(x => x.ApplyAsync(stack.Id, actorId, null, false, It.IsAny<CancellationToken>()))
+            .Returns(SuccessfulApplyStream());
+
+        var userContext = new Mock<IUserContextAccessor>();
+        userContext.Setup(x => x.Current).Returns(new TestUserContext(actorId));
+
+        var handler = new RollbackStackHandler(unitOfWork.Object, applyStackService.Object, userContext.Object);
+
+        var items = new List<StackStreamItem>();
+        await foreach (var item in handler.Handle(new RollbackStack(stack.Id, oldRelease.Id), TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        Assert.NotNull(updatedStack);
+        Assert.NotEqual(oldRelease.Id, updatedStack!.CurrentStackReleaseId);
+        Assert.NotEqual(stack.CurrentStackReleaseId, oldRelease.Id);
+        var rollbackSpec = Assert.IsType<GitStack>(updatedStack.CurrentStackRelease!.Spec);
+        Assert.Equal("abc123", rollbackSpec.CommitSha);
+        Assert.Equal(["stacks/app/compose.yml", "stacks/app/compose.prod.yml"], rollbackSpec.ComposePaths);
+        Assert.Equal("stacks/app", rollbackSpec.WorkingDirectory);
+        Assert.Equal(["stacks/app/.env"], rollbackSpec.ComposeEnvFilesFromRepo);
+        Assert.Equal(["stacks/app/**", "shared/network.yml"], rollbackSpec.WatchPaths);
+        Assert.Contains(
+            items,
+            item => item.ProgressMessage?.Contains("Rollback release prepared", StringComparison.Ordinal) == true);
+        applyStackService.Verify(x => x.ApplyAsync(stack.Id, actorId, null, false, It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static async IAsyncEnumerable<StackStreamItem> SuccessfulApplyStream()
+    {
+        yield return StackStreamItem.SystemMessage("applied", 0);
+        await Task.CompletedTask;
+    }
+
+    private sealed record TestUserContext(Guid ActorId) : IUserContext
+    {
+        public Guid UserId { get; init; } = Guid.CreateVersion7();
+        public bool IsAdmin { get; init; } = true;
+        public bool IsAuthenticated { get; init; } = true;
+        public string[] Roles { get; init; } = ["admin"];
+    }
+}

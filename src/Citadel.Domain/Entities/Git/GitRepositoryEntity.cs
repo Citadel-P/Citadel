@@ -49,17 +49,7 @@ public class GitRepository(
 
     // Helper for the RepoCache path
     public string GetCachePath()
-    {
-        var repositoryName = ExtractRepositoryName(Url);
-        if (!string.IsNullOrWhiteSpace(repositoryName))
-            return $"/app/data/repos/{repositoryName}";
-
-        var fallbackName = SanitizeDirectoryName(Name);
-        if (!string.IsNullOrWhiteSpace(fallbackName))
-            return $"/app/data/repos/{fallbackName}";
-
-        return $"/app/data/repos/{Id}";
-    }
+        => $"/app/data/repos/{Id:D}";
 
     public void PartialUpdate(
         string? name = null,
@@ -215,46 +205,6 @@ public class GitRepository(
         return Math.Max(1, syncIntervalMinutes ?? 5);
     }
 
-    private static string ExtractRepositoryName(string url)
-    {
-        if (string.IsNullOrWhiteSpace(url))
-            return string.Empty;
-
-        string candidate;
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
-        {
-            candidate = uri.AbsolutePath.TrimEnd('/');
-            var separatorIndex = candidate.LastIndexOf('/');
-            candidate = separatorIndex >= 0 ? candidate[(separatorIndex + 1)..] : candidate;
-        }
-        else
-        {
-            var normalized = url.Trim().TrimEnd('/');
-            var separatorIndex = normalized.LastIndexOfAny(['/', ':']);
-            candidate = separatorIndex >= 0 ? normalized[(separatorIndex + 1)..] : normalized;
-        }
-
-        return SanitizeDirectoryName(candidate);
-    }
-
-    private static string SanitizeDirectoryName(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return string.Empty;
-
-        var result = string.Create(value.Length, value, static (span, source) =>
-        {
-            for (var i = 0; i < source.Length; i++)
-            {
-                var c = source[i];
-                span[i] = char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-';
-            }
-        }).Trim('-');
-
-        return result.EndsWith(".git", StringComparison.OrdinalIgnoreCase)
-            ? result[..^4]
-            : result;
-    }
 }
 
 public record RepoCommand(List<string> Commands, string Path = "./");

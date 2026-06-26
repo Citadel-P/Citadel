@@ -315,6 +315,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(ResourceCapabilities))]
 [JsonSerializable(typeof(ContainerDataView))]
 [JsonSerializable(typeof(ApplyStackInput))]
+[JsonSerializable(typeof(RollbackStackInput))]
 [JsonSerializable(typeof(ContainersDataView))]
 [JsonSerializable(typeof(StackStatsView))]
 [JsonSerializable(typeof(StackContainerStatsView))]

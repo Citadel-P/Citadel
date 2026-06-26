@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Application.Features.Stacks.Commands;
 using Application.Services;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
@@ -174,11 +175,13 @@ public class StackLifecycleTests
         connectorFactory
             .Setup(x => x.GetConnector(PlatformConnectorType.Local))
             .Returns(connector.Object);
+        var stackHub = new Mock<IStackStreamManager>();
 
         var handler = new DeleteStacksHandler(
             unitOfWork.Object,
             platformCache,
-            connectorFactory.Object);
+            connectorFactory.Object,
+            stackHub.Object);
 
         var result = await handler.Handle(new DeleteStacks([stack.Id]), CancellationToken.None);
 
@@ -188,6 +191,7 @@ public class StackLifecycleTests
             It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
             It.IsAny<CancellationToken>()), Times.Once);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        stackHub.Verify(x => x.SendStackInfo(stack, "delete"), Times.Once);
     }
 
     private static ContainerInspectionInfo InspectionWithLabels(IReadOnlyDictionary<string, string> labels)

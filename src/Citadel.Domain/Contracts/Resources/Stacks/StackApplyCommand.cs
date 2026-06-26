@@ -5,7 +5,7 @@ namespace Domain.Contracts.Resources.Stacks;
 public sealed record StackApplyCommand(
     string PlatformAddress,
     string StackName,
-    string ComposeFileContent,
+    string? ComposeFileContent,
     string? ProjectName,
     string? EnvironmentFilePath,
     string? RegistryAuth,
@@ -17,4 +17,8 @@ public sealed record StackApplyCommand(
     StackCommand? PostDeploy,
     StackSpec Spec,
     IReadOnlyList<string>? ServiceNames = null,
-    bool PullImages = false);
+    bool PullImages = false,
+    string? SourceWorkingDirectory = null,
+    IReadOnlyList<string>? SourceComposeFilePaths = null,
+    string? LabelsOverrideFilePath = null,
+    string? GeneratedFilesDirectory = null);

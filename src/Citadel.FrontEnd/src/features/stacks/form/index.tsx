@@ -14,6 +14,8 @@ import {
   ContainerStateStatus,
   StackDriftMode,
   StackDrift,
+  StackReleaseView,
+  StackSource,
 } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
@@ -36,11 +38,13 @@ import { StackStats } from '@/features/docker-resources/containers/container-inf
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Check, Dot, Funnel, Loader2 } from 'lucide-react';
+import { Check, Dot, Funnel, Loader2, RotateCcw } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useRead } from '@/lib/hooks';
 import { hasActionableStackDrift } from '../drift';
+import { useTaskSheet } from '@/lib/atoms';
+import { fromNow } from '@/lib/dayjs.helper';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -79,6 +83,12 @@ export const StackFormComponents: RequiredFormComponents = {
         disabled: (resource: StackView): boolean => resource.status === StackReleaseStatus.Created,
         Content: ({ resource }: { resource: StackView }) => {
           return <StackRuntime key={resource.id} stack={resource} />;
+        },
+      },
+      {
+        label: 'Releases',
+        Content: ({ resource }: { resource: StackView }) => {
+          return <StackReleasesTab stack={resource} />;
         },
       },
       {
@@ -200,6 +210,124 @@ const StackRuntime = ({ stack }: { stack: StackView }) => {
     </div>
   );
 };
+
+const StackReleasesTab = ({ stack }: { stack: StackView }) => {
+  const { data, isLoading } = useRead('listStackReleases', { stackId: stack.id });
+  const { open: openSheet } = useTaskSheet('Stack');
+  const releases = data?.data.releases ?? [];
+  const canRollback = hasCapability(stack, 'canApply') && stack.controlState !== ResourceControlState.Processing;
+
+  const columns = useMemo<ColumnDef<StackReleaseView>[]>(
+    () => [
+      {
+        accessorKey: 'version',
+        header: () => <span>Version</span>,
+        cell: ({ row }) => {
+          const release = row.original;
+          const isCurrent = release.id === stack.currentStackReleaseId;
+
+          return (
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{release.version}</span>
+              {isCurrent && (
+                <span className="rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">Current</span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: 'status',
+        header: () => <span>Status</span>,
+        cell: ({ row }) => <StateIndicator value={row.original.status} />,
+      },
+      {
+        accessorKey: 'source',
+        header: () => <span>Source</span>,
+        cell: ({ row }) => <StackReleaseSourceCell release={row.original} />,
+      },
+      {
+        accessorKey: 'createdAt',
+        header: () => <span>Created</span>,
+        cell: ({ row }) => <span className="text-sm text-muted-foreground">{fromNow(row.original.createdAt)}</span>,
+      },
+      {
+        id: 'actions',
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => {
+          const release = row.original;
+          const isCurrent = release.id === stack.currentStackReleaseId;
+          const canRollbackRelease = canRollback && isRollbackCandidateRelease(release);
+
+          return (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isCurrent || !canRollbackRelease}
+              onClick={() =>
+                openSheet({
+                  kind: 'stackRollback',
+                  payload: {
+                    stackId: stack.id,
+                    releaseId: release.id,
+                    name: stack.name,
+                    version: release.version,
+                  },
+                })
+              }>
+              <RotateCcw className="size-3.5" />
+              Rollback
+            </Button>
+          );
+        },
+      },
+    ],
+    [canRollback, openSheet, stack.currentStackReleaseId, stack.id, stack.name],
+  );
+
+  return (
+    <div className="flex w-full flex-col gap-3">
+      <AlertMessage type="info" className="my-0">
+        Rollback creates a new release from the selected historical release, then applies it.
+      </AlertMessage>
+      <div className="rounded-sm border p-1 shadow-xs">
+        <DataTable columns={columns} data={releases} isLoading={isLoading} />
+      </div>
+    </div>
+  );
+};
+
+const StackReleaseSourceCell = ({ release }: { release: StackReleaseView }) => {
+  const source = release.source;
+
+  if (!source) {
+    return <span className="text-sm text-muted-foreground">Stored spec</span>;
+  }
+
+  if (source.sourceType === StackSource.Git) {
+    const paths = source.composePaths?.length ? source.composePaths.join(', ') : null;
+
+    return (
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-sm">
+          {source.gitRepositoryName ?? 'Git repository'}
+          {source.branch ? `/${source.branch}` : ''}
+          {source.resolvedCommitSha ? ` @ ${formatId(source.resolvedCommitSha)}` : ''}
+        </span>
+        {paths && (
+          <span className="truncate text-xs text-muted-foreground" title={paths}>
+            {paths}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return <span className="text-sm text-muted-foreground">{source.sourceType}</span>;
+};
+
+const isRollbackCandidateRelease = (release: StackReleaseView) => release.status === StackReleaseStatus.Healthy;
 
 const StackDriftPanel = ({ stack }: { stack: StackView }) => {
   const driftDetectionDisabled = stack.driftPolicy?.mode === StackDriftMode.Disabled;

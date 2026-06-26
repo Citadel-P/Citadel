@@ -3415,6 +3415,13 @@ export interface RolesView {
   capabilities: ResourceCapabilities;
 }
 
+export interface RollbackStackInput {
+  /** @format uuid */
+  stackId: string;
+  /** @format uuid */
+  releaseId: string;
+}
+
 export interface StackCapabilities {
   canViewLogs: boolean;
   canInspect: boolean;
@@ -3567,6 +3574,11 @@ export interface StackReleaseSource {
   resolvedCommitSha: string;
   composePaths: string[];
   envFilePaths: string[];
+  gitRepositoryUrl?: null | string;
+  workingDirectory?: null | string;
+  watchPaths?: null | string[];
+  composeEnvFilesFromRepo?: null | string[];
+  composeDigest?: null | string;
 }
 
 export interface StackReleaseView {
@@ -3616,6 +3628,9 @@ export interface StackSpecGitStack {
   updateBehavior: StackUpdateBehavior;
   webhook?: null | StackWebhookConfig;
   composePaths?: null | string[];
+  workingDirectory?: null | string;
+  composeEnvFilesFromRepo?: null | string[];
+  watchPaths?: null | string[];
   additionalEnvFileFromRepo?: null | string[];
   projectName?: null | string;
   preDeploy?: null | StackCommand;
@@ -7759,6 +7774,35 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/stacks/apply`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name RollbackStack
+     * @summary Rollback a stack to a previous release and stream execution logs in real time.
+     * @request POST:/api/v1/stacks/rollback
+     * @secure
+     * @response `200` `(StackStreamItem)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    rollbackStack: (data: RollbackStackInput, params: RequestParams = {}) =>
+      this.request<
+        StackStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/rollback`,
         method: "POST",
         body: data,
         secure: true,

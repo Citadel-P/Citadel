@@ -127,6 +127,7 @@ const ActionDialog = ({ action, onClose }: { action: { key: string; data?: Actio
       setIsLoading(true)
       const maybePromise = action.data.onClick?.()
       Promise.resolve(maybePromise)
+        //.then(() => onClose())
         .catch((err) => {
           const problem = (err as any)?.error as ProblemDetails
           if (problem && problem.status === 400) {

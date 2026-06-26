@@ -10,10 +10,10 @@ namespace Tests.Unit.Domain.Entities.Git;
 public class GitRepositoryTests
 {
     [Theory]
-    [InlineData("https://github.com/citadel-p/citadel.git", "/app/data/repos/citadel")]
-    [InlineData("https://github.com/citadel-p/citadel", "/app/data/repos/citadel")]
-    [InlineData("git@github.com:citadel-p/citadel.git", "/app/data/repos/citadel")]
-    public void GetCachePath_UsesRemoteRepositoryName(string url, string expectedPath)
+    [InlineData("https://github.com/citadel-p/citadel.git")]
+    [InlineData("https://github.com/citadel-p/citadel")]
+    [InlineData("git@github.com:citadel-p/citadel.git")]
+    public void GetCachePath_UsesRepositoryId(string url)
     {
         var repository = new GitRepository(
             name: "GR-TEST",
@@ -25,11 +25,11 @@ public class GitRepositoryTests
 
         var cachePath = repository.GetCachePath();
 
-        Assert.Equal(expectedPath, cachePath);
+        Assert.Equal($"/app/data/repos/{repository.Id:D}", cachePath);
     }
 
     [Fact]
-    public void GetCachePath_FallsBackToSanitizedName_WhenUrlDoesNotContainRepositorySegment()
+    public void GetCachePath_DoesNotDependOnRepositoryName()
     {
         var repository = new GitRepository(
             name: "My Repo",
@@ -41,7 +41,7 @@ public class GitRepositoryTests
 
         var cachePath = repository.GetCachePath();
 
-        Assert.Equal("/app/data/repos/My-Repo", cachePath);
+        Assert.Equal($"/app/data/repos/{repository.Id:D}", cachePath);
     }
 
     [Fact]

@@ -24,6 +24,7 @@ import {
   ActivityEventInfoDeploymentApplied,
   ActivityEventInfoStackApplied,
   ApplyStackInput,
+  RollbackStackInput,
   StackStreamItem,
 } from '@/api/generated/api.types';
 import { formatActivityEvent, serializeData } from '@/lib/utils';
@@ -40,6 +41,7 @@ interface PullImageParams {
 
 type DeployParams = { name: string } & ApplyDeploymentInput;
 type StackDeployParams = { name: string } & ApplyStackInput;
+type StackRollbackParams = { name: string; version?: string } & RollbackStackInput;
 
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
@@ -47,7 +49,8 @@ export type TaskSpec =
   | { kind: 'activity'; payload: ActivityView }
   | { kind: 'alertEvent'; payload: AlertEventView }
   | { kind: 'build'; payload: Record<string, unknown> }
-  | { kind: 'stack'; payload: Record<string, unknown> };
+  | { kind: 'stack'; payload: Record<string, unknown> }
+  | { kind: 'stackRollback'; payload: StackRollbackParams };
 
 export interface TaskSheetState {
   open: boolean;
@@ -510,6 +513,12 @@ function ApplyStackTaskRenderer({ payload, type }: { payload: StackDeployParams;
   return <TaskStreamLayout title="Stack" refName={payload.name} type={type} state={state as any} />;
 }
 
+function RollbackStackTaskRenderer({ payload, type }: { payload: StackRollbackParams; type: ResourceType }) {
+  const state = useRollbackStackProgress(payload);
+  const refName = payload.version ? `${payload.name} -> ${payload.version}` : payload.name;
+  return <TaskStreamLayout title="Rollback" refName={refName} type={type} state={state as any} />;
+}
+
 function ActivityTaskRenderer({ payload }: { payload: ActivityView; type: ResourceType }) {
   return <TaskActivityLayout activityId={payload.id} />;
 }
@@ -522,6 +531,7 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   pull: PullImageTaskRenderer,
   deploy: ApplyDeployTaskRenderer,
   stack: ApplyStackTaskRenderer,
+  stackRollback: RollbackStackTaskRenderer,
   activity: ActivityTaskRenderer,
   alertEvent: AlertEventTaskRenderer,
 };
@@ -611,6 +621,20 @@ function useApplyStackProgress(params: StackDeployParams) {
     request,
     successMessage: 'Stack applied successfully',
     errorMessageDefault: 'Failed to deploy',
+    getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
+  });
+}
+
+function useRollbackStackProgress(params: StackRollbackParams) {
+  const { stackId, releaseId } = params;
+
+  const request: RollbackStackInput = useMemo(() => ({ stackId, releaseId }), [stackId, releaseId]);
+
+  return useStreamProgress<RollbackStackInput, StackStreamItem>({
+    endpoint: 'api/v1/stacks/rollback',
+    request,
+    successMessage: 'Stack rolled back successfully',
+    errorMessageDefault: 'Failed to rollback',
     getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
   });
 }

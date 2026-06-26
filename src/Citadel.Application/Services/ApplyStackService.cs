@@ -149,9 +149,14 @@ internal class ApplyStackService(
         stack = markResult.Stack!;
         currentRelease = stack.CurrentStackRelease!;
         var stackSpec = currentRelease.Spec;
-        string composeFileContent;
+        string? composeFileContent;
         string? environmentFilePath;
         IReadOnlyList<string>? environmentVariables;
+        string? sourceWorkingDirectory = null;
+        IReadOnlyList<string>? sourceComposeFilePaths = null;
+        string? labelsOverrideFilePath = null;
+        string? generatedFilesDirectory = null;
+        string? gitSnapshotRoot = null;
         StackReleaseSource? releaseSource = null;
 
         if (stackSpec is ManualStack currentManualStack)
@@ -180,9 +185,14 @@ internal class ApplyStackService(
                 yield break;
             }
 
-            composeFileContent = StackComposeLabelInjector.Inject(payload.ComposeContent, stack.Id, currentRelease.Id);
+            composeFileContent = null;
             environmentFilePath = payload.EnvFilePath;
             environmentVariables = payload.EnvironmentVariables;
+            sourceWorkingDirectory = payload.SourceWorkingDirectory;
+            sourceComposeFilePaths = payload.SourceComposeFilePaths;
+            labelsOverrideFilePath = payload.LabelsOverrideFilePath;
+            generatedFilesDirectory = payload.GeneratedFilesDirectory;
+            gitSnapshotRoot = payload.SnapshotRoot;
             releaseSource = new StackReleaseSource(
                 SourceType: StackSource.Git,
                 GitRepositoryId: gitRepository.Id,
@@ -191,7 +201,11 @@ internal class ApplyStackService(
                 RequestedCommitSha: gitStack.CommitSha,
                 ResolvedCommitSha: payload.ResolvedCommitSha,
                 ComposePaths: payload.ComposePaths,
-                EnvFilePaths: payload.EnvFilePaths);
+                EnvFilePaths: payload.EnvFilePaths,
+                GitRepositoryUrl: gitRepository.Url,
+                WorkingDirectory: Path.GetRelativePath(payload.SnapshotRoot, payload.SourceWorkingDirectory).Replace('\\', '/'),
+                WatchPaths: payload.WatchPaths,
+                ComposeEnvFilesFromRepo: payload.EnvFilePaths);
         }
         else
         {
@@ -219,7 +233,11 @@ internal class ApplyStackService(
             registryName,
             registryHost,
             serviceNames,
-            pullImages);
+            pullImages,
+            sourceWorkingDirectory,
+            sourceComposeFilePaths,
+            labelsOverrideFilePath,
+            generatedFilesDirectory);
 
         int? exitCode = null;
         var errorLogs = new List<string>(); 
@@ -297,6 +315,24 @@ internal class ApplyStackService(
                 await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, releaseSource, ct);
                 yield return StackStreamItem.FromStdErr($"❌ {errorMessage}", exitCode ?? 1 );
                 yield break;
+            }
+
+            if (!string.IsNullOrWhiteSpace(gitSnapshotRoot))
+            {
+                string? sourcePointerWarning = null;
+                try
+                {
+                    await gitStackMaterializer.ActivateCurrentAsync(stack.Id, gitSnapshotRoot, ct);
+                }
+                catch (Exception ex)
+                {
+                    sourcePointerWarning = $"Git source pointer update failed: {ex.Message}";
+                }
+
+                if (sourcePointerWarning is not null)
+                {
+                    yield return StackStreamItem.SystemMessage(sourcePointerWarning, 0);
+                }
             }
         
             await dbWorkQueue.EnqueueAsync(
@@ -411,12 +447,16 @@ internal class ApplyStackService(
         Stack stack,
         string platformAddress,
         StackSpec stackSpec,
-        string composeFileContent, string projectName,
+        string? composeFileContent, string projectName,
         string? environmentFilePath,
         IReadOnlyList<string>? environmentVariables,
         string? registryAuth, string? registryName, string? registryHost,
         IReadOnlyList<string>? serviceNames,
-        bool pullImages)
+        bool pullImages,
+        string? sourceWorkingDirectory,
+        IReadOnlyList<string>? sourceComposeFilePaths,
+        string? labelsOverrideFilePath,
+        string? generatedFilesDirectory)
         => new(
             PlatformAddress: platformAddress,
             StackName: stack.Name,
@@ -432,7 +472,11 @@ internal class ApplyStackService(
             DestroyBeforeDeploy: stackSpec.DestroyBeforeDeploy && serviceNames is not { Count: > 0 },
             Spec: stackSpec,
             ServiceNames: serviceNames,
-            PullImages: pullImages);
+            PullImages: pullImages,
+            SourceWorkingDirectory: sourceWorkingDirectory,
+            SourceComposeFilePaths: sourceComposeFilePaths,
+            LabelsOverrideFilePath: labelsOverrideFilePath,
+            GeneratedFilesDirectory: generatedFilesDirectory);
 
 
     private static async Task<(bool HasItem, StackApplyResult? Result, string? ErrorMessage)> TryReadNextAsync(IAsyncEnumerator<StackApplyResult> enumerator)

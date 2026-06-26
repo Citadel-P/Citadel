@@ -355,6 +355,10 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "new-commit", true));
 
+        _gitCliRepositoryMock
+            .Setup(x => x.GetChangedPathsAsync(It.IsAny<string>(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["compose.yml"]));
+
         await RunJobOnceAsync();
 
         await using var scope = Services.CreateAsyncScope();
@@ -372,6 +376,43 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             Times.Once);
         _applyStackServiceMock.Verify(
             x => x.ApplyAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenBranchTrackingGitStackHasOnlyUnrelatedPathChanges_DoesNotMarkUpdateAvailable()
+    {
+        var stackId = await CreateTrackedGitStackAsync(
+            "old-commit",
+            composePaths: ["stacks/beszel/compose.yml"],
+            workingDirectory: "stacks/beszel");
+
+        _gitCliRepositoryMock
+            .Setup(x => x.TestConnectionAsync(It.IsAny<string>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        _repoCacheManagerMock
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "new-commit", true));
+
+        _gitCliRepositoryMock
+            .Setup(x => x.GetChangedPathsAsync(It.IsAny<string>(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["stacks/caddy/compose.yml", "README.md"]));
+
+        await RunJobOnceAsync();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = await uow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(stack);
+        var updateState = Assert.IsType<GitStackUpdateState>(stack!.StackUpdateState);
+        Assert.Equal("old-commit", updateState.RecreateStackOnNewCommitState.CurrentCommitSha);
+        Assert.Null(updateState.RecreateStackOnNewCommitState.RemoteCommitSha);
+        Assert.NotEqual(ActivityEventType.StackGitUpdateAvailable, stack.LatestActivityEvent?.EventType);
+
+        _alertServiceMock.Verify(
+            x => x.ProcessAsync(AlertType.StackGitUpdateAvailable, It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -429,8 +470,12 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         return repository.Id;
     }
 
-    private async Task<Guid> CreateTrackedGitStackAsync(string deployedCommit)
+    private async Task<Guid> CreateTrackedGitStackAsync(
+        string deployedCommit,
+        List<string>? composePaths = null,
+        string? workingDirectory = null)
     {
+        composePaths ??= ["compose.yml"];
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var stack = Stack.Create(
@@ -443,7 +488,8 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
                 Branch: "main",
                 CommitSha: null,
                 UpdateBehavior: StackUpdateBehavior.Notify,
-                ComposePaths: ["compose.yml"]));
+                ComposePaths: composePaths,
+                WorkingDirectory: workingDirectory));
 
         stack.ReleaseProcessing(StackReleaseStatus.Healthy);
         stack.CurrentStackRelease!.UpdateSource(new StackReleaseSource(
@@ -453,8 +499,9 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             Branch: "main",
             RequestedCommitSha: null,
             ResolvedCommitSha: deployedCommit,
-            ComposePaths: ["compose.yml"],
-            EnvFilePaths: []));
+            ComposePaths: composePaths,
+            EnvFilePaths: [],
+            WorkingDirectory: workingDirectory));
 
         await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);

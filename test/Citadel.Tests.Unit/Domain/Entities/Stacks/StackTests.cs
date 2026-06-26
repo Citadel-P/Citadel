@@ -5,6 +5,36 @@ namespace Tests.Unit.Domain.Entities.Stacks;
 
 public class StackTests
 {
+    [Fact]
+    public void PrepareReleaseForApply_Should_Reuse_Failed_Release()
+    {
+        var stack = CreateManualStack();
+        stack.ReleaseProcessing(StackReleaseStatus.Failed);
+        var releaseId = stack.CurrentStackReleaseId;
+        var version = stack.CurrentStackRelease!.Version;
+
+        var prepared = stack.PrepareReleaseForApply(Guid.CreateVersion7());
+
+        Assert.True(prepared);
+        Assert.Equal(releaseId, stack.CurrentStackReleaseId);
+        Assert.Equal(version, stack.CurrentStackRelease!.Version);
+    }
+
+    [Fact]
+    public void PrepareReleaseForApply_Should_Create_Next_Release_After_Successful_Release()
+    {
+        var stack = CreateManualStack();
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        var releaseId = stack.CurrentStackReleaseId;
+
+        var prepared = stack.PrepareReleaseForApply(Guid.CreateVersion7());
+
+        Assert.True(prepared);
+        Assert.NotEqual(releaseId, stack.CurrentStackReleaseId);
+        Assert.Equal("2", stack.CurrentStackRelease!.Version);
+        Assert.Equal(StackReleaseStatus.Created, stack.CurrentStackRelease.Status);
+    }
+
     [Theory]
     [InlineData(StackReleaseStatus.Healthy, ContainerStateStatus.Running, ContainerStateStatus.Running)]
     [InlineData(StackReleaseStatus.Paused, ContainerStateStatus.Paused, ContainerStateStatus.Paused)]
@@ -22,4 +52,14 @@ public class StackTests
 
         Assert.Equal(expectedStatus, status);
     }
+
+    private static Stack CreateManualStack()
+        => Stack.Create(
+            name: "stack",
+            createdByActorId: Guid.CreateVersion7(),
+            StackSource: StackSource.WebEditor,
+            platformId: Guid.CreateVersion7(),
+            spec: new ManualStack(
+                ComposeFile: "services:\n  app:\n    image: nginx\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
 }

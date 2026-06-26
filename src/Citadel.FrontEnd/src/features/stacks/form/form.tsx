@@ -346,12 +346,12 @@ export const StackForm = ({
                       ),
                     }),
                     defineField({
-                      key: 'spec.additionalEnvFileFromRepo',
-                      label: 'Additional Env Files',
-                      description: 'Optional env files from the repository root.',
+                      key: 'spec.composeEnvFilesFromRepo',
+                      label: 'Compose Env Files',
+                      description: 'Optional repository env files used by Docker Compose for interpolation.',
                       render: (value, set) => (
                         <MonacoToArrayEditor
-                          value={value}
+                          value={value ?? (original.spec as any)?.additionalEnvFileFromRepo}
                           helperText="# .env.production"
                           language="string_list"
                           onChange={(v: string[] | undefined) =>
@@ -359,7 +359,7 @@ export const StackForm = ({
                               spec: {
                                 ...(prev.spec as any),
                                 $type: 'Git',
-                                additionalEnvFileFromRepo: v ?? [],
+                                composeEnvFilesFromRepo: v ?? [],
                               } as any,
                             }))
                           }
@@ -534,6 +534,57 @@ export const StackForm = ({
                 ...(currentStackSource === StackSource.Git
                   ? [
                       defineGroupField<StackInput>({
+                        id: 'git_stack_paths',
+                        label: 'Git Source Paths',
+                        title: 'Git Source Paths',
+                        description: 'Control how this stack resolves compose files inside the linked repository.',
+                        items: [
+                          defineField<StackInput, 'spec.workingDirectory'>({
+                            key: 'spec.workingDirectory',
+                            label: 'Working Directory',
+                            description:
+                              'Optional repository path used as the Docker Compose project directory. Defaults to the first compose file folder.',
+                            render: (value, set) => (
+                              <FieldInput
+                                value={value}
+                                onChange={(v) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...(prev.spec as any),
+                                      $type: 'Git',
+                                      workingDirectory: v || null,
+                                    } as any,
+                                  }))
+                                }
+                                placeholder="e.g. stacks/beszel"
+                              />
+                            ),
+                          }),
+                          defineField<StackInput, 'spec.watchPaths'>({
+                            key: 'spec.watchPaths',
+                            label: 'Watch Paths',
+                            description:
+                              'Optional paths used to decide whether a repository commit affects this stack. Leave empty to watch the working directory and compose files.',
+                            render: (value, set) => (
+                              <MonacoToArrayEditor
+                                value={value}
+                                helperText="# stacks/beszel/**\n# shared/networks.yml"
+                                language="string_list"
+                                onChange={(v: string[] | undefined) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...(prev.spec as any),
+                                      $type: 'Git',
+                                      watchPaths: v ?? [],
+                                    } as any,
+                                  }))
+                                }
+                              />
+                            ),
+                          }),
+                        ],
+                      }),
+                      defineGroupField<StackInput>({
                         id: 'webhook',
                         label: 'Webhook',
                         title: 'Webhook',
@@ -654,7 +705,8 @@ export const StackForm = ({
                           defineField<StackInput, 'driftPolicy.removeExtraContainers'>({
                             key: 'driftPolicy.removeExtraContainers',
                             label: 'Remove Extra Containers',
-                            description: 'Reserved for destructive cleanup. It stays off unless explicitly enabled for auto-fix.',
+                            description:
+                              'Reserved for destructive cleanup. It stays off unless explicitly enabled for auto-fix.',
                             render: (value, set) => (
                               <FieldSwitch
                                 id="stack-drift-remove-extra"
@@ -786,7 +838,7 @@ export const StackForm = ({
                   required: false,
                   render: (value, set) => (
                     <FieldSwitch
-                      checked={value ?? false}
+                      checked={value ?? true}
                       id="spec.destroyBeforeDeploy"
                       onChange={(value) =>
                         set((prev) => ({

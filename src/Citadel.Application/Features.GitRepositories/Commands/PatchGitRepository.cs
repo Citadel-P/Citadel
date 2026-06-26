@@ -101,7 +101,7 @@ internal sealed class PatchGitRepositoryHandler(
 
         gitRepository.UpdateSource(patchedGitRepository.Url, patchedGitRepository.GitAccountId);
 
-        if (sourceChanged && !string.Equals(previousCachePath, gitRepository.GetCachePath(), StringComparison.OrdinalIgnoreCase))
+        if (sourceChanged)
         {
             await repoCacheManager.DeleteCacheAsync(previousCachePath, cancellationToken);
         }

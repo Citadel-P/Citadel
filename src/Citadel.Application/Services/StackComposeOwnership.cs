@@ -151,6 +151,68 @@ internal static class StackComposeLabelInjector
         return writer.ToString();
     }
 
+    public static string CreateLabelsOverride(IEnumerable<string> composeFiles, Guid stackId, Guid releaseId)
+    {
+        var serviceHashes = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var composeFile in composeFiles)
+        {
+            using var reader = new StringReader(composeFile);
+            var yaml = new YamlStream();
+            yaml.Load(reader);
+
+            if (yaml.Documents.Count == 0 || yaml.Documents[0].RootNode is not YamlMappingNode root)
+            {
+                continue;
+            }
+
+            if (!TryGetMapping(root, "services", out var services))
+            {
+                continue;
+            }
+
+            foreach (var (key, value) in services.Children)
+            {
+                if (key is not YamlScalarNode serviceNameNode
+                    || string.IsNullOrWhiteSpace(serviceNameNode.Value)
+                    || value is not YamlMappingNode service)
+                {
+                    continue;
+                }
+
+                ValidateExistingLabels(service);
+                if (!serviceHashes.TryGetValue(serviceNameNode.Value, out var hashes))
+                {
+                    hashes = [];
+                    serviceHashes[serviceNameNode.Value] = hashes;
+                }
+
+                hashes.Add(SerializeNode(service));
+            }
+        }
+
+        var rootOverride = new YamlMappingNode();
+        var servicesOverride = new YamlMappingNode();
+        rootOverride.Add("services", servicesOverride);
+
+        foreach (var (serviceName, serviceDefinitions) in serviceHashes.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            var serviceOverride = new YamlMappingNode();
+            var labels = new YamlMappingNode();
+            SetMappingValue(labels, CitadelLabels.Managed, "true");
+            SetMappingValue(labels, CitadelLabels.StackId, StackContainerOwnership.FormatStackId(stackId));
+            SetMappingValue(labels, CitadelLabels.ReleaseId, releaseId.ToString("D"));
+            SetMappingValue(labels, CitadelLabels.ServiceHash, HashServiceDefinitions(serviceDefinitions));
+
+            serviceOverride.Add("labels", labels);
+            servicesOverride.Add(serviceName, serviceOverride);
+        }
+
+        using var writer = new StringWriter();
+        new YamlStream(new YamlDocument(rootOverride)).Save(writer, assignAnchors: false);
+        return writer.ToString();
+    }
+
     private static YamlMappingNode GetOrCreateNormalizedLabels(YamlMappingNode service)
     {
         var labelKey = FindKey(service, "labels");
@@ -171,6 +233,22 @@ internal static class StackComposeLabelInjector
 
         service.Children[labelKey] = labels;
         return labels;
+    }
+
+    private static void ValidateExistingLabels(YamlMappingNode service)
+    {
+        var labelKey = FindKey(service, "labels");
+        if (labelKey is null)
+        {
+            return;
+        }
+
+        _ = service.Children[labelKey] switch
+        {
+            YamlMappingNode mapping => ValidateLabelMapping(mapping),
+            YamlSequenceNode sequence => ConvertLabelSequence(sequence),
+            _ => throw new InvalidOperationException("Compose service labels must be a mapping or a sequence.")
+        };
     }
 
     private static YamlMappingNode ValidateLabelMapping(YamlMappingNode mapping)
@@ -217,6 +295,13 @@ internal static class StackComposeLabelInjector
     private static string HashService(YamlMappingNode service)
     {
         var serialized = SerializeNode(service);
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(serialized));
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static string HashServiceDefinitions(IEnumerable<string> definitions)
+    {
+        var serialized = string.Join("\n---\n", definitions);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(serialized));
         return Convert.ToHexString(hash).ToLowerInvariant();
     }

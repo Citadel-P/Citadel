@@ -104,6 +104,38 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
         return result.Map();
     }
 
+    public async Task<Result<IReadOnlyList<string>>> GetChangedPathsAsync(
+        string repoPath,
+        string fromCommitSha,
+        string toCommitSha,
+        CancellationToken ct = default)
+    {
+        var args = new[]
+        {
+            "-C",
+            repoPath,
+            "diff",
+            "--name-only",
+            "--find-renames",
+            $"{fromCommitSha}..{toCommitSha}"
+        };
+
+        var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, "", ct);
+        if (!result.IsSuccess)
+        {
+            return Result.Failure<IReadOnlyList<string>>(result.StandardError);
+        }
+
+        var paths = result.StandardOutput
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(path => path.Replace('\\', '/').TrimStart('/'))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return Result.Success<IReadOnlyList<string>>(paths);
+    }
+
     public async Task<Result> MaterializeSnapshotAsync(string repoPath, string commitSha, string targetPath, CancellationToken ct = default)
     {
         if (Directory.Exists(targetPath))

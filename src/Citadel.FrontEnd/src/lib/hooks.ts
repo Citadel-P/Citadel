@@ -26,7 +26,13 @@ import {
 import { useGetValidationErrors, getValidationErrors } from '@/hooks/useGetValidationErrors';
 import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router';
-import { ApplyDeploymentInput, ApplyStackInput, ProblemDetails, PullImageInput } from '@/api/generated/api.types';
+import {
+  ApplyDeploymentInput,
+  ApplyStackInput,
+  ProblemDetails,
+  PullImageInput,
+  RollbackStackInput,
+} from '@/api/generated/api.types';
 import { useAuthContext } from '@/features/auth/auth-context';
 
 const EMPTY_ARGS = Object.freeze({});
@@ -370,7 +376,7 @@ export const useWindowDimensions = () => {
   return dimensions;
 };
 
-type PulledStreamProps = PullImageInput | ApplyDeploymentInput | ApplyStackInput;
+type PulledStreamProps = PullImageInput | ApplyDeploymentInput | ApplyStackInput | RollbackStackInput;
 
 const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: string, onMutate?: () => void) => {
   const { apiClient } = useApiClientContext();

@@ -86,6 +86,7 @@ public static class ApplicationModule
             .AddSingleton<IStackRuntimeStateProvider, DockerStackRuntimeStateProvider>()
             .AddSingleton<IStackDriftChecker, ManualStackDriftChecker>()
             .AddSingleton<IStackReconciler, StackReconciler>()
+            .AddSingleton<IStackStoragePathProvider, StackStoragePathProvider>()
             .AddSingleton<IGitStackMaterializer, GitStackMaterializer>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 

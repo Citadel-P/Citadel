@@ -1,4 +1,5 @@
 using Application.Services;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -17,7 +18,8 @@ public sealed record DeleteStacks(IEnumerable<Guid> Ids) : ICommand<Result>;
 internal sealed class DeleteStacksHandler(
     IUnitOfWork unitOfWork,
     IPlatformContainerCache platformCache,
-    IConnectorFactory<IContainerConnector> connectorFactory) : ICommandHandler<DeleteStacks, Result>
+    IConnectorFactory<IContainerConnector> connectorFactory,
+    IStackStreamManager stackHub) : ICommandHandler<DeleteStacks, Result>
 {
     public async ValueTask<Result> Handle(DeleteStacks command, CancellationToken cancellationToken)
     {
@@ -38,6 +40,12 @@ internal sealed class DeleteStacksHandler(
 
         await unitOfWork.Stacks.RemoveRangeAsync(stacks.Select(stack => stack.Id), cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        foreach (var stack in stacks)
+        {
+            await stackHub.SendStackInfo(stack, "delete");
+        }
+
         return Result.Success();
     }
 

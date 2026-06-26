@@ -148,6 +148,14 @@ public static class Stacks
         }
     }
 
+    public static async IAsyncEnumerable<StackStreamItem> RollbackStack(IMediator mediator, RollbackStackInput rollbackStackInput, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var reply in mediator.CreateStream(rollbackStackInput.ToCommand(), cancellationToken))
+        {
+            yield return reply;
+        }
+    }
+
     public static async Task<Results<NoContent, ProblemHttpResult>> Stop(IMediator mediator, [FromBody] Guid[] stackIds, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new ChangeStackState(stackIds, StackAction.STOP), cancellationToken);

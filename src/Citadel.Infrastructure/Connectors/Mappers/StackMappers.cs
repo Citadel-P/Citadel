@@ -22,7 +22,11 @@ internal static class StackMappers
             PreDeploy: cmd.PreDeploy?.Map(),
             PostDeploy: cmd.PostDeploy?.Map(),
             ServiceNames: cmd.ServiceNames,
-            PullImages: cmd.PullImages);
+            PullImages: cmd.PullImages,
+            SourceWorkingDirectory: cmd.SourceWorkingDirectory,
+            SourceComposeFilePaths: cmd.SourceComposeFilePaths,
+            LabelsOverrideFilePath: cmd.LabelsOverrideFilePath,
+            GeneratedFilesDirectory: cmd.GeneratedFilesDirectory);
     }
 
     public static StackApplyResult Map(this Hosting.DockerClient.Models.Stacks.StackApplyResult result)

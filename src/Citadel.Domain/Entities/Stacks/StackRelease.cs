@@ -93,6 +93,9 @@ public sealed class StackRelease : IAuditedEntity
         Source = source;
     }
 
+    public bool IsRollbackCandidate()
+        => Status == StackReleaseStatus.Healthy;
+
     public static string GetNextVersion(string currentVersion)
     {
         if (int.TryParse(currentVersion, out var currentVersionNumber))
@@ -112,4 +115,9 @@ public sealed record StackReleaseSource(
     string? RequestedCommitSha,
     string ResolvedCommitSha,
     IReadOnlyList<string> ComposePaths,
-    IReadOnlyList<string> EnvFilePaths);
+    IReadOnlyList<string> EnvFilePaths,
+    string? GitRepositoryUrl = null,
+    string? WorkingDirectory = null,
+    IReadOnlyList<string>? WatchPaths = null,
+    IReadOnlyList<string>? ComposeEnvFilesFromRepo = null,
+    string? ComposeDigest = null);

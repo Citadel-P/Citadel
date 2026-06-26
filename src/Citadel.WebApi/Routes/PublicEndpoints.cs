@@ -1059,6 +1059,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("applyStack");
 
+        stacks.MapPost("/rollback", Stacks.RollbackStack)
+            .WithSummary("Rollback a stack to a previous release and stream execution logs in real time.")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("rollbackStack");
+
         stacks.MapPost("/stop", Stacks.Stop)
             .WithSummary("Stop stacks")
             .ProducesValidationProblem()
