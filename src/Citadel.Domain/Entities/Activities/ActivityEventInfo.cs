@@ -49,6 +49,8 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(GitRepoDeleted), nameof(ActivityEventType.GitRepoDeleted))]
 [JsonDerivedType(typeof(GitRepoCloned), nameof(ActivityEventType.GitRepoCloned))]
 [JsonDerivedType(typeof(GitRepoPulled), nameof(ActivityEventType.GitRepoPulled))]
+[JsonDerivedType(typeof(GitRepoWebhookReceived), nameof(ActivityEventType.GitRepoWebhookReceived))]
+[JsonDerivedType(typeof(StackWebhookReceived), nameof(ActivityEventType.StackWebhookReceived))]
 
 public abstract record ActivityEventInfo;
 
@@ -93,6 +95,17 @@ public sealed record StackGitAutoDeployFailed(
     string CurrentCommitSha,
     string RemoteCommitSha,
     string Reason) : ActivityEventInfo;
+public sealed record StackWebhookReceived(
+    Guid RequestId,
+    string AuthType,
+    string Execution,
+    string Status,
+    string? Reason,
+    string? EventType,
+    string? DeliveryId,
+    string? Branch,
+    string? CommitSha,
+    string? RepositoryFullName) : ActivityEventInfo;
 
 
 public sealed record AlertRuleCreated(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
@@ -110,3 +123,14 @@ public sealed record GitRepoRenamed(string OldName, string NewName) : ActivityEv
 public sealed record GitRepoDeleted(GitRepositorySnapshot GitRepo) : ActivityEventInfo;
 public sealed record GitRepoCloned(GitRepositorySnapshot GitRepo, RepoSyncResultSnapshot Result) : ActivityEventInfo;
 public sealed record GitRepoPulled(GitRepositorySnapshot GitRepo, RepoSyncResultSnapshot Result) : ActivityEventInfo;
+public sealed record GitRepoWebhookReceived(
+    Guid RequestId,
+    string AuthType,
+    string Execution,
+    string Status,
+    string? Reason,
+    string? EventType,
+    string? DeliveryId,
+    string? Branch,
+    string? CommitSha,
+    string? RepositoryFullName) : ActivityEventInfo;

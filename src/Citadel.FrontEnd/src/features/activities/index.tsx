@@ -11,6 +11,24 @@ import TaskSheet from '@/components/custom/task-sheet';
 import { Link } from 'react-router';
 import { CitadelIcons } from '@/lib/icons';
 
+const activityResourceIcons = {
+  [ActivityResourceType.Deployment]: CitadelIcons.Deployment,
+  [ActivityResourceType.Registry]: CitadelIcons.Registry,
+  [ActivityResourceType.Platform]: CitadelIcons.Platform,
+  [ActivityResourceType.Stack]: CitadelIcons.Stack,
+  [ActivityResourceType.AlertRule]: CitadelIcons.Alert,
+  [ActivityResourceType.GitRepository]: CitadelIcons.GitRepository,
+} satisfies Record<ActivityResourceType, any>;
+
+const activityEventPrefixes = {
+  [ActivityResourceType.Deployment]: 'Deployment',
+  [ActivityResourceType.Registry]: 'Registry',
+  [ActivityResourceType.Platform]: 'Platform',
+  [ActivityResourceType.Stack]: 'Stack',
+  [ActivityResourceType.AlertRule]: 'AlertRule',
+  [ActivityResourceType.GitRepository]: 'GitRepo',
+} satisfies Record<ActivityResourceType, string>;
+
 export const ActivityComponents: RequiredComponents = {
   Icon: Activity,
   Content: ({ items, isLoading }) => {
@@ -44,26 +62,18 @@ function SearchSection() {
   const [query, setQuery] = useActivityQuery();
 
   const resourceOptions = useMemo(() => {
-    const icons: Record<string, any> = {
-      [ActivityResourceType.Deployment]: CitadelIcons.Deployment,
-      [ActivityResourceType.Registry]: CitadelIcons.Registry,
-      [ActivityResourceType.Platform]: CitadelIcons.Platform,
-      [ActivityResourceType.Stack]: CitadelIcons.Stack,
-      [ActivityResourceType.AlertRule]: CitadelIcons.Alert,
-      [ActivityResourceType.GitRepository]: CitadelIcons.GitRepository,
-    };
-
     return Object.values(ActivityResourceType).map((t) => ({
       value: t,
       label: t,
-      icon: icons[t],
+      icon: activityResourceIcons[t],
     }));
   }, []);
 
   const eventOptions = useMemo(() => {
     const all = Object.values(ActivityEventType);
     if (query.resourceType === 'All') return all;
-    return all.filter((e) => e.startsWith(query.resourceType));
+    const eventPrefix = activityEventPrefixes[query.resourceType];
+    return all.filter((e) => e.startsWith(eventPrefix));
   }, [query.resourceType]);
 
   const handleResourceTypeChange = (value: string) => {

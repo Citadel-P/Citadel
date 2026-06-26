@@ -23,6 +23,10 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(StackGitUpdateAvailableAlertInfo), nameof(AlertType.StackGitUpdateAvailable))]
 [JsonDerivedType(typeof(StackGitAutoUpdatedAlertInfo), nameof(AlertType.StackGitAutoUpdated))]
 [JsonDerivedType(typeof(StackGitAutoDeployFailedAlertInfo), nameof(AlertType.StackGitAutoDeployFailed))]
+[JsonDerivedType(typeof(WebhookAuthenticationFailedAlertInfo), nameof(AlertType.WebhookAuthenticationFailed))]
+[JsonDerivedType(typeof(WebhookDispatchFailedAlertInfo), nameof(AlertType.WebhookDispatchFailed))]
+[JsonDerivedType(typeof(WebhookGitRepoSyncFailedAlertInfo), nameof(AlertType.WebhookGitRepoSyncFailed))]
+[JsonDerivedType(typeof(WebhookStackGitDeployFailedAlertInfo), nameof(AlertType.WebhookStackGitDeployFailed))]
 public abstract record AlertEventInfo
 {
     /// <summary>
@@ -172,6 +176,74 @@ public sealed record StackGitAutoDeployFailedAlertInfo(
 {
     public override string HumanMessage =>
         $"Git stack '{StackName}' auto-deploy failed from {GitRepositoryName}/{Branch}: {Reason}";
+}
+
+public abstract record WebhookAlertInfo(
+    string ResourceName,
+    string ResourceType,
+    string Provider,
+    string Execution,
+    string Reason,
+    Guid RequestId,
+    string? EventType,
+    string? DeliveryId,
+    string? Branch,
+    string? CommitSha,
+    string? RepositoryFullName) : AlertEventInfo;
+
+public sealed record WebhookAuthenticationFailedAlertInfo(
+    string ResourceName,
+    string ResourceType,
+    string Provider,
+    string Execution,
+    string Reason,
+    Guid RequestId,
+    string? EventType,
+    string? DeliveryId,
+    string? Branch,
+    string? CommitSha,
+    string? RepositoryFullName)
+    : WebhookAlertInfo(ResourceName, ResourceType, Provider, Execution, Reason, RequestId, EventType, DeliveryId, Branch, CommitSha, RepositoryFullName)
+{
+    public override string HumanMessage =>
+        $"Webhook authentication failed for {ResourceType} '{ResourceName}': {Reason}";
+}
+
+public sealed record WebhookDispatchFailedAlertInfo(
+    string ResourceName,
+    string ResourceType,
+    string Provider,
+    string Execution,
+    string Reason,
+    Guid RequestId,
+    string? EventType,
+    string? DeliveryId,
+    string? Branch,
+    string? CommitSha,
+    string? RepositoryFullName)
+    : WebhookAlertInfo(ResourceName, ResourceType, Provider, Execution, Reason, RequestId, EventType, DeliveryId, Branch, CommitSha, RepositoryFullName)
+{
+    public override string HumanMessage =>
+        $"Webhook dispatch failed for {ResourceType} '{ResourceName}': {Reason}";
+}
+
+public sealed record WebhookGitRepoSyncFailedAlertInfo(
+    string GitRepositoryName,
+    string Branch,
+    string Reason) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Webhook-triggered sync failed for Git repository '{GitRepositoryName}' on branch '{Branch}': {Reason}";
+}
+
+public sealed record WebhookStackGitDeployFailedAlertInfo(
+    string StackName,
+    string GitRepositoryName,
+    string Branch,
+    string Reason) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Webhook-triggered deploy failed for Git stack '{StackName}' from {GitRepositoryName}/{Branch}: {Reason}";
 }
 
 file static class StackAlertMessageFormatter

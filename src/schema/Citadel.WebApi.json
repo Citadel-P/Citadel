@@ -15457,6 +15457,12 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoGitRepoPulled"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoGitRepoWebhookReceived"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackWebhookReceived"
           }
         ],
         "discriminator": {
@@ -15499,7 +15505,9 @@
             "GitRepoRenamed": "#/components/schemas/ActivityEventInfoGitRepoRenamed",
             "GitRepoDeleted": "#/components/schemas/ActivityEventInfoGitRepoDeleted",
             "GitRepoCloned": "#/components/schemas/ActivityEventInfoGitRepoCloned",
-            "GitRepoPulled": "#/components/schemas/ActivityEventInfoGitRepoPulled"
+            "GitRepoPulled": "#/components/schemas/ActivityEventInfoGitRepoPulled",
+            "GitRepoWebhookReceived": "#/components/schemas/ActivityEventInfoGitRepoWebhookReceived",
+            "StackWebhookReceived": "#/components/schemas/ActivityEventInfoStackWebhookReceived"
           }
         }
       },
@@ -15856,6 +15864,77 @@
           },
           "newGitRepo": {
             "$ref": "#/components/schemas/GitRepositorySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoGitRepoWebhookReceived": {
+        "required": [
+          "requestId",
+          "authType",
+          "execution",
+          "status",
+          "reason",
+          "eventType",
+          "deliveryId",
+          "branch",
+          "commitSha",
+          "repositoryFullName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "GitRepoWebhookReceived"
+            ],
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authType": {
+            "type": "string"
+          },
+          "execution": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "eventType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deliveryId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "commitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "repositoryFullName": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -16254,6 +16333,77 @@
           }
         }
       },
+      "ActivityEventInfoStackWebhookReceived": {
+        "required": [
+          "requestId",
+          "authType",
+          "execution",
+          "status",
+          "reason",
+          "eventType",
+          "deliveryId",
+          "branch",
+          "commitSha",
+          "repositoryFullName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackWebhookReceived"
+            ],
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authType": {
+            "type": "string"
+          },
+          "execution": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "eventType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deliveryId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "commitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "repositoryFullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ActivityEventType": {
         "enum": [
           "DeploymentCreated",
@@ -16282,6 +16432,7 @@
           "GitRepoRenamed",
           "GitRepoPulled",
           "GitRepoCloned",
+          "GitRepoWebhookReceived",
           "StackCreated",
           "StackUpdated",
           "StackRenamed",
@@ -16296,7 +16447,8 @@
           "StackReconciliationAttempted",
           "StackGitUpdateAvailable",
           "StackGitAutoUpdated",
-          "StackGitAutoDeployFailed"
+          "StackGitAutoDeployFailed",
+          "StackWebhookReceived"
         ]
       },
       "ActivityResourceType": {
@@ -16678,6 +16830,18 @@
           },
           {
             "$ref": "#/components/schemas/AlertEventInfoStackGitAutoDeployFailedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoWebhookAuthenticationFailedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoWebhookDispatchFailedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoWebhookGitRepoSyncFailedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoWebhookStackGitDeployFailedAlertInfo"
           }
         ],
         "discriminator": {
@@ -16699,7 +16863,11 @@
             "StackDriftDetected": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo",
             "StackGitUpdateAvailable": "#/components/schemas/AlertEventInfoStackGitUpdateAvailableAlertInfo",
             "StackGitAutoUpdated": "#/components/schemas/AlertEventInfoStackGitAutoUpdatedAlertInfo",
-            "StackGitAutoDeployFailed": "#/components/schemas/AlertEventInfoStackGitAutoDeployFailedAlertInfo"
+            "StackGitAutoDeployFailed": "#/components/schemas/AlertEventInfoStackGitAutoDeployFailedAlertInfo",
+            "WebhookAuthenticationFailed": "#/components/schemas/AlertEventInfoWebhookAuthenticationFailedAlertInfo",
+            "WebhookDispatchFailed": "#/components/schemas/AlertEventInfoWebhookDispatchFailedAlertInfo",
+            "WebhookGitRepoSyncFailed": "#/components/schemas/AlertEventInfoWebhookGitRepoSyncFailedAlertInfo",
+            "WebhookStackGitDeployFailed": "#/components/schemas/AlertEventInfoWebhookStackGitDeployFailedAlertInfo"
           }
         }
       },
@@ -17270,6 +17438,226 @@
           }
         }
       },
+      "AlertEventInfoWebhookAuthenticationFailedAlertInfo": {
+        "required": [
+          "resourceName",
+          "resourceType",
+          "provider",
+          "execution",
+          "reason",
+          "requestId",
+          "eventType",
+          "deliveryId",
+          "branch",
+          "commitSha",
+          "repositoryFullName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "WebhookAuthenticationFailed"
+            ],
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resourceName": {
+            "type": "string"
+          },
+          "resourceType": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "execution": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deliveryId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "commitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "repositoryFullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoWebhookDispatchFailedAlertInfo": {
+        "required": [
+          "resourceName",
+          "resourceType",
+          "provider",
+          "execution",
+          "reason",
+          "requestId",
+          "eventType",
+          "deliveryId",
+          "branch",
+          "commitSha",
+          "repositoryFullName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "WebhookDispatchFailed"
+            ],
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resourceName": {
+            "type": "string"
+          },
+          "resourceType": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "execution": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deliveryId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "commitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "repositoryFullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoWebhookGitRepoSyncFailedAlertInfo": {
+        "required": [
+          "gitRepositoryName",
+          "branch",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "WebhookGitRepoSyncFailed"
+            ],
+            "type": "string"
+          },
+          "gitRepositoryName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoWebhookStackGitDeployFailedAlertInfo": {
+        "required": [
+          "stackName",
+          "gitRepositoryName",
+          "branch",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "WebhookStackGitDeployFailed"
+            ],
+            "type": "string"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "gitRepositoryName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "AlertEventStatus": {
         "enum": [
           "Active",
@@ -17417,7 +17805,9 @@
         "enum": [
           "Platform",
           "Deployment",
-          "Stack"
+          "Stack",
+          "GitRepository",
+          "Webhook"
         ]
       },
       "AlertRuleConfigView": {
@@ -17866,7 +18256,11 @@
           "StackDriftDetected",
           "StackGitUpdateAvailable",
           "StackGitAutoUpdated",
-          "StackGitAutoDeployFailed"
+          "StackGitAutoDeployFailed",
+          "WebhookAuthenticationFailed",
+          "WebhookDispatchFailed",
+          "WebhookGitRepoSyncFailed",
+          "WebhookStackGitDeployFailed"
         ]
       },
       "ApplyDeploymentInput": {

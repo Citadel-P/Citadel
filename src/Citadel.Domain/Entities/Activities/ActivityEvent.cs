@@ -89,6 +89,7 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.StackGitUpdateAvailable
             or ActivityEventType.StackGitAutoUpdated
             or ActivityEventType.StackGitAutoDeployFailed
+            or ActivityEventType.StackWebhookReceived
                 => ActivityResourceType.Stack,
 
             ActivityEventType.PlatformConnected
@@ -114,6 +115,7 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.GitRepoRenamed
             or ActivityEventType.GitRepoPulled
             or ActivityEventType.GitRepoCloned
+            or ActivityEventType.GitRepoWebhookReceived
                 => ActivityResourceType.GitRepository,
 
             _ => throw new InvalidOperationException(
@@ -193,6 +195,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.StackGitUpdateAvailable, StackGitUpdateAvailable) => true,
             (ActivityEventType.StackGitAutoUpdated, StackGitAutoUpdated) => true,
             (ActivityEventType.StackGitAutoDeployFailed, StackGitAutoDeployFailed) => true,
+            (ActivityEventType.StackWebhookReceived, StackWebhookReceived) => true,
 
             (ActivityEventType.AlertRuleCreated, AlertRuleCreated) => true,
             (ActivityEventType.AlertRuleUpdated, AlertRuleUpdated) => true,
@@ -210,6 +213,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.GitRepoDeleted, GitRepoDeleted) => true,
             (ActivityEventType.GitRepoCloned, GitRepoCloned) => true,
             (ActivityEventType.GitRepoPulled, GitRepoPulled) => true,
+            (ActivityEventType.GitRepoWebhookReceived, GitRepoWebhookReceived) => true,
 
             _ => false
         };

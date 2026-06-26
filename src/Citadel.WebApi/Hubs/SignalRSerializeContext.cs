@@ -4,6 +4,7 @@ using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Activities;
+using Domain.Entities.Alerts;
 using Domain.Entities.Platforms;
 using Nerdbank.MessagePack;
 using PolyType;
@@ -81,6 +82,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<StackGitUpdateAvailable>]
 [GenerateShapeFor<StackGitAutoUpdated>]
 [GenerateShapeFor<StackGitAutoDeployFailed>]
+[GenerateShapeFor<StackWebhookReceived>]
 [GenerateShapeFor<AlertRuleCreated>]
 [GenerateShapeFor<AlertRuleUpdated>]
 [GenerateShapeFor<AlertRuleDeleted>]
@@ -95,6 +97,11 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<GitRepoDeleted>]
 [GenerateShapeFor<GitRepoCloned>]
 [GenerateShapeFor<GitRepoPulled>]
+[GenerateShapeFor<GitRepoWebhookReceived>]
+[GenerateShapeFor<WebhookAuthenticationFailedAlertInfo>]
+[GenerateShapeFor<WebhookDispatchFailedAlertInfo>]
+[GenerateShapeFor<WebhookGitRepoSyncFailedAlertInfo>]
+[GenerateShapeFor<WebhookStackGitDeployFailedAlertInfo>]
 [GenerateShapeFor<TargetResource>]
 [GenerateShapeFor<ContainerDataView>]
 [GenerateShapeFor<ContainersDataView>]
@@ -127,6 +134,7 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.StackGitUpdateAvailable)] = typeof(StackGitUpdateAvailable),
         [nameof(ActivityEventType.StackGitAutoUpdated)] = typeof(StackGitAutoUpdated),
         [nameof(ActivityEventType.StackGitAutoDeployFailed)] = typeof(StackGitAutoDeployFailed),
+        [nameof(ActivityEventType.StackWebhookReceived)] = typeof(StackWebhookReceived),
         [nameof(ActivityEventType.DeploymentCreated)] = typeof(DeploymentCreated),
         [nameof(ActivityEventType.DeploymentUpdated)] = typeof(DeploymentUpdated),
         [nameof(ActivityEventType.DeploymentRenamed)] = typeof(DeploymentRenamed),
@@ -150,5 +158,6 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.GitRepoDeleted)] = typeof(GitRepoDeleted),
         [nameof(ActivityEventType.GitRepoCloned)] = typeof(GitRepoCloned),
         [nameof(ActivityEventType.GitRepoPulled)] = typeof(GitRepoPulled),
+        [nameof(ActivityEventType.GitRepoWebhookReceived)] = typeof(GitRepoWebhookReceived),
     };
 }

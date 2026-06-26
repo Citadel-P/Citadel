@@ -58,8 +58,10 @@ function SearchSection() {
   const resourceOptions = useMemo(() => {
     const icons: Record<AlertResourceType, any> = {
       [AlertResourceType.Deployment]: CitadelIcons.Deployment,
+      [AlertResourceType.GitRepository]: CitadelIcons.GitRepository,
       [AlertResourceType.Platform]: CitadelIcons.Platform,
       [AlertResourceType.Stack]: CitadelIcons.Stack,
+      [AlertResourceType.Webhook]: CitadelIcons.Webhook,
     };
 
     return Object.values(AlertResourceType).map((value) => ({
@@ -122,7 +124,7 @@ function SearchSection() {
         allIcon={SquareStack}
         className={filterFieldClassName}
       />
-      {query.resourceType !== 'All' && (
+      {query.resourceType !== 'All' && query.resourceType !== AlertResourceType.Webhook && (
         <ResourceSelectorField
           sourceType={LookupResourceType.Alert}
           targetType={LookupResourceType[query.resourceType]}
@@ -145,6 +147,7 @@ function SearchSection() {
 }
 
 function getAlertTypeResourceType(type: AlertType): AlertResourceType {
+  if (type.startsWith('Webhook')) return AlertResourceType.Webhook;
   if (type.startsWith('Deployment')) return AlertResourceType.Deployment;
   if (type.startsWith('Stack')) return AlertResourceType.Stack;
   return AlertResourceType.Platform;

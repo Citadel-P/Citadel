@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
-using Domain.Entities;
+using Domain.Contracts.Resources;
 
 namespace Domain.Entities.Stacks;
 

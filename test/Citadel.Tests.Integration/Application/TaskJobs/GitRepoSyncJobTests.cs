@@ -2,11 +2,15 @@
 using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Application.TaskJobs;
+using Application.Features.Deployments.Notifications;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Activities;
 using Domain.Entities.Git;
+using Domain.Entities.Identity;
 using Domain.Entities.Stacks;
 using Hosting.Common;
+using Hosting.Common.Models;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -139,6 +143,28 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenManualSyncSucceeds_RecordsActivityWithRequestActor()
+    {
+        var actorId = await CreateActorAsync("manual-sync-user");
+        await MarkRepoProcessingAsync(_repoId, actorId);
+
+        _gitCliRepositoryMock
+            .Setup(x => x.TestConnectionAsync(It.IsAny<string>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        _repoCacheManagerMock
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "manual-hash", true));
+
+        await RunJobOnceAsync(new GitRepoSyncRequest(_repoId, "main", GitRepoSyncTrigger.Manual));
+
+        var activities = await GetGitRepoPullActivitiesAsync(_repoId);
+        var activity = Assert.Single(activities.Items);
+
+        Assert.Equal(actorId, activity.CreatedByActorId);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenSynchronizationFails_MarksRepositoryAsDegraded()
     {
         _gitCliRepositoryMock
@@ -160,6 +186,101 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.NotNull(gitRef);
         Assert.Equal(GitReposStatus.Degraded, gitRef!.Status);
         Assert.Equal("sync failed", gitRef.LastError);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenWebhookSynchronizationFails_EmitsWebhookSyncFailureAlert()
+    {
+        _gitCliRepositoryMock
+            .Setup(x => x.TestConnectionAsync(It.IsAny<string>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        _repoCacheManagerMock
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Error: "sync failed"));
+
+        await RunJobOnceAsync(new GitRepoSyncRequest(_repoId, "main", GitRepoSyncTrigger.Webhook));
+
+        _alertServiceMock.Verify(
+            x => x.ProcessAsync(
+                AlertType.WebhookGitRepoSyncFailed,
+                It.Is<AlertEvaluationContext>(context =>
+                    context.GitRepoWebhookSyncFailures != null
+                    && context.GitRepoWebhookSyncFailures.Single().Id == _repoId
+                    && context.GitRepoWebhookSyncFailures.Single().Reason == "sync failed"),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenPollPullResolvesSameCommit_DoesNotCreateActivity()
+    {
+        await UpsertRepoRefAsync(_repoId, "main", "hash", GitReposStatus.Healthy);
+
+        _gitCliRepositoryMock
+            .Setup(x => x.TestConnectionAsync(It.IsAny<string>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        _repoCacheManagerMock
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "hash", true));
+
+        await RunJobOnceAsync(new GitRepoSyncRequest(_repoId, "main", GitRepoSyncTrigger.Poll));
+
+        var repo = await WaitForRepoStatusAsync(GitReposStatus.Healthy);
+        var activities = await GetGitRepoPullActivitiesAsync(_repoId);
+        var gitRef = await GetRepoRefAsync(_repoId, "main");
+
+        Assert.NotNull(repo);
+        Assert.Equal(GitReposStatus.Healthy, repo!.Status);
+        Assert.Equal(ResourceControlState.Idle, repo.ControlState);
+        Assert.Null(repo.LatestActivityEvent);
+        Assert.Empty(activities.Items);
+        Assert.NotNull(gitRef);
+        Assert.Equal("hash", gitRef!.ResolvedCommitSha);
+
+        _notificationQueueMock.Verify(
+            x => x.EnqueueAsync(It.IsAny<ActivityNotificationWorkItem>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _notificationQueueMock.Verify(
+            x => x.EnqueueAsync(It.IsAny<GitRepoNotificationWorkItem>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenPollPullRepeatsSameFailure_DoesNotCreateActivity()
+    {
+        await UpsertRepoRefAsync(_repoId, "main", string.Empty, GitReposStatus.Degraded, "sync failed");
+
+        _gitCliRepositoryMock
+            .Setup(x => x.TestConnectionAsync(It.IsAny<string>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        _repoCacheManagerMock
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Error: "sync failed"));
+
+        await RunJobOnceAsync(new GitRepoSyncRequest(_repoId, "main", GitRepoSyncTrigger.Poll));
+
+        var repo = await WaitForRepoStatusAsync(GitReposStatus.Degraded);
+        var activities = await GetGitRepoPullActivitiesAsync(_repoId);
+        var gitRef = await GetRepoRefAsync(_repoId, "main");
+
+        Assert.NotNull(repo);
+        Assert.Equal(GitReposStatus.Degraded, repo!.Status);
+        Assert.Equal(ResourceControlState.Idle, repo.ControlState);
+        Assert.Null(repo.LatestActivityEvent);
+        Assert.Empty(activities.Items);
+        Assert.NotNull(gitRef);
+        Assert.Equal(GitReposStatus.Degraded, gitRef!.Status);
+        Assert.Equal("sync failed", gitRef.LastError);
+
+        _notificationQueueMock.Verify(
+            x => x.EnqueueAsync(It.IsAny<ActivityNotificationWorkItem>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _notificationQueueMock.Verify(
+            x => x.EnqueueAsync(It.IsAny<GitRepoNotificationWorkItem>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -367,6 +488,55 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         return await uow.GitRepositories.GetRefAsync(repoId, branch, TestContext.Current.CancellationToken);
+    }
+
+    private async Task<Guid> CreateActorAsync(string name)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var actor = Actor.Create(ActorType.User, new ActorMetadata(name));
+        await uow.Actors.AddAsync(actor, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+        return actor.Id;
+    }
+
+    private async Task MarkRepoProcessingAsync(Guid repoId, Guid actorId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var repo = await uow.GitRepositories.GetWithAccountAsync(repoId, TestContext.Current.CancellationToken);
+        Assert.NotNull(repo);
+        repo!.MarkProcessing(actorId);
+        await uow.GitRepositories.UpdateAsync(repo, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task UpsertRepoRefAsync(
+        Guid repoId,
+        string branch,
+        string resolvedCommitSha,
+        GitReposStatus status,
+        string? lastError = null)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.GitRepositories.UpsertRefAsync(
+            new GitRepositoryRef(repoId, branch, resolvedCommitSha, status, lastError),
+            TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task<PagedResult<ActivityEvent>> GetGitRepoPullActivitiesAsync(Guid repoId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return await uow.ActivityEventRepository.GetPagedAsync(
+            repoId,
+            ActivityResourceType.GitRepository,
+            ActivityEventType.GitRepoPulled,
+            1,
+            50,
+            TestContext.Current.CancellationToken);
     }
 
     private sealed class InlineDbWorkQueue(IServiceScopeFactory scopeFactory) : IDbWorkQueue

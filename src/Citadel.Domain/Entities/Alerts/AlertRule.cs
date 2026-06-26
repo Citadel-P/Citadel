@@ -366,6 +366,10 @@ public static class AlertTypeMetadata
         { AlertType.StackGitUpdateAvailable, AlertResourceType.Stack },
         { AlertType.StackGitAutoUpdated, AlertResourceType.Stack },
         { AlertType.StackGitAutoDeployFailed, AlertResourceType.Stack },
+        { AlertType.WebhookAuthenticationFailed, AlertResourceType.Webhook },
+        { AlertType.WebhookDispatchFailed, AlertResourceType.Webhook },
+        { AlertType.WebhookGitRepoSyncFailed, AlertResourceType.Webhook },
+        { AlertType.WebhookStackGitDeployFailed, AlertResourceType.Webhook },
     };
 
     private static readonly HashSet<AlertType> ThresholdTypes =
@@ -400,6 +404,10 @@ public static class AlertTypeMetadata
             (AlertType.StackGitUpdateAvailable, StackGitUpdateAvailableAlertInfo) => true,
             (AlertType.StackGitAutoUpdated, StackGitAutoUpdatedAlertInfo) => true,
             (AlertType.StackGitAutoDeployFailed, StackGitAutoDeployFailedAlertInfo) => true,
+            (AlertType.WebhookAuthenticationFailed, WebhookAuthenticationFailedAlertInfo) => true,
+            (AlertType.WebhookDispatchFailed, WebhookDispatchFailedAlertInfo) => true,
+            (AlertType.WebhookGitRepoSyncFailed, WebhookGitRepoSyncFailedAlertInfo) => true,
+            (AlertType.WebhookStackGitDeployFailed, WebhookStackGitDeployFailedAlertInfo) => true,
             _ => false
         };
 }

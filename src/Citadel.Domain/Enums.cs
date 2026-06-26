@@ -533,6 +533,7 @@ public enum ActivityEventType
     GitRepoRenamed,
     GitRepoPulled,
     GitRepoCloned,
+    GitRepoWebhookReceived,
     #endregion
 
     #region Stack Events
@@ -551,6 +552,7 @@ public enum ActivityEventType
     StackGitUpdateAvailable,
     StackGitAutoUpdated,
     StackGitAutoDeployFailed,
+    StackWebhookReceived,
     #endregion
 }
 
@@ -580,6 +582,10 @@ public enum AlertType
     StackGitUpdateAvailable,
     StackGitAutoUpdated,
     StackGitAutoDeployFailed,
+    WebhookAuthenticationFailed,
+    WebhookDispatchFailed,
+    WebhookGitRepoSyncFailed,
+    WebhookStackGitDeployFailed,
     #endregion
 }
 
@@ -606,7 +612,9 @@ public enum AlertResourceType
 {
     Platform,
     Deployment,
-    Stack
+    Stack,
+    GitRepository,
+    Webhook
 }
 
 public enum AlertEventStatus

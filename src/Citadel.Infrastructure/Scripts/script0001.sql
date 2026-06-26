@@ -1,4 +1,4 @@
-﻿CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
     "MigrationId" character varying(150) NOT NULL,
     "ProductVersion" character varying(32) NOT NULL,
     CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
@@ -640,6 +640,21 @@ CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
 VALUES ('20260625192524_migration0001', '10.0.9');
+
+COMMIT;
+
+START TRANSACTION;
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
+VALUES ('019d0000-0001-7000-8001-00000000000f', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Webhook Authentication Failed', '[]', NULL, 'Warning', NULL, 'WebhookAuthenticationFailed');
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
+VALUES ('019d0000-0001-7000-8001-000000000010', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Webhook Dispatch Failed', '[]', NULL, 'Warning', NULL, 'WebhookDispatchFailed');
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
+VALUES ('019d0000-0001-7000-8001-000000000012', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Webhook Sync Failed - Git Repository', '[]', NULL, 'Warning', NULL, 'WebhookGitRepoSyncFailed');
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
+VALUES ('019d0000-0001-7000-8001-000000000013', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Webhook Deploy Failed - Git Stack', '[]', NULL, 'Critical', NULL, 'WebhookStackGitDeployFailed');
+
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20260625214814_migration0002', '10.0.9');
 
 COMMIT;
 

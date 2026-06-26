@@ -1,8 +1,11 @@
+using Application.Features.Deployments.Notifications;
 using Application.Services;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using Domain.Entities.Stacks;
 using FluentValidation;
@@ -47,6 +50,8 @@ internal sealed class ReceiveWebhookHandler(
     ChannelWriter<GitRepoSyncRequest> gitSyncWriter,
     INotificationQueue notificationQueue,
     IGitRepositoryStreamManager gitRepositoryStreamManager,
+    IActivityStreamManager activityStreamManager,
+    IAlertService alertService,
     IApplyStackService applyStackService,
     ILoggerFactory loggerFactory) : ICommandHandler<ReceiveWebhook, Result<WebhookReceiveResult>>
 {
@@ -57,17 +62,44 @@ internal sealed class ReceiveWebhookHandler(
     {
         var requestId = Guid.CreateVersion7();
         if (command.Body.Length > MaxBodyBytes)
+        {
+            await RecordActivityAsync(command, requestId, target: null, payload: null, pendingGitSyncRequest: null, status: "rejected", reason: "Request body too large", ActivityStatus.Failure, cancellationToken);
             return Result.Failure<WebhookReceiveResult>(new BadRequestError("Request body too large"));
+        }
 
         var target = await ResolveTargetAsync(command, cancellationToken);
         if (target.Error is not null)
+        {
+            await RecordActivityAsync(command, requestId, target, payload: null, pendingGitSyncRequest: null, status: "rejected", reason: target.Error.Message, ActivityStatus.Failure, cancellationToken);
             return Result.Failure<WebhookReceiveResult>(target.Error);
+        }
 
         if (!Authenticate(target.AuthScheme, command.Headers, command.Body, target.Secret))
+        {
+            await RecordActivityAsync(command, requestId, target, payload: null, pendingGitSyncRequest: null, status: "rejected", reason: "Webhook authentication failed", ActivityStatus.Failure, cancellationToken);
+            await ProcessWebhookAlertAsync(AlertType.WebhookAuthenticationFailed, command, requestId, target, payload: null, "Webhook authentication failed", cancellationToken);
             return Result.Failure<WebhookReceiveResult>(new UnauthorizedError("Webhook authentication failed"));
+        }
 
         var payload = ParsePayload(target.Provider, command.Headers, command.Body);
         var dispatch = await DispatchAsync(target, payload, cancellationToken);
+        await RecordActivityAsync(
+            command,
+            requestId,
+            target,
+            payload,
+            dispatch.GitSyncRequest,
+            dispatch.Status,
+            dispatch.Reason,
+            dispatch.Status.Equals("queued", StringComparison.OrdinalIgnoreCase) ? ActivityStatus.Success : ActivityStatus.Information,
+            cancellationToken);
+
+        if (dispatch.Status.Equals("noop", StringComparison.OrdinalIgnoreCase)
+            && IsAlertableDispatchNoOp(dispatch.Reason))
+        {
+            await ProcessWebhookAlertAsync(AlertType.WebhookDispatchFailed, command, requestId, target, payload, dispatch.Reason!, cancellationToken);
+        }
+
         return new WebhookReceiveResult(true, dispatch.Status, requestId, dispatch.Reason);
     }
 
@@ -163,9 +195,8 @@ internal sealed class ReceiveWebhookHandler(
         repo.MarkProcessing(Constants.SystemId);
         await unitOfWork.GitRepositories.UpdateAsync(repo, cancellationToken);
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(gitRepositoryStreamManager, repo), cancellationToken);
-        await gitSyncWriter.WriteAsync(new GitRepoSyncRequest(repo.Id, branch.Branch, GitRepoSyncTrigger.Webhook), cancellationToken);
 
-        return WebhookDispatchResult.Queued();
+        return WebhookDispatchResult.Queued(new GitRepoSyncRequest(repo.Id, branch.Branch, GitRepoSyncTrigger.Webhook));
     }
 
     private async Task<WebhookDispatchResult> DispatchStackDeployAsync(
@@ -192,28 +223,226 @@ internal sealed class ReceiveWebhookHandler(
         if (branch.NoOpReason is not null)
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
+        var resolvedBranch = branch.Branch ?? gitStack.Branch;
         var logger = loggerFactory.CreateLogger("WebhookStackDeploy");
         _ = Task.Run(async () =>
         {
             try
             {
-                await foreach (var _ in applyStackService.ApplyAsync(
+                await foreach (var item in applyStackService.ApplyAsync(
                     stack.Id,
                     Constants.SystemId,
                     serviceNames: null,
                     pullImages: true,
                     CancellationToken.None))
                 {
-                    // The apply service owns status/activity/SignalR side effects.
+                    if (!string.IsNullOrWhiteSpace(item.Message))
+                    {
+                        await ProcessStackWebhookDeployFailureAlertAsync(stack, repo, resolvedBranch, item.Message, CancellationToken.None);
+                        return;
+                    }
                 }
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Webhook stack deploy failed for stack {StackId}", stack.Id);
+                await ProcessStackWebhookDeployFailureAlertAsync(stack, repo, resolvedBranch, ex.Message, CancellationToken.None);
             }
         }, CancellationToken.None);
 
         return WebhookDispatchResult.Queued();
+    }
+
+    private async Task RecordActivityAsync(
+        ReceiveWebhook command,
+        Guid requestId,
+        WebhookTarget? target,
+        WebhookPayloadInfo? payload,
+        GitRepoSyncRequest? pendingGitSyncRequest,
+        string status,
+        string? reason,
+        ActivityStatus activityStatus,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveActivityEvent(command, target, requestId, payload, status, reason, activityStatus, out var activity))
+            return;
+
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        await notificationQueue.EnqueueAsync(
+            new ActivityNotificationWorkItem(activityStreamManager, await activity.AssignActor(unitOfWork, cancellationToken)),
+            cancellationToken);
+
+        if (status.Equals("queued", StringComparison.OrdinalIgnoreCase)
+            && target?.Execution == WebhookExecution.RepoPull
+            && pendingGitSyncRequest is { } syncRequest)
+        {
+            await gitSyncWriter.WriteAsync(syncRequest, cancellationToken);
+        }
+    }
+
+    private Task ProcessWebhookAlertAsync(
+        AlertType alertType,
+        ReceiveWebhook command,
+        Guid requestId,
+        WebhookTarget target,
+        WebhookPayloadInfo? payload,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = CreateWebhookAlertSnapshot(command, requestId, target, payload, reason);
+        if (snapshot is null)
+            return Task.CompletedTask;
+
+        var context = new AlertEvaluationContext(
+            UtcNow: DateTime.UtcNow,
+            Platforms: [],
+            Deployments: [],
+            Stacks: [],
+            Webhooks: [snapshot]);
+
+        return alertService.ProcessAsync(alertType, context, cancellationToken);
+    }
+
+    private Task ProcessStackWebhookDeployFailureAlertAsync(
+        Stack stack,
+        GitRepository repository,
+        string branch,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var context = new AlertEvaluationContext(
+            UtcNow: DateTime.UtcNow,
+            Platforms: [],
+            Deployments: [],
+            Stacks: [],
+            StackGitWebhookDeployFailures:
+            [
+                new StackGitWebhookDeployFailureAlertSnapshot(
+                    stack.Id,
+                    stack.Name,
+                    repository.Name,
+                    branch,
+                    reason)
+            ]);
+
+        return alertService.ProcessAsync(AlertType.WebhookStackGitDeployFailed, context, cancellationToken);
+    }
+
+    private static WebhookAlertSnapshot? CreateWebhookAlertSnapshot(
+        ReceiveWebhook command,
+        Guid requestId,
+        WebhookTarget target,
+        WebhookPayloadInfo? payload,
+        string reason)
+    {
+        var provider = target.Provider.ToString();
+        if (target.Repository is { } repo)
+        {
+            return new WebhookAlertSnapshot(
+                repo.Id,
+                repo.Name,
+                AlertResourceType.Webhook,
+                "repository",
+                provider,
+                command.Execution,
+                reason,
+                requestId,
+                payload?.EventType,
+                payload?.DeliveryId,
+                payload?.Branch,
+                payload?.CommitSha,
+                payload?.RepositoryFullName);
+        }
+
+        if (target.Stack is { } stack)
+        {
+            return new WebhookAlertSnapshot(
+                stack.Id,
+                stack.Name,
+                AlertResourceType.Webhook,
+                "stack",
+                provider,
+                command.Execution,
+                reason,
+                requestId,
+                payload?.EventType,
+                payload?.DeliveryId,
+                payload?.Branch,
+                payload?.CommitSha,
+                payload?.RepositoryFullName);
+        }
+
+        return null;
+    }
+
+    private static bool IsAlertableDispatchNoOp(string? reason)
+        => reason is not null
+           && !reason.Equals("Branch mismatch", StringComparison.OrdinalIgnoreCase)
+           && !reason.Equals("Unsupported event type", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryResolveActivityEvent(
+        ReceiveWebhook command,
+        WebhookTarget? target,
+        Guid requestId,
+        WebhookPayloadInfo? payload,
+        string status,
+        string? reason,
+        ActivityStatus activityStatus,
+        out ActivityEvent activity)
+    {
+        activity = null!;
+        if (command.ResourceType.Equals("repo", StringComparison.OrdinalIgnoreCase))
+        {
+            var info = new GitRepoWebhookReceived(
+                requestId,
+                command.AuthType,
+                command.Execution,
+                status,
+                reason,
+                payload?.EventType,
+                payload?.DeliveryId,
+                payload?.Branch,
+                payload?.CommitSha,
+                payload?.RepositoryFullName);
+
+            activity = new ActivityEvent(
+                platformId: null,
+                resourceId: target?.Repository?.Id ?? command.ResourceId,
+                actorId: Constants.SystemId,
+                resourceName: target?.Repository?.Name ?? $"repo:{command.ResourceId}",
+                eventType: ActivityEventType.GitRepoWebhookReceived,
+                status: activityStatus,
+                info: info);
+            return true;
+        }
+
+        if (command.ResourceType.Equals("stack", StringComparison.OrdinalIgnoreCase))
+        {
+            var info = new StackWebhookReceived(
+                requestId,
+                command.AuthType,
+                command.Execution,
+                status,
+                reason,
+                payload?.EventType,
+                payload?.DeliveryId,
+                payload?.Branch,
+                payload?.CommitSha,
+                payload?.RepositoryFullName);
+
+            activity = new ActivityEvent(
+                platformId: target?.Stack?.CurrentStackRelease?.PlatformId,
+                resourceId: target?.Stack?.Id ?? command.ResourceId,
+                actorId: Constants.SystemId,
+                resourceName: target?.Stack?.Name ?? $"stack:{command.ResourceId}",
+                eventType: ActivityEventType.StackWebhookReceived,
+                status: activityStatus,
+                info: info);
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryResolveProvider(string authType, out WebhookProvider provider)
@@ -453,9 +682,9 @@ internal sealed class ReceiveWebhookHandler(
         IReadOnlyList<string> RepositoryUrls,
         bool UnsupportedEvent);
 
-    private sealed record WebhookDispatchResult(string Status, string? Reason)
+    private sealed record WebhookDispatchResult(string Status, string? Reason, GitRepoSyncRequest? GitSyncRequest = null)
     {
-        public static WebhookDispatchResult Queued() => new("queued", null);
+        public static WebhookDispatchResult Queued(GitRepoSyncRequest? gitSyncRequest = null) => new("queued", null, gitSyncRequest);
         public static WebhookDispatchResult NoOp(string reason) => new("noop", reason);
     }
 }

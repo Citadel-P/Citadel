@@ -434,4 +434,121 @@ public sealed class StackGitAutoDeployFailedEvaluator : IAlertEvaluator
         }
     }
 }
+
+[AlertEvaluator(AlertType.WebhookAuthenticationFailed)]
+public sealed class WebhookAuthenticationFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.WebhookAuthenticationFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.Webhooks is null)
+            yield break;
+
+        foreach (var webhook in context.Webhooks)
+        {
+            yield return new AlertMatch(
+                webhook.ResourceId,
+                webhook.ResourceName,
+                webhook.ResourceType,
+                new WebhookAuthenticationFailedAlertInfo(
+                    webhook.ResourceName,
+                    webhook.ResourceTypeName,
+                    webhook.Provider,
+                    webhook.Execution,
+                    webhook.Reason,
+                    webhook.RequestId,
+                    webhook.EventType,
+                    webhook.DeliveryId,
+                    webhook.Branch,
+                    webhook.CommitSha,
+                    webhook.RepositoryFullName),
+                DeduplicationComponent: $"{webhook.Provider}:{webhook.Execution}:{webhook.Reason}:{webhook.DeliveryId ?? webhook.RequestId.ToString()}");
+        }
+    }
+}
+
+[AlertEvaluator(AlertType.WebhookDispatchFailed)]
+public sealed class WebhookDispatchFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.WebhookDispatchFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.Webhooks is null)
+            yield break;
+
+        foreach (var webhook in context.Webhooks)
+        {
+            yield return new AlertMatch(
+                webhook.ResourceId,
+                webhook.ResourceName,
+                webhook.ResourceType,
+                new WebhookDispatchFailedAlertInfo(
+                    webhook.ResourceName,
+                    webhook.ResourceTypeName,
+                    webhook.Provider,
+                    webhook.Execution,
+                    webhook.Reason,
+                    webhook.RequestId,
+                    webhook.EventType,
+                    webhook.DeliveryId,
+                    webhook.Branch,
+                    webhook.CommitSha,
+                    webhook.RepositoryFullName),
+                DeduplicationComponent: $"{webhook.Provider}:{webhook.Execution}:{webhook.Reason}:{webhook.DeliveryId ?? webhook.RequestId.ToString()}");
+        }
+    }
+}
+
+[AlertEvaluator(AlertType.WebhookGitRepoSyncFailed)]
+public sealed class WebhookGitRepoSyncFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.WebhookGitRepoSyncFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.GitRepoWebhookSyncFailures is null)
+            yield break;
+
+        foreach (var failure in context.GitRepoWebhookSyncFailures)
+        {
+            yield return new AlertMatch(
+                failure.Id,
+                failure.Name,
+                AlertResourceType.Webhook,
+                new WebhookGitRepoSyncFailedAlertInfo(
+                    failure.Name,
+                    failure.Branch,
+                    failure.Reason),
+                DeduplicationComponent: $"{failure.Branch}:{failure.Reason}");
+        }
+    }
+}
+
+[AlertEvaluator(AlertType.WebhookStackGitDeployFailed)]
+public sealed class WebhookStackGitDeployFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.WebhookStackGitDeployFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.StackGitWebhookDeployFailures is null)
+            yield break;
+
+        foreach (var failure in context.StackGitWebhookDeployFailures)
+        {
+            yield return new AlertMatch(
+                failure.Id,
+                failure.Name,
+                AlertResourceType.Webhook,
+                new WebhookStackGitDeployFailedAlertInfo(
+                    failure.Name,
+                    failure.GitRepositoryName,
+                    failure.Branch,
+                    failure.Reason),
+                DeduplicationComponent: $"{failure.GitRepositoryName}:{failure.Branch}:{failure.Reason}");
+        }
+    }
+}
 #endregion

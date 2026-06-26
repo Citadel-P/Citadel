@@ -134,6 +134,28 @@ Stack deploy:
 - Use existing stack apply service.
 - Do not duplicate lifecycle logic in the listener.
 
+## Activities And Alerts
+
+Webhook deliveries should always leave a small activity trail when Citadel can associate the route with a supported resource type:
+
+- `GitRepoWebhookReceived`
+- `StackWebhookReceived`
+
+Activities are the audit log for all accepted, rejected, queued, and no-op deliveries. They may include request id, provider event type, delivery id, branch, commit SHA, repository full name, status, and reason.
+
+Alerts are reserved for user-actionable failures. Do not alert for every successful webhook, every branch mismatch, or every unsupported provider event. Those cases are normal operational noise and should remain activities only.
+
+Minimal alert events:
+
+| Alert type | Resource | When |
+| --- | --- | --- |
+| `WebhookAuthenticationFailed` | Webhook | A configured webhook target is found, a secret is configured, and provider authentication fails. |
+| `WebhookDispatchFailed` | Webhook | The webhook is authenticated but Citadel refuses to dispatch because the configuration or payload is inconsistent. Examples: repository identity mismatch, missing payload branch, pinned Git stack, missing linked repository. |
+| `WebhookGitRepoSyncFailed` | Webhook | A repo webhook successfully queues a sync, but the Git sync job fails. |
+| `WebhookStackGitDeployFailed` | Webhook | A stack webhook successfully dispatches deploy, but Git stack materialization or stack apply fails. |
+
+Branch mismatch and unsupported provider event type should not emit alerts. They are expected no-op outcomes when providers send broad event traffic or users intentionally filter branches.
+
 ## UI
 
 Do not show a generic Webhooks page or endpoint table.

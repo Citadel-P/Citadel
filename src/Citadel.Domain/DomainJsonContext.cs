@@ -118,6 +118,7 @@ public partial class DeploymentJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackGitUpdateAvailable))]
 [JsonSerializable(typeof(StackGitAutoUpdated))]
 [JsonSerializable(typeof(StackGitAutoDeployFailed))]
+[JsonSerializable(typeof(StackWebhookReceived))]
 [JsonSerializable(typeof(StackApplied))]
 [JsonSerializable(typeof(AlertRuleCreated))]
 [JsonSerializable(typeof(AlertRuleUpdated))]
@@ -132,6 +133,7 @@ public partial class DeploymentJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(GitRepoDeleted))]
 [JsonSerializable(typeof(GitRepoCloned))]
 [JsonSerializable(typeof(GitRepoPulled))]
+[JsonSerializable(typeof(GitRepoWebhookReceived))]
 
 public partial class EventInfoJsonContext : JsonSerializerContext
 {
@@ -157,6 +159,10 @@ public partial class EventInfoJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackGitUpdateAvailableAlertInfo))]
 [JsonSerializable(typeof(StackGitAutoUpdatedAlertInfo))]
 [JsonSerializable(typeof(StackGitAutoDeployFailedAlertInfo))]
+[JsonSerializable(typeof(WebhookAuthenticationFailedAlertInfo))]
+[JsonSerializable(typeof(WebhookDispatchFailedAlertInfo))]
+[JsonSerializable(typeof(WebhookGitRepoSyncFailedAlertInfo))]
+[JsonSerializable(typeof(WebhookStackGitDeployFailedAlertInfo))]
 public partial class AlertEventJsonContext : JsonSerializerContext
 {
 }

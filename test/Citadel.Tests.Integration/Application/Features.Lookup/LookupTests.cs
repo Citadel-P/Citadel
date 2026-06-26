@@ -582,6 +582,33 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     }
 
     [Fact]
+    public async Task Lookup_Alert_To_GitRepository_Should_Return_Only_Visible_GitRepositories()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.GitRepository, _visibleGitRepositoryId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync("/api/v1/lookup?sourceResourceType=Alert&targetResourceType=GitRepository", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement;
+        Assert.Equal(1, items.GetArrayLength());
+        Assert.Equal(_visibleGitRepositoryId, items[0].GetProperty("id").GetGuid());
+        Assert.Equal("git-visible", items[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
     public async Task Lookup_Stack_To_Platform_Should_Return_Authorized_Platforms_And_Referenced_Platform_Without_Duplicates()
     {
         var subject = await CreateAuthorizationSubjectAsync(

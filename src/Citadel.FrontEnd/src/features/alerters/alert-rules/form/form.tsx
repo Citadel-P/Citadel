@@ -105,10 +105,12 @@ export const AlertRuleForm = ({
 
   const resourceFromAlertType = useCallback((): ResourceType => {
     if (!merged.type) return 'Platform';
+    if (merged.type.startsWith('Webhook')) return 'Webhook';
     if (merged.type.startsWith('Deployment')) return 'Deployment';
     if (merged.type.includes('Stack')) return 'Stack';
     return 'Platform';
   }, [merged.type]);
+  const showScope = resourceFromAlertType() !== 'Webhook';
 
   const schema = useMemo(
     () => ({
@@ -255,39 +257,43 @@ export const AlertRuleForm = ({
             ],
           }),
 
-          defineGroupField<AlertRuleInput>({
-            id: 'scope',
-            label: 'Scope',
-            items: [
-              defineField({
-                label: 'Applies to',
-                key: 'limitedTo',
-                description: `Optionally limit this alert rule to specific ${resourceFromAlertType().toLocaleLowerCase()}s.`,
-                render: (value, set) => (
-                  <MultiResourceSelectorField
-                    targetType={resourceFromAlertType()}
-                    sourceType={LookupResourceType.Alert}
-                    sourceResourceId={mode == 'add' ? undefined : id}
-                    selected={
-                      (value as Array<string | LimitedToEntry> | undefined)?.map((item) =>
-                        typeof item === 'string' ? item : item.resourceId,
-                      ) ?? []
-                    }
-                    onSelect={(v: DeploymentView[] | undefined) =>
-                      set(() => ({
-                        limitedTo:
-                          v?.map((d) => ({
-                            resourceType: resourceFromAlertType() as AlertResourceType,
-                            resourceId: d.id,
-                          })) ?? [],
-                      }))
-                    }
-                    placeholder={`Select resources`}
-                  />
-                ),
-              }),
-            ],
-          }),
+          ...(showScope
+            ? [
+                defineGroupField<AlertRuleInput>({
+                  id: 'scope',
+                  label: 'Scope',
+                  items: [
+                    defineField({
+                      label: 'Applies to',
+                      key: 'limitedTo',
+                      description: `Optionally limit this alert rule to specific ${resourceFromAlertType().toLocaleLowerCase()}s.`,
+                      render: (value, set) => (
+                        <MultiResourceSelectorField
+                          targetType={resourceFromAlertType()}
+                          sourceType={LookupResourceType.Alert}
+                          sourceResourceId={mode == 'add' ? undefined : id}
+                          selected={
+                            (value as Array<string | LimitedToEntry> | undefined)?.map((item) =>
+                              typeof item === 'string' ? item : item.resourceId,
+                            ) ?? []
+                          }
+                          onSelect={(v: DeploymentView[] | undefined) =>
+                            set(() => ({
+                              limitedTo:
+                                v?.map((d) => ({
+                                  resourceType: resourceFromAlertType() as AlertResourceType,
+                                  resourceId: d.id,
+                                })) ?? [],
+                            }))
+                          }
+                          placeholder={`Select resources`}
+                        />
+                      ),
+                    }),
+                  ],
+                }),
+              ]
+            : []),
 
           defineGroupField<AlertRuleInput>({
             id: 'channels',
@@ -332,7 +338,7 @@ export const AlertRuleForm = ({
         ],
       }),
     }),
-    [mode, showThresholdFields, showCooldown, id, resourceFromAlertType],
+    [mode, showThresholdFields, showCooldown, id, resourceFromAlertType, showScope],
   );
 
   return (

@@ -1,6 +1,7 @@
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -84,5 +85,32 @@ public sealed class WebhookListenerTests(PostgresTestFixture fixture) : Integrat
         Assert.Equal(_repoId, syncRequest.RepoId);
         Assert.Equal("main", syncRequest.Branch);
         Assert.Equal(GitRepoSyncTrigger.Webhook, syncRequest.Trigger);
+
+        await using var activityScope = Services.CreateAsyncScope();
+        var activityUow = activityScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var activities = await activityUow.ActivityEventRepository.GetPagedAsync(
+            _repoId,
+            ActivityResourceType.GitRepository,
+            ActivityEventType.GitRepoWebhookReceived,
+            page: 1,
+            pageSize: 10,
+            TestContext.Current.CancellationToken);
+
+        var activityItems = activities.Items.ToList();
+        Assert.Equal(2, activities.TotalCount);
+        Assert.Contains(activityItems, activity =>
+            activity.Status == ActivityStatus.Failure
+            && activity.EventType == ActivityEventType.GitRepoWebhookReceived);
+        Assert.Contains(activityItems, activity =>
+            activity.Status == ActivityStatus.Success
+            && activity.EventType == ActivityEventType.GitRepoWebhookReceived);
+
+        var rejected = Assert.Single(activityItems, activity => activity.Status == ActivityStatus.Failure);
+        var queued = Assert.Single(activityItems, activity => activity.Status == ActivityStatus.Success);
+        var rejectedDetails = await activityUow.ActivityEventRepository.GetByIdAsync(rejected.Id, TestContext.Current.CancellationToken);
+        var queuedDetails = await activityUow.ActivityEventRepository.GetByIdAsync(queued.Id, TestContext.Current.CancellationToken);
+
+        Assert.IsType<GitRepoWebhookReceived>(rejectedDetails?.Info);
+        Assert.IsType<GitRepoWebhookReceived>(queuedDetails?.Info);
     }
 }

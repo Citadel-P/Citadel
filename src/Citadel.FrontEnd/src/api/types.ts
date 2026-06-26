@@ -15,6 +15,7 @@ export type ResourceType =
   | 'Stack'
   | 'GitRepository'
   | 'GitAccount'
+  | 'Webhook'
   | 'Access'
   | 'User'
   | 'Team'
@@ -35,6 +36,7 @@ export const PluralResourceMap = {
   AlertChannel: 'AlertChannels',
   GitRepository: 'GitRepositories',
   GitAccount: 'GitAccounts',
+  Webhook: 'Webhooks',
   Access: 'Access',
   User: 'Users',
   Team: 'Teams',

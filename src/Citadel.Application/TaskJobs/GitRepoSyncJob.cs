@@ -60,6 +60,7 @@ internal class GitRepoSyncJob(
                             gitRepoStreamManager,
                             notificationQueue,
                             activityHub, 
+                            alertService,
                             GitOperation.Authenticate,
                             repo, 
                             branch,
@@ -76,6 +77,7 @@ internal class GitRepoSyncJob(
                                 gitRepoStreamManager,
                                 notificationQueue,
                                 activityHub,
+                                alertService,
                                 syncResult.Operation,
                                 repo,
                                 branch,
@@ -133,6 +135,10 @@ internal sealed class GitRepoSyncSuccessWorkItem(
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
         var primaryRepositorySync = GitRepoSyncScope.IsPrimaryRepositorySync(repo, branch, trigger);
+        var activityActorId = repo.ControlTriggeredBy ?? Constants.SystemId;
+        var previousRef = await uow.GitRepositories.GetRefAsync(repo.Id, branch, cancellationToken);
+        var shouldRecordActivity = primaryRepositorySync
+            && GitRepoSyncActivityPolicy.ShouldRecordSuccess(trigger, gitOperation, previousRef, commitHash);
 
         // Update repo status
         if (primaryRepositorySync)
@@ -147,24 +153,14 @@ internal sealed class GitRepoSyncSuccessWorkItem(
 
         // Add activity
         ActivityEvent? activity = null;
-        if (primaryRepositorySync)
+        if (shouldRecordActivity)
         {
-            var repoSnapshot = repo.ToSnapshot(resolvedCommitSha: commitHash);
-            var syncResult = new RepoSyncResultSnapshot(commitHash, null);
-            activity = new ActivityEvent(
-                actorId: Constants.SystemId,
-                resourceId: repo.Id,
-                platformId: null,
-                resourceName: repo.Name,
-                eventType: gitOperation == GitOperation.Pull
-                    ? ActivityEventType.GitRepoPulled
-                    : ActivityEventType.GitRepoCloned,
-                status: ActivityStatus.Success,
-                info: gitOperation == GitOperation.Pull
-                    ? new GitRepoPulled(repoSnapshot, syncResult)
-                    : new GitRepoCloned(repoSnapshot, syncResult)
-                );
-
+            activity = GitRepoSyncActivityPolicy.CreateActivity(
+                repo,
+                gitOperation,
+                activityActorId,
+                ActivityStatus.Success,
+                new RepoSyncResultSnapshot(commitHash, null));
             await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
         }
 
@@ -177,6 +173,10 @@ internal sealed class GitRepoSyncSuccessWorkItem(
         {
             repo.AssignActivityEvent(activity);
             await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, cancellationToken)), cancellationToken);
+            await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);
+        }
+        else if (primaryRepositorySync)
+        {
             await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);
         }
 
@@ -414,6 +414,7 @@ internal sealed class GitRepoSyncFailedWorkItem(
     IGitRepositoryStreamManager streamManager,
     INotificationQueue notificationQueue,
     IActivityStreamManager activityHub,
+    IAlertService alertService,
     GitOperation gitOperation,
     GitRepository repo,
     string branch,
@@ -438,6 +439,10 @@ internal sealed class GitRepoSyncFailedWorkItem(
         }
 
         // Update repo status
+        var previousRef = await uow.GitRepositories.GetRefAsync(repo.Id, branch, cancellationToken);
+        var shouldRecordActivity = GitRepoSyncActivityPolicy.ShouldRecordFailure(trigger, previousRef, errorMessage);
+        var activityActorId = repo.ControlTriggeredBy ?? Constants.SystemId;
+
         repo.ReleaseProcessing(GitReposStatus.Degraded);
         await uow.GitRepositories.UpdateAsync(repo, cancellationToken);
         await uow.GitRepositories.UpsertRefAsync(
@@ -445,29 +450,104 @@ internal sealed class GitRepoSyncFailedWorkItem(
             cancellationToken);
 
         // Add activity
-        var syncResult = new RepoSyncResultSnapshot(null, errorMessage);
-        var activity = new ActivityEvent(
-            actorId: Constants.SystemId,
-            resourceId: repo.Id,
-            platformId: null,
-            resourceName: repo.Name,
-            eventType: gitOperation == GitOperation.Pull 
-                ? ActivityEventType.GitRepoPulled 
-                : ActivityEventType.GitRepoCloned,
-            status: ActivityStatus.Failure,
-            info: gitOperation == GitOperation.Pull 
-                ? new GitRepoPulled(repo.ToSnapshot(), syncResult)
-                : new GitRepoCloned(repo.ToSnapshot(), syncResult)
-            );
-
-        await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        ActivityEvent? activity = null;
+        if (shouldRecordActivity)
+        {
+            activity = GitRepoSyncActivityPolicy.CreateActivity(
+                repo,
+                gitOperation,
+                activityActorId,
+                ActivityStatus.Failure,
+                new RepoSyncResultSnapshot(null, errorMessage));
+            await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        }
 
         await uow.CommitAsync(cancellationToken);
 
         // Notify clients
-        repo.AssignActivityEvent(activity);
-        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, cancellationToken)), cancellationToken);
+        if (activity is not null)
+        {
+            repo.AssignActivityEvent(activity);
+            await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, cancellationToken)), cancellationToken);
+        }
+
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);
+
+        if (trigger == GitRepoSyncTrigger.Webhook)
+        {
+            var context = new AlertEvaluationContext(
+                UtcNow: DateTime.UtcNow,
+                Platforms: [],
+                Deployments: [],
+                Stacks: [],
+                GitRepoWebhookSyncFailures:
+                [
+                    new GitRepoWebhookSyncFailureAlertSnapshot(
+                        repo.Id,
+                        repo.Name,
+                        branch,
+                        errorMessage)
+                ]);
+
+            await alertService.ProcessAsync(AlertType.WebhookGitRepoSyncFailed, context, cancellationToken);
+        }
+    }
+}
+
+internal static class GitRepoSyncActivityPolicy
+{
+    public static bool ShouldRecordSuccess(
+        GitRepoSyncTrigger trigger,
+        GitOperation gitOperation,
+        GitRepositoryRef? previousRef,
+        string commitHash)
+    {
+        if (trigger != GitRepoSyncTrigger.Poll || gitOperation != GitOperation.Pull)
+        {
+            return true;
+        }
+
+        return previousRef is null
+            || !string.Equals(previousRef.ResolvedCommitSha, commitHash, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool ShouldRecordFailure(
+        GitRepoSyncTrigger trigger,
+        GitRepositoryRef? previousRef,
+        string errorMessage)
+    {
+        if (trigger != GitRepoSyncTrigger.Poll)
+        {
+            return true;
+        }
+
+        return previousRef?.Status != GitReposStatus.Degraded
+            || !string.Equals(previousRef.LastError, errorMessage, StringComparison.Ordinal);
+    }
+
+    public static ActivityEvent CreateActivity(
+        GitRepository repo,
+        GitOperation gitOperation,
+        Guid actorId,
+        ActivityStatus status,
+        RepoSyncResultSnapshot syncResult)
+    {
+        var repoSnapshot = repo.ToSnapshot(resolvedCommitSha: syncResult.CommitSha);
+        var eventType = gitOperation == GitOperation.Pull
+            ? ActivityEventType.GitRepoPulled
+            : ActivityEventType.GitRepoCloned;
+        ActivityEventInfo info = gitOperation == GitOperation.Pull
+            ? new GitRepoPulled(repoSnapshot, syncResult)
+            : new GitRepoCloned(repoSnapshot, syncResult);
+
+        return new ActivityEvent(
+            actorId: actorId,
+            resourceId: repo.Id,
+            platformId: null,
+            resourceName: repo.Name,
+            eventType: eventType,
+            status: status,
+            info: info);
     }
 }
 

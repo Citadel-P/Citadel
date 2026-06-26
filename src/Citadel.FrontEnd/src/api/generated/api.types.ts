@@ -294,6 +294,10 @@ export enum AlertType {
   StackGitUpdateAvailable = "StackGitUpdateAvailable",
   StackGitAutoUpdated = "StackGitAutoUpdated",
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
+  WebhookAuthenticationFailed = "WebhookAuthenticationFailed",
+  WebhookDispatchFailed = "WebhookDispatchFailed",
+  WebhookGitRepoSyncFailed = "WebhookGitRepoSyncFailed",
+  WebhookStackGitDeployFailed = "WebhookStackGitDeployFailed",
 }
 
 export enum AlertSeverity {
@@ -311,6 +315,8 @@ export enum AlertResourceType {
   Platform = "Platform",
   Deployment = "Deployment",
   Stack = "Stack",
+  GitRepository = "GitRepository",
+  Webhook = "Webhook",
 }
 
 export enum AlertEventStatus {
@@ -394,6 +400,7 @@ export enum ActivityEventType {
   GitRepoRenamed = "GitRepoRenamed",
   GitRepoPulled = "GitRepoPulled",
   GitRepoCloned = "GitRepoCloned",
+  GitRepoWebhookReceived = "GitRepoWebhookReceived",
   StackCreated = "StackCreated",
   StackUpdated = "StackUpdated",
   StackRenamed = "StackRenamed",
@@ -409,6 +416,7 @@ export enum ActivityEventType {
   StackGitUpdateAvailable = "StackGitUpdateAvailable",
   StackGitAutoUpdated = "StackGitAutoUpdated",
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
+  StackWebhookReceived = "StackWebhookReceived",
 }
 
 export type StackUpdateState = BaseStackUpdateState &
@@ -609,6 +617,22 @@ export type AlertEventInfo = BaseAlertEventInfo &
         "StackGitAutoDeployFailed",
         AlertEventInfoStackGitAutoDeployFailedAlertInfo
       >
+    | BaseAlertEventInfoTypeMapping<
+        "WebhookAuthenticationFailed",
+        AlertEventInfoWebhookAuthenticationFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "WebhookDispatchFailed",
+        AlertEventInfoWebhookDispatchFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "WebhookGitRepoSyncFailed",
+        AlertEventInfoWebhookGitRepoSyncFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "WebhookStackGitDeployFailed",
+        AlertEventInfoWebhookStackGitDeployFailedAlertInfo
+      >
   );
 
 export type ActivityEventInfo = BaseActivityEventInfo &
@@ -765,6 +789,14 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "GitRepoPulled",
         ActivityEventInfoGitRepoPulled
       >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoWebhookReceived",
+        ActivityEventInfoGitRepoWebhookReceived
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackWebhookReceived",
+        ActivityEventInfoStackWebhookReceived
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -879,6 +911,21 @@ export interface ActivityEventInfoGitRepoUpdated {
   newGitRepo: GitRepositorySnapshot;
 }
 
+export interface ActivityEventInfoGitRepoWebhookReceived {
+  $type?: "GitRepoWebhookReceived";
+  /** @format uuid */
+  requestId: string;
+  authType: string;
+  execution: string;
+  status: string;
+  reason: null | string;
+  eventType: null | string;
+  deliveryId: null | string;
+  branch: null | string;
+  commitSha: null | string;
+  repositoryFullName: null | string;
+}
+
 export interface ActivityEventInfoRegistryCreated {
   $type?: "RegistryCreated";
   registry: RegistrySnapshot;
@@ -990,6 +1037,21 @@ export interface ActivityEventInfoStackUpdated {
   $type?: "StackUpdated";
   oldStack: StackSnapshot;
   newStack: StackSnapshot;
+}
+
+export interface ActivityEventInfoStackWebhookReceived {
+  $type?: "StackWebhookReceived";
+  /** @format uuid */
+  requestId: string;
+  authType: string;
+  execution: string;
+  status: string;
+  reason: null | string;
+  eventType: null | string;
+  deliveryId: null | string;
+  branch: null | string;
+  commitSha: null | string;
+  repositoryFullName: null | string;
 }
 
 export interface ActivityView {
@@ -1232,6 +1294,57 @@ export interface AlertEventInfoUnmanagedContainerCreatedAlertInfo {
   platformAddress: string;
   containerName: string;
   containerId: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoWebhookAuthenticationFailedAlertInfo {
+  $type?: "WebhookAuthenticationFailed";
+  humanMessage?: null | string;
+  resourceName: string;
+  resourceType: string;
+  provider: string;
+  execution: string;
+  reason: string;
+  /** @format uuid */
+  requestId: string;
+  eventType: null | string;
+  deliveryId: null | string;
+  branch: null | string;
+  commitSha: null | string;
+  repositoryFullName: null | string;
+}
+
+export interface AlertEventInfoWebhookDispatchFailedAlertInfo {
+  $type?: "WebhookDispatchFailed";
+  humanMessage?: null | string;
+  resourceName: string;
+  resourceType: string;
+  provider: string;
+  execution: string;
+  reason: string;
+  /** @format uuid */
+  requestId: string;
+  eventType: null | string;
+  deliveryId: null | string;
+  branch: null | string;
+  commitSha: null | string;
+  repositoryFullName: null | string;
+}
+
+export interface AlertEventInfoWebhookGitRepoSyncFailedAlertInfo {
+  $type?: "WebhookGitRepoSyncFailed";
+  gitRepositoryName: string;
+  branch: string;
+  reason: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoWebhookStackGitDeployFailedAlertInfo {
+  $type?: "WebhookStackGitDeployFailed";
+  stackName: string;
+  gitRepositoryName: string;
+  branch: string;
+  reason: string;
   humanMessage?: null | string;
 }
 
