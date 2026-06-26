@@ -26,6 +26,8 @@ internal sealed class ApplyStackHandler(
             actorId,
             serviceNames: null,
             pullImages: false,
+            StackApplyOperation.Apply,
+            previousStackSnapshot: null,
             cancellationToken))
         {
             yield return streamItem;

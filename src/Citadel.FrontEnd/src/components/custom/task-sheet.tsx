@@ -23,6 +23,7 @@ import {
   ActivityEventInfoGitRepoCloned,
   ActivityEventInfoDeploymentApplied,
   ActivityEventInfoStackApplied,
+  ActivityEventInfoStackRollback,
   ApplyStackInput,
   RollbackStackInput,
   StackStreamItem,
@@ -279,6 +280,24 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
       </div>
     );
   },
+  StackRollback: (info, activity) => {
+    const containerIds = info.result.containerIds ?? [];
+    const label = containerIds.length <= 1 ? 'Container ID' : 'Container IDs';
+    return (
+      <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+        <MonacoDiff
+          original={info.oldStack}
+          modified={info.newStack}
+          format="yaml"
+          title="Rollback configuration changes"
+        />
+        {activity.status === ActivityStatus.Success && (
+          <KeyValueBlock label={label} value={info.result.containerIds ?? []} />
+        )}
+        <ActivityAlertZone info={info} activity={activity} />
+      </div>
+    );
+  },
   StackDegraded: (info) => <span className="text-sm text-muted-foreground">{info.reason}</span>,
   StackDriftDetected: (info) => <span className="text-sm text-muted-foreground">{info.reason}</span>,
   StackDriftResolved: (info) => <KeyValueBlock label="Resolved drift fingerprint" value={info.previousFingerprint} />,
@@ -389,7 +408,8 @@ export function ActivityAlertZone({
     | ActivityEventInfoGitRepoPulled
     | ActivityEventInfoGitRepoCloned
     | ActivityEventInfoDeploymentApplied
-    | ActivityEventInfoStackApplied;
+    | ActivityEventInfoStackApplied
+    | ActivityEventInfoStackRollback;
   activity: ActivityView;
   title?: string;
   date?: any;

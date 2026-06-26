@@ -102,7 +102,8 @@ public class ApplyStackServiceTests
             dockerContainers,
             Mock.Of<IStackStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
-            notificationQueue);
+            notificationQueue,
+            StackApplyOperation.Apply);
 
         await workItem.ExecuteAsync(unitOfWork.Object, CancellationToken.None);
 
@@ -117,6 +118,88 @@ public class ApplyStackServiceTests
         Assert.Equal(["beszel-container-id", "beszel-agent-container-id"], applied.Result.ContainerIds);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
         Assert.Equal(2, notificationQueue.Items.Count);
+    }
+
+    [Fact]
+    public async Task StackSucceededWorkItem_Should_Record_Rollback_Activity_For_Rollback_Operation()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "beszel",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  beszel:\n    image: henrygd/beszel\n",
+                UpdateBehavior: StackUpdateBehavior.Notify));
+        var previousStackSnapshot = stack.ToSnapshot();
+        stack.UpdateCurrentStackReleaseDefinition(
+            platformId,
+            new ManualStack(
+                ComposeFile: "services:\n  beszel:\n    image: henrygd/beszel\n",
+                UpdateBehavior: StackUpdateBehavior.ServiceAutoDeploy));
+        stack.MarkProcessing(actorId);
+
+        ActivityEvent? activity = null;
+        var stacks = new Mock<IStackRepository>();
+        stacks
+            .Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stacks
+            .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var containers = new Mock<IContainerRepository>();
+        containers
+            .Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        containers
+            .Setup(x => x.BulkUpsertAsync(It.IsAny<IEnumerable<Container>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var images = new Mock<IImageRepository>();
+        images
+            .Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents
+            .Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<ActivityEvent, CancellationToken>((item, _) => activity = item)
+            .ReturnsAsync(1);
+
+        var actors = new Mock<IActorRepository>();
+        actors
+            .Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Actor?)null);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
+        unitOfWork.Setup(x => x.Images).Returns(images.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var workItem = new StackSucceededWorkItem(
+            stack.Id,
+            actorId,
+            [],
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            StackApplyOperation.Rollback,
+            previousStackSnapshot);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, CancellationToken.None);
+
+        Assert.Equal(ActivityEventType.StackRollback, activity?.EventType);
+        var rollback = Assert.IsType<StackRollback>(activity?.Info);
+        Assert.Equal(StackUpdateBehavior.Notify, Assert.IsType<ManualStack>(rollback.OldStack!.StackRelease!.Spec).UpdateBehavior);
+        Assert.Equal(StackUpdateBehavior.ServiceAutoDeploy, Assert.IsType<ManualStack>(rollback.NewStack!.StackRelease!.Spec).UpdateBehavior);
     }
 
     private sealed class TestNotificationQueue : INotificationQueue

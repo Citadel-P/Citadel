@@ -344,6 +344,39 @@ public sealed class StackDriftDetectedEvaluator : IAlertEvaluator
     }
 }
 
+[AlertEvaluator(AlertType.StackDriftAutoReconciled)]
+public sealed class StackDriftAutoReconciledEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.StackDriftAutoReconciled;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.StackDrifts is null)
+            yield break;
+
+        foreach (var stack in context.StackDrifts)
+        {
+            if (stack.ReconciliationResult?.Status != StackReconciliationStatus.Reconciled)
+                continue;
+
+            yield return new AlertMatch(
+                stack.Id,
+                stack.Name,
+                AlertResourceType.Stack,
+                new StackDriftAutoReconciledAlertInfo(
+                    StackId: stack.Id,
+                    StackName: stack.Name,
+                    PlatformId: stack.PlatformId,
+                    PlatformName: stack.PlatformName,
+                    DriftCount: stack.Report.Drifts.Count,
+                    DriftSummaries: stack.DriftSummaries,
+                    Actions: stack.ReconciliationResult.Actions),
+                DeduplicationComponent: stack.Fingerprint,
+                Severity: AlertSeverity.Info);
+        }
+    }
+}
+
 [AlertEvaluator(AlertType.StackGitUpdateAvailable)]
 public sealed class StackGitUpdateAvailableEvaluator : IAlertEvaluator
 {

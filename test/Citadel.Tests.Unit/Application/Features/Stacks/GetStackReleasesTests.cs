@@ -9,20 +9,32 @@ namespace Tests.Unit.Application.Features.Stacks;
 public class GetStackReleasesTests
 {
     [Fact]
-    public async Task GetStackReleases_Should_Return_Only_Successfully_Applied_Releases()
+    public async Task GetStackReleases_Should_Return_Only_Previous_Healthy_Releases()
     {
         var actorId = Guid.CreateVersion7();
         var stack = CreateStack(actorId);
-        var healthyRelease = stack.CurrentStackRelease!;
-        healthyRelease.UpdateStackStatus(StackReleaseStatus.Healthy);
+        var previousHealthyRelease = stack.CurrentStackRelease!;
+        previousHealthyRelease.UpdateStackStatus(StackReleaseStatus.Healthy);
+
+        stack.PrepareReleaseForApply(actorId);
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        var currentHealthyRelease = stack.CurrentStackRelease!;
 
         var failedRelease = StackRelease.Create(
             stackId: stack.Id,
-            platformId: healthyRelease.PlatformId,
-            spec: healthyRelease.Spec,
+            platformId: previousHealthyRelease.PlatformId,
+            spec: previousHealthyRelease.Spec,
             createdByActorId: actorId,
-            version: "2");
+            version: "3");
         failedRelease.UpdateStackStatus(StackReleaseStatus.Failed);
+
+        var degradedRelease = StackRelease.Create(
+            stackId: stack.Id,
+            platformId: previousHealthyRelease.PlatformId,
+            spec: previousHealthyRelease.Spec,
+            createdByActorId: actorId,
+            version: "4");
+        degradedRelease.UpdateStackStatus(StackReleaseStatus.Degraded);
 
         var stackRepository = new Mock<IStackRepository>();
         stackRepository
@@ -30,7 +42,7 @@ public class GetStackReleasesTests
             .ReturnsAsync(stack);
         stackRepository
             .Setup(x => x.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([failedRelease, healthyRelease]);
+            .ReturnsAsync([currentHealthyRelease, failedRelease, degradedRelease, previousHealthyRelease]);
 
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.Setup(x => x.Stacks).Returns(stackRepository.Object);
@@ -41,7 +53,7 @@ public class GetStackReleasesTests
 
         Assert.True(result.IsSuccess(out var releases, out var error), error?.Message);
         var release = Assert.Single(releases);
-        Assert.Equal(healthyRelease.Id, release.Id);
+        Assert.Equal(previousHealthyRelease.Id, release.Id);
     }
 
     private static Stack CreateStack(Guid actorId)

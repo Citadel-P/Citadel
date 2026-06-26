@@ -93,6 +93,19 @@ public sealed class StackRelease : IAuditedEntity
         Source = source;
     }
 
+    public StackRelease CreateSnapshot()
+        => new()
+        {
+            StackId = StackId,
+            PlatformId = PlatformId,
+            Status = Status,
+            Version = Version,
+            Spec = Spec,
+            Source = Source,
+            CreatedAt = CreatedAt,
+            CreatedByActorId = CreatedByActorId,
+        };
+
     public bool IsRollbackCandidate()
         => Status == StackReleaseStatus.Healthy;
 

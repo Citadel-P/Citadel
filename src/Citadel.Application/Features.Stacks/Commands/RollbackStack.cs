@@ -41,13 +41,15 @@ internal sealed class RollbackStackHandler(
             actorId,
             serviceNames: null,
             pullImages: false,
+            StackApplyOperation.Rollback,
+            prepare.PreviousStackSnapshot,
             cancellationToken))
         {
             yield return streamItem;
         }
     }
 
-    private async Task<(bool Success, string? Error, string? Version)> PrepareRollbackReleaseAsync(
+    private async Task<(bool Success, string? Error, string? Version, StackSnapshot? PreviousStackSnapshot)> PrepareRollbackReleaseAsync(
         Guid stackId,
         Guid releaseId,
         Guid actorId,
@@ -56,46 +58,52 @@ internal sealed class RollbackStackHandler(
         var stack = await unitOfWork.Stacks.GetAsync(stackId, cancellationToken);
         if (stack?.CurrentStackRelease is null)
         {
-            return (false, $"Stack with ID {stackId} does not exist.", null);
+            return (false, $"Stack with ID {stackId} does not exist.", null, null);
         }
 
         if (stack.ControlState == ResourceControlState.Processing)
         {
-            return (false, "Stack is already being processed.", null);
+            return (false, "Stack is already being processed.", null, null);
         }
 
         if (stack.CurrentStackReleaseId == releaseId)
         {
-            return (false, "Selected release is already the current release.", null);
+            return (false, "Selected release is already the current release.", null, null);
         }
 
         var releases = await unitOfWork.Stacks.GetReleasesByStackIdAsync(stackId, cancellationToken);
         var release = releases.FirstOrDefault(item => item.Id == releaseId);
         if (release is null)
         {
-            return (false, $"Release with ID {releaseId} does not exist for stack {stackId}.", null);
+            return (false, $"Release with ID {releaseId} does not exist for stack {stackId}.", null, null);
+        }
+
+        if (release.Version == stack.CurrentStackRelease.Version)
+        {
+            return (false, "Only releases older than the current version can be rolled back.", null, null);
         }
 
         if (!CanRollback(release))
         {
-            return (false, "Only previous healthy releases can be rolled back.", null);
+            return (false, "Only previous healthy releases can be rolled back.", null, null);
         }
 
         var rollbackSpec = CreateRollbackSpec(release);
         if (rollbackSpec is null)
         {
-            return (false, "Selected release does not contain enough source metadata to roll back.", null);
+            return (false, "Selected release does not contain enough Git source metadata to roll back.", null, null);
         }
 
+        var previousStackSnapshot = stack.ToSnapshot();
         if (!stack.PrepareRollbackRelease(release, rollbackSpec, actorId))
         {
-            return (false, "Rollback release could not be prepared.", null);
+            return (false, "Rollback release could not be prepared.", null, null);
         }
 
         await unitOfWork.Stacks.UpdateAsync(stack, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return (true, null, release.Version);
+        return (true, null, release.Version, previousStackSnapshot);
     }
 
     private static bool CanRollback(StackRelease release)
@@ -111,8 +119,12 @@ internal sealed class RollbackStackHandler(
 
     private static GitStack? CreateGitRollbackSpec(GitStack gitStack, StackReleaseSource? source)
     {
-        if (source is null
-            || source.SourceType != StackSource.Git
+        if (source is null)
+        {
+            return CreatePinnedGitRollbackSpec(gitStack);
+        }
+
+        if (source.SourceType != StackSource.Git
             || string.IsNullOrWhiteSpace(source.ResolvedCommitSha))
         {
             return null;
@@ -153,5 +165,18 @@ internal sealed class RollbackStackHandler(
             AdditionalEnvFileFromRepo = null,
             WatchPaths = source.WatchPaths?.ToList() ?? gitStack.WatchPaths
         };
+    }
+
+    private static GitStack? CreatePinnedGitRollbackSpec(GitStack gitStack)
+    {
+        if (gitStack.GitRepoId == Guid.Empty
+            || string.IsNullOrWhiteSpace(gitStack.Branch)
+            || string.IsNullOrWhiteSpace(gitStack.CommitSha)
+            || gitStack.ComposePaths is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        return gitStack;
     }
 }

@@ -7,9 +7,11 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities.Activities;
+using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
+using Hosting.Common.MergePatch;
 using LightResults;
 using Moq;
 using Actor = Domain.Entities.Identity.Actor;
@@ -69,6 +71,100 @@ public class StackLifecycleTests
         var manualStack = Assert.IsType<ManualStack>(stack.CurrentStackRelease?.Spec);
         Assert.Equal("beszel", manualStack.ProjectName);
         Assert.Equal("beszel", StackProjectNameResolver.Resolve(stack));
+        stacks.Verify(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task PatchStack_Should_Preserve_Current_Healthy_Release_Snapshot_Before_Definition_Update()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platformId = Guid.CreateVersion7();
+        var originalSpec = new ManualStack(
+            ComposeFile: "services:\n  app:\n    image: nginx:1\n",
+            UpdateBehavior: StackUpdateBehavior.Disabled);
+        var stack = Stack.Create(
+            name: "web",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: originalSpec);
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        var currentRelease = stack.CurrentStackRelease!;
+
+        StackRelease? snapshot = null;
+        var stacks = new Mock<IStackRepository>();
+        stacks
+            .Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stacks
+            .Setup(x => x.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([currentRelease]);
+        stacks
+            .Setup(x => x.AddReleaseAsync(It.IsAny<StackRelease>(), It.IsAny<CancellationToken>()))
+            .Callback<StackRelease, CancellationToken>((release, _) => snapshot = release)
+            .ReturnsAsync(1);
+        stacks
+            .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(x => x.GetByIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Platform.FromPersistence(
+                id: platformId,
+                name: "local",
+                address: "http://docker.local",
+                networkCount: 0,
+                volumeCount: 0,
+                imageCount: 0,
+                cpuCount: 0,
+                memTotal: 0,
+                status: PlatformStatus.Online,
+                connectorType: PlatformConnectorType.Local,
+                platformDescriptor: null!));
+
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents
+            .Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.Platforms).Returns(platforms.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var userContext = new Mock<IUserContextAccessor>();
+        userContext
+            .Setup(x => x.Current)
+            .Returns(Mock.Of<IUserContext>(x => x.ActorId == actorId));
+
+        var patch = JsonMergePatchDocument<StackPatchModel>.FromJson($$"""
+            {
+              "platformId": "{{platformId}}",
+              "spec": {
+                "$type": "WebEditor",
+                "composeFile": "services:\n  app:\n    image: nginx:2\n",
+                "updateBehavior": "Disabled"
+              }
+            }
+            """);
+        var handler = new PatchStackHandler(unitOfWork.Object, userContext.Object);
+
+        var result = await handler.Handle(new PatchStack(stack.Id, patch), CancellationToken.None);
+
+        Assert.True(result.IsSuccess());
+        Assert.NotNull(snapshot);
+        Assert.NotEqual(currentRelease.Id, snapshot!.Id);
+        Assert.Equal(currentRelease.Version, snapshot.Version);
+        Assert.Equal(StackReleaseStatus.Healthy, snapshot.Status);
+        Assert.Equal(originalSpec.ComposeFile, Assert.IsType<ManualStack>(snapshot.Spec).ComposeFile);
+        Assert.Equal("services:\n  app:\n    image: nginx:2\n", Assert.IsType<ManualStack>(stack.CurrentStackRelease!.Spec).ComposeFile);
+        Assert.Equal(currentRelease.Id, stack.CurrentStackReleaseId);
+        stacks.Verify(x => x.AddReleaseAsync(It.IsAny<StackRelease>(), It.IsAny<CancellationToken>()), Times.Once);
         stacks.Verify(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()), Times.Once);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }

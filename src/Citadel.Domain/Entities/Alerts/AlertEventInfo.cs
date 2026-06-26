@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Domain.Entities.Stacks;
 
 namespace Domain.Entities.Alerts;
 
@@ -20,6 +21,7 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(StackServiceAutoUpdatedAlertInfo), nameof(AlertType.StackServiceAutoUpdated))]
 [JsonDerivedType(typeof(StackServiceAutoDeployFailedAlertInfo), nameof(AlertType.StackServiceAutoDeployFailed))]
 [JsonDerivedType(typeof(StackDriftDetectedAlertInfo), nameof(AlertType.StackDriftDetected))]
+[JsonDerivedType(typeof(StackDriftAutoReconciledAlertInfo), nameof(AlertType.StackDriftAutoReconciled))]
 [JsonDerivedType(typeof(StackGitUpdateAvailableAlertInfo), nameof(AlertType.StackGitUpdateAvailable))]
 [JsonDerivedType(typeof(StackGitAutoUpdatedAlertInfo), nameof(AlertType.StackGitAutoUpdated))]
 [JsonDerivedType(typeof(StackGitAutoDeployFailedAlertInfo), nameof(AlertType.StackGitAutoDeployFailed))]
@@ -140,6 +142,26 @@ public sealed record StackDriftDetectedAlertInfo(
                     : string.Empty;
 
             return $"Drift detected on stack '{StackName}': {issueText}.{actionText}";
+        }
+    }
+}
+
+public sealed record StackDriftAutoReconciledAlertInfo(
+    Guid StackId,
+    string StackName,
+    Guid PlatformId,
+    string PlatformName,
+    int DriftCount,
+    IReadOnlyList<string> DriftSummaries,
+    IReadOnlyList<StackReconciliationAction> Actions) : AlertEventInfo
+{
+    public override string HumanMessage
+    {
+        get
+        {
+            var issueText = DriftCount == 1 ? "1 drift issue" : $"{DriftCount} drift issues";
+            var actionText = Actions.Count == 1 ? "1 action" : $"{Actions.Count} actions";
+            return $"Stack '{StackName}' drift auto-reconciled: {issueText} fixed with {actionText}.";
         }
     }
 }

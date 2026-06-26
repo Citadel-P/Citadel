@@ -445,6 +445,30 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         }, transaction: tx());
     }
 
+    public Task<int> AddReleaseAsync(StackRelease release, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT INTO StackReleases (
+                Id, StackId, PlatformId, Status, Version, Spec, Source, CreatedAt, CreatedByActorId
+            ) VALUES (
+                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
+            )
+        """;
+
+        return db.ExecuteAsync(sql, new
+        {
+            ReleaseId = release.Id,
+            ReleaseStackId = release.StackId,
+            ReleasePlatformId = release.PlatformId,
+            ReleaseStatus = EnumFormatter<StackReleaseStatus>.GetValue(release.Status),
+            ReleaseVersion = release.Version,
+            ReleaseSpec = JsonSerializer.Serialize(release.Spec, StackJsonContext.Default.StackSpec),
+            ReleaseSource = release.Source is null ? null : JsonSerializer.Serialize(release.Source, StackJsonContext.Default.StackReleaseSource),
+            ReleaseCreatedAt = release.CreatedAt,
+            ReleaseCreatedByActorId = release.CreatedByActorId
+        }, transaction: tx());
+    }
+
     public Task<int> UpdateAsync(Stack stack, CancellationToken cancellationToken)
     {
         const string stackSql = """
@@ -497,6 +521,22 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ReleaseSource = currentStackRelease.Source is null ? null : JsonSerializer.Serialize(currentStackRelease.Source, StackJsonContext.Default.StackReleaseSource),
             ReleaseCreatedAt = currentStackRelease.CreatedAt,
             ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId
+        }, transaction: tx());
+    }
+
+    public Task<int> UpdateReleaseStatusAsync(Guid releaseId, StackReleaseStatus status, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE StackReleases
+            SET Status = @Status
+            WHERE Id = @ReleaseId
+        """;
+
+        return db.ExecuteAsync(sql, new
+        {
+            ReleaseId = releaseId,
+            Status = EnumFormatter<StackReleaseStatus>.GetValue(status),
+            cancellationToken
         }, transaction: tx());
     }
 

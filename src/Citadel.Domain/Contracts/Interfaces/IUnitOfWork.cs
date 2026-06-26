@@ -138,7 +138,9 @@ public interface IStackRepository
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
     Task<int> AddAsync(Stack stack, CancellationToken cancellationToken);
+    Task<int> AddReleaseAsync(StackRelease release, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Stack stack, CancellationToken cancellationToken);
+    Task<int> UpdateReleaseStatusAsync(Guid releaseId, StackReleaseStatus status, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetStuckStacksAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
     Task<IEnumerable<GitStackBranchSubscription>> GetGitStackBranchSubscriptionsAsync(CancellationToken cancellationToken);

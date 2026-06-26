@@ -291,6 +291,7 @@ export enum AlertType {
   StackServiceAutoDeployFailed = "StackServiceAutoDeployFailed",
   StackServiceAutoUpdated = "StackServiceAutoUpdated",
   StackDriftDetected = "StackDriftDetected",
+  StackDriftAutoReconciled = "StackDriftAutoReconciled",
   StackGitUpdateAvailable = "StackGitUpdateAvailable",
   StackGitAutoUpdated = "StackGitAutoUpdated",
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
@@ -409,6 +410,7 @@ export enum ActivityEventType {
   StackStopped = "StackStopped",
   StackPaused = "StackPaused",
   StackApplied = "StackApplied",
+  StackRollback = "StackRollback",
   StackDegraded = "StackDegraded",
   StackDriftDetected = "StackDriftDetected",
   StackDriftResolved = "StackDriftResolved",
@@ -606,6 +608,10 @@ export type AlertEventInfo = BaseAlertEventInfo &
         AlertEventInfoStackDriftDetectedAlertInfo
       >
     | BaseAlertEventInfoTypeMapping<
+        "StackDriftAutoReconciled",
+        AlertEventInfoStackDriftAutoReconciledAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
         "StackGitUpdateAvailable",
         AlertEventInfoStackGitUpdateAvailableAlertInfo
       >
@@ -704,6 +710,10 @@ export type ActivityEventInfo = BaseActivityEventInfo &
     | BaseActivityEventInfoTypeMapping<
         "StackApplied",
         ActivityEventInfoStackApplied
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackRollback",
+        ActivityEventInfoStackRollback
       >
     | BaseActivityEventInfoTypeMapping<
         "StackDegraded",
@@ -1023,6 +1033,13 @@ export interface ActivityEventInfoStackRenamed {
   newName: string;
 }
 
+export interface ActivityEventInfoStackRollback {
+  $type?: "StackRollback";
+  oldStack: null | StackSnapshot;
+  newStack: null | StackSnapshot;
+  result: StackResultSnapshot;
+}
+
 export interface ActivityEventInfoStackStarted {
   $type?: "StackStarted";
   containerIds: string[];
@@ -1213,6 +1230,24 @@ export interface AlertEventInfoStackDeployFailedAlertInfo {
   $type?: "StackAutoDeployFailed";
   stackName: string;
   reason: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackDriftAutoReconciledAlertInfo {
+  $type?: "StackDriftAutoReconciled";
+  /** @format uuid */
+  stackId: string;
+  stackName: string;
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  driftCount: number | string;
+  driftSummaries: string[];
+  actions: StackReconciliationAction[];
   humanMessage?: null | string;
 }
 

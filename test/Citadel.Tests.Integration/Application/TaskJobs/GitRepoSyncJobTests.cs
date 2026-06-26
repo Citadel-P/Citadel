@@ -375,7 +375,14 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             x => x.ProcessAsync(AlertType.StackGitUpdateAvailable, It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()),
             Times.Once);
         _applyStackServiceMock.Verify(
-            x => x.ApplyAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<IReadOnlyList<string>?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            x => x.ApplyAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyList<string>?>(),
+                It.IsAny<bool>(),
+                StackApplyOperation.Apply,
+                null,
+                It.IsAny<CancellationToken>()),
             Times.Never);
     }
 

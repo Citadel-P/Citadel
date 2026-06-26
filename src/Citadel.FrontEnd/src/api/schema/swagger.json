@@ -15485,6 +15485,9 @@
             "$ref": "#/components/schemas/ActivityEventInfoStackApplied"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoStackRollback"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoStackDegraded"
           },
           {
@@ -15574,6 +15577,7 @@
             "StackStopped": "#/components/schemas/ActivityEventInfoStackStopped",
             "StackPaused": "#/components/schemas/ActivityEventInfoStackPaused",
             "StackApplied": "#/components/schemas/ActivityEventInfoStackApplied",
+            "StackRollback": "#/components/schemas/ActivityEventInfoStackRollback",
             "StackDegraded": "#/components/schemas/ActivityEventInfoStackDegraded",
             "StackDriftDetected": "#/components/schemas/ActivityEventInfoStackDriftDetected",
             "StackDriftResolved": "#/components/schemas/ActivityEventInfoStackDriftResolved",
@@ -16364,6 +16368,44 @@
           }
         }
       },
+      "ActivityEventInfoStackRollback": {
+        "required": [
+          "oldStack",
+          "newStack",
+          "result"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackRollback"
+            ],
+            "type": "string"
+          },
+          "oldStack": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackSnapshot"
+              }
+            ]
+          },
+          "newStack": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackSnapshot"
+              }
+            ]
+          },
+          "result": {
+            "$ref": "#/components/schemas/StackResultSnapshot"
+          }
+        }
+      },
       "ActivityEventInfoStackStarted": {
         "required": [
           "containerIds"
@@ -16530,6 +16572,7 @@
           "StackStopped",
           "StackPaused",
           "StackApplied",
+          "StackRollback",
           "StackDegraded",
           "StackDriftDetected",
           "StackDriftResolved",
@@ -16912,6 +16955,9 @@
             "$ref": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo"
           },
           {
+            "$ref": "#/components/schemas/AlertEventInfoStackDriftAutoReconciledAlertInfo"
+          },
+          {
             "$ref": "#/components/schemas/AlertEventInfoStackGitUpdateAvailableAlertInfo"
           },
           {
@@ -16950,6 +16996,7 @@
             "StackServiceAutoUpdated": "#/components/schemas/AlertEventInfoStackServiceAutoUpdatedAlertInfo",
             "StackServiceAutoDeployFailed": "#/components/schemas/AlertEventInfoStackServiceAutoDeployFailedAlertInfo",
             "StackDriftDetected": "#/components/schemas/AlertEventInfoStackDriftDetectedAlertInfo",
+            "StackDriftAutoReconciled": "#/components/schemas/AlertEventInfoStackDriftAutoReconciledAlertInfo",
             "StackGitUpdateAvailable": "#/components/schemas/AlertEventInfoStackGitUpdateAvailableAlertInfo",
             "StackGitAutoUpdated": "#/components/schemas/AlertEventInfoStackGitAutoUpdatedAlertInfo",
             "StackGitAutoDeployFailed": "#/components/schemas/AlertEventInfoStackGitAutoDeployFailedAlertInfo",
@@ -17215,6 +17262,65 @@
           },
           "reason": {
             "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackDriftAutoReconciledAlertInfo": {
+        "required": [
+          "stackId",
+          "stackName",
+          "platformId",
+          "platformName",
+          "driftCount",
+          "driftSummaries",
+          "actions"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackDriftAutoReconciled"
+            ],
+            "type": "string"
+          },
+          "stackId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "driftCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "driftSummaries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackReconciliationAction"
+            }
           },
           "humanMessage": {
             "type": [
@@ -18343,6 +18449,7 @@
           "StackServiceAutoDeployFailed",
           "StackServiceAutoUpdated",
           "StackDriftDetected",
+          "StackDriftAutoReconciled",
           "StackGitUpdateAvailable",
           "StackGitAutoUpdated",
           "StackGitAutoDeployFailed",

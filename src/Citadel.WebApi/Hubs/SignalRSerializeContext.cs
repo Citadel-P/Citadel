@@ -75,6 +75,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<StackStopped>]
 [GenerateShapeFor<StackPaused>]
 [GenerateShapeFor<StackApplied>]
+[GenerateShapeFor<StackRollback>]
 [GenerateShapeFor<StackDegraded>]
 [GenerateShapeFor<StackDriftDetected>]
 [GenerateShapeFor<StackDriftResolved>]
@@ -127,6 +128,7 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.StackStopped)] = typeof(StackStopped),
         [nameof(ActivityEventType.StackPaused)] = typeof(StackPaused),
         [nameof(ActivityEventType.StackApplied)] = typeof(StackApplied),
+        [nameof(ActivityEventType.StackRollback)] = typeof(StackRollback),
         [nameof(ActivityEventType.StackDegraded)] = typeof(StackDegraded),
         [nameof(ActivityEventType.StackDriftDetected)] = typeof(StackDriftDetected),
         [nameof(ActivityEventType.StackDriftResolved)] = typeof(StackDriftResolved),

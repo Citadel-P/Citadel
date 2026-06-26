@@ -82,6 +82,7 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.StackStopped
             or ActivityEventType.StackPaused
             or ActivityEventType.StackApplied
+            or ActivityEventType.StackRollback
             or ActivityEventType.StackDegraded
             or ActivityEventType.StackDriftDetected
             or ActivityEventType.StackDriftResolved
@@ -187,6 +188,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.StackStarted, StackStarted) => true,
             (ActivityEventType.StackStopped, StackStopped) => true,
             (ActivityEventType.StackApplied, StackApplied) => true,
+            (ActivityEventType.StackRollback, StackRollback) => true,
             (ActivityEventType.StackPaused, StackPaused) => true,
             (ActivityEventType.StackDegraded, StackDegraded) => true,
             (ActivityEventType.StackDriftDetected, StackDriftDetected) => true,

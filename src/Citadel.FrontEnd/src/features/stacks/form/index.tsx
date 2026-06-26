@@ -38,13 +38,16 @@ import { StackStats } from '@/features/docker-resources/containers/container-inf
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Check, Dot, Funnel, Loader2, RotateCcw } from 'lucide-react';
+import { Check, Dot, Eye, Funnel, Loader2, RotateCcw } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useRead } from '@/lib/hooks';
 import { hasActionableStackDrift } from '../drift';
 import { useTaskSheet } from '@/lib/atoms';
 import { fromNow } from '@/lib/dayjs.helper';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { MonacoDiff } from '@/lib/monaco';
+import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -110,6 +113,7 @@ const StackSubHeader = ({ latestActivity, stack }: { stack: StackView; latestAct
     <>
       <StackLatestActivity latestActivity={latestActivity} stack={stack} />
       <StackUpdateNotice stack={stack} />
+      <StackDriftPanel stack={stack} />
     </>
   );
 };
@@ -200,7 +204,6 @@ const StackRuntime = ({ stack }: { stack: StackView }) => {
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <StackDriftPanel stack={stack} />
       <StackContainersTable
         containers={containersInfo}
         isLoading={isLoading}
@@ -214,6 +217,7 @@ const StackRuntime = ({ stack }: { stack: StackView }) => {
 const StackReleasesTab = ({ stack }: { stack: StackView }) => {
   const { data, isLoading } = useRead('listStackReleases', { stackId: stack.id });
   const { open: openSheet } = useTaskSheet('Stack');
+  const [previewRelease, setPreviewRelease] = useState<StackReleaseView | null>(null);
   const releases = data?.data.releases ?? [];
   const canRollback = hasCapability(stack, 'canApply') && stack.controlState !== ResourceControlState.Processing;
 
@@ -222,19 +226,7 @@ const StackReleasesTab = ({ stack }: { stack: StackView }) => {
       {
         accessorKey: 'version',
         header: () => <span>Version</span>,
-        cell: ({ row }) => {
-          const release = row.original;
-          const isCurrent = release.id === stack.currentStackReleaseId;
-
-          return (
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{release.version}</span>
-              {isCurrent && (
-                <span className="rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">Current</span>
-              )}
-            </div>
-          );
-        },
+        cell: ({ row }) => <span className="font-medium">v{row.original.version}</span>,
       },
       {
         accessorKey: 'status',
@@ -256,47 +248,98 @@ const StackReleasesTab = ({ stack }: { stack: StackView }) => {
         header: () => <span className="sr-only">Actions</span>,
         cell: ({ row }) => {
           const release = row.original;
-          const isCurrent = release.id === stack.currentStackReleaseId;
           const canRollbackRelease = canRollback && isRollbackCandidateRelease(release);
 
           return (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={isCurrent || !canRollbackRelease}
-              onClick={() =>
-                openSheet({
-                  kind: 'stackRollback',
-                  payload: {
-                    stackId: stack.id,
-                    releaseId: release.id,
-                    name: stack.name,
-                    version: release.version,
-                  },
-                })
-              }>
-              <RotateCcw className="size-3.5" />
-              Rollback
-            </Button>
+            <div className="flex items-center justify-end gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => setPreviewRelease(release)}>
+                <Eye className="size-3.5" />
+                Preview Config
+              </Button>
+              <ActionWithDialog
+                name={stack.name}
+                title="Rollback"
+                icon={<RotateCcw className="size-3.5" />}
+                iconPosition="left"
+                variant="outline"
+                disabled={!canRollbackRelease}
+                targetClassName="h-8 max-w-none flex-none px-3"
+                onClick={() =>
+                  openSheet({
+                    kind: 'stackRollback',
+                    payload: {
+                      stackId: stack.id,
+                      releaseId: release.id,
+                      name: stack.name,
+                      version: release.version,
+                    },
+                  })
+                }
+              />
+            </div>
           );
         },
       },
     ],
-    [canRollback, openSheet, stack.currentStackReleaseId, stack.id, stack.name],
+    [canRollback, openSheet, stack.id, stack.name],
   );
 
   return (
     <div className="flex w-full flex-col gap-3">
-      <AlertMessage type="info" className="my-0">
-        Rollback creates a new release from the selected historical release, then applies it.
-      </AlertMessage>
-      <div className="rounded-sm border p-1 shadow-xs">
-        <DataTable columns={columns} data={releases} isLoading={isLoading} />
-      </div>
+      {releases.length === 0 && !isLoading ? (
+        <div className="rounded-sm border border-dashed px-4 py-6 text-sm text-center text-muted-foreground">
+          No rollback targets yet. Deploy a new successful version to make the previous release available here.
+        </div>
+      ) : (
+        <div className="rounded-sm border p-1 shadow-xs">
+          <DataTable columns={columns} data={releases} isLoading={isLoading} />
+        </div>
+      )}
+
+      <Sheet open={!!previewRelease} onOpenChange={(open) => !open && setPreviewRelease(null)}>
+        <SheetContent
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          side="top"
+          className="mx-auto w-300 max-w-[100vw] rounded-b-md">
+          <SheetHeader>
+            <SheetTitle>Release v{previewRelease?.version} configuration</SheetTitle>
+            <SheetDescription>
+              Snapshot captured from a previously healthy stack release. Rollback applies this configuration.
+            </SheetDescription>
+          </SheetHeader>
+          {previewRelease && (
+            <div className="p-4 pt-0 pb-2">
+              <MonacoDiff
+                original={createStackPreviewConfig(stack)}
+                modified={createStackReleasePreviewConfig(stack, previewRelease)}
+                format="yaml"
+                title="Configuration snapshot"
+              />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
+
+const createStackPreviewConfig = (stack: StackView) => ({
+  name: stack.name,
+  description: stack.description,
+  stackSource: stack.stackSource,
+  platformId: stack.platformId,
+  spec: stack.spec,
+  source: stack.source,
+});
+
+const createStackReleasePreviewConfig = (stack: StackView, release: StackReleaseView) => ({
+  name: stack.name,
+  description: stack.description,
+  stackSource: stack.stackSource,
+  platformId: release.platformId,
+  spec: release.spec,
+  source: release.source,
+});
 
 const StackReleaseSourceCell = ({ release }: { release: StackReleaseView }) => {
   const source = release.source;
@@ -364,15 +407,7 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
     );
   }
 
-  if (!report?.hasDrift) {
-    return (
-      <AlertMessage type="success" className="my-0">
-        <div className="flex flex-wrap gap-2 items-center ">
-          No drift detected <Dot width={13} height={13} /> Running containers match the stack compose state.
-        </div>
-      </AlertMessage>
-    );
-  }
+  if (!report?.hasDrift) return;
 
   const actionable = hasActionableStackDrift(stack, report);
   const details = report.drifts.map(formatStackDrift).join('; ');

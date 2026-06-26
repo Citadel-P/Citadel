@@ -190,6 +190,8 @@ internal sealed class ManualStackAutoUpdateJob(
                 Constants.SystemId,
                 serviceNames,
                 pullImages: true,
+                StackApplyOperation.Apply,
+                previousStackSnapshot: null,
                 cancellationToken))
             {
                 if (!string.IsNullOrEmpty(item.Message))

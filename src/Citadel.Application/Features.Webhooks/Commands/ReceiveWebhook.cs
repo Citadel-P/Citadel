@@ -234,6 +234,8 @@ internal sealed class ReceiveWebhookHandler(
                     Constants.SystemId,
                     serviceNames: null,
                     pullImages: true,
+                    StackApplyOperation.Apply,
+                    previousStackSnapshot: null,
                     CancellationToken.None))
                 {
                     if (!string.IsNullOrWhiteSpace(item.Message))

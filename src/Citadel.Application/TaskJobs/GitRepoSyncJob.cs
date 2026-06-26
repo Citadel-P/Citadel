@@ -328,6 +328,8 @@ internal sealed class GitRepoSyncSuccessWorkItem(
                 Constants.SystemId,
                 serviceNames: null,
                 pullImages: true,
+                StackApplyOperation.Apply,
+                previousStackSnapshot: null,
                 cancellationToken))
             {
                 if (!string.IsNullOrWhiteSpace(item.Message))

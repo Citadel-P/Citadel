@@ -12,6 +12,92 @@ namespace Tests.Unit.Application.Features.Stacks;
 public class RollbackStackTests
 {
     [Fact]
+    public async Task RollbackStack_Should_Prepare_Manual_Release_From_Selected_Snapshot_And_Invoke_Apply()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platformId = Guid.CreateVersion7();
+        var oldSpec = new ManualStack(
+            ComposeFile: "services:\n  app:\n    image: nginx:1\n",
+            UpdateBehavior: StackUpdateBehavior.Disabled);
+        var newSpec = oldSpec with
+        {
+            ComposeFile = "services:\n  app:\n    image: nginx:2\n"
+        };
+        var stack = Stack.Create(
+            name: "manual-stack",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: oldSpec);
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        var oldRelease = stack.CurrentStackRelease!.CreateSnapshot();
+
+        Assert.True(stack.PrepareReleaseForApply(actorId));
+        stack.UpdateCurrentStackReleaseDefinition(platformId, newSpec);
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+
+        Stack? updatedStack = null;
+        var stackRepository = new Mock<IStackRepository>();
+        stackRepository
+            .Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stackRepository
+            .Setup(x => x.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([stack.CurrentStackRelease!, oldRelease]);
+        stackRepository
+            .Setup(x => x.UpdateAsync(It.IsAny<Stack>(), It.IsAny<CancellationToken>()))
+            .Callback<Stack, CancellationToken>((item, _) => updatedStack = item)
+            .ReturnsAsync(1);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stackRepository.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var applyStackService = new Mock<IApplyStackService>();
+        applyStackService
+            .Setup(x => x.ApplyAsync(
+                stack.Id,
+                actorId,
+                null,
+                false,
+                StackApplyOperation.Rollback,
+                It.Is<StackSnapshot?>(snapshot => snapshot != null),
+                It.IsAny<CancellationToken>()))
+            .Returns(SuccessfulApplyStream());
+
+        var userContext = new Mock<IUserContextAccessor>();
+        userContext.Setup(x => x.Current).Returns(new TestUserContext(actorId));
+
+        var handler = new RollbackStackHandler(unitOfWork.Object, applyStackService.Object, userContext.Object);
+
+        var items = new List<StackStreamItem>();
+        await foreach (var item in handler.Handle(new RollbackStack(stack.Id, oldRelease.Id), TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        Assert.NotNull(updatedStack);
+        Assert.NotEqual(oldRelease.Id, updatedStack!.CurrentStackReleaseId);
+        var rollbackSpec = Assert.IsType<ManualStack>(updatedStack.CurrentStackRelease!.Spec);
+        Assert.Equal(oldSpec.ComposeFile, rollbackSpec.ComposeFile);
+        Assert.NotEqual(newSpec.ComposeFile, rollbackSpec.ComposeFile);
+        Assert.Contains(
+            items,
+            item => item.ProgressMessage?.Contains("Rollback release prepared", StringComparison.Ordinal) == true);
+        applyStackService.Verify(x => x.ApplyAsync(
+            stack.Id,
+            actorId,
+            null,
+            false,
+            StackApplyOperation.Rollback,
+            It.Is<StackSnapshot?>(snapshot => snapshot != null),
+            It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task RollbackStack_Should_Prepare_Git_Release_From_Historical_Source_And_Invoke_Apply()
     {
         var actorId = Guid.CreateVersion7();
@@ -80,7 +166,14 @@ public class RollbackStackTests
 
         var applyStackService = new Mock<IApplyStackService>();
         applyStackService
-            .Setup(x => x.ApplyAsync(stack.Id, actorId, null, false, It.IsAny<CancellationToken>()))
+            .Setup(x => x.ApplyAsync(
+                stack.Id,
+                actorId,
+                null,
+                false,
+                StackApplyOperation.Rollback,
+                It.Is<StackSnapshot?>(snapshot => snapshot != null),
+                It.IsAny<CancellationToken>()))
             .Returns(SuccessfulApplyStream());
 
         var userContext = new Mock<IUserContextAccessor>();
@@ -106,7 +199,14 @@ public class RollbackStackTests
         Assert.Contains(
             items,
             item => item.ProgressMessage?.Contains("Rollback release prepared", StringComparison.Ordinal) == true);
-        applyStackService.Verify(x => x.ApplyAsync(stack.Id, actorId, null, false, It.IsAny<CancellationToken>()), Times.Once);
+        applyStackService.Verify(x => x.ApplyAsync(
+            stack.Id,
+            actorId,
+            null,
+            false,
+            StackApplyOperation.Rollback,
+            It.Is<StackSnapshot?>(snapshot => snapshot != null),
+            It.IsAny<CancellationToken>()), Times.Once);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 

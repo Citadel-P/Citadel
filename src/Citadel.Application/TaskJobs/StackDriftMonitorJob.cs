@@ -79,11 +79,6 @@ internal sealed class StackDriftMonitorJob(
                 {
                     await PersistDriftStateAsync(stack.Id, report, fingerprint, cancellationToken);
 
-                    if (stack.DriftPolicy.AlertOnDrift)
-                    {
-                        await EmitAlertAsync(stack, report, fingerprint, cancellationToken);
-                    }
-
                     if (stack.DriftPolicy.Mode == StackDriftMode.AutoFix)
                     {
                         var result = await reconciler.ReconcileAsync(stack.Id, cancellationToken);
@@ -104,6 +99,22 @@ internal sealed class StackDriftMonitorJob(
                                 fingerprint,
                                 cancellationToken);
                         }
+
+                        if (stack.DriftPolicy.AlertOnDrift)
+                        {
+                            if (result.Status == StackReconciliationStatus.Reconciled)
+                            {
+                                await EmitAutoReconciledAlertAsync(stack, report, fingerprint, result, cancellationToken);
+                            }
+                            else
+                            {
+                                await EmitAlertAsync(stack, report, fingerprint, cancellationToken);
+                            }
+                        }
+                    }
+                    else if (stack.DriftPolicy.AlertOnDrift)
+                    {
+                        await EmitAlertAsync(stack, report, fingerprint, cancellationToken);
                     }
                 }
                 else
@@ -174,6 +185,35 @@ internal sealed class StackDriftMonitorJob(
             ]);
 
         await alertService.ProcessAsync(AlertType.StackDriftDetected, context, cancellationToken);
+    }
+
+    private async Task EmitAutoReconciledAlertAsync(
+        StackDriftStack stack,
+        StackDriftReport report,
+        string fingerprint,
+        StackReconciliationResult result,
+        CancellationToken cancellationToken)
+    {
+        var context = new AlertEvaluationContext(
+            UtcNow: DateTime.UtcNow,
+            Platforms: [],
+            Deployments: [],
+            Stacks: [],
+            StackDrifts:
+            [
+                new StackDriftAlertSnapshot(
+                    Id: stack.Id,
+                    Name: stack.Name,
+                    PlatformId: report.PlatformId,
+                    PlatformName: stack.PlatformName ?? string.Empty,
+                    Report: report,
+                    Severity: AlertSeverity.Info,
+                    Fingerprint: fingerprint,
+                    DriftSummaries: StackDriftHelpers.Summaries(report),
+                    ReconciliationResult: result)
+            ]);
+
+        await alertService.ProcessAsync(AlertType.StackDriftAutoReconciled, context, cancellationToken);
     }
 }
 

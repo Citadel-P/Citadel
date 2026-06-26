@@ -192,6 +192,8 @@ public sealed class ReceiveWebhookTests
                 Constants.SystemId,
                 It.Is<IReadOnlyList<string>?>(services => services == null),
                 true,
+                StackApplyOperation.Apply,
+                null,
                 It.IsAny<CancellationToken>()))
             .Callback(() => applyCalled.TrySetResult())
             .Returns(EmptyStackStream());
@@ -260,6 +262,8 @@ public sealed class ReceiveWebhookTests
                 Constants.SystemId,
                 It.Is<IReadOnlyList<string>?>(services => services == null),
                 true,
+                StackApplyOperation.Apply,
+                null,
                 It.IsAny<CancellationToken>()))
             .Returns(FailedStackStream("compose failed"));
 

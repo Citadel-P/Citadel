@@ -48,7 +48,8 @@ public sealed record StackDriftAlertSnapshot(
     StackDriftReport Report,
     AlertSeverity Severity,
     string Fingerprint,
-    IReadOnlyList<string> DriftSummaries);
+    IReadOnlyList<string> DriftSummaries,
+    StackReconciliationResult? ReconciliationResult = null);
 public sealed record StackGitUpdateAlertSnapshot(
     Guid Id,
     string Name,

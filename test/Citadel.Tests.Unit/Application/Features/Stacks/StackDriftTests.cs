@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Threading.Channels;
 using Application.Services;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
@@ -9,6 +10,7 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
+using Domain.Entities.Alerts;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -655,6 +657,55 @@ public class StackDriftTests
 
         Assert.True(StackDriftHelpers.IsAutoFixable(drift));
         Assert.False(StackDriftHelpers.IsStructural(drift));
+    }
+
+    [Fact]
+    public void StackDriftAutoReconciledEvaluator_returns_info_alert_for_reconciled_result()
+    {
+        var stackId = Guid.CreateVersion7();
+        var platformId = Guid.CreateVersion7();
+        var before = Report(stackId, platformId, new ContainerStopped("api-container", "api"));
+        var after = Report(stackId, platformId);
+        var action = new StackReconciliationAction(
+            ContainerId: "api-container",
+            ServiceName: "api",
+            Action: StackReconciliationActionType.StartContainer,
+            Succeeded: true);
+        var result = new StackReconciliationResult(
+            stackId,
+            StackReconciliationStatus.Reconciled,
+            before,
+            after,
+            [action]);
+        var context = new AlertEvaluationContext(
+            UtcNow: DateTime.UtcNow,
+            Platforms: [],
+            Deployments: [],
+            Stacks: [],
+            StackDrifts:
+            [
+                new StackDriftAlertSnapshot(
+                    Id: stackId,
+                    Name: "demo",
+                    PlatformId: platformId,
+                    PlatformName: "local",
+                    Report: before,
+                    Severity: AlertSeverity.Warning,
+                    Fingerprint: "fp",
+                    DriftSummaries: ["api is stopped"],
+                    ReconciliationResult: result)
+            ]);
+
+        var match = Assert.Single(new StackDriftAutoReconciledEvaluator().Evaluate(null!, context));
+
+        Assert.Equal(stackId, match.ResourceId);
+        Assert.Equal(AlertResourceType.Stack, match.ResourceType);
+        Assert.Equal(AlertSeverity.Info, match.Severity);
+        Assert.Equal("fp", match.DeduplicationComponent);
+        var info = Assert.IsType<StackDriftAutoReconciledAlertInfo>(match.Info);
+        Assert.Equal(1, info.DriftCount);
+        Assert.Equal(["api is stopped"], info.DriftSummaries);
+        Assert.Equal([action], info.Actions);
     }
 
     private static ManualStackDriftChecker CreateChecker(

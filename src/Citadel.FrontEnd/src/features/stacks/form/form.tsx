@@ -106,17 +106,30 @@ const normalizeDriftPolicy = (policy?: Partial<StackDriftPolicy> | null): StackD
 const specTypeForSource = (stackSource?: StackSource): 'Git' | 'WebEditor' | undefined =>
   stackSource === StackSource.Git ? 'Git' : stackSource === StackSource.WebEditor ? 'WebEditor' : undefined;
 
+const normalizeDisabledWebhook = <T extends Partial<StackInput> | StackConfigView>(value: T): T => {
+  const spec = (value as any)?.spec;
+  if (!spec?.webhook || spec.webhook.enabled) return value;
+
+  const { webhook: _webhook, ...specWithoutWebhook } = spec;
+  return {
+    ...value,
+    spec: specWithoutWebhook,
+  };
+};
+
 const toPatchStackInput = (patch: Partial<StackInput>, original: StackConfigView): PatchStackInput => {
+  const normalizedPatch = normalizeDisabledWebhook(patch);
   const data: Partial<PatchStackInput> = {};
 
-  if ('platformId' in patch) data.platformId = patch.platformId;
-  if ('spec' in patch && patch.spec) {
+  if ('platformId' in normalizedPatch) data.platformId = normalizedPatch.platformId;
+  if ('spec' in normalizedPatch && normalizedPatch.spec) {
     data.spec = {
-      ...patch.spec,
-      $type: (patch.spec as any).$type ?? (original.spec as any)?.$type ?? specTypeForSource(original.stackSource),
+      ...normalizedPatch.spec,
+      $type:
+        (normalizedPatch.spec as any).$type ?? (original.spec as any)?.$type ?? specTypeForSource(original.stackSource),
     } as PatchStackInput['spec'];
   }
-  if ('driftPolicy' in patch) data.driftPolicy = patch.driftPolicy;
+  if ('driftPolicy' in normalizedPatch) data.driftPolicy = normalizedPatch.driftPolicy;
 
   return data as PatchStackInput;
 };
@@ -140,6 +153,8 @@ export const StackForm = ({
 
   const resource: StackConfigView | undefined = stackCfg?.data;
   const original = resource ?? ({} as StackConfigView);
+  const formOriginal = useMemo(() => normalizeDisabledWebhook(original), [original]);
+  const formUpdate = useMemo(() => normalizeDisabledWebhook(update), [update]);
   const currentStackSource = (update as Partial<CreateStackInput>).stackSource ?? original.stackSource;
   const currentDriftPolicy = normalizeDriftPolicy({
     ...(original.driftPolicy ?? {}),
@@ -863,8 +878,8 @@ export const StackForm = ({
     <FormShell
       mode={mode}
       schema={schema}
-      original={original}
-      update={update}
+      original={formOriginal}
+      update={formUpdate}
       setUpdate={setUpdate}
       onSave={handleSave}
       pending={isPending}

@@ -100,6 +100,7 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
 
         if (PatchTouchesReleaseDefinition(command.Patch.Patch))
         {
+            await PreserveCurrentReleaseSnapshotAsync(stack, cancellationToken);
             stack.UpdateCurrentStackReleaseDefinition(patched.PlatformId.Value, patched.Spec);
         }
 
@@ -128,13 +129,27 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
             _ => false
         };
 
-    private static bool IsCompatible(StackSource stackSource, StackUpdateState stackUpdateState)
-        => (stackSource, stackUpdateState) switch
+    private async Task PreserveCurrentReleaseSnapshotAsync(Stack stack, CancellationToken cancellationToken)
+    {
+        var currentRelease = stack.CurrentStackRelease;
+        if (currentRelease is null || !currentRelease.IsRollbackCandidate())
         {
-            (StackSource.WebEditor, ManualStackUpdateState) => true,
-            (StackSource.Git, GitStackUpdateState) => true,
-            _ => false
-        };
+            return;
+        }
+
+        var releases = await unitOfWork.Stacks.GetReleasesByStackIdAsync(stack.Id, cancellationToken);
+        var snapshotExists = releases.Any(release =>
+            release.Id != currentRelease.Id &&
+            release.Version == currentRelease.Version &&
+            release.IsRollbackCandidate());
+
+        if (snapshotExists)
+        {
+            return;
+        }
+
+        await unitOfWork.Stacks.AddReleaseAsync(currentRelease.CreateSnapshot(), cancellationToken);
+    }
 
     private static bool PatchTouchesReleaseDefinition(JsonElement patch)
     {

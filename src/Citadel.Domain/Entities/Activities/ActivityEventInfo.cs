@@ -28,6 +28,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(StackStopped), nameof(ActivityEventType.StackStopped))]
 [JsonDerivedType(typeof(StackPaused), nameof(ActivityEventType.StackPaused))]
 [JsonDerivedType(typeof(StackApplied), nameof(ActivityEventType.StackApplied))]
+[JsonDerivedType(typeof(StackRollback), nameof(ActivityEventType.StackRollback))]
 [JsonDerivedType(typeof(StackDegraded), nameof(ActivityEventType.StackDegraded))]
 [JsonDerivedType(typeof(StackDriftDetected), nameof(ActivityEventType.StackDriftDetected))]
 [JsonDerivedType(typeof(StackDriftResolved), nameof(ActivityEventType.StackDriftResolved))]
@@ -79,6 +80,7 @@ public sealed record StackReconciliationAttempted(
     IReadOnlyList<StackReconciliationAction> Actions,
     string DriftFingerprint) : ActivityEventInfo;
 public sealed record StackApplied(StackSnapshot? Stack, StackResultSnapshot Result) : ActivityEventInfo;
+public sealed record StackRollback(StackSnapshot? OldStack, StackSnapshot? NewStack, StackResultSnapshot Result) : ActivityEventInfo;
 public sealed record StackGitUpdateAvailable(
     string GitRepositoryName,
     string Branch,

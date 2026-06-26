@@ -98,6 +98,7 @@ export const AlertRuleForm = ({
     AlertType.StackAutoDeployFailed,
     AlertType.StackServiceAutoUpdated,
     AlertType.StackServiceAutoDeployFailed,
+    AlertType.StackDriftAutoReconciled,
     AlertType.DeploymentAutoUpdated,
     AlertType.DeploymentAutoDeployFailed,
   ];
