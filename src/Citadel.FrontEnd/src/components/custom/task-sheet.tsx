@@ -24,8 +24,12 @@ import {
   ActivityEventInfoDeploymentApplied,
   ActivityEventInfoStackApplied,
   ActivityEventInfoStackRollback,
+  ActivityEventInfoGitRepoWebhookReceived,
+  ActivityEventInfoStackWebhookReceived,
   ApplyStackInput,
   RollbackStackInput,
+  StackReleaseSource,
+  StackSnapshot,
   StackStreamItem,
 } from '@/api/generated/api.types';
 import { formatActivityEvent, serializeData } from '@/lib/utils';
@@ -260,11 +264,16 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   DeploymentPaused: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
 
   StackCreated: (info, activity) => (
-    <SpecViewer spec={info.stack} resourceId={activity.resourceId} title="Initial configuration" />
+    <SpecViewer spec={stripStackReleaseSource(info.stack)} resourceId={activity.resourceId} title="Initial configuration" />
   ),
 
   StackUpdated: (info) => (
-    <MonacoDiff original={info.oldStack} modified={info.newStack} format="yaml" title="Configuration changes" />
+    <MonacoDiff
+      original={stripStackReleaseSource(info.oldStack)}
+      modified={stripStackReleaseSource(info.newStack)}
+      format="yaml"
+      title="Configuration changes"
+    />
   ),
 
   StackApplied: (info, activity) => {
@@ -272,7 +281,8 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     const label = containerIds.length <= 1 ? 'Container ID' : 'Container IDs';
     return (
       <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-        <SpecViewer spec={info.stack} resourceId={activity.resourceId} title="Applied configuration" />
+        <SpecViewer spec={stripStackReleaseSource(info.stack)} resourceId={activity.resourceId} title="Applied configuration" />
+        <StackSourceDetails source={info.stack?.stackRelease?.source} />
         {activity.status === ActivityStatus.Success && (
           <KeyValueBlock label={label} value={info.result.containerIds ?? []} />
         )}
@@ -286,11 +296,12 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     return (
       <div className="flex flex-col gap-4 text-sm text-muted-foreground">
         <MonacoDiff
-          original={info.oldStack}
-          modified={info.newStack}
+          original={stripStackReleaseSource(info.oldStack)}
+          modified={stripStackReleaseSource(info.newStack)}
           format="yaml"
           title="Rollback configuration changes"
         />
+        <StackSourceDetails source={info.newStack?.stackRelease?.source} />
         {activity.status === ActivityStatus.Success && (
           <KeyValueBlock label={label} value={info.result.containerIds ?? []} />
         )}
@@ -319,6 +330,42 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   StackStarted: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
   StackStopped: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
   StackPaused: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
+  StackGitUpdateAvailable: (info) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <span>
+        Git update available from <b>{shortCommit(info.currentCommitSha)}</b> to{' '}
+        <b>{shortCommit(info.remoteCommitSha)}</b>.
+      </span>
+      <KeyValueBlock label="Repository" value={info.gitRepositoryName} />
+      <KeyValueBlock label="Branch" value={info.branch} />
+      <KeyValueBlock label="Current commit" value={info.currentCommitSha} />
+      <KeyValueBlock label="Remote commit" value={info.remoteCommitSha} />
+    </div>
+  ),
+  StackGitAutoUpdated: (info) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <span>
+        Stack auto-updated from <b>{shortCommit(info.previousCommitSha)}</b> to{' '}
+        <b>{shortCommit(info.updatedCommitSha)}</b>.
+      </span>
+      <KeyValueBlock label="Repository" value={info.gitRepositoryName} />
+      <KeyValueBlock label="Branch" value={info.branch} />
+      <KeyValueBlock label="Previous commit" value={info.previousCommitSha} />
+      <KeyValueBlock label="Updated commit" value={info.updatedCommitSha} />
+    </div>
+  ),
+  StackGitAutoDeployFailed: (info) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <AlertMessage type="error" title="Auto deploy failed">
+        {info.reason}
+      </AlertMessage>
+      <KeyValueBlock label="Repository" value={info.gitRepositoryName} />
+      <KeyValueBlock label="Branch" value={info.branch} />
+      <KeyValueBlock label="Current commit" value={info.currentCommitSha} />
+      <KeyValueBlock label="Remote commit" value={info.remoteCommitSha} />
+    </div>
+  ),
+  StackWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
 
   StackRenamed: (info) => (
     <span className="text-sm text-muted-foreground">
@@ -396,6 +443,7 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
       <ActivityAlertZone info={info} activity={activity} />
     </div>
   ),
+  GitRepoWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
 };
 
 export function ActivityAlertZone({
@@ -425,7 +473,7 @@ export function ActivityAlertZone({
   );
 }
 
-function KeyValueBlock({ label, value }: { label: string; value: string | string[] }) {
+function KeyValueBlock({ label, value }: { label: string; value: string | string[] | null | undefined }) {
   return (
     <div className="flex flex-col gap-2 text-sm text-muted-foreground">
       <span className="text-sm font-medium text-foreground">{label}</span>
@@ -441,12 +489,93 @@ function KeyValueBlock({ label, value }: { label: string; value: string | string
           ) : (
             <span>-</span>
           )
-        ) : (
+        ) : value ? (
           <span>{value}</span>
+        ) : (
+          <span>-</span>
         )}
       </div>
     </div>
   );
+}
+
+function WebhookActivityDetails({
+  info,
+}: {
+  info: ActivityEventInfoGitRepoWebhookReceived | ActivityEventInfoStackWebhookReceived;
+}) {
+  const displayReason = formatWebhookReason(info.reason);
+  const title =
+    info.status === 'queued'
+      ? 'Webhook accepted and queued.'
+      : info.status === 'rejected'
+        ? 'Webhook rejected.'
+        : displayReason || 'Webhook did not trigger an action.';
+
+  return (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <span>{title}</span>
+      {displayReason && <KeyValueBlock label="Reason" value={displayReason} />}
+      <KeyValueBlock label="Request ID" value={info.requestId} />
+      <KeyValueBlock label="Execution" value={info.execution} />
+      <KeyValueBlock label="Auth type" value={info.authType} />
+      <KeyValueBlock label="Provider event" value={info.eventType} />
+      <KeyValueBlock label="Delivery ID" value={info.deliveryId} />
+      <KeyValueBlock label="Repository" value={info.repositoryFullName} />
+      <KeyValueBlock label="Branch" value={info.branch} />
+      <KeyValueBlock label="Commit" value={info.commitSha} />
+      {info.dispatchedBranch && <KeyValueBlock label="Dispatched branch" value={info.dispatchedBranch} />}
+      {info.dispatchedCommitSha && <KeyValueBlock label="Dispatched commit" value={info.dispatchedCommitSha} />}
+    </div>
+  );
+}
+
+function formatWebhookReason(reason: string | null | undefined) {
+  switch (reason) {
+    case 'No new commit':
+      return 'No deployment needed because the stack already runs the latest commit.';
+    case 'No relevant path changes':
+      return 'No deployment needed because the commit did not change paths watched by this resource.';
+    case 'Branch mismatch':
+      return 'No action taken because the webhook branch does not match the configured branch.';
+    case 'Unsupported event type':
+      return 'No action taken because this provider event is not handled by Citadel.';
+    default:
+      return reason;
+  }
+}
+
+function stripStackReleaseSource(stack: StackSnapshot | null | undefined): StackSnapshot | null | undefined {
+  if (!stack?.stackRelease || !('source' in stack.stackRelease)) return stack;
+
+  const { source: _source, ...stackRelease } = stack.stackRelease;
+  return {
+    ...stack,
+    stackRelease,
+  };
+}
+
+function StackSourceDetails({ source }: { source?: StackReleaseSource | null }) {
+  if (!source) return null;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+      <span className="font-medium text-foreground">Release source</span>
+      <KeyValueBlock label="Source type" value={source.sourceType} />
+      <KeyValueBlock label="Repository" value={source.gitRepositoryName} />
+      <KeyValueBlock label="Branch" value={source.branch} />
+      <KeyValueBlock label="Resolved commit" value={source.resolvedCommitSha} />
+      <KeyValueBlock label="Working directory" value={source.workingDirectory} />
+      <KeyValueBlock label="Compose paths" value={source.composePaths ?? []} />
+      <KeyValueBlock label="Env file paths" value={source.envFilePaths ?? []} />
+      <KeyValueBlock label="Watch paths" value={source.watchPaths ?? []} />
+    </div>
+  );
+}
+
+function shortCommit(commit: string | null | undefined) {
+  if (!commit) return '-';
+  return commit.length > 12 ? commit.slice(0, 12) : commit;
 }
 
 function ActivityInfo({ activity }: { activity: ActivityView }) {

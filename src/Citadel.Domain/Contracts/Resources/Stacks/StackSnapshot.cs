@@ -19,7 +19,8 @@ public sealed record StackReleaseSnapshot(
     Guid PlatformId,
     StackSpec Spec,
     Guid CreatedByActorId,
-    string? Version);
+    string? Version,
+    StackReleaseSource? Source = null);
 
 public static class StackSnapshotExtensions
 {
@@ -46,7 +47,8 @@ public static class StackSnapshotExtensions
             PlatformId: stackRelease.PlatformId,
             Spec: stackRelease.Spec,
             CreatedByActorId: stackRelease.CreatedByActorId,
-            Version: stackRelease.Version);
+            Version: stackRelease.Version,
+            Source: stackRelease.Source);
 }
 
 public sealed record StackResultSnapshot(IEnumerable<string>? ContainerIds = null, string? Message = null);

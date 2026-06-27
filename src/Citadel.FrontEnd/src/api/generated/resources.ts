@@ -74,6 +74,8 @@ export const resources = {
   getGitRepository: { method: "GET", key: "getGitRepository", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   updateGitRepository: { method: "PATCH", key: "updateGitRepository", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   getGitRepositoryConfig: { method: "GET", key: "getGitRepositoryConfig", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
+  getGitRepositoryRefs: { method: "GET", key: "getGitRepositoryRefs", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
+  discoverGitRepositoryComposeProjects: { method: "GET", key: "discoverGitRepositoryComposeProjects", params: ["id","query","params"], requiredParams: ["id"], queryParams: ["branch"] },
   updateGitRepositoryMetadata: { method: "PATCH", key: "updateGitRepositoryMetadata", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   syncGitRepository: { method: "POST", key: "syncGitRepository", params: ["id","query","params"], requiredParams: ["id"], queryParams: ["branch"] },
   renameGitRepository: { method: "POST", key: "renameGitRepository", params: ["data","params"], requiredParams: [], queryParams: [] },

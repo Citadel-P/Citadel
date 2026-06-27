@@ -63,6 +63,12 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IUserContextAcc
 
         if (command.Spec is GitStack gitSpec)
         {
+            var validationError = GitStackSpecValidation.Validate(gitSpec);
+            if (validationError is not null)
+            {
+                return Result.Failure<Stack>(new BadRequestError(validationError));
+            }
+
             var gitRepository = await unitOfWork.GitRepositories.GetAsync(gitSpec.GitRepoId, cancellationToken);
             if (gitRepository == null)
             {

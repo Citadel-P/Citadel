@@ -20,5 +20,6 @@ public sealed record StackApplyCommand(
     bool PullImages = false,
     string? SourceWorkingDirectory = null,
     IReadOnlyList<string>? SourceComposeFilePaths = null,
+    IReadOnlyList<string>? SourceEnvFilePaths = null,
     string? LabelsOverrideFilePath = null,
     string? GeneratedFilesDirectory = null);

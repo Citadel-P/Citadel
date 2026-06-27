@@ -1,10 +1,11 @@
-import { ActivityView, PagedResultViewOfActivityView } from '@/api/generated/api.types';
+import { ActivityEventInfo, ActivityView, PagedResultViewOfActivityView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { useActivityQuery, useTaskSheet } from '@/lib/atoms';
 import { ActorCell, ActivityStatusCell, PagedDataTable, TargetCell } from '@/components/custom/common';
 import { fromNow } from '@/lib/dayjs.helper';
+import { formatActivityEvent } from '@/lib/utils';
 
 const EMPTY_ROWS: ActivityView[] = [];
 
@@ -89,13 +90,64 @@ const columns = (displayTarget: boolean): ColumnDef<ActivityView>[] => {
 
 function EventTypeCell({ activity }: { activity: ActivityView }) {
   const { open } = useTaskSheet('Activity');
+  const summary = getActivitySummary(activity.info);
 
   return (
     <button
       type="button"
       onClick={() => open({ kind: 'activity', payload: activity })}
-      className="cursor-pointer table-link">
-      <span>{activity.eventType}</span>
+      className="cursor-pointer table-link text-left">
+      <span className="flex flex-col gap-0.5">
+        <span>{formatActivityEvent(activity.eventType)}</span>
+        {summary && <span className="text-xs text-muted-foreground font-normal normal-case">{summary}</span>}
+      </span>
     </button>
   );
+}
+
+function getActivitySummary(info: ActivityEventInfo | null | undefined): string | null {
+  if (!info?.$type) return null;
+
+  switch (info.$type) {
+    case 'GitRepoWebhookReceived':
+    case 'StackWebhookReceived':
+      return [
+        info.status,
+        formatWebhookReason(info.reason),
+        info.dispatchedBranch ? `queued ${info.dispatchedBranch}` : info.branch ? `branch ${info.branch}` : null,
+        info.dispatchedCommitSha ? shortCommit(info.dispatchedCommitSha) : info.commitSha ? shortCommit(info.commitSha) : null,
+      ]
+        .filter(Boolean)
+        .join(' - ');
+    case 'StackGitUpdateAvailable':
+      return `${info.gitRepositoryName}:${info.branch} ${shortCommit(info.currentCommitSha)} -> ${shortCommit(info.remoteCommitSha)}`;
+    case 'StackGitAutoUpdated':
+      return `${info.gitRepositoryName}:${info.branch} ${shortCommit(info.previousCommitSha)} -> ${shortCommit(info.updatedCommitSha)}`;
+    case 'StackGitAutoDeployFailed':
+      return `${info.gitRepositoryName}:${info.branch} ${shortCommit(info.currentCommitSha)} -> ${shortCommit(info.remoteCommitSha)} - ${info.reason}`;
+    case 'GitRepoPulled':
+    case 'GitRepoCloned':
+      return [info.result?.commitSha ? shortCommit(info.result.commitSha) : null, info.result?.message].filter(Boolean).join(' - ');
+    default:
+      return null;
+  }
+}
+
+function formatWebhookReason(reason: string | null | undefined) {
+  switch (reason) {
+    case 'No new commit':
+      return 'already latest commit';
+    case 'No relevant path changes':
+      return 'no watched path changes';
+    case 'Branch mismatch':
+      return 'branch mismatch';
+    case 'Unsupported event type':
+      return 'unsupported event';
+    default:
+      return reason;
+  }
+}
+
+function shortCommit(commit: string) {
+  return commit.length > 12 ? commit.slice(0, 12) : commit;
 }

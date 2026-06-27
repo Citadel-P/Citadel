@@ -39,6 +39,25 @@ public static class GitRepositories
         return EndpointHandlers.HandleResult(result, GitRepositoryConfigView.Map);
     }
 
+    public static async Task<Results<Ok<GitRepositoryRefsView>, ProblemHttpResult>> GetRefs(
+        IMediator mediator,
+        [Description("Git repository id")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetGitRepositoryRefs(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, GitRepositoryRefsView.Map);
+    }
+
+    public static async Task<Results<Ok<GitRepositoryComposeDiscovery>, ProblemHttpResult>> DiscoverComposeProjects(
+        IMediator mediator,
+        [Description("Git repository id")] Guid id,
+        [FromQuery] string? branch,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new DiscoverGitRepositoryComposeProjects(id, branch), cancellationToken);
+        return EndpointHandlers.HandleResult(result);
+    }
+
     public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteGitRepositoriesInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);

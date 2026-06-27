@@ -11,9 +11,12 @@ using Domain.Entities.Git;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
+using LightResults;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Channels;
 
 namespace Tests.Unit.Application.Features.Webhooks;
@@ -52,6 +55,8 @@ public sealed class ReceiveWebhookTests
         var info = Assert.IsType<GitRepoWebhookReceived>(activity.Info);
         Assert.Equal("queued", info.Status);
         Assert.Equal("main", info.Branch);
+        Assert.Equal("main", info.DispatchedBranch);
+        Assert.Equal("2f1f6a0c5f6ed3c9b8b1fb8099c2c2f05bb42f5d", info.DispatchedCommitSha);
         gitRepos.Verify(x => x.UpdateAsync(repo, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -168,7 +173,7 @@ public sealed class ReceiveWebhookTests
             GitRepoId: repo.Id,
             Branch: "main",
             CommitSha: null,
-            UpdateBehavior: StackUpdateBehavior.Disabled,
+            UpdateBehavior: StackUpdateBehavior.StackAutoDeploy,
             Webhook: new StackWebhookConfig(Enabled: true),
             ComposePaths: ["compose.yml"]);
         var stack = Stack.Create(
@@ -217,6 +222,448 @@ public sealed class ReceiveWebhookTests
         var info = Assert.IsType<StackWebhookReceived>(activity.Info);
         Assert.Equal("queued", info.Status);
         Assert.Equal("main", info.Branch);
+        Assert.Equal("main", info.DispatchedBranch);
+        Assert.Equal("2f1f6a0c5f6ed3c9b8b1fb8099c2c2f05bb42f5d", info.DispatchedCommitSha);
+        applyStackService.VerifyAll();
+    }
+
+    [Fact]
+    public async Task StackDeploy_WithNotifyOnlyPolicy_QueuesRepoSyncAndDoesNotDeploy()
+    {
+        var repo = CreateRepository();
+        var gitSpec = new GitStack(
+            GitRepoId: repo.Id,
+            Branch: "main",
+            CommitSha: null,
+            UpdateBehavior: StackUpdateBehavior.Notify,
+            Webhook: new StackWebhookConfig(Enabled: true),
+            ComposePaths: ["compose.yml"]);
+        var stack = Stack.Create(
+            name: "git-stack",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.Git,
+            platformId: Guid.CreateVersion7(),
+            spec: gitSpec);
+
+        var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(stack);
+        var applyStackService = new Mock<IApplyStackService>();
+        List<ActivityEvent> activities = [];
+
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            stacks: stacks.Object,
+            gitSyncWriter: channel.Writer,
+            applyStackService: applyStackService.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateStackDeployCommand(
+                stack.Id,
+                branch: "main",
+                repositoryUrl: "https://github.com/octocat/Hello-World.git",
+                changedPaths: ["compose.yml"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("queued", response.Status);
+        Assert.Equal("Stack update notification queued", response.Reason);
+        Assert.True(channel.Reader.TryRead(out var syncRequest));
+        Assert.Equal(repo.Id, syncRequest.RepoId);
+        Assert.Equal("main", syncRequest.Branch);
+        Assert.Equal(GitRepoSyncTrigger.Webhook, syncRequest.Trigger);
+
+        var activity = Assert.Single(activities);
+        var info = Assert.IsType<StackWebhookReceived>(activity.Info);
+        Assert.Equal("queued", info.Status);
+        Assert.Equal("Stack update notification queued", info.Reason);
+        Assert.Equal("main", info.DispatchedBranch);
+        Assert.Equal("2f1f6a0c5f6ed3c9b8b1fb8099c2c2f05bb42f5d", info.DispatchedCommitSha);
+        applyStackService.Verify(
+            x => x.ApplyAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyList<string>?>(),
+                It.IsAny<bool>(),
+                It.IsAny<StackApplyOperation>(),
+                It.IsAny<StackSnapshot?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task StackDeploy_WithDisabledPolicy_ReturnsNoOpAndDoesNotDeploy()
+    {
+        var repo = CreateRepository();
+        var gitSpec = new GitStack(
+            GitRepoId: repo.Id,
+            Branch: "main",
+            CommitSha: null,
+            UpdateBehavior: StackUpdateBehavior.Disabled,
+            Webhook: new StackWebhookConfig(Enabled: true),
+            ComposePaths: ["compose.yml"]);
+        var stack = Stack.Create(
+            name: "git-stack",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.Git,
+            platformId: Guid.CreateVersion7(),
+            spec: gitSpec);
+
+        var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(stack);
+        var applyStackService = new Mock<IApplyStackService>();
+
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            stacks: stacks.Object,
+            gitSyncWriter: channel.Writer,
+            applyStackService: applyStackService.Object);
+
+        var result = await handler.Handle(
+            CreateStackDeployCommand(
+                stack.Id,
+                branch: "main",
+                repositoryUrl: "https://github.com/octocat/Hello-World.git",
+                changedPaths: ["compose.yml"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("Stack Git updates are disabled", response.Reason);
+        Assert.False(channel.Reader.TryRead(out _));
+        applyStackService.Verify(
+            x => x.ApplyAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyList<string>?>(),
+                It.IsAny<bool>(),
+                It.IsAny<StackApplyOperation>(),
+                It.IsAny<StackSnapshot?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task StackDeploy_WhenStackIsPinnedToCommit_ReturnsNoOpAndDoesNotDeploy()
+    {
+        var repo = CreateRepository();
+        var gitSpec = new GitStack(
+            GitRepoId: repo.Id,
+            Branch: "main",
+            CommitSha: "2f1f6a0c5f6ed3c9b8b1fb8099c2c2f05bb42f5d",
+            UpdateBehavior: StackUpdateBehavior.Disabled,
+            Webhook: new StackWebhookConfig(Enabled: true),
+            ComposePaths: ["compose.yml"]);
+        var stack = Stack.Create(
+            name: "git-stack",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.Git,
+            platformId: Guid.CreateVersion7(),
+            spec: gitSpec);
+
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(stack);
+        var applyStackService = new Mock<IApplyStackService>();
+        List<ActivityEvent> activities = [];
+
+        var handler = CreateHandler(
+            stacks: stacks.Object,
+            applyStackService: applyStackService.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateStackDeployCommand(stack.Id, branch: "main", repositoryUrl: "https://github.com/octocat/Hello-World.git"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("Stack is pinned to a commit", response.Reason);
+        var activity = Assert.Single(activities);
+        var info = Assert.IsType<StackWebhookReceived>(activity.Info);
+        Assert.Equal("noop", info.Status);
+        Assert.Equal("Stack is pinned to a commit", info.Reason);
+        applyStackService.Verify(
+            x => x.ApplyAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyList<string>?>(),
+                It.IsAny<bool>(),
+                It.IsAny<StackApplyOperation>(),
+                It.IsAny<StackSnapshot?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Theory]
+    [InlineData("X-Gitea-Signature")]
+    [InlineData("X-Forgejo-Signature")]
+    public async Task RepoPull_WithGitHubCompatibleSignatureHeader_QueuesWebhookSync(string signatureHeader)
+    {
+        const string secret = "forgejo-secret";
+        var repo = CreateRepository(new RepoWebhookConfig(Enabled: true, Secret: secret));
+        var body = PushPayload("main", "https://github.com/octocat/Hello-World.git", "octocat/Hello-World");
+        var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        gitRepos.Setup(x => x.UpdateAsync(repo, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var handler = CreateHandler(gitRepos: gitRepos.Object, gitSyncWriter: channel.Writer);
+
+        var result = await handler.Handle(
+            new ReceiveWebhook(
+                AuthType: "github",
+                ResourceType: "repo",
+                ResourceId: repo.Id,
+                Execution: "pull",
+                Headers: Headers(
+                    ("X-GitHub-Event", "push"),
+                    (signatureHeader, SignHex(secret, body))),
+                Body: body),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("queued", response.Status);
+        Assert.True(channel.Reader.TryRead(out var syncRequest));
+        Assert.Equal(repo.Id, syncRequest.RepoId);
+        Assert.Equal("main", syncRequest.Branch);
+    }
+
+    [Fact]
+    public async Task StackDeploy_WithOnlyUnrelatedPathChanges_ReturnsNoOpAndDoesNotDeploy()
+    {
+        var repo = CreateRepository();
+        var gitSpec = new GitStack(
+            GitRepoId: repo.Id,
+            Branch: "main",
+            CommitSha: null,
+            UpdateBehavior: StackUpdateBehavior.StackAutoDeploy,
+            Webhook: new StackWebhookConfig(Enabled: true),
+            ComposePaths: ["stacks/app/compose.yml"],
+            WorkingDirectory: "stacks/app");
+        var stack = Stack.Create(
+            name: "git-stack",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.Git,
+            platformId: Guid.CreateVersion7(),
+            spec: gitSpec);
+        stack.CurrentStackRelease!.UpdateSource(new StackReleaseSource(
+            SourceType: StackSource.Git,
+            GitRepositoryId: repo.Id,
+            GitRepositoryName: repo.Name,
+            Branch: "main",
+            RequestedCommitSha: null,
+            ResolvedCommitSha: "old-commit",
+            ComposePaths: ["stacks/app/compose.yml"],
+            EnvFilePaths: [],
+            WorkingDirectory: "stacks/app"));
+
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(stack);
+        var applyStackService = new Mock<IApplyStackService>();
+        var alertService = new Mock<IAlertService>();
+        List<ActivityEvent> activities = [];
+
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            stacks: stacks.Object,
+            applyStackService: applyStackService.Object,
+            alertService: alertService.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateStackDeployCommand(
+                stack.Id,
+                branch: "main",
+                repositoryUrl: "https://github.com/octocat/Hello-World.git",
+                changedPaths: ["stacks/other/compose.yml", "README.md"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("No relevant path changes", response.Reason);
+        var activity = Assert.Single(activities);
+        var info = Assert.IsType<StackWebhookReceived>(activity.Info);
+        Assert.Equal("noop", info.Status);
+        Assert.Equal("No relevant path changes", info.Reason);
+        applyStackService.Verify(
+            x => x.ApplyAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyList<string>?>(),
+                It.IsAny<bool>(),
+                It.IsAny<StackApplyOperation>(),
+                It.IsAny<StackSnapshot?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        alertService.Verify(
+            x => x.ProcessAsync(AlertType.WebhookDispatchFailed, It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task StackDeploy_WithoutPayloadPaths_UsesRepositoryDiffAndSkipsUnrelatedChanges()
+    {
+        var repo = CreateRepository();
+        var gitSpec = new GitStack(
+            GitRepoId: repo.Id,
+            Branch: "main",
+            CommitSha: null,
+            UpdateBehavior: StackUpdateBehavior.StackAutoDeploy,
+            Webhook: new StackWebhookConfig(Enabled: true),
+            ComposePaths: ["stacks/app/compose.yml"],
+            WorkingDirectory: "stacks/app");
+        var stack = Stack.Create(
+            name: "git-stack",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.Git,
+            platformId: Guid.CreateVersion7(),
+            spec: gitSpec);
+        stack.CurrentStackRelease!.UpdateSource(new StackReleaseSource(
+            SourceType: StackSource.Git,
+            GitRepositoryId: repo.Id,
+            GitRepositoryName: repo.Name,
+            Branch: "main",
+            RequestedCommitSha: null,
+            ResolvedCommitSha: "old-commit",
+            ComposePaths: ["stacks/app/compose.yml"],
+            EnvFilePaths: [],
+            WorkingDirectory: "stacks/app"));
+
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(stack);
+        var repoCacheManager = new Mock<IRepoCacheManager>();
+        repoCacheManager
+            .Setup(x => x.SynchronizeAsync(repo, repo.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Hash: "new-commit", Success: true));
+        var gitCliRepository = new Mock<IGitCliRepository>();
+        gitCliRepository
+            .Setup(x => x.GetChangedPathsAsync(repo.GetCachePath(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["stacks/other/compose.yml", "README.md"]));
+        var applyStackService = new Mock<IApplyStackService>();
+        var alertService = new Mock<IAlertService>();
+        List<ActivityEvent> activities = [];
+
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            stacks: stacks.Object,
+            applyStackService: applyStackService.Object,
+            alertService: alertService.Object,
+            repoCacheManager: repoCacheManager.Object,
+            gitCliRepository: gitCliRepository.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateStackDeployCommand(stack.Id, branch: "main", repositoryUrl: "https://github.com/octocat/Hello-World.git"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("No relevant path changes", response.Reason);
+        var activity = Assert.Single(activities);
+        var info = Assert.IsType<StackWebhookReceived>(activity.Info);
+        Assert.Equal("noop", info.Status);
+        Assert.Equal("No relevant path changes", info.Reason);
+        applyStackService.Verify(
+            x => x.ApplyAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyList<string>?>(),
+                It.IsAny<bool>(),
+                It.IsAny<StackApplyOperation>(),
+                It.IsAny<StackSnapshot?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        alertService.Verify(
+            x => x.ProcessAsync(AlertType.WebhookDispatchFailed, It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task StackDeploy_WithoutPayloadPaths_UsesRepositoryDiffAndDeploysRelevantChanges()
+    {
+        var repo = CreateRepository();
+        var gitSpec = new GitStack(
+            GitRepoId: repo.Id,
+            Branch: "main",
+            CommitSha: null,
+            UpdateBehavior: StackUpdateBehavior.StackAutoDeploy,
+            Webhook: new StackWebhookConfig(Enabled: true),
+            ComposePaths: ["stacks/app/compose.yml"],
+            WorkingDirectory: "stacks/app");
+        var stack = Stack.Create(
+            name: "git-stack",
+            createdByActorId: Constants.SystemId,
+            StackSource: StackSource.Git,
+            platformId: Guid.CreateVersion7(),
+            spec: gitSpec);
+        stack.CurrentStackRelease!.UpdateSource(new StackReleaseSource(
+            SourceType: StackSource.Git,
+            GitRepositoryId: repo.Id,
+            GitRepositoryName: repo.Name,
+            Branch: "main",
+            RequestedCommitSha: null,
+            ResolvedCommitSha: "old-commit",
+            ComposePaths: ["stacks/app/compose.yml"],
+            EnvFilePaths: [],
+            WorkingDirectory: "stacks/app"));
+
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(stack);
+        var repoCacheManager = new Mock<IRepoCacheManager>();
+        repoCacheManager
+            .Setup(x => x.SynchronizeAsync(repo, repo.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Hash: "new-commit", Success: true));
+        var gitCliRepository = new Mock<IGitCliRepository>();
+        gitCliRepository
+            .Setup(x => x.GetChangedPathsAsync(repo.GetCachePath(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["stacks/app/compose.yml"]));
+
+        var applyCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var applyStackService = new Mock<IApplyStackService>();
+        applyStackService
+            .Setup(x => x.ApplyAsync(
+                stack.Id,
+                Constants.SystemId,
+                It.Is<IReadOnlyList<string>?>(services => services == null),
+                true,
+                StackApplyOperation.Apply,
+                null,
+                It.IsAny<CancellationToken>()))
+            .Callback(() => applyCalled.TrySetResult())
+            .Returns(EmptyStackStream());
+
+        List<ActivityEvent> activities = [];
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            stacks: stacks.Object,
+            applyStackService: applyStackService.Object,
+            repoCacheManager: repoCacheManager.Object,
+            gitCliRepository: gitCliRepository.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateStackDeployCommand(stack.Id, branch: "main", repositoryUrl: "https://github.com/octocat/Hello-World.git"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("queued", response.Status);
+        await applyCalled.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        var activity = Assert.Single(activities);
+        var info = Assert.IsType<StackWebhookReceived>(activity.Info);
+        Assert.Equal("main", info.DispatchedBranch);
+        Assert.Equal("new-commit", info.DispatchedCommitSha);
         applyStackService.VerifyAll();
     }
 
@@ -228,7 +675,7 @@ public sealed class ReceiveWebhookTests
             GitRepoId: repo.Id,
             Branch: "main",
             CommitSha: null,
-            UpdateBehavior: StackUpdateBehavior.Disabled,
+            UpdateBehavior: StackUpdateBehavior.StackAutoDeploy,
             Webhook: new StackWebhookConfig(Enabled: true),
             ComposePaths: ["compose.yml"]);
         var stack = Stack.Create(
@@ -291,6 +738,8 @@ public sealed class ReceiveWebhookTests
         INotificationQueue? notificationQueue = null,
         IApplyStackService? applyStackService = null,
         IAlertService? alertService = null,
+        IRepoCacheManager? repoCacheManager = null,
+        IGitCliRepository? gitCliRepository = null,
         List<ActivityEvent>? activities = null)
     {
         activities ??= [];
@@ -320,6 +769,8 @@ public sealed class ReceiveWebhookTests
             Mock.Of<IActivityStreamManager>(),
             alertService ?? Mock.Of<IAlertService>(),
             applyStackService ?? Mock.Of<IApplyStackService>(),
+            repoCacheManager ?? Mock.Of<IRepoCacheManager>(),
+            gitCliRepository ?? Mock.Of<IGitCliRepository>(),
             NullLoggerFactory.Instance);
     }
 
@@ -346,14 +797,18 @@ public sealed class ReceiveWebhookTests
             Headers: Headers(("X-GitHub-Event", "push")),
             Body: PushPayload(branch, repositoryUrl, repositoryFullName));
 
-    private static ReceiveWebhook CreateStackDeployCommand(Guid stackId, string branch, string repositoryUrl)
+    private static ReceiveWebhook CreateStackDeployCommand(
+        Guid stackId,
+        string branch,
+        string repositoryUrl,
+        IReadOnlyList<string>? changedPaths = null)
         => new(
             AuthType: "github",
             ResourceType: "stack",
             ResourceId: stackId,
             Execution: "deploy",
             Headers: Headers(("X-GitHub-Event", "push")),
-            Body: PushPayload(branch, repositoryUrl, "octocat/Hello-World"));
+            Body: PushPayload(branch, repositoryUrl, "octocat/Hello-World", changedPaths));
 
     private static Dictionary<string, string[]> Headers(params (string Name, string Value)[] headers)
         => headers.ToDictionary(
@@ -361,8 +816,25 @@ public sealed class ReceiveWebhookTests
             header => new[] { header.Value },
             StringComparer.OrdinalIgnoreCase);
 
-    private static byte[] PushPayload(string branch, string repositoryUrl, string repositoryFullName)
-        => Encoding.UTF8.GetBytes($$"""
+    private static string SignHex(string secret, byte[] body)
+        => Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), body)).ToLowerInvariant();
+
+    private static byte[] PushPayload(
+        string branch,
+        string repositoryUrl,
+        string repositoryFullName,
+        IReadOnlyList<string>? changedPaths = null)
+    {
+        var commitsJson = changedPaths is null
+            ? string.Empty
+            : $$"""
+              ,
+              "commits": [
+                { "added": [], "modified": {{JsonSerializer.Serialize(changedPaths)}}, "removed": [] }
+              ]
+              """;
+
+        return Encoding.UTF8.GetBytes($$"""
         {
           "ref": "refs/heads/{{branch}}",
           "after": "2f1f6a0c5f6ed3c9b8b1fb8099c2c2f05bb42f5d",
@@ -371,8 +843,10 @@ public sealed class ReceiveWebhookTests
             "clone_url": "{{repositoryUrl}}",
             "full_name": "{{repositoryFullName}}"
           }
+          {{commitsJson}}
         }
         """);
+    }
 
     private static async IAsyncEnumerable<StackStreamItem> EmptyStackStream()
     {

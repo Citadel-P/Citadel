@@ -25,6 +25,7 @@ internal static class StackMappers
             PullImages: cmd.PullImages,
             SourceWorkingDirectory: cmd.SourceWorkingDirectory,
             SourceComposeFilePaths: cmd.SourceComposeFilePaths,
+            SourceEnvFilePaths: cmd.SourceEnvFilePaths,
             LabelsOverrideFilePath: cmd.LabelsOverrideFilePath,
             GeneratedFilesDirectory: cmd.GeneratedFilesDirectory);
     }

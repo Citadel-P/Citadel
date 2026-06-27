@@ -164,6 +164,7 @@ internal class ApplyStackService(
         IReadOnlyList<string>? environmentVariables;
         string? sourceWorkingDirectory = null;
         IReadOnlyList<string>? sourceComposeFilePaths = null;
+        IReadOnlyList<string>? sourceEnvFilePaths = null;
         string? labelsOverrideFilePath = null;
         string? generatedFilesDirectory = null;
         string? gitSnapshotRoot = null;
@@ -200,6 +201,7 @@ internal class ApplyStackService(
             environmentVariables = payload.EnvironmentVariables;
             sourceWorkingDirectory = payload.SourceWorkingDirectory;
             sourceComposeFilePaths = payload.SourceComposeFilePaths;
+            sourceEnvFilePaths = payload.SourceEnvFilePaths;
             labelsOverrideFilePath = payload.LabelsOverrideFilePath;
             generatedFilesDirectory = payload.GeneratedFilesDirectory;
             gitSnapshotRoot = payload.SnapshotRoot;
@@ -212,7 +214,7 @@ internal class ApplyStackService(
                 ResolvedCommitSha: payload.ResolvedCommitSha,
                 ComposePaths: payload.ComposePaths,
                 EnvFilePaths: payload.EnvFilePaths,
-                GitRepositoryUrl: gitRepository.Url,
+                GitRepositoryUrl: GitRepositoryUrlSanitizer.Sanitize(gitRepository.Url),
                 WorkingDirectory: Path.GetRelativePath(payload.SnapshotRoot, payload.SourceWorkingDirectory).Replace('\\', '/'),
                 WatchPaths: payload.WatchPaths,
                 ComposeEnvFilesFromRepo: payload.EnvFilePaths);
@@ -246,6 +248,7 @@ internal class ApplyStackService(
             pullImages,
             sourceWorkingDirectory,
             sourceComposeFilePaths,
+            sourceEnvFilePaths,
             labelsOverrideFilePath,
             generatedFilesDirectory);
 
@@ -260,6 +263,7 @@ internal class ApplyStackService(
                 var next = await TryReadNextAsync(enumerator);
                 if (next.ErrorMessage is not null)
                 {
+                    await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
                     await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, next.ErrorMessage, operation: operation, source: releaseSource, ct: ct);
                     yield return StackStreamItem.FromStdErr(next.ErrorMessage, exitCode ?? 1);
                     yield break;
@@ -305,6 +309,7 @@ internal class ApplyStackService(
                             ? string.Join(Environment.NewLine, errorLogs)
                             : $"❌ Pipeline command failed with exit code {result.ExitCode}.";
 
+                        await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
                         await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, operation: operation, source: releaseSource, ct: ct);
                         yield return StackStreamItem.FromStdErr($"❌ {explicitFailure}", result.ExitCode.Value);
                         yield break;
@@ -322,6 +327,7 @@ internal class ApplyStackService(
             var (errorMessage, containers) = await GetContainers(stack, platform, ct);
             if (!string.IsNullOrEmpty(errorMessage))
             {
+                await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
                 await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, operation: operation, source: releaseSource, ct: ct);
                 yield return StackStreamItem.FromStdErr($"❌ {errorMessage}", exitCode ?? 1 );
                 yield break;
@@ -329,19 +335,21 @@ internal class ApplyStackService(
 
             if (!string.IsNullOrWhiteSpace(gitSnapshotRoot))
             {
-                string? sourcePointerWarning = null;
+                string? sourceSnapshotWarning = null;
                 try
                 {
                     await gitStackMaterializer.ActivateCurrentAsync(stack.Id, gitSnapshotRoot, ct);
+                    var retainedReleaseIds = await LoadRetainedGitSnapshotReleaseIdsAsync(stack.Id, stack.CurrentStackReleaseId, ct);
+                    await gitStackMaterializer.PruneSnapshotsAsync(stack.Id, retainedReleaseIds, ct);
                 }
                 catch (Exception ex)
                 {
-                    sourcePointerWarning = $"Git source pointer update failed: {ex.Message}";
+                    sourceSnapshotWarning = $"Git source snapshot maintenance failed: {ex.Message}";
                 }
 
-                if (sourcePointerWarning is not null)
+                if (sourceSnapshotWarning is not null)
                 {
-                    yield return StackStreamItem.SystemMessage(sourcePointerWarning, 0);
+                    yield return StackStreamItem.SystemMessage(sourceSnapshotWarning, 0);
                 }
             }
         
@@ -366,6 +374,7 @@ internal class ApplyStackService(
             ? string.Join(Environment.NewLine, errorLogs)
             : (exitCode is int code ? $"❌ docker compose exited with code {code}." : "❌ Stack apply did not report a completion exit code.");
 
+        await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
         await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, operation: operation, source: releaseSource, ct: ct);
 
         yield return StackStreamItem.FromStdErr(finalFailureMessage, exitCode ?? 1);
@@ -455,6 +464,32 @@ internal class ApplyStackService(
         return containers.ToHashSet(StringComparer.Ordinal);
     }
 
+    private async Task<IReadOnlyCollection<Guid>> LoadRetainedGitSnapshotReleaseIdsAsync(
+        Guid stackId,
+        Guid currentReleaseId,
+        CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var releases = await uow.Stacks.GetReleasesByStackIdAsync(stackId, ct);
+        return releases
+            .Where(release => release.Id == currentReleaseId || release.IsRollbackCandidate())
+            .Select(release => release.Id)
+            .ToArray();
+    }
+
+    private async Task DiscardFailedGitSnapshotAsync(
+        Guid stackId,
+        Guid releaseId,
+        string? gitSnapshotRoot,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(gitSnapshotRoot))
+            return;
+
+        await gitStackMaterializer.DiscardSnapshotAsync(stackId, releaseId, ct);
+    }
+
     private StackApplyCommand BuildApplyCommand(
         Stack stack,
         string platformAddress,
@@ -467,6 +502,7 @@ internal class ApplyStackService(
         bool pullImages,
         string? sourceWorkingDirectory,
         IReadOnlyList<string>? sourceComposeFilePaths,
+        IReadOnlyList<string>? sourceEnvFilePaths,
         string? labelsOverrideFilePath,
         string? generatedFilesDirectory)
         => new(
@@ -487,6 +523,7 @@ internal class ApplyStackService(
             PullImages: pullImages,
             SourceWorkingDirectory: sourceWorkingDirectory,
             SourceComposeFilePaths: sourceComposeFilePaths,
+            SourceEnvFilePaths: sourceEnvFilePaths,
             LabelsOverrideFilePath: labelsOverrideFilePath,
             GeneratedFilesDirectory: generatedFilesDirectory);
 

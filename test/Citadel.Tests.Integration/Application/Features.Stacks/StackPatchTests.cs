@@ -85,12 +85,18 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         Assert.NotNull(stack);
         Assert.Equal("stack-1", stack.Name);
         Assert.Equal("original-description", stack.Description);
-        Assert.Single(releases);
+        Assert.Equal(2, releases.Count);
         Assert.Equal("1", stack.CurrentStackRelease!.Version);
         Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease.Status);
         Assert.Equal(otherPlatformId, stack.CurrentStackRelease.PlatformId);
         Assert.Equal(stack.CurrentStackReleaseId, stack.CurrentStackRelease.Id);
         Assert.Equal("compose.updated.yml", Assert.IsType<ManualStack>(stack.CurrentStackRelease.Spec).ComposeFile);
+
+        var rollbackSnapshot = Assert.Single(releases, release => release.Id != stack.CurrentStackReleaseId);
+        Assert.Equal("1", rollbackSnapshot.Version);
+        Assert.Equal(StackReleaseStatus.Healthy, rollbackSnapshot.Status);
+        Assert.Equal(platformId, rollbackSnapshot.PlatformId);
+        Assert.Equal("docker-compose.yml", Assert.IsType<ManualStack>(rollbackSnapshot.Spec).ComposeFile);
     }
 
     [Fact]
@@ -149,10 +155,15 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var releases = (await uow.Stacks.GetReleasesByStackIdAsync(stackId, TestContext.Current.CancellationToken)).ToList();
 
         Assert.NotNull(stack);
-        Assert.Single(releases);
+        Assert.Equal(2, releases.Count);
         Assert.Equal("1", stack.CurrentStackRelease!.Version);
         Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease.Status);
         Assert.Equal(".env", Assert.IsType<ManualStack>(stack.CurrentStackRelease.Spec).EnvFilePath);
+
+        var rollbackSnapshot = Assert.Single(releases, release => release.Id != stack.CurrentStackReleaseId);
+        Assert.Equal("1", rollbackSnapshot.Version);
+        Assert.Equal(StackReleaseStatus.Healthy, rollbackSnapshot.Status);
+        Assert.Null(Assert.IsType<ManualStack>(rollbackSnapshot.Spec).EnvFilePath);
     }
 
     [Fact]

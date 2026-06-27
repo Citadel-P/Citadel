@@ -8,6 +8,8 @@ import {
   StackSource,
   StackDriftMode,
   StackDriftPolicy,
+  GitRepositoryRefView,
+  GitComposeProjectCandidate,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -18,6 +20,7 @@ import {
   FieldTextArea,
   ItemSelector,
   FieldSwitch,
+  FieldSelect,
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -26,6 +29,11 @@ import { useParams } from 'react-router';
 import { ResourceSelectorField } from '@/components/custom/common';
 import { MonacoEditor, MonacoToArrayEditor } from '@/lib/monaco';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { GitBranch, Loader2, Search } from 'lucide-react';
+import { toast } from 'sonner';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -34,15 +42,15 @@ const update_behaviors = {
   },
   [StackUpdateBehavior.Notify]: {
     label: 'Notify Only',
-    description: 'Periodically check for updates and alert me, but do not redeploy.',
+    description: 'Report new image or Git source updates, but do not redeploy.',
   },
   [StackUpdateBehavior.ServiceAutoDeploy]: {
     label: 'Auto Deploy Services',
-    description: 'Automatically redeploy only services with new images.',
+    description: 'Redeploy changed image services. Git source updates redeploy the stack.',
   },
   [StackUpdateBehavior.StackAutoDeploy]: {
     label: 'Auto Deploy Stack',
-    description: 'Automatically redeploy the entire stack when a new image is found.',
+    description: 'Redeploy the entire stack when image or Git source updates are found.',
   },
 };
 
@@ -58,6 +66,10 @@ const stack_source = {
 };
 
 type StackInput = CreateStackInput | PatchStackInput;
+
+const EMPTY_STACK_CONFIG = {} as StackConfigView;
+const EMPTY_GIT_REFS: GitRepositoryRefView[] = [];
+const EMPTY_COMPOSE_PROJECTS: GitComposeProjectCandidate[] = [];
 
 const DEFAULT_DRIFT_POLICY: StackDriftPolicy = {
   mode: StackDriftMode.DetectOnly,
@@ -106,6 +118,109 @@ const normalizeDriftPolicy = (policy?: Partial<StackDriftPolicy> | null): StackD
 const specTypeForSource = (stackSource?: StackSource): 'Git' | 'WebEditor' | undefined =>
   stackSource === StackSource.Git ? 'Git' : stackSource === StackSource.WebEditor ? 'WebEditor' : undefined;
 
+const normalizeGitPath = (value: string) => value.trim().replaceAll('\\', '/');
+
+const shortSha = (value?: string | null) => (value ? value.slice(0, 12) : '-');
+
+const validateGitPath = (value?: string | null, { requireFile = false }: { requireFile?: boolean } = {}) => {
+  const path = value?.trim();
+  if (!path) return null;
+
+  if (path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(path)) return 'Use a path relative to the repository root.';
+  if (path.split(/[\\/]+/).some((segment) => segment === '..')) return 'Path cannot leave the repository root.';
+  if (path.includes('\0')) return 'Path contains an invalid character.';
+  if (requireFile && path.endsWith('/')) return 'Path must point to a file, not a directory.';
+
+  return null;
+};
+
+const validateGitPathList = (
+  value: unknown,
+  { required = false, requireFile = false }: { required?: boolean; requireFile?: boolean } = {},
+) => {
+  if (!Array.isArray(value)) return required ? 'At least one path is required.' : null;
+
+  const paths = value.map((item) => String(item ?? '').trim()).filter(Boolean);
+  if (required && paths.length === 0) return 'At least one path is required.';
+
+  const duplicates = new Set<string>();
+  for (const path of paths) {
+    const error = validateGitPath(path, { requireFile });
+    if (error) return `${path}: ${error}`;
+
+    const normalized = normalizeGitPath(path).toLowerCase();
+    if (duplicates.has(normalized)) return `${path}: duplicate path.`;
+    duplicates.add(normalized);
+  }
+
+  return null;
+};
+
+const validateGitPathItem =
+  ({ requireFile = false }: { requireFile?: boolean } = {}) =>
+  (path: string) => {
+    const error = validateGitPath(path, { requireFile });
+    return error ? `${path}: ${error}` : null;
+  };
+
+const validateCommitSha = (value?: string | null) => {
+  const commitSha = value?.trim();
+  if (!commitSha) return null;
+
+  return /^[0-9a-f]{7,40}$/i.test(commitSha) ? null : 'Use a 7 to 40 character Git commit SHA.';
+};
+
+const duplicatePathMessage = (path: string) => `${path}: duplicate path.`;
+
+const validateDiscoveredPath = (
+  path: string,
+  discoveredPaths: string[],
+  discoveryReady: boolean,
+  label: string,
+) => {
+  if (!discoveryReady) return null;
+
+  const allowed = new Set(discoveredPaths.map(normalizeGitPath));
+  const normalized = normalizeGitPath(path);
+
+  return allowed.has(normalized) ? null : `${path}: not found in discovered ${label}.`;
+};
+
+const validateDiscoveredPathList = (
+  value: unknown,
+  discoveredPaths: string[],
+  discoveryReady: boolean,
+  label: string,
+) => {
+  if (!discoveryReady || !Array.isArray(value)) return null;
+
+  for (const path of value.map((item) => String(item ?? '').trim()).filter(Boolean)) {
+    const error = validateDiscoveredPath(path, discoveredPaths, discoveryReady, label);
+    if (error) return error;
+  }
+
+  return null;
+};
+
+const validateGitDiscoveredPathItem =
+  ({
+    requireFile = false,
+    discoveredPaths,
+    discoveryReady,
+    label,
+  }: {
+    requireFile?: boolean;
+    discoveredPaths: string[];
+    discoveryReady: boolean;
+    label: string;
+  }) =>
+  (path: string) => {
+    const syntaxError = validateGitPathItem({ requireFile })(path);
+    if (syntaxError) return syntaxError;
+
+    return validateDiscoveredPath(path, discoveredPaths, discoveryReady, label);
+  };
+
 const normalizeDisabledWebhook = <T extends Partial<StackInput> | StackConfigView>(value: T): T => {
   const spec = (value as any)?.spec;
   if (!spec?.webhook || spec.webhook.enabled) return value;
@@ -134,6 +249,203 @@ const toPatchStackInput = (patch: Partial<StackInput>, original: StackConfigView
   return data as PatchStackInput;
 };
 
+const GitBranchField = ({
+  repoId,
+  value,
+  disabled,
+  refs,
+  onChange,
+}: {
+  repoId?: string | null;
+  value?: string | null;
+  disabled?: boolean;
+  refs: Array<{ branch: string; resolvedCommitSha?: string | null; lastError?: string | null }>;
+  onChange: (branch: string) => void;
+}) => {
+  const options = useMemo(() => {
+    const known = new Map<string, string>();
+    refs.forEach((ref) => known.set(ref.branch, ref.branch));
+    if (value && !known.has(value)) known.set(value, value);
+    return [...known.values()].map((branch) => ({
+      value: branch,
+      label: (
+        <span className="flex min-w-0 items-center gap-2">
+          <GitBranch className="size-3.5 text-muted-foreground" />
+          <span className="truncate">{branch}</span>
+          {refs.find((ref) => ref.branch === branch)?.resolvedCommitSha ? (
+            <span className="font-mono text-xs text-muted-foreground">
+              {shortSha(refs.find((ref) => ref.branch === branch)?.resolvedCommitSha)}
+            </span>
+          ) : null}
+        </span>
+      ),
+    }));
+  }, [refs, value]);
+
+  if (!repoId || options.length === 0) {
+    return (
+      <div className="flex flex-col gap-2">
+        <FieldInput value={value!} onChange={onChange} disabled={disabled} placeholder="e.g. main" />
+        <p className="text-xs text-muted-foreground">
+          Select and sync a repository to populate branch refs. You can still type a branch manually.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldSelect
+        value={value ?? undefined}
+        onChange={onChange}
+        options={options}
+        disabled={disabled}
+        placeholder="Select branch"
+      />
+      {refs.find((ref) => ref.branch === value)?.lastError ? (
+        <p className="text-xs text-destructive">{refs.find((ref) => ref.branch === value)?.lastError}</p>
+      ) : null}
+    </div>
+  );
+};
+
+const GitSourceStateHint = ({
+  currentCommitSha,
+  latestCommitSha,
+  pinnedCommitSha,
+}: {
+  currentCommitSha?: string | null;
+  latestCommitSha?: string | null;
+  pinnedCommitSha?: string | null;
+}) => (
+  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+    <Badge variant="outline" className="rounded-sm font-mono">
+      current {shortSha(currentCommitSha)}
+    </Badge>
+    <Badge variant="outline" className="rounded-sm font-mono">
+      latest {shortSha(latestCommitSha)}
+    </Badge>
+    {pinnedCommitSha ? (
+      <Badge variant="secondary" className="rounded-sm font-mono">
+        pinned {shortSha(pinnedCommitSha)}
+      </Badge>
+    ) : null}
+    {currentCommitSha && latestCommitSha && currentCommitSha !== latestCommitSha ? (
+      <span>Remote branch has a newer synced commit.</span>
+    ) : null}
+  </div>
+);
+
+const GitDiscoveredPathsField = ({
+  canDiscover,
+  discoveredPaths,
+  discoveryReady,
+  discovering,
+  discoveryError,
+  disabled,
+  title,
+  unavailableMessage,
+  emptyMessage,
+  helperText,
+  requiredMessage,
+  completionItemDetail,
+  validateItem,
+  value,
+  onRefresh,
+  onChange,
+}: {
+  canDiscover: boolean;
+  discoveredPaths: string[];
+  discoveryReady: boolean;
+  discovering: boolean;
+  discoveryError?: Error | null;
+  disabled?: boolean;
+  title: string;
+  unavailableMessage: string;
+  emptyMessage: string;
+  helperText: string;
+  requiredMessage?: string;
+  completionItemDetail: string;
+  validateItem: (path: string) => string | null;
+  value?: string[] | null;
+  onRefresh: () => void;
+  onChange: (paths: string[] | undefined) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const copyPath = async (path: string) => {
+    await navigator.clipboard.writeText(path);
+    toast.success(`Copied "${path}" to clipboard`);
+    setOpen(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-start">
+        <Popover
+          open={open}
+          onOpenChange={(nextOpen) => {
+            setOpen(nextOpen);
+            if (nextOpen && canDiscover && !discovering) {
+              onRefresh();
+            }
+          }}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!canDiscover || discovering}
+              title={canDiscover ? title : unavailableMessage}>
+              {discovering ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+              <span className="text-[13px]">Discover Paths</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-80 p-1 bg-background">
+            {!canDiscover ? (
+              <p className="px-2 py-2 text-sm text-muted-foreground">{unavailableMessage}</p>
+            ) : null}
+
+            
+
+            {discoveryError ? <p className="px-2 py-2 text-sm text-destructive">{discoveryError.message}</p> : null}
+
+            {discoveredPaths.length > 0 ? (
+              <div className="max-h-72 overflow-y-auto">
+                {discoveredPaths.map((path) => (
+                  <button
+                    key={path}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => copyPath(path)}
+                    className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent disabled:pointer-events-none disabled:opacity-60">
+                    <span className="truncate font-mono text-xs">{path}</span>
+                  </button>
+                ))}
+              </div>
+            ) : discoveryReady ? (
+              <p className="px-2 py-2 text-sm text-muted-foreground">{emptyMessage}</p>
+            ) : !discovering ? (
+              <p className="px-2 py-2 text-sm text-muted-foreground">Open search to scan the selected branch.</p>
+            ) : null}
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <MonacoToArrayEditor
+        value={value!}
+        helperText={helperText}
+        language="string_list"
+        unique
+        duplicateMessage={duplicatePathMessage}
+        requiredMessage={requiredMessage}
+        validateItem={validateItem}
+        completionItems={discoveredPaths}
+        completionItemDetail={completionItemDetail}
+        onChange={onChange}
+      />
+    </div>
+  );
+};
+
 export const StackForm = ({
   mode,
   metadataChanged,
@@ -150,12 +462,45 @@ export const StackForm = ({
   const { mutateAsync: createStack } = useMutate('createStack');
   const { mutateAsync: updateStack } = useMutate('updateStack');
   const { data: stackCfg } = useRead('getStackConfig', { stackId: id });
+  const { data: stackViewData } = useRead('getStack', { stackId: id }, { enabled: mode === 'edit' && !!id });
 
   const resource: StackConfigView | undefined = stackCfg?.data;
-  const original = resource ?? ({} as StackConfigView);
+  const stackView = stackViewData?.data;
+  const original = resource ?? EMPTY_STACK_CONFIG;
   const formOriginal = useMemo(() => normalizeDisabledWebhook(original), [original]);
   const formUpdate = useMemo(() => normalizeDisabledWebhook(update), [update]);
   const currentStackSource = (update as Partial<CreateStackInput>).stackSource ?? original.stackSource;
+  const currentGitRepoId = (update as any)?.spec?.gitRepoId ?? (original.spec as any)?.gitRepoId ?? null;
+  const currentGitBranch = (update as any)?.spec?.branch ?? (original.spec as any)?.branch ?? null;
+  const currentPinnedCommit = (update as any)?.spec?.commitSha ?? (original.spec as any)?.commitSha ?? null;
+  const { data: gitRefsData } = useRead(
+    'getGitRepositoryRefs',
+    { id: currentGitRepoId ?? '' },
+    { enabled: currentStackSource === StackSource.Git && !!currentGitRepoId },
+  );
+  const gitRefs = gitRefsData?.data.refs ?? EMPTY_GIT_REFS;
+  const selectedBranchRef = gitRefs.find((ref) => ref.branch === currentGitBranch);
+  const canDiscoverGitPaths = currentStackSource === StackSource.Git && !!currentGitRepoId && !!currentGitBranch;
+  const {
+    data: gitComposeDiscoveryData,
+    isFetching: isDiscoveringGitPaths,
+    isSuccess: gitComposeDiscoveryReady,
+    error: gitComposeDiscoveryError,
+    refetch: refreshGitComposeDiscovery,
+  } = useRead(
+    'discoverGitRepositoryComposeProjects',
+    { id: currentGitRepoId ?? '', query: { branch: currentGitBranch ?? undefined } },
+    { enabled: canDiscoverGitPaths },
+  );
+  const gitComposeProjects = gitComposeDiscoveryData?.data.projects ?? EMPTY_COMPOSE_PROJECTS;
+  const discoveredComposePaths = useMemo(
+    () => [...new Set(gitComposeProjects.flatMap((project) => project.composePaths.map(normalizeGitPath)))],
+    [gitComposeProjects],
+  );
+  const discoveredEnvFilePaths = useMemo(
+    () => [...new Set(gitComposeProjects.flatMap((project) => project.envFilePaths.map(normalizeGitPath)))],
+    [gitComposeProjects],
+  );
   const currentDriftPolicy = normalizeDriftPolicy({
     ...(original.driftPolicy ?? {}),
     ...((update as Partial<StackInput>).driftPolicy ?? {}),
@@ -272,12 +617,16 @@ export const StackForm = ({
                 defineGroupField<StackInput>({
                   id: 'git_stack_source',
                   label: 'Git Stack',
+                  title: 'Git Stack',
+                  description:
+                    'Select a repository branch and the Compose files that define this stack. Use one stack per Compose project in a monorepo.',
                   items: [
                     defineField({
                       key: 'spec.gitRepoId',
                       label: 'Repository',
                       required: true,
-                      description: 'Select the Git repository that contains the compose project.',
+                      description: 'Repository that contains the Compose project for this stack.',
+                      validate: (v) => (!v ? 'Repository is required' : null),
                       render: (value, set) => (
                         <ResourceSelectorField
                           sourceType={LookupResourceType.Stack}
@@ -290,6 +639,7 @@ export const StackForm = ({
                                 ...(prev.spec as any),
                                 $type: 'Git',
                                 gitRepoId: v?.id ?? '',
+                                branch: undefined,
                               } as any,
                             }))
                           }
@@ -301,11 +651,15 @@ export const StackForm = ({
                       key: 'spec.branch',
                       label: 'Branch',
                       required: true,
-                      description: 'Branch to use for the stack source.',
+                      description:
+                        'Branch to fetch, discover paths from, and track for updates. Required even when a commit pin is set.',
                       validate: (v) => (!v ? 'Branch is required' : null),
                       render: (value, set) => (
-                        <FieldInput
+                        <GitBranchField
+                          repoId={currentGitRepoId}
                           value={value}
+                          refs={gitRefs}
+                          disabled={disabled}
                           onChange={(v) =>
                             set((prev) => ({
                               spec: {
@@ -315,45 +669,81 @@ export const StackForm = ({
                               } as any,
                             }))
                           }
-                          placeholder="e.g. main"
                         />
                       ),
                     }),
                     defineField({
                       key: 'spec.commitSha',
-                      label: 'Commit SHA',
-                      description: 'Optional specific commit to pin this stack release.',
+                      label: 'Pin Commit SHA',
+                      description:
+                        'Optional commit from the selected branch. When set, deploys stay on this commit and Git push webhooks are ignored.',
+                      validate: validateCommitSha,
                       render: (value, set) => (
-                        <FieldInput
-                          value={value}
-                          onChange={(v) =>
-                            set((prev) => ({
-                              spec: {
-                                ...(prev.spec as any),
-                                $type: 'Git',
-                                commitSha: v || null,
-                              } as any,
-                            }))
-                          }
-                          placeholder="Optional commit SHA"
-                        />
+                        <div className="flex flex-col gap-2">
+                          <FieldInput
+                            value={value}
+                            onChange={(v) =>
+                              set((prev) => ({
+                                spec: {
+                                  ...(prev.spec as any),
+                                  $type: 'Git',
+                                  commitSha: v || null,
+                                } as any,
+                              }))
+                            }
+                            placeholder="Optional commit SHA"
+                          />
+                          {value ? (
+                            <p className="text-xs text-muted-foreground">
+                              This stack will reapply this commit until the pin is removed or changed.
+                            </p>
+                          ) : null}
+                          <GitSourceStateHint
+                            currentCommitSha={stackView?.source?.resolvedCommitSha}
+                            latestCommitSha={selectedBranchRef?.resolvedCommitSha}
+                            pinnedCommitSha={currentPinnedCommit}
+                          />
+                        </div>
                       ),
                     }),
                     defineField({
                       key: 'spec.composePaths',
                       label: 'Compose Paths',
-                      description: 'Compose files relative to repository root.',
+                      required: true,
+                      description:
+                        'Compose files relative to the repository root. Order matters: base file first, overrides after.',
+                      validate: (v) =>
+                        validateGitPathList(v, { required: true, requireFile: true }) ??
+                        validateDiscoveredPathList(v, discoveredComposePaths, gitComposeDiscoveryReady, 'compose files'),
+                      hideValidationMessage: true,
                       render: (value, set) => (
-                        <MonacoToArrayEditor
+                        <GitDiscoveredPathsField
+                          canDiscover={canDiscoverGitPaths}
+                          discoveredPaths={discoveredComposePaths}
+                          discoveryReady={gitComposeDiscoveryReady}
+                          discovering={isDiscoveringGitPaths}
+                          discoveryError={gitComposeDiscoveryError}
+                          title="Discover compose paths"
+                          unavailableMessage="Select a repository and branch first."
+                          emptyMessage="No compose files were found on this branch."
+                          helperText="# compose.yml\n# stacks/beszel/compose.yml\n# stacks/beszel/compose.prod.yml\n# paths are relative to the repository root"
+                          requiredMessage="At least one path is required."
+                          completionItemDetail="Discovered compose file"
+                          validateItem={validateGitDiscoveredPathItem({
+                            requireFile: true,
+                            discoveredPaths: discoveredComposePaths,
+                            discoveryReady: gitComposeDiscoveryReady,
+                            label: 'compose files',
+                          })}
+                          disabled={disabled}
                           value={value}
-                          helperText="# compose.yml"
-                          language="string_list"
+                          onRefresh={refreshGitComposeDiscovery}
                           onChange={(v: string[] | undefined) =>
                             set((prev) => ({
                               spec: {
                                 ...(prev.spec as any),
                                 $type: 'Git',
-                                composePaths: v ?? [],
+                                composePaths: (v ?? []).map(normalizeGitPath).filter(Boolean),
                               } as any,
                             }))
                           }
@@ -363,18 +753,39 @@ export const StackForm = ({
                     defineField({
                       key: 'spec.composeEnvFilesFromRepo',
                       label: 'Compose Env Files',
-                      description: 'Optional repository env files used by Docker Compose for interpolation.',
+                      description:
+                        'Optional repository env files passed to Docker Compose for interpolation. These are read from the Git snapshot.',
+                      validate: (v) =>
+                        validateGitPathList(v, { requireFile: true }) ??
+                        validateDiscoveredPathList(v, discoveredEnvFilePaths, gitComposeDiscoveryReady, 'env files'),
+                      hideValidationMessage: true,
                       render: (value, set) => (
-                        <MonacoToArrayEditor
+                        <GitDiscoveredPathsField
+                          canDiscover={canDiscoverGitPaths}
+                          discoveredPaths={discoveredEnvFilePaths}
+                          discoveryReady={gitComposeDiscoveryReady}
+                          discovering={isDiscoveringGitPaths}
+                          discoveryError={gitComposeDiscoveryError}
+                          title="Discover env files"
+                          unavailableMessage="Select a repository and branch first."
+                          emptyMessage="No env files were found on this branch."
                           value={value ?? (original.spec as any)?.additionalEnvFileFromRepo}
-                          helperText="# .env.production"
-                          language="string_list"
+                          helperText="# .env\n# stacks/beszel/.env.production\n# paths are read from the selected commit snapshot"
+                          completionItemDetail="Discovered env file"
+                          validateItem={validateGitDiscoveredPathItem({
+                            requireFile: true,
+                            discoveredPaths: discoveredEnvFilePaths,
+                            discoveryReady: gitComposeDiscoveryReady,
+                            label: 'env files',
+                          })}
+                          disabled={disabled}
+                          onRefresh={refreshGitComposeDiscovery}
                           onChange={(v: string[] | undefined) =>
                             set((prev) => ({
                               spec: {
                                 ...(prev.spec as any),
                                 $type: 'Git',
-                                composeEnvFilesFromRepo: v ?? [],
+                                composeEnvFilesFromRepo: (v ?? []).map(normalizeGitPath).filter(Boolean),
                               } as any,
                             }))
                           }
@@ -552,13 +963,15 @@ export const StackForm = ({
                         id: 'git_stack_paths',
                         label: 'Git Source Paths',
                         title: 'Git Source Paths',
-                        description: 'Control how this stack resolves compose files inside the linked repository.',
+                        description:
+                          'Advanced path controls for monorepos. Defaults work for most stacks when compose files live beside their assets.',
                         items: [
                           defineField<StackInput, 'spec.workingDirectory'>({
                             key: 'spec.workingDirectory',
                             label: 'Working Directory',
                             description:
-                              'Optional repository path used as the Docker Compose project directory. Defaults to the first compose file folder.',
+                              'Repository path used as the Docker Compose project directory. Defaults to the first compose file folder.',
+                            validate: (v) => validateGitPath(v),
                             render: (value, set) => (
                               <FieldInput
                                 value={value}
@@ -567,7 +980,7 @@ export const StackForm = ({
                                     spec: {
                                       ...(prev.spec as any),
                                       $type: 'Git',
-                                      workingDirectory: v || null,
+                                      workingDirectory: v ? normalizeGitPath(v) : null,
                                     } as any,
                                   }))
                                 }
@@ -579,18 +992,23 @@ export const StackForm = ({
                             key: 'spec.watchPaths',
                             label: 'Watch Paths',
                             description:
-                              'Optional paths used to decide whether a repository commit affects this stack. Leave empty to watch the working directory and compose files.',
+                              'Optional paths used to decide whether a commit affects this stack. Leave empty to watch the working directory, compose files, and repo env files.',
+                            validate: (v) => validateGitPathList(v),
+                            hideValidationMessage: true,
                             render: (value, set) => (
                               <MonacoToArrayEditor
                                 value={value}
-                                helperText="# stacks/beszel/**\n# shared/networks.yml"
+                                helperText="# stacks/beszel/**\n# stacks/beszel/compose.yml\n# shared/networks.yml"
                                 language="string_list"
+                                unique
+                                duplicateMessage={duplicatePathMessage}
+                                validateItem={validateGitPathItem()}
                                 onChange={(v: string[] | undefined) =>
                                   set((prev) => ({
                                     spec: {
                                       ...(prev.spec as any),
                                       $type: 'Git',
-                                      watchPaths: v ?? [],
+                                      watchPaths: (v ?? []).map(normalizeGitPath).filter(Boolean),
                                     } as any,
                                   }))
                                 }
@@ -605,16 +1023,16 @@ export const StackForm = ({
                         title: 'Webhook',
                         description: 'Trigger a deploy from your Git provider when this branch receives a push.',
                         items: [
-                          defineField<StackInput, 'spec'>({
-                            key: 'spec',
+                          defineField<StackInput, 'spec.webhook'>({
+                            key: 'spec.webhook',
                             label: 'Enabled',
                             render: (value, set) => (
                               <WebhookConfigField
                                 resourceType="stack"
                                 resourceId={id}
                                 execution="deploy"
-                                value={(value as any)?.webhook ?? null}
-                                defaultBranch={(value as any)?.branch ?? null}
+                                value={value ?? null}
+                                defaultBranch={currentGitBranch}
                                 disabled={disabled}
                                 onChange={(webhook) =>
                                   set((prev) => ({
@@ -871,7 +1289,28 @@ export const StackForm = ({
           }
         : {}),
     }),
-    [disabled, mode, id, currentStackSource, currentDriftPolicy, patchDriftPolicy, original.spec],
+    [
+      disabled,
+      mode,
+      id,
+      currentStackSource,
+      currentGitRepoId,
+      currentGitBranch,
+      currentPinnedCommit,
+      currentDriftPolicy,
+      canDiscoverGitPaths,
+      discoveredComposePaths,
+      discoveredEnvFilePaths,
+      gitComposeDiscoveryReady,
+      gitComposeDiscoveryError,
+      isDiscoveringGitPaths,
+      refreshGitComposeDiscovery,
+      patchDriftPolicy,
+      original.spec,
+      gitRefs,
+      selectedBranchRef?.resolvedCommitSha,
+      stackView?.source?.resolvedCommitSha,
+    ],
   );
 
   return (

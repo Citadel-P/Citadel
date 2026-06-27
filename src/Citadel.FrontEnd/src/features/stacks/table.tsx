@@ -139,10 +139,7 @@ const StackUpdateStatusCell = ({ stack }: { stack: StackView }) => {
     return <span className="text-muted-foreground text-sm">{'<none>'}</span>;
   }
 
-  const updatedAt = states
-    .map((state) => new Date(state.lastCheckedAt).getTime())
-    .filter((value) => !Number.isNaN(value))
-    .sort((a, b) => b - a)[0];
+  const updatedAt = getLatestStackUpdateCheckTime(stack);
 
   return (
     <HoverCard openDelay={150} closeDelay={150}>
@@ -238,6 +235,18 @@ const StackUpdateStateRow = ({ state }: { state: ImageUpdateState }) => {
 
 const getStackImageUpdateStates = (stack: StackView): ImageUpdateState[] =>
   stack.stackUpdateState?.recreateStackOnNewImageState?.autoUpdateStates ?? [];
+
+const getLatestStackUpdateCheckTime = (stack: StackView): number | undefined => {
+  const candidates = [
+    getStackGitUpdateState(stack)?.lastCheckedAt,
+    ...getStackImageUpdateStates(stack).map((state) => state.lastCheckedAt),
+  ];
+
+  return candidates
+    .map((value) => (value ? new Date(value).getTime() : Number.NaN))
+    .filter((value) => !Number.isNaN(value))
+    .sort((a, b) => b - a)[0];
+};
 
 const getStackGitUpdateState = (stack: StackView): RecreateStackOnNewCommitState | null => {
   const state = stack.stackUpdateState;

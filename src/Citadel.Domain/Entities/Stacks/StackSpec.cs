@@ -45,7 +45,8 @@ public sealed record ManualStack(
 /// <param name="EnvVars"></param>
 /// <param name="AdditionalEnvFileFromRepo">Additional env files selected from the Repo.</param>
 /// <param name="EnvFilePath"></param>
-/// <param name="CommitSha">Optionally specify a commit sha to deploy from. If not specified, will deploy from the default branch and track new commits based on the update behavior.</param>
+/// <param name="Branch">Branch to fetch, discover paths from, and track for updates. Required even when deploying a pinned commit.</param>
+/// <param name="CommitSha">Optionally specify a commit sha to deploy from. If not specified, Citadel deploys the latest synced commit from the selected branch and tracks new commits based on the update behavior.</param>
 /// <param name="UpdateBehavior"> How to handle updates when a new image digest is detected for the currently defined tags in the compose file.</param>
 /// <param name="Webhook">Webhook settings used to deploy this stack from Git provider push events.</param>
 /// <param name="RegistryName">The name of the container registry to use for the stack.</param>

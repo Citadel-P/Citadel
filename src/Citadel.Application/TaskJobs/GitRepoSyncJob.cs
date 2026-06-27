@@ -93,6 +93,7 @@ internal class GitRepoSyncJob(
                                 notificationQueue,
                                 activityHub,
                                 alertService,
+                                gitCliRepository,
                                 applyStackService,
                                 syncResult.Operation,
                                 syncResult.Hash!,
@@ -125,6 +126,7 @@ internal sealed class GitRepoSyncSuccessWorkItem(
     INotificationQueue notificationQueue,
     IActivityStreamManager activityHub,
     IAlertService alertService,
+    IGitCliRepository gitCliRepository,
     IApplyStackService applyStackService,
     GitOperation gitOperation,
     string commitHash,
@@ -239,6 +241,7 @@ internal sealed class GitRepoSyncSuccessWorkItem(
     {
         var linkedStacks = await uow.Stacks.GetBranchTrackingGitStacksAsync(repo.Id, branch, cancellationToken);
         var updates = new List<LinkedGitStackUpdate>();
+        var changedPathsByCommitRange = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
         var now = DateTime.UtcNow;
 
         foreach (var stack in linkedStacks)
@@ -262,6 +265,14 @@ internal sealed class GitRepoSyncSuccessWorkItem(
             var currentCommit = source.ResolvedCommitSha;
             var remoteCommit = commitHash;
             var updateAvailable = !string.Equals(currentCommit, remoteCommit, StringComparison.OrdinalIgnoreCase);
+            var relevantUpdate = updateAvailable
+                && await HasRelevantGitStackChangesAsync(
+                    gitStack,
+                    source,
+                    currentCommit,
+                    remoteCommit,
+                    changedPathsByCommitRange,
+                    cancellationToken);
 
             var currentState = stack.StackUpdateState as GitStackUpdateState
                 ?? new GitStackUpdateState(
@@ -269,20 +280,20 @@ internal sealed class GitRepoSyncSuccessWorkItem(
                     new RecreateStackOnNewCommitState(currentCommit, null, DateTime.MinValue));
 
             var previousCommitState = currentState.RecreateStackOnNewCommitState;
-            var alreadyReported = updateAvailable
+            var alreadyReported = relevantUpdate
                 && string.Equals(previousCommitState.RemoteCommitSha, remoteCommit, StringComparison.OrdinalIgnoreCase);
 
             stack.SetStackUpdateState(currentState with
             {
                 RecreateStackOnNewCommitState = new RecreateStackOnNewCommitState(
                     CurrentCommitSha: currentCommit,
-                    RemoteCommitSha: updateAvailable ? remoteCommit : null,
+                    RemoteCommitSha: relevantUpdate ? remoteCommit : null,
                     LastCheckedAt: now)
             });
 
             await uow.Stacks.UpdateAsync(stack, cancellationToken);
 
-            if (!updateAvailable || alreadyReported)
+            if (!relevantUpdate || alreadyReported)
                 continue;
 
             var shouldNotify = gitStack.UpdateBehavior == StackUpdateBehavior.Notify;
@@ -296,7 +307,7 @@ internal sealed class GitRepoSyncSuccessWorkItem(
                     currentCommit,
                     remoteCommit,
                     ActivityEventType.StackGitUpdateAvailable,
-                    ActivityStatus.Warning,
+                    ActivityStatus.Information,
                     new StackGitUpdateAvailable(repo.Name, branch, currentCommit, remoteCommit));
 
                 await uow.ActivityEventRepository.AddAsync(availableActivity, cancellationToken);
@@ -315,6 +326,33 @@ internal sealed class GitRepoSyncSuccessWorkItem(
         }
 
         return updates;
+    }
+
+    private async Task<bool> HasRelevantGitStackChangesAsync(
+        GitStack gitStack,
+        StackReleaseSource source,
+        string currentCommit,
+        string remoteCommit,
+        Dictionary<string, IReadOnlyList<string>> changedPathsByCommitRange,
+        CancellationToken cancellationToken)
+    {
+        var cacheKey = $"{currentCommit}..{remoteCommit}";
+        if (!changedPathsByCommitRange.TryGetValue(cacheKey, out var changedPaths))
+        {
+            var result = await gitCliRepository.GetChangedPathsAsync(
+                repo.GetCachePath(),
+                currentCommit,
+                remoteCommit,
+                cancellationToken);
+
+            if (result.IsFailure(out _, out var paths))
+                return true;
+
+            changedPaths = paths;
+            changedPathsByCommitRange[cacheKey] = changedPaths;
+        }
+
+        return GitStackWatchPathMatcher.HasRelevantChanges(gitStack, source, changedPaths);
     }
 
     private async Task<(bool Success, string? Error)> TryAutoDeployAsync(Guid stackId, CancellationToken cancellationToken)

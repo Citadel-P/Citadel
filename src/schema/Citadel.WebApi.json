@@ -7452,6 +7452,209 @@
         ]
       }
     },
+    "/api/v1/gitRepositories/{id}/refs": {
+      "get": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Get synced Git repository refs",
+        "operationId": "getGitRepositoryRefs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git repository id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryRefsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/gitRepositories/{id}/compose-projects": {
+      "get": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Discover compose projects in a Git repository branch",
+        "operationId": "discoverGitRepositoryComposeProjects",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git repository id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "branch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryComposeDiscovery"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/gitRepositories/{id}/_metadata": {
       "patch": {
         "tags": [
@@ -16028,6 +16231,18 @@
               "null",
               "string"
             ]
+          },
+          "dispatchedBranch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dispatchedCommitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -16528,6 +16743,18 @@
             ]
           },
           "repositoryFullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dispatchedBranch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dispatchedCommitSha": {
             "type": [
               "null",
               "string"
@@ -21838,6 +22065,38 @@
           "SshKey"
         ]
       },
+      "GitComposeProjectCandidate": {
+        "required": [
+          "workingDirectory",
+          "composePaths",
+          "envFilePaths",
+          "suggestedWatchPaths"
+        ],
+        "type": "object",
+        "properties": {
+          "workingDirectory": {
+            "type": "string"
+          },
+          "composePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "envFilePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suggestedWatchPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "GitHubCrPackageVersion": {
         "required": [
           "id",
@@ -21963,6 +22222,33 @@
           }
         }
       },
+      "GitRepositoryComposeDiscovery": {
+        "required": [
+          "repositoryId",
+          "branch",
+          "resolvedCommitSha",
+          "projects"
+        ],
+        "type": "object",
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "resolvedCommitSha": {
+            "type": "string"
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitComposeProjectCandidate"
+            }
+          }
+        }
+      },
       "GitRepositoryConfigView": {
         "required": [
           "id",
@@ -22046,6 +22332,63 @@
                 "$ref": "#/components/schemas/RepoCommand"
               }
             ]
+          }
+        }
+      },
+      "GitRepositoryRefView": {
+        "required": [
+          "id",
+          "gitRepositoryId",
+          "branch",
+          "resolvedCommitSha",
+          "status",
+          "lastError",
+          "lastSyncedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "gitRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "resolvedCommitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitReposStatus"
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastSyncedAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "GitRepositoryRefsView": {
+        "required": [
+          "refs"
+        ],
+        "type": "object",
+        "properties": {
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitRepositoryRefView"
+            }
           }
         }
       },
@@ -26520,6 +26863,16 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackReleaseSource"
+              }
             ]
           }
         }

@@ -2,7 +2,6 @@ import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { DeploymentForm } from './form';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
-import { useState } from 'react';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useDeploymentGroup } from './hooks/useDeploymentGroup';
 import {
@@ -23,11 +22,11 @@ import { useContainerInfoGroup } from '@/features/docker-resources/containers/ho
 import { DeploymentExec } from '@/features/docker-resources/containers/container-info/container-exec';
 import { DeploymentStats } from '@/features/docker-resources/containers/container-info/container-stats';
 import { ActivitiesTab } from '@/features/activities';
-import { ArrowRight, ArrowUpCircle, X } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ActivityAlertZone } from '@/components/custom/task-sheet';
 import { DeploymentLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { hasCapability } from '@/lib/resource-capabilities';
+import { UpdateAvailableNotice } from '@/components/custom/common';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -125,9 +124,7 @@ const DeploymentLatestActivity = ({ latestActivity }: { latestActivity: LatestAc
 };
 
 const DeploymentUpdateNotice = ({ deployment }: { deployment: DeploymentView }) => {
-  const [dismissed, setDismissed] = useState(false);
   if (
-    dismissed ||
     deployment.spec?.updateBehavior === UpdateBehavior.Disabled ||
     deployment.autoUpdateState.status !== AutoUpdateStatus.UpdateAvailable
   ) {
@@ -135,37 +132,14 @@ const DeploymentUpdateNotice = ({ deployment }: { deployment: DeploymentView }) 
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-md border border-amber-200 bg-amber-50/50 px-4 py-3 ">
-      <div className="flex items-center gap-3 overflow-hidden">
-        <ArrowUpCircle className="h-4 w-4 shrink-0 text-amber-500" />
-        <div className="flex items-center gap-2 truncate text-sm text-muted-foreground">
-          <span className="font-mono text-foreground/80 ">Update available: </span>
-          <span className="truncate ">
-            Click <span className="font-mono text-foreground/80">Redeploy</span> to apply the update to this deployment.
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span
-              className=" text-xs text-muted-foreground line-through"
-              title={deployment.autoUpdateState.currentDigest ?? deployment.name}>
-              {formatId(deployment.autoUpdateState.currentDigest ?? undefined)}
-            </span>
-            <ArrowRight className="h-3 w-3 text-muted-foreground" />
-            <span
-              className="text-xs font-medium text-amber-700"
-              title={deployment.autoUpdateState.remoteDigest ?? deployment.name}>
-              {formatId(deployment.autoUpdateState.remoteDigest ?? undefined)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <button
-        onClick={() => setDismissed(true)}
-        className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-amber-100/50 hover:text-slate-600"
-        aria-label="Dismiss">
-        <X className="h-4 w-4" />
-      </button>
-    </div>
+    <UpdateAvailableNotice
+      actionLabel="Redeploy"
+      targetLabel="deployment"
+      currentLabel={formatId(deployment.autoUpdateState.currentDigest ?? undefined)}
+      nextLabel={formatId(deployment.autoUpdateState.remoteDigest ?? undefined)}
+      currentTitle={deployment.autoUpdateState.currentDigest ?? deployment.name}
+      nextTitle={deployment.autoUpdateState.remoteDigest ?? deployment.name}
+    />
   );
 };
 

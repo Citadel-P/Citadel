@@ -1,14 +1,23 @@
 import { Eye, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { StackDriftMode, StackReleaseStatus, StackView, ResourceControlState } from '@/api/generated/api.types';
 import { Ban, Pause, Play, RefreshCw, Rocket, StepForward } from 'lucide-react';
 import { useTaskSheet } from '@/lib/atoms';
 import { ActionConfig } from '@/components/custom/actions-builder';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { getStackReconciliationToast, hasActionableStackDrift } from './drift';
+import {
+  StackReleaseStatus,
+  ResourceControlState,
+  StackDrift,
+  StackDriftMode,
+  StackDriftPolicy,
+  StackDriftReport,
+  StackReconciliationResult,
+  StackReconciliationStatus,
+  StackView,
+} from '@/api/generated/api.types';
 
 export const useVariables = (resources: StackView | StackView[]) =>
   Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];
@@ -89,10 +98,7 @@ export const syncAction: ActionConfig<StackView, any> = {
     const selected = Array.isArray(resources) ? resources[0] : resources;
     const multiSelect = Array.isArray(resources) && resources.length > 1;
     const queryEnabled =
-      !!selected &&
-      !multiSelect &&
-      canCheckDrift(selected) &&
-      selected.driftPolicy?.mode !== StackDriftMode.Disabled;
+      !!selected && !multiSelect && canCheckDrift(selected) && selected.driftPolicy?.mode !== StackDriftMode.Disabled;
     const { data, isLoading, isFetching, refetch } = useRead(
       'getStackDrift',
       { stackId: selected?.id ?? '' },
@@ -102,25 +108,13 @@ export const syncAction: ActionConfig<StackView, any> = {
     const report = data?.data;
     const hasActionableDrift = hasActionableStackDrift(selected, report);
 
-    const canExecute =
-      !!selected &&
-      queryEnabled &&
-      !isProcessing(selected) &&
-      !isLoading &&
-      hasActionableDrift;
+    const canExecute = !!selected && queryEnabled && !isProcessing(selected) && !isLoading && hasActionableDrift;
 
     return {
       canExecute,
       isPending: isPending || isFetching,
       run: async () => {
-        if (
-          !selected ||
-          multiSelect ||
-          !queryEnabled ||
-          isProcessing(selected) ||
-          isLoading ||
-          !hasActionableDrift
-        )
+        if (!selected || multiSelect || !queryEnabled || isProcessing(selected) || isLoading || !hasActionableDrift)
           return;
         const result = await mutateAsync({ stackId: selected.id });
         const message = getStackReconciliationToast(result.data);
@@ -167,44 +161,114 @@ export const pauseAction: ActionConfig<StackView, 'pauseStacks' | 'resumeStacks'
   },
 };
 
-export const { dropdown: StackDropdownActions, group: StackGroupActions } =
-  createActionsBuilder<StackView>()
-    .addAction(deployAction)
-    .addAction(syncAction)
-    .addAction(startAction)
-    .addAction(stopAction)
-    .addAction(pauseAction)
-    .addAction({
-      key: 'details',
-      type: 'command',
-      separatorBefore: true,
-      icon: Eye,
-      useHandler: ({ resources }) => {
-        const navigate = useNavigate();
-        const selected = Array.isArray(resources) ? resources[0] : resources;
-        const multiSelect = Array.isArray(resources) && resources.length > 1;
-        const canExecute = !!selected && !multiSelect;
+export const { dropdown: StackDropdownActions, group: StackGroupActions } = createActionsBuilder<StackView>()
+  .addAction(deployAction)
+  .addAction(syncAction)
+  .addAction(startAction)
+  .addAction(stopAction)
+  .addAction(pauseAction)
+  .addAction({
+    key: 'details',
+    type: 'command',
+    separatorBefore: true,
+    icon: Eye,
+    useHandler: ({ resources }) => {
+      const navigate = useNavigate();
+      const selected = Array.isArray(resources) ? resources[0] : resources;
+      const multiSelect = Array.isArray(resources) && resources.length > 1;
+      const canExecute = !!selected && !multiSelect;
 
-        return {
-          canExecute,
-          isPending: false,
-          run: () => {
-            if (!canExecute || !selected) return;
-            navigate(`/stacks/edit/${selected.id}/`);
-          },
-        };
-      },
-    })
-    .addAction({
-      key: 'delete',
-      type: 'command',
-      icon: Trash,
-      mutateKey: 'deleteStacks',
-      canExecute: () => true,
-      separatorBefore: true,
-      confirm: true,
-      destructive: true,
-      resourceType: 'Stack',
-      useVariables,
-    })
-    .build();
+      return {
+        canExecute,
+        isPending: false,
+        run: () => {
+          if (!canExecute || !selected) return;
+          navigate(`/stacks/edit/${selected.id}/`);
+        },
+      };
+    },
+  })
+  .addAction({
+    key: 'delete',
+    type: 'command',
+    icon: Trash,
+    mutateKey: 'deleteStacks',
+    canExecute: () => true,
+    separatorBefore: true,
+    confirm: true,
+    destructive: true,
+    resourceType: 'Stack',
+    useVariables,
+  })
+  .build();
+
+const canApplyStackDrift = (policy: StackDriftPolicy | null | undefined, drift: StackDrift): boolean => {
+  if (!policy || policy.mode !== StackDriftMode.AutoFix) return false;
+
+  switch (drift.$type) {
+    case 'ContainerStopped':
+      return policy.autoStartStoppedContainers;
+    case 'ContainerPaused':
+      return policy.autoResumePausedContainers;
+    case 'ExtraContainer':
+      return policy.removeExtraContainers;
+    default:
+      return false;
+  }
+};
+
+export const hasActionableStackDrift = (
+  stack: StackView | null | undefined,
+  report: StackDriftReport | null | undefined,
+): boolean =>
+  !!stack &&
+  !!report &&
+  report.hasDrift &&
+  !report.hasStructuralDrift &&
+  report.drifts.some((drift) => canApplyStackDrift(stack.driftPolicy, drift));
+
+export const getStackReconciliationToast = (
+  result: StackReconciliationResult,
+): { kind: 'success' | 'warning' | 'info' | 'error'; title: string; description?: string } => {
+  if (result.status === StackReconciliationStatus.Reconciled) {
+    return {
+      kind: 'success',
+      title: 'Stack drift reconciled',
+    };
+  }
+
+  if (result.status === StackReconciliationStatus.NoDrift) {
+    return {
+      kind: 'info',
+      title: 'No drift detected',
+    };
+  }
+
+  if (result.status === StackReconciliationStatus.RequiresReapply) {
+    return {
+      kind: 'warning',
+      title: 'Reapply required',
+      description: 'This drift changes stack structure and cannot be safely reconciled.',
+    };
+  }
+
+  if (result.actions.length === 0 && result.beforeReport.hasAutoFixableDrift) {
+    return {
+      kind: 'warning',
+      title: 'No safe auto-fix action is enabled',
+      description: 'Enable the matching safe auto-fix option in Config, then sync again.',
+    };
+  }
+
+  if (result.status === StackReconciliationStatus.Failed) {
+    return {
+      kind: 'error',
+      title: 'Stack drift reconciliation failed',
+    };
+  }
+
+  return {
+    kind: 'warning',
+    title: 'Stack drift partially reconciled',
+  };
+};

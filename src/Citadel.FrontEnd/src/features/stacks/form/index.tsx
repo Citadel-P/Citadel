@@ -27,7 +27,13 @@ import { ColumnDef } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
-import { CPUCell, DockerContainerCell, DockerImageCell, MemoryUsageCell } from '@/components/custom/common';
+import {
+  CPUCell,
+  DockerContainerCell,
+  DockerImageCell,
+  MemoryUsageCell,
+  UpdateAvailableNotice,
+} from '@/components/custom/common';
 import { truncate } from '@/lib/truncate';
 import { formatId } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -38,16 +44,16 @@ import { StackStats } from '@/features/docker-resources/containers/container-inf
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Check, Dot, Eye, Funnel, Loader2, RotateCcw } from 'lucide-react';
+import { Check, Eye, Funnel, RotateCcw } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useRead } from '@/lib/hooks';
-import { hasActionableStackDrift } from '../drift';
 import { useTaskSheet } from '@/lib/atoms';
 import { fromNow } from '@/lib/dayjs.helper';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { MonacoDiff } from '@/lib/monaco';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
+import { hasActionableStackDrift } from '../actions';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -129,13 +135,17 @@ const StackUpdateNotice = ({ stack }: { stack: StackView }) => {
     gitState.remoteCommitSha !== gitState.currentCommitSha
   ) {
     return (
-      <AlertMessage type="info" title="Git update available">
-        <div className="flex flex-wrap gap-2 items-center">
-          {stack.source?.gitRepositoryName ?? 'Repository'}
-          {stack.source?.branch ? `/${stack.source.branch}` : ''}: {formatId(gitState.currentCommitSha)} {'->'}{' '}
-          {formatId(gitState.remoteCommitSha)}
-        </div>
-      </AlertMessage>
+      <UpdateAvailableNotice
+        title="Git update available:"
+        actionLabel="Deploy"
+        targetLabel="stack"
+        sourceLabel={`${stack.source?.gitRepositoryName ?? 'Repository'}${stack.source?.branch ? `/${stack.source.branch}` : ''}`}
+        sourceTitle={stack.source?.gitRepositoryName ?? undefined}
+        currentLabel={formatId(gitState.currentCommitSha)}
+        nextLabel={formatId(gitState.remoteCommitSha)}
+        currentTitle={gitState.currentCommitSha}
+        nextTitle={gitState.remoteCommitSha}
+      />
     );
   }
 
@@ -179,6 +189,9 @@ const StackLatestActivity = ({
         <div className="flex flex-wrap gap-2 items-center ">{latestActivity?.info.reason}</div>
       </AlertMessage>
     );
+  }
+  if (latestActivity?.info.$type === 'StackGitUpdateAvailable') {
+    return null;
   }
   return (
     <ActivityAlertZone
@@ -308,7 +321,8 @@ const StackReleasesTab = ({ stack }: { stack: StackView }) => {
             </SheetDescription>
           </SheetHeader>
           {previewRelease && (
-            <div className="p-4 pt-0 pb-2">
+            <div className="flex flex-col gap-4 p-4 pt-0 pb-2">
+              <StackReleaseSourceDetails release={previewRelease} />
               <MonacoDiff
                 original={createStackPreviewConfig(stack)}
                 modified={createStackReleasePreviewConfig(stack, previewRelease)}
@@ -329,7 +343,6 @@ const createStackPreviewConfig = (stack: StackView) => ({
   stackSource: stack.stackSource,
   platformId: stack.platformId,
   spec: stack.spec,
-  source: stack.source,
 });
 
 const createStackReleasePreviewConfig = (stack: StackView, release: StackReleaseView) => ({
@@ -338,7 +351,6 @@ const createStackReleasePreviewConfig = (stack: StackView, release: StackRelease
   stackSource: stack.stackSource,
   platformId: release.platformId,
   spec: release.spec,
-  source: release.source,
 });
 
 const StackReleaseSourceCell = ({ release }: { release: StackReleaseView }) => {
@@ -349,26 +361,82 @@ const StackReleaseSourceCell = ({ release }: { release: StackReleaseView }) => {
   }
 
   if (source.sourceType === StackSource.Git) {
-    const paths = source.composePaths?.length ? source.composePaths.join(', ') : null;
-
     return (
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate text-sm">
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <span className="truncate text-sm font-medium">
           {source.gitRepositoryName ?? 'Git repository'}
           {source.branch ? `/${source.branch}` : ''}
-          {source.resolvedCommitSha ? ` @ ${formatId(source.resolvedCommitSha)}` : ''}
         </span>
-        {paths && (
-          <span className="truncate text-xs text-muted-foreground" title={paths}>
-            {paths}
-          </span>
-        )}
+        <div className="flex min-w-0 flex-wrap gap-1.5">
+          {source.resolvedCommitSha ? <SourceBadge value={formatId(source.resolvedCommitSha)} title={source.resolvedCommitSha} /> : null}
+          {source.workingDirectory ? <SourceBadge value={source.workingDirectory} title={`Working directory: ${source.workingDirectory}`} /> : null}
+          {source.composePaths?.length ? <SourceBadge value={`${source.composePaths.length} compose`} title={source.composePaths.join('\n')} /> : null}
+          {source.envFilePaths?.length ? <SourceBadge value={`${source.envFilePaths.length} env`} title={source.envFilePaths.join('\n')} /> : null}
+          {source.watchPaths?.length ? <SourceBadge value={`${source.watchPaths.length} watch`} title={source.watchPaths.join('\n')} /> : null}
+        </div>
       </div>
     );
   }
 
   return <span className="text-sm text-muted-foreground">{source.sourceType}</span>;
 };
+
+const StackReleaseSourceDetails = ({ release }: { release: StackReleaseView }) => {
+  const source = release.source;
+  if (!source) return null;
+
+  if (source.sourceType !== StackSource.Git) {
+    return (
+      <div className="rounded-sm border border-dashed p-3 text-sm text-muted-foreground">
+        Source: {source.sourceType}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 rounded-sm border border-dashed p-3 text-sm">
+      <div className="grid gap-1 sm:grid-cols-[9rem_1fr]">
+        <span className="text-muted-foreground">Repository</span>
+        <span className="min-w-0 truncate">{source.gitRepositoryName ?? '-'}</span>
+      </div>
+      <div className="grid gap-1 sm:grid-cols-[9rem_1fr]">
+        <span className="text-muted-foreground">Branch</span>
+        <span className="min-w-0 truncate">{source.branch ?? '-'}</span>
+      </div>
+      <div className="grid gap-1 sm:grid-cols-[9rem_1fr]">
+        <span className="text-muted-foreground">Resolved commit</span>
+        <span className="min-w-0 truncate font-mono text-xs" title={source.resolvedCommitSha}>
+          {source.resolvedCommitSha ?? '-'}
+        </span>
+      </div>
+      <SourcePathRow label="Working directory" paths={source.workingDirectory ? [source.workingDirectory] : []} />
+      <SourcePathRow label="Compose files" paths={source.composePaths ?? []} />
+      <SourcePathRow label="Env files" paths={source.envFilePaths ?? []} />
+      <SourcePathRow label="Watch paths" paths={source.watchPaths ?? []} />
+    </div>
+  );
+};
+
+const SourcePathRow = ({ label, paths }: { label: string; paths: string[] }) => (
+  <div className="grid gap-1 sm:grid-cols-[9rem_1fr]">
+    <span className="text-muted-foreground">{label}</span>
+    {paths.length ? (
+      <div className="flex min-w-0 flex-wrap gap-1.5">
+        {paths.map((path) => (
+          <SourceBadge key={path} value={path} title={path} />
+        ))}
+      </div>
+    ) : (
+      <span className="text-muted-foreground">-</span>
+    )}
+  </div>
+);
+
+const SourceBadge = ({ value, title }: { value: string; title?: string }) => (
+  <span className="max-w-full truncate rounded-sm border bg-muted/30 px-1.5 py-0.5 font-mono text-xs" title={title ?? value}>
+    {value}
+  </span>
+);
 
 const isRollbackCandidateRelease = (release: StackReleaseView) => release.status === StackReleaseStatus.Healthy;
 
@@ -377,7 +445,7 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
   const driftEligibleStatus =
     stack.status === StackReleaseStatus.Healthy || stack.status === StackReleaseStatus.Degraded;
   const queryEnabled = !driftDetectionDisabled && driftEligibleStatus;
-  const { data, isLoading, error } = useRead('getStackDrift', { stackId: stack.id }, { enabled: queryEnabled });
+  const { data, error } = useRead('getStackDrift', { stackId: stack.id }, { enabled: queryEnabled });
   const report = data?.data;
 
   if (driftDetectionDisabled) {
@@ -395,15 +463,6 @@ const StackDriftPanel = ({ stack }: { stack: StackView }) => {
       <AlertMessage type="warning" title="Drift check failed" className="my-0">
         {(error as any)?.error?.detail ?? 'Unable to check stack drift.'}
       </AlertMessage>
-    );
-  }
-
-  if (isLoading && !report) {
-    return (
-      <div className="flex items-center gap-2 rounded-sm border px-3 py-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
-        Checking stack drift...
-      </div>
     );
   }
 

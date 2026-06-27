@@ -51,29 +51,29 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
     {
         var candidates = new[]
         {
-            branch,
-            $"refs/heads/{branch}",
             $"refs/remotes/origin/{branch}",
+            $"refs/heads/{branch}",
+            branch,
             "HEAD"
         };
 
         foreach (var candidate in candidates)
         {
-            var args = new[] { "-C", repoPath, "rev-parse", candidate };
+            var args = new[] { "-C", NormalizeLocalGitPath(repoPath), "rev-parse", candidate };
             var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, "", ct);
 
             if (result.IsSuccess)
                 return Result.Success(result.StandardOutput.Trim());
         }
 
-        var error = $"Failed to resolve commit hash for repo at {repoPath} and branch {branch}. Tried refs/heads/{branch}, refs/remotes/origin/{branch}, and HEAD.";
+        var error = $"Failed to resolve commit hash for repo at {repoPath} and branch {branch}. Tried refs/remotes/origin/{branch}, refs/heads/{branch}, {branch}, and HEAD.";
         return Result.Failure<string>(error);
     }
 
     public async Task<Result> CloneAsync(string url, string targetPath, string branch, GitAccount? account, CancellationToken ct = default)
     {
         var (args, env) = PrepareRemoteCmd(account);
-        args.AddRange(["clone", "-b", branch, "--single-branch", url, targetPath]);
+        args.AddRange(["clone", "-b", branch, "--single-branch", url, NormalizeLocalGitPath(targetPath)]);
 
         var result = await processService.ExecuteAsync(GitExecutable, args, env, "", ct);
         return result.Map();
@@ -82,7 +82,7 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
     public async Task<Result> PullAsync(string repoPath, string branch, GitAccount? account, CancellationToken ct = default)
     {
         var (args, env) = PrepareRemoteCmd(account);
-        args.AddRange(["-C", repoPath, "pull", "origin", branch]);
+        args.AddRange(["-C", NormalizeLocalGitPath(repoPath), "pull", "origin", branch]);
 
         var result = await processService.ExecuteAsync(GitExecutable, args, env, "", ct);
         return result.Map();
@@ -91,15 +91,40 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
     public async Task<Result> FetchAsync(string repoPath, string branch, GitAccount? account, CancellationToken ct = default)
     {
         var (args, env) = PrepareRemoteCmd(account);
-        args.AddRange(["-C", repoPath, "fetch", "origin", $"{branch}:refs/remotes/origin/{branch}"]);
+        args.AddRange(["-C", NormalizeLocalGitPath(repoPath), "fetch", "origin", $"{branch}:refs/remotes/origin/{branch}"]);
 
         var result = await processService.ExecuteAsync(GitExecutable, args, env, "", ct);
         return result.Map();
     }
 
+    public async Task<Result> ResetWorkingTreeAsync(string repoPath, string branch, CancellationToken ct = default)
+    {
+        var normalizedRepoPath = NormalizeLocalGitPath(repoPath);
+        var remoteRef = $"refs/remotes/origin/{branch}";
+
+        var checkout = await processService.ExecuteAsync(
+            GitExecutable,
+            ["-C", normalizedRepoPath, "checkout", "-B", branch, remoteRef],
+            GitEnv,
+            "",
+            ct);
+
+        if (!checkout.IsSuccess)
+            return checkout.Map();
+
+        var reset = await processService.ExecuteAsync(
+            GitExecutable,
+            ["-C", normalizedRepoPath, "reset", "--hard", remoteRef],
+            GitEnv,
+            "",
+            ct);
+
+        return reset.Map();
+    }
+
     public async Task<Result> CommitExistsAsync(string repoPath, string commitSha, CancellationToken ct = default)
     {
-        var args = new[] { "-C", repoPath, "cat-file", "-e", $"{commitSha}^{{commit}}" };
+        var args = new[] { "-C", NormalizeLocalGitPath(repoPath), "cat-file", "-e", $"{commitSha}^{{commit}}" };
         var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, "", ct);
         return result.Map();
     }
@@ -113,7 +138,7 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
         var args = new[]
         {
             "-C",
-            repoPath,
+            NormalizeLocalGitPath(repoPath),
             "diff",
             "--name-only",
             "--find-renames",
@@ -141,9 +166,12 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
         if (Directory.Exists(targetPath))
             Directory.Delete(targetPath, recursive: true);
 
+        var normalizedRepoPath = NormalizeLocalGitPath(repoPath);
+        var normalizedTargetPath = NormalizeLocalGitPath(targetPath);
+
         var clone = await processService.ExecuteAsync(
             GitExecutable,
-            ["clone", "--no-checkout", "--no-hardlinks", repoPath, targetPath],
+            ["clone", "--no-checkout", "--no-hardlinks", normalizedRepoPath, normalizedTargetPath],
             GitEnv,
             "",
             ct);
@@ -153,7 +181,7 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
 
         var checkout = await processService.ExecuteAsync(
             GitExecutable,
-            ["-C", targetPath, "checkout", "--detach", commitSha],
+            ["-C", normalizedTargetPath, "checkout", "--detach", commitSha],
             GitEnv,
             "",
             ct);
@@ -258,5 +286,18 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
         }
 
         File.SetUnixFileMode(keyFile, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+    }
+
+    private static string NormalizeLocalGitPath(string path)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            || string.IsNullOrWhiteSpace(path)
+            || path[0] != '/'
+            || path.StartsWith("//", StringComparison.Ordinal))
+        {
+            return path;
+        }
+
+        return Path.GetFullPath(path);
     }
 }

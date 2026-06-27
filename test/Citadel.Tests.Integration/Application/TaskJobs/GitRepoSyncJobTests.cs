@@ -370,6 +370,7 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal("old-commit", updateState.RecreateStackOnNewCommitState.CurrentCommitSha);
         Assert.Equal("new-commit", updateState.RecreateStackOnNewCommitState.RemoteCommitSha);
         Assert.Equal(ActivityEventType.StackGitUpdateAvailable, stack.LatestActivityEvent?.EventType);
+        Assert.Equal(ActivityStatus.Information, stack.LatestActivityEvent?.Status);
 
         _alertServiceMock.Verify(
             x => x.ProcessAsync(AlertType.StackGitUpdateAvailable, It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()),
@@ -421,6 +422,52 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         _alertServiceMock.Verify(
             x => x.ProcessAsync(AlertType.StackGitUpdateAvailable, It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenMultipleStacksTrackSameMonorepo_OnlyAffectedStackIsMarkedUpdateAvailable()
+    {
+        var beszelStackId = await CreateTrackedGitStackAsync(
+            "old-commit",
+            composePaths: ["stacks/beszel/compose.yml"],
+            workingDirectory: "stacks/beszel");
+        var caddyStackId = await CreateTrackedGitStackAsync(
+            "old-commit",
+            composePaths: ["stacks/caddy/compose.yml"],
+            workingDirectory: "stacks/caddy");
+
+        _gitCliRepositoryMock
+            .Setup(x => x.TestConnectionAsync(It.IsAny<string>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        _repoCacheManagerMock
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "new-commit", true));
+
+        _gitCliRepositoryMock
+            .Setup(x => x.GetChangedPathsAsync(It.IsAny<string>(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["stacks/beszel/compose.yml"]));
+
+        await RunJobOnceAsync();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var beszel = await uow.Stacks.GetAsync(beszelStackId, TestContext.Current.CancellationToken);
+        var caddy = await uow.Stacks.GetAsync(caddyStackId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(beszel);
+        Assert.NotNull(caddy);
+        var beszelUpdateState = Assert.IsType<GitStackUpdateState>(beszel!.StackUpdateState);
+        Assert.Equal("new-commit", beszelUpdateState.RecreateStackOnNewCommitState.RemoteCommitSha);
+        Assert.Equal(ActivityEventType.StackGitUpdateAvailable, beszel.LatestActivityEvent?.EventType);
+
+        var caddyUpdateState = Assert.IsType<GitStackUpdateState>(caddy!.StackUpdateState);
+        Assert.Null(caddyUpdateState.RecreateStackOnNewCommitState.RemoteCommitSha);
+        Assert.NotEqual(ActivityEventType.StackGitUpdateAvailable, caddy.LatestActivityEvent?.EventType);
+
+        _alertServiceMock.Verify(
+            x => x.ProcessAsync(AlertType.StackGitUpdateAvailable, It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     private Task RunJobOnceAsync(Guid repoId)

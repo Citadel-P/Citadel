@@ -61,11 +61,14 @@ import {
   Funnel,
   HardDrive,
   Network,
+  ArrowRight,
+  ArrowUpCircle,
   RefreshCcw,
   RefreshCcwDot,
   RefreshCwOff,
   Timer,
   WrapText,
+  X,
 } from 'lucide-react';
 import { byteTransform } from '@/lib/bytes.helper';
 import { Link } from 'react-router';
@@ -618,6 +621,74 @@ export const UpdateStatusIcon = ({ updateStatus }: { updateStatus: AutoUpdateSta
   const { Icon, className } = UPDATE_STATUS_UI[updateStatus];
 
   return <Icon width={14} height={14} className={className} />;
+};
+
+export const UpdateAvailableNotice = ({
+  title = 'Update available:',
+  actionLabel,
+  targetLabel,
+  sourceLabel,
+  sourceTitle,
+  currentLabel,
+  nextLabel,
+  currentTitle,
+  nextTitle,
+}: {
+  title?: string;
+  actionLabel: string;
+  targetLabel: string;
+  sourceLabel?: ReactNode;
+  sourceTitle?: string | null;
+  currentLabel?: ReactNode;
+  nextLabel?: ReactNode;
+  currentTitle?: string | null;
+  nextTitle?: string | null;
+}) => {
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
+
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-md border border-amber-200 bg-amber-50/50 px-4 py-3">
+      <div className="flex items-center gap-3 overflow-hidden">
+        <ArrowUpCircle className="h-4 w-4 shrink-0 text-amber-500" />
+        <div className="flex items-center gap-2 truncate text-sm text-muted-foreground">
+          <span className="font-mono text-foreground/80">{title}</span>
+          <span className="truncate">
+            Click <span className="font-mono text-foreground/80">{actionLabel}</span> to apply the update to this{' '}
+            {targetLabel}.
+          </span>
+          {sourceLabel ? (
+            <span className="truncate text-xs text-muted-foreground" title={sourceTitle ?? undefined}>
+              {sourceLabel}
+            </span>
+          ) : null}
+          {currentLabel || nextLabel ? (
+            <div className="flex shrink-0 items-center gap-1.5">
+              {currentLabel ? (
+                <span className="text-xs text-muted-foreground line-through" title={currentTitle ?? undefined}>
+                  {currentLabel}
+                </span>
+              ) : null}
+              {currentLabel && nextLabel ? <ArrowRight className="h-3 w-3 text-muted-foreground" /> : null}
+              {nextLabel ? (
+                <span className="text-xs font-medium text-amber-700" title={nextTitle ?? undefined}>
+                  {nextLabel}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <button
+        onClick={() => setDismissed(true)}
+        className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-amber-100/50 hover:text-slate-600"
+        aria-label="Dismiss">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
 };
 
 export interface LogEntry {

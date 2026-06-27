@@ -56,6 +56,10 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
                 var fetchResult = await gitCli.FetchAsync(targetPath, syncBranch, account, ct);
                 if (fetchResult.IsFailure(out var error))
                     return new RepoSyncResult(Operation: operation, Error: error.Message);
+
+                var resetResult = await gitCli.ResetWorkingTreeAsync(targetPath, syncBranch, ct);
+                if (resetResult.IsFailure(out error))
+                    return new RepoSyncResult(Operation: operation, Error: error.Message);
             }
 
             // Execute SystemMessage Hooks
@@ -161,7 +165,8 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
     public string GetRemoteUrl(GitRepository repo, GitAccount? account)
     {
         if (repo.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ||
-            repo.Url.StartsWith("git@", StringComparison.OrdinalIgnoreCase))
+            repo.Url.StartsWith("git@", StringComparison.OrdinalIgnoreCase) ||
+            repo.Url.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
         {
             return repo.Url;
         }

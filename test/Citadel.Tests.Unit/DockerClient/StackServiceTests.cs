@@ -18,9 +18,11 @@ public class StackServiceTests
         var baseCompose = Path.Combine(workingDirectory, "compose.yml");
         var overrideCompose = Path.Combine(workingDirectory, "compose.prod.yml");
         var labelsOverride = Path.Combine(generatedDirectory, "citadel.labels.yml");
+        var repoEnvFile = Path.Combine(workingDirectory, ".env");
         File.WriteAllText(baseCompose, "services: {}");
         File.WriteAllText(overrideCompose, "services: {}");
         File.WriteAllText(labelsOverride, "services: {}");
+        File.WriteAllText(repoEnvFile, "APP_ENV=repo");
 
         var executor = new CapturingCommandExecutor();
         var service = new StackService(executor);
@@ -42,6 +44,7 @@ public class StackServiceTests
             PullImages: false,
             SourceWorkingDirectory: workingDirectory,
             SourceComposeFilePaths: [baseCompose, overrideCompose],
+            SourceEnvFilePaths: [repoEnvFile],
             LabelsOverrideFilePath: labelsOverride,
             GeneratedFilesDirectory: generatedDirectory);
 
@@ -53,13 +56,15 @@ public class StackServiceTests
         Assert.Equal("docker", invocation.FileName);
         Assert.Equal(workingDirectory, invocation.WorkingDirectory);
         Assert.Equal("prod", invocation.EnvironmentVariables["APP_ENV"]);
-        Assert.Equal(generatedDirectory, Path.GetDirectoryName(invocation.Arguments[6]));
+        var generatedEnvFile = Path.Combine(generatedDirectory, ".env");
+        Assert.True(File.Exists(generatedEnvFile));
         Assert.Equal(
             [
                 "compose",
                 "--project-directory", workingDirectory,
                 "-p", "demo",
-                "--env-file", Path.Combine(generatedDirectory, ".env"),
+                "--env-file", repoEnvFile,
+                "--env-file", generatedEnvFile,
                 "-f", baseCompose,
                 "-f", overrideCompose,
                 "-f", labelsOverride,

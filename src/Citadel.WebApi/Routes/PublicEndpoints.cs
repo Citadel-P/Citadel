@@ -379,6 +379,22 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getGitRepositoryConfig");
 
+        gitRepositories.MapGet("{id}/refs", GitRepositories.GetRefs)
+            .WithSummary("Get synced Git repository refs")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getGitRepositoryRefs");
+
+        gitRepositories.MapGet("{id}/compose-projects", GitRepositories.DiscoverComposeProjects)
+            .WithSummary("Discover compose projects in a Git repository branch")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("discoverGitRepositoryComposeProjects");
+
         gitRepositories.MapPost("/", GitRepositories.Create)
             .WithSummary("Create a git repository")
             .ProducesValidationProblem()

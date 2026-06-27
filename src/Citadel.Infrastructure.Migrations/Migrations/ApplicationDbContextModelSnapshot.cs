@@ -606,6 +606,40 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("019d0000-0001-7000-8001-000000000015"),
+                            CooldownSeconds = 86400,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Git Update Available - Stack",
+                            QuietHours = "[]",
+                            Severity = "Info",
+                            Type = "StackGitUpdateAvailable"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-000000000016"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Git Stack Auto Updated",
+                            QuietHours = "[]",
+                            Severity = "Info",
+                            Type = "StackGitAutoUpdated"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-000000000017"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Git Auto Deploy Failed - Stack",
+                            QuietHours = "[]",
+                            Severity = "Critical",
+                            Type = "StackGitAutoDeployFailed"
+                        },
+                        new
+                        {
                             Id = new Guid("019d0000-0001-7000-8001-00000000000f"),
                             CooldownSeconds = 300,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),

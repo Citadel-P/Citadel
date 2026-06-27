@@ -53,6 +53,8 @@ internal sealed class ReceiveWebhookHandler(
     IActivityStreamManager activityStreamManager,
     IAlertService alertService,
     IApplyStackService applyStackService,
+    IRepoCacheManager repoCacheManager,
+    IGitCliRepository gitCliRepository,
     ILoggerFactory loggerFactory) : ICommandHandler<ReceiveWebhook, Result<WebhookReceiveResult>>
 {
     private const int MaxBodyBytes = 1024 * 1024;
@@ -63,20 +65,20 @@ internal sealed class ReceiveWebhookHandler(
         var requestId = Guid.CreateVersion7();
         if (command.Body.Length > MaxBodyBytes)
         {
-            await RecordActivityAsync(command, requestId, target: null, payload: null, pendingGitSyncRequest: null, status: "rejected", reason: "Request body too large", ActivityStatus.Failure, cancellationToken);
+            await RecordActivityAsync(command, requestId, null, null, WebhookDispatchResult.NoOp("Request body too large"), "rejected", "Request body too large", ActivityStatus.Failure, cancellationToken);
             return Result.Failure<WebhookReceiveResult>(new BadRequestError("Request body too large"));
         }
 
         var target = await ResolveTargetAsync(command, cancellationToken);
         if (target.Error is not null)
         {
-            await RecordActivityAsync(command, requestId, target, payload: null, pendingGitSyncRequest: null, status: "rejected", reason: target.Error.Message, ActivityStatus.Failure, cancellationToken);
+            await RecordActivityAsync(command, requestId, target, null, WebhookDispatchResult.NoOp(target.Error.Message), "rejected", target.Error.Message, ActivityStatus.Failure, cancellationToken);
             return Result.Failure<WebhookReceiveResult>(target.Error);
         }
 
         if (!Authenticate(target.AuthScheme, command.Headers, command.Body, target.Secret))
         {
-            await RecordActivityAsync(command, requestId, target, payload: null, pendingGitSyncRequest: null, status: "rejected", reason: "Webhook authentication failed", ActivityStatus.Failure, cancellationToken);
+            await RecordActivityAsync(command, requestId, target, null, WebhookDispatchResult.NoOp("Webhook authentication failed"), "rejected", "Webhook authentication failed", ActivityStatus.Failure, cancellationToken);
             await ProcessWebhookAlertAsync(AlertType.WebhookAuthenticationFailed, command, requestId, target, payload: null, "Webhook authentication failed", cancellationToken);
             return Result.Failure<WebhookReceiveResult>(new UnauthorizedError("Webhook authentication failed"));
         }
@@ -88,7 +90,7 @@ internal sealed class ReceiveWebhookHandler(
             requestId,
             target,
             payload,
-            dispatch.GitSyncRequest,
+            dispatch,
             dispatch.Status,
             dispatch.Reason,
             dispatch.Status.Equals("queued", StringComparison.OrdinalIgnoreCase) ? ActivityStatus.Success : ActivityStatus.Information,
@@ -196,7 +198,10 @@ internal sealed class ReceiveWebhookHandler(
         await unitOfWork.GitRepositories.UpdateAsync(repo, cancellationToken);
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(gitRepositoryStreamManager, repo), cancellationToken);
 
-        return WebhookDispatchResult.Queued(new GitRepoSyncRequest(repo.Id, branch.Branch, GitRepoSyncTrigger.Webhook));
+        return WebhookDispatchResult.Queued(
+            new GitRepoSyncRequest(repo.Id, branch.Branch, GitRepoSyncTrigger.Webhook),
+            branch.Branch,
+            payload.CommitSha);
     }
 
     private async Task<WebhookDispatchResult> DispatchStackDeployAsync(
@@ -224,6 +229,24 @@ internal sealed class ReceiveWebhookHandler(
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
         var resolvedBranch = branch.Branch ?? gitStack.Branch;
+        var relevance = await ResolveStackWebhookChangeRelevanceAsync(stack, gitStack, repo, resolvedBranch, payload, cancellationToken);
+        if (!relevance.Relevant)
+            return WebhookDispatchResult.NoOp(relevance.Reason ?? "No relevant path changes");
+
+        var dispatchedCommit = relevance.ResolvedCommitSha ?? payload.CommitSha;
+
+        if (gitStack.UpdateBehavior == StackUpdateBehavior.Disabled)
+            return WebhookDispatchResult.NoOp("Stack Git updates are disabled");
+
+        if (gitStack.UpdateBehavior == StackUpdateBehavior.Notify)
+        {
+            return WebhookDispatchResult.Queued(
+                new GitRepoSyncRequest(repo.Id, resolvedBranch, GitRepoSyncTrigger.Webhook),
+                resolvedBranch,
+                dispatchedCommit,
+                "Stack update notification queued");
+        }
+
         var logger = loggerFactory.CreateLogger("WebhookStackDeploy");
         _ = Task.Run(async () =>
         {
@@ -252,7 +275,52 @@ internal sealed class ReceiveWebhookHandler(
             }
         }, CancellationToken.None);
 
-        return WebhookDispatchResult.Queued();
+        return WebhookDispatchResult.Queued(null, resolvedBranch, dispatchedCommit);
+    }
+
+    private async Task<(bool Relevant, string? Reason, string? ResolvedCommitSha)> ResolveStackWebhookChangeRelevanceAsync(
+        Stack stack,
+        GitStack gitStack,
+        GitRepository repo,
+        string branch,
+        WebhookPayloadInfo payload,
+        CancellationToken cancellationToken)
+    {
+        if (gitStack.Webhook?.ForceDeploy == true)
+            return (true, null, payload.CommitSha);
+
+        if (stack.CurrentStackRelease?.Source is not { } source)
+            return (true, null, payload.CommitSha);
+
+        if (payload.ChangedPaths.Count > 0)
+        {
+            return GitStackWatchPathMatcher.HasRelevantChanges(gitStack, source, payload.ChangedPaths)
+                ? (true, null, payload.CommitSha)
+                : (false, "No relevant path changes", null);
+        }
+
+        if (string.IsNullOrWhiteSpace(source.ResolvedCommitSha))
+            return (true, null, payload.CommitSha);
+
+        var sync = await repoCacheManager.SynchronizeAsync(repo, repo.GitAccount, branch, cancellationToken);
+        if (sync.Success != true || string.IsNullOrWhiteSpace(sync.Hash))
+            return (false, sync.Error ?? "Repository sync did not resolve a commit", null);
+
+        if (string.Equals(source.ResolvedCommitSha, sync.Hash, StringComparison.OrdinalIgnoreCase))
+            return (false, "No new commit", null);
+
+        var pathsResult = await gitCliRepository.GetChangedPathsAsync(
+            repo.GetCachePath(),
+            source.ResolvedCommitSha,
+            sync.Hash,
+            cancellationToken);
+
+        if (pathsResult.IsFailure(out _, out var changedPaths))
+            return (true, null, sync.Hash);
+
+        return GitStackWatchPathMatcher.HasRelevantChanges(gitStack, source, changedPaths)
+            ? (true, null, sync.Hash)
+            : (false, "No relevant path changes", null);
     }
 
     private async Task RecordActivityAsync(
@@ -260,13 +328,23 @@ internal sealed class ReceiveWebhookHandler(
         Guid requestId,
         WebhookTarget? target,
         WebhookPayloadInfo? payload,
-        GitRepoSyncRequest? pendingGitSyncRequest,
+        WebhookDispatchResult dispatch,
         string status,
         string? reason,
         ActivityStatus activityStatus,
         CancellationToken cancellationToken)
     {
-        if (!TryResolveActivityEvent(command, target, requestId, payload, status, reason, activityStatus, out var activity))
+        if (!TryResolveActivityEvent(
+                command,
+                target,
+                requestId,
+                payload,
+                status,
+                reason,
+                activityStatus,
+                dispatch.DispatchedBranch,
+                dispatch.DispatchedCommitSha,
+                out var activity))
             return;
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
@@ -276,8 +354,7 @@ internal sealed class ReceiveWebhookHandler(
             cancellationToken);
 
         if (status.Equals("queued", StringComparison.OrdinalIgnoreCase)
-            && target?.Execution == WebhookExecution.RepoPull
-            && pendingGitSyncRequest is { } syncRequest)
+            && dispatch.GitSyncRequest is { } syncRequest)
         {
             await gitSyncWriter.WriteAsync(syncRequest, cancellationToken);
         }
@@ -381,6 +458,8 @@ internal sealed class ReceiveWebhookHandler(
     private static bool IsAlertableDispatchNoOp(string? reason)
         => reason is not null
            && !reason.Equals("Branch mismatch", StringComparison.OrdinalIgnoreCase)
+           && !reason.Equals("No relevant path changes", StringComparison.OrdinalIgnoreCase)
+           && !reason.Equals("No new commit", StringComparison.OrdinalIgnoreCase)
            && !reason.Equals("Unsupported event type", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryResolveActivityEvent(
@@ -391,6 +470,8 @@ internal sealed class ReceiveWebhookHandler(
         string status,
         string? reason,
         ActivityStatus activityStatus,
+        string? dispatchedBranch,
+        string? dispatchedCommitSha,
         out ActivityEvent activity)
     {
         activity = null!;
@@ -406,7 +487,9 @@ internal sealed class ReceiveWebhookHandler(
                 payload?.DeliveryId,
                 payload?.Branch,
                 payload?.CommitSha,
-                payload?.RepositoryFullName);
+                payload?.RepositoryFullName,
+                dispatchedBranch,
+                dispatchedCommitSha);
 
             activity = new ActivityEvent(
                 platformId: null,
@@ -431,7 +514,9 @@ internal sealed class ReceiveWebhookHandler(
                 payload?.DeliveryId,
                 payload?.Branch,
                 payload?.CommitSha,
-                payload?.RepositoryFullName);
+                payload?.RepositoryFullName,
+                dispatchedBranch,
+                dispatchedCommitSha);
 
             activity = new ActivityEvent(
                 platformId: target?.Stack?.CurrentStackRelease?.PlatformId,
@@ -522,12 +607,28 @@ internal sealed class ReceiveWebhookHandler(
     private static bool ValidateGitHub(IReadOnlyDictionary<string, string[]> headers, byte[] rawBody, string secret)
     {
         var header = GetHeader(headers, "X-Hub-Signature-256");
-        if (string.IsNullOrWhiteSpace(header) || !header.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
+        var expectedBytes = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), rawBody);
+        var expectedHex = Convert.ToHexString(expectedBytes).ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(header))
+        {
+            header = GetHeader(headers, "X-Gitea-Signature") ?? GetHeader(headers, "X-Forgejo-Signature");
+            if (string.IsNullOrWhiteSpace(header))
+                return false;
+
+            return FixedTimeEquals(header.Trim(), expectedHex);
+        }
+
+        if (!header.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        var expectedBytes = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), rawBody);
-        var expected = Encoding.ASCII.GetBytes($"sha256={Convert.ToHexString(expectedBytes).ToLowerInvariant()}");
-        var actual = Encoding.ASCII.GetBytes(header.Trim());
+        return FixedTimeEquals(header.Trim(), $"sha256={expectedHex}");
+    }
+
+    private static bool FixedTimeEquals(string actualValue, string expectedValue)
+    {
+        var expected = Encoding.ASCII.GetBytes(expectedValue);
+        var actual = Encoding.ASCII.GetBytes(actualValue);
         return actual.Length == expected.Length && CryptographicOperations.FixedTimeEquals(actual, expected);
     }
 
@@ -603,7 +704,7 @@ internal sealed class ReceiveWebhookHandler(
             && !eventType.Contains("push", StringComparison.OrdinalIgnoreCase)
             && !eventType.Equals("Push Hook", StringComparison.OrdinalIgnoreCase))
         {
-            return new WebhookPayloadInfo(deliveryId, eventType, null, null, null, [], true);
+            return new WebhookPayloadInfo(deliveryId, eventType, null, null, null, [], [], true);
         }
 
         try
@@ -633,11 +734,44 @@ internal sealed class ReceiveWebhookHandler(
                 fullName = TryGetString(repo, "full_name") ?? TryGetString(repo, "path_with_namespace");
             }
 
-            return new WebhookPayloadInfo(deliveryId, eventType, branch, commit, fullName, urls, false);
+            var changedPaths = GetChangedPaths(root);
+            return new WebhookPayloadInfo(deliveryId, eventType, branch, commit, fullName, urls, changedPaths, false);
         }
         catch
         {
-            return new WebhookPayloadInfo(deliveryId, eventType, null, null, null, [], true);
+            return new WebhookPayloadInfo(deliveryId, eventType, null, null, null, [], [], true);
+        }
+    }
+
+    private static IReadOnlyList<string> GetChangedPaths(JsonElement root)
+    {
+        if (!root.TryGetProperty("commits", out var commits) || commits.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var changedPaths = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var commit in commits.EnumerateArray())
+        {
+            AddPathArray(changedPaths, commit, "added");
+            AddPathArray(changedPaths, commit, "modified");
+            AddPathArray(changedPaths, commit, "removed");
+        }
+
+        return changedPaths.ToArray();
+    }
+
+    private static void AddPathArray(HashSet<string> paths, JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var values) || values.ValueKind != JsonValueKind.Array)
+            return;
+
+        foreach (var value in values.EnumerateArray())
+        {
+            if (value.ValueKind != JsonValueKind.String)
+                continue;
+
+            var path = value.GetString()?.Replace('\\', '/').Trim().TrimStart('/');
+            if (!string.IsNullOrWhiteSpace(path))
+                paths.Add(path);
         }
     }
 
@@ -682,11 +816,23 @@ internal sealed class ReceiveWebhookHandler(
         string? CommitSha,
         string? RepositoryFullName,
         IReadOnlyList<string> RepositoryUrls,
+        IReadOnlyList<string> ChangedPaths,
         bool UnsupportedEvent);
 
-    private sealed record WebhookDispatchResult(string Status, string? Reason, GitRepoSyncRequest? GitSyncRequest = null)
+    private sealed record WebhookDispatchResult(
+        string Status,
+        string? Reason,
+        GitRepoSyncRequest? GitSyncRequest = null,
+        string? DispatchedBranch = null,
+        string? DispatchedCommitSha = null)
     {
-        public static WebhookDispatchResult Queued(GitRepoSyncRequest? gitSyncRequest = null) => new("queued", null, gitSyncRequest);
+        public static WebhookDispatchResult Queued(
+            GitRepoSyncRequest? gitSyncRequest = null,
+            string? dispatchedBranch = null,
+            string? dispatchedCommitSha = null,
+            string? reason = null)
+            => new("queued", reason, gitSyncRequest, dispatchedBranch, dispatchedCommitSha);
+
         public static WebhookDispatchResult NoOp(string reason) => new("noop", reason);
     }
 }

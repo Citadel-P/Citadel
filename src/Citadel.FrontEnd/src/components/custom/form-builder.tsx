@@ -29,6 +29,7 @@ export interface FieldConfig<T> {
   description?: React.ReactElement | string;
   disabled?: boolean;
   validate?: (value: any) => string | null;
+  hideValidationMessage?: boolean;
   render: (value: any, set: FieldChange<T>) => React.ReactNode;
 }
 
@@ -70,6 +71,7 @@ interface FieldShellProps {
   description?: React.ReactElement | string;
   edited: boolean;
   error?: string | null;
+  hideValidationMessage?: boolean;
   touched: boolean;
   children: React.ReactNode;
 }
@@ -143,8 +145,17 @@ export function defineSection<T>(config: SectionConfig<T>): SectionConfig<T> {
 /*                               Shell components                             */
 /* -------------------------------------------------------------------------- */
 
-function FieldShell({ label, required, description, edited, error, touched, children }: FieldShellProps) {
-  const showError = touched && error;
+function FieldShell({
+  label,
+  required,
+  description,
+  edited,
+  error,
+  hideValidationMessage,
+  touched,
+  children,
+}: FieldShellProps) {
+  const showError = touched && error && !hideValidationMessage;
 
   return (
     <div className="flex flex-col gap-4">
@@ -1004,6 +1015,7 @@ export function FormShell<T>({
                           description={f.description}
                           edited={!!edited}
                           error={error}
+                          hideValidationMessage={f.hideValidationMessage}
                           touched={!!touched[key]}
                         />
                       </fieldset>
@@ -1042,6 +1054,7 @@ export function FormShell<T>({
                                   description={f.description}
                                   edited={!!edited}
                                   error={error}
+                                  hideValidationMessage={f.hideValidationMessage}
                                   touched={!!touched[key]}
                                 />
                               </fieldset>
@@ -1098,6 +1111,7 @@ export function FormShell<T>({
                                   description={f.description}
                                   edited={!!edited}
                                   error={error}
+                                  hideValidationMessage={f.hideValidationMessage}
                                   touched={!!touched[key]}
                                 />
                               </fieldset>
@@ -1135,6 +1149,7 @@ export function FormShell<T>({
                                         description={f.description}
                                         edited={!!edited}
                                         error={error}
+                                        hideValidationMessage={f.hideValidationMessage}
                                         touched={!!touched[key]}
                                       />
                                     </fieldset>

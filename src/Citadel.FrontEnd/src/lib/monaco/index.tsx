@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { DiffEditor, Editor, Monaco, type OnMount } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 
@@ -29,6 +29,13 @@ export type SupportedLanguage =
 
 type DiffFormat = 'json' | 'yaml';
 type DiffLayout = 'side-by-side' | 'inline';
+type MonacoDiagnostic = {
+  lineNumber: number;
+  message: string;
+  severity?: monaco.MarkerSeverity;
+  startColumn?: number;
+  endColumn?: number;
+};
 
 let prettierLoader: Promise<{
   formatWithCursor: (source: string, options: any) => Promise<{ formatted: string; cursorOffset: number }>;
@@ -161,6 +168,9 @@ interface MonacoEditorProps {
   minimap?: boolean;
   fontSize?: number;
   title?: string;
+  diagnostics?: MonacoDiagnostic[];
+  completionItems?: string[];
+  completionItemDetail?: string;
 }
 
 export const MonacoEditor = ({
@@ -175,8 +185,12 @@ export const MonacoEditor = ({
   minimap = false,
   fontSize = 13,
   title,
+  diagnostics,
+  completionItems,
+  completionItemDetail,
 }: MonacoEditorProps) => {
   const [editorInstance, setEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const markersOwner = useId();
   const lastEditorValueRef = useRef(value);
   const isApplyingExternalValueRef = useRef(false);
   const { currentTheme, handleBeforeMount } = useThemeEditor();
@@ -204,10 +218,71 @@ export const MonacoEditor = ({
   useEffect(() => {
     return () => {
       if (editorInstance) {
+        const model = editorInstance.getModel();
+        if (model) {
+          monaco.editor.setModelMarkers(model, markersOwner, []);
+        }
         editorInstance.dispose();
       }
     };
-  }, [editorInstance]);
+  }, [editorInstance, markersOwner]);
+
+  useEffect(() => {
+    if (!editorInstance) return;
+    const model = editorInstance.getModel();
+    if (!model) return;
+
+    monaco.editor.setModelMarkers(
+      model,
+      markersOwner,
+      (diagnostics ?? []).map((diagnostic) => {
+        const lineMaxColumn = model.getLineMaxColumn(diagnostic.lineNumber);
+        return {
+          severity: diagnostic.severity ?? monaco.MarkerSeverity.Error,
+          message: diagnostic.message,
+          startLineNumber: diagnostic.lineNumber,
+          startColumn: diagnostic.startColumn ?? 1,
+          endLineNumber: diagnostic.lineNumber,
+          endColumn: diagnostic.endColumn ?? lineMaxColumn,
+        };
+      }),
+    );
+  }, [diagnostics, editorInstance, markersOwner]);
+
+  useEffect(() => {
+    if (!editorInstance || !completionItems?.length) return;
+    const model = editorInstance.getModel();
+    if (!model) return;
+
+    const modelUri = model.uri.toString();
+    const disposable = monaco.languages.registerCompletionItemProvider(language, {
+      triggerCharacters: ['/', '.', '-', '_'],
+      provideCompletionItems: (targetModel, position) => {
+        if (targetModel.uri.toString() !== modelUri) return { suggestions: [] };
+
+        const lineContent = targetModel.getLineContent(position.lineNumber);
+        const firstNonWhitespace = lineContent.search(/\S/);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: firstNonWhitespace >= 0 ? firstNonWhitespace + 1 : 1,
+          endColumn: position.column,
+        };
+
+        return {
+          suggestions: completionItems.map((item) => ({
+            label: item,
+            kind: monaco.languages.CompletionItemKind.File,
+            insertText: item,
+            range,
+            detail: completionItemDetail,
+          })),
+        };
+      },
+    });
+
+    return () => disposable.dispose();
+  }, [completionItemDetail, completionItems, editorInstance, language]);
 
   const handleMount: OnMount = useCallback((editor) => {
     lastEditorValueRef.current = editor.getValue();
@@ -319,10 +394,27 @@ interface MonacoToArrayEditorProps {
   value?: string[];
   language: SupportedLanguage;
   helperText?: string;
+  unique?: boolean;
+  duplicateMessage?: string | ((value: string) => string);
+  requiredMessage?: string;
+  validateItem?: (value: string) => string | null;
+  completionItems?: string[];
+  completionItemDetail?: string;
   onChange: (v?: string[]) => void;
 }
 
-export const MonacoToArrayEditor = ({ value, language, helperText, onChange }: MonacoToArrayEditorProps) => {
+export const MonacoToArrayEditor = ({
+  value,
+  language,
+  helperText,
+  unique,
+  duplicateMessage,
+  requiredMessage,
+  validateItem,
+  completionItems,
+  completionItemDetail,
+  onChange,
+}: MonacoToArrayEditorProps) => {
   const cleanHelper = helperText?.trim();
 
   const generateDisplayContent = useCallback(
@@ -347,6 +439,59 @@ export const MonacoToArrayEditor = ({ value, language, helperText, onChange }: M
   });
   const rawRef = useRef(raw);
   const prevArrayValueRef = useRef<string[] | undefined>(value);
+
+  const diagnostics = useMemo<MonacoDiagnostic[]>(() => {
+    const markers: MonacoDiagnostic[] = [];
+    const seen = new Set<string>();
+    let dataLineCount = 0;
+
+    raw.split('\n').forEach((line, index) => {
+      const item = line.trim();
+      if (!item || item.startsWith('#')) return;
+
+      dataLineCount += 1;
+      const startColumn = line.search(/\S/) + 1;
+      const endColumn = startColumn + item.length;
+
+      if (unique) {
+        const normalized = item.toLowerCase();
+        if (seen.has(normalized)) {
+          markers.push({
+            lineNumber: index + 1,
+            startColumn,
+            endColumn,
+            message:
+              typeof duplicateMessage === 'function'
+                ? duplicateMessage(item)
+                : (duplicateMessage ?? `${item}: duplicate value.`),
+          });
+        } else {
+          seen.add(normalized);
+        }
+      }
+
+      const itemError = validateItem?.(item);
+      if (itemError) {
+        markers.push({
+          lineNumber: index + 1,
+          startColumn,
+          endColumn,
+          message: itemError,
+        });
+      }
+    });
+
+    if (requiredMessage && dataLineCount === 0) {
+      markers.push({
+        lineNumber: 1,
+        startColumn: 1,
+        endColumn: Math.max(raw.split('\n')[0]?.length ?? 1, 1),
+        message: requiredMessage,
+      });
+    }
+
+    return markers;
+  }, [duplicateMessage, raw, requiredMessage, unique, validateItem]);
 
   useEffect(() => {
     rawRef.current = raw;
@@ -376,6 +521,9 @@ export const MonacoToArrayEditor = ({ value, language, helperText, onChange }: M
     <MonacoEditor
       language={language}
       value={raw}
+      diagnostics={diagnostics}
+      completionItems={completionItems}
+      completionItemDetail={completionItemDetail}
       onValueChange={(text) => {
         const currentText = text || '';
         rawRef.current = currentText;

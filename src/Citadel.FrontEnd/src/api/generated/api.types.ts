@@ -934,6 +934,8 @@ export interface ActivityEventInfoGitRepoWebhookReceived {
   branch: null | string;
   commitSha: null | string;
   repositoryFullName: null | string;
+  dispatchedBranch?: null | string;
+  dispatchedCommitSha?: null | string;
 }
 
 export interface ActivityEventInfoRegistryCreated {
@@ -1069,6 +1071,8 @@ export interface ActivityEventInfoStackWebhookReceived {
   branch: null | string;
   commitSha: null | string;
   repositoryFullName: null | string;
+  dispatchedBranch?: null | string;
+  dispatchedCommitSha?: null | string;
 }
 
 export interface ActivityView {
@@ -2342,6 +2346,13 @@ export interface GitAuthConfigurationTokenAuth {
   token: string;
 }
 
+export interface GitComposeProjectCandidate {
+  workingDirectory: string;
+  composePaths: string[];
+  envFilePaths: string[];
+  suggestedWatchPaths: string[];
+}
+
 export interface GitHubCrPackageVersion {
   /**
    * @format int32
@@ -2370,6 +2381,14 @@ export interface GitRepositoriesView {
   capabilities: ResourceCapabilities;
 }
 
+export interface GitRepositoryComposeDiscovery {
+  /** @format uuid */
+  repositoryId: string;
+  branch: string;
+  resolvedCommitSha: string;
+  projects: GitComposeProjectCandidate[];
+}
+
 export interface GitRepositoryConfigView {
   /** @format uuid */
   id: string;
@@ -2388,6 +2407,23 @@ export interface GitRepositoryConfigView {
   webhook: null | RepoWebhookConfig;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
+}
+
+export interface GitRepositoryRefView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  gitRepositoryId: string;
+  branch: string;
+  resolvedCommitSha: null | string;
+  status: GitReposStatus;
+  lastError: null | string;
+  /** @format date-time */
+  lastSyncedAt: any;
+}
+
+export interface GitRepositoryRefsView {
+  refs: GitRepositoryRefView[];
 }
 
 export interface GitRepositorySnapshot {
@@ -3597,6 +3633,7 @@ export interface StackReleaseSnapshot {
   /** @format uuid */
   createdByActorId: string;
   version: null | string;
+  source?: null | StackReleaseSource;
 }
 
 export interface StackReleaseSource {
@@ -6416,6 +6453,69 @@ export class Api<
       >({
         path: `/api/v1/gitRepositories/${id}/_cfg`,
         method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name GetGitRepositoryRefs
+     * @summary Get synced Git repository refs
+     * @request GET:/api/v1/gitRepositories/{id}/refs
+     * @secure
+     * @response `200` `GitRepositoryRefsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getGitRepositoryRefs: (id: string, params: RequestParams = {}) =>
+      this.request<
+        GitRepositoryRefsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/${id}/refs`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name DiscoverGitRepositoryComposeProjects
+     * @summary Discover compose projects in a Git repository branch
+     * @request GET:/api/v1/gitRepositories/{id}/compose-projects
+     * @secure
+     * @response `200` `GitRepositoryComposeDiscovery` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    discoverGitRepositoryComposeProjects: (
+      id: string,
+      query?: {
+        branch?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitRepositoryComposeDiscovery,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/${id}/compose-projects`,
+        method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,

@@ -107,7 +107,9 @@ public sealed record StackWebhookReceived(
     string? DeliveryId,
     string? Branch,
     string? CommitSha,
-    string? RepositoryFullName) : ActivityEventInfo;
+    string? RepositoryFullName,
+    string? DispatchedBranch = null,
+    string? DispatchedCommitSha = null) : ActivityEventInfo;
 
 
 public sealed record AlertRuleCreated(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
@@ -135,4 +137,6 @@ public sealed record GitRepoWebhookReceived(
     string? DeliveryId,
     string? Branch,
     string? CommitSha,
-    string? RepositoryFullName) : ActivityEventInfo;
+    string? RepositoryFullName,
+    string? DispatchedBranch = null,
+    string? DispatchedCommitSha = null) : ActivityEventInfo;

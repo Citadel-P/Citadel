@@ -1,5 +1,6 @@
 ﻿using Application.Features.Identity.Auth.Models;
 using Application.Features.Images.Queries;
+using Application.Features.GitRepositories.Queries;
 using Domain;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Compose;
@@ -41,6 +42,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Volumes;
+using Application.Features.Webhooks.Commands;
 using ApiActorView = WebApi.Routes.Endpoints.Resources.Identity.Actors.ActorView;
 using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageResponseItem;
 
@@ -131,6 +133,10 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeleteGitRepositoriesInput))]
 [JsonSerializable(typeof(GitRepositoriesView))]
 [JsonSerializable(typeof(GitRepositoryView))]
+[JsonSerializable(typeof(GitRepositoryRefsView))]
+[JsonSerializable(typeof(GitRepositoryRefView))]
+[JsonSerializable(typeof(GitRepositoryComposeDiscovery))]
+[JsonSerializable(typeof(GitComposeProjectCandidate))]
 [JsonSerializable(typeof(DeleteImagesRequest))]
 [JsonSerializable(typeof(DockerHubImageView))]
 [JsonSerializable(typeof(ImageView))]
@@ -262,6 +268,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeleteAlertRulesInput))]
 [JsonSerializable(typeof(DeleteAlertChannelsInput))]
 [JsonSerializable(typeof(AlertRuleConfigView))]
+[JsonSerializable(typeof(WebhookReceiveResult))]
 [JsonSerializable(typeof(GitRepositoryConfigView))]
 [JsonSerializable(typeof(RoleInput))]
 [JsonSerializable(typeof(PermissionInput))]
