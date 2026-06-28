@@ -5,6 +5,7 @@ using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
+using Domain.Entities.Configuration;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
@@ -34,6 +35,8 @@ public interface IUnitOfWork : IAsyncDisposable
     IAlertEventRepository AlertEvents { get; }
     IDeploymentRepository Deployments { get; }
     IStackRepository Stacks { get; }
+    IConfigurationEntryRepository ConfigurationEntries { get; }
+    ISecretDefinitionRepository SecretDefinitions { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
@@ -41,6 +44,23 @@ public interface IUnitOfWork : IAsyncDisposable
 
     Task CommitAsync(CancellationToken cancellationToken);
     Task RollbackAsync();
+}
+
+public interface IConfigurationEntryRepository
+{
+    Task<int> AddAsync(ConfigurationEntry entry, CancellationToken cancellationToken);
+    Task<int> ReplaceEntriesAsync(ConfigurationScope scope, Guid? resourceId, IEnumerable<ConfigurationEntry> entries, CancellationToken cancellationToken);
+    Task<int> ReplaceResourceEntriesAsync(ConfigurationScope scope, Guid resourceId, IEnumerable<ConfigurationEntry> entries, CancellationToken cancellationToken);
+    Task<IEnumerable<ConfigurationEntry>> GetEntriesAsync(ConfigurationScope scope, Guid? resourceId, CancellationToken cancellationToken);
+    Task<IEnumerable<ConfigurationEntry>> GetEffectiveEntriesAsync(ConfigurationScope scope, Guid resourceId, CancellationToken cancellationToken);
+}
+
+public interface ISecretDefinitionRepository
+{
+    Task<int> AddAsync(SecretDefinition secret, InternalSecretValue? value, CancellationToken cancellationToken);
+    Task<SecretDefinition?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<SecretDefinition>> GetAllAsync(CancellationToken cancellationToken);
+    Task<InternalSecretValue?> GetInternalValueAsync(Guid secretId, CancellationToken cancellationToken);
 }
 
 public interface IActorRepository

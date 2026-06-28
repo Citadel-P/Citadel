@@ -88,6 +88,9 @@ public static class ApplicationModule
             .AddSingleton<IStackReconciler, StackReconciler>()
             .AddSingleton<IStackStoragePathProvider, StackStoragePathProvider>()
             .AddSingleton<IGitStackMaterializer, GitStackMaterializer>()
+            .AddSingleton<ISecretValueProtector, SecretValueProtector>()
+            .AddSingleton<ISecretRedactor, SecretRedactor>()
+            .AddSingleton<IConfigurationResolver, ConfigurationResolver>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 
     private static IServiceCollection AddLookups(this IServiceCollection services)

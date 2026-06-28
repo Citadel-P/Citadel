@@ -10,7 +10,6 @@ public sealed record DeploymentSpec(
     ResourceSpec? ResourceSpec = null,
     Dictionary<string, string>? Labels = null,
     List<string>? Ports = null,
-    List<string>? EnvVars = null,
     List<string>? Volumes = null,
     List<string>? Networks = null,
     List<string>? Command = null

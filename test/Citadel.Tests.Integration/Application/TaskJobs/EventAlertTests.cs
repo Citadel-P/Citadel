@@ -114,8 +114,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
                     ImageTag: "nginx:latest",
                     ResolvedDigest: "sha256:old-digest"
                 ),
-                Ports: new List<string> { "80:80" },
-                EnvVars: new List<string> { "ENV=production" }
+                Ports: new List<string> { "80:80" }
             )
 
         );

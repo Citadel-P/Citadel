@@ -31,8 +31,7 @@ public class DeploymentPatchTests(PostgresTestFixture fixture) : IntegrationTest
                     RegistryId: Constants.DefaultRegistryId,
                     ImageTag: "nginx:latest"
                 ),
-                Ports: new List<string> { "80:80" },
-                EnvVars: new List<string> { "ENV=production" }
+                Ports: new List<string> { "80:80" }
             )
 
         );
@@ -77,11 +76,6 @@ public class DeploymentPatchTests(PostgresTestFixture fixture) : IntegrationTest
             {
                 "key1":"val1"
             },
-            "envVars":
-            [
-                "ENV=staging",
-                "DEBUG=true"
-            ],
             "command":["--housekeeping_interval=5s"]
            }
         }
@@ -101,8 +95,6 @@ public class DeploymentPatchTests(PostgresTestFixture fixture) : IntegrationTest
 
         Assert.Equal("Test Deployment", deployment?.Name);
         Assert.Equal("A deployment for testing", deployment?.Description);
-        Assert.Contains("ENV=staging", deployment?.Spec?.EnvVars ?? []);
-        Assert.Contains("DEBUG=true", deployment?.Spec?.EnvVars ?? []);
         Assert.Contains("key1", deployment?.Spec?.Labels?? []);
         await VerifyJson(responseBody);
     }

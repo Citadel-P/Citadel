@@ -4,6 +4,7 @@ using Domain.Contracts.Resources;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
+using Domain.Entities.Configuration;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
@@ -78,12 +79,33 @@ public partial class ImagTagsContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<AutoUpdateStatus>),
         typeof(JsonStringEnumConverter<ResourceControlState>),
         typeof(JsonStringEnumConverter<ContainerRestartPolicy>),
+        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
+        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<SecretDeliveryMode>),
     })]
 [JsonSerializable(typeof(IEnumerable<Guid>))]
 [JsonSerializable(typeof(Deployment))]
 [JsonSerializable(typeof(DeploymentSpec))]
 [JsonSerializable(typeof(HealthCheckConfig))]
 public partial class DeploymentJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
+        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<SecretDeliveryMode>),
+        typeof(JsonStringEnumConverter<SecretProviderType>)
+    })]
+[JsonSerializable(typeof(ConfigurationEntry))]
+[JsonSerializable(typeof(IEnumerable<ConfigurationEntry>))]
+[JsonSerializable(typeof(SecretDefinition))]
+[JsonSerializable(typeof(InternalSecretValue))]
+public partial class ConfigurationJsonContext : JsonSerializerContext
 {
 }
 
@@ -205,7 +227,10 @@ public partial class AlertRuleJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<GitReposStatus>),
         typeof(JsonStringEnumConverter<GitRepositorySyncMode>),
         typeof(JsonStringEnumConverter<WebhookProvider>),
-        typeof(JsonStringEnumConverter<WebhookAuthScheme>)
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>),
+        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
+        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<SecretDeliveryMode>)
     })]
 [JsonSerializable(typeof(GitAccount))]
 [JsonSerializable(typeof(BasicAuth))]

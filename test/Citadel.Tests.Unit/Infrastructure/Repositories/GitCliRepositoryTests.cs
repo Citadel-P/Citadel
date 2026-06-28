@@ -56,7 +56,7 @@ public sealed class GitCliRepositoryTests
         var result = await repository.ResetWorkingTreeAsync("repo", "main", TestContext.Current.CancellationToken);
 
         Assert.True(result.IsFailure(out var error));
-        Assert.Equal("checkout failed", error.Message);
+        Assert.Equal("ExitCode=1. Error=checkout failed", error.Message);
         Assert.Single(executor.Calls);
     }
 

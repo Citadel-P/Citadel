@@ -117,11 +117,6 @@ internal sealed class GitStackMaterializer(
             }
         }
 
-        if (spec.EnvVars is { Count: > 0 })
-        {
-            envVars.AddRange(spec.EnvVars.Where(value => !string.IsNullOrWhiteSpace(value)));
-        }
-
         var watchPaths = NormalizeWatchPaths(snapshotRoot, spec.WatchPaths);
         if (watchPaths.IsFailure(out var watchPathError, out var normalizedWatchPaths))
             return FailAfterSnapshot(watchPathError.Message);

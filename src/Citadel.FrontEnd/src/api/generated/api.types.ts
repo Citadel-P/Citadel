@@ -108,6 +108,11 @@ export enum SpecificPermission {
   Terminal = "Terminal",
 }
 
+export enum SecretProviderType {
+  InternalEncrypted = "InternalEncrypted",
+  VaultCompatibleKvV2 = "VaultCompatibleKvV2",
+}
+
 export enum ScheduleType {
   Daily = "Daily",
   Weekly = "Weekly",
@@ -130,6 +135,7 @@ export enum ResourceType {
   User = "User",
   Team = "Team",
   Role = "Role",
+  Configuration = "Configuration",
 }
 
 export enum ResourceControlState {
@@ -266,6 +272,17 @@ export enum ContainerRestartPolicy {
   Always = "Always",
   OnFailure = "OnFailure",
   UnlessStopped = "UnlessStopped",
+}
+
+export enum ConfigurationScope {
+  Global = "Global",
+  Stack = "Stack",
+  Deployment = "Deployment",
+}
+
+export enum ConfigurationEntryKind {
+  Variable = "Variable",
+  Secret = "Secret",
 }
 
 export enum AutoUpdateStatus {
@@ -1604,6 +1621,37 @@ export interface ConfigFromInput {
   network: string;
 }
 
+export interface ConfigurationEntriesView {
+  entries: ConfigurationEntryView[];
+  effectiveEntries: ConfigurationEntryView[];
+}
+
+export interface ConfigurationEntryInput {
+  name: string;
+  kind: ConfigurationEntryKind;
+  value: null | string;
+  /** @format uuid */
+  secretId: null | string;
+  secretDeliveryMode?: any;
+  targetPath?: null | string;
+}
+
+export interface ConfigurationEntryView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  kind: ConfigurationEntryKind;
+  scope: ConfigurationScope;
+  /** @format uuid */
+  resourceId: null | string;
+  value: null | string;
+  /** @format uuid */
+  secretId: null | string;
+  secretDeliveryMode: null | SecretDeliveryMode;
+  targetPath: null | string;
+  isInherited: boolean;
+}
+
 export interface ContainerConfiguration {
   hostname: null | string;
   domainname: null | string;
@@ -1889,6 +1937,11 @@ export interface CreateGitRepositoryInput {
   onPull: null | RepoCommand;
 }
 
+export interface CreateInternalSecretInput {
+  name: string;
+  value: string;
+}
+
 export interface CreateNetworkInput {
   /** @format uuid */
   platformId: string;
@@ -2098,7 +2151,6 @@ export interface DeploymentSpec {
   resourceSpec?: null | ResourceSpec;
   labels?: null | Record<string, string>;
   ports?: null | string[];
-  envVars?: null | string[];
   volumes?: null | string[];
   networks?: null | string[];
   command?: null | string[];
@@ -3400,6 +3452,10 @@ export interface RenameResource {
   name: string;
 }
 
+export interface ReplaceConfigurationEntriesInput {
+  entries: ConfigurationEntryInput[];
+}
+
 export interface RepoCommand {
   commands: string[];
   /** @default "./" */
@@ -3492,6 +3548,30 @@ export interface RollbackStackInput {
   /** @format uuid */
   releaseId: string;
 }
+
+export interface SecretDefinitionView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  providerType: SecretProviderType;
+  /** @format uuid */
+  providerId: null | string;
+  externalPath: null | string;
+  externalKey: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  externalVersion: null | number | string;
+  /** @format date-time */
+  createdAt: any;
+}
+
+export interface SecretDefinitionsView {
+  secrets: SecretDefinitionView[];
+}
+
+export type SecretDeliveryMode = any;
 
 export interface StackCapabilities {
   canViewLogs: boolean;
@@ -3709,7 +3789,6 @@ export interface StackSpecGitStack {
   projectName?: null | string;
   preDeploy?: null | StackCommand;
   postDeploy?: null | StackCommand;
-  envVars?: null | string[];
   envFilePath?: null | string;
   /** @format uuid */
   registryId?: null | string;
@@ -3724,7 +3803,6 @@ export interface StackSpecManualStack {
   projectName?: null | string;
   preDeploy?: null | StackCommand;
   postDeploy?: null | StackCommand;
-  envVars?: null | string[];
   envFilePath?: null | string;
   /** @format uuid */
   registryId?: null | string;
@@ -8233,6 +8311,141 @@ export class Api<
         path: `/api/v1/stacks/${stackId}/containers/${containerId}/inspect`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name GetGlobalConfigurationEntries
+     * @summary Get global variables and secrets
+     * @request GET:/api/v1/configuration/global
+     * @response `200` `ConfigurationEntriesView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getGlobalConfigurationEntries: (params: RequestParams = {}) =>
+      this.request<ConfigurationEntriesView, ProblemDetails>({
+        path: `/api/v1/configuration/global`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name ReplaceGlobalConfigurationEntries
+     * @summary Replace global variables and secrets
+     * @request PUT:/api/v1/configuration/global
+     * @response `200` `ConfigurationEntriesView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceGlobalConfigurationEntries: (
+      data: ReplaceConfigurationEntriesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ConfigurationEntriesView, ProblemDetails>({
+        path: `/api/v1/configuration/global`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name GetResourceConfigurationEntries
+     * @summary Get resource variables and secrets
+     * @request GET:/api/v1/configuration/{scope}/{resourceId}
+     * @response `200` `ConfigurationEntriesView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getResourceConfigurationEntries: (
+      scope: ConfigurationScope,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ConfigurationEntriesView, ProblemDetails>({
+        path: `/api/v1/configuration/${scope}/${resourceId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name ReplaceResourceConfigurationEntries
+     * @summary Replace resource variables and secrets
+     * @request PUT:/api/v1/configuration/{scope}/{resourceId}
+     * @response `200` `ConfigurationEntriesView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceResourceConfigurationEntries: (
+      scope: ConfigurationScope,
+      resourceId: string,
+      data: ReplaceConfigurationEntriesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ConfigurationEntriesView, ProblemDetails>({
+        path: `/api/v1/configuration/${scope}/${resourceId}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name ListSecretDefinitions
+     * @summary List secret definitions
+     * @request GET:/api/v1/configuration/secrets
+     * @response `200` `SecretDefinitionsView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listSecretDefinitions: (params: RequestParams = {}) =>
+      this.request<SecretDefinitionsView, ProblemDetails>({
+        path: `/api/v1/configuration/secrets`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name CreateInternalSecret
+     * @summary Create an internal encrypted secret
+     * @request POST:/api/v1/configuration/secrets
+     * @response `200` `SecretDefinitionView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createInternalSecret: (
+      data: CreateInternalSecretInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<SecretDefinitionView, ProblemDetails>({
+        path: `/api/v1/configuration/secrets`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),

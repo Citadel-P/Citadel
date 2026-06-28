@@ -17,6 +17,7 @@ import {
   StackReleaseView,
   StackSource,
   ActorType,
+  ConfigurationScope,
 } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
@@ -68,6 +69,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { MonacoDiff } from '@/lib/monaco';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { hasActionableStackDrift } from '../actions';
+import { ConfigurationEntriesTab } from '@/components/custom/configuration-entries-tab';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -98,6 +100,18 @@ export const StackFormComponents: RequiredFormComponents = {
         Content: ({ resource, metadataChanged }: { resource: StackView; metadataChanged?: boolean }) => {
           return (
             <StackForm mode="edit" metadataChanged={metadataChanged} disabled={!hasCapability(resource, 'canWrite')} />
+          );
+        },
+      },
+      {
+        label: 'Environment',
+        Content: ({ resource }: { resource: StackView }) => {
+          return (
+            <ConfigurationEntriesTab
+              scope={ConfigurationScope.Stack}
+              resourceId={resource.id}
+              disabled={!hasCapability(resource, 'canWrite')}
+            />
           );
         },
       },

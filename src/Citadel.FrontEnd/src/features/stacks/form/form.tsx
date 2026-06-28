@@ -10,6 +10,7 @@ import {
   StackDriftPolicy,
   GitRepositoryRefView,
   GitComposeProjectCandidate,
+  ConfigurationScope,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -27,13 +28,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useParams } from 'react-router';
 import { ResourceSelectorField } from '@/components/custom/common';
-import { MonacoEditor, MonacoToArrayEditor } from '@/lib/monaco';
+import { MonacoEditor, MonacoToArrayEditor, type MonacoDiagnostic } from '@/lib/monaco';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
+import { ConfigurationSummary } from '@/components/custom/configuration-entries-tab';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { GitBranch, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import * as monaco from 'monaco-editor';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -171,6 +174,51 @@ const validateCommitSha = (value?: string | null) => {
 };
 
 const duplicatePathMessage = (path: string) => `${path}: duplicate path.`;
+
+const composeVariablePattern = /\$\{([^}]+)\}/g;
+const composeVariableNamePattern = /^([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-+?]).*)?$/;
+
+const shouldWarnForMissingVariable = (operator?: string) => !operator || operator.includes('?');
+
+const getComposeVariableDiagnostics = (compose: string | undefined, configurationNames: string[]): MonacoDiagnostic[] => {
+  if (!compose?.trim()) return [];
+
+  const knownNames = new Set(configurationNames);
+  const diagnostics: MonacoDiagnostic[] = [];
+
+  compose.split('\n').forEach((line, lineIndex) => {
+    for (const match of line.matchAll(composeVariablePattern)) {
+      const expression = match[1]?.trim() ?? '';
+      const parsed = composeVariableNamePattern.exec(expression);
+      const startColumn = (match.index ?? 0) + 1;
+      const endColumn = startColumn + match[0].length;
+
+      if (!parsed) {
+        diagnostics.push({
+          lineNumber: lineIndex + 1,
+          startColumn,
+          endColumn,
+          severity: monaco.MarkerSeverity.Warning,
+          message: `Unsupported Compose variable expression '${match[0]}'.`,
+        });
+        continue;
+      }
+
+      const [, name, operator] = parsed;
+      if (!knownNames.has(name) && shouldWarnForMissingVariable(operator)) {
+        diagnostics.push({
+          lineNumber: lineIndex + 1,
+          startColumn,
+          endColumn,
+          severity: monaco.MarkerSeverity.Warning,
+          message: `${name} is not defined in stack or global variables.`,
+        });
+      }
+    }
+  });
+
+  return diagnostics;
+};
 
 const validateDiscoveredPath = (path: string, discoveredPaths: string[], discoveryReady: boolean, label: string) => {
   if (!discoveryReady) return null;
@@ -455,6 +503,13 @@ export const StackForm = ({
   const { mutateAsync: updateStack } = useMutate('updateStack');
   const { data: stackCfg } = useRead('getStackConfig', { stackId: id });
   const { data: stackViewData } = useRead('getStack', { stackId: id }, { enabled: mode === 'edit' && !!id });
+  const stackConfigurationArgs = useMemo(() => ({ scope: ConfigurationScope.Stack, resourceId: id ?? '' }), [id]);
+  const { data: stackConfigurationData } = useRead('getResourceConfigurationEntries', stackConfigurationArgs, {
+    enabled: mode === 'edit' && !!id,
+  });
+  const { data: globalConfigurationData } = useRead('getGlobalConfigurationEntries', undefined, {
+    enabled: mode === 'add',
+  });
 
   const resource: StackConfigView | undefined = stackCfg?.data;
   const stackView = stackViewData?.data;
@@ -497,6 +552,14 @@ export const StackForm = ({
     ...(original.driftPolicy ?? {}),
     ...((update as Partial<StackInput>).driftPolicy ?? {}),
   });
+  const effectiveConfigurationEntries =
+    mode === 'edit'
+      ? (stackConfigurationData?.data.effectiveEntries ?? [])
+      : (globalConfigurationData?.data.effectiveEntries ?? []);
+  const effectiveConfigurationNames = useMemo(
+    () => [...new Set(effectiveConfigurationEntries.map((entry) => entry.name))].sort(),
+    [effectiveConfigurationEntries],
+  );
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`stack:${id ?? 'new'}`);
@@ -809,6 +872,10 @@ export const StackForm = ({
                             language="yaml"
                             filename="compose.yaml"
                             value={value ?? DEFAULT_STACK_FILE_CONTENTS}
+                            diagnostics={getComposeVariableDiagnostics(value ?? DEFAULT_STACK_FILE_CONTENTS, effectiveConfigurationNames)}
+                            completionItems={effectiveConfigurationNames}
+                            completionItemDetail="Citadel variable or secret"
+                            completionMode="variable"
                             onValueChange={(v) =>
                               set((prev) => ({
                                 spec: {
@@ -832,7 +899,7 @@ export const StackForm = ({
                   id: 'stack_environment',
                   label: 'Environment',
                   title: 'Environment',
-                  description: 'Configure env file path and inline environment variables.',
+                  description: 'Configure the stack env file path. Variables and secrets are managed from the Environment tab.',
                   items: [
                     defineField<StackInput, 'spec.envFilePath'>({
                       key: 'spec.envFilePath',
@@ -850,27 +917,6 @@ export const StackForm = ({
                             }))
                           }
                           placeholder="e.g. .env"
-                        />
-                      ),
-                    }),
-                    defineField<StackInput, 'spec.envVars'>({
-                      key: 'spec.envVars',
-                      label: 'Environment',
-                      description: 'Runtime configuration passed to the application inside the container.',
-                      required: false,
-                      render: (value, set) => (
-                        <MonacoToArrayEditor
-                          value={value}
-                          helperText="# KEY=value"
-                          language="key_value"
-                          onChange={(e: string[] | undefined) =>
-                            set((prev) => ({
-                              spec: {
-                                ...prev.spec!,
-                                envVars: e ?? [],
-                              },
-                            }))
-                          }
                         />
                       ),
                     }),
@@ -1307,22 +1353,32 @@ export const StackForm = ({
       gitRefs,
       selectedBranchRef?.resolvedCommitSha,
       stackView?.source?.resolvedCommitSha,
+      effectiveConfigurationNames,
     ],
   );
 
   return (
-    <FormShell
-      mode={mode}
-      schema={schema}
-      original={formOriginal}
-      update={formUpdate}
-      setUpdate={setUpdate}
-      onSave={handleSave}
-      pending={isPending}
-      disabled={disabled}
-      draftKey={`stack:${id ?? 'new'}`}
-      draftVersion={1}
-    />
+    <div className="flex flex-col gap-4">
+      {mode === 'edit' && id && (
+        <ConfigurationSummary
+          scope={ConfigurationScope.Stack}
+          resourceId={id}
+          description="Reference variables and secret bindings in compose content as ${NAME}. Secrets are resolved only during deploy."
+        />
+      )}
+      <FormShell
+        mode={mode}
+        schema={schema}
+        original={formOriginal}
+        update={formUpdate}
+        setUpdate={setUpdate}
+        onSave={handleSave}
+        pending={isPending}
+        disabled={disabled}
+        draftKey={`stack:${id ?? 'new'}`}
+        draftVersion={1}
+      />
+    </div>
   );
 };
 

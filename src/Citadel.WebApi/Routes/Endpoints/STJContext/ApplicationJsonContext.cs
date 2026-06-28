@@ -1,5 +1,6 @@
 ﻿using Application.Features.Identity.Auth.Models;
 using Application.Features.Images.Queries;
+using Application.Features.Configuration.Models;
 using Application.Features.GitRepositories.Queries;
 using Domain;
 using Domain.Contracts.Resources;
@@ -13,6 +14,7 @@ using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
+using Domain.Entities.Configuration;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
@@ -25,6 +27,7 @@ using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Configuration;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
@@ -52,7 +55,11 @@ namespace Application.Models;
     GenerationMode = JsonSourceGenerationMode.Default,
     Converters = new[]
     {
-        typeof(JsonStringEnumConverter<ActorType>)
+        typeof(JsonStringEnumConverter<ActorType>),
+        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
+        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<SecretDeliveryMode>),
+        typeof(JsonStringEnumConverter<SecretProviderType>)
     })]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Guid[]))]
@@ -60,6 +67,14 @@ namespace Application.Models;
 [JsonSerializable(typeof(LookupResourceType?))]
 [JsonSerializable(typeof(ResourceType))]
 [JsonSerializable(typeof(ResourceType?))]
+[JsonSerializable(typeof(ConfigurationEntryKind))]
+[JsonSerializable(typeof(ConfigurationEntryKind?))]
+[JsonSerializable(typeof(ConfigurationScope))]
+[JsonSerializable(typeof(ConfigurationScope?))]
+[JsonSerializable(typeof(SecretDeliveryMode))]
+[JsonSerializable(typeof(SecretDeliveryMode?))]
+[JsonSerializable(typeof(SecretProviderType))]
+[JsonSerializable(typeof(SecretProviderType?))]
 [JsonSerializable(typeof(ActorType))]
 [JsonSerializable(typeof(ActorType?))]
 [JsonSerializable(typeof(TargetResource))]
@@ -329,6 +344,13 @@ namespace Application.Models;
 [JsonSerializable(typeof(WebhookProvider))]
 [JsonSerializable(typeof(WebhookAuthScheme))]
 [JsonSerializable(typeof(WebhookExecution))]
+[JsonSerializable(typeof(ConfigurationEntryInput))]
+[JsonSerializable(typeof(ConfigurationEntryView))]
+[JsonSerializable(typeof(ConfigurationEntriesView))]
+[JsonSerializable(typeof(ReplaceConfigurationEntriesInput))]
+[JsonSerializable(typeof(SecretDefinitionView))]
+[JsonSerializable(typeof(SecretDefinitionsView))]
+[JsonSerializable(typeof(CreateInternalSecretInput))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

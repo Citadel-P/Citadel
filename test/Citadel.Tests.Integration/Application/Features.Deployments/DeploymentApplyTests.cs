@@ -77,8 +77,7 @@ public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTest
                 ResourceSpec: new ResourceSpec(
                     NanoCpus: (float)0.5,
                     MemoryLimit: 256
-                ),
-                EnvVars: new List<string> { "ENV=production" }
+                )
             )
         );
 

@@ -36,7 +36,7 @@ internal class AgentDeploymentConnector(IGrpcClientFactory clientFactory) : IDep
                     Labels = { applyDeployment.Spec.Labels ?? [] },
                     Networks = { applyDeployment.Spec.Networks ?? [] },
                     Command = { applyDeployment.Spec.Command ?? [] },
-                    EnvVars = { applyDeployment.Spec.EnvVars ?? [] },
+                    EnvVars = { applyDeployment.EnvironmentVariables ?? [] },
                     Ports = { applyDeployment.Spec.Ports ?? [] },
                     Volumes = { applyDeployment.Spec.Volumes ?? [] }
                 }

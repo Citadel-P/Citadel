@@ -92,6 +92,34 @@ public class StackDriftTests
     }
 
     [Fact]
+    public async Task CheckAsync_ignores_starting_health_status()
+    {
+        var platformId = Guid.CreateVersion7();
+        var stack = CreateStack(platformId);
+        var checker = CreateChecker(
+            stack,
+            new StackDesiredState(
+                "demo",
+                new Dictionary<string, StackDesiredService>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["api"] = new("api", "nginx:latest", null),
+                }),
+            new StackRuntimeState(
+                platformId,
+                "http://docker.local",
+                PlatformConnectorType.Local,
+                "demo",
+                [
+                    Container("api-container", "api", ContainerStateStatus.Running, healthStatus: "starting"),
+                ]));
+
+        var report = await checker.CheckAsync(stack.Id, CancellationToken.None);
+
+        Assert.False(report.HasDrift);
+        Assert.Empty(report.Drifts);
+    }
+
+    [Fact]
     public async Task CheckAsync_reports_stopped_container_for_git_stack_from_current_snapshot()
     {
         using var temp = new TempDirectory();

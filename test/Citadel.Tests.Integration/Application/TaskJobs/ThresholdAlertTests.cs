@@ -183,15 +183,7 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
     [Fact]
     public async Task CpuHighAlert_ShouldNotRetrigger_DuringCooldown()
     {
-        _configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 3 });
-
-        _platformFactoryMock
-            .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
-            .Returns(_platformConnector.Object);
-
-        _platformConnector
-            .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
-            .Returns(() => GetStatsAsync());
+        await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
 
         // Ensure clean counter
         await using (var scope = Services.CreateAsyncScope())
@@ -204,18 +196,26 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
         }
 
         // First trigger
-        await _broadcaster.PublishAsync(
-            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
-            TestContext.Current.CancellationToken);
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var context = BuildCpuContext([91, 92, 93]);
+            await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
+        }
 
-        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        await using (var firstScope = Services.CreateAsyncScope())
+        {
+            var db = firstScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var firstAlertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+            Assert.Single(firstAlertEvents.Items);
+        }
 
         // Second trigger (still within cooldown)
-        await _broadcaster.PublishAsync(
-            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
-            TestContext.Current.CancellationToken);
-
-        await Task.Delay(1500, TestContext.Current.CancellationToken);
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var context = BuildCpuContext([91, 92, 93]);
+            await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
+        }
 
         await using var finalScope = Services.CreateAsyncScope();
         var dbFinal = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();

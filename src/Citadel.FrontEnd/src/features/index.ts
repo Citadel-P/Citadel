@@ -24,6 +24,7 @@ import { UserFormComponents } from './access/users/form';
 import { TeamFormComponents } from './access/teams/form';
 import { StackFormComponents } from './stacks/form';
 import { StackComponents } from './stacks';
+import { VariableComponents } from './variables';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -45,6 +46,7 @@ export const ResourceComponents: {
   User: AccessComponents,
   Team: AccessComponents,
   Role: AccessComponents,
+  Variable: VariableComponents,
 };
 
 export const ResourceFormComponents: {
@@ -69,6 +71,7 @@ export const ResourceFormComponents: {
   User: UserFormComponents,
   Team: TeamFormComponents,
   Role: undefined,
+  Variable: undefined,
 };
 
 export const DockerResourceInfoComponents: {

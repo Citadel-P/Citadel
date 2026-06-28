@@ -22,7 +22,7 @@ internal class LocalDeploymentConnector(IDeploymentService deploymentService) : 
             Labels: applyDeployment.Spec.Labels,
             Networks: applyDeployment.Spec.Networks,
             Command: applyDeployment.Spec.Command,
-            EnvVars: applyDeployment.Spec.EnvVars,
+            EnvVars: applyDeployment.EnvironmentVariables?.ToList(),
             Ports: applyDeployment.Spec.Ports,
             Volumes: applyDeployment.Spec.Volumes,
             StopTimeout: applyDeployment.Spec.LifeCycleSpec?.StopTimeout,

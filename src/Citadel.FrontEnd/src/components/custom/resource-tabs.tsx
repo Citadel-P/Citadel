@@ -5,6 +5,8 @@ import { RequiredFormFields, ResourceTabElement } from '@/pages/types';
 import { useSegmentTitle } from '@/lib/atoms';
 import { useEffect, useMemo } from 'react';
 
+const getTabHash = (label: string) => label.toLowerCase().replace(/\s+/g, '-');
+
 export const ResourceTabs = ({
   localKey,
   resource,
@@ -42,8 +44,29 @@ export const ResourceTabs = ({
     }
   }, [activeTab, effectiveActiveTab, setActiveTab]);
 
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash.replace(/^#/, '');
+      if (!hash) return;
+
+      const matchingTab = tabs.find((tab) => getTabHash(tab.label) === hash);
+      if (matchingTab && !(matchingTab.disabled?.(resource) ?? false)) {
+        setActiveTab(matchingTab.label);
+      }
+    };
+
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, [resource, setActiveTab, tabs]);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${getTabHash(tab)}`);
+  };
+
   return (
-    <Tabs value={effectiveActiveTab} onValueChange={setActiveTab} className="gap-4">
+    <Tabs value={effectiveActiveTab} onValueChange={handleTabChange} className="gap-4">
       <div ref={sentinelRef} aria-hidden className="h-px" />
       <div
         className={cn(

@@ -27,6 +27,8 @@ internal sealed class ApplyDeploymentService(
     ImageDigestCache imageDigestCache,
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformCache,
+    IConfigurationResolver configurationResolver,
+    ISecretRedactor secretRedactor,
     IDeploymentStreamManager deploymentHub,
     IActivityStreamManager activityHub,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
@@ -126,16 +128,30 @@ internal sealed class ApplyDeploymentService(
             }
         }
 
+        yield return Info("Resolving deployment variables and secrets...");
+
+        var configurationResult = await configurationResolver.ResolveAsync(Domain.Entities.Configuration.ConfigurationScope.Deployment, deployment.Id, ct);
+        if (configurationResult.IsFailure(out var configurationError, out var resolvedConfiguration))
+        {
+            var safeMessage = configurationError.Message;
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, ct: ct);
+            yield return Error(400, safeMessage);
+            yield break;
+        }
+
+        yield return Info(ConfigurationApplyMessageBuilder.BuildDeploymentEnvironmentMessage(resolvedConfiguration));
+
         yield return Info($"Applying deployment to {platform.Address}...");
 
         var connector = deploymentConnectorFactory.GetConnector(platform.ConnectorType);
-        var commandToApply = BuildApplyCommand(deployment, platform.Address, imageId);
+        var commandToApply = BuildApplyCommand(deployment, platform.Address, imageId, resolvedConfiguration.EnvironmentVariables);
 
         var result = await connector.ApplyDeploymentAsync(commandToApply, ct);
         if (!result.IsSuccess(out var deploymentResult, out var error))
         {
-            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, error.Message, ct: ct);
-            yield return Error(500, error.Message);
+            var safeMessage = secretRedactor.Redact(error.Message, resolvedConfiguration.RedactionValues);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, ct: ct);
+            yield return Error(500, safeMessage);
             yield break;
         }
 
@@ -166,7 +182,11 @@ internal sealed class ApplyDeploymentService(
         yield return Info("✅ Deployment is now running.");
     }
 
-    private static ApplyDeploymentCommand BuildApplyCommand(Deployment deployment, string platformAddress, string imageId)
+    private static ApplyDeploymentCommand BuildApplyCommand(
+        Deployment deployment,
+        string platformAddress,
+        string imageId,
+        IReadOnlyList<string> environmentVariables)
     {
         var rs = deployment.Spec!.ResourceSpec;
 
@@ -182,7 +202,8 @@ internal sealed class ApplyDeploymentService(
             PlatformAddress: platformAddress,
             Name: deployment.Name,
             ImageId: imageId,
-            Spec: deployment.Spec with { ResourceSpec = normalized });
+            Spec: deployment.Spec with { ResourceSpec = normalized },
+            EnvironmentVariables: environmentVariables);
     }
 
     private static DeploymentStreamItem Info(string message)

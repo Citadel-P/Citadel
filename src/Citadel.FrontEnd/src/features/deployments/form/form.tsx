@@ -12,6 +12,7 @@ import {
   DeploymentConfigView,
   PatchDeploymentInput,
   LookupResourceType,
+  ConfigurationScope,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -31,6 +32,7 @@ import { useParams } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
 import { AlertMessage } from '@/components/custom/alert-message';
+import { ConfigurationSummary } from '@/components/custom/configuration-entries-tab';
 
 const enum ImageSource {
   local = 'Local',
@@ -498,27 +500,6 @@ export const DeploymentForm = ({
             ),
           }),
           defineField({
-            key: 'spec.envVars',
-            label: 'Environment',
-            description: 'Runtime configuration passed to the application inside the container.',
-            required: false,
-            render: (value, set) => (
-              <MonacoToArrayEditor
-                value={value}
-                helperText="# KEY=value"
-                language="key_value"
-                onChange={(e: string[] | undefined) =>
-                  set((prev) => ({
-                    spec: {
-                      ...prev.spec!,
-                      envVars: e ?? [],
-                    },
-                  }))
-                }
-              />
-            ),
-          }),
-          defineField({
             key: 'spec.updateBehavior',
             label: 'Auto Update',
             description: 'Define how the platform handles new image versions.',
@@ -716,17 +697,20 @@ export const DeploymentForm = ({
   );
 
   return (
-    <FormShell
-      mode={mode}
-      schema={schema}
-      original={original}
-      update={update}
-      setUpdate={setUpdate}
-      onSave={handleSave}
-      pending={isPending}
-      disabled={disabled}
-      draftKey={`deployment:${id ?? 'new'}`}
-      draftVersion={1}
-    />
+    <div className="flex flex-col gap-4">
+      {mode === 'edit' && id && <ConfigurationSummary scope={ConfigurationScope.Deployment} resourceId={id} />}
+      <FormShell
+        mode={mode}
+        schema={schema}
+        original={original}
+        update={update}
+        setUpdate={setUpdate}
+        onSave={handleSave}
+        pending={isPending}
+        disabled={disabled}
+        draftKey={`deployment:${id ?? 'new'}`}
+        draftVersion={1}
+      />
+    </div>
   );
 };

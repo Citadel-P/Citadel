@@ -30,8 +30,7 @@ public class DeploymentDeleteTests(PostgresTestFixture fixture) : IntegrationTes
                     RegistryId: Constants.DefaultRegistryId,
                     ImageTag: "nginx:latest"
                 ),
-                Ports: new List<string> { "80:80" },
-                EnvVars: new List<string> { "ENV=production" }
+                Ports: new List<string> { "80:80" }
             )
 
         );

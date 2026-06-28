@@ -35,6 +35,21 @@ public class StackTests
         Assert.Equal(StackReleaseStatus.Created, stack.CurrentStackRelease.Status);
     }
 
+    [Fact]
+    public void PrepareReleaseForApply_Should_Reuse_Healthy_Release_When_Next_Release_Is_Not_Requested()
+    {
+        var stack = CreateManualStack();
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        var releaseId = stack.CurrentStackReleaseId;
+        var version = stack.CurrentStackRelease!.Version;
+
+        var prepared = stack.PrepareReleaseForApply(Guid.CreateVersion7(), createNextRelease: false);
+
+        Assert.True(prepared);
+        Assert.Equal(releaseId, stack.CurrentStackReleaseId);
+        Assert.Equal(version, stack.CurrentStackRelease!.Version);
+    }
+
     [Theory]
     [InlineData(StackReleaseStatus.Healthy, ContainerStateStatus.Running, ContainerStateStatus.Running)]
     [InlineData(StackReleaseStatus.Paused, ContainerStateStatus.Paused, ContainerStateStatus.Paused)]

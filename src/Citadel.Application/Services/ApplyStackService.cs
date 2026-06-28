@@ -7,12 +7,14 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
+using Domain.Entities.Configuration;
 using Domain.Entities.Git;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 
 namespace Application.Services;
 
@@ -43,7 +45,9 @@ internal class ApplyStackService(
     IPlatformContainerCache platformCache,
     IConnectorFactory<IStackConnector> stackConnectorFactory,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
-    IGitStackMaterializer gitStackMaterializer) : IApplyStackService
+    IGitStackMaterializer gitStackMaterializer,
+    IConfigurationResolver configurationResolver,
+    ISecretRedactor secretRedactor) : IApplyStackService
 {
     public async IAsyncEnumerable<StackStreamItem> ApplyAsync(
         Guid stackId,
@@ -169,12 +173,21 @@ internal class ApplyStackService(
         string? generatedFilesDirectory = null;
         string? gitSnapshotRoot = null;
         StackReleaseSource? releaseSource = null;
+        yield return StackStreamItem.SystemMessage("Resolving stack variables and secrets...", 0);
+        var configurationResult = await configurationResolver.ResolveAsync(ConfigurationScope.Stack, stack.Id, ct);
+        if (configurationResult.IsFailure(out var configurationError, out var resolvedConfiguration))
+        {
+            var message = configurationError.Message;
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            yield return StackStreamItem.FromStdErr(message, 1);
+            yield break;
+        }
 
         if (stackSpec is ManualStack currentManualStack)
         {
             composeFileContent = StackComposeLabelInjector.Inject(currentManualStack.ComposeFile, stack.Id, currentRelease.Id);
             environmentFilePath = currentManualStack.EnvFilePath;
-            environmentVariables = currentManualStack.EnvVars;
+            environmentVariables = resolvedConfiguration.EnvironmentVariables;
         }
         else if (stackSpec is GitStack gitStack)
         {
@@ -198,7 +211,7 @@ internal class ApplyStackService(
 
             composeFileContent = null;
             environmentFilePath = payload.EnvFilePath;
-            environmentVariables = payload.EnvironmentVariables;
+            environmentVariables = [.. payload.EnvironmentVariables, .. resolvedConfiguration.EnvironmentVariables];
             sourceWorkingDirectory = payload.SourceWorkingDirectory;
             sourceComposeFilePaths = payload.SourceComposeFilePaths;
             sourceEnvFilePaths = payload.SourceEnvFilePaths;
@@ -226,6 +239,18 @@ internal class ApplyStackService(
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
+
+        var referencedConfigurationKeys = await GetReferencedConfigurationKeysAsync(
+            composeFileContent,
+            sourceComposeFilePaths,
+            ct);
+
+        yield return StackStreamItem.SystemMessage(
+            ConfigurationApplyMessageBuilder.BuildComposeInterpolationMessage(
+                resolvedConfiguration,
+                referencedConfigurationKeys,
+                sourceEnvFilePaths?.Count ?? 0),
+            0);
 
         var isServiceScopedApply = serviceNames is { Count: > 0 };
         yield return StackStreamItem.FromStdOut(isServiceScopedApply
@@ -263,9 +288,10 @@ internal class ApplyStackService(
                 var next = await TryReadNextAsync(enumerator);
                 if (next.ErrorMessage is not null)
                 {
+                    var safeError = secretRedactor.Redact(next.ErrorMessage, resolvedConfiguration.RedactionValues);
                     await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
-                    await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, next.ErrorMessage, operation: operation, source: releaseSource, ct: ct);
-                    yield return StackStreamItem.FromStdErr(next.ErrorMessage, exitCode ?? 1);
+                    await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, safeError, operation: operation, source: releaseSource, ct: ct);
+                    yield return StackStreamItem.FromStdErr(safeError, exitCode ?? 1);
                     yield break;
                 }
 
@@ -278,22 +304,23 @@ internal class ApplyStackService(
 
                 if (!string.IsNullOrWhiteSpace(result.Message))
                 {
+                    var safeMessage = secretRedactor.Redact(result.Message, resolvedConfiguration.RedactionValues);
                     if (result.Type == StackApplyEventType.SystemMessage)
                     {
-                        yield return StackStreamItem.SystemMessage(result.Message, result.ExitCode ?? 0);
+                        yield return StackStreamItem.SystemMessage(safeMessage, result.ExitCode ?? 0);
                     }
                     else
                     {
                         // Docker writes warnings and progress to stderr. 
                         // Only treat it as a critical failure message if it contains "error" or "failed"
-                        if (result.Message.Contains("error", StringComparison.OrdinalIgnoreCase) ||
-                            result.Message.Contains("failed", StringComparison.OrdinalIgnoreCase))
+                        if (safeMessage.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                            safeMessage.Contains("failed", StringComparison.OrdinalIgnoreCase))
                         {
-                            errorLogs.Add(result.Message);
+                            errorLogs.Add(safeMessage);
                         }
                         else
                         {
-                            yield return StackStreamItem.FromStdOut(result.Message);
+                            yield return StackStreamItem.FromStdOut(safeMessage);
                         }
                     }
                 }
@@ -527,6 +554,53 @@ internal class ApplyStackService(
             LabelsOverrideFilePath: labelsOverrideFilePath,
             GeneratedFilesDirectory: generatedFilesDirectory);
 
+    private static async Task<IReadOnlySet<string>> GetReferencedConfigurationKeysAsync(
+        string? composeFileContent,
+        IReadOnlyList<string>? sourceComposeFilePaths,
+        CancellationToken cancellationToken)
+    {
+        var references = new HashSet<string>(StringComparer.Ordinal);
+
+        if (!string.IsNullOrWhiteSpace(composeFileContent))
+        {
+            AddReferencedConfigurationKeys(composeFileContent, references);
+        }
+
+        if (sourceComposeFilePaths is { Count: > 0 })
+        {
+            foreach (var composeFilePath in sourceComposeFilePaths)
+            {
+                if (!File.Exists(composeFilePath))
+                    continue;
+
+                var content = await File.ReadAllTextAsync(composeFilePath, cancellationToken);
+                AddReferencedConfigurationKeys(content, references);
+            }
+        }
+
+        return references;
+    }
+
+    private static void AddReferencedConfigurationKeys(string content, HashSet<string> references)
+    {
+        foreach (Match match in BracedVariableReferenceRegex.Matches(content))
+        {
+            references.Add(match.Groups["name"].Value);
+        }
+
+        foreach (Match match in SimpleVariableReferenceRegex.Matches(content))
+        {
+            references.Add(match.Groups["name"].Value);
+        }
+    }
+
+    private static readonly Regex BracedVariableReferenceRegex = new(
+        @"(?<!\$)\$\{(?<name>[A-Za-z_][A-Za-z0-9_]*)(?=[:?+\-}]|\})",
+        RegexOptions.Compiled);
+
+    private static readonly Regex SimpleVariableReferenceRegex = new(
+        @"(?<!\$)\$(?<name>[A-Za-z_][A-Za-z0-9_]*)",
+        RegexOptions.Compiled);
 
     private static async Task<(bool HasItem, StackApplyResult? Result, string? ErrorMessage)> TryReadNextAsync(IAsyncEnumerator<StackApplyResult> enumerator)
     {
@@ -554,11 +628,12 @@ internal class ApplyStackService(
         }
 
         var previousRelease = stack.CurrentStackRelease;
-        var demotePreviousEditedRelease = previousRelease is not null
-            && previousRelease.IsRollbackCandidate()
+        var hasRollbackSnapshotForCurrentVersion = previousRelease is not null
             && await HasRollbackSnapshotForCurrentVersionAsync(uow, stack, previousRelease, ct);
+        var createNextRelease = ShouldCreateNextReleaseForApply(stack, hasRollbackSnapshotForCurrentVersion);
+        var demotePreviousEditedRelease = createNextRelease && hasRollbackSnapshotForCurrentVersion;
 
-        if (!stack.PrepareReleaseForApply(actorId))
+        if (!stack.PrepareReleaseForApply(actorId, createNextRelease))
         {
             return (false, null, "Stack has no release to apply.");
         }
@@ -590,6 +665,25 @@ internal class ApplyStackService(
             release.Id != currentRelease.Id &&
             release.Version == currentRelease.Version &&
             release.IsRollbackCandidate()) == true;
+    }
+
+    private static bool ShouldCreateNextReleaseForApply(Stack stack, bool hasRollbackSnapshotForCurrentVersion)
+    {
+        if (stack.CurrentStackRelease?.Status is StackReleaseStatus.Created or StackReleaseStatus.Failed)
+            return false;
+
+        if (hasRollbackSnapshotForCurrentVersion)
+            return true;
+
+        if (stack.CurrentStackRelease?.Spec is GitStack
+            && stack.StackUpdateState is GitStackUpdateState gitState)
+        {
+            var commitState = gitState.RecreateStackOnNewCommitState;
+            return !string.IsNullOrWhiteSpace(commitState.RemoteCommitSha)
+                && !string.Equals(commitState.CurrentCommitSha, commitState.RemoteCommitSha, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 
     private async Task<Stack?> LoadStack(Guid id, CancellationToken ct)

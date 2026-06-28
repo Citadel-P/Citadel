@@ -29,13 +29,15 @@ export type SupportedLanguage =
 
 type DiffFormat = 'json' | 'yaml';
 type DiffLayout = 'side-by-side' | 'inline';
-type MonacoDiagnostic = {
+export type MonacoDiagnostic = {
   lineNumber: number;
   message: string;
   severity?: monaco.MarkerSeverity;
   startColumn?: number;
   endColumn?: number;
 };
+
+type CompletionMode = 'line' | 'variable';
 
 let prettierLoader: Promise<{
   formatWithCursor: (source: string, options: any) => Promise<{ formatted: string; cursorOffset: number }>;
@@ -171,6 +173,7 @@ interface MonacoEditorProps {
   diagnostics?: MonacoDiagnostic[];
   completionItems?: string[];
   completionItemDetail?: string;
+  completionMode?: CompletionMode;
 }
 
 export const MonacoEditor = ({
@@ -188,6 +191,7 @@ export const MonacoEditor = ({
   diagnostics,
   completionItems,
   completionItemDetail,
+  completionMode = 'line',
 }: MonacoEditorProps) => {
   const [editorInstance, setEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const markersOwner = useId();
@@ -256,11 +260,38 @@ export const MonacoEditor = ({
 
     const modelUri = model.uri.toString();
     const disposable = monaco.languages.registerCompletionItemProvider(language, {
-      triggerCharacters: ['/', '.', '-', '_'],
+      triggerCharacters: completionMode === 'variable' ? ['$', '{', '_'] : ['/', '.', '-', '_'],
       provideCompletionItems: (targetModel, position) => {
         if (targetModel.uri.toString() !== modelUri) return { suggestions: [] };
 
         const lineContent = targetModel.getLineContent(position.lineNumber);
+        const beforeCursor = lineContent.slice(0, position.column - 1);
+        const variableStartIndex = beforeCursor.lastIndexOf('${');
+
+        if (completionMode === 'variable') {
+          if (variableStartIndex < 0) return { suggestions: [] };
+
+          const typed = beforeCursor.slice(variableStartIndex + 2);
+          if (typed.includes('}') || /\s/.test(typed)) return { suggestions: [] };
+
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: variableStartIndex + 3,
+            endColumn: position.column,
+          };
+
+          return {
+            suggestions: completionItems.map((item) => ({
+              label: item,
+              kind: monaco.languages.CompletionItemKind.Variable,
+              insertText: item,
+              range,
+              detail: completionItemDetail,
+            })),
+          };
+        }
+
         const firstNonWhitespace = lineContent.search(/\S/);
         const range = {
           startLineNumber: position.lineNumber,
@@ -282,7 +313,7 @@ export const MonacoEditor = ({
     });
 
     return () => disposable.dispose();
-  }, [completionItemDetail, completionItems, editorInstance, language]);
+  }, [completionItemDetail, completionItems, completionMode, editorInstance, language]);
 
   const handleMount: OnMount = useCallback((editor) => {
     lastEditorValueRef.current = editor.getValue();

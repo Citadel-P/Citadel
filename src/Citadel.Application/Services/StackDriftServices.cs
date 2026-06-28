@@ -302,7 +302,8 @@ internal sealed class StackDriftChecker(
 
                 if (!string.IsNullOrWhiteSpace(container.HealthStatus)
                     && !container.HealthStatus.Equals("healthy", StringComparison.OrdinalIgnoreCase)
-                    && !container.HealthStatus.Equals("none", StringComparison.OrdinalIgnoreCase))
+                    && !container.HealthStatus.Equals("none", StringComparison.OrdinalIgnoreCase)
+                    && !container.HealthStatus.Equals("starting", StringComparison.OrdinalIgnoreCase))
                 {
                     drifts.Add(new ContainerUnhealthy(container.ContainerId, service.ServiceName, container.HealthStatus));
                 }

@@ -1,0 +1,46 @@
+using Domain.Entities.Configuration;
+using Infrastructure.Persistence.Dtos;
+
+namespace Infrastructure.Persistence.Mappers;
+
+internal static class ConfigurationMappers
+{
+    internal static ConfigurationEntry ToDomain(this ConfigurationEntryDto dto)
+        => new(
+            Name: dto.Name,
+            Kind: Enum.Parse<ConfigurationEntryKind>(dto.Kind),
+            Scope: Enum.Parse<ConfigurationScope>(dto.Scope),
+            ResourceId: dto.ResourceId,
+            Value: dto.Value,
+            SecretId: dto.SecretId,
+            SecretDeliveryMode: string.IsNullOrWhiteSpace(dto.SecretDeliveryMode)
+                ? null
+                : Enum.Parse<SecretDeliveryMode>(dto.SecretDeliveryMode),
+            TargetPath: dto.TargetPath)
+        {
+            Id = dto.Id,
+            CreatedAt = dto.CreatedAt,
+            UpdatedAt = dto.UpdatedAt
+        };
+
+    internal static SecretDefinition ToDomain(this SecretDefinitionDto dto)
+        => new(
+            Name: dto.Name,
+            ProviderType: Enum.Parse<SecretProviderType>(dto.ProviderType),
+            ProviderId: dto.ProviderId,
+            ExternalPath: dto.ExternalPath,
+            ExternalKey: dto.ExternalKey,
+            ExternalVersion: dto.ExternalVersion)
+        {
+            Id = dto.Id,
+            CreatedAt = dto.CreatedAt,
+            UpdatedAt = dto.UpdatedAt
+        };
+
+    internal static InternalSecretValue ToDomain(this InternalSecretValueDto dto)
+        => new(dto.SecretId, dto.EncryptedValue)
+        {
+            CreatedAt = dto.CreatedAt,
+            UpdatedAt = dto.UpdatedAt
+        };
+}

@@ -10,6 +10,7 @@ import {
   DeploymentStatus,
   DeploymentView,
   ContainerDataView,
+  ConfigurationScope,
   LatestActivityView,
   ResourceControlState,
   UpdateBehavior,
@@ -27,6 +28,7 @@ import { ActivityAlertZone } from '@/components/custom/task-sheet';
 import { DeploymentLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { UpdateAvailableNotice } from '@/components/custom/common';
+import { ConfigurationEntriesTab } from '@/components/custom/configuration-entries-tab';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -59,6 +61,18 @@ export const DeploymentFormComponents: RequiredFormComponents = {
             <DeploymentForm
               mode="edit"
               metadataChanged={metadataChanged}
+              disabled={!hasCapability(resource, 'canWrite')}
+            />
+          );
+        },
+      },
+      {
+        label: 'Environment',
+        Content: ({ resource }: { resource: DeploymentView }) => {
+          return (
+            <ConfigurationEntriesTab
+              scope={ConfigurationScope.Deployment}
+              resourceId={resource.id}
               disabled={!hasCapability(resource, 'canWrite')}
             />
           );

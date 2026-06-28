@@ -67,8 +67,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
                     RegistryId: Constants.DefaultRegistryId,
                     ImageTag: "nginx:latest"
                 ),
-                Ports: new List<string> { "80:80" },
-                EnvVars: new List<string> { "ENV=production" }
+                Ports: new List<string> { "80:80" }
             )
         );
         var stack = Stack.Create

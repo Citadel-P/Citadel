@@ -79,6 +79,25 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "secretdefinitions",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    externalkey = table.Column<string>(type: "text", nullable: true),
+                    externalpath = table.Column<string>(type: "text", nullable: true),
+                    externalversion = table.Column<int>(type: "integer", nullable: true),
+                    name = table.Column<string>(type: "text", nullable: false),
+                    providerid = table.Column<Guid>(type: "uuid", nullable: true),
+                    providertype = table.Column<string>(type: "text", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_secretdefinitions", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "alertchannels",
                 columns: table => new
                 {
@@ -402,6 +421,53 @@ namespace Infrastructure.Migrations.Migrations
                         name: "fk_permissions_roles_roleid",
                         column: x => x.roleid,
                         principalTable: "roles",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "configurationentries",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    kind = table.Column<string>(type: "text", nullable: false),
+                    name = table.Column<string>(type: "text", nullable: false),
+                    resourceid = table.Column<Guid>(type: "uuid", nullable: true),
+                    scope = table.Column<string>(type: "text", nullable: false),
+                    secretdeliverymode = table.Column<string>(type: "text", nullable: true),
+                    secretid = table.Column<Guid>(type: "uuid", nullable: true),
+                    targetpath = table.Column<string>(type: "text", nullable: true),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    value = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_configurationentries", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_configurationentries_secretdefinitions_secretid",
+                        column: x => x.secretid,
+                        principalTable: "secretdefinitions",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "internalsecretvalues",
+                columns: table => new
+                {
+                    secretid = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    encryptedvalue = table.Column<string>(type: "text", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_internalsecretvalues", x => x.secretid);
+                    table.ForeignKey(
+                        name: "fk_internalsecretvalues_secretdefinitions_secretid",
+                        column: x => x.secretid,
+                        principalTable: "secretdefinitions",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -842,6 +908,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("5f36ed62-49a9-8610-dc34-2bc89165e4de"), 4, 1, new Guid("30000000-0000-0000-0000-000000000001"), 23 },
                     { new Guid("645b4c54-7937-2180-7186-be24ac6bf330"), 4, 5, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("672ebf04-40e5-547b-29f2-6daf5c3c3856"), 1, 8, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("6e1cf352-66c2-0671-eb47-b70b01f27406"), 2, 11, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("80aa1c34-79dd-6587-52db-52605326fe77"), 2, 7, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("86dadd60-fced-3dcd-cdbe-8d262bec7d22"), 2, 5, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("909763b4-50a0-e1c7-6df1-61add076910c"), 1, 2, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
@@ -855,11 +922,13 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("b104e60e-87ef-a58f-f04a-ba2fc634f037"), 1, 6, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("b3abb382-80da-8170-b011-05af044e7908"), 2, 3, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("c5e4df97-9c4a-cdf4-6568-b709276db612"), 4, 2, new Guid("30000000-0000-0000-0000-000000000001"), 7 },
+                    { new Guid("ca880835-6808-358a-bebb-8ea95efdea97"), 1, 11, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("d0d48de1-86a5-c43e-309c-1adce8776662"), 2, 2, new Guid("30000000-0000-0000-0000-000000000002"), 7 },
                     { new Guid("d5fa8563-b0a2-4f11-7e16-7c1877e43dda"), 4, 6, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("dbb104e4-d7e2-5173-b0b2-6d1519c2f682"), 4, 8, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("e04cd0d3-47bf-2d28-e099-c7a9b61e3875"), 1, 3, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("ee9254c3-9b59-15a0-aa85-898f5974a603"), 2, 6, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("f7aa549c-bcc2-d9b2-449d-0f223e0f9752"), 4, 11, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("fb710f21-c146-e381-00f0-820f58ecb69a"), 1, 9, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("fbb8ef70-2ec3-134f-0c18-1533173d5849"), 4, 9, new Guid("30000000-0000-0000-0000-000000000001"), 0 }
                 });
@@ -964,6 +1033,25 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_alertrulestates_createdbyactorid",
                 table: "alertrulestates",
                 column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_configurationentries_scope_name_global",
+                table: "configurationentries",
+                columns: new[] { "scope", "name" },
+                unique: true,
+                filter: "resourceid IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_configurationentries_scope_resourceid_name",
+                table: "configurationentries",
+                columns: new[] { "scope", "resourceid", "name" },
+                unique: true,
+                filter: "resourceid IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_configurationentries_secretid",
+                table: "configurationentries",
+                column: "secretid");
 
             migrationBuilder.CreateIndex(
                 name: "ix__containers_dockercontainerid_platformid",
@@ -1143,6 +1231,11 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_secretdefinitions_name",
+                table: "secretdefinitions",
+                column: "name");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_stackreleases_createdbyactorid",
                 table: "stackreleases",
                 column: "createdbyactorid");
@@ -1225,10 +1318,16 @@ namespace Infrastructure.Migrations.Migrations
                 name: "alertrulestates");
 
             migrationBuilder.DropTable(
+                name: "configurationentries");
+
+            migrationBuilder.DropTable(
                 name: "containerstats");
 
             migrationBuilder.DropTable(
                 name: "gitrepositoryrefs");
+
+            migrationBuilder.DropTable(
+                name: "internalsecretvalues");
 
             migrationBuilder.DropTable(
                 name: "permissions");
@@ -1259,6 +1358,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "gitrepositories");
+
+            migrationBuilder.DropTable(
+                name: "secretdefinitions");
 
             migrationBuilder.DropTable(
                 name: "roles");

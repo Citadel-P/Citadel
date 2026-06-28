@@ -32,6 +32,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .ResourceAccessConfiguration()
             .RoleConfiguration()
             .ActorRoleConfiguration()
+            .ConfigurationEntryConfiguration()
+            .SecretDefinitionConfiguration()
+            .InternalSecretValueConfiguration()
             .DeploymentConfiguration()
             .ImageConfiguration()
             .ActivityEventConfiguration()
@@ -739,6 +742,93 @@ internal static class Configuration
 
         actorRole.HasIndex("RoleId").HasDatabaseName($"IX_{tableName}_RoleId");
         actorRole.HasIndex("ActorId").HasDatabaseName($"IX_{tableName}_ActorId");
+
+        return builder;
+    }
+
+    public static ModelBuilder ConfigurationEntryConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "ConfigurationEntries";
+        var entry = builder.Entity("ConfigurationEntry");
+
+        entry.ToTable(tableName);
+
+        entry.Property<Guid>("Id").IsRequired();
+        entry.HasKey("Id");
+
+        entry.Property<string>("Name").HasColumnType(Text).IsRequired();
+        entry.Property<string>("Kind").HasColumnType(Text).IsRequired();
+        entry.Property<string>("Scope").HasColumnType(Text).IsRequired();
+        entry.Property<Guid?>("ResourceId").IsRequired(false);
+        entry.Property<string>("Value").HasColumnType(Text).IsRequired(false);
+        entry.Property<Guid?>("SecretId").IsRequired(false);
+        entry.Property<string>("SecretDeliveryMode").HasColumnType(Text).IsRequired(false);
+        entry.Property<string>("TargetPath").HasColumnType(Text).IsRequired(false);
+        entry.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entry.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        entry
+            .HasOne("SecretDefinition")
+            .WithMany()
+            .HasForeignKey("SecretId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entry.HasIndex("Scope", "Name")
+            .IsUnique()
+            .HasFilter("resourceid IS NULL")
+            .HasDatabaseName($"IX_{tableName}_Scope_Name_Global");
+        entry.HasIndex("Scope", "ResourceId", "Name")
+            .IsUnique()
+            .HasFilter("resourceid IS NOT NULL")
+            .HasDatabaseName($"IX_{tableName}_Scope_ResourceId_Name");
+        entry.HasIndex("SecretId").HasDatabaseName($"IX_{tableName}_SecretId");
+
+        return builder;
+    }
+
+    public static ModelBuilder SecretDefinitionConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "SecretDefinitions";
+        var secret = builder.Entity("SecretDefinition");
+
+        secret.ToTable(tableName);
+
+        secret.Property<Guid>("Id").IsRequired();
+        secret.HasKey("Id");
+
+        secret.Property<string>("Name").HasColumnType(Text).IsRequired();
+        secret.Property<string>("ProviderType").HasColumnType(Text).IsRequired();
+        secret.Property<Guid?>("ProviderId").IsRequired(false);
+        secret.Property<string>("ExternalPath").HasColumnType(Text).IsRequired(false);
+        secret.Property<string>("ExternalKey").HasColumnType(Text).IsRequired(false);
+        secret.Property<int?>("ExternalVersion").HasColumnType(Integer).IsRequired(false);
+        secret.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        secret.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        secret.HasIndex("Name").HasDatabaseName($"IX_{tableName}_Name");
+
+        return builder;
+    }
+
+    public static ModelBuilder InternalSecretValueConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "InternalSecretValues";
+        var value = builder.Entity("InternalSecretValue");
+
+        value.ToTable(tableName);
+
+        value.Property<Guid>("SecretId").IsRequired();
+        value.HasKey("SecretId");
+
+        value.Property<string>("EncryptedValue").HasColumnType(Text).IsRequired();
+        value.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        value.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        value
+            .HasOne("SecretDefinition")
+            .WithMany()
+            .HasForeignKey("SecretId")
+            .OnDelete(DeleteBehavior.Cascade);
 
         return builder;
     }

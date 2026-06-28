@@ -36,6 +36,7 @@ public static class PublicEndpoints
     const string RegistriesName = nameof(Registries);
     const string DeploymentsName = nameof(Deployments);
     const string StacksName = nameof(Stacks);
+    const string ConfigurationName = nameof(ConfigurationEntries);
     const string AuthenticationName = nameof(Authentication);
     const string LookupName = nameof(Lookup);
 
@@ -102,6 +103,10 @@ public static class PublicEndpoints
             var stacks = group.MapGroup("/stacks").WithTags(StacksName).RequireAuthorization();
             {
                 MapStackEndpoints(stacks);
+            }
+            var configuration = group.MapGroup("/configuration").WithTags(ConfigurationName).RequireAuthorization();
+            {
+                MapConfigurationEndpoints(configuration);
             }
             var activities = group.MapGroup("/activities").WithTags(ActivitiesName).RequireAuthorization();
             {
@@ -447,6 +452,33 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteGitRepositories");
+    }
+
+    private static void MapConfigurationEndpoints(RouteGroupBuilder configuration)
+    {
+        configuration.MapGet("global", ConfigurationEntries.GetGlobal)
+            .WithName("getGlobalConfigurationEntries")
+            .WithSummary("Get global variables and secrets");
+
+        configuration.MapPut("global", ConfigurationEntries.ReplaceGlobal)
+            .WithName("replaceGlobalConfigurationEntries")
+            .WithSummary("Replace global variables and secrets");
+
+        configuration.MapGet("{scope}/{resourceId:guid}", ConfigurationEntries.GetResource)
+            .WithName("getResourceConfigurationEntries")
+            .WithSummary("Get resource variables and secrets");
+
+        configuration.MapPut("{scope}/{resourceId:guid}", ConfigurationEntries.ReplaceResource)
+            .WithName("replaceResourceConfigurationEntries")
+            .WithSummary("Replace resource variables and secrets");
+
+        configuration.MapGet("secrets", ConfigurationEntries.ListSecrets)
+            .WithName("listSecretDefinitions")
+            .WithSummary("List secret definitions");
+
+        configuration.MapPost("secrets", ConfigurationEntries.CreateInternalSecret)
+            .WithName("createInternalSecret")
+            .WithSummary("Create an internal encrypted secret");
     }
 
     private static void MapAuthEndpoints(RouteGroupBuilder auth)

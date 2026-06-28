@@ -12,6 +12,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
+using Domain.Entities.Configuration;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
 using Domain.Entities.Stacks;
@@ -35,7 +36,7 @@ public class ApplyStackServiceTests
         Directory.CreateDirectory(Path.Combine(repoRoot, "stacks", "app"));
         await File.WriteAllTextAsync(
             Path.Combine(repoRoot, "stacks", "app", "compose.yml"),
-            "services:\n  app:\n    image: nginx\n",
+            "services:\n  app:\n    image: nginx\n    environment:\n      APP_MODE: ${APP_MODE}\n      API_KEY: ${API_KEY}\n",
             TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(
             Path.Combine(repoRoot, "stacks", "app", ".env"),
@@ -139,7 +140,17 @@ public class ApplyStackServiceTests
                     ImmutableDictionary<string, Guid>.Empty)),
                 stackConnectorFactory.Object,
                 containerConnectorFactory.Object,
-                gitStackMaterializer);
+                gitStackMaterializer,
+                new StaticConfigurationResolver(new ResolvedConfiguration(
+                    ["APP_MODE=prod", "API_KEY=super-secret"],
+                    [
+                        new ResolvedConfigurationEntry("APP_MODE", ConfigurationEntryKind.Variable, "prod"),
+                        new ResolvedConfigurationEntry("API_KEY", ConfigurationEntryKind.Secret, "super-secret")
+                    ],
+                    ["super-secret"],
+                    VariableCount: 1,
+                    SecretCount: 1)),
+                new PassThroughSecretRedactor());
 
             var items = new List<StackStreamItem>();
             await foreach (var item in service.ApplyAsync(
@@ -173,6 +184,9 @@ public class ApplyStackServiceTests
             Assert.Equal(["stacks/app/compose.yml"], stack.CurrentStackRelease?.Source?.ComposePaths);
             Assert.Equal(["stacks/app/.env"], stack.CurrentStackRelease?.Source?.EnvFilePaths);
             Assert.Equal("stacks/app", stack.CurrentStackRelease?.Source?.WorkingDirectory);
+            Assert.Contains(
+                items,
+                item => item.ProgressMessage == "Resolved 1 variable APP_MODE=prod and 1 secret API_KEY for compose interpolation. Included 1 repo env file.");
             Assert.Contains(items, item => item.ExitCode == 0);
         }
         finally
@@ -347,7 +361,9 @@ public class ApplyStackServiceTests
                 ImmutableDictionary<string, Guid>.Empty)),
             stackConnectorFactory.Object,
             containerConnectorFactory.Object,
-            gitStackMaterializer.Object);
+            gitStackMaterializer.Object,
+            new EmptyConfigurationResolver(),
+            new PassThroughSecretRedactor());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -500,7 +516,9 @@ public class ApplyStackServiceTests
                 ImmutableDictionary<string, Guid>.Empty)),
             stackConnectorFactory.Object,
             containerConnectorFactory.Object,
-            gitStackMaterializer.Object);
+            gitStackMaterializer.Object,
+            new EmptyConfigurationResolver(),
+            new PassThroughSecretRedactor());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -518,6 +536,103 @@ public class ApplyStackServiceTests
         Assert.Contains(items, item => item.ExitCode == 1);
         gitStackMaterializer.Verify(x => x.DiscardSnapshotAsync(stack.Id, releaseId, It.IsAny<CancellationToken>()), Times.Once);
         gitStackMaterializer.Verify(x => x.ActivateCurrentAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_Should_Redeploy_Healthy_ManualStack_Without_Creating_New_Release_When_Definition_Is_Unchanged()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "manual-stack",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  app:\n    image: nginx\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        var releaseId = stack.CurrentStackReleaseId;
+        var releaseVersion = stack.CurrentStackRelease!.Version;
+
+        var appliedContainer = new DockerContainer(
+            Name: "/manual-stack-app-1",
+            Image: "nginx:latest",
+            Id: "manual-stack-app-container",
+            ImageId: "sha256:nginx",
+            State: ContainerStateStatus.Running,
+            Created: 123,
+            Stack: "manual-stack");
+
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .SetupSequence(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer> { [appliedContainer.Id] = appliedContainer }));
+
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerConnectorFactory
+            .Setup(x => x.GetConnector(PlatformConnectorType.Local))
+            .Returns(containerConnector.Object);
+
+        var stackConnector = new Mock<IStackConnector>();
+        stackConnector
+            .Setup(x => x.StackApplyAsync(It.IsAny<StackApplyCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(SuccessfulStackApplyStream());
+
+        var stackConnectorFactory = new Mock<IConnectorFactory<IStackConnector>>();
+        stackConnectorFactory
+            .Setup(x => x.GetConnector(PlatformConnectorType.Local))
+            .Returns(stackConnector.Object);
+
+        var repository = new GitRepository(
+            name: "unused",
+            description: null,
+            url: "https://example.invalid/repo.git",
+            defaultBranch: "main",
+            gitAccountId: null,
+            createdByActorId: actorId);
+        var unitOfWork = CreateApplyUnitOfWork(stack, repository, platformId, actorId);
+        var services = new ServiceCollection()
+            .AddScoped(_ => unitOfWork.Object)
+            .BuildServiceProvider();
+
+        var service = new ApplyStackService(
+            new InlineDbWorkQueue(unitOfWork.Object),
+            Mock.Of<IStackStreamManager>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            new TestPlatformContainerCache(new PlatformCacheEntry(
+                platformId,
+                "http://docker.local",
+                PlatformConnectorType.Local,
+                ImmutableDictionary<string, Guid>.Empty)),
+            stackConnectorFactory.Object,
+            containerConnectorFactory.Object,
+            Mock.Of<IGitStackMaterializer>(),
+            new EmptyConfigurationResolver(),
+            new PassThroughSecretRedactor());
+
+        var items = new List<StackStreamItem>();
+        await foreach (var item in service.ApplyAsync(
+            stack.Id,
+            actorId,
+            serviceNames: null,
+            pullImages: true,
+            StackApplyOperation.Apply,
+            previousStackSnapshot: null,
+            TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        Assert.Contains(items, item => item.ExitCode == 0);
+        Assert.Equal(releaseId, stack.CurrentStackReleaseId);
+        Assert.Equal(releaseVersion, stack.CurrentStackRelease!.Version);
+        Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease.Status);
     }
 
     [Fact]
@@ -1069,6 +1184,29 @@ public class ApplyStackServiceTests
     private sealed class TestStackStoragePathProvider(string path) : IStackStoragePathProvider
     {
         public string StacksRoot { get; } = path;
+    }
+
+    private sealed class EmptyConfigurationResolver : IConfigurationResolver
+    {
+        public Task<Result<ResolvedConfiguration>> ResolveAsync(
+            ConfigurationScope scope,
+            Guid resourceId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result.Success(new ResolvedConfiguration([], [], [], 0, 0)));
+    }
+
+    private sealed class StaticConfigurationResolver(ResolvedConfiguration configuration) : IConfigurationResolver
+    {
+        public Task<Result<ResolvedConfiguration>> ResolveAsync(
+            ConfigurationScope scope,
+            Guid resourceId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result.Success(configuration));
+    }
+
+    private sealed class PassThroughSecretRedactor : ISecretRedactor
+    {
+        public string Redact(string? value, IEnumerable<string> secrets) => value ?? string.Empty;
     }
 
     private sealed class TempDirectory : IDisposable

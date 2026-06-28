@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260626214125_migration0001")]
+    [Migration("20260628130638_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -749,6 +749,79 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("alertrulestates", (string)null);
                 });
 
+            modelBuilder.Entity("ConfigurationEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("ResourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resourceid");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("SecretDeliveryMode")
+                        .HasColumnType("text")
+                        .HasColumnName("secretdeliverymode");
+
+                    b.Property<Guid?>("SecretId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("secretid");
+
+                    b.Property<string>("TargetPath")
+                        .HasColumnType("text")
+                        .HasColumnName("targetpath");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_configurationentries");
+
+                    b.HasIndex("SecretId")
+                        .HasDatabaseName("ix_configurationentries_secretid");
+
+                    b.HasIndex("Scope", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_configurationentries_scope_name_global")
+                        .HasFilter("resourceid IS NULL");
+
+                    b.HasIndex("Scope", "ResourceId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_configurationentries_scope_resourceid_name")
+                        .HasFilter("resourceid IS NOT NULL");
+
+                    b.ToTable("configurationentries", (string)null);
+                });
+
             modelBuilder.Entity("Container", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1309,6 +1382,35 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("images", (string)null);
                 });
 
+            modelBuilder.Entity("InternalSecretValue", b =>
+                {
+                    b.Property<Guid>("SecretId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("secretid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("EncryptedValue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("encryptedvalue");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("SecretId")
+                        .HasName("pk_internalsecretvalues");
+
+                    b.ToTable("internalsecretvalues", (string)null);
+                });
+
             modelBuilder.Entity("LatestActivityEvent", b =>
                 {
                     b.Property<DateTime>("CreatedAt")
@@ -1557,6 +1659,30 @@ namespace Infrastructure.Migrations.Migrations
                             Id = new Guid("86dadd60-fced-3dcd-cdbe-8d262bec7d22"),
                             PermissionLevel = 2,
                             ResourceType = 5,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("f7aa549c-bcc2-d9b2-449d-0f223e0f9752"),
+                            PermissionLevel = 4,
+                            ResourceType = 11,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("ca880835-6808-358a-bebb-8ea95efdea97"),
+                            PermissionLevel = 1,
+                            ResourceType = 11,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("6e1cf352-66c2-0671-eb47-b70b01f27406"),
+                            PermissionLevel = 2,
+                            ResourceType = 11,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
@@ -1923,6 +2049,60 @@ namespace Infrastructure.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SecretDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("ExternalKey")
+                        .HasColumnType("text")
+                        .HasColumnName("externalkey");
+
+                    b.Property<string>("ExternalPath")
+                        .HasColumnType("text")
+                        .HasColumnName("externalpath");
+
+                    b.Property<int?>("ExternalVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("externalversion");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("providerid");
+
+                    b.Property<string>("ProviderType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("providertype");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id")
+                        .HasName("pk_secretdefinitions");
+
+                    b.HasIndex("Name")
+                        .HasDatabaseName("ix_secretdefinitions_name");
+
+                    b.ToTable("secretdefinitions", (string)null);
+                });
+
             modelBuilder.Entity("Stack", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2281,6 +2461,15 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_alertrulestates_actors_createdbyactorid");
                 });
 
+            modelBuilder.Entity("ConfigurationEntry", b =>
+                {
+                    b.HasOne("SecretDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("SecretId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_configurationentries_secretdefinitions_secretid");
+                });
+
             modelBuilder.Entity("Container", b =>
                 {
                     b.HasOne("Actor", null)
@@ -2410,6 +2599,16 @@ namespace Infrastructure.Migrations.Migrations
                         .HasForeignKey("RegistryId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_images_registries_registryid");
+                });
+
+            modelBuilder.Entity("InternalSecretValue", b =>
+                {
+                    b.HasOne("SecretDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("SecretId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_internalsecretvalues_secretdefinitions_secretid");
                 });
 
             modelBuilder.Entity("Permission", b =>

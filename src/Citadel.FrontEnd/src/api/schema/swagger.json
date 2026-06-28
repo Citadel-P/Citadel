@@ -13428,6 +13428,318 @@
         ]
       }
     },
+    "/api/v1/configuration/global": {
+      "get": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Get global variables and secrets",
+        "operationId": "getGlobalConfigurationEntries",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationEntriesView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Replace global variables and secrets",
+        "operationId": "replaceGlobalConfigurationEntries",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceConfigurationEntriesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationEntriesView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/configuration/{scope}/{resourceId}": {
+      "get": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Get resource variables and secrets",
+        "operationId": "getResourceConfigurationEntries",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Configuration scope",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConfigurationScope"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationEntriesView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Replace resource variables and secrets",
+        "operationId": "replaceResourceConfigurationEntries",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Configuration scope",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConfigurationScope"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceConfigurationEntriesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationEntriesView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/configuration/secrets": {
+      "get": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "List secret definitions",
+        "operationId": "listSecretDefinitions",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretDefinitionsView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Create an internal encrypted secret",
+        "operationId": "createInternalSecret",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInternalSecretInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretDefinitionView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/activities/{id}": {
       "get": {
         "tags": [
@@ -18913,6 +19225,146 @@
           }
         }
       },
+      "ConfigurationEntriesView": {
+        "required": [
+          "entries",
+          "effectiveEntries"
+        ],
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationEntryView"
+            }
+          },
+          "effectiveEntries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationEntryView"
+            }
+          }
+        }
+      },
+      "ConfigurationEntryInput": {
+        "required": [
+          "name",
+          "kind",
+          "value",
+          "secretId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConfigurationEntryKind"
+          },
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "secretId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "secretDeliveryMode": { },
+          "targetPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ConfigurationEntryKind": {
+        "enum": [
+          "Variable",
+          "Secret"
+        ]
+      },
+      "ConfigurationEntryView": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "scope",
+          "resourceId",
+          "value",
+          "secretId",
+          "secretDeliveryMode",
+          "targetPath",
+          "isInherited"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConfigurationEntryKind"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ConfigurationScope"
+          },
+          "resourceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "secretId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "secretDeliveryMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SecretDeliveryMode"
+              }
+            ]
+          },
+          "targetPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isInherited": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ConfigurationScope": {
+        "enum": [
+          "Global",
+          "Stack",
+          "Deployment"
+        ]
+      },
       "ContainerConfiguration": {
         "required": [
           "hostname",
@@ -20115,6 +20567,21 @@
           }
         }
       },
+      "CreateInternalSecretInput": {
+        "required": [
+          "name",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
       "CreateNetworkInput": {
         "required": [
           "platformId",
@@ -20970,15 +21437,6 @@
             }
           },
           "ports": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "envVars": {
             "type": [
               "null",
               "array"
@@ -25963,6 +26421,20 @@
           }
         }
       },
+      "ReplaceConfigurationEntriesInput": {
+        "required": [
+          "entries"
+        ],
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationEntryInput"
+            }
+          }
+        }
+      },
       "RepoCommand": {
         "required": [
           "commands"
@@ -26164,7 +26636,8 @@
           "AlertChannel",
           "User",
           "Team",
-          "Role"
+          "Role",
+          "Configuration"
         ]
       },
       "RestartPolicy": {
@@ -26281,6 +26754,83 @@
         "enum": [
           "Daily",
           "Weekly"
+        ]
+      },
+      "SecretDefinitionView": {
+        "required": [
+          "id",
+          "name",
+          "providerType",
+          "providerId",
+          "externalPath",
+          "externalKey",
+          "externalVersion",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "providerType": {
+            "$ref": "#/components/schemas/SecretProviderType"
+          },
+          "providerId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "externalPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "externalKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "externalVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "createdAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "SecretDefinitionsView": {
+        "required": [
+          "secrets"
+        ],
+        "type": "object",
+        "properties": {
+          "secrets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SecretDefinitionView"
+            }
+          }
+        }
+      },
+      "SecretDeliveryMode": { },
+      "SecretProviderType": {
+        "enum": [
+          "InternalEncrypted",
+          "VaultCompatibleKvV2"
         ]
       },
       "SpecificPermission": {
@@ -26994,7 +27544,9 @@
           "spec",
           "source",
           "createdAt",
-          "createdByActorId"
+          "createdByActorId",
+          "actorName",
+          "actorType"
         ],
         "type": "object",
         "properties": {
@@ -27035,6 +27587,12 @@
           "createdByActorId": {
             "type": "string",
             "format": "uuid"
+          },
+          "actorName": {
+            "type": "string"
+          },
+          "actorType": {
+            "$ref": "#/components/schemas/ActorType"
           },
           "platformStatus": {
             "$ref": "#/components/schemas/PlatformStatus"
@@ -27258,15 +27816,6 @@
               }
             ]
           },
-          "envVars": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
           "envFilePath": {
             "type": [
               "null",
@@ -27329,15 +27878,6 @@
                 "$ref": "#/components/schemas/StackCommand"
               }
             ]
-          },
-          "envVars": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
           },
           "envFilePath": {
             "type": [
@@ -28372,6 +28912,9 @@
     },
     {
       "name": "Stacks"
+    },
+    {
+      "name": "ConfigurationEntries"
     },
     {
       "name": "Activities"

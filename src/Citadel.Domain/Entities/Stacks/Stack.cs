@@ -172,11 +172,11 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         return true;
     }
 
-    public bool PrepareReleaseForApply(Guid actorId)
+    public bool PrepareReleaseForApply(Guid actorId, bool createNextRelease = true)
     {
         if (CurrentStackRelease is null) return false;
 
-        if (CurrentStackRelease.Status is StackReleaseStatus.Created or StackReleaseStatus.Failed)
+        if (!createNextRelease || CurrentStackRelease.Status is StackReleaseStatus.Created or StackReleaseStatus.Failed)
             return true;
 
         SetCurrentStackRelease(StackRelease.Create(

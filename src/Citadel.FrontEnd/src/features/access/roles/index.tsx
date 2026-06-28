@@ -63,6 +63,7 @@ export const RESOURCE_ICONS: Record<ResourceType, ResourceIcon> = {
   Registry: CitadelIcons.Registry,
   GitRepository: CitadelIcons.GitRepository,
   GitAccount: CitadelIcons.GitAccount,
+  Configuration: CitadelIcons.Configuration,
   Alert: CitadelIcons.Alert,
   AlertChannel: CitadelIcons.AlertChannel,
   User: CitadelIcons.User,
