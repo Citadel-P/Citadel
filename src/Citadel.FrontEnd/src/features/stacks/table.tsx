@@ -4,6 +4,7 @@ import {
   ImageUpdateState,
   RecreateStackOnNewCommitState,
   ResourceControlState,
+  StackSource,
   StackView,
 } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -21,6 +22,7 @@ import { truncate } from '@/lib/truncate';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { fromNow } from '@/lib/dayjs.helper';
 import { formatId } from '@/lib/utils';
+import { FileText, GitBranch } from 'lucide-react';
 
 export const StacksTable = ({
   items,
@@ -76,6 +78,12 @@ const columns = (
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
+    accessorKey: 'source',
+    header: ({ column }) => <SortableCell cellName="Source" column={column} />,
+    cell: ({ row }) => <StackSourceCell stack={row.original} />,
+    sortingFn: (rowA, rowB) => getStackSourceLabel(rowA.original).localeCompare(getStackSourceLabel(rowB.original)),
+  },
+  {
     accessorKey: 'updateStatus',
     header: ({ column }) => <SortableCell cellName="Update Status" column={column} />,
     cell: ({ row }) => <StackUpdateStatusCell stack={row.original} />,
@@ -126,6 +134,28 @@ const StackNameRow = ({ stack }: { stack: StackView }) => {
         {truncate(stack.name ?? '', 32, 'right')}
       </span>
     </div>
+  );
+};
+
+const StackSourceCell = ({ stack }: { stack: StackView }) => {
+  if (stack.stackSource === StackSource.Git) {
+    const repositoryName = stack.source?.gitRepositoryName ?? 'Git repository';
+    const branch = stack.source?.branch;
+    const label = branch ? `${repositoryName}/${branch}` : repositoryName;
+
+    return (
+      <span className="flex min-w-0 items-center gap-2 text-sm " title={label}>
+        <GitBranch className="size-3.5 shrink-0 text-foreground/80" />
+        <span className="truncate">{label}</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex min-w-0 items-center gap-2 text-sm" title="UI defined">
+      <FileText className="size-3.5 shrink-0 text-foreground/80" />
+      <span className="truncate">UI defined</span>
+    </span>
   );
 };
 
@@ -235,6 +265,13 @@ const StackUpdateStateRow = ({ state }: { state: ImageUpdateState }) => {
 
 const getStackImageUpdateStates = (stack: StackView): ImageUpdateState[] =>
   stack.stackUpdateState?.recreateStackOnNewImageState?.autoUpdateStates ?? [];
+
+const getStackSourceLabel = (stack: StackView): string => {
+  if (stack.stackSource !== StackSource.Git) return 'UI defined';
+
+  const repositoryName = stack.source?.gitRepositoryName ?? 'Git repository';
+  return stack.source?.branch ? `${repositoryName}/${stack.source.branch}` : repositoryName;
+};
 
 const getLatestStackUpdateCheckTime = (stack: StackView): number | undefined => {
   const candidates = [
