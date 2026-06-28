@@ -135,6 +135,8 @@ public sealed record StackReleaseView(
     StackReleaseSource? Source,
     DateTime CreatedAt,
     Guid CreatedByActorId,
+    string ActorName,
+    ActorType ActorType,
     PlatformStatus PlatformStatus = PlatformStatus.Offline,
     string? PlatformName = null)
 {
@@ -148,6 +150,8 @@ public sealed record StackReleaseView(
         Source: release.Source,
         CreatedAt: release.CreatedAt,
         CreatedByActorId: release.CreatedByActorId,
+        ActorName: release.Actor?.ActorMetadata?.Name ?? "Unknown",
+        ActorType: release.Actor?.Type ?? ActorType.User,
         PlatformStatus: release.Platform?.Status ?? PlatformStatus.Offline,
         PlatformName: release.Platform?.Name);
 }

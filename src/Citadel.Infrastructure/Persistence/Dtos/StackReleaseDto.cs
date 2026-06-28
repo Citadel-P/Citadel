@@ -11,5 +11,7 @@ internal sealed record StackReleaseDto(
     DateTime CreatedAt,
     Guid CreatedByActorId,
     string? Platform_Name = null,
-    string? Platform_Status = null
+    string? Platform_Status = null,
+    string? Actor_Name = null,
+    string? Actor_Type = null
     );

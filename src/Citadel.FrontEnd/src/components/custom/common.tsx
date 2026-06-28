@@ -633,6 +633,7 @@ export const UpdateAvailableNotice = ({
   nextLabel,
   currentTitle,
   nextTitle,
+  dismissible = true,
 }: {
   title?: string;
   actionLabel: string;
@@ -643,10 +644,11 @@ export const UpdateAvailableNotice = ({
   nextLabel?: ReactNode;
   currentTitle?: string | null;
   nextTitle?: string | null;
+  dismissible?: boolean;
 }) => {
   const [dismissed, setDismissed] = useState(false);
 
-  if (dismissed) return null;
+  if (dismissible && dismissed) return null;
 
   return (
     <div className="flex items-center justify-between gap-4 rounded-md border border-amber-200 bg-amber-50/50 px-4 py-3">
@@ -681,12 +683,14 @@ export const UpdateAvailableNotice = ({
         </div>
       </div>
 
-      <button
-        onClick={() => setDismissed(true)}
-        className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-amber-100/50 hover:text-slate-600"
-        aria-label="Dismiss">
-        <X className="h-4 w-4" />
-      </button>
+      {dismissible ? (
+        <button
+          onClick={() => setDismissed(true)}
+          className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-amber-100/50 hover:text-slate-600"
+          aria-label="Dismiss">
+          <X className="h-4 w-4" />
+        </button>
+      ) : null}
     </div>
   );
 };

@@ -14,7 +14,7 @@ namespace Infrastructure.Persistence;
 
 internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) : IAlertEventRepository
 {
-    public Task<int> AddAsync(AlertEvent alertEvent, CancellationToken cancellationToken)
+    public Task<Guid> AddAsync(AlertEvent alertEvent, CancellationToken cancellationToken)
     {
         const string sql = @"
         INSERT INTO AlertEvents (
@@ -33,8 +33,9 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             ResourceId = excluded.ResourceId,
             ResourceName = excluded.ResourceName,
             ResourceType = excluded.ResourceType,
-            UpdatedAt = excluded.UpdatedAt";
-        return db.ExecuteAsync(sql, new
+            UpdatedAt = excluded.UpdatedAt
+        RETURNING Id";
+        return db.ExecuteScalarAsync<Guid>(sql, new
         {
             Id = alertEvent.Id,
             AlertRuleId = alertEvent.AlertRuleId,

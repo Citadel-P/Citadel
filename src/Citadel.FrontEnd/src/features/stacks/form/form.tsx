@@ -172,12 +172,7 @@ const validateCommitSha = (value?: string | null) => {
 
 const duplicatePathMessage = (path: string) => `${path}: duplicate path.`;
 
-const validateDiscoveredPath = (
-  path: string,
-  discoveredPaths: string[],
-  discoveryReady: boolean,
-  label: string,
-) => {
+const validateDiscoveredPath = (path: string, discoveredPaths: string[], discoveryReady: boolean, label: string) => {
   if (!discoveryReady) return null;
 
   const allowed = new Set(discoveredPaths.map(normalizeGitPath));
@@ -393,18 +388,15 @@ const GitDiscoveredPathsField = ({
             <Button
               type="button"
               variant="outline"
+              className='ml-2 rounded-none font-normal'
               disabled={!canDiscover || discovering}
               title={canDiscover ? title : unavailableMessage}>
-              {discovering ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
-              <span className="text-[13px]">Discover Paths</span>
+              {discovering ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-3.5 text-muted-foreground" />}
+              <span className="text-xs">Discover Paths</span>
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-80 p-1 bg-background">
-            {!canDiscover ? (
-              <p className="px-2 py-2 text-sm text-muted-foreground">{unavailableMessage}</p>
-            ) : null}
-
-            
+            {!canDiscover ? <p className="px-2 py-2 text-sm text-muted-foreground">{unavailableMessage}</p> : null}
 
             {discoveryError ? <p className="px-2 py-2 text-sm text-destructive">{discoveryError.message}</p> : null}
 
@@ -714,7 +706,12 @@ export const StackForm = ({
                         'Compose files relative to the repository root. Order matters: base file first, overrides after.',
                       validate: (v) =>
                         validateGitPathList(v, { required: true, requireFile: true }) ??
-                        validateDiscoveredPathList(v, discoveredComposePaths, gitComposeDiscoveryReady, 'compose files'),
+                        validateDiscoveredPathList(
+                          v,
+                          discoveredComposePaths,
+                          gitComposeDiscoveryReady,
+                          'compose files',
+                        ),
                       hideValidationMessage: true,
                       render: (value, set) => (
                         <GitDiscoveredPathsField
@@ -726,7 +723,7 @@ export const StackForm = ({
                           title="Discover compose paths"
                           unavailableMessage="Select a repository and branch first."
                           emptyMessage="No compose files were found on this branch."
-                          helperText="# compose.yml\n# stacks/beszel/compose.yml\n# stacks/beszel/compose.prod.yml\n# paths are relative to the repository root"
+                          helperText="# compose.yml"
                           requiredMessage="At least one path is required."
                           completionItemDetail="Discovered compose file"
                           validateItem={validateGitDiscoveredPathItem({
@@ -770,7 +767,7 @@ export const StackForm = ({
                           unavailableMessage="Select a repository and branch first."
                           emptyMessage="No env files were found on this branch."
                           value={value ?? (original.spec as any)?.additionalEnvFileFromRepo}
-                          helperText="# .env\n# stacks/beszel/.env.production\n# paths are read from the selected commit snapshot"
+                          helperText="# .env"
                           completionItemDetail="Discovered env file"
                           validateItem={validateGitDiscoveredPathItem({
                             requireFile: true,
@@ -984,7 +981,7 @@ export const StackForm = ({
                                     } as any,
                                   }))
                                 }
-                                placeholder="e.g. stacks/beszel"
+                                placeholder="e.g. stacks/mystack"
                               />
                             ),
                           }),
@@ -998,7 +995,7 @@ export const StackForm = ({
                             render: (value, set) => (
                               <MonacoToArrayEditor
                                 value={value}
-                                helperText="# stacks/beszel/**\n# stacks/beszel/compose.yml\n# shared/networks.yml"
+                                helperText="# stacks/mystack/**"
                                 language="string_list"
                                 unique
                                 duplicateMessage={duplicatePathMessage}

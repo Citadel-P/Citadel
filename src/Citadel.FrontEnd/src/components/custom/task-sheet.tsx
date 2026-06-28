@@ -1,10 +1,26 @@
 import { memo, ReactNode, useCallback, useMemo } from 'react';
-import { Calendar, Check, CheckCheck, Clock, LoaderCircle, NotepadText } from 'lucide-react';
+import {
+  Calendar,
+  Check,
+  CheckCheck,
+  Clock,
+  GitBranch,
+  GitCommitHorizontal,
+  LoaderCircle,
+  NotepadText,
+  Route,
+} from 'lucide-react';
 import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 import { useAppContext } from '@/lib/context/app-context';
-import { ActorCell, AlertEventStatusCell, LogViewer, TargetCell } from '@/components/custom/common';
+import {
+  ActorCell,
+  AlertEventStatusCell,
+  LogViewer,
+  TargetCell,
+  UpdateAvailableNotice,
+} from '@/components/custom/common';
 import { useMutate, useRead, useStreamProgress } from '@/lib/hooks';
 import {
   ActivityView,
@@ -107,20 +123,24 @@ function TaskActivityLayout({ activityId }: { activityId: string }) {
   if (isLoading) return <Loader />;
 
   const activity = data!.data;
+  const releaseSource = getActivityReleaseSource(activity);
 
   return (
     <div className="p-2">
       <SheetHeader>
         <SheetTitle>{formatActivityEvent(activity.eventType)}</SheetTitle>
         <SheetDescription asChild>
-          <div className="flex flex-col gap-3">
-            <ActorCell type={activity.actorType} name={activity.actorName} />
-            <TargetCell
-              resourceType={activity.resourceType}
-              resourceId={activity.resourceId ?? ''}
-              resourceName={activity.resourceName}
-            />
-            <RecordedAtCell createdAt={activity.createdAt} />
+          <div className={releaseSource ? 'flex flex-between items-start gap-x-8 gap-y-4' : 'flex flex-col gap-3'}>
+            <div className="flex flex-col gap-3">
+              <ActorCell type={activity.actorType} name={activity.actorName} />
+              <TargetCell
+                resourceType={activity.resourceType}
+                resourceId={activity.resourceId ?? ''}
+                resourceName={activity.resourceName}
+              />
+              <RecordedAtCell createdAt={activity.createdAt} />
+            </div>
+            {releaseSource ? <ReleaseSourceHeader source={releaseSource} /> : null}
           </div>
         </SheetDescription>
       </SheetHeader>
@@ -264,7 +284,11 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   DeploymentPaused: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
 
   StackCreated: (info, activity) => (
-    <SpecViewer spec={stripStackReleaseSource(info.stack)} resourceId={activity.resourceId} title="Initial configuration" />
+    <SpecViewer
+      spec={stripStackReleaseSource(info.stack)}
+      resourceId={activity.resourceId}
+      title="Initial configuration"
+    />
   ),
 
   StackUpdated: (info) => (
@@ -281,8 +305,11 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     const label = containerIds.length <= 1 ? 'Container ID' : 'Container IDs';
     return (
       <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-        <SpecViewer spec={stripStackReleaseSource(info.stack)} resourceId={activity.resourceId} title="Applied configuration" />
-        <StackSourceDetails source={info.stack?.stackRelease?.source} />
+        <SpecViewer
+          spec={stripStackReleaseSource(info.stack)}
+          resourceId={activity.resourceId}
+          title="Applied configuration"
+        />
         {activity.status === ActivityStatus.Success && (
           <KeyValueBlock label={label} value={info.result.containerIds ?? []} />
         )}
@@ -301,7 +328,6 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
           format="yaml"
           title="Rollback configuration changes"
         />
-        <StackSourceDetails source={info.newStack?.stackRelease?.source} />
         {activity.status === ActivityStatus.Success && (
           <KeyValueBlock label={label} value={info.result.containerIds ?? []} />
         )}
@@ -331,16 +357,18 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   StackStopped: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
   StackPaused: (info) => <KeyValueBlock label="Container IDs" value={info.containerIds} />,
   StackGitUpdateAvailable: (info) => (
-    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-      <span>
-        Git update available from <b>{shortCommit(info.currentCommitSha)}</b> to{' '}
-        <b>{shortCommit(info.remoteCommitSha)}</b>.
-      </span>
-      <KeyValueBlock label="Repository" value={info.gitRepositoryName} />
-      <KeyValueBlock label="Branch" value={info.branch} />
-      <KeyValueBlock label="Current commit" value={info.currentCommitSha} />
-      <KeyValueBlock label="Remote commit" value={info.remoteCommitSha} />
-    </div>
+    <UpdateAvailableNotice
+      title="Git update available:"
+      actionLabel="Deploy"
+      targetLabel="stack"
+      sourceLabel={`${info.gitRepositoryName}${info.branch ? `/${info.branch}` : ''}`}
+      sourceTitle={info.gitRepositoryName}
+      currentLabel={shortCommit(info.currentCommitSha)}
+      nextLabel={shortCommit(info.remoteCommitSha)}
+      currentTitle={info.currentCommitSha}
+      nextTitle={info.remoteCommitSha}
+      dismissible={false}
+    />
   ),
   StackGitAutoUpdated: (info) => (
     <div className="flex flex-col gap-4 text-sm text-muted-foreground">
@@ -513,20 +541,34 @@ function WebhookActivityDetails({
         : displayReason || 'Webhook did not trigger an action.';
 
   return (
-    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-      <span>{title}</span>
-      {displayReason && <KeyValueBlock label="Reason" value={displayReason} />}
-      <KeyValueBlock label="Request ID" value={info.requestId} />
-      <KeyValueBlock label="Execution" value={info.execution} />
-      <KeyValueBlock label="Auth type" value={info.authType} />
-      <KeyValueBlock label="Provider event" value={info.eventType} />
-      <KeyValueBlock label="Delivery ID" value={info.deliveryId} />
-      <KeyValueBlock label="Repository" value={info.repositoryFullName} />
-      <KeyValueBlock label="Branch" value={info.branch} />
-      <KeyValueBlock label="Commit" value={info.commitSha} />
-      {info.dispatchedBranch && <KeyValueBlock label="Dispatched branch" value={info.dispatchedBranch} />}
-      {info.dispatchedCommitSha && <KeyValueBlock label="Dispatched commit" value={info.dispatchedCommitSha} />}
-    </div>
+    <SpecViewer
+      spec={compactWebhookDetails(info, title, displayReason)}
+      resourceId={info.requestId}
+      title="Webhook details"
+    />
+  );
+}
+
+function compactWebhookDetails(
+  info: ActivityEventInfoGitRepoWebhookReceived | ActivityEventInfoStackWebhookReceived,
+  message: string,
+  reason: string | null | undefined,
+) {
+  return Object.fromEntries(
+    Object.entries({
+      message,
+      reason,
+      requestId: info.requestId,
+      execution: info.execution,
+      authType: info.authType,
+      providerEvent: info.eventType,
+      deliveryId: info.deliveryId,
+      repository: info.repositoryFullName,
+      branch: info.branch,
+      commit: info.commitSha,
+      dispatchedBranch: info.dispatchedBranch,
+      dispatchedCommit: info.dispatchedCommitSha,
+    }).filter(([, value]) => value),
   );
 }
 
@@ -555,21 +597,58 @@ function stripStackReleaseSource(stack: StackSnapshot | null | undefined): Stack
   };
 }
 
-function StackSourceDetails({ source }: { source?: StackReleaseSource | null }) {
-  if (!source) return null;
+function getActivityReleaseSource(activity: ActivityView): StackReleaseSource | null | undefined {
+  switch (activity.info.$type) {
+    case 'StackApplied':
+      return activity.info.stack?.stackRelease?.source;
+    case 'StackRollback':
+      return activity.info.newStack?.stackRelease?.source;
+    default:
+      return null;
+  }
+}
+
+function ReleaseSourceHeader({ source }: { source: StackReleaseSource }) {
+  return (
+    <div className="flex flex-col gap-3 ">
+      <SourceMetaItem
+        icon={<GitBranch className="h-3.5 w-3.5 text-muted-foreground" />}
+        value={source.gitRepositoryName}
+      />
+      <SourceMetaItem icon={<Route className="h-3.5 w-3.5 text-muted-foreground" />} value={source.branch} />
+      <SourceMetaItem
+        icon={<GitCommitHorizontal className="h-3.5 w-3.5 text-muted-foreground" />}
+        value={shortCommit(source.resolvedCommitSha)}
+        title={source.resolvedCommitSha}
+      />
+      {source.workingDirectory ? (
+        <SourceMetaItem
+          icon={<NotepadText className="h-3.5 w-3.5 text-muted-foreground" />}
+          value={source.workingDirectory}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function SourceMetaItem({
+  icon,
+  value,
+  title,
+}: {
+  icon: ReactNode;
+  value: string | null | undefined;
+  title?: string | null;
+}) {
+  if (!value) return null;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-      <span className="font-medium text-foreground">Release source</span>
-      <KeyValueBlock label="Source type" value={source.sourceType} />
-      <KeyValueBlock label="Repository" value={source.gitRepositoryName} />
-      <KeyValueBlock label="Branch" value={source.branch} />
-      <KeyValueBlock label="Resolved commit" value={source.resolvedCommitSha} />
-      <KeyValueBlock label="Working directory" value={source.workingDirectory} />
-      <KeyValueBlock label="Compose paths" value={source.composePaths ?? []} />
-      <KeyValueBlock label="Env file paths" value={source.envFilePaths ?? []} />
-      <KeyValueBlock label="Watch paths" value={source.watchPaths ?? []} />
-    </div>
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="shrink-0 text-foreground/80">{icon}</span>
+      <span className="truncate" title={title ?? value}>
+        {value}
+      </span>
+    </span>
   );
 }
 

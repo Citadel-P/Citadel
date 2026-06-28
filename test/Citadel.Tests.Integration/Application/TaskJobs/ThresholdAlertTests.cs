@@ -153,6 +153,34 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
     }
 
     [Fact]
+    public async Task CpuHighAlert_ShouldNotTrigger_WhenSingleSpikeIsSmoothedWithinFlush()
+    {
+        _configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 3 });
+
+        _platformFactoryMock
+            .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(_platformConnector.Object);
+
+        _platformConnector
+            .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(() => GetSingleCpuSpikeStatsAsync());
+
+        await _broadcaster.PublishAsync(
+            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
+            TestContext.Current.CancellationToken);
+
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+        var state = await db.AlertRules.GetStateAsync(_alertRuleId, _platformId, TestContext.Current.CancellationToken);
+
+        Assert.Empty(alertEvents.Items);
+        Assert.Equal(0, state?.ConsecutiveMatches);
+    }
+
+    [Fact]
     public async Task CpuHighAlert_ShouldNotRetrigger_DuringCooldown()
     {
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 3 });
@@ -326,6 +354,26 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Single(alertEvents.Items);
     }
 
+    [Fact]
+    public async Task CpuHighAlert_ShouldResetConsecutiveMatches_WhenBelowThreshold()
+    {
+        await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var context = BuildCpuContext([50]);
+            await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
+        }
+
+        await using var finalScope = Services.CreateAsyncScope();
+        var db = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var state = await db.AlertRules.GetStateAsync(_alertRuleId, _platformId, TestContext.Current.CancellationToken);
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Empty(alertEvents.Items);
+        Assert.Equal(0, state?.ConsecutiveMatches);
+    }
+
     private static async Task RunAlertInlineAsync(IServiceProvider services, AlertEvaluationContext context, CancellationToken cancellationToken)
     {
         var uow = services.GetRequiredService<IUnitOfWork>();
@@ -394,6 +442,16 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
         yield return BuildStat(time + 60, 40); // breaks sequence
         await Task.Delay(50);
         yield return BuildStat(time + 120, 95);
+    }
+
+    private static async IAsyncEnumerable<PlatformStatsResult> GetSingleCpuSpikeStatsAsync()
+    {
+        var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        yield return BuildStat(time, 25);
+        await Task.Delay(50);
+        yield return BuildStat(time + 60, 120);
+        await Task.Delay(50);
+        yield return BuildStat(time + 120, 30);
     }
 
     private static PlatformStatsResult BuildStat(long time, int cpu)

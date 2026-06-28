@@ -32,7 +32,14 @@ public sealed class PlatformCpuHighEvaluator : IAlertEvaluator
         foreach (var platform in context.Platforms)
         {
             if (platform.CpuUsage < rule.Threshold)
+            {
+                yield return new AlertMatch(
+                    platform.Id,
+                    platform.Name,
+                    AlertResourceType.Platform,
+                    Info: null);
                 continue;
+            }
 
             yield return new AlertMatch(
                 platform.Id,
@@ -54,7 +61,14 @@ public sealed class PlatformRamHighEvaluator : IAlertEvaluator
         foreach (var platform in context.Platforms)
         {
             if (platform.RamUsage < rule.Threshold)
+            {
+                yield return new AlertMatch(
+                    platform.Id,
+                    platform.Name,
+                    AlertResourceType.Platform,
+                    Info: null);
                 continue;
+            }
 
             yield return new AlertMatch(
                 platform.Id,

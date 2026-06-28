@@ -18,6 +18,7 @@ public sealed class StackRelease : IAuditedEntity
     #endregion
 
     public Platform? Platform { get; private set; } = null;
+    public Domain.Entities.Identity.Actor? Actor { get; private set; } = null;
     public IReadOnlyList<Image>? Images { get; private set; } = null;
     public IReadOnlyList<Container>? Containers { get; private set; } = null;
 
@@ -50,6 +51,7 @@ public sealed class StackRelease : IAuditedEntity
         DateTime createdAt,
         Guid createdByActorId,
         Platform? platform = null,
+        Domain.Entities.Identity.Actor? actor = null,
         IReadOnlyList<Image>? images = null,
         IReadOnlyList<Container>? containers = null)
     {
@@ -65,6 +67,7 @@ public sealed class StackRelease : IAuditedEntity
             CreatedAt = createdAt,
             CreatedByActorId = createdByActorId,
             Platform = platform,
+            Actor = actor,
             Images = images,
             Containers = containers
         };

@@ -15,6 +15,7 @@ internal sealed record StackDriftStackDto(
         Guid PlatformId,
         string Status,
         string Spec,
+        string? Source,
         string? PlatformName)
 {
     public StackDriftStack ToDriftStack()
@@ -28,6 +29,9 @@ internal sealed record StackDriftStackDto(
             Enum.Parse<StackReleaseStatus>(Status),
             Enum.Parse<ResourceControlState>(ControlState),
             JsonSerializer.Deserialize(Spec, StackJsonContext.Default.StackSpec)!,
+            string.IsNullOrWhiteSpace(Source)
+                ? null
+                : JsonSerializer.Deserialize(Source, StackJsonContext.Default.StackReleaseSource),
             string.IsNullOrWhiteSpace(DriftPolicy)
                 ? StackDriftPolicy.Default
                 : JsonSerializer.Deserialize(DriftPolicy, StackJsonContext.Default.StackDriftPolicy) ?? StackDriftPolicy.Default);

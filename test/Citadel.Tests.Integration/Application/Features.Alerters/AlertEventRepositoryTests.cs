@@ -39,14 +39,17 @@ public sealed class AlertEventRepositoryTests(PostgresTestFixture fixture) : Int
         var first = CreateAlertEvent(resourceId, "platform-1", "https://platform-1");
         var second = CreateAlertEvent(resourceId, "platform-1", "https://platform-1");
 
-        await uow.AlertEvents.AddAsync(first, TestContext.Current.CancellationToken);
-        await uow.AlertEvents.AddAsync(second, TestContext.Current.CancellationToken);
+        var firstPersistedId = await uow.AlertEvents.AddAsync(first, TestContext.Current.CancellationToken);
+        var secondPersistedId = await uow.AlertEvents.AddAsync(second, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         var events = await uow.AlertEvents.GetPagedAsync(resourceId, AlertType.PlatformUnreachable, AlertResourceType.Platform, 1, 10, TestContext.Current.CancellationToken);
         var unresolvedCount = await uow.AlertEvents.CountUnresolvedAsync(TestContext.Current.CancellationToken);
 
         Assert.Single(events.Items);
+        Assert.Equal(first.Id, firstPersistedId);
+        Assert.Equal(first.Id, secondPersistedId);
+        Assert.NotEqual(second.Id, secondPersistedId);
         Assert.Equal(1, unresolvedCount);
     }
 

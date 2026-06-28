@@ -13,4 +13,5 @@ public sealed record StackDriftStack(
     StackReleaseStatus Status,
     ResourceControlState ControlState,
     StackSpec Spec,
+    StackReleaseSource? Source,
     StackDriftPolicy DriftPolicy);

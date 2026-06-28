@@ -3668,6 +3668,8 @@ export interface StackReleaseView {
   createdAt: any;
   /** @format uuid */
   createdByActorId: string;
+  actorName: string;
+  actorType: ActorType;
   platformStatus?: PlatformStatus;
   platformName?: null | string;
 }

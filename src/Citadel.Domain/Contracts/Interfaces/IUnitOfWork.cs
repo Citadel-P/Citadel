@@ -375,7 +375,7 @@ public interface IAlertRuleRepository
 
 public interface IAlertEventRepository
 {
-    Task<int> AddAsync(AlertEvent alertEvent, CancellationToken cancellationToken);
+    Task<Guid> AddAsync(AlertEvent alertEvent, CancellationToken cancellationToken);
     Task<AlertEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<PagedResult<AlertEvent>> GetAuthorizedPagedAsync(Guid userId, ResourceType permissionResourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, Guid? resourceId, AlertType? alertType, AlertResourceType? resourceType,

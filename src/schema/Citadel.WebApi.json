@@ -26994,7 +26994,9 @@
           "spec",
           "source",
           "createdAt",
-          "createdByActorId"
+          "createdByActorId",
+          "actorName",
+          "actorType"
         ],
         "type": "object",
         "properties": {
@@ -27035,6 +27037,12 @@
           "createdByActorId": {
             "type": "string",
             "format": "uuid"
+          },
+          "actorName": {
+            "type": "string"
+          },
+          "actorType": {
+            "$ref": "#/components/schemas/ActorType"
           },
           "platformStatus": {
             "$ref": "#/components/schemas/PlatformStatus"

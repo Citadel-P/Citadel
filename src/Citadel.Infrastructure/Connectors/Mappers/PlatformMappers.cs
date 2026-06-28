@@ -107,7 +107,7 @@ internal static class PlatformMappers
         var platformStat = new DockerPlatformStat(
             created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             memoryUsage: source.Stat.MemoryUsage,
-            cpuUsage: source.Stat.CpuUsage,
+            cpuUsage: NormalizePlatformCpuUsage(source.Stat.CpuUsage, source.CpuCount),
             rxBytes: source.Stat.RxBytes,
             txBytes: source.Stat.TxBytes,
             containerCount: source.Stat.ContainerCount,
@@ -144,7 +144,7 @@ internal static class PlatformMappers
         DockerPlatformStat platformStat = new (
             created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             memoryUsage: source.PlatformStatistics?.MemoryUsage ?? 0,
-            cpuUsage: source.PlatformStatistics?.CpuUsage ?? 0,
+            cpuUsage: NormalizePlatformCpuUsage(source.PlatformStatistics?.CpuUsage ?? 0, source.CpuCount),
             rxBytes: source.PlatformStatistics?.RxBytes ?? 0,
             txBytes: source.PlatformStatistics?.TxBytes ?? 0,
             containerCount: source.PlatformStatistics?.ContainerCount ?? 0,
@@ -160,6 +160,14 @@ internal static class PlatformMappers
             NetworkCount: source.NetworkCount,
             AgentVersion: string.Empty,
             PlatformStat: platformStat);
+    }
+
+    private static double NormalizePlatformCpuUsage(double totalContainerCpuUsage, long cpuCount)
+    {
+        if (cpuCount <= 0)
+            return Math.Round(totalContainerCpuUsage, 2);
+
+        return Math.Round(totalContainerCpuUsage / cpuCount, 2);
     }
 
     internal static DaemonEventInfo Map(this DaemonEventResult @event)

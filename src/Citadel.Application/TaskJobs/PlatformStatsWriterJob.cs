@@ -113,15 +113,7 @@ internal sealed class PersistPlatformStatsWorkItem(
 
             filteredBuffer[platformId] = stats;
 
-            foreach (var stat in stats)
-            {
-                platformSnapshots.Add(new PlatformAlertSnapshot(
-                   platformId,
-                   existing.Name,
-                   CpuUsage: stat.PlatformStat.CpuUsage,
-                   RamUsage: stat.PlatformStat.MemoryUsage,
-                   AgentVersion: stat.AgentVersion));
-            }
+            platformSnapshots.Add(BuildThresholdAlertSnapshot(platformId, existing.Name, stats));
 
             PlatformDescriptor? descriptor = existing.PlatformDescriptor switch
             {
@@ -186,6 +178,36 @@ internal sealed class PersistPlatformStatsWorkItem(
                 context,
                 cancellationToken);
         }
+    }
+
+    private static PlatformAlertSnapshot BuildThresholdAlertSnapshot(
+        Guid platformId,
+        string platformName,
+        IReadOnlyList<PlatformStatsResult> stats)
+    {
+        var last = stats[^1];
+
+        return new PlatformAlertSnapshot(
+            platformId,
+            platformName,
+            CpuUsage: Median(stats.Select(x => x.PlatformStat.CpuUsage)),
+            RamUsage: Median(stats.Select(x => x.PlatformStat.MemoryUsage)),
+            AgentVersion: last.AgentVersion);
+    }
+
+    private static double Median(IEnumerable<double> values)
+    {
+        var ordered = values
+            .Where(value => !double.IsNaN(value) && !double.IsInfinity(value))
+            .Order()
+            .ToArray();
+
+        return ordered.Length switch
+        {
+            0 => 0,
+            var count when count % 2 == 1 => ordered[count / 2],
+            var count => (ordered[(count / 2) - 1] + ordered[count / 2]) / 2.0
+        };
     }
 }
 

@@ -91,6 +91,67 @@ public class StackDriftTests
         Assert.IsType<ContainerPaused>(report.Drifts[0]);
     }
 
+    [Fact]
+    public async Task CheckAsync_reports_stopped_container_for_git_stack_from_current_snapshot()
+    {
+        using var temp = new TempDirectory();
+        var platformId = Guid.CreateVersion7();
+        var composePath = "stacks/app/compose.yml";
+        var gitSpec = new GitStack(
+            GitRepoId: Guid.CreateVersion7(),
+            Branch: "main",
+            CommitSha: null,
+            UpdateBehavior: StackUpdateBehavior.Disabled,
+            ComposePaths: [composePath]);
+        var stack = Stack.Create(
+            name: "git-demo",
+            createdByActorId: Guid.CreateVersion7(),
+            StackSource: StackSource.Git,
+            platformId: platformId,
+            spec: gitSpec);
+        stack.PartialUpdate(StackReleaseStatus.Healthy);
+        stack.CurrentStackRelease!.UpdateSource(new StackReleaseSource(
+            SourceType: StackSource.Git,
+            GitRepositoryId: gitSpec.GitRepoId,
+            GitRepositoryName: "repo",
+            Branch: "main",
+            RequestedCommitSha: null,
+            ResolvedCommitSha: "abc123",
+            ComposePaths: [composePath],
+            EnvFilePaths: []));
+
+        var sourceRoot = Path.Combine(temp.Path, "source");
+        Directory.CreateDirectory(Path.Combine(sourceRoot, "stacks", "app"));
+        await File.WriteAllTextAsync(
+            Path.Combine(sourceRoot, "stacks", "app", "compose.yml"),
+            "services:\n  api:\n    image: nginx:latest\n",
+            TestContext.Current.CancellationToken);
+
+        var stackRoot = Path.Combine(temp.Path, stack.Id.ToString("D"));
+        Directory.CreateDirectory(stackRoot);
+        await File.WriteAllTextAsync(
+            Path.Combine(stackRoot, "current.source"),
+            sourceRoot,
+            TestContext.Current.CancellationToken);
+
+        var checker = new StackDriftChecker(
+            CreateScopeFactory(stack),
+            new StackDesiredStateProvider(new TestStackStoragePathProvider(temp.Path)),
+            new TestRuntimeStateProvider(new StackRuntimeState(
+                platformId,
+                "http://docker.local",
+                PlatformConnectorType.Local,
+                "git-demo",
+                [
+                    Container("api-container", "api", ContainerStateStatus.Exited),
+                ])));
+
+        var report = await checker.CheckAsync(stack.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(report.HasDrift);
+        Assert.Contains(report.Drifts, drift => drift is ContainerStopped { ContainerId: "api-container", ServiceName: "api" });
+    }
+
     [Theory]
     [InlineData(StackReleaseStatus.Paused, ContainerStateStatus.Paused)]
     [InlineData(StackReleaseStatus.Stopped, ContainerStateStatus.Exited)]
@@ -708,12 +769,12 @@ public class StackDriftTests
         Assert.Equal([action], info.Actions);
     }
 
-    private static ManualStackDriftChecker CreateChecker(
+    private static StackDriftChecker CreateChecker(
         Stack stack,
         StackDesiredState desired,
         StackRuntimeState runtime)
     {
-        return new ManualStackDriftChecker(
+        return new StackDriftChecker(
             CreateScopeFactory(stack),
             new TestDesiredStateProvider(desired),
             new TestRuntimeStateProvider(runtime));
@@ -886,6 +947,7 @@ public class StackDriftTests
             release.Status,
             stack.ControlState,
             release.Spec,
+            release.Source,
             stack.DriftPolicy);
     }
 
@@ -926,6 +988,29 @@ public class StackDriftTests
     {
         public Task<StackRuntimeState> GetRuntimeStateAsync(StackDriftStack stack, CancellationToken cancellationToken)
             => Task.FromResult(state);
+    }
+
+    private sealed class TestStackStoragePathProvider(string path) : IStackStoragePathProvider
+    {
+        public string StacksRoot { get; } = path;
+    }
+
+    private sealed class TempDirectory : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+        public TempDirectory()
+        {
+            Directory.CreateDirectory(Path);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+        }
     }
 
     private sealed class TestStackDriftChecker(StackDriftReport beforeReport, StackDriftReport? afterReport = null) : IStackDriftChecker

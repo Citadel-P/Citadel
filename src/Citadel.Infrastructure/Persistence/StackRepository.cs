@@ -60,10 +60,16 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         sr.CreatedAt,
         sr.CreatedByActorId,
         p.Name AS Platform_Name,
-        p.Status AS Platform_Status
+        p.Status AS Platform_Status,
+        u.Name AS Actor_Name,
+        ac.Type AS Actor_Type
     FROM StackReleases sr
     LEFT JOIN Platforms p
         ON sr.PlatformId = p.Id
+    LEFT JOIN Actors ac
+        ON sr.CreatedByActorId = ac.Id
+    LEFT JOIN Users u
+        ON sr.CreatedByActorId = u.ActorId
     """;
 
     public async Task<Stack?> GetAsync(Guid id, CancellationToken cancellationToken)
@@ -140,6 +146,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.PlatformId,
                 sr.Status,
                 sr.Spec,
+                sr.Source,
                 p.Name AS PlatformName
             FROM Stacks s
             INNER JOIN StackReleases sr
@@ -168,6 +175,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.PlatformId,
                 sr.Status,
                 sr.Spec,
+                sr.Source,
                 p.Name AS PlatformName
             FROM Stacks s
             INNER JOIN StackReleases sr

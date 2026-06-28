@@ -33,18 +33,65 @@ internal interface IStackRuntimeStateProvider
     Task<StackRuntimeState> GetRuntimeStateAsync(StackDriftStack stack, CancellationToken cancellationToken);
 }
 
-internal sealed class ManualStackDesiredStateProvider : IStackDesiredStateProvider
+internal sealed class StackDesiredStateProvider(IStackStoragePathProvider stackStoragePathProvider) : IStackDesiredStateProvider
 {
     public Task<StackDesiredState> GetDesiredStateAsync(StackDriftStack stack, CancellationToken cancellationToken)
     {
-        if (stack.Spec is not ManualStack manualStack)
+        if (stack.Spec is ManualStack manualStack)
         {
-            return Task.FromResult(new StackDesiredState(
-                ProjectName: StackProjectNameResolver.Resolve(stack),
-                Services: new Dictionary<string, StackDesiredService>(StringComparer.OrdinalIgnoreCase)));
+            return Task.FromResult(Parse(stack, manualStack));
         }
 
-        return Task.FromResult(Parse(stack, manualStack));
+        if (stack.Spec is GitStack gitStack)
+        {
+            return GetGitDesiredStateAsync(stack, gitStack, cancellationToken);
+        }
+
+        return Task.FromResult(new StackDesiredState(
+            ProjectName: StackProjectNameResolver.Resolve(stack),
+            Services: new Dictionary<string, StackDesiredService>(StringComparer.OrdinalIgnoreCase)));
+    }
+
+    private async Task<StackDesiredState> GetGitDesiredStateAsync(
+        StackDriftStack stack,
+        GitStack gitStack,
+        CancellationToken cancellationToken)
+    {
+        var sourceRoot = TryGetCurrentSourceRoot(stack.Id);
+        var composePaths = stack.Source?.ComposePaths is { Count: > 0 }
+            ? stack.Source.ComposePaths
+            : gitStack.ComposePaths;
+
+        if (sourceRoot is null || composePaths is not { Count: > 0 })
+        {
+            return new StackDesiredState(
+                ProjectName: StackProjectNameResolver.Resolve(stack),
+                Services: new Dictionary<string, StackDesiredService>(StringComparer.OrdinalIgnoreCase));
+        }
+
+        var composeFiles = new List<string>(composePaths.Count);
+        foreach (var composePath in composePaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var resolvedPath = ResolveRepositoryFile(sourceRoot, composePath);
+            if (resolvedPath is null)
+            {
+                continue;
+            }
+
+            composeFiles.Add(await File.ReadAllTextAsync(resolvedPath, cancellationToken));
+        }
+
+        var services = StackComposeParser.ParseServices(stack.Id, stack.CurrentStackReleaseId, composeFiles)
+            .ToDictionary(
+                item => item.Key,
+                item => new StackDesiredService(
+                    item.Value.ServiceName,
+                    item.Value.Image,
+                    item.Value.ExpectedConfigHash),
+                StringComparer.OrdinalIgnoreCase);
+
+        return new StackDesiredState(StackProjectNameResolver.Resolve(stack), services);
     }
 
     private static StackDesiredState Parse(StackDriftStack stack, ManualStack manualStack)
@@ -66,6 +113,48 @@ internal sealed class ManualStackDesiredStateProvider : IStackDesiredStateProvid
                 StringComparer.OrdinalIgnoreCase);
 
         return new StackDesiredState(StackProjectNameResolver.Resolve(stack), services);
+    }
+
+    private string? TryGetCurrentSourceRoot(Guid stackId)
+    {
+        var stackRoot = Path.Combine(stackStoragePathProvider.StacksRoot, stackId.ToString("D"));
+        var currentPath = Path.Combine(stackRoot, "current");
+        if (Directory.Exists(currentPath))
+        {
+            return Path.GetFullPath(currentPath);
+        }
+
+        var pointerPath = Path.Combine(stackRoot, "current.source");
+        if (!File.Exists(pointerPath))
+        {
+            return null;
+        }
+
+        var snapshotRoot = File.ReadAllText(pointerPath).Trim();
+        if (string.IsNullOrWhiteSpace(snapshotRoot) || !Directory.Exists(snapshotRoot))
+        {
+            return null;
+        }
+
+        return Path.GetFullPath(snapshotRoot);
+    }
+
+    private static string? ResolveRepositoryFile(string snapshotRoot, string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
+        {
+            return null;
+        }
+
+        var normalizedRoot = Path.GetFullPath(snapshotRoot);
+        var fullPath = Path.GetFullPath(Path.Combine(normalizedRoot, relativePath));
+        if (!fullPath.StartsWith(normalizedRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            && !string.Equals(fullPath, normalizedRoot, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return File.Exists(fullPath) ? fullPath : null;
     }
 }
 
@@ -132,7 +221,7 @@ internal sealed class DockerStackRuntimeStateProvider(
     }
 }
 
-internal sealed class ManualStackDriftChecker(
+internal sealed class StackDriftChecker(
     IServiceScopeFactory scopeFactory,
     IStackDesiredStateProvider desiredStateProvider,
     IStackRuntimeStateProvider runtimeStateProvider) : IStackDriftChecker
@@ -145,7 +234,7 @@ internal sealed class ManualStackDriftChecker(
 
     public async Task<StackDriftReport> CheckAsync(StackDriftStack stack, CancellationToken cancellationToken)
     {
-        if (stack.StackSource != StackSource.WebEditor)
+        if (stack.Spec is not ManualStack and not GitStack)
         {
             return NoDrift(stack);
         }

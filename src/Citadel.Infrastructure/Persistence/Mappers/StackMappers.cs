@@ -1,7 +1,9 @@
 using Domain;
 using Domain.Entities.Activities;
+using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
+using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
 
@@ -99,6 +101,11 @@ internal static class StackMappers
                 status: dto.Platform_Status != null ? Enum.Parse<PlatformStatus>(dto.Platform_Status) : PlatformStatus.Offline,
                 connectorType: PlatformConnectorType.Unknown,
                 platformDescriptor: null);
+        var actor = Actor.FromPersistence(
+            id: dto.CreatedByActorId,
+            type: dto.Actor_Type != null ? Enum.Parse<ActorType>(dto.Actor_Type) : ActorType.User,
+            actorMetadata: new ActorMetadata(dto.CreatedByActorId == Constants.SystemId ? Constants.SystemName : dto.Actor_Name ?? "unknown"),
+            isEnabled: true);
 
         return StackRelease.FromPersistence(
             id: dto.Id,
@@ -112,6 +119,7 @@ internal static class StackMappers
                 : JsonSerializer.Deserialize(dto.Source, StackJsonContext.Default.StackReleaseSource),
             createdAt: dto.CreatedAt,
             createdByActorId: dto.CreatedByActorId,
-            platform: platform);
+            platform: platform,
+            actor: actor);
     }
 }

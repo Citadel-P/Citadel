@@ -10,14 +10,51 @@ internal static class StackComposeParser
         Guid releaseId,
         string composeFile)
     {
+        if (string.IsNullOrWhiteSpace(composeFile))
+            return new Dictionary<string, StackComposeService>(StringComparer.OrdinalIgnoreCase);
+
+        var managedComposeFile = StackComposeLabelInjector.Inject(composeFile, stackId, releaseId);
+        return ParseServicesFromYaml(managedComposeFile);
+    }
+
+    public static IReadOnlyDictionary<string, StackComposeService> ParseServices(
+        Guid stackId,
+        Guid releaseId,
+        IReadOnlyList<string> composeFiles)
+    {
+        var services = new Dictionary<string, StackComposeService>(StringComparer.OrdinalIgnoreCase);
+
+        if (composeFiles.Count == 0)
+            return services;
+
+        foreach (var composeFile in composeFiles)
+        {
+            foreach (var service in ParseServicesFromYaml(composeFile).Values)
+            {
+                services[service.ServiceName] = service;
+            }
+        }
+
+        var labelsOverride = StackComposeLabelInjector.CreateLabelsOverride(composeFiles, stackId, releaseId);
+        foreach (var service in ParseServicesFromYaml(labelsOverride).Values)
+        {
+            if (services.TryGetValue(service.ServiceName, out var existing))
+            {
+                services[service.ServiceName] = existing with { ExpectedConfigHash = service.ExpectedConfigHash };
+            }
+        }
+
+        return services;
+    }
+
+    private static IReadOnlyDictionary<string, StackComposeService> ParseServicesFromYaml(string composeFile)
+    {
         var services = new Dictionary<string, StackComposeService>(StringComparer.OrdinalIgnoreCase);
 
         if (string.IsNullOrWhiteSpace(composeFile))
             return services;
 
-        var managedComposeFile = StackComposeLabelInjector.Inject(composeFile, stackId, releaseId);
-
-        using var reader = new StringReader(managedComposeFile);
+        using var reader = new StringReader(composeFile);
         var yaml = new YamlStream();
         yaml.Load(reader);
 

@@ -29,7 +29,9 @@ public sealed class AlertService(
     {
         var snapshot = alertRuleProvider.Current;
 
-        // Most-severe-wins: per resource we keep only the highest-severity rule
+        var thresholdNonMatches = new List<(AlertRule Rule, AlertMatch Match)>();
+
+        // Most-severe-wins: per resource we keep only the highest-severity matching rule
         var candidates = new Dictionary<Guid, (AlertRule Rule, List<AlertMatch> Matches)>();
 
         foreach (var rule in snapshot.Get(type))
@@ -41,6 +43,16 @@ public sealed class AlertService(
 
             foreach (var match in ApplyScope(rule, matches))
             {
+                if (!match.IsMatch)
+                {
+                    if (AlertTypeMetadata.IsThreshold(rule.Type))
+                    {
+                        thresholdNonMatches.Add((rule, match));
+                    }
+
+                    continue;
+                }
+
                 if (!candidates.TryGetValue(match.ResourceId, out var existing))
                 {
                     candidates[match.ResourceId] = (rule, [match]);
@@ -54,6 +66,21 @@ public sealed class AlertService(
                     existing.Matches.Add(match);
                 }
             }
+        }
+
+        foreach (var (rule, match) in thresholdNonMatches)
+        {
+            var workItem = new AlertStateWorkItem(
+                rule,
+                match,
+                context.UtcNow,
+                snapshot,
+                alertEventStreamManager,
+                notificationQueue,
+                notificationService,
+                logger);
+
+            await dbQueue.EnqueueAsync(workItem, ct);
         }
 
         foreach (var (_, (rule, matches)) in candidates)
@@ -116,6 +143,18 @@ internal sealed class AlertStateWorkItem(
             // Threshold alerts (e.g. CPU/RAM)
             if (AlertTypeMetadata.IsThreshold(rule.Type))
             {
+                if (!match.IsMatch)
+                {
+                    if (state.ConsecutiveMatches > 0)
+                    {
+                        state.Reset();
+                    }
+
+                    await uow.AlertRules.UpsertAlertRuleStateAsync(state, token);
+                    await uow.CommitAsync(token);
+                    return;
+                }
+
                 if (!rule.CanTrigger(utcNow, state))
                 {
                     await uow.AlertRules.UpsertAlertRuleStateAsync(state, token);
@@ -159,16 +198,17 @@ internal sealed class AlertStateWorkItem(
                 state.Reset();
 
             await uow.AlertRules.UpsertAlertRuleStateAsync(state, token);
-            await uow.AlertEvents.AddAsync(evt, token);
+            var persistedAlertEventId = await uow.AlertEvents.AddAsync(evt, token);
+            var persistedAlertEvent = await uow.AlertEvents.GetByIdAsync(persistedAlertEventId, token) ?? evt;
 
             await uow.CommitAsync(token);
             var unresolvedCount = await uow.AlertEvents.CountUnresolvedAsync(token);
-            await notificationQueue.EnqueueAsync(new TriggeredAlertEventNotificationWorkItem(evt, alertEventStreamManager), token);
+            await notificationQueue.EnqueueAsync(new TriggeredAlertEventNotificationWorkItem(persistedAlertEvent, alertEventStreamManager), token);
             await notificationQueue.EnqueueAsync(new UnresolvedAlertCountNotificationWorkItem(unresolvedCount, alertEventStreamManager), token);
 
             if (rule.ChannelIds.Count > 0)
             {
-                await notificationQueue.EnqueueAsync(new AlertNotificationWorkItem(rule, evt, snapshot, notificationService), token);
+                await notificationQueue.EnqueueAsync(new AlertNotificationWorkItem(rule, persistedAlertEvent, snapshot, notificationService), token);
             }
         }
         catch (Exception ex)

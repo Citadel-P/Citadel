@@ -1079,7 +1079,7 @@ export function FormShell<T>({
                               <h3 className="text-sm font-semibold tracking-tight text-foreground/90">{group.title}</h3>
                             )}
                             {typeof group.description === 'string' ? (
-                              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{group.description}</p>
+                              <p className="max-w-full text-sm leading-6 text-muted-foreground">{group.description}</p>
                             ) : (
                               group.description
                             )}
