@@ -84,6 +84,7 @@ public static class InfrastructureModule
         => services
             .AddSingleton<IGitCliRepository, GitCliRepository>()
             .AddSingleton<IGitHubCrRepository, GitHubCrRepository>()
+            .AddSingleton<IExternalSecretProviderClient, ExternalSecretProviderClient>()
             .AddSingleton<IShoutrrrCliRepository, ShoutrrrCliRepository>()
             .AddSingleton<IDockerHubRegistryRepository, DockerHubRegistryRepository>()
             .AddSingleton<IDbWorkQueue, DbWorkQueue>()
@@ -126,6 +127,9 @@ public static class InfrastructureModule
             .Services
             .AddRefitClient<IGithubCrApi>(refitSettings)
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.github.com"))
+                .AddPolicyHandler(Configuration.GetRetryPolicy())
+            .Services
+            .AddHttpClient(ExternalSecretProviderClient.HttpClientName)
                 .AddPolicyHandler(Configuration.GetRetryPolicy())
             .Services;
 

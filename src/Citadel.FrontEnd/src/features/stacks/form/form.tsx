@@ -11,6 +11,7 @@ import {
   GitRepositoryRefView,
   GitComposeProjectCandidate,
   ConfigurationScope,
+  ConfigurationEntryView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -73,6 +74,7 @@ type StackInput = CreateStackInput | PatchStackInput;
 const EMPTY_STACK_CONFIG = {} as StackConfigView;
 const EMPTY_GIT_REFS: GitRepositoryRefView[] = [];
 const EMPTY_COMPOSE_PROJECTS: GitComposeProjectCandidate[] = [];
+const EMPTY_CONFIGURATION_ENTRIES: ConfigurationEntryView[] = [];
 
 const DEFAULT_DRIFT_POLICY: StackDriftPolicy = {
   mode: StackDriftMode.DetectOnly,
@@ -552,10 +554,13 @@ export const StackForm = ({
     ...(original.driftPolicy ?? {}),
     ...((update as Partial<StackInput>).driftPolicy ?? {}),
   });
-  const effectiveConfigurationEntries =
-    mode === 'edit'
-      ? (stackConfigurationData?.data.effectiveEntries ?? [])
-      : (globalConfigurationData?.data.effectiveEntries ?? []);
+  const effectiveConfigurationEntries = useMemo(
+    () =>
+      mode === 'edit'
+        ? (stackConfigurationData?.data.effectiveEntries ?? EMPTY_CONFIGURATION_ENTRIES)
+        : (globalConfigurationData?.data.effectiveEntries ?? EMPTY_CONFIGURATION_ENTRIES),
+    [globalConfigurationData?.data.effectiveEntries, mode, stackConfigurationData?.data.effectiveEntries],
+  );
   const effectiveConfigurationNames = useMemo(
     () => [...new Set(effectiveConfigurationEntries.map((entry) => entry.name))].sort(),
     [effectiveConfigurationEntries],
@@ -895,33 +900,6 @@ export const StackForm = ({
 
           ...(currentStackSource
             ? [
-                defineGroupField<StackInput>({
-                  id: 'stack_environment',
-                  label: 'Environment',
-                  title: 'Environment',
-                  description: 'Configure the stack env file path. Variables and secrets are managed from the Environment tab.',
-                  items: [
-                    defineField<StackInput, 'spec.envFilePath'>({
-                      key: 'spec.envFilePath',
-                      label: 'Env File Path',
-                      description: 'Optional default env file path used at deploy time.',
-                      render: (value, set) => (
-                        <FieldInput
-                          value={value}
-                          onChange={(v) =>
-                            set((prev) => ({
-                              spec: {
-                                ...prev.spec!,
-                                envFilePath: v || null,
-                              },
-                            }))
-                          }
-                          placeholder="e.g. .env"
-                        />
-                      ),
-                    }),
-                  ],
-                }),
                 defineField<StackInput, 'spec.registryId'>({
                   key: 'spec.registryId',
                   label: 'Registry',
@@ -999,6 +977,35 @@ export const StackForm = ({
                       placeholder="Optional project name"
                     />
                   ),
+                }),
+                defineGroupField<StackInput>({
+                  id: 'compose_materialization',
+                  label: 'Compose Materialization',
+                  title: 'Compose Materialization',
+                  description:
+                    'Advanced Docker Compose runtime file controls. Resource variables and secrets are managed from the Variables tab.',
+                  items: [
+                    defineField<StackInput, 'spec.envFilePath'>({
+                      key: 'spec.envFilePath',
+                      label: 'Generated Env File Path',
+                      description:
+                        'Optional path where Citadel writes the generated compose env file during deploy. Leave empty for the default.',
+                      render: (value, set) => (
+                        <FieldInput
+                          value={value}
+                          onChange={(v) =>
+                            set((prev) => ({
+                              spec: {
+                                ...prev.spec!,
+                                envFilePath: v || null,
+                              },
+                            }))
+                          }
+                          placeholder="Default"
+                        />
+                      ),
+                    }),
+                  ],
                 }),
                 ...(currentStackSource === StackSource.Git
                   ? [

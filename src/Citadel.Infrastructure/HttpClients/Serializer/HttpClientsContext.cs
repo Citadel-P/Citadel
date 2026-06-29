@@ -2,6 +2,7 @@
 using System.Text.Json.Serialization;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
+using Infrastructure.Vault;
 
 namespace Infrastructure.HttpClients.Serializer;
 
@@ -51,10 +52,19 @@ internal class HttpClientsContext
         // Resolvers
         serializerOptions.TypeInfoResolverChain.Add(DockerHubContext.Default);
         serializerOptions.TypeInfoResolverChain.Add(GitHubCrContext.Default);
+        serializerOptions.TypeInfoResolverChain.Add(VaultKvV2Context.Default);
 
         // Converters
         serializerOptions.Converters.Add(new JsonStringEnumConverter());
 
         return serializerOptions;
     }
+}
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSerializable(typeof(VaultKvV2ReadResponse))]
+[JsonSerializable(typeof(VaultKvV2DataEnvelope))]
+[JsonSerializable(typeof(IReadOnlyDictionary<string, JsonElement>))]
+internal partial class VaultKvV2Context : JsonSerializerContext
+{
 }

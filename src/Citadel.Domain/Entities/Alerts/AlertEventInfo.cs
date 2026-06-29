@@ -25,6 +25,8 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(StackGitUpdateAvailableAlertInfo), nameof(AlertType.StackGitUpdateAvailable))]
 [JsonDerivedType(typeof(StackGitAutoUpdatedAlertInfo), nameof(AlertType.StackGitAutoUpdated))]
 [JsonDerivedType(typeof(StackGitAutoDeployFailedAlertInfo), nameof(AlertType.StackGitAutoDeployFailed))]
+[JsonDerivedType(typeof(StackConfigurationResolutionFailedAlertInfo), nameof(AlertType.StackConfigurationResolutionFailed))]
+[JsonDerivedType(typeof(DeploymentConfigurationResolutionFailedAlertInfo), nameof(AlertType.DeploymentConfigurationResolutionFailed))]
 [JsonDerivedType(typeof(WebhookAuthenticationFailedAlertInfo), nameof(AlertType.WebhookAuthenticationFailed))]
 [JsonDerivedType(typeof(WebhookDispatchFailedAlertInfo), nameof(AlertType.WebhookDispatchFailed))]
 [JsonDerivedType(typeof(WebhookGitRepoSyncFailedAlertInfo), nameof(AlertType.WebhookGitRepoSyncFailed))]
@@ -198,6 +200,22 @@ public sealed record StackGitAutoDeployFailedAlertInfo(
 {
     public override string HumanMessage =>
         $"Git stack '{StackName}' auto-deploy failed from {GitRepositoryName}/{Branch}: {Reason}";
+}
+
+public sealed record StackConfigurationResolutionFailedAlertInfo(
+    string StackName,
+    string Reason) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Stack '{StackName}' could not resolve variables and secrets: {Reason}";
+}
+
+public sealed record DeploymentConfigurationResolutionFailedAlertInfo(
+    string DeploymentName,
+    string Reason) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Deployment '{DeploymentName}' could not resolve variables and secrets: {Reason}";
 }
 
 public abstract record WebhookAlertInfo(

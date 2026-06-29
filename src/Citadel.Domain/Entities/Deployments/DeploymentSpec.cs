@@ -12,7 +12,8 @@ public sealed record DeploymentSpec(
     List<string>? Ports = null,
     List<string>? Volumes = null,
     List<string>? Networks = null,
-    List<string>? Command = null
+    List<string>? Command = null,
+    List<string>? EnvironmentVariables = null
     );
 
 [JsonPolymorphic]

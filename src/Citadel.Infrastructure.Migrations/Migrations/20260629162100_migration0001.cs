@@ -79,22 +79,19 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "secretdefinitions",
+                name: "secretproviders",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
+                    configuration = table.Column<string>(type: "text", nullable: false),
                     createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    externalkey = table.Column<string>(type: "text", nullable: true),
-                    externalpath = table.Column<string>(type: "text", nullable: true),
-                    externalversion = table.Column<int>(type: "integer", nullable: true),
                     name = table.Column<string>(type: "text", nullable: false),
-                    providerid = table.Column<Guid>(type: "uuid", nullable: true),
                     providertype = table.Column<string>(type: "text", nullable: false),
                     updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_secretdefinitions", x => x.id);
+                    table.PrimaryKey("pk_secretproviders", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -426,50 +423,28 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "configurationentries",
+                name: "secretdefinitions",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    kind = table.Column<string>(type: "text", nullable: false),
+                    externalkey = table.Column<string>(type: "text", nullable: true),
+                    externalpath = table.Column<string>(type: "text", nullable: true),
+                    externalversion = table.Column<int>(type: "integer", nullable: true),
                     name = table.Column<string>(type: "text", nullable: false),
-                    resourceid = table.Column<Guid>(type: "uuid", nullable: true),
-                    scope = table.Column<string>(type: "text", nullable: false),
-                    secretdeliverymode = table.Column<string>(type: "text", nullable: true),
-                    secretid = table.Column<Guid>(type: "uuid", nullable: true),
-                    targetpath = table.Column<string>(type: "text", nullable: true),
-                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    value = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_configurationentries", x => x.id);
-                    table.ForeignKey(
-                        name: "fk_configurationentries_secretdefinitions_secretid",
-                        column: x => x.secretid,
-                        principalTable: "secretdefinitions",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "internalsecretvalues",
-                columns: table => new
-                {
-                    secretid = table.Column<Guid>(type: "uuid", nullable: false),
-                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    encryptedvalue = table.Column<string>(type: "text", nullable: false),
+                    providerid = table.Column<Guid>(type: "uuid", nullable: true),
+                    providertype = table.Column<string>(type: "text", nullable: false),
                     updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_internalsecretvalues", x => x.secretid);
+                    table.PrimaryKey("pk_secretdefinitions", x => x.id);
                     table.ForeignKey(
-                        name: "fk_internalsecretvalues_secretdefinitions_secretid",
-                        column: x => x.secretid,
-                        principalTable: "secretdefinitions",
+                        name: "fk_secretdefinitions_secretproviders_providerid",
+                        column: x => x.providerid,
+                        principalTable: "secretproviders",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -726,6 +701,53 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "configurationentries",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    kind = table.Column<string>(type: "text", nullable: false),
+                    name = table.Column<string>(type: "text", nullable: false),
+                    resourceid = table.Column<Guid>(type: "uuid", nullable: true),
+                    scope = table.Column<string>(type: "text", nullable: false),
+                    secretdeliverymode = table.Column<string>(type: "text", nullable: true),
+                    secretid = table.Column<Guid>(type: "uuid", nullable: true),
+                    targetpath = table.Column<string>(type: "text", nullable: true),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    value = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_configurationentries", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_configurationentries_secretdefinitions_secretid",
+                        column: x => x.secretid,
+                        principalTable: "secretdefinitions",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "internalsecretvalues",
+                columns: table => new
+                {
+                    secretid = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    encryptedvalue = table.Column<string>(type: "text", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_internalsecretvalues", x => x.secretid);
+                    table.ForeignKey(
+                        name: "fk_internalsecretvalues_secretdefinitions_secretid",
+                        column: x => x.secretid,
+                        principalTable: "secretdefinitions",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "gitrepositoryrefs",
                 columns: table => new
                 {
@@ -897,7 +919,6 @@ namespace Infrastructure.Migrations.Migrations
                 {
                     { new Guid("030c8f34-4447-d6b0-bc28-62b9626999c7"), 1, 1, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("07b143ad-6b02-c7ff-3d7d-48af137b2bbc"), 2, 0, new Guid("30000000-0000-0000-0000-000000000002"), 27 },
-                    { new Guid("1879288f-3bbb-20f0-ab2c-1eefcc32262a"), 2, 1, new Guid("30000000-0000-0000-0000-000000000002"), 23 },
                     { new Guid("2533e6f2-53e3-1281-01f7-cc28045cbc4f"), 2, 10, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9"), 4, 3, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("361e1bf8-ef0f-1409-9137-6fa885696a19"), 4, 7, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
@@ -905,11 +926,12 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("4032d1e2-fe5e-16ef-f554-69bd2c2ac19d"), 1, 10, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("440deb9d-ace8-5e15-ef80-3a42f11a0c42"), 4, 10, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("44debca1-5d97-b691-196c-8e421143e307"), 2, 8, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
-                    { new Guid("5f36ed62-49a9-8610-dc34-2bc89165e4de"), 4, 1, new Guid("30000000-0000-0000-0000-000000000001"), 23 },
+                    { new Guid("4bc13990-838c-6f0c-0ad1-a456e6821ff7"), 4, 2, new Guid("30000000-0000-0000-0000-000000000001"), 103 },
                     { new Guid("645b4c54-7937-2180-7186-be24ac6bf330"), 4, 5, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("672ebf04-40e5-547b-29f2-6daf5c3c3856"), 1, 8, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("6e1cf352-66c2-0671-eb47-b70b01f27406"), 2, 11, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("80aa1c34-79dd-6587-52db-52605326fe77"), 2, 7, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("81be1cc9-0daf-0b6e-7278-0a279754f8a0"), 2, 2, new Guid("30000000-0000-0000-0000-000000000002"), 103 },
                     { new Guid("86dadd60-fced-3dcd-cdbe-8d262bec7d22"), 2, 5, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("909763b4-50a0-e1c7-6df1-61add076910c"), 1, 2, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("936632a5-4e74-0a17-fb8e-497c960c3005"), 1, 0, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
@@ -921,12 +943,12 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("a60ba8de-ff46-b387-85ed-913d96170a2a"), 1, 7, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("b104e60e-87ef-a58f-f04a-ba2fc634f037"), 1, 6, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("b3abb382-80da-8170-b011-05af044e7908"), 2, 3, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
-                    { new Guid("c5e4df97-9c4a-cdf4-6568-b709276db612"), 4, 2, new Guid("30000000-0000-0000-0000-000000000001"), 7 },
+                    { new Guid("c94d72c9-1e1a-a3e0-4855-c3b2c5f74306"), 4, 1, new Guid("30000000-0000-0000-0000-000000000001"), 55 },
                     { new Guid("ca880835-6808-358a-bebb-8ea95efdea97"), 1, 11, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
-                    { new Guid("d0d48de1-86a5-c43e-309c-1adce8776662"), 2, 2, new Guid("30000000-0000-0000-0000-000000000002"), 7 },
                     { new Guid("d5fa8563-b0a2-4f11-7e16-7c1877e43dda"), 4, 6, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("dbb104e4-d7e2-5173-b0b2-6d1519c2f682"), 4, 8, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("e04cd0d3-47bf-2d28-e099-c7a9b61e3875"), 1, 3, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("ea27984d-f6fa-54f1-d8a4-1ddeb122a98f"), 2, 1, new Guid("30000000-0000-0000-0000-000000000002"), 55 },
                     { new Guid("ee9254c3-9b59-15a0-aa85-898f5974a603"), 2, 6, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("f7aa549c-bcc2-d9b2-449d-0f223e0f9752"), 4, 11, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("fb710f21-c146-e381-00f0-820f58ecb69a"), 1, 9, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
@@ -1236,6 +1258,17 @@ namespace Infrastructure.Migrations.Migrations
                 column: "name");
 
             migrationBuilder.CreateIndex(
+                name: "ix_secretdefinitions_providerid",
+                table: "secretdefinitions",
+                column: "providerid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_secretproviders_name",
+                table: "secretproviders",
+                column: "name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_stackreleases_createdbyactorid",
                 table: "stackreleases",
                 column: "createdbyactorid");
@@ -1382,6 +1415,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "gitaccounts");
+
+            migrationBuilder.DropTable(
+                name: "secretproviders");
 
             migrationBuilder.DropTable(
                 name: "platforms");

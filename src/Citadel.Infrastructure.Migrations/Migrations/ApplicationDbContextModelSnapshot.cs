@@ -1565,11 +1565,11 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("5f36ed62-49a9-8610-dc34-2bc89165e4de"),
+                            Id = new Guid("c94d72c9-1e1a-a3e0-4855-c3b2c5f74306"),
                             PermissionLevel = 4,
                             ResourceType = 1,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 23
+                            SpecificPermissions = 55
                         },
                         new
                         {
@@ -1581,19 +1581,19 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("1879288f-3bbb-20f0-ab2c-1eefcc32262a"),
+                            Id = new Guid("ea27984d-f6fa-54f1-d8a4-1ddeb122a98f"),
                             PermissionLevel = 2,
                             ResourceType = 1,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 23
+                            SpecificPermissions = 55
                         },
                         new
                         {
-                            Id = new Guid("c5e4df97-9c4a-cdf4-6568-b709276db612"),
+                            Id = new Guid("4bc13990-838c-6f0c-0ad1-a456e6821ff7"),
                             PermissionLevel = 4,
                             ResourceType = 2,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 7
+                            SpecificPermissions = 103
                         },
                         new
                         {
@@ -1605,11 +1605,11 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("d0d48de1-86a5-c43e-309c-1adce8776662"),
+                            Id = new Guid("81be1cc9-0daf-0b6e-7278-0a279754f8a0"),
                             PermissionLevel = 2,
                             ResourceType = 2,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 7
+                            SpecificPermissions = 103
                         },
                         new
                         {
@@ -2097,7 +2097,54 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("Name")
                         .HasDatabaseName("ix_secretdefinitions_name");
 
+                    b.HasIndex("ProviderId")
+                        .HasDatabaseName("ix_secretdefinitions_providerid");
+
                     b.ToTable("secretdefinitions", (string)null);
+                });
+
+            modelBuilder.Entity("SecretProvider", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Configuration")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("configuration");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ProviderType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("providertype");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id")
+                        .HasName("pk_secretproviders");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_secretproviders_name");
+
+                    b.ToTable("secretproviders", (string)null);
                 });
 
             modelBuilder.Entity("Stack", b =>
@@ -2188,6 +2235,10 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("Configuration")
+                        .HasColumnType("json")
+                        .HasColumnName("configuration");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -2646,6 +2697,15 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_registries_actors_createdbyactorid");
+                });
+
+            modelBuilder.Entity("SecretDefinition", b =>
+                {
+                    b.HasOne("SecretProvider", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_secretdefinitions_secretproviders_providerid");
                 });
 
             modelBuilder.Entity("Stack", b =>

@@ -482,6 +482,54 @@ public sealed class StackGitAutoDeployFailedEvaluator : IAlertEvaluator
     }
 }
 
+[AlertEvaluator(AlertType.StackConfigurationResolutionFailed)]
+public sealed class StackConfigurationResolutionFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.StackConfigurationResolutionFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.StackConfigurationFailures is null)
+            yield break;
+
+        foreach (var failure in context.StackConfigurationFailures)
+        {
+            yield return new AlertMatch(
+                failure.Id,
+                failure.Name,
+                AlertResourceType.Stack,
+                new StackConfigurationResolutionFailedAlertInfo(
+                    failure.Name,
+                    failure.Reason),
+                DeduplicationComponent: failure.Reason);
+        }
+    }
+}
+
+[AlertEvaluator(AlertType.DeploymentConfigurationResolutionFailed)]
+public sealed class DeploymentConfigurationResolutionFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.DeploymentConfigurationResolutionFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.DeploymentConfigurationFailures is null)
+            yield break;
+
+        foreach (var failure in context.DeploymentConfigurationFailures)
+        {
+            yield return new AlertMatch(
+                failure.Id,
+                failure.Name,
+                AlertResourceType.Deployment,
+                new DeploymentConfigurationResolutionFailedAlertInfo(
+                    failure.Name,
+                    failure.Reason),
+                DeduplicationComponent: failure.Reason);
+        }
+    }
+}
+
 [AlertEvaluator(AlertType.WebhookAuthenticationFailed)]
 public sealed class WebhookAuthenticationFailedEvaluator : IAlertEvaluator
 {

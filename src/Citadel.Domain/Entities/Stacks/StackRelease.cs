@@ -11,6 +11,7 @@ public sealed class StackRelease : IAuditedEntity
     public string Version { get; private set; } = string.Empty;
     public StackSpec Spec { get; private set; } = null!;
     public StackReleaseSource? Source { get; private set; }
+    public IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration { get; private set; }
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -48,6 +49,7 @@ public sealed class StackRelease : IAuditedEntity
         string version,
         StackSpec spec,
         StackReleaseSource? source,
+        IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? configuration,
         DateTime createdAt,
         Guid createdByActorId,
         Platform? platform = null,
@@ -64,6 +66,7 @@ public sealed class StackRelease : IAuditedEntity
             Version = version,
             Spec = spec,
             Source = source,
+            Configuration = configuration,
             CreatedAt = createdAt,
             CreatedByActorId = createdByActorId,
             Platform = platform,
@@ -82,6 +85,7 @@ public sealed class StackRelease : IAuditedEntity
     {
         Spec = spec;
         Source = null;
+        Configuration = null;
     }
 
     public void UpdateDefinition(Guid platformId, StackSpec spec)
@@ -89,11 +93,17 @@ public sealed class StackRelease : IAuditedEntity
         PlatformId = platformId;
         Spec = spec;
         Source = null;
+        Configuration = null;
     }
 
     public void UpdateSource(StackReleaseSource source)
     {
         Source = source;
+    }
+
+    public void UpdateConfiguration(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? configuration)
+    {
+        Configuration = configuration;
     }
 
     public StackRelease CreateSnapshot()
@@ -105,6 +115,7 @@ public sealed class StackRelease : IAuditedEntity
             Version = Version,
             Spec = Spec,
             Source = Source,
+            Configuration = Configuration,
             CreatedAt = CreatedAt,
             CreatedByActorId = CreatedByActorId,
         };

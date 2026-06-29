@@ -46,17 +46,14 @@ CREATE TABLE roles (
     CONSTRAINT pk_roles PRIMARY KEY (id)
 );
 
-CREATE TABLE secretdefinitions (
+CREATE TABLE secretproviders (
     id uuid NOT NULL,
+    configuration text NOT NULL,
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    externalkey text,
-    externalpath text,
-    externalversion integer,
     name text NOT NULL,
-    providerid uuid,
     providertype text NOT NULL,
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    CONSTRAINT pk_secretdefinitions PRIMARY KEY (id)
+    CONSTRAINT pk_secretproviders PRIMARY KEY (id)
 );
 
 CREATE TABLE alertchannels (
@@ -225,29 +222,18 @@ CREATE TABLE permissions (
     CONSTRAINT fk_permissions_roles_roleid FOREIGN KEY (roleid) REFERENCES roles (id) ON DELETE CASCADE
 );
 
-CREATE TABLE configurationentries (
+CREATE TABLE secretdefinitions (
     id uuid NOT NULL,
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    kind text NOT NULL,
+    externalkey text,
+    externalpath text,
+    externalversion integer,
     name text NOT NULL,
-    resourceid uuid,
-    scope text NOT NULL,
-    secretdeliverymode text,
-    secretid uuid,
-    targetpath text,
+    providerid uuid,
+    providertype text NOT NULL,
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    value text,
-    CONSTRAINT pk_configurationentries PRIMARY KEY (id),
-    CONSTRAINT fk_configurationentries_secretdefinitions_secretid FOREIGN KEY (secretid) REFERENCES secretdefinitions (id) ON DELETE RESTRICT
-);
-
-CREATE TABLE internalsecretvalues (
-    secretid uuid NOT NULL,
-    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    encryptedvalue text NOT NULL,
-    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    CONSTRAINT pk_internalsecretvalues PRIMARY KEY (secretid),
-    CONSTRAINT fk_internalsecretvalues_secretdefinitions_secretid FOREIGN KEY (secretid) REFERENCES secretdefinitions (id) ON DELETE CASCADE
+    CONSTRAINT pk_secretdefinitions PRIMARY KEY (id),
+    CONSTRAINT fk_secretdefinitions_secretproviders_providerid FOREIGN KEY (providerid) REFERENCES secretproviders (id) ON DELETE RESTRICT
 );
 
 CREATE TABLE alertevents (
@@ -368,6 +354,31 @@ CREATE TABLE usersteams (
     CONSTRAINT pk_usersteams PRIMARY KEY (userid, teamid),
     CONSTRAINT fk_usersteams_teams_teamid FOREIGN KEY (teamid) REFERENCES teams (id) ON DELETE CASCADE,
     CONSTRAINT fk_usersteams_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE configurationentries (
+    id uuid NOT NULL,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    kind text NOT NULL,
+    name text NOT NULL,
+    resourceid uuid,
+    scope text NOT NULL,
+    secretdeliverymode text,
+    secretid uuid,
+    targetpath text,
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    value text,
+    CONSTRAINT pk_configurationentries PRIMARY KEY (id),
+    CONSTRAINT fk_configurationentries_secretdefinitions_secretid FOREIGN KEY (secretid) REFERENCES secretdefinitions (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE internalsecretvalues (
+    secretid uuid NOT NULL,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    encryptedvalue text NOT NULL,
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    CONSTRAINT pk_internalsecretvalues PRIMARY KEY (secretid),
+    CONSTRAINT fk_internalsecretvalues_secretdefinitions_secretid FOREIGN KEY (secretid) REFERENCES secretdefinitions (id) ON DELETE CASCADE
 );
 
 CREATE TABLE gitrepositoryrefs (
@@ -495,8 +506,6 @@ VALUES ('030c8f34-4447-d6b0-bc28-62b9626999c7', 1, 1, '30000000-0000-0000-0000-0
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('07b143ad-6b02-c7ff-3d7d-48af137b2bbc', 2, 0, '30000000-0000-0000-0000-000000000002', 27);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('1879288f-3bbb-20f0-ab2c-1eefcc32262a', 2, 1, '30000000-0000-0000-0000-000000000002', 23);
-INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('2533e6f2-53e3-1281-01f7-cc28045cbc4f', 2, 10, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9', 4, 3, '30000000-0000-0000-0000-000000000001', 0);
@@ -511,7 +520,7 @@ VALUES ('440deb9d-ace8-5e15-ef80-3a42f11a0c42', 4, 10, '30000000-0000-0000-0000-
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('44debca1-5d97-b691-196c-8e421143e307', 2, 8, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('5f36ed62-49a9-8610-dc34-2bc89165e4de', 4, 1, '30000000-0000-0000-0000-000000000001', 23);
+VALUES ('4bc13990-838c-6f0c-0ad1-a456e6821ff7', 4, 2, '30000000-0000-0000-0000-000000000001', 103);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('645b4c54-7937-2180-7186-be24ac6bf330', 4, 5, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -520,6 +529,8 @@ INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificperm
 VALUES ('6e1cf352-66c2-0671-eb47-b70b01f27406', 2, 11, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('80aa1c34-79dd-6587-52db-52605326fe77', 2, 7, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('81be1cc9-0daf-0b6e-7278-0a279754f8a0', 2, 2, '30000000-0000-0000-0000-000000000002', 103);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('86dadd60-fced-3dcd-cdbe-8d262bec7d22', 2, 5, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -543,17 +554,17 @@ VALUES ('b104e60e-87ef-a58f-f04a-ba2fc634f037', 1, 6, '30000000-0000-0000-0000-0
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('b3abb382-80da-8170-b011-05af044e7908', 2, 3, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('c5e4df97-9c4a-cdf4-6568-b709276db612', 4, 2, '30000000-0000-0000-0000-000000000001', 7);
+VALUES ('c94d72c9-1e1a-a3e0-4855-c3b2c5f74306', 4, 1, '30000000-0000-0000-0000-000000000001', 55);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('ca880835-6808-358a-bebb-8ea95efdea97', 1, 11, '30000000-0000-0000-0000-000000000003', 0);
-INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('d0d48de1-86a5-c43e-309c-1adce8776662', 2, 2, '30000000-0000-0000-0000-000000000002', 7);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('d5fa8563-b0a2-4f11-7e16-7c1877e43dda', 4, 6, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('dbb104e4-d7e2-5173-b0b2-6d1519c2f682', 4, 8, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('e04cd0d3-47bf-2d28-e099-c7a9b61e3875', 1, 3, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('ea27984d-f6fa-54f1-d8a4-1ddeb122a98f', 2, 1, '30000000-0000-0000-0000-000000000002', 55);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('ee9254c3-9b59-15a0-aa85-898f5974a603', 2, 6, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -682,6 +693,10 @@ CREATE UNIQUE INDEX ix_resourceaccesses_resourcetype_resourceid_actorid ON resou
 
 CREATE INDEX ix_secretdefinitions_name ON secretdefinitions (name);
 
+CREATE INDEX ix_secretdefinitions_providerid ON secretdefinitions (providerid);
+
+CREATE UNIQUE INDEX ix_secretproviders_name ON secretproviders (name);
+
 CREATE INDEX ix_stackreleases_createdbyactorid ON stackreleases (createdbyactorid);
 
 CREATE INDEX ix_stackreleases_platformid ON stackreleases (platformid);
@@ -707,7 +722,15 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260628130638_migration0001', '10.0.9');
+VALUES ('20260629162100_migration0001', '10.0.9');
+
+COMMIT;
+
+START TRANSACTION;
+ALTER TABLE stackreleases ADD configuration json;
+
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20260629190701_migration0002', '10.0.9');
 
 COMMIT;
 

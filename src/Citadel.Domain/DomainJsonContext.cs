@@ -82,10 +82,14 @@ public partial class ImagTagsContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
         typeof(JsonStringEnumConverter<ConfigurationScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
+        typeof(JsonStringEnumConverter<SecretProviderType>),
     })]
 [JsonSerializable(typeof(IEnumerable<Guid>))]
 [JsonSerializable(typeof(Deployment))]
 [JsonSerializable(typeof(DeploymentSpec))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Deployments.DeploymentResultSnapshot))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
+[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
 [JsonSerializable(typeof(HealthCheckConfig))]
 public partial class DeploymentJsonContext : JsonSerializerContext
 {
@@ -103,8 +107,12 @@ public partial class DeploymentJsonContext : JsonSerializerContext
     })]
 [JsonSerializable(typeof(ConfigurationEntry))]
 [JsonSerializable(typeof(IEnumerable<ConfigurationEntry>))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
+[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
 [JsonSerializable(typeof(SecretDefinition))]
 [JsonSerializable(typeof(InternalSecretValue))]
+[JsonSerializable(typeof(SecretProvider))]
+[JsonSerializable(typeof(VaultKvV2SecretProviderConfiguration))]
 public partial class ConfigurationJsonContext : JsonSerializerContext
 {
 }
@@ -115,6 +123,10 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
     Converters = new[]
     {
         typeof(JsonStringEnumConverter<ActivityEventType>),
+        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
+        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<SecretDeliveryMode>),
+        typeof(JsonStringEnumConverter<SecretProviderType>),
     })]
 [JsonSerializable(typeof(ActivityEventInfo))]
 [JsonSerializable(typeof(DeploymentCreated))]
@@ -143,6 +155,10 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackWebhookReceived))]
 [JsonSerializable(typeof(StackApplied))]
 [JsonSerializable(typeof(StackRollback))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Deployments.DeploymentResultSnapshot))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Stacks.StackResultSnapshot))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
+[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
 [JsonSerializable(typeof(AlertRuleCreated))]
 [JsonSerializable(typeof(AlertRuleUpdated))]
 [JsonSerializable(typeof(AlertRuleDeleted))]
@@ -183,6 +199,8 @@ public partial class EventInfoJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackGitUpdateAvailableAlertInfo))]
 [JsonSerializable(typeof(StackGitAutoUpdatedAlertInfo))]
 [JsonSerializable(typeof(StackGitAutoDeployFailedAlertInfo))]
+[JsonSerializable(typeof(StackConfigurationResolutionFailedAlertInfo))]
+[JsonSerializable(typeof(DeploymentConfigurationResolutionFailedAlertInfo))]
 [JsonSerializable(typeof(WebhookAuthenticationFailedAlertInfo))]
 [JsonSerializable(typeof(WebhookDispatchFailedAlertInfo))]
 [JsonSerializable(typeof(WebhookGitRepoSyncFailedAlertInfo))]
@@ -257,7 +275,11 @@ public partial class GitJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<StackUpdateBehavior>),
         typeof(JsonStringEnumConverter<ResourceControlState>),
         typeof(JsonStringEnumConverter<WebhookProvider>),
-        typeof(JsonStringEnumConverter<WebhookAuthScheme>)
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>),
+        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
+        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<SecretDeliveryMode>),
+        typeof(JsonStringEnumConverter<SecretProviderType>)
     })]
 [JsonSerializable(typeof(IEnumerable<Guid>))]
 [JsonSerializable(typeof(Stack))]
@@ -276,6 +298,9 @@ public partial class GitJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackReconciliationAction))]
 [JsonSerializable(typeof(StackRelease))]
 [JsonSerializable(typeof(StackReleaseSource))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Stacks.StackResultSnapshot))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
+[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
 [JsonSerializable(typeof(StackSpec))]
 [JsonSerializable(typeof(ManualStack))]
 [JsonSerializable(typeof(GitStack))]

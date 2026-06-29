@@ -24,6 +24,14 @@ internal sealed record SecretDefinitionDto(
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
+internal sealed record SecretProviderDto(
+    Guid Id,
+    string Name,
+    string ProviderType,
+    string Configuration,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);
+
 internal sealed record InternalSecretValueDto(
     Guid SecretId,
     string EncryptedValue,

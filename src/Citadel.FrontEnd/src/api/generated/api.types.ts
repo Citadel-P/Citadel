@@ -106,11 +106,8 @@ export enum SpecificPermission {
   Apply = "Apply",
   Pull = "Pull",
   Terminal = "Terminal",
-}
-
-export enum SecretProviderType {
-  InternalEncrypted = "InternalEncrypted",
-  VaultCompatibleKvV2 = "VaultCompatibleKvV2",
+  Configuration = "Configuration",
+  Releases = "Releases",
 }
 
 export enum ScheduleType {
@@ -312,6 +309,8 @@ export enum AlertType {
   StackGitUpdateAvailable = "StackGitUpdateAvailable",
   StackGitAutoUpdated = "StackGitAutoUpdated",
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
+  StackConfigurationResolutionFailed = "StackConfigurationResolutionFailed",
+  DeploymentConfigurationResolutionFailed = "DeploymentConfigurationResolutionFailed",
   WebhookAuthenticationFailed = "WebhookAuthenticationFailed",
   WebhookDispatchFailed = "WebhookDispatchFailed",
   WebhookGitRepoSyncFailed = "WebhookGitRepoSyncFailed",
@@ -639,6 +638,14 @@ export type AlertEventInfo = BaseAlertEventInfo &
     | BaseAlertEventInfoTypeMapping<
         "StackGitAutoDeployFailed",
         AlertEventInfoStackGitAutoDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackConfigurationResolutionFailed",
+        AlertEventInfoStackConfigurationResolutionFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "DeploymentConfigurationResolutionFailed",
+        AlertEventInfoDeploymentConfigurationResolutionFailedAlertInfo
       >
     | BaseAlertEventInfoTypeMapping<
         "WebhookAuthenticationFailed",
@@ -1193,6 +1200,13 @@ export interface AlertEventInfoDeploymentAutoUpdatedAlertInfo {
   humanMessage?: null | string;
 }
 
+export interface AlertEventInfoDeploymentConfigurationResolutionFailedAlertInfo {
+  $type?: "DeploymentConfigurationResolutionFailed";
+  deploymentName: string;
+  reason: string;
+  humanMessage?: null | string;
+}
+
 export interface AlertEventInfoDeploymentImageUpdateAvailableAlertInfo {
   $type?: "DeploymentImageUpdateAvailable";
   deploymentName: string;
@@ -1244,6 +1258,13 @@ export interface AlertEventInfoStackAutoUpdatedAlertInfo {
   $type?: "StackAutoUpdated";
   stackName: string;
   updates: StackImageUpdateItem[];
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackConfigurationResolutionFailedAlertInfo {
+  $type?: "StackConfigurationResolutionFailed";
+  stackName: string;
+  reason: string;
   humanMessage?: null | string;
 }
 
@@ -1624,6 +1645,7 @@ export interface ConfigFromInput {
 export interface ConfigurationEntriesView {
   entries: ConfigurationEntryView[];
   effectiveEntries: ConfigurationEntryView[];
+  capabilities?: null | ResourceCapabilities;
 }
 
 export interface ConfigurationEntryInput {
@@ -1650,6 +1672,29 @@ export interface ConfigurationEntryView {
   secretDeliveryMode: null | SecretDeliveryMode;
   targetPath: null | string;
   isInherited: boolean;
+}
+
+export interface ConfigurationSnapshotEntry {
+  name: string;
+  kind: ConfigurationEntryKind;
+  scope: ConfigurationScope;
+  /** @format uuid */
+  resourceId: null | string;
+  value: null | string;
+  /** @format uuid */
+  secretId: null | string;
+  secretName: null | string;
+  secretProviderType: null | SecretProviderType;
+  secretProviderName: null | string;
+  externalPath: null | string;
+  externalKey: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  externalVersion: null | number | string;
+  secretDeliveryMode: null | SecretDeliveryMode;
+  targetPath: null | string;
 }
 
 export interface ContainerConfiguration {
@@ -1919,6 +1964,19 @@ export interface CreateDeploymentInput {
   spec: DeploymentSpec;
 }
 
+export interface CreateExternalSecretInput {
+  name: string;
+  /** @format uuid */
+  providerId: string;
+  externalPath: string;
+  externalKey: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  externalVersion: null | number | string;
+}
+
 export interface CreateGitRepositoryInput {
   name: string;
   description: null | string;
@@ -1998,6 +2056,13 @@ export interface CreateUserInput {
   teamIds?: null | string[];
   roleIds?: null | string[];
   resourceAccesses?: null | UserResourceAccessInput[];
+}
+
+export interface CreateVaultKvV2SecretProviderInput {
+  name: string;
+  address: string;
+  mountPath: string;
+  token: string;
 }
 
 export interface CreateVolumeInput {
@@ -2101,6 +2166,7 @@ export interface DeploymentCapabilities {
   canOpenTerminal: boolean;
   canPull: boolean;
   canApply: boolean;
+  canViewConfiguration: boolean;
   canRead: boolean;
   canWrite: boolean;
   canExecute: boolean;
@@ -2132,6 +2198,7 @@ export interface DeploymentImageInfoLocalImage {
 export interface DeploymentResultSnapshot {
   containerIds?: null | string[];
   message?: null | string;
+  configuration?: null | ConfigurationSnapshotEntry[];
 }
 
 export interface DeploymentSnapshot {
@@ -2154,6 +2221,7 @@ export interface DeploymentSpec {
   volumes?: null | string[];
   networks?: null | string[];
   command?: null | string[];
+  environmentVariables?: null | string[];
 }
 
 export interface DeploymentStreamItem {
@@ -2341,6 +2409,11 @@ export interface EndpointSettingsInfo {
 
 export interface ExposedPortsResult {
   ports: string[];
+}
+
+export interface ExternalSecretTestResultView {
+  success: boolean;
+  message: string;
 }
 
 export interface GitAccountConfigView {
@@ -3569,9 +3642,27 @@ export interface SecretDefinitionView {
 
 export interface SecretDefinitionsView {
   secrets: SecretDefinitionView[];
+  capabilities: ResourceCapabilities;
 }
 
 export type SecretDeliveryMode = any;
+
+export type SecretProviderType = any;
+
+export interface SecretProviderView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  providerType: SecretProviderType;
+  address: string;
+  mountPath: string;
+  /** @format date-time */
+  createdAt: any;
+}
+
+export interface SecretProvidersView {
+  providers: SecretProviderView[];
+}
 
 export interface StackCapabilities {
   canViewLogs: boolean;
@@ -3579,6 +3670,8 @@ export interface StackCapabilities {
   canOpenTerminal: boolean;
   canPull: boolean;
   canApply: boolean;
+  canViewConfiguration: boolean;
+  canViewReleases: boolean;
   canRead: boolean;
   canWrite: boolean;
   canExecute: boolean;
@@ -3714,6 +3807,7 @@ export interface StackReleaseSnapshot {
   createdByActorId: string;
   version: null | string;
   source?: null | StackReleaseSource;
+  configuration?: null | ConfigurationSnapshotEntry[];
 }
 
 export interface StackReleaseSource {
@@ -3744,6 +3838,7 @@ export interface StackReleaseView {
   version: string;
   spec: StackSpec;
   source: null | StackReleaseSource;
+  configuration: null | ConfigurationSnapshotEntry[];
   /** @format date-time */
   createdAt: any;
   /** @format uuid */
@@ -3761,6 +3856,7 @@ export interface StackReleasesView {
 export interface StackResultSnapshot {
   containerIds?: null | string[];
   message?: null | string;
+  configuration?: null | ConfigurationSnapshotEntry[];
 }
 
 export interface StackSnapshot {
@@ -3859,6 +3955,7 @@ export interface StackView {
   version?: null | string;
   spec?: null | StackSpec;
   source?: null | StackReleaseSource;
+  configuration?: null | ConfigurationSnapshotEntry[];
   platformStatus?: PlatformStatus;
   platformName?: null | string;
   latestActivityView?: null | LatestActivityView;
@@ -3920,6 +4017,18 @@ export interface TeamView {
 export interface TeamsView {
   pagedResult: PagedResultViewOfTeamView;
   capabilities: ResourceCapabilities;
+}
+
+export interface TestExternalSecretInput {
+  /** @format uuid */
+  providerId: string;
+  externalPath: string;
+  externalKey: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  externalVersion: null | number | string;
 }
 
 export interface TimeZoneInfo {
@@ -8418,10 +8527,22 @@ export class Api<
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    listSecretDefinitions: (params: RequestParams = {}) =>
+    listSecretDefinitions: (
+      query?: {
+        /** Optional resource configuration scope */
+        scope?: ConfigurationScope;
+        /**
+         * Optional resource ID
+         * @format uuid
+         */
+        resourceId?: string;
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<SecretDefinitionsView, ProblemDetails>({
         path: `/api/v1/configuration/secrets`,
         method: "GET",
+        query: query,
         format: "json",
         ...params,
       }),
@@ -8443,6 +8564,97 @@ export class Api<
     ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
         path: `/api/v1/configuration/secrets`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name CreateExternalSecret
+     * @summary Create an external secret definition
+     * @request POST:/api/v1/configuration/secrets/external
+     * @response `200` `SecretDefinitionView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createExternalSecret: (
+      data: CreateExternalSecretInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<SecretDefinitionView, ProblemDetails>({
+        path: `/api/v1/configuration/secrets/external`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name TestExternalSecret
+     * @summary Test an external secret reference
+     * @request POST:/api/v1/configuration/secrets/external/test
+     * @response `200` `ExternalSecretTestResultView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    testExternalSecret: (
+      data: TestExternalSecretInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ExternalSecretTestResultView, ProblemDetails>({
+        path: `/api/v1/configuration/secrets/external/test`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name ListSecretProviders
+     * @summary List secret providers
+     * @request GET:/api/v1/configuration/secret-providers
+     * @response `200` `SecretProvidersView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listSecretProviders: (params: RequestParams = {}) =>
+      this.request<SecretProvidersView, ProblemDetails>({
+        path: `/api/v1/configuration/secret-providers`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name CreateVaultKvV2SecretProvider
+     * @summary Create a Vault-compatible KV v2 secret provider
+     * @request POST:/api/v1/configuration/secret-providers/vault-kv2
+     * @response `200` `SecretProviderView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createVaultKvV2SecretProvider: (
+      data: CreateVaultKvV2SecretProviderInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<SecretProviderView, ProblemDetails>({
+        path: `/api/v1/configuration/secret-providers/vault-kv2`,
         method: "POST",
         body: data,
         type: ContentType.Json,

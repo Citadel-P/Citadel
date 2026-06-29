@@ -67,7 +67,8 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         },
       },
       {
-        label: 'Environment',
+        label: 'Variables',
+        disabled: (resource: DeploymentView): boolean => !hasCapability(resource, 'canViewConfiguration'),
         Content: ({ resource }: { resource: DeploymentView }) => {
           return (
             <ConfigurationEntriesTab

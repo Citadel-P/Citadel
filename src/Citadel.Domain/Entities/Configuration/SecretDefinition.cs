@@ -22,6 +22,17 @@ public sealed record SecretDefinition(
             if (ProviderId is not null || ExternalPath is not null || ExternalKey is not null || ExternalVersion is not null)
                 throw new ArgumentException("Internal encrypted secrets cannot define external provider metadata.");
         }
+        else if (ProviderType == SecretProviderType.VaultCompatibleKvV2)
+        {
+            if (ProviderId is null)
+                throw new ArgumentException("External secrets require a provider.");
+            if (string.IsNullOrWhiteSpace(ExternalPath))
+                throw new ArgumentException("External secrets require a provider path.");
+            if (string.IsNullOrWhiteSpace(ExternalKey))
+                throw new ArgumentException("External secrets require a provider key.");
+            if (ExternalVersion is <= 0)
+                throw new ArgumentException("External secret version must be greater than zero.");
+        }
     }
 }
 

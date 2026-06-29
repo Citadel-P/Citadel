@@ -584,6 +584,8 @@ public enum AlertType
     StackGitUpdateAvailable,
     StackGitAutoUpdated,
     StackGitAutoDeployFailed,
+    StackConfigurationResolutionFailed,
+    DeploymentConfigurationResolutionFailed,
     WebhookAuthenticationFailed,
     WebhookDispatchFailed,
     WebhookGitRepoSyncFailed,

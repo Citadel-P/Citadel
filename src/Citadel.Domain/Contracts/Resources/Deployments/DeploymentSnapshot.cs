@@ -20,4 +20,7 @@ public static class DeploymentSnapshotExtensions
             Spec: deployment.Spec);
 }
 
-public sealed record DeploymentResultSnapshot(IEnumerable<string>? ContainerIds = null, string? Message = null);
+public sealed record DeploymentResultSnapshot(
+    IEnumerable<string>? ContainerIds = null,
+    string? Message = null,
+    IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration = null);

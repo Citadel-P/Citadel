@@ -13,6 +13,7 @@ import {
   PatchDeploymentInput,
   LookupResourceType,
   ConfigurationScope,
+  ConfigurationEntryView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -140,6 +141,38 @@ const stop_signals = {
 
 type DeploymentInput = CreateDeploymentInput | PatchDeploymentInput;
 
+const EMPTY_CONFIGURATION_ENTRIES: ConfigurationEntryView[] = [];
+const environmentNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const environmentReferencePattern = /\$\{([^}]+)\}/g;
+
+const validateDeploymentEnvironmentVariable = (line: string, configurationNames: string[]) => {
+  const separator = line.indexOf('=');
+  const key = (separator < 0 ? line : line.slice(0, separator)).trim();
+
+  if (!environmentNamePattern.test(key)) {
+    return `${key || 'Environment key'} is not a valid environment key.`;
+  }
+
+  const knownNames = new Set(configurationNames);
+  if (separator < 0) {
+    return knownNames.has(key) ? null : `${key} is not defined in deployment or global variables.`;
+  }
+
+  const value = line.slice(separator + 1);
+  for (const match of value.matchAll(environmentReferencePattern)) {
+    const name = match[1]?.trim() ?? '';
+    if (!environmentNamePattern.test(name)) {
+      return `${match[0]} is not a supported variable reference.`;
+    }
+
+    if (!knownNames.has(name)) {
+      return `${name} is not defined in deployment or global variables.`;
+    }
+  }
+
+  return null;
+};
+
 export const DeploymentForm = ({
   mode,
   metadataChanged,
@@ -156,6 +189,20 @@ export const DeploymentForm = ({
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
   const { data: deploymentCfg } = useRead('getDeploymentConfig', { deploymentId: id });
+  const deploymentConfigurationArgs = useMemo(
+    () => ({ scope: ConfigurationScope.Deployment, resourceId: id ?? '' }),
+    [id],
+  );
+  const { data: deploymentConfigurationData } = useRead(
+    'getResourceConfigurationEntries',
+    deploymentConfigurationArgs,
+    {
+      enabled: mode === 'edit' && !!id,
+    },
+  );
+  const { data: globalConfigurationData } = useRead('getGlobalConfigurationEntries', undefined, {
+    enabled: mode === 'add',
+  });
 
   const resource: DeploymentConfigView | undefined = deploymentCfg?.data;
 
@@ -166,6 +213,17 @@ export const DeploymentForm = ({
   const currentSpec = { ...original.spec, ...update.spec };
   const currentImage = update.spec?.image ?? original.spec?.image;
   const provider = currentImage?.$type;
+  const effectiveConfigurationEntries = useMemo(
+    () =>
+      mode === 'edit'
+        ? (deploymentConfigurationData?.data.effectiveEntries ?? EMPTY_CONFIGURATION_ENTRIES)
+        : (globalConfigurationData?.data.effectiveEntries ?? EMPTY_CONFIGURATION_ENTRIES),
+    [deploymentConfigurationData?.data.effectiveEntries, globalConfigurationData?.data.effectiveEntries, mode],
+  );
+  const effectiveConfigurationNames = useMemo(
+    () => [...new Set(effectiveConfigurationEntries.map((entry) => entry.name))].sort(),
+    [effectiveConfigurationEntries],
+  );
 
   const { data, isSuccess: imageInfoIsSuccess } = useRead('getExposedPorts', {
     platformId: currentPlatformId,
@@ -500,6 +558,31 @@ export const DeploymentForm = ({
             ),
           }),
           defineField({
+            key: 'spec.environmentVariables',
+            label: 'Container Variables',
+            description:
+              'Select the environment keys injected into the container. Use KEY to expose a matching Citadel variable or KEY=${OTHER_KEY} to map a value.',
+            required: false,
+            render: (value, set) => (
+              <MonacoToArrayEditor
+                value={value}
+                helperText="# db_password=${POSTGRES_PASSWORD}"
+                language="key_value"
+                completionItems={effectiveConfigurationNames}
+                completionItemDetail="Citadel variable or secret"
+                validateItem={(line) => validateDeploymentEnvironmentVariable(line, effectiveConfigurationNames)}
+                onChange={(environmentVariables: string[] | undefined) =>
+                  set((prev) => ({
+                    spec: {
+                      ...prev.spec!,
+                      environmentVariables: environmentVariables ?? [],
+                    },
+                  }))
+                }
+              />
+            ),
+          }),
+          defineField({
             key: 'spec.updateBehavior',
             label: 'Auto Update',
             description: 'Define how the platform handles new image versions.',
@@ -693,7 +776,7 @@ export const DeploymentForm = ({
         ],
       }),
     }),
-    [provider, currentPlatformId, currentSpec.image, mode, id],
+    [provider, currentPlatformId, currentSpec.image, mode, id, effectiveConfigurationNames],
   );
 
   return (

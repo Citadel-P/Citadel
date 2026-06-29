@@ -1,8 +1,10 @@
 ﻿using Application.Features.Deployments.Notifications;
 using Application.Mappers;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Configuration;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
@@ -47,7 +49,8 @@ internal class ApplyStackService(
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IGitStackMaterializer gitStackMaterializer,
     IConfigurationResolver configurationResolver,
-    ISecretRedactor secretRedactor) : IApplyStackService
+    ISecretRedactor secretRedactor,
+    IAlertService alertService) : IApplyStackService
 {
     public async IAsyncEnumerable<StackStreamItem> ApplyAsync(
         Guid stackId,
@@ -166,6 +169,7 @@ internal class ApplyStackService(
         string? composeFileContent;
         string? environmentFilePath;
         IReadOnlyList<string>? environmentVariables;
+        IReadOnlyList<string>? sourceEnvironmentVariables = null;
         string? sourceWorkingDirectory = null;
         IReadOnlyList<string>? sourceComposeFilePaths = null;
         IReadOnlyList<string>? sourceEnvFilePaths = null;
@@ -179,6 +183,7 @@ internal class ApplyStackService(
         {
             var message = configurationError.Message;
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            await ProcessConfigurationFailureAlertAsync(stack.Id, stack.Name, message, ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
@@ -187,7 +192,7 @@ internal class ApplyStackService(
         {
             composeFileContent = StackComposeLabelInjector.Inject(currentManualStack.ComposeFile, stack.Id, currentRelease.Id);
             environmentFilePath = currentManualStack.EnvFilePath;
-            environmentVariables = resolvedConfiguration.EnvironmentVariables;
+            environmentVariables = [];
         }
         else if (stackSpec is GitStack gitStack)
         {
@@ -211,7 +216,8 @@ internal class ApplyStackService(
 
             composeFileContent = null;
             environmentFilePath = payload.EnvFilePath;
-            environmentVariables = [.. payload.EnvironmentVariables, .. resolvedConfiguration.EnvironmentVariables];
+            sourceEnvironmentVariables = payload.EnvironmentVariables;
+            environmentVariables = sourceEnvironmentVariables;
             sourceWorkingDirectory = payload.SourceWorkingDirectory;
             sourceComposeFilePaths = payload.SourceComposeFilePaths;
             sourceEnvFilePaths = payload.SourceEnvFilePaths;
@@ -244,10 +250,14 @@ internal class ApplyStackService(
             composeFileContent,
             sourceComposeFilePaths,
             ct);
+        var selectedConfiguration = resolvedConfiguration.SelectEntries(referencedConfigurationKeys);
+        environmentVariables = sourceEnvironmentVariables is { Count: > 0 }
+            ? [.. sourceEnvironmentVariables, .. selectedConfiguration.EnvironmentVariables]
+            : selectedConfiguration.EnvironmentVariables;
 
         yield return StackStreamItem.SystemMessage(
             ConfigurationApplyMessageBuilder.BuildComposeInterpolationMessage(
-                resolvedConfiguration,
+                selectedConfiguration,
                 referencedConfigurationKeys,
                 sourceEnvFilePaths?.Count ?? 0),
             0);
@@ -288,9 +298,9 @@ internal class ApplyStackService(
                 var next = await TryReadNextAsync(enumerator);
                 if (next.ErrorMessage is not null)
                 {
-                    var safeError = secretRedactor.Redact(next.ErrorMessage, resolvedConfiguration.RedactionValues);
+                    var safeError = secretRedactor.Redact(next.ErrorMessage, selectedConfiguration.RedactionValues);
                     await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
-                    await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, safeError, operation: operation, source: releaseSource, ct: ct);
+                    await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, safeError, operation: operation, source: releaseSource, configuration: selectedConfiguration.SnapshotEntries, ct: ct);
                     yield return StackStreamItem.FromStdErr(safeError, exitCode ?? 1);
                     yield break;
                 }
@@ -304,7 +314,7 @@ internal class ApplyStackService(
 
                 if (!string.IsNullOrWhiteSpace(result.Message))
                 {
-                    var safeMessage = secretRedactor.Redact(result.Message, resolvedConfiguration.RedactionValues);
+                    var safeMessage = secretRedactor.Redact(result.Message, selectedConfiguration.RedactionValues);
                     if (result.Type == StackApplyEventType.SystemMessage)
                     {
                         yield return StackStreamItem.SystemMessage(safeMessage, result.ExitCode ?? 0);
@@ -337,7 +347,7 @@ internal class ApplyStackService(
                             : $"❌ Pipeline command failed with exit code {result.ExitCode}.";
 
                         await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
-                        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, operation: operation, source: releaseSource, ct: ct);
+                        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, operation: operation, source: releaseSource, configuration: selectedConfiguration.SnapshotEntries, ct: ct);
                         yield return StackStreamItem.FromStdErr($"❌ {explicitFailure}", result.ExitCode.Value);
                         yield break;
                     }
@@ -355,7 +365,7 @@ internal class ApplyStackService(
             if (!string.IsNullOrEmpty(errorMessage))
             {
                 await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
-                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, operation: operation, source: releaseSource, ct: ct);
+                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, operation: operation, source: releaseSource, configuration: selectedConfiguration.SnapshotEntries, ct: ct);
                 yield return StackStreamItem.FromStdErr($"❌ {errorMessage}", exitCode ?? 1 );
                 yield break;
             }
@@ -390,7 +400,8 @@ internal class ApplyStackService(
                     notificationQueue,
                     operation,
                     previousStackSnapshot,
-                    releaseSource),
+                    releaseSource,
+                    selectedConfiguration.SnapshotEntries),
                 ct);
 
             yield return StackStreamItem.SystemMessage("✅ Stack is now running.", 0);
@@ -402,7 +413,7 @@ internal class ApplyStackService(
             : (exitCode is int code ? $"❌ docker compose exited with code {code}." : "❌ Stack apply did not report a completion exit code.");
 
         await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
-        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, operation: operation, source: releaseSource, ct: ct);
+        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, operation: operation, source: releaseSource, configuration: selectedConfiguration.SnapshotEntries, ct: ct);
 
         yield return StackStreamItem.FromStdErr(finalFailureMessage, exitCode ?? 1);
     }
@@ -553,6 +564,24 @@ internal class ApplyStackService(
             SourceEnvFilePaths: sourceEnvFilePaths,
             LabelsOverrideFilePath: labelsOverrideFilePath,
             GeneratedFilesDirectory: generatedFilesDirectory);
+
+    private Task ProcessConfigurationFailureAlertAsync(Guid stackId, string stackName, string reason, CancellationToken ct)
+    {
+        var context = new AlertEvaluationContext(
+            UtcNow: DateTime.UtcNow,
+            Platforms: [],
+            Deployments: [],
+            Stacks: [],
+            StackConfigurationFailures:
+            [
+                new StackConfigurationResolutionFailureAlertSnapshot(
+                    stackId,
+                    stackName,
+                    reason)
+            ]);
+
+        return alertService.ProcessAsync(AlertType.StackConfigurationResolutionFailed, context, ct);
+    }
 
     private static async Task<IReadOnlySet<string>> GetReferencedConfigurationKeysAsync(
         string? composeFileContent,
@@ -715,6 +744,7 @@ internal class ApplyStackService(
         StackApplyOperation operation,
         StackSnapshot? previousStackSnapshot = null,
         StackReleaseSource? source = null,
+        IReadOnlyList<ConfigurationSnapshotEntry>? configuration = null,
         CancellationToken ct = default)
         => dbWorkQueue.EnqueueAsync(
             new UpdateStackStatusWorkItem(
@@ -727,12 +757,13 @@ internal class ApplyStackService(
                 notificationQueue,
                 operation,
                 previousStackSnapshot,
-                source),
+                source,
+                configuration),
             ct);
 }
 
 internal sealed class UpdateStackStatusWorkItem(Guid stackId, Guid actorId, StackReleaseStatus status, string? message, IStackStreamManager stackHub,
-    IActivityStreamManager activityHub, INotificationQueue notificationQueue, StackApplyOperation operation, StackSnapshot? previousStackSnapshot = null, StackReleaseSource? source = null) : IDbWorkItem
+    IActivityStreamManager activityHub, INotificationQueue notificationQueue, StackApplyOperation operation, StackSnapshot? previousStackSnapshot = null, StackReleaseSource? source = null, IReadOnlyList<ConfigurationSnapshotEntry>? configuration = null) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -762,7 +793,7 @@ internal sealed class UpdateStackStatusWorkItem(Guid stackId, Guid actorId, Stac
                                 operation,
                                 previousStackSnapshot,
                                 stack.ToSnapshot(),
-                                new StackResultSnapshot(null, Helpers.RemoveAnsiSequences(message ?? "")))
+                                new StackResultSnapshot(null, Helpers.RemoveAnsiSequences(message ?? ""), configuration))
                             );
 
             await uow.ActivityEventRepository.AddAsync(activity, ct);
@@ -793,7 +824,8 @@ internal sealed class StackSucceededWorkItem(
     INotificationQueue notificationQueue,
     StackApplyOperation operation,
     StackSnapshot? previousStackSnapshot = null,
-    StackReleaseSource? source = null) : IDbWorkItem
+    StackReleaseSource? source = null,
+    IReadOnlyList<ConfigurationSnapshotEntry>? configuration = null) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -818,6 +850,7 @@ internal sealed class StackSucceededWorkItem(
             }
         }
 
+        stack.CurrentStackRelease.UpdateConfiguration(configuration);
         stack.ReleaseProcessing(StackReleaseStatus.Healthy);
 
         var platformId = stack.CurrentStackRelease.PlatformId;
@@ -871,7 +904,7 @@ internal sealed class StackSucceededWorkItem(
                             operation,
                             previousStackSnapshot,
                             stack.ToSnapshot(),
-                            new StackResultSnapshot(containerIds, operation == StackApplyOperation.Rollback ? "Stack rolled back successfully." : "Stack applied successfully."))
+                            new StackResultSnapshot(containerIds, operation == StackApplyOperation.Rollback ? "Stack rolled back successfully." : "Stack applied successfully.", configuration))
                         );
 
         await uow.ActivityEventRepository.AddAsync(activity, ct);

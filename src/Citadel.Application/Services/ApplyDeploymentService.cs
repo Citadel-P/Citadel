@@ -1,17 +1,22 @@
 using Application.Features.Deployments.Notifications;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Configuration;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
 using Domain.Entities.Activities;
+using Domain.Entities.Configuration;
 using Domain.Entities.Deployments;
 using Hosting.Common;
+using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 
 namespace Application.Services;
 
@@ -20,7 +25,7 @@ internal interface IApplyDeploymentService
     IAsyncEnumerable<DeploymentStreamItem> ApplyAsync(Guid deploymentId, Guid actorId, bool recreate, CancellationToken ct);
 }
 
-internal sealed class ApplyDeploymentService(
+internal sealed partial class ApplyDeploymentService(
     IDbWorkQueue dbWorkQueue,
     IServiceScopeFactory scopeFactory,
     IPullImageService pullImageService,
@@ -29,6 +34,7 @@ internal sealed class ApplyDeploymentService(
     IPlatformContainerCache platformCache,
     IConfigurationResolver configurationResolver,
     ISecretRedactor secretRedactor,
+    IAlertService alertService,
     IDeploymentStreamManager deploymentHub,
     IActivityStreamManager activityHub,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
@@ -135,22 +141,33 @@ internal sealed class ApplyDeploymentService(
         {
             var safeMessage = configurationError.Message;
             await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, ct: ct);
+            await ProcessConfigurationFailureAlertAsync(deployment.Id, deployment.Name, safeMessage, ct);
             yield return Error(400, safeMessage);
             yield break;
         }
 
-        yield return Info(ConfigurationApplyMessageBuilder.BuildDeploymentEnvironmentMessage(resolvedConfiguration));
+        var injectedConfiguration = resolvedConfiguration.SelectEntries(GetReferencedConfigurationNames(deployment.Spec.EnvironmentVariables ?? []));
+        var environmentResult = BuildDeploymentEnvironmentVariables(deployment, injectedConfiguration);
+        if (environmentResult.IsFailure(out var environmentError, out var environmentVariables))
+        {
+            var safeMessage = environmentError.Message;
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, configuration: injectedConfiguration.SnapshotEntries, ct: ct);
+            yield return Error(400, safeMessage);
+            yield break;
+        }
+
+        yield return Info(ConfigurationApplyMessageBuilder.BuildDeploymentEnvironmentMessage(injectedConfiguration));
 
         yield return Info($"Applying deployment to {platform.Address}...");
 
         var connector = deploymentConnectorFactory.GetConnector(platform.ConnectorType);
-        var commandToApply = BuildApplyCommand(deployment, platform.Address, imageId, resolvedConfiguration.EnvironmentVariables);
+        var commandToApply = BuildApplyCommand(deployment, platform.Address, imageId, environmentVariables);
 
         var result = await connector.ApplyDeploymentAsync(commandToApply, ct);
         if (!result.IsSuccess(out var deploymentResult, out var error))
         {
-            var safeMessage = secretRedactor.Redact(error.Message, resolvedConfiguration.RedactionValues);
-            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, ct: ct);
+            var safeMessage = secretRedactor.Redact(error.Message, injectedConfiguration.RedactionValues);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, configuration: injectedConfiguration.SnapshotEntries, ct: ct);
             yield return Error(500, safeMessage);
             yield break;
         }
@@ -162,7 +179,7 @@ internal sealed class ApplyDeploymentService(
         if (deploymentResult.DeployedContainerState != DeployedContainerState.Running)
         {
             var message = $"Deployment failed: container did not start successfully - Container state: {deploymentResult.DeployedContainerState}";
-            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, deploymentResult.ContainerId, autoUpdateState, ct);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, deploymentResult.ContainerId, autoUpdateState, injectedConfiguration.SnapshotEntries, ct);
             yield return Error(422, message);
             yield break;
         }
@@ -176,7 +193,8 @@ internal sealed class ApplyDeploymentService(
                 autoUpdateState,
                 deploymentHub,
                 activityHub,
-                notificationQueue),
+                notificationQueue,
+                injectedConfiguration.SnapshotEntries),
             ct);
 
         yield return Info("✅ Deployment is now running.");
@@ -205,6 +223,120 @@ internal sealed class ApplyDeploymentService(
             Spec: deployment.Spec with { ResourceSpec = normalized },
             EnvironmentVariables: environmentVariables);
     }
+
+    private Task ProcessConfigurationFailureAlertAsync(Guid deploymentId, string deploymentName, string reason, CancellationToken ct)
+    {
+        var context = new AlertEvaluationContext(
+            UtcNow: DateTime.UtcNow,
+            Platforms: [],
+            Deployments: [],
+            Stacks: [],
+            DeploymentConfigurationFailures:
+            [
+                new DeploymentConfigurationResolutionFailureAlertSnapshot(
+                    deploymentId,
+                    deploymentName,
+                    reason)
+            ]);
+
+        return alertService.ProcessAsync(AlertType.DeploymentConfigurationResolutionFailed, context, ct);
+    }
+
+    private static Result<IReadOnlyList<string>> BuildDeploymentEnvironmentVariables(
+        Deployment deployment,
+        ResolvedConfiguration configuration)
+    {
+        var configured = deployment.Spec?.EnvironmentVariables ?? [];
+        if (configured.Count == 0)
+            return Array.Empty<string>();
+
+        var values = configuration.ToValueDictionary();
+        var result = new List<string>(configured.Count);
+
+        foreach (var rawLine in configured)
+        {
+            var line = rawLine.Trim();
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
+                continue;
+
+            var separator = line.IndexOf('=');
+            if (separator < 0)
+            {
+                if (!IsValidEnvironmentName(line))
+                    return Result.Failure<IReadOnlyList<string>>($"Deployment environment key '{line}' is not valid.");
+
+                if (!values.TryGetValue(line, out var value))
+                    return Result.Failure<IReadOnlyList<string>>($"Deployment environment key '{line}' is not defined in Variables.");
+
+                result.Add($"{line}={value}");
+                continue;
+            }
+
+            var name = line[..separator].Trim();
+            var template = line[(separator + 1)..];
+            if (!IsValidEnvironmentName(name))
+                return Result.Failure<IReadOnlyList<string>>($"Deployment environment key '{name}' is not valid.");
+
+            var valueResult = InterpolateEnvironmentTemplate(template, values);
+            if (valueResult.IsFailure(out var interpolationError, out var interpolatedValue))
+                return Result.Failure<IReadOnlyList<string>>(interpolationError.Message);
+
+            result.Add($"{name}={interpolatedValue}");
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<string> GetReferencedConfigurationNames(IEnumerable<string> configured)
+    {
+        foreach (var rawLine in configured)
+        {
+            var line = rawLine.Trim();
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
+                continue;
+
+            var separator = line.IndexOf('=');
+            if (separator < 0)
+            {
+                yield return line;
+                continue;
+            }
+
+            foreach (Match match in EnvironmentReferenceRegex().Matches(line[(separator + 1)..]))
+            {
+                yield return match.Groups["name"].Value;
+            }
+        }
+    }
+
+    private static Result<string> InterpolateEnvironmentTemplate(string template, IReadOnlyDictionary<string, string> values)
+    {
+        var missingName = string.Empty;
+        var interpolated = EnvironmentReferenceRegex().Replace(template, match =>
+        {
+            var name = match.Groups["name"].Value;
+            if (!values.TryGetValue(name, out var value))
+            {
+                missingName = name;
+                return match.Value;
+            }
+
+            return value;
+        });
+
+        return string.IsNullOrEmpty(missingName)
+            ? interpolated
+            : Result.Failure<string>($"Deployment environment reference '{missingName}' is not defined in Variables.");
+    }
+
+    private static bool IsValidEnvironmentName(string name)
+        => EnvironmentNameRegex().IsMatch(name);
+
+    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled)]
+    private static partial Regex EnvironmentNameRegex();
+
+    [GeneratedRegex(@"\$\{(?<name>[A-Za-z_][A-Za-z0-9_]*)\}", RegexOptions.Compiled)]
+    private static partial Regex EnvironmentReferenceRegex();
 
     private static DeploymentStreamItem Info(string message)
         => new(ProgressMessage: message);
@@ -240,7 +372,15 @@ internal sealed class ApplyDeploymentService(
             RemoteDigest: remoteDigest);
     }
 
-    private ValueTask EnqueueStatus(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, string? containerId = null, AutoUpdateState? autoUpdateState = null, CancellationToken ct = default) 
+    private ValueTask EnqueueStatus(
+        Guid deploymentId,
+        Guid actorId,
+        DeploymentStatus status,
+        string? message,
+        string? containerId = null,
+        AutoUpdateState? autoUpdateState = null,
+        IReadOnlyList<ConfigurationSnapshotEntry>? configuration = null,
+        CancellationToken ct = default)
         => dbWorkQueue.EnqueueAsync(
             new UpdateDeploymentStatusWorkItem(
                 deploymentId,
@@ -251,7 +391,8 @@ internal sealed class ApplyDeploymentService(
                 autoUpdateState,
                 deploymentHub,
                 activityHub,
-                notificationQueue),
+                notificationQueue,
+                configuration),
             ct);
     
     private async Task<Deployment?> LoadDeployment(Guid id, CancellationToken ct)
@@ -287,7 +428,7 @@ internal sealed class ApplyDeploymentService(
 }
 
 internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, string? containerId, AutoUpdateState? autoUpdateState, IDeploymentStreamManager deploymentHub,
-    IActivityStreamManager activityHub, INotificationQueue notificationQueue) : IDbWorkItem
+    IActivityStreamManager activityHub, INotificationQueue notificationQueue, IReadOnlyList<ConfigurationSnapshotEntry>? configuration) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -320,7 +461,7 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
                             resourceName: deployment.Name,
                             status: ActivityStatus.Failure,
                             eventType: ActivityEventType.DeploymentApplied,
-                            info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot(null, message))
+                            info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot(null, message, configuration))
                             );
 
             await uow.ActivityEventRepository.AddAsync(activity, ct);
@@ -345,7 +486,8 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
 internal sealed class DeploymentSucceededWorkItem(
     Guid deploymentId, Guid actorId, string containerId, string imageDigest, AutoUpdateState? autoUpdateState, 
     IDeploymentStreamManager deploymentHub, IActivityStreamManager activityHub, 
-    INotificationQueue notificationQueue) : IDbWorkItem
+    INotificationQueue notificationQueue,
+    IReadOnlyList<ConfigurationSnapshotEntry>? configuration) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -378,7 +520,7 @@ internal sealed class DeploymentSucceededWorkItem(
                         resourceName: deployment.Name,
                         status: ActivityStatus.Success,
                         eventType: ActivityEventType.DeploymentApplied,
-                        info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot([containerId]))
+                        info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot([containerId], Configuration: configuration))
                         );
 
         await uow.ActivityEventRepository.AddAsync(activity, ct);

@@ -1,5 +1,7 @@
+using Domain;
 using Domain.Entities.Configuration;
 using Infrastructure.Persistence.Dtos;
+using System.Text.Json;
 
 namespace Infrastructure.Persistence.Mappers;
 
@@ -43,4 +45,22 @@ internal static class ConfigurationMappers
             CreatedAt = dto.CreatedAt,
             UpdatedAt = dto.UpdatedAt
         };
+
+    internal static SecretProvider ToDomain(this SecretProviderDto dto)
+    {
+        var configuration = JsonSerializer.Deserialize(
+            dto.Configuration,
+            ConfigurationJsonContext.Default.VaultKvV2SecretProviderConfiguration)
+            ?? throw new InvalidOperationException("Secret provider configuration is invalid.");
+
+        return new SecretProvider(
+            Name: dto.Name,
+            ProviderType: Enum.Parse<SecretProviderType>(dto.ProviderType),
+            Configuration: configuration)
+        {
+            Id = dto.Id,
+            CreatedAt = dto.CreatedAt,
+            UpdatedAt = dto.UpdatedAt
+        };
+    }
 }

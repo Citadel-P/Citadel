@@ -37,6 +37,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IStackRepository Stacks { get; }
     IConfigurationEntryRepository ConfigurationEntries { get; }
     ISecretDefinitionRepository SecretDefinitions { get; }
+    ISecretProviderRepository SecretProviders { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
@@ -61,6 +62,31 @@ public interface ISecretDefinitionRepository
     Task<SecretDefinition?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<SecretDefinition>> GetAllAsync(CancellationToken cancellationToken);
     Task<InternalSecretValue?> GetInternalValueAsync(Guid secretId, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
+}
+
+public interface ISecretProviderRepository
+{
+    Task<int> AddAsync(SecretProvider provider, CancellationToken cancellationToken);
+    Task<SecretProvider?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<SecretProvider>> GetAllAsync(CancellationToken cancellationToken);
+    Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
+}
+
+public interface IExternalSecretProviderClient
+{
+    Task<ExternalSecretValueResult> ResolveAsync(
+        SecretDefinition secret,
+        SecretProvider provider,
+        string token,
+        CancellationToken cancellationToken);
+}
+
+public sealed record ExternalSecretValueResult(bool IsSuccess, string? Value, string? ErrorMessage)
+{
+    public static ExternalSecretValueResult Success(string value) => new(true, value, null);
+
+    public static ExternalSecretValueResult Failure(string errorMessage) => new(false, null, errorMessage);
 }
 
 public interface IActorRepository

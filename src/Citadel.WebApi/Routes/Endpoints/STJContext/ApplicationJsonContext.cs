@@ -75,6 +75,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(SecretDeliveryMode?))]
 [JsonSerializable(typeof(SecretProviderType))]
 [JsonSerializable(typeof(SecretProviderType?))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
+[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
 [JsonSerializable(typeof(ActorType))]
 [JsonSerializable(typeof(ActorType?))]
 [JsonSerializable(typeof(TargetResource))]
@@ -351,6 +353,12 @@ namespace Application.Models;
 [JsonSerializable(typeof(SecretDefinitionView))]
 [JsonSerializable(typeof(SecretDefinitionsView))]
 [JsonSerializable(typeof(CreateInternalSecretInput))]
+[JsonSerializable(typeof(CreateExternalSecretInput))]
+[JsonSerializable(typeof(TestExternalSecretInput))]
+[JsonSerializable(typeof(ExternalSecretTestResultView))]
+[JsonSerializable(typeof(SecretProviderView))]
+[JsonSerializable(typeof(SecretProvidersView))]
+[JsonSerializable(typeof(CreateVaultKvV2SecretProviderInput))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

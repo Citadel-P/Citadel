@@ -88,4 +88,13 @@ internal sealed class SecretDefinitionRepository(IDbConnection db, Func<IDbTrans
 
         return result?.ToDomain();
     }
+
+    public Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM SecretDefinitions WHERE lower(Name) = lower(@Name))";
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new { Name = name },
+            transaction: tx());
+    }
 }

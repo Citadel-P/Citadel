@@ -13657,6 +13657,25 @@
         ],
         "summary": "List secret definitions",
         "operationId": "listSecretDefinitions",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Optional resource configuration scope",
+            "schema": {
+              "$ref": "#/components/schemas/ConfigurationScope"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "query",
+            "description": "Optional resource ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "500": {
             "description": "Internal Server Error",
@@ -13723,6 +13742,200 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SecretDefinitionView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/configuration/secrets/external": {
+      "post": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Create an external secret definition",
+        "operationId": "createExternalSecret",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExternalSecretInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretDefinitionView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/configuration/secrets/external/test": {
+      "post": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Test an external secret reference",
+        "operationId": "testExternalSecret",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestExternalSecretInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalSecretTestResultView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/configuration/secret-providers": {
+      "get": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "List secret providers",
+        "operationId": "listSecretProviders",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretProvidersView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/configuration/secret-providers/vault-kv2": {
+      "post": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Create a Vault-compatible KV v2 secret provider",
+        "operationId": "createVaultKvV2SecretProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVaultKvV2SecretProviderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretProviderView"
                 }
               }
             }
@@ -17506,6 +17719,12 @@
             "$ref": "#/components/schemas/AlertEventInfoStackGitAutoDeployFailedAlertInfo"
           },
           {
+            "$ref": "#/components/schemas/AlertEventInfoStackConfigurationResolutionFailedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoDeploymentConfigurationResolutionFailedAlertInfo"
+          },
+          {
             "$ref": "#/components/schemas/AlertEventInfoWebhookAuthenticationFailedAlertInfo"
           },
           {
@@ -17539,6 +17758,8 @@
             "StackGitUpdateAvailable": "#/components/schemas/AlertEventInfoStackGitUpdateAvailableAlertInfo",
             "StackGitAutoUpdated": "#/components/schemas/AlertEventInfoStackGitAutoUpdatedAlertInfo",
             "StackGitAutoDeployFailed": "#/components/schemas/AlertEventInfoStackGitAutoDeployFailedAlertInfo",
+            "StackConfigurationResolutionFailed": "#/components/schemas/AlertEventInfoStackConfigurationResolutionFailedAlertInfo",
+            "DeploymentConfigurationResolutionFailed": "#/components/schemas/AlertEventInfoDeploymentConfigurationResolutionFailedAlertInfo",
             "WebhookAuthenticationFailed": "#/components/schemas/AlertEventInfoWebhookAuthenticationFailedAlertInfo",
             "WebhookDispatchFailed": "#/components/schemas/AlertEventInfoWebhookDispatchFailedAlertInfo",
             "WebhookGitRepoSyncFailed": "#/components/schemas/AlertEventInfoWebhookGitRepoSyncFailedAlertInfo",
@@ -17592,6 +17813,32 @@
             "type": "string"
           },
           "updatedImage": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoDeploymentConfigurationResolutionFailedAlertInfo": {
+        "required": [
+          "deploymentName",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentConfigurationResolutionFailed"
+            ],
+            "type": "string"
+          },
+          "deploymentName": {
+            "type": "string"
+          },
+          "reason": {
             "type": "string"
           },
           "humanMessage": {
@@ -17775,6 +18022,32 @@
             "items": {
               "$ref": "#/components/schemas/StackImageUpdateItem"
             }
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackConfigurationResolutionFailedAlertInfo": {
+        "required": [
+          "stackName",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackConfigurationResolutionFailed"
+            ],
+            "type": "string"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
           },
           "humanMessage": {
             "type": [
@@ -18992,6 +19265,8 @@
           "StackGitUpdateAvailable",
           "StackGitAutoUpdated",
           "StackGitAutoDeployFailed",
+          "StackConfigurationResolutionFailed",
+          "DeploymentConfigurationResolutionFailed",
           "WebhookAuthenticationFailed",
           "WebhookDispatchFailed",
           "WebhookGitRepoSyncFailed",
@@ -19243,6 +19518,16 @@
             "items": {
               "$ref": "#/components/schemas/ConfigurationEntryView"
             }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
           }
         }
       },
@@ -19364,6 +19649,115 @@
           "Stack",
           "Deployment"
         ]
+      },
+      "ConfigurationSnapshotEntry": {
+        "required": [
+          "name",
+          "kind",
+          "scope",
+          "resourceId",
+          "value",
+          "secretId",
+          "secretName",
+          "secretProviderType",
+          "secretProviderName",
+          "externalPath",
+          "externalKey",
+          "externalVersion",
+          "secretDeliveryMode",
+          "targetPath"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConfigurationEntryKind"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ConfigurationScope"
+          },
+          "resourceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "secretId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "secretName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "secretProviderType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SecretProviderType"
+              }
+            ]
+          },
+          "secretProviderName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "externalPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "externalKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "externalVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "secretDeliveryMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SecretDeliveryMode"
+              }
+            ]
+          },
+          "targetPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
       },
       "ContainerConfiguration": {
         "required": [
@@ -20486,6 +20880,40 @@
           }
         }
       },
+      "CreateExternalSecretInput": {
+        "required": [
+          "name",
+          "providerId",
+          "externalPath",
+          "externalKey",
+          "externalVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "externalPath": {
+            "type": "string"
+          },
+          "externalKey": {
+            "type": "string"
+          },
+          "externalVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "CreateGitRepositoryInput": {
         "required": [
           "name",
@@ -20859,6 +21287,29 @@
           }
         }
       },
+      "CreateVaultKvV2SecretProviderInput": {
+        "required": [
+          "name",
+          "address",
+          "mountPath",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "mountPath": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
       "CreateVolumeInput": {
         "required": [
           "platformId",
@@ -21209,6 +21660,7 @@
           "canOpenTerminal",
           "canPull",
           "canApply",
+          "canViewConfiguration",
           "canRead",
           "canWrite",
           "canExecute"
@@ -21228,6 +21680,9 @@
             "type": "boolean"
           },
           "canApply": {
+            "type": "boolean"
+          },
+          "canViewConfiguration": {
             "type": "boolean"
           },
           "canRead": {
@@ -21354,6 +21809,15 @@
               "null",
               "string"
             ]
+          },
+          "configuration": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+            }
           }
         }
       },
@@ -21464,6 +21928,15 @@
             }
           },
           "command": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "environmentVariables": {
             "type": [
               "null",
               "array"
@@ -22294,6 +22767,21 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ExternalSecretTestResultView": {
+        "required": [
+          "success",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
           }
         }
       },
@@ -26814,7 +27302,8 @@
       },
       "SecretDefinitionsView": {
         "required": [
-          "secrets"
+          "secrets",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -26823,15 +27312,59 @@
             "items": {
               "$ref": "#/components/schemas/SecretDefinitionView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },
       "SecretDeliveryMode": { },
-      "SecretProviderType": {
-        "enum": [
-          "InternalEncrypted",
-          "VaultCompatibleKvV2"
-        ]
+      "SecretProviderType": { },
+      "SecretProviderView": {
+        "required": [
+          "id",
+          "name",
+          "providerType",
+          "address",
+          "mountPath",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "providerType": {
+            "$ref": "#/components/schemas/SecretProviderType"
+          },
+          "address": {
+            "type": "string"
+          },
+          "mountPath": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "SecretProvidersView": {
+        "required": [
+          "providers"
+        ],
+        "type": "object",
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SecretProviderView"
+            }
+          }
+        }
       },
       "SpecificPermission": {
         "enum": [
@@ -26840,7 +27373,9 @@
           "Inspect",
           "Apply",
           "Pull",
-          "Terminal"
+          "Terminal",
+          "Configuration",
+          "Releases"
         ]
       },
       "StackApplyEventType": {
@@ -26858,6 +27393,8 @@
           "canOpenTerminal",
           "canPull",
           "canApply",
+          "canViewConfiguration",
+          "canViewReleases",
           "canRead",
           "canWrite",
           "canExecute"
@@ -26877,6 +27414,12 @@
             "type": "boolean"
           },
           "canApply": {
+            "type": "boolean"
+          },
+          "canViewConfiguration": {
+            "type": "boolean"
+          },
+          "canViewReleases": {
             "type": "boolean"
           },
           "canRead": {
@@ -27424,6 +27967,15 @@
                 "$ref": "#/components/schemas/StackReleaseSource"
               }
             ]
+          },
+          "configuration": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+            }
           }
         }
       },
@@ -27543,6 +28095,7 @@
           "version",
           "spec",
           "source",
+          "configuration",
           "createdAt",
           "createdByActorId",
           "actorName",
@@ -27580,6 +28133,15 @@
                 "$ref": "#/components/schemas/StackReleaseSource"
               }
             ]
+          },
+          "configuration": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+            }
           },
           "createdAt": {
             "format": "date-time"
@@ -27636,6 +28198,15 @@
               "null",
               "string"
             ]
+          },
+          "configuration": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+            }
           }
         }
       },
@@ -28101,6 +28672,15 @@
               }
             ]
           },
+          "configuration": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+            }
+          },
           "platformStatus": {
             "$ref": "#/components/schemas/PlatformStatus"
           },
@@ -28329,6 +28909,36 @@
           },
           "capabilities": {
             "$ref": "#/components/schemas/ResourceCapabilities"
+          }
+        }
+      },
+      "TestExternalSecretInput": {
+        "required": [
+          "providerId",
+          "externalPath",
+          "externalKey",
+          "externalVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "externalPath": {
+            "type": "string"
+          },
+          "externalKey": {
+            "type": "string"
+          },
+          "externalVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

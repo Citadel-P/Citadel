@@ -479,6 +479,22 @@ public static class PublicEndpoints
         configuration.MapPost("secrets", ConfigurationEntries.CreateInternalSecret)
             .WithName("createInternalSecret")
             .WithSummary("Create an internal encrypted secret");
+
+        configuration.MapPost("secrets/external", ConfigurationEntries.CreateExternalSecret)
+            .WithName("createExternalSecret")
+            .WithSummary("Create an external secret definition");
+
+        configuration.MapPost("secrets/external/test", ConfigurationEntries.TestExternalSecret)
+            .WithName("testExternalSecret")
+            .WithSummary("Test an external secret reference");
+
+        configuration.MapGet("secret-providers", ConfigurationEntries.ListSecretProviders)
+            .WithName("listSecretProviders")
+            .WithSummary("List secret providers");
+
+        configuration.MapPost("secret-providers/vault-kv2", ConfigurationEntries.CreateVaultKvV2SecretProvider)
+            .WithName("createVaultKvV2SecretProvider")
+            .WithSummary("Create a Vault-compatible KV v2 secret provider");
     }
 
     private static void MapAuthEndpoints(RouteGroupBuilder auth)

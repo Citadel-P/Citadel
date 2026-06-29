@@ -10,7 +10,9 @@ public class Permission
         (int)SpecificPermission.Logs |
         (int)SpecificPermission.Terminal |
         (int)SpecificPermission.Pull |
-        (int)SpecificPermission.Inspect;
+        (int)SpecificPermission.Inspect |
+        (int)SpecificPermission.Configuration |
+        (int)SpecificPermission.Releases;
 
     public Guid Id { get; private set; }
     public Guid RoleId { get; private set; }
@@ -97,6 +99,12 @@ public class Permission
 
         if ((mask & (int)SpecificPermission.Inspect) != 0)
             permissions.Add(SpecificPermission.Inspect);
+
+        if ((mask & (int)SpecificPermission.Configuration) != 0)
+            permissions.Add(SpecificPermission.Configuration);
+
+        if ((mask & (int)SpecificPermission.Releases) != 0)
+            permissions.Add(SpecificPermission.Releases);
 
         return [.. permissions];
     }

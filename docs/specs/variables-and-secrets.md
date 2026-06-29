@@ -197,6 +197,50 @@ Secret plaintext must still live outside configuration entries.
 
 The materializer is the target-specific delivery layer. It decides how a resolved variable/secret reaches Docker Compose, Docker containers, Swarm, Kubernetes, or future targets.
 
+### Secret Definitions And Secret Keys
+
+The UI must make a clear distinction between a stored secret and a runtime secret key.
+
+A `SecretDefinition` is the stored secret source:
+
+- internal encrypted value, or
+- external provider reference, for example Vault/OpenBao KV v2 path/key/version.
+
+A secret `ConfigurationEntry` is the runtime key exposed to a stack or deployment. It points to a `SecretDefinition` through `SecretId`.
+
+Example:
+
+```text
+SecretDefinition:
+  Name = prod-db-password
+  Provider = Internal
+
+ConfigurationEntry:
+  Name = POSTGRES_PASSWORD
+  Kind = Secret
+  SecretId = prod-db-password
+  SecretDeliveryMode = EnvironmentVariable
+```
+
+In this example, compose files reference `${POSTGRES_PASSWORD}`. Citadel resolves the value from `prod-db-password` during apply and never exposes the plaintext after creation.
+
+This is effectively a secret-backed configuration key. It can behave like an alias in the MVP, but it is intentionally modeled separately because:
+
+- one stored secret can be reused under different runtime names
+- external provider names/paths do not have to match compose environment keys
+- delivery metadata can evolve later, for example mounted files or native platform secrets
+- stack/deployment overrides can change the runtime key mapping without changing the stored secret
+
+UI wording should avoid exposing the domain term "binding" as the primary user action. Prefer:
+
+- `Add variable`
+- `Add secret key`
+- `Create stored secret`
+
+Implementation may still use "binding" internally because the configuration entry is a binding from runtime key to stored secret.
+
+Stored secret names must be unique case-insensitively. Duplicate stored secret names make the default key flow ambiguous and should be rejected before provider lookup or value persistence.
+
 ## Spec Changes
 
 Stacks and deployments currently expose:
@@ -320,7 +364,7 @@ public enum SecretProviderType
 }
 ```
 
-For Vault/OpenBao KV v2, use the generic `VaultCompatibleKvV2` name.
+For Vault/OpenBao KV v2, use the generic `VaultCompatibleKvV2` name. This should support Vault, OpenBao, and compatible KV v2 APIs that expose the same read shape.
 
 Provider config:
 
@@ -339,7 +383,7 @@ public sealed class SecretProvider
 }
 ```
 
-For MVP, support token auth only. The provider token must be stored as an internal encrypted secret.
+For MVP, support token auth only. The provider token must be encrypted at rest and must not be returned after creation. If the implementation stores provider credentials directly on the provider record, the value must still use the same encryption/redaction rules as internal secrets.
 
 Vault KV v2 read shape:
 
@@ -349,7 +393,57 @@ Header: X-Vault-Token: <token>
 Value: response.data.data[externalKey]
 ```
 
+Field mapping:
+
+```text
+Provider Address = https://vault.example.com
+Provider MountPath = secret
+Secret ExternalPath = apps/api/prod
+Secret ExternalKey = stripe_api_key
+Secret ExternalVersion = null | 3
+```
+
+The resolver reads:
+
+```text
+GET https://vault.example.com/v1/secret/data/apps/api/prod
+```
+
+or, when a version is pinned:
+
+```text
+GET https://vault.example.com/v1/secret/data/apps/api/prod?version=3
+```
+
+Important KV v2 rules:
+
+- `MountPath` is the KV engine mount, for example `secret`.
+- `ExternalPath` is the secret path inside the mount, for example `apps/api/prod`.
+- `ExternalKey` is the property inside the KV v2 `data.data` object.
+- `ExternalVersion` is optional. Empty means use the provider's latest version.
+- Do not include `/v1` in `MountPath`.
+- Do not include `/data` in `ExternalPath`; Citadel inserts the KV v2 `/data/` segment.
+- Trim leading/trailing slashes from `MountPath` and `ExternalPath`.
+
 Do not log the request auth header or response body.
+
+Provider validation:
+
+- provider name required
+- address required and must be an absolute HTTP or HTTPS URI
+- mount path required
+- token required for MVP token auth
+- external secret path required
+- external key required
+- external version, when provided, must be a positive integer
+
+Resolver failure behavior:
+
+- provider not found: fail apply safely
+- provider auth failure: fail apply safely with a redacted message
+- secret path not found: fail apply safely
+- key missing from the KV v2 payload: fail apply safely
+- provider response body must never be persisted in activity, alert, apply logs, or SignalR streams
 
 ## Resolver
 
@@ -417,12 +511,16 @@ MVP support:
 - `EnvironmentVariable` for deployments
 - `EnvironmentVariable` for stacks, materialized by the Docker Compose backend through a generated compose env file
 
+Unsupported delivery modes must fail validation and must also fail safely if bad persisted data reaches the resolver. Do not silently downgrade `MountedFile` or `NativePlatformSecret` to environment variables.
+
 Future support:
 
 - mounted file
 - Docker Compose secret wiring as a materializer implementation detail
 - Docker Swarm secrets
 - Kubernetes Secret resources
+
+`MountedFile` is the next delivery mode to implement after the environment-variable path is stable. It requires a separate materialization contract for generated secret files, target path validation, file permissions, Compose bind/secret wiring, cleanup, redaction, and release snapshot metadata.
 
 ## Stack Behavior
 
@@ -433,24 +531,28 @@ Manual stack flow:
 1. Load current stack spec.
 2. Resolve effective variables and secrets for the stack.
 3. Inject Citadel labels into compose content.
-4. Build an environment list for Docker Compose.
-5. Pass the environment list to the existing generated env file path.
-6. Redact secret values from stack apply output.
-7. Delete generated files containing secrets after apply.
+4. Detect Citadel keys referenced by compose interpolation expressions.
+5. Build an environment list for Docker Compose from referenced Citadel keys only.
+6. Persist only the referenced Citadel keys in the stack release configuration snapshot.
+7. Pass the environment list to the existing generated env file path.
+8. Redact selected secret values from stack apply output.
+9. Delete generated files containing secrets after apply.
 
 Git stack flow:
 
 1. Materialize Git source at the resolved commit.
 2. Resolve effective variables and secrets for the stack.
-3. Merge repo env files and Citadel-generated values.
-4. Citadel-generated values should take precedence over repo env file values.
-5. Pass resolved values to the generated env file path.
-6. Redact secret values from output.
-7. Do not persist plaintext secrets in `StackReleaseSource`, release snapshots, or activity events.
+3. Detect Citadel keys referenced by materialized compose files.
+4. Merge repo env files and referenced Citadel-generated values.
+5. Citadel-generated values should take precedence over repo env file values.
+6. Pass resolved values to the generated env file path.
+7. Persist only the referenced Citadel keys in the stack release configuration snapshot.
+8. Redact selected secret values from output.
+9. Do not persist plaintext secrets in `StackReleaseSource`, release snapshots, or activity events.
 
 For Docker Compose, users should still write `${NAME}` placeholders. Citadel should generate the env file and let Docker Compose perform interpolation.
 
-The stack config tab is where users reference variables in compose content. The stack Variables & Secrets tab is where users view inherited global entries and define stack overrides.
+The stack config tab is where users reference variables in compose content. The stack Variables & Secrets tab is where users manage stack-local entries and explicit overrides. Inherited global entries are resolved at deploy time but are not listed in every resource tab.
 
 ## Deployment Behavior
 
@@ -460,10 +562,12 @@ Deployment flow:
 
 1. Load current deployment spec.
 2. Resolve effective variables and secrets for the deployment.
-3. Convert resolved entries to Docker container environment entries.
-4. Build `ApplyDeploymentCommand`.
-5. Apply the deployment through the existing deployment connector.
-6. Redact secret values from apply errors, activity events, alert events, logs, and SignalR streams.
+3. Detect Citadel keys referenced by the deployment environment configuration.
+4. Convert referenced entries to Docker container environment entries.
+5. Persist only the referenced Citadel keys in apply activity/result snapshots.
+6. Build `ApplyDeploymentCommand`.
+7. Apply the deployment through the existing deployment connector.
+8. Redact selected secret values from apply errors, activity events, alert events, logs, and SignalR streams.
 
 For deployments, resolved values should be materialized as:
 
@@ -550,6 +654,8 @@ Responsibilities:
 Do not log resolved secret values.
 
 Redaction should be best-effort for text streams, but persistence rules must be strict: never persist plaintext secret values intentionally.
+
+When multiple resolved secret values overlap, the redactor must process longest values first. For example, `abc123` must be masked before `abc` so partial redaction cannot leave suffixes visible.
 
 ## Access Control
 
@@ -648,11 +754,11 @@ Stack
   Variables & Secrets
 ```
 
-The tab shows the effective stack configuration:
+The tab manages only stack-scoped configuration entries.
 
-- global entries inherited by the stack
-- stack-scoped entries
-- stack overrides of global entries
+Do not list every inherited global entry in the stack tab. Citadel may have hundreds or thousands of global variables, and repeating them on every resource page creates noise and unnecessary query/render cost.
+
+Global entries remain discoverable and editable on the global `Variables` page. The stack tab may show a compact summary and link to that page, but the table itself should stay focused on stack-local values.
 
 The stack `Config` tab remains the place where the user edits compose content and references variables with `${NAME}`.
 
@@ -660,7 +766,6 @@ Stack copy:
 
 - title: `Variables & Secrets`
 - description: `Values available to Docker Compose at deploy time. Reference them in compose files as ${NAME}.`
-- global helper: `Inherited from global configuration.`
 - override helper: `Stack values override global values with the same name.`
 - secret helper: `Secrets resolve only during deploy and are never shown in plaintext.`
 
@@ -668,24 +773,17 @@ Recommended table columns:
 
 - Name
 - Kind
-- Effective Source
 - Value / Reference
 - Delivery
 - Actions
 
-Source badges:
-
-- `Global`
-- `Stack`
-- `Override`
-
 Behavior:
 
-- inherited global entries are read-only from the stack tab
 - stack entries can be added/edited/deleted from the stack tab
-- clicking `Override` on a global entry creates a stack-scoped entry with the same name
-- deleting a stack override reveals the global value again
-- the effective value preview should clearly show which value will be used at deploy time
+- adding a stack entry with the same name as a global entry creates an explicit override
+- deleting a stack override makes the global value effective again at deploy time
+- global entries are not edited or listed from the stack tab
+- the config summary can show counts of effective variables/secrets, but it should not expand into a full inherited table
 
 The stack form should no longer show `Env File Path` as a primary user field for Citadel-managed variables. The generated env file path is an implementation detail. If an advanced override remains useful, keep it under an advanced deploy/materialization setting, not in the main config.
 
@@ -704,15 +802,14 @@ Deployment copy:
 
 - title: `Variables & Secrets`
 - description: `Values injected into the container environment at deploy time.`
-- global helper: `Inherited from global configuration.`
 - override helper: `Deployment values override global values with the same name.`
 
 Deployment behavior:
 
-- inherited global entries are read-only from the deployment tab
 - deployment entries can be added/edited/deleted from the deployment tab
-- clicking `Override` on a global entry creates a deployment-scoped entry with the same name
-- deleting a deployment override reveals the global value again
+- adding a deployment entry with the same name as a global entry creates an explicit override
+- deleting a deployment override makes the global value effective again at deploy time
+- global entries are not edited or listed from the deployment tab
 
 ### Config Tab Integration
 
@@ -787,6 +884,8 @@ Provider test endpoints must not return secret values.
 
 Snapshots should show configuration metadata safely.
 
+The shared snapshot contract is `ConfigurationSnapshotEntry` under `Domain.Contracts.Resources.Configuration`. It is not the canonical configuration entry; it is a deployment-time evidence record used by activity events, stack releases, deployment result snapshots, and API views.
+
 Allowed:
 
 - variable names and values
@@ -808,6 +907,8 @@ Stack releases and deployment snapshots should contain enough metadata to unders
 
 For global entries, snapshots should record the effective metadata used at apply time. This is important because a later global variable edit should not rewrite the meaning of an older release snapshot.
 
+Stack releases persist the safe `ConfigurationSnapshotEntry` list on the release row. Release preview and rollback views should read this persisted snapshot instead of re-resolving current global/resource configuration.
+
 Snapshot rules:
 
 - variable values are copied into snapshots
@@ -823,6 +924,13 @@ Add minimal alert events only when useful:
 - secret resolution failed
 - secret provider authentication failed
 - secret provider unavailable
+
+MVP alert types:
+
+- `StackConfigurationResolutionFailed`
+- `DeploymentConfigurationResolutionFailed`
+
+These alerts are emitted when stack/deployment apply cannot resolve the effective variables/secrets for that resource. The failure reason must be safe for users and notifications. It may include the configuration key or provider name, but must not include plaintext secret values, provider tokens, auth headers, or raw provider response bodies.
 
 Avoid noisy alerts for successful secret resolution.
 
@@ -874,8 +982,8 @@ For deployments, validation should ensure every configured entry can be converte
 - Add global `Variables & Secrets` page.
 - Add stack `Variables & Secrets` tab.
 - Add deployment `Variables & Secrets` tab.
-- Add effective configuration table with `Global`, `Stack`/`Deployment`, and `Override` badges.
-- Add override/remove override flows.
+- Keep resource tab tables local-only; do not list inherited global entries on every resource.
+- Add explicit override support by allowing resource entries with the same key as global entries.
 - Add config-tab summaries and compose autocomplete/validation.
 - Mask existing secrets.
 
@@ -921,8 +1029,8 @@ Backend tests should cover:
 Frontend tests are recommended for:
 
 - masked secret display
-- effective source badges
-- override/create/delete override flows
+- local resource create/edit/delete flows
+- explicit override behavior when a local key matches a global key
 - global page create/edit/delete
 - preview diff masking
 - stack compose autocomplete from effective variables/secrets

@@ -32,6 +32,9 @@ internal sealed class CreateInternalSecretHandler(IUnitOfWork unitOfWork, ISecre
 {
     public async ValueTask<Result<SecretDefinition>> Handle(CreateInternalSecret command, CancellationToken cancellationToken)
     {
+        if (await unitOfWork.SecretDefinitions.ExistsByNameAsync(command.Name, cancellationToken))
+            return Result.Failure<SecretDefinition>(new ConflictError("Name already exists"));
+
         var secret = new SecretDefinition(command.Name, SecretProviderType.InternalEncrypted);
         try
         {

@@ -67,7 +67,8 @@ public sealed record DeploymentCapabilities(
     bool CanInspect,
     bool CanOpenTerminal,
     bool CanPull,
-    bool CanApply
+    bool CanApply,
+    bool CanViewConfiguration
 ) : ResourceCapabilities(
     CanRead,
     CanWrite,
@@ -81,7 +82,9 @@ public sealed record StackCapabilities(
     bool CanInspect,
     bool CanOpenTerminal,
     bool CanPull,
-    bool CanApply
+    bool CanApply,
+    bool CanViewConfiguration,
+    bool CanViewReleases
 ) : ResourceCapabilities(
     CanRead,
     CanWrite,
@@ -193,7 +196,11 @@ public static class CapabilityMapper
 
             CanApply:
                 common.CanRead &&
-                (permission.SpecificPermissions & SpecificPermission.Apply) != 0
+                (permission.SpecificPermissions & SpecificPermission.Apply) != 0,
+
+            CanViewConfiguration:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Configuration) != 0
         );
     }
 
@@ -225,7 +232,15 @@ public static class CapabilityMapper
 
             CanApply:
                 common.CanRead &&
-                (permission.SpecificPermissions & SpecificPermission.Apply) != 0
+                (permission.SpecificPermissions & SpecificPermission.Apply) != 0,
+
+            CanViewConfiguration:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Configuration) != 0,
+
+            CanViewReleases:
+                common.CanRead &&
+                (permission.SpecificPermissions & SpecificPermission.Releases) != 0
         );
     }
 

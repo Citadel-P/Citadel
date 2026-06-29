@@ -6,7 +6,9 @@ export type CapabilityKey =
   | 'canInspect'
   | 'canViewLogs'
   | 'canOpenTerminal'
-  | 'canPull';
+  | 'canPull'
+  | 'canViewConfiguration'
+  | 'canViewReleases';
 
 type ResourceWithCapabilities = {
   capabilities?: null | Partial<Record<CapabilityKey, boolean>>;

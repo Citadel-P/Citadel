@@ -45,6 +45,9 @@ internal static class StackMappers
                 source: string.IsNullOrWhiteSpace(dto.CurrentRelease_Source)
                     ? null
                     : JsonSerializer.Deserialize(dto.CurrentRelease_Source, StackJsonContext.Default.StackReleaseSource),
+                configuration: string.IsNullOrWhiteSpace(dto.CurrentRelease_Configuration)
+                    ? null
+                    : JsonSerializer.Deserialize(dto.CurrentRelease_Configuration, StackJsonContext.Default.IReadOnlyListConfigurationSnapshotEntry),
                 createdAt: dto.CurrentRelease_CreatedAt!.Value,
                 createdByActorId: dto.CurrentRelease_CreatedByActorId!.Value,
                 platform: platform);
@@ -117,6 +120,9 @@ internal static class StackMappers
             source: string.IsNullOrWhiteSpace(dto.Source)
                 ? null
                 : JsonSerializer.Deserialize(dto.Source, StackJsonContext.Default.StackReleaseSource),
+            configuration: string.IsNullOrWhiteSpace(dto.Configuration)
+                ? null
+                : JsonSerializer.Deserialize(dto.Configuration, StackJsonContext.Default.IReadOnlyListConfigurationSnapshotEntry),
             createdAt: dto.CreatedAt,
             createdByActorId: dto.CreatedByActorId,
             platform: platform,

@@ -13,3 +13,16 @@ public sealed record ConfigurationEntryInput(
 public sealed record ConfigurationEntriesResult(
     IReadOnlyList<ConfigurationEntry> Entries,
     IReadOnlyList<ConfigurationEntry> EffectiveEntries);
+
+public sealed record CreateExternalSecretInputModel(
+    string Name,
+    Guid ProviderId,
+    string ExternalPath,
+    string ExternalKey,
+    int? ExternalVersion);
+
+public sealed record CreateVaultKvV2SecretProviderInputModel(
+    string Name,
+    string Address,
+    string MountPath,
+    string Token);

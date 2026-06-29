@@ -104,7 +104,8 @@ export const StackFormComponents: RequiredFormComponents = {
         },
       },
       {
-        label: 'Environment',
+        label: 'Variables',
+        disabled: (resource: StackView): boolean => !hasCapability(resource, 'canViewConfiguration'),
         Content: ({ resource }: { resource: StackView }) => {
           return (
             <ConfigurationEntriesTab
@@ -124,6 +125,7 @@ export const StackFormComponents: RequiredFormComponents = {
       },
       {
         label: 'Releases',
+        disabled: (resource: StackView): boolean => !hasCapability(resource, 'canViewReleases'),
         Content: ({ resource }: { resource: StackView }) => {
           return <StackReleasesTab stack={resource} />;
         },
@@ -376,6 +378,7 @@ const createStackPreviewConfig = (stack: StackView) => ({
   stackSource: stack.stackSource,
   platformId: stack.platformId,
   spec: stack.spec,
+  configuration: stack.configuration,
 });
 
 const createStackReleasePreviewConfig = (stack: StackView, release: StackReleaseView) => ({
@@ -384,6 +387,7 @@ const createStackReleasePreviewConfig = (stack: StackView, release: StackRelease
   stackSource: stack.stackSource,
   platformId: release.platformId,
   spec: release.spec,
+  configuration: release.configuration,
 });
 
 const StackReleaseActorCell = ({ release }: { release: StackReleaseView }) => (

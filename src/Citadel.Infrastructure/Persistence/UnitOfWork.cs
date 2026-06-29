@@ -40,6 +40,7 @@ internal class UnitOfWork : IUnitOfWork
         GitRepositories = new Lazy<IGitReposRepository>(() => new GitReposRepository(connection, GetTransaction));
         ConfigurationEntries = new Lazy<IConfigurationEntryRepository>(() => new ConfigurationEntryRepository(connection, GetTransaction));
         SecretDefinitions = new Lazy<ISecretDefinitionRepository>(() => new SecretDefinitionRepository(connection, GetTransaction));
+        SecretProviders = new Lazy<ISecretProviderRepository>(() => new SecretProviderRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -59,6 +60,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IGitReposRepository> GitRepositories { get; }
     private Lazy<IConfigurationEntryRepository> ConfigurationEntries { get; }
     private Lazy<ISecretDefinitionRepository> SecretDefinitions { get; }
+    private Lazy<ISecretProviderRepository> SecretProviders { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
     private Lazy<IActivityEventRepository> ActivityEvents { get; }
@@ -85,6 +87,7 @@ internal class UnitOfWork : IUnitOfWork
     IActivityEventRepository IUnitOfWork.ActivityEventRepository => ActivityEvents.Value;
     IConfigurationEntryRepository IUnitOfWork.ConfigurationEntries => ConfigurationEntries.Value;
     ISecretDefinitionRepository IUnitOfWork.SecretDefinitions => SecretDefinitions.Value;
+    ISecretProviderRepository IUnitOfWork.SecretProviders => SecretProviders.Value;
 
     // Lazily creates a transaction
     private IDbTransaction GetTransaction()

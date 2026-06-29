@@ -57,7 +57,7 @@ public class StackServiceTests
         Assert.Equal(workingDirectory, invocation.WorkingDirectory);
         Assert.Equal("prod", invocation.EnvironmentVariables["APP_ENV"]);
         var generatedEnvFile = Path.Combine(generatedDirectory, ".env");
-        Assert.True(File.Exists(generatedEnvFile));
+        Assert.False(File.Exists(generatedEnvFile));
         Assert.Equal(
             [
                 "compose",
@@ -128,6 +128,42 @@ public class StackServiceTests
                 Assert.Equal("prod", up.EnvironmentVariables["APP_ENV"]);
                 Assert.EndsWith("up -d", string.Join(' ', up.Arguments));
             });
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_Should_Delete_Generated_Docker_Config_After_Apply()
+    {
+        using var temp = new TempDirectory();
+        var generatedDirectory = Path.Combine(temp.Path, "citadel");
+        Directory.CreateDirectory(generatedDirectory);
+
+        var executor = new CapturingCommandExecutor();
+        var service = new StackService(executor);
+
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: "services:\n  app:\n    image: nginx",
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: "registry-token",
+            RegistryName: "ghcr",
+            RegistryHost: "https://ghcr.io",
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            ServiceNames: null,
+            PullImages: false,
+            GeneratedFilesDirectory: generatedDirectory);
+
+        await foreach (var _ in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+        {
+        }
+
+        var invocation = Assert.Single(executor.Invocations);
+        Assert.NotNull(invocation.DockerConfigDirectory);
+        Assert.False(Directory.Exists(invocation.DockerConfigDirectory));
     }
 
     private sealed class CapturingCommandExecutor : ICommandExecutor

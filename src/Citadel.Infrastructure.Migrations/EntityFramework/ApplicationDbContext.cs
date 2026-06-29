@@ -33,6 +33,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .RoleConfiguration()
             .ActorRoleConfiguration()
             .ConfigurationEntryConfiguration()
+            .SecretProviderConfiguration()
             .SecretDefinitionConfiguration()
             .InternalSecretValueConfiguration()
             .DeploymentConfiguration()
@@ -805,7 +806,35 @@ internal static class Configuration
         secret.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         secret.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+        secret
+            .HasOne("SecretProvider")
+            .WithMany()
+            .HasForeignKey("ProviderId")
+            .OnDelete(DeleteBehavior.Restrict);
+
         secret.HasIndex("Name").HasDatabaseName($"IX_{tableName}_Name");
+        secret.HasIndex("ProviderId").HasDatabaseName($"IX_{tableName}_ProviderId");
+
+        return builder;
+    }
+
+    public static ModelBuilder SecretProviderConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "SecretProviders";
+        var provider = builder.Entity("SecretProvider");
+
+        provider.ToTable(tableName);
+
+        provider.Property<Guid>("Id").IsRequired();
+        provider.HasKey("Id");
+
+        provider.Property<string>("Name").HasColumnType(Text).IsRequired();
+        provider.Property<string>("ProviderType").HasColumnType(Text).IsRequired();
+        provider.Property<string>("Configuration").HasColumnType(Text).IsRequired();
+        provider.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        provider.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        provider.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
 
         return builder;
     }
@@ -1064,6 +1093,7 @@ internal static class Configuration
         release.Property<string>("Version").HasColumnType(Text).IsRequired();
         release.Property<string>("Spec").HasColumnType(Json).IsRequired();
         release.Property<string>("Source").HasColumnType(Json).IsRequired(false);
+        release.Property<string>("Configuration").HasColumnType(Json).IsRequired(false);
 
         release.AddAuditedMemebers();
 

@@ -95,6 +95,38 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
     }
 
     [Fact]
+    public async Task Resource_Configuration_Should_Reject_Unsupported_Secret_Delivery_Mode()
+    {
+        var createSecretResponse = await Client.PostAsJsonAsync(
+            "/api/v1/configuration/secrets",
+            new { name = "FILE_SECRET", value = "super-secret-value" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        createSecretResponse.EnsureSuccessStatusCode();
+
+        var secretJson = await JsonDocument.ParseAsync(
+            await createSecretResponse.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+        var secretId = secretJson.RootElement.GetProperty("id").GetGuid();
+
+        var resourceJson = $$"""
+        {
+          "entries": [
+            { "name": "FILE_SECRET", "kind": "Secret", "value": null, "secretId": "{{secretId}}", "secretDeliveryMode": "MountedFile", "targetPath": "/run/secrets/file_secret" }
+          ]
+        }
+        """;
+
+        var replaceResponse = await Client.PutAsync(
+            $"/api/v1/configuration/Stack/{_stackId}",
+            new StringContent(resourceJson, Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, replaceResponse.StatusCode);
+        var responseBody = await replaceResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Only environment variable secret delivery is supported", responseBody);
+    }
+
+    [Fact]
     public async Task Resource_Configuration_Should_Return_Forbidden_Without_Target_Resource_Permission()
     {
         var subject = await CreateAuthorizationSubjectAsync();
@@ -122,5 +154,34 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Scoped_Secret_Definitions_Should_Use_Target_Resource_Configuration_Permission()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(
+                    ResourceType.Stack,
+                    _stackId,
+                    PermissionLevel.Read,
+                    SpecificPermission.Configuration)
+            ]);
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var scopedResponse = await Client.GetAsync(
+            $"/api/v1/configuration/secrets?scope=Stack&resourceId={_stackId}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, scopedResponse.StatusCode);
+
+        var globalResponse = await Client.GetAsync(
+            "/api/v1/configuration/secrets",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, globalResponse.StatusCode);
     }
 }

@@ -1,5 +1,6 @@
 using Application.Configs;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Configuration;
 using Domain.Entities.Configuration;
 using Hosting.Common;
 using LightResults;
@@ -27,7 +28,10 @@ internal interface ISecretRedactor
     string Redact(string? value, IEnumerable<string> secrets);
 }
 
-internal sealed partial class ConfigurationResolver(IServiceScopeFactory scopeFactory, ISecretValueProtector secretValueProtector) : IConfigurationResolver
+internal sealed partial class ConfigurationResolver(
+    IServiceScopeFactory scopeFactory,
+    ISecretValueProtector secretValueProtector,
+    IExternalSecretProviderClient externalSecretProviderClient) : IConfigurationResolver
 {
     private static readonly Regex NameRegex = GetNameRegex();
 
@@ -40,6 +44,7 @@ internal sealed partial class ConfigurationResolver(IServiceScopeFactory scopeFa
         var effective = MergeEffective(entries);
         var environment = new Dictionary<string, string>(StringComparer.Ordinal);
         var resolvedEntries = new List<ResolvedConfigurationEntry>();
+        var snapshotEntries = new List<ConfigurationSnapshotEntry>();
         var redactionValues = new List<string>();
         var variableCount = 0;
         var secretCount = 0;
@@ -64,24 +69,27 @@ internal sealed partial class ConfigurationResolver(IServiceScopeFactory scopeFa
                 var variableValue = entry.Value ?? string.Empty;
                 environment[entry.Name] = variableValue;
                 resolvedEntries.Add(new ResolvedConfigurationEntry(entry.Name, entry.Kind, variableValue));
+                snapshotEntries.Add(entry.ToVariableSnapshot(variableValue));
                 continue;
             }
 
             secretCount++;
+            if (entry.SecretDeliveryMode != SecretDeliveryMode.EnvironmentVariable)
+                return Result.Failure<ResolvedConfiguration>(
+                    $"Secret {entry.Name} uses delivery mode {entry.SecretDeliveryMode}, which is not supported yet.");
+
             var secret = await uow.SecretDefinitions.GetAsync(entry.SecretId!.Value, cancellationToken);
             if (secret is null)
                 return Result.Failure<ResolvedConfiguration>($"Secret {entry.Name} is not available.");
 
-            if (secret.ProviderType != SecretProviderType.InternalEncrypted)
-                return Result.Failure<ResolvedConfiguration>($"Secret provider {secret.ProviderType} is not implemented.");
+            var plaintextResult = await ResolveSecretPlaintextAsync(uow, entry.Name, secret, cancellationToken);
+            if (!plaintextResult.IsSuccess(out var resolvedSecret, out var plaintextError))
+                return Result.Failure<ResolvedConfiguration>(plaintextError!);
 
-            var value = await uow.SecretDefinitions.GetInternalValueAsync(secret.Id, cancellationToken);
-            if (value is null)
-                return Result.Failure<ResolvedConfiguration>($"Secret {entry.Name} is not available.");
-
-            var plaintext = secretValueProtector.Unprotect(value.EncryptedValue);
+            var plaintext = resolvedSecret.Plaintext;
             environment[entry.Name] = plaintext;
             resolvedEntries.Add(new ResolvedConfigurationEntry(entry.Name, entry.Kind, plaintext, secret.Name));
+            snapshotEntries.Add(entry.ToSecretSnapshot(secret, resolvedSecret.Provider));
             if (!string.IsNullOrEmpty(plaintext))
             {
                 redactionValues.Add(plaintext);
@@ -93,7 +101,59 @@ internal sealed partial class ConfigurationResolver(IServiceScopeFactory scopeFa
             Entries: resolvedEntries,
             RedactionValues: [.. redactionValues],
             VariableCount: variableCount,
-            SecretCount: secretCount);
+            SecretCount: secretCount)
+        {
+            SnapshotEntries = snapshotEntries
+        };
+    }
+
+    private async Task<Result<ResolvedSecretPlaintext>> ResolveSecretPlaintextAsync(
+        IUnitOfWork uow,
+        string entryName,
+        SecretDefinition secret,
+        CancellationToken cancellationToken)
+    {
+        if (secret.ProviderType == SecretProviderType.InternalEncrypted)
+        {
+            var value = await uow.SecretDefinitions.GetInternalValueAsync(secret.Id, cancellationToken);
+            if (value is null)
+                return Result.Failure<ResolvedSecretPlaintext>($"Secret {entryName} is not available.");
+
+            var plaintext = UnprotectSecret(value.EncryptedValue, $"Secret {entryName} could not be decrypted.");
+            return plaintext.IsSuccess(out var valuePlaintext, out var error)
+                ? new ResolvedSecretPlaintext(valuePlaintext, null)
+                : Result.Failure<ResolvedSecretPlaintext>(error!);
+        }
+
+        if (secret.ProviderId is null)
+            return Result.Failure<ResolvedSecretPlaintext>($"Secret {entryName} does not reference a provider.");
+
+        var provider = await uow.SecretProviders.GetAsync(secret.ProviderId.Value, cancellationToken);
+        if (provider is null)
+            return Result.Failure<ResolvedSecretPlaintext>($"Secret provider for {entryName} is not available.");
+
+        var tokenResult = UnprotectSecret(
+            provider.Configuration.ProtectedToken,
+            $"Secret provider token for {entryName} could not be decrypted.");
+        if (!tokenResult.IsSuccess(out var token, out var tokenError))
+            return Result.Failure<ResolvedSecretPlaintext>(tokenError!);
+
+        var result = await externalSecretProviderClient.ResolveAsync(secret, provider, token, cancellationToken);
+        return result.IsSuccess
+            ? new ResolvedSecretPlaintext(result.Value ?? string.Empty, provider)
+            : Result.Failure<ResolvedSecretPlaintext>(result.ErrorMessage ?? $"Secret {entryName} could not be resolved.");
+    }
+
+    private Result<string> UnprotectSecret(string protectedValue, string failureMessage)
+    {
+        try
+        {
+            return secretValueProtector.Unprotect(protectedValue);
+        }
+        catch (Exception ex) when (ex is FormatException or CryptographicException)
+        {
+            return Result.Failure<string>(failureMessage);
+        }
     }
 
     private static IReadOnlyList<ConfigurationEntry> MergeEffective(IEnumerable<ConfigurationEntry> entries)
@@ -172,7 +232,10 @@ internal sealed class SecretRedactor : ISecretRedactor
             return string.Empty;
 
         var redacted = value;
-        foreach (var secret in secrets.Where(x => !string.IsNullOrEmpty(x)).Distinct(StringComparer.Ordinal))
+        foreach (var secret in secrets
+            .Where(x => !string.IsNullOrEmpty(x))
+            .Distinct(StringComparer.Ordinal)
+            .OrderByDescending(x => x.Length))
         {
             redacted = redacted.Replace(secret, "********", StringComparison.Ordinal);
         }
@@ -186,10 +249,40 @@ internal sealed record ResolvedConfiguration(
     IReadOnlyList<ResolvedConfigurationEntry> Entries,
     IReadOnlyList<string> RedactionValues,
     int VariableCount,
-    int SecretCount);
+    int SecretCount)
+{
+    public IReadOnlyList<ConfigurationSnapshotEntry> SnapshotEntries { get; init; } = [];
+
+    public IReadOnlyDictionary<string, string> ToValueDictionary()
+        => Entries.ToDictionary(x => x.Name, x => x.Value, StringComparer.Ordinal);
+
+    public ResolvedConfiguration SelectEntries(IEnumerable<string> names)
+    {
+        var selectedNames = names.ToHashSet(StringComparer.Ordinal);
+        var selectedEntries = Entries.Where(entry => selectedNames.Contains(entry.Name)).ToArray();
+
+        return this with
+        {
+            Entries = selectedEntries,
+            EnvironmentVariables = [.. selectedEntries.Select(entry => $"{entry.Name}={entry.Value}")],
+            RedactionValues =
+            [
+                .. selectedEntries
+                    .Where(entry => entry.Kind == ConfigurationEntryKind.Secret)
+                    .Select(entry => entry.Value)
+                    .Where(value => !string.IsNullOrEmpty(value))
+            ],
+            SnapshotEntries = [.. SnapshotEntries.Where(entry => selectedNames.Contains(entry.Name))],
+            VariableCount = selectedEntries.Count(entry => entry.Kind == ConfigurationEntryKind.Variable),
+            SecretCount = selectedEntries.Count(entry => entry.Kind == ConfigurationEntryKind.Secret)
+        };
+    }
+}
 
 internal sealed record ResolvedConfigurationEntry(
     string Name,
     ConfigurationEntryKind Kind,
     string Value,
     string? SecretName = null);
+
+internal sealed record ResolvedSecretPlaintext(string Plaintext, SecretProvider? Provider);

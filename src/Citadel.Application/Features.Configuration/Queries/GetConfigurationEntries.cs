@@ -13,10 +13,10 @@ namespace Application.Features.Configuration.Queries;
 [RequirePermission(ResourceType.Configuration, PermissionLevel.Read)]
 public sealed record GetGlobalConfigurationEntries : IQuery<Result<ConfigurationEntriesResult>>;
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Read)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Read, SpecificPermission.Configuration)]
 public sealed record GetStackConfigurationEntries(Guid Id) : IQuery<Result<ConfigurationEntriesResult>>;
 
-[RequirePermission(ResourceType.Deployment, PermissionLevel.Read)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.Configuration)]
 public sealed record GetDeploymentConfigurationEntries(Guid Id) : IQuery<Result<ConfigurationEntriesResult>>;
 
 internal sealed class GetGlobalConfigurationEntriesHandler(IUnitOfWork unitOfWork)

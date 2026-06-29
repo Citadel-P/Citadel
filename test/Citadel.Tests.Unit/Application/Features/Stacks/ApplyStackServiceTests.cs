@@ -4,10 +4,12 @@ using System.Threading.Channels;
 using Process = System.Diagnostics.Process;
 using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 using Application.Services;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Configuration;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
@@ -142,15 +144,83 @@ public class ApplyStackServiceTests
                 containerConnectorFactory.Object,
                 gitStackMaterializer,
                 new StaticConfigurationResolver(new ResolvedConfiguration(
-                    ["APP_MODE=prod", "API_KEY=super-secret"],
+                    ["APP_MODE=prod", "API_KEY=super-secret", "UNUSED_FLAG=true", "UNUSED_SECRET=unused-secret"],
                     [
                         new ResolvedConfigurationEntry("APP_MODE", ConfigurationEntryKind.Variable, "prod"),
-                        new ResolvedConfigurationEntry("API_KEY", ConfigurationEntryKind.Secret, "super-secret")
+                        new ResolvedConfigurationEntry("API_KEY", ConfigurationEntryKind.Secret, "super-secret"),
+                        new ResolvedConfigurationEntry("UNUSED_FLAG", ConfigurationEntryKind.Variable, "true"),
+                        new ResolvedConfigurationEntry("UNUSED_SECRET", ConfigurationEntryKind.Secret, "unused-secret")
                     ],
-                    ["super-secret"],
-                    VariableCount: 1,
-                    SecretCount: 1)),
-                new PassThroughSecretRedactor());
+                    ["super-secret", "unused-secret"],
+                    VariableCount: 2,
+                    SecretCount: 2)
+                {
+                    SnapshotEntries =
+                    [
+                        new ConfigurationSnapshotEntry(
+                            Name: "APP_MODE",
+                            Kind: ConfigurationEntryKind.Variable,
+                            Scope: ConfigurationScope.Stack,
+                            ResourceId: stack.Id,
+                            Value: "prod",
+                            SecretId: null,
+                            SecretName: null,
+                            SecretProviderType: null,
+                            SecretProviderName: null,
+                            ExternalPath: null,
+                            ExternalKey: null,
+                            ExternalVersion: null,
+                            SecretDeliveryMode: null,
+                            TargetPath: null),
+                        new ConfigurationSnapshotEntry(
+                            Name: "API_KEY",
+                            Kind: ConfigurationEntryKind.Secret,
+                            Scope: ConfigurationScope.Stack,
+                            ResourceId: stack.Id,
+                            Value: "********",
+                            SecretId: Guid.CreateVersion7(),
+                            SecretName: "api-key",
+                            SecretProviderType: SecretProviderType.InternalEncrypted,
+                            SecretProviderName: null,
+                            ExternalPath: null,
+                            ExternalKey: null,
+                            ExternalVersion: null,
+                            SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
+                            TargetPath: null),
+                        new ConfigurationSnapshotEntry(
+                            Name: "UNUSED_FLAG",
+                            Kind: ConfigurationEntryKind.Variable,
+                            Scope: ConfigurationScope.Stack,
+                            ResourceId: stack.Id,
+                            Value: "true",
+                            SecretId: null,
+                            SecretName: null,
+                            SecretProviderType: null,
+                            SecretProviderName: null,
+                            ExternalPath: null,
+                            ExternalKey: null,
+                            ExternalVersion: null,
+                            SecretDeliveryMode: null,
+                            TargetPath: null),
+                        new ConfigurationSnapshotEntry(
+                            Name: "UNUSED_SECRET",
+                            Kind: ConfigurationEntryKind.Secret,
+                            Scope: ConfigurationScope.Stack,
+                            ResourceId: stack.Id,
+                            Value: "********",
+                            SecretId: Guid.CreateVersion7(),
+                            SecretName: "unused-secret",
+                            SecretProviderType: SecretProviderType.InternalEncrypted,
+                            SecretProviderName: null,
+                            ExternalPath: null,
+                            ExternalKey: null,
+                            ExternalVersion: null,
+                            SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
+                            TargetPath: null)
+                    ]
+                }),
+                new PassThroughSecretRedactor(),
+                Mock.Of<IAlertService>());
 
             var items = new List<StackStreamItem>();
             await foreach (var item in service.ApplyAsync(
@@ -180,10 +250,25 @@ public class ApplyStackServiceTests
             Assert.True(File.Exists(composePath));
             Assert.True(File.Exists(envPath));
             Assert.True(File.Exists(capturedCommand.LabelsOverrideFilePath));
+            Assert.Equal(["APP_MODE=prod", "API_KEY=super-secret"], capturedCommand.EnvironmentVariables);
             Assert.Equal(expectedCommit, stack.CurrentStackRelease?.Source?.ResolvedCommitSha);
             Assert.Equal(["stacks/app/compose.yml"], stack.CurrentStackRelease?.Source?.ComposePaths);
             Assert.Equal(["stacks/app/.env"], stack.CurrentStackRelease?.Source?.EnvFilePaths);
             Assert.Equal("stacks/app", stack.CurrentStackRelease?.Source?.WorkingDirectory);
+            Assert.Collection(
+                stack.CurrentStackRelease?.Configuration ?? [],
+                entry =>
+                {
+                    Assert.Equal("APP_MODE", entry.Name);
+                    Assert.Equal("prod", entry.Value);
+                },
+                entry =>
+                {
+                    Assert.Equal("API_KEY", entry.Name);
+                    Assert.Equal("********", entry.Value);
+                    Assert.Equal("api-key", entry.SecretName);
+                    Assert.Equal(SecretProviderType.InternalEncrypted, entry.SecretProviderType);
+                });
             Assert.Contains(
                 items,
                 item => item.ProgressMessage == "Resolved 1 variable APP_MODE=prod and 1 secret API_KEY for compose interpolation. Included 1 repo env file.");
@@ -363,7 +448,8 @@ public class ApplyStackServiceTests
             containerConnectorFactory.Object,
             gitStackMaterializer.Object,
             new EmptyConfigurationResolver(),
-            new PassThroughSecretRedactor());
+            new PassThroughSecretRedactor(),
+            Mock.Of<IAlertService>());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -394,6 +480,144 @@ public class ApplyStackServiceTests
         Assert.Contains(items, item => item.ExitCode == 0);
         gitStackMaterializer.Verify(x => x.ActivateCurrentAsync(stack.Id, snapshotRoot, It.IsAny<CancellationToken>()), Times.Once);
         gitStackMaterializer.Verify(x => x.DiscardSnapshotAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenGitStackMaterializationFails_Should_Not_Persist_Configuration_Snapshot()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var repositoryId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "git-stack",
+            createdByActorId: actorId,
+            StackSource: StackSource.Git,
+            platformId: platformId,
+            spec: new GitStack(
+                GitRepoId: repositoryId,
+                Branch: "main",
+                CommitSha: null,
+                UpdateBehavior: StackUpdateBehavior.Notify,
+                ComposePaths: ["missing-compose.yml"]));
+        var repository = new GitRepository(
+            name: "homelab",
+            description: null,
+            url: "https://github.com/org/homelab.git",
+            defaultBranch: "main",
+            gitAccountId: null,
+            createdByActorId: actorId);
+
+        ActivityEvent? activity = null;
+
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(stack);
+        stacks.Setup(x => x.GetContainerIdsAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        stacks.Setup(x => x.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(() => [stack.CurrentStackRelease!]);
+        stacks.Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetWithAccountAsync(repositoryId, It.IsAny<CancellationToken>())).ReturnsAsync(repository);
+
+        var containers = new Mock<IContainerRepository>();
+        containers.Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        var images = new Mock<IImageRepository>();
+        images.Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents
+            .Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<ActivityEvent, CancellationToken>((item, _) => activity = item)
+            .ReturnsAsync(1);
+        var actors = new Mock<IActorRepository>();
+        actors.Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>())).ReturnsAsync((Actor?)null);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.GitRepositories).Returns(gitRepos.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
+        unitOfWork.Setup(x => x.Images).Returns(images.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var services = new ServiceCollection()
+            .AddSingleton(unitOfWork.Object)
+            .BuildServiceProvider();
+
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(new Dictionary<string, DockerContainer>()));
+
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerConnectorFactory.Setup(x => x.GetConnector(PlatformConnectorType.Local)).Returns(containerConnector.Object);
+
+        var stackConnectorFactory = new Mock<IConnectorFactory<IStackConnector>>();
+        stackConnectorFactory.Setup(x => x.GetConnector(PlatformConnectorType.Local)).Returns(Mock.Of<IStackConnector>());
+
+        var gitStackMaterializer = new Mock<IGitStackMaterializer>();
+        gitStackMaterializer
+            .Setup(x => x.MaterializeAsync(stack, It.IsAny<GitStack>(), repository, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure<GitStackMaterializationResult>("compose path missing"));
+
+        var service = new ApplyStackService(
+            new InlineDbWorkQueue(unitOfWork.Object),
+            Mock.Of<IStackStreamManager>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            new TestPlatformContainerCache(new PlatformCacheEntry(
+                platformId,
+                "http://docker.local",
+                PlatformConnectorType.Local,
+                ImmutableDictionary<string, Guid>.Empty)),
+            stackConnectorFactory.Object,
+            containerConnectorFactory.Object,
+            gitStackMaterializer.Object,
+            new StaticConfigurationResolver(new ResolvedConfiguration(
+                ["API_KEY=super-secret"],
+                [new ResolvedConfigurationEntry("API_KEY", ConfigurationEntryKind.Secret, "super-secret")],
+                ["super-secret"],
+                VariableCount: 0,
+                SecretCount: 1)
+            {
+                SnapshotEntries =
+                [
+                    new ConfigurationSnapshotEntry(
+                        Name: "API_KEY",
+                        Kind: ConfigurationEntryKind.Secret,
+                        Scope: ConfigurationScope.Stack,
+                        ResourceId: stack.Id,
+                        Value: "********",
+                        SecretId: Guid.CreateVersion7(),
+                        SecretName: "api-key",
+                        SecretProviderType: SecretProviderType.InternalEncrypted,
+                        SecretProviderName: null,
+                        ExternalPath: null,
+                        ExternalKey: null,
+                        ExternalVersion: null,
+                        SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
+                        TargetPath: null)
+                ]
+            }),
+            new PassThroughSecretRedactor(),
+            Mock.Of<IAlertService>());
+
+        var items = new List<StackStreamItem>();
+        await foreach (var item in service.ApplyAsync(
+            stack.Id,
+            actorId,
+            serviceNames: null,
+            pullImages: true,
+            StackApplyOperation.Apply,
+            previousStackSnapshot: null,
+            TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        Assert.Contains(items, item => item.Message?.Contains("compose path missing", StringComparison.Ordinal) == true);
+        var applied = Assert.IsType<StackApplied>(activity?.Info);
+        Assert.Null(applied.Result.Configuration);
     }
 
     [Fact]
@@ -518,7 +742,8 @@ public class ApplyStackServiceTests
             containerConnectorFactory.Object,
             gitStackMaterializer.Object,
             new EmptyConfigurationResolver(),
-            new PassThroughSecretRedactor());
+            new PassThroughSecretRedactor(),
+            Mock.Of<IAlertService>());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -614,7 +839,8 @@ public class ApplyStackServiceTests
             containerConnectorFactory.Object,
             Mock.Of<IGitStackMaterializer>(),
             new EmptyConfigurationResolver(),
-            new PassThroughSecretRedactor());
+            new PassThroughSecretRedactor(),
+            Mock.Of<IAlertService>());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(

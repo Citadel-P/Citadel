@@ -20,7 +20,8 @@ public sealed record StackReleaseSnapshot(
     StackSpec Spec,
     Guid CreatedByActorId,
     string? Version,
-    StackReleaseSource? Source = null);
+    StackReleaseSource? Source = null,
+    IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration = null);
 
 public static class StackSnapshotExtensions
 {
@@ -48,7 +49,11 @@ public static class StackSnapshotExtensions
             Spec: stackRelease.Spec,
             CreatedByActorId: stackRelease.CreatedByActorId,
             Version: stackRelease.Version,
-            Source: stackRelease.Source);
+            Source: stackRelease.Source,
+            Configuration: stackRelease.Configuration);
 }
 
-public sealed record StackResultSnapshot(IEnumerable<string>? ContainerIds = null, string? Message = null);
+public sealed record StackResultSnapshot(
+    IEnumerable<string>? ContainerIds = null,
+    string? Message = null,
+    IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration = null);

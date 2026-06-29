@@ -45,13 +45,17 @@ public sealed record ReplaceGlobalConfigurationEntries(IReadOnlyList<Configurati
             {
                 RuleFor(x => x.Value).Null();
                 RuleFor(x => x.SecretId).NotNull();
-                RuleFor(x => x.SecretDeliveryMode).NotNull();
+                RuleFor(x => x.SecretDeliveryMode)
+                    .NotNull()
+                    .Equal(SecretDeliveryMode.EnvironmentVariable)
+                    .WithMessage("Only environment variable secret delivery is supported.");
+                RuleFor(x => x.TargetPath).Null();
             });
         }
     }
 }
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Write, SpecificPermission.Configuration)]
 public sealed record ReplaceStackConfigurationEntries(Guid Id, IReadOnlyList<ConfigurationEntryInput> Entries) : ICommand<Result<ConfigurationEntriesResult>>
 {
     internal sealed class Validator : AbstractValidator<ReplaceStackConfigurationEntries>
@@ -64,7 +68,7 @@ public sealed record ReplaceStackConfigurationEntries(Guid Id, IReadOnlyList<Con
     }
 }
 
-[RequirePermission(ResourceType.Deployment, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Write, SpecificPermission.Configuration)]
 public sealed record ReplaceDeploymentConfigurationEntries(Guid Id, IReadOnlyList<ConfigurationEntryInput> Entries) : ICommand<Result<ConfigurationEntriesResult>>
 {
     internal sealed class Validator : AbstractValidator<ReplaceDeploymentConfigurationEntries>
