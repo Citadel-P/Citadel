@@ -285,8 +285,16 @@ public class ConfigurationResolverTests
             Entries:
             [
                 new ResolvedConfigurationEntry("APP_MODE", ConfigurationEntryKind.Variable, "prod"),
-                new ResolvedConfigurationEntry("API_KEY", ConfigurationEntryKind.Secret, "plain-secret"),
-                new ResolvedConfigurationEntry("UNUSED_SECRET", ConfigurationEntryKind.Secret, "unused-secret")
+                new ResolvedConfigurationEntry(
+                    "API_KEY",
+                    ConfigurationEntryKind.Secret,
+                    "plain-secret",
+                    SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable),
+                new ResolvedConfigurationEntry(
+                    "UNUSED_SECRET",
+                    ConfigurationEntryKind.Secret,
+                    "unused-secret",
+                    SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable)
             ],
             RedactionValues: ["plain-secret", "unused-secret"],
             VariableCount: 1,
@@ -352,7 +360,52 @@ public class ConfigurationResolverTests
     }
 
     [Fact]
-    public async Task ResolveAsync_Should_Reject_Unsupported_Secret_Delivery_Mode()
+    public async Task ResolveAsync_Should_Resolve_Stack_Mounted_File_Secrets_Without_Environment_Variable()
+    {
+        var stackId = Guid.CreateVersion7();
+        var secretId = Guid.CreateVersion7();
+        var entry = new ConfigurationEntry(
+            Name: "API_KEY",
+            Kind: ConfigurationEntryKind.Secret,
+            Scope: ConfigurationScope.Stack,
+            ResourceId: stackId,
+            Value: null,
+            SecretId: secretId,
+            SecretDeliveryMode: SecretDeliveryMode.MountedFile,
+            TargetPath: "/run/secrets/api_key");
+        var secret = new SecretDefinition(
+            Name: "API_KEY",
+            ProviderType: SecretProviderType.InternalEncrypted)
+        {
+            Id = secretId
+        };
+        var encryptedSecret = new InternalSecretValue(secretId, "encrypted");
+        var resolver = CreateResolver(
+            [entry],
+            configureSecrets: secrets =>
+            {
+                secrets.Setup(x => x.GetAsync(secretId, It.IsAny<CancellationToken>())).ReturnsAsync(secret);
+                secrets.Setup(x => x.GetInternalValueAsync(secretId, It.IsAny<CancellationToken>())).ReturnsAsync(encryptedSecret);
+            },
+            unprotectedSecretValue: "plain-secret");
+
+        var result = await resolver.ResolveAsync(ConfigurationScope.Stack, stackId, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
+        Assert.Empty(resolved.EnvironmentVariables);
+        Assert.Equal(["plain-secret"], resolved.RedactionValues);
+        var entryResult = Assert.Single(resolved.Entries);
+        Assert.Equal("API_KEY", entryResult.Name);
+        Assert.Equal("plain-secret", entryResult.Value);
+        Assert.Equal(SecretDeliveryMode.MountedFile, entryResult.SecretDeliveryMode);
+        Assert.Equal("/run/secrets/api_key", entryResult.TargetPath);
+        var snapshot = Assert.Single(resolved.SnapshotEntries);
+        Assert.Equal(SecretDeliveryMode.MountedFile, snapshot.SecretDeliveryMode);
+        Assert.Equal("/run/secrets/api_key", snapshot.TargetPath);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_Should_Reject_Native_Platform_Secret_Delivery_Mode()
     {
         var stackId = Guid.CreateVersion7();
         var entry = new ConfigurationEntry(
@@ -362,6 +415,47 @@ public class ConfigurationResolverTests
             ResourceId: stackId,
             Value: null,
             SecretId: Guid.CreateVersion7(),
+            SecretDeliveryMode: SecretDeliveryMode.NativePlatformSecret);
+        var resolver = CreateResolver([entry]);
+
+        var result = await resolver.ResolveAsync(ConfigurationScope.Stack, stackId, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess(out _, out var error));
+        Assert.Contains("Native platform secret delivery is not supported", error.Message);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_Should_Reject_Mounted_File_Secrets_For_Deployments()
+    {
+        var deploymentId = Guid.CreateVersion7();
+        var entry = new ConfigurationEntry(
+            Name: "API_KEY",
+            Kind: ConfigurationEntryKind.Secret,
+            Scope: ConfigurationScope.Deployment,
+            ResourceId: deploymentId,
+            Value: null,
+            SecretId: Guid.CreateVersion7(),
+            SecretDeliveryMode: SecretDeliveryMode.MountedFile,
+            TargetPath: "/run/secrets/api_key");
+        var resolver = CreateResolver([entry]);
+
+        var result = await resolver.ResolveAsync(ConfigurationScope.Deployment, deploymentId, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess(out _, out var error));
+        Assert.Equal("Secret API_KEY uses mounted-file delivery, which is only supported for stack-scoped entries.", error.Message);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_Should_Reject_Global_Mounted_File_Secrets_For_Stacks()
+    {
+        var stackId = Guid.CreateVersion7();
+        var entry = new ConfigurationEntry(
+            Name: "API_KEY",
+            Kind: ConfigurationEntryKind.Secret,
+            Scope: ConfigurationScope.Global,
+            ResourceId: null,
+            Value: null,
+            SecretId: Guid.CreateVersion7(),
             SecretDeliveryMode: SecretDeliveryMode.MountedFile,
             TargetPath: "/run/secrets/api_key");
         var resolver = CreateResolver([entry]);
@@ -369,7 +463,7 @@ public class ConfigurationResolverTests
         var result = await resolver.ResolveAsync(ConfigurationScope.Stack, stackId, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess(out _, out var error));
-        Assert.Equal("Secret API_KEY uses delivery mode MountedFile, which is not supported yet.", error.Message);
+        Assert.Equal("Secret API_KEY uses mounted-file delivery, which is only supported for stack-scoped entries.", error.Message);
     }
 
     [Fact]

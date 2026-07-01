@@ -1,4 +1,5 @@
 using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Configuration;
 using FluentValidation;

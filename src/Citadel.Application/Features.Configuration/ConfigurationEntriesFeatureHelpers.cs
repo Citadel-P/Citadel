@@ -1,4 +1,5 @@
 using Application.Features.Configuration.Models;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Configuration;
 using Hosting.Common.ErrorTypes;

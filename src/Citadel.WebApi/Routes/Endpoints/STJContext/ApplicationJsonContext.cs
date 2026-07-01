@@ -354,11 +354,15 @@ namespace Application.Models;
 [JsonSerializable(typeof(SecretDefinitionsView))]
 [JsonSerializable(typeof(CreateInternalSecretInput))]
 [JsonSerializable(typeof(CreateExternalSecretInput))]
+[JsonSerializable(typeof(UpdateExternalSecretInput))]
 [JsonSerializable(typeof(TestExternalSecretInput))]
 [JsonSerializable(typeof(ExternalSecretTestResultView))]
+[JsonSerializable(typeof(TestVaultKvV2SecretProviderConnectionInput))]
+[JsonSerializable(typeof(SecretProviderConnectionTestResultView))]
 [JsonSerializable(typeof(SecretProviderView))]
 [JsonSerializable(typeof(SecretProvidersView))]
 [JsonSerializable(typeof(CreateVaultKvV2SecretProviderInput))]
+[JsonSerializable(typeof(UpdateVaultKvV2SecretProviderInput))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

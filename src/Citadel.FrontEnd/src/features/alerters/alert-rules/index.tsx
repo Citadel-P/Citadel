@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { FieldInput, FieldSwitch, ItemSelector } from '@/components/custom/form-builder';
 import { CitadelIcons } from '@/lib/icons';
+import { IntegrationAddCard, IntegrationCard } from '@/components/custom/common';
 
 const EMPTY_CHANNEL: AlertChannelInput = {
   name: '',
@@ -140,33 +141,21 @@ function ChannelCard({
   const letter = channel.alertDestination.charAt(0).toUpperCase();
 
   return (
-    <div
-      role="button"
-      tabIndex={disabled ? -1 : 0}
-      onClick={disabled ? undefined : onEdit}
-      onKeyDown={(e) => !disabled && (e.key === 'Enter' || e.key === ' ') && onEdit()}
-      aria-disabled={disabled}
-      className={cn(
-        'group relative bg-background rounded-xl border border-muted p-4 hover:border-zinc-300 hover:shadow-md transition-all flex flex-col justify-between h-35',
-        disabled ? 'hover:cursor-not-allowed opacity-70' : 'cursor-pointer',
-      )}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              'h-10 w-10 rounded-lg flex items-center justify-center border shadow-sm text-white font-bold',
-              color,
-            )}>
-            {letter}
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm">{channel.name}</h3>
-            <p className="text-xs text-muted-foreground truncate">{channel.alertDestination}</p>
-          </div>
+    <IntegrationCard
+      title={channel.name}
+      subtitle={channel.alertDestination}
+      disabled={disabled}
+      onEdit={onEdit}
+      icon={
+        <div
+          className={cn(
+            'h-10 w-10 rounded-lg flex items-center justify-center border shadow-sm text-white font-bold',
+            color,
+          )}>
+          {letter}
         </div>
-      </div>
-
-      <div className="flex items-center justify-between mt-4 pt-4 border-t border-muted">
+      }
+      footerLeft={
         <div className="flex items-center gap-1.5">
           <div
             className={cn(
@@ -176,18 +165,18 @@ function ChannelCard({
           />
           <span className="text-xs font-medium text-zinc-600">{channel.isActive ? 'Active' : 'Inactive'}</span>
         </div>
-        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="presentation">
-          <ActionWithDialog
-            name={channel.name}
-            title="Delete"
-            icon={<Trash2 className="h-3.5 w-3.5" />}
-            variant="outline"
-            disabled={disabled}
-            onClick={() => onDelete(channel.id)}
-          />
-        </div>
-      </div>
-    </div>
+      }
+      footerRight={
+        <ActionWithDialog
+          name={channel.name}
+          title="Delete"
+          icon={<Trash2 className="h-3.5 w-3.5" />}
+          variant="outline"
+          disabled={disabled}
+          onClick={() => onDelete(channel.id)}
+        />
+      }
+    />
   );
 }
 
@@ -263,16 +252,7 @@ function AlertNotificationChannels() {
           />
         ))}
 
-        <button
-          onClick={openAdd}
-          disabled={!capabilities?.canWrite}
-          className={cn(
-            'flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600 h-35',
-            !capabilities?.canWrite && 'hover:cursor-not-allowed',
-          )}>
-          <Plus className="h-5 w-5" />
-          <span className="text-sm font-medium">Connect New Channel</span>
-        </button>
+        <IntegrationAddCard label="Connect New Channel" disabled={!capabilities?.canWrite} onClick={openAdd} />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

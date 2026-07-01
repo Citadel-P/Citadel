@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources.Configuration;
+using Domain;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -120,6 +121,25 @@ public static class ConfigurationEntries
         return EndpointHandlers.HandleResult(result, SecretDefinitionView.Map);
     }
 
+    public static async Task<Results<Ok<SecretDefinitionView>, ProblemHttpResult>> UpdateExternalSecret(
+        IMediator mediator,
+        [FromRoute][Description("Secret definition ID")] Guid id,
+        [FromBody] UpdateExternalSecretInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new UpdateExternalSecret(
+                id,
+                input.Name,
+                input.ProviderId,
+                input.ExternalPath,
+                input.ExternalKey,
+                input.ExternalVersion),
+            cancellationToken);
+
+        return EndpointHandlers.HandleResult(result, SecretDefinitionView.Map);
+    }
+
     public static async Task<Results<Ok<ExternalSecretTestResultView>, ProblemHttpResult>> TestExternalSecret(
         IMediator mediator,
         [FromBody] TestExternalSecretInput input,
@@ -134,6 +154,23 @@ public static class ConfigurationEntries
             cancellationToken);
 
         return EndpointHandlers.HandleResult(result, ExternalSecretTestResultView.Map);
+    }
+
+    public static async Task<Results<Ok<SecretProviderConnectionTestResultView>, ProblemHttpResult>> TestVaultKvV2SecretProviderConnection(
+        IMediator mediator,
+        [FromBody] TestVaultKvV2SecretProviderConnectionInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new TestVaultKvV2SecretProviderConnection(
+                input.ProviderId,
+                input.Name,
+                input.Address,
+                input.MountPath,
+                input.Token),
+            cancellationToken);
+
+        return EndpointHandlers.HandleResult(result, SecretProviderConnectionTestResultView.Map);
     }
 
     public static async Task<Results<Ok<SecretProvidersView>, ProblemHttpResult>> ListSecretProviders(
@@ -158,5 +195,32 @@ public static class ConfigurationEntries
             cancellationToken);
 
         return EndpointHandlers.HandleResult(result, SecretProviderView.Map);
+    }
+
+    public static async Task<Results<Ok<SecretProviderView>, ProblemHttpResult>> UpdateVaultKvV2SecretProvider(
+        IMediator mediator,
+        [FromRoute][Description("Secret provider ID")] Guid id,
+        [FromBody] UpdateVaultKvV2SecretProviderInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new UpdateVaultKvV2SecretProvider(
+                id,
+                input.Name,
+                input.Address,
+                input.MountPath,
+                input.Token),
+            cancellationToken);
+
+        return EndpointHandlers.HandleResult(result, SecretProviderView.Map);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteSecretProvider(
+        IMediator mediator,
+        [FromRoute][Description("Secret provider ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new DeleteSecretProvider(id), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
     }
 }

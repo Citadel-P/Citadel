@@ -1,4 +1,14 @@
-import { useMemo, useState, useLayoutEffect, useRef, useCallback, useDeferredValue, memo, type ReactNode } from 'react';
+import {
+  useMemo,
+  useState,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+  useDeferredValue,
+  memo,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -63,6 +73,7 @@ import {
   Network,
   ArrowRight,
   ArrowUpCircle,
+  Plus,
   RefreshCcw,
   RefreshCcwDot,
   RefreshCwOff,
@@ -135,6 +146,84 @@ export const StatsSummaryItem = ({ label, value }: { label: ReactNode; value: Re
     <span className="text-xs text-muted-foreground">{label}</span>
     <span className="text-sm text-foreground font-medium leading-none">{value}</span>
   </div>
+);
+
+export const IntegrationCard = ({
+  title,
+  subtitle,
+  icon,
+  footerLeft,
+  footerRight,
+  disabled = false,
+  onEdit,
+}: {
+  title: ReactNode;
+  subtitle: ReactNode;
+  icon: ReactNode;
+  footerLeft: ReactNode;
+  footerRight: ReactNode;
+  disabled?: boolean;
+  onEdit: () => void;
+}) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onEdit();
+    }
+  };
+
+  return (
+    <div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      onClick={disabled ? undefined : onEdit}
+      onKeyDown={handleKeyDown}
+      aria-disabled={disabled}
+      className={cn(
+        'group relative bg-background rounded-xl border border-muted p-4 hover:border-zinc-300 hover:shadow-md transition-all flex flex-col justify-between h-35',
+        disabled ? 'hover:cursor-not-allowed opacity-70' : 'cursor-pointer',
+      )}>
+      <div className="flex items-start justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          {icon}
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold">{title}</h3>
+            <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-t border-muted pt-4">
+        {footerLeft}
+        <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} role="presentation">
+          {footerRight}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const IntegrationAddCard = ({
+  label,
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={disabled ? undefined : onClick}
+    disabled={disabled}
+    className={cn(
+      'flex h-35 flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600',
+      disabled && 'hover:cursor-not-allowed opacity-70',
+    )}>
+    <Plus className="h-5 w-5" />
+    <span className="text-sm font-medium">{label}</span>
+  </button>
 );
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({

@@ -176,6 +176,7 @@ internal class ApplyStackService(
         string? labelsOverrideFilePath = null;
         string? generatedFilesDirectory = null;
         string? gitSnapshotRoot = null;
+        IReadOnlyList<string>? secretTargetServiceNames = null;
         StackReleaseSource? releaseSource = null;
         yield return StackStreamItem.SystemMessage("Resolving stack variables and secrets...", 0);
         var configurationResult = await configurationResolver.ResolveAsync(ConfigurationScope.Stack, stack.Id, ct);
@@ -193,6 +194,10 @@ internal class ApplyStackService(
             composeFileContent = StackComposeLabelInjector.Inject(currentManualStack.ComposeFile, stack.Id, currentRelease.Id);
             environmentFilePath = currentManualStack.EnvFilePath;
             environmentVariables = [];
+            secretTargetServiceNames = StackComposeParser
+                .ParseServices(stack.Id, currentRelease.Id, currentManualStack.ComposeFile)
+                .Keys
+                .ToArray();
         }
         else if (stackSpec is GitStack gitStack)
         {
@@ -224,6 +229,10 @@ internal class ApplyStackService(
             labelsOverrideFilePath = payload.LabelsOverrideFilePath;
             generatedFilesDirectory = payload.GeneratedFilesDirectory;
             gitSnapshotRoot = payload.SnapshotRoot;
+            secretTargetServiceNames = StackComposeParser
+                .ParseServices(stack.Id, currentRelease.Id, [.. payload.SourceComposeFilePaths.Select(File.ReadAllText)])
+                .Keys
+                .ToArray();
             releaseSource = new StackReleaseSource(
                 SourceType: StackSource.Git,
                 GitRepositoryId: gitRepository.Id,
@@ -250,7 +259,18 @@ internal class ApplyStackService(
             composeFileContent,
             sourceComposeFilePaths,
             ct);
-        var selectedConfiguration = resolvedConfiguration.SelectEntries(referencedConfigurationKeys);
+        var selectedConfiguration = SelectStackApplyConfiguration(
+            resolvedConfiguration,
+            referencedConfigurationKeys);
+        var secretFiles = BuildMountedSecretFiles(selectedConfiguration);
+        if (secretFiles.Count > 0 && secretTargetServiceNames is not { Count: > 0 })
+        {
+            var message = "Mounted file secrets require at least one Compose service.";
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            yield return StackStreamItem.FromStdErr(message, 1);
+            yield break;
+        }
+
         environmentVariables = sourceEnvironmentVariables is { Count: > 0 }
             ? [.. sourceEnvironmentVariables, .. selectedConfiguration.EnvironmentVariables]
             : selectedConfiguration.EnvironmentVariables;
@@ -285,7 +305,9 @@ internal class ApplyStackService(
             sourceComposeFilePaths,
             sourceEnvFilePaths,
             labelsOverrideFilePath,
-            generatedFilesDirectory);
+            generatedFilesDirectory,
+            secretFiles,
+            secretTargetServiceNames);
 
         int? exitCode = null;
         var errorLogs = new List<string>(); 
@@ -542,7 +564,9 @@ internal class ApplyStackService(
         IReadOnlyList<string>? sourceComposeFilePaths,
         IReadOnlyList<string>? sourceEnvFilePaths,
         string? labelsOverrideFilePath,
-        string? generatedFilesDirectory)
+        string? generatedFilesDirectory,
+        IReadOnlyList<StackSecretFile>? secretFiles,
+        IReadOnlyList<string>? secretTargetServiceNames)
         => new(
             PlatformAddress: platformAddress,
             StackName: stack.Name,
@@ -563,7 +587,32 @@ internal class ApplyStackService(
             SourceComposeFilePaths: sourceComposeFilePaths,
             SourceEnvFilePaths: sourceEnvFilePaths,
             LabelsOverrideFilePath: labelsOverrideFilePath,
-            GeneratedFilesDirectory: generatedFilesDirectory);
+            GeneratedFilesDirectory: generatedFilesDirectory,
+            SecretFiles: secretFiles,
+            SecretTargetServiceNames: secretTargetServiceNames);
+
+    private static ResolvedConfiguration SelectStackApplyConfiguration(
+        ResolvedConfiguration configuration,
+        IEnumerable<string> referencedConfigurationKeys)
+    {
+        var mountedSecretNames = GetMountedFileSecretEntries(configuration).Select(entry => entry.Name);
+        return configuration.SelectEntries(referencedConfigurationKeys.Concat(mountedSecretNames));
+    }
+
+    private static IReadOnlyList<StackSecretFile> BuildMountedSecretFiles(ResolvedConfiguration configuration)
+        =>
+        [
+            .. GetMountedFileSecretEntries(configuration)
+                .Select(entry => new StackSecretFile(
+                    Name: entry.Name,
+                    TargetPath: entry.TargetPath!,
+                    Content: entry.Value))
+        ];
+
+    private static IEnumerable<ResolvedConfigurationEntry> GetMountedFileSecretEntries(ResolvedConfiguration configuration)
+        => configuration.Entries.Where(entry =>
+            entry.Kind == ConfigurationEntryKind.Secret
+            && entry.SecretDeliveryMode == SecretDeliveryMode.MountedFile);
 
     private Task ProcessConfigurationFailureAlertAsync(Guid stackId, string stackName, string reason, CancellationToken ct)
     {

@@ -42,8 +42,3 @@ public sealed record InternalSecretValue(Guid SecretId, string EncryptedValue)
     public DateTime UpdatedAt { get; init; } = DateTime.UtcNow;
 }
 
-public enum SecretProviderType
-{
-    InternalEncrypted,
-    VaultCompatibleKvV2
-}

@@ -147,9 +147,17 @@ public class ApplyStackServiceTests
                     ["APP_MODE=prod", "API_KEY=super-secret", "UNUSED_FLAG=true", "UNUSED_SECRET=unused-secret"],
                     [
                         new ResolvedConfigurationEntry("APP_MODE", ConfigurationEntryKind.Variable, "prod"),
-                        new ResolvedConfigurationEntry("API_KEY", ConfigurationEntryKind.Secret, "super-secret"),
+                        new ResolvedConfigurationEntry(
+                            "API_KEY",
+                            ConfigurationEntryKind.Secret,
+                            "super-secret",
+                            SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable),
                         new ResolvedConfigurationEntry("UNUSED_FLAG", ConfigurationEntryKind.Variable, "true"),
-                        new ResolvedConfigurationEntry("UNUSED_SECRET", ConfigurationEntryKind.Secret, "unused-secret")
+                        new ResolvedConfigurationEntry(
+                            "UNUSED_SECRET",
+                            ConfigurationEntryKind.Secret,
+                            "unused-secret",
+                            SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable)
                     ],
                     ["super-secret", "unused-secret"],
                     VariableCount: 2,
@@ -314,6 +322,15 @@ public class ApplyStackServiceTests
         var sourceEnvFile = Path.Combine(sourceWorkingDirectory, ".env");
         var generatedDirectory = Path.Combine(Path.GetDirectoryName(snapshotRoot)!, "citadel");
         var labelsOverrideFile = Path.Combine(generatedDirectory, "citadel.labels.yml");
+        Directory.CreateDirectory(sourceWorkingDirectory);
+        await File.WriteAllTextAsync(
+            sourceComposeFile,
+            "services:\n  app:\n    image: nginx\n",
+            TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(
+            sourceEnvFile,
+            "APP_ENV=prod\n",
+            TestContext.Current.CancellationToken);
 
         StackApplyCommand? capturedCommand = null;
         var appliedContainer = new DockerContainer(
@@ -664,6 +681,11 @@ public class ApplyStackServiceTests
         var sourceComposeFile = Path.Combine(sourceWorkingDirectory, "compose.yml");
         var generatedDirectory = Path.Combine(Path.GetDirectoryName(snapshotRoot)!, "citadel");
         var labelsOverrideFile = Path.Combine(generatedDirectory, "citadel.labels.yml");
+        Directory.CreateDirectory(sourceWorkingDirectory);
+        await File.WriteAllTextAsync(
+            sourceComposeFile,
+            "services:\n  app:\n    image: nginx\n",
+            TestContext.Current.CancellationToken);
 
         var stacks = new Mock<IStackRepository>();
         stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(stack);
@@ -859,6 +881,176 @@ public class ApplyStackServiceTests
         Assert.Equal(releaseId, stack.CurrentStackReleaseId);
         Assert.Equal(releaseVersion, stack.CurrentStackRelease!.Version);
         Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease.Status);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_Should_Pass_Mounted_File_Secrets_To_Stack_Command_Without_Env_Injection()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "postgres-stack",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile:
+                """
+                services:
+                  db:
+                    image: postgres:16
+                    environment:
+                      APP_MODE: ${APP_MODE}
+                      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+                """,
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+
+        var appliedContainer = new DockerContainer(
+            Name: "/postgres-stack-db-1",
+            Image: "postgres:16",
+            Id: "postgres-container",
+            ImageId: "sha256:postgres",
+            State: ContainerStateStatus.Running,
+            Created: 123,
+            Stack: "postgres-stack");
+
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .SetupSequence(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer> { [appliedContainer.Id] = appliedContainer }));
+
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerConnectorFactory
+            .Setup(x => x.GetConnector(PlatformConnectorType.Local))
+            .Returns(containerConnector.Object);
+
+        StackApplyCommand? capturedCommand = null;
+        var stackConnector = new Mock<IStackConnector>();
+        stackConnector
+            .Setup(x => x.StackApplyAsync(It.IsAny<StackApplyCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<StackApplyCommand, CancellationToken>((command, _) => capturedCommand = command)
+            .Returns(SuccessfulStackApplyStream());
+
+        var stackConnectorFactory = new Mock<IConnectorFactory<IStackConnector>>();
+        stackConnectorFactory
+            .Setup(x => x.GetConnector(PlatformConnectorType.Local))
+            .Returns(stackConnector.Object);
+
+        var repository = new GitRepository(
+            name: "unused",
+            description: null,
+            url: "https://example.invalid/repo.git",
+            defaultBranch: "main",
+            gitAccountId: null,
+            createdByActorId: actorId);
+        var unitOfWork = CreateApplyUnitOfWork(stack, repository, platformId, actorId);
+        var services = new ServiceCollection()
+            .AddScoped(_ => unitOfWork.Object)
+            .BuildServiceProvider();
+        var secretId = Guid.CreateVersion7();
+
+        var service = new ApplyStackService(
+            new InlineDbWorkQueue(unitOfWork.Object),
+            Mock.Of<IStackStreamManager>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            new TestPlatformContainerCache(new PlatformCacheEntry(
+                platformId,
+                "http://docker.local",
+                PlatformConnectorType.Local,
+                ImmutableDictionary<string, Guid>.Empty)),
+            stackConnectorFactory.Object,
+            containerConnectorFactory.Object,
+            Mock.Of<IGitStackMaterializer>(),
+            new StaticConfigurationResolver(new ResolvedConfiguration(
+                EnvironmentVariables: ["APP_MODE=prod"],
+                Entries:
+                [
+                    new ResolvedConfigurationEntry("APP_MODE", ConfigurationEntryKind.Variable, "prod"),
+                    new ResolvedConfigurationEntry(
+                        "POSTGRES_PASSWORD",
+                        ConfigurationEntryKind.Secret,
+                        "super-secret",
+                        SecretName: "postgres-password",
+                        SecretDeliveryMode: SecretDeliveryMode.MountedFile,
+                        TargetPath: "/run/secrets/postgres_password")
+                ],
+                RedactionValues: ["super-secret"],
+                VariableCount: 1,
+                SecretCount: 1)
+            {
+                SnapshotEntries =
+                [
+                    new ConfigurationSnapshotEntry(
+                        Name: "APP_MODE",
+                        Kind: ConfigurationEntryKind.Variable,
+                        Scope: ConfigurationScope.Stack,
+                        ResourceId: stack.Id,
+                        Value: "prod",
+                        SecretId: null,
+                        SecretName: null,
+                        SecretProviderType: null,
+                        SecretProviderName: null,
+                        ExternalPath: null,
+                        ExternalKey: null,
+                        ExternalVersion: null,
+                        SecretDeliveryMode: null,
+                        TargetPath: null),
+                    new ConfigurationSnapshotEntry(
+                        Name: "POSTGRES_PASSWORD",
+                        Kind: ConfigurationEntryKind.Secret,
+                        Scope: ConfigurationScope.Stack,
+                        ResourceId: stack.Id,
+                        Value: "********",
+                        SecretId: secretId,
+                        SecretName: "postgres-password",
+                        SecretProviderType: SecretProviderType.InternalEncrypted,
+                        SecretProviderName: null,
+                        ExternalPath: null,
+                        ExternalKey: null,
+                        ExternalVersion: null,
+                        SecretDeliveryMode: SecretDeliveryMode.MountedFile,
+                        TargetPath: "/run/secrets/postgres_password")
+                ]
+            }),
+            new PassThroughSecretRedactor(),
+            Mock.Of<IAlertService>());
+
+        var items = new List<StackStreamItem>();
+        await foreach (var item in service.ApplyAsync(
+            stack.Id,
+            actorId,
+            serviceNames: null,
+            pullImages: false,
+            StackApplyOperation.Apply,
+            previousStackSnapshot: null,
+            TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        Assert.Contains(items, item => item.ExitCode == 0);
+        Assert.NotNull(capturedCommand);
+        Assert.Equal(["APP_MODE=prod"], capturedCommand!.EnvironmentVariables);
+        var secretFile = Assert.Single(capturedCommand.SecretFiles!);
+        Assert.Equal("POSTGRES_PASSWORD", secretFile.Name);
+        Assert.Equal("/run/secrets/postgres_password", secretFile.TargetPath);
+        Assert.Equal("super-secret", secretFile.Content);
+        Assert.Equal(["db"], capturedCommand.SecretTargetServiceNames);
+        Assert.Collection(
+            stack.CurrentStackRelease?.Configuration ?? [],
+            entry => Assert.Equal("APP_MODE", entry.Name),
+            entry =>
+            {
+                Assert.Equal("POSTGRES_PASSWORD", entry.Name);
+                Assert.Equal("********", entry.Value);
+                Assert.Equal(SecretDeliveryMode.MountedFile, entry.SecretDeliveryMode);
+                Assert.Equal("/run/secrets/postgres_password", entry.TargetPath);
+            });
     }
 
     [Fact]

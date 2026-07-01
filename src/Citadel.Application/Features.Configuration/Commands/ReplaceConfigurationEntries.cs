@@ -8,6 +8,7 @@ using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Domain;
 
 namespace Application.Features.Configuration.Commands;
 
@@ -19,13 +20,13 @@ public sealed record ReplaceGlobalConfigurationEntries(IReadOnlyList<Configurati
         public Validator()
         {
             RuleFor(x => x.Entries).NotNull();
-            RuleForEach(x => x.Entries).SetValidator(new ConfigurationEntryInputValidator());
+            RuleForEach(x => x.Entries).SetValidator(new ConfigurationEntryInputValidator(allowMountedFile: false));
         }
     }
 
     internal sealed class ConfigurationEntryInputValidator : AbstractValidator<ConfigurationEntryInput>
     {
-        public ConfigurationEntryInputValidator()
+        public ConfigurationEntryInputValidator(bool allowMountedFile)
         {
             RuleFor(x => x.Name)
                 .NotEmpty()
@@ -45,12 +46,55 @@ public sealed record ReplaceGlobalConfigurationEntries(IReadOnlyList<Configurati
             {
                 RuleFor(x => x.Value).Null();
                 RuleFor(x => x.SecretId).NotNull();
-                RuleFor(x => x.SecretDeliveryMode)
-                    .NotNull()
-                    .Equal(SecretDeliveryMode.EnvironmentVariable)
-                    .WithMessage("Only environment variable secret delivery is supported.");
-                RuleFor(x => x.TargetPath).Null();
+                RuleFor(x => x.SecretDeliveryMode).NotNull();
+                When(x => x.SecretDeliveryMode == SecretDeliveryMode.EnvironmentVariable, () =>
+                {
+                    RuleFor(x => x.TargetPath).Null();
+                });
+                When(x => x.SecretDeliveryMode == SecretDeliveryMode.MountedFile, () =>
+                {
+                    if (allowMountedFile)
+                    {
+                        RuleFor(x => x.TargetPath)
+                            .NotEmpty()
+                            .Must(BeValidMountedFileTargetPath)
+                            .WithMessage("Mounted file target path must be an absolute Linux file path outside protected system paths.");
+                    }
+                    else
+                    {
+                        RuleFor(x => x.SecretDeliveryMode)
+                            .Equal(SecretDeliveryMode.EnvironmentVariable)
+                            .WithMessage("Only environment variable secret delivery is supported.");
+                    }
+                });
+                When(x => x.SecretDeliveryMode == SecretDeliveryMode.NativePlatformSecret, () =>
+                {
+                    RuleFor(x => x.SecretDeliveryMode)
+                        .Equal(SecretDeliveryMode.EnvironmentVariable)
+                        .WithMessage("Native platform secret delivery is not supported.");
+                });
             });
+        }
+
+        private static bool BeValidMountedFileTargetPath(string? targetPath)
+        {
+            try
+            {
+                new ConfigurationEntry(
+                    Name: "SECRET",
+                    Kind: ConfigurationEntryKind.Secret,
+                    Scope: ConfigurationScope.Stack,
+                    ResourceId: Guid.CreateVersion7(),
+                    Value: null,
+                    SecretId: Guid.CreateVersion7(),
+                    SecretDeliveryMode: SecretDeliveryMode.MountedFile,
+                    TargetPath: targetPath).Validate();
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
         }
     }
 }
@@ -63,7 +107,7 @@ public sealed record ReplaceStackConfigurationEntries(Guid Id, IReadOnlyList<Con
         public Validator()
         {
             RuleFor(x => x.Entries).NotNull();
-            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalConfigurationEntries.ConfigurationEntryInputValidator());
+            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalConfigurationEntries.ConfigurationEntryInputValidator(allowMountedFile: true));
         }
     }
 }
@@ -76,7 +120,7 @@ public sealed record ReplaceDeploymentConfigurationEntries(Guid Id, IReadOnlyLis
         public Validator()
         {
             RuleFor(x => x.Entries).NotNull();
-            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalConfigurationEntries.ConfigurationEntryInputValidator());
+            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalConfigurationEntries.ConfigurationEntryInputValidator(allowMountedFile: false));
         }
     }
 }

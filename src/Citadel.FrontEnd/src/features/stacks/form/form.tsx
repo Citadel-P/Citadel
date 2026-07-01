@@ -819,7 +819,7 @@ export const StackForm = ({
                       key: 'spec.composeEnvFilesFromRepo',
                       label: 'Compose Env Files',
                       description:
-                        'Optional repository env files passed to Docker Compose for interpolation. These are read from the Git snapshot.',
+                        'Optional env files from the Git snapshot, passed to Docker Compose before Citadel-generated variables. Values from the Variables tab override duplicate keys.',
                       validate: (v) =>
                         validateGitPathList(v, { requireFile: true }) ??
                         validateDiscoveredPathList(v, discoveredEnvFilePaths, gitComposeDiscoveryReady, 'env files'),
@@ -857,6 +857,27 @@ export const StackForm = ({
                         />
                       ),
                     }),
+                    defineField<StackInput, 'spec.envFilePath'>({
+                      key: 'spec.envFilePath',
+                      label: 'Generated Env File Path',
+                      description:
+                        'Optional path, relative to the Docker Compose run directory, where Citadel writes resolved Variables tab entries before deploy. Leave empty for the default temporary path.',
+                      render: (value, set) => (
+                        <FieldInput
+                          value={value}
+                          onChange={(v) =>
+                            set((prev) => ({
+                              spec: {
+                                ...(prev.spec as any),
+                                $type: 'Git',
+                                envFilePath: v || null,
+                              } as any,
+                            }))
+                          }
+                          placeholder="Default generated path"
+                        />
+                      ),
+                    }),
                   ],
                 }),
               ]
@@ -890,6 +911,27 @@ export const StackForm = ({
                                 } as any,
                               }))
                             }
+                          />
+                        ),
+                      }),
+                      defineField<StackInput, 'spec.envFilePath'>({
+                        key: 'spec.envFilePath',
+                        label: 'Generated Env File Path',
+                        description:
+                          'Optional path, relative to the Docker Compose run directory, where Citadel writes resolved Variables tab entries before deploy. Leave empty for the default temporary path.',
+                        render: (value, set) => (
+                          <FieldInput
+                            value={value}
+                            onChange={(v) =>
+                              set((prev) => ({
+                                spec: {
+                                  ...(prev.spec as any),
+                                  $type: 'WebEditor',
+                                  envFilePath: v || null,
+                                } as any,
+                              }))
+                            }
+                            placeholder="Default generated path"
                           />
                         ),
                       }),
@@ -977,35 +1019,6 @@ export const StackForm = ({
                       placeholder="Optional project name"
                     />
                   ),
-                }),
-                defineGroupField<StackInput>({
-                  id: 'compose_materialization',
-                  label: 'Compose Materialization',
-                  title: 'Compose Materialization',
-                  description:
-                    'Advanced Docker Compose runtime file controls. Resource variables and secrets are managed from the Variables tab.',
-                  items: [
-                    defineField<StackInput, 'spec.envFilePath'>({
-                      key: 'spec.envFilePath',
-                      label: 'Generated Env File Path',
-                      description:
-                        'Optional path where Citadel writes the generated compose env file during deploy. Leave empty for the default.',
-                      render: (value, set) => (
-                        <FieldInput
-                          value={value}
-                          onChange={(v) =>
-                            set((prev) => ({
-                              spec: {
-                                ...prev.spec!,
-                                envFilePath: v || null,
-                              },
-                            }))
-                          }
-                          placeholder="Default"
-                        />
-                      ),
-                    }),
-                  ],
                 }),
                 ...(currentStackSource === StackSource.Git
                   ? [

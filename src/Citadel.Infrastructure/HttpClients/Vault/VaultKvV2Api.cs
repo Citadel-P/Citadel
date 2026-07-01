@@ -6,6 +6,14 @@ namespace Infrastructure.Vault;
 
 internal interface IVaultKvV2Api
 {
+    [Get("/v1/sys/health")]
+    Task<HttpResponseMessage> GetHealthAsync(CancellationToken cancellationToken = default);
+
+    [Get("/v1/auth/token/lookup-self")]
+    Task<HttpResponseMessage> LookupSelfAsync(
+        [Header("X-Vault-Token")] string token,
+        CancellationToken cancellationToken = default);
+
     [Get("/v1/{mountPath}/data/{**secretPath}")]
     Task<VaultKvV2ReadResponse> ReadSecretAsync(
         string mountPath,

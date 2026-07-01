@@ -17,6 +17,7 @@ using Infrastructure.Repositories;
 using Infrastructure.Repositories.DbQueue;
 using Infrastructure.Repositories.Security.Grpc;
 using Infrastructure.TypeHandlers;
+using Infrastructure.Vault;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -129,9 +130,7 @@ public static class InfrastructureModule
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.github.com"))
                 .AddPolicyHandler(Configuration.GetRetryPolicy())
             .Services
-            .AddHttpClient(ExternalSecretProviderClient.HttpClientName)
-                .AddPolicyHandler(Configuration.GetRetryPolicy())
-            .Services;
+            .AddSingleton<IVaultKvV2ApiFactory, VaultKvV2ApiFactory>();
 
     private static void RegisterTypeHandlers()
     {

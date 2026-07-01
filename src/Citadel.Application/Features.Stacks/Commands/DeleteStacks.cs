@@ -9,6 +9,7 @@ using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using System.Text;
 
 namespace Application.Features.Stacks.Commands;
 
@@ -19,7 +20,8 @@ internal sealed class DeleteStacksHandler(
     IUnitOfWork unitOfWork,
     IPlatformContainerCache platformCache,
     IConnectorFactory<IContainerConnector> connectorFactory,
-    IStackStreamManager stackHub) : ICommandHandler<DeleteStacks, Result>
+    IStackStreamManager stackHub,
+    IStackStoragePathProvider stackStoragePathProvider) : ICommandHandler<DeleteStacks, Result>
 {
     public async ValueTask<Result> Handle(DeleteStacks command, CancellationToken cancellationToken)
     {
@@ -36,6 +38,7 @@ internal sealed class DeleteStacksHandler(
             {
                 return cleanupResult;
             }
+
         }
 
         await unitOfWork.Stacks.RemoveRangeAsync(stacks.Select(stack => stack.Id), cancellationToken);
@@ -43,10 +46,88 @@ internal sealed class DeleteStacksHandler(
 
         foreach (var stack in stacks)
         {
+            TryDeleteStackStorage(stack);
+        }
+
+        foreach (var stack in stacks)
+        {
             await stackHub.SendStackInfo(stack, "delete");
         }
 
         return Result.Success();
+    }
+
+    private void TryDeleteStackStorage(Stack stack)
+    {
+        try
+        {
+            DeleteStackStorage(stack);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Runtime containers and database state are already deleted. Leave stale files
+            // behind rather than reporting a failed delete for a stack that no longer exists.
+        }
+    }
+
+    private void DeleteStackStorage(Stack stack)
+    {
+        DeleteStackStoragePath(stack.Id.ToString("D"));
+        DeleteStackStoragePath(SanitizeSegment(stack.Name));
+        if (!string.IsNullOrWhiteSpace(stack.CurrentStackRelease?.Spec?.ProjectName))
+        {
+            DeleteStackStoragePath(SanitizeSegment(stack.CurrentStackRelease.Spec.ProjectName));
+        }
+    }
+
+    private void DeleteStackStoragePath(string segment)
+    {
+        var stacksRoot = Path.GetFullPath(stackStoragePathProvider.StacksRoot);
+        var rootWithSeparator = EnsureTrailingDirectorySeparator(stacksRoot);
+        var targetPath = Path.GetFullPath(Path.Combine(rootWithSeparator, segment));
+
+        if (!targetPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(targetPath, stacksRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException("Resolved stack storage path is outside the configured stacks directory.");
+        }
+
+        DeletePath(targetPath);
+    }
+
+    private static void DeletePath(string path)
+    {
+        if (!Directory.Exists(path) && !File.Exists(path))
+        {
+            return;
+        }
+
+        var attributes = File.GetAttributes(path);
+        if ((attributes & FileAttributes.Directory) != 0)
+        {
+            var isSymlink = (attributes & FileAttributes.ReparsePoint) != 0;
+            Directory.Delete(path, recursive: !isSymlink);
+            return;
+        }
+
+        File.Delete(path);
+    }
+
+    private static string EnsureTrailingDirectorySeparator(string path)
+        => path.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
+            ? path
+            : path + Path.DirectorySeparatorChar;
+
+    private static string SanitizeSegment(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var builder = new StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            builder.Append(Array.IndexOf(invalidChars, c) >= 0 ? '_' : c);
+        }
+
+        return builder.Length == 0 ? "stack" : builder.ToString();
     }
 
     private async Task<Result> DeleteRuntimeContainersAsync(Stack stack, CancellationToken cancellationToken)

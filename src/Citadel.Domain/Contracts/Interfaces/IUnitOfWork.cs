@@ -59,27 +59,45 @@ public interface IConfigurationEntryRepository
 public interface ISecretDefinitionRepository
 {
     Task<int> AddAsync(SecretDefinition secret, InternalSecretValue? value, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(SecretDefinition secret, CancellationToken cancellationToken);
     Task<SecretDefinition?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<SecretDefinition>> GetAllAsync(CancellationToken cancellationToken);
     Task<InternalSecretValue?> GetInternalValueAsync(Guid secretId, CancellationToken cancellationToken);
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken);
 }
 
 public interface ISecretProviderRepository
 {
     Task<int> AddAsync(SecretProvider provider, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(SecretProvider provider, CancellationToken cancellationToken);
+    Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
     Task<SecretProvider?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<SecretProvider>> GetAllAsync(CancellationToken cancellationToken);
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken);
+    Task<bool> IsUsedBySecretDefinitionAsync(Guid id, CancellationToken cancellationToken);
 }
 
 public interface IExternalSecretProviderClient
 {
+    Task<ExternalSecretProviderConnectionTestResult> TestConnectionAsync(
+        SecretProvider provider,
+        string token,
+        CancellationToken cancellationToken);
+
     Task<ExternalSecretValueResult> ResolveAsync(
         SecretDefinition secret,
         SecretProvider provider,
         string token,
         CancellationToken cancellationToken);
+}
+
+public sealed record ExternalSecretProviderConnectionTestResult(bool Success, string Message)
+{
+    public static ExternalSecretProviderConnectionTestResult Succeeded(string message) => new(true, message);
+
+    public static ExternalSecretProviderConnectionTestResult Failed(string message) => new(false, message);
 }
 
 public sealed record ExternalSecretValueResult(bool IsSuccess, string? Value, string? ErrorMessage)

@@ -8,7 +8,6 @@ import {
   ConfigurationAddDropdown,
   CreateSecretDialog,
   ENV_DELIVERY_MODE,
-  SecretProvidersSection,
   toInputFromView,
   useSecretCreation,
 } from '@/components/custom/configuration-entries-tab';
@@ -173,11 +172,19 @@ export const VariablesTable = ({
   const secretCreation = useSecretCreation(
     useCallback(
       async (secret?: SecretDefinitionView) => {
-        if (!secret) return;
-        await saveEntries([...originalInputs, newSecretBindingInput(secret)]);
+        if (!secret) return false;
+        const next = [...originalInputs, newSecretBindingInput(secret)];
+        if (hasDuplicateEntryName(next)) {
+          toast.error('A variable or secret key with this name already exists.');
+          return false;
+        }
+
+        await saveEntries(next, 'Secret key added');
+        return true;
       },
       [originalInputs, saveEntries],
     ),
+    secrets,
   );
   const setCreateSecretOpen = secretCreation.setOpen;
   const openCreateSecretDialog = useCallback(
@@ -214,6 +221,11 @@ export const VariablesTable = ({
         dialogMode === 'edit' && editingEntry
           ? originalInputs.map((entry, index) => (allEntries[index].id === editingEntry.id ? normalizeInput(entryInput) : entry))
           : [...originalInputs, normalizeInput(entryInput)];
+
+      if (hasDuplicateEntryName(next)) {
+        toast.error('A variable or secret key with this name already exists.');
+        return;
+      }
 
       await saveEntries(next, dialogMode === 'edit' ? 'Entry updated' : 'Entry created');
       setEntryDialogOpen(false);
@@ -272,10 +284,6 @@ export const VariablesTable = ({
           />
         </ContentCard>
       </div>
-
-      <div className="border-b border-dashed" />
-
-      <SecretProvidersSection disabled={!canWrite} />
 
       <EntryEditorDialog
         open={entryDialogOpen}
@@ -569,6 +577,17 @@ const normalizeInput = (entry: ConfigurationEntryInput): ConfigurationEntryInput
   secretDeliveryMode: entry.kind === ConfigurationEntryKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
   targetPath: entry.kind === ConfigurationEntryKind.Secret ? (entry.targetPath ?? null) : null,
 });
+
+const hasDuplicateEntryName = (entries: ConfigurationEntryInput[]): boolean => {
+  const names = new Set<string>();
+  for (const entry of entries) {
+    const name = entry.name.trim().toLowerCase();
+    if (names.has(name)) return true;
+    names.add(name);
+  }
+
+  return false;
+};
 
 const invalidateConfigurationQueries = async (queryClient: ReturnType<typeof useQueryClient>) => {
   await queryClient.invalidateQueries({ queryKey: ['getGlobalConfigurationEntries'] });

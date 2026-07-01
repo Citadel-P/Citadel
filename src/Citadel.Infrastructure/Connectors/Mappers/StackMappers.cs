@@ -27,7 +27,12 @@ internal static class StackMappers
             SourceComposeFilePaths: cmd.SourceComposeFilePaths,
             SourceEnvFilePaths: cmd.SourceEnvFilePaths,
             LabelsOverrideFilePath: cmd.LabelsOverrideFilePath,
-            GeneratedFilesDirectory: cmd.GeneratedFilesDirectory);
+            GeneratedFilesDirectory: cmd.GeneratedFilesDirectory,
+            SecretFiles: cmd.SecretFiles?.Select(secret => new Hosting.DockerClient.Models.Stacks.StackSecretFile(
+                secret.Name,
+                secret.TargetPath,
+                secret.Content)).ToArray(),
+            SecretTargetServiceNames: cmd.SecretTargetServiceNames);
     }
 
     public static StackApplyResult Map(this Hosting.DockerClient.Models.Stacks.StackApplyResult result)

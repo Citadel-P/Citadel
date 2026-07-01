@@ -1,3 +1,4 @@
+using Domain;
 using Domain.Entities.Configuration;
 
 namespace Application.Features.Configuration.Models;

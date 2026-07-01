@@ -3647,6 +3647,11 @@ export interface SecretDefinitionsView {
 
 export type SecretDeliveryMode = any;
 
+export interface SecretProviderConnectionTestResultView {
+  success: boolean;
+  message: string;
+}
+
 export type SecretProviderType = any;
 
 export interface SecretProviderView {
@@ -4031,6 +4036,15 @@ export interface TestExternalSecretInput {
   externalVersion: null | number | string;
 }
 
+export interface TestVaultKvV2SecretProviderConnectionInput {
+  /** @format uuid */
+  providerId: null | string;
+  name: null | string;
+  address: string;
+  mountPath: string;
+  token: null | string;
+}
+
 export interface TimeZoneInfo {
   /** @pattern ^-?(\d+\.)?\d{2}:\d{2}:\d{2}(\.\d{1,7})?$ */
   baseUtcOffset?: string;
@@ -4066,6 +4080,26 @@ export interface UnresolvedAlertsCountView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   count: number | string;
+}
+
+export interface UpdateExternalSecretInput {
+  name: string;
+  /** @format uuid */
+  providerId: string;
+  externalPath: string;
+  externalKey: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  externalVersion: null | number | string;
+}
+
+export interface UpdateVaultKvV2SecretProviderInput {
+  name: string;
+  address: string;
+  mountPath: string;
+  token: null | string;
 }
 
 export interface UserResourceAccessInput {
@@ -8599,6 +8633,31 @@ export class Api<
      * No description
      *
      * @tags ConfigurationEntries
+     * @name UpdateExternalSecret
+     * @summary Update an external secret definition
+     * @request PUT:/api/v1/configuration/secrets/external/{id}
+     * @response `200` `SecretDefinitionView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateExternalSecret: (
+      id: string,
+      data: UpdateExternalSecretInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<SecretDefinitionView, ProblemDetails>({
+        path: `/api/v1/configuration/secrets/external/${id}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
      * @name TestExternalSecret
      * @summary Test an external secret reference
      * @request POST:/api/v1/configuration/secrets/external/test
@@ -8612,6 +8671,30 @@ export class Api<
     ) =>
       this.request<ExternalSecretTestResultView, ProblemDetails>({
         path: `/api/v1/configuration/secrets/external/test`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name TestVaultKvV2SecretProviderConnection
+     * @summary Test a Vault-compatible KV v2 secret provider connection
+     * @request POST:/api/v1/configuration/secret-providers/vault-kv2/test
+     * @response `200` `SecretProviderConnectionTestResultView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    testVaultKvV2SecretProviderConnection: (
+      data: TestVaultKvV2SecretProviderConnectionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<SecretProviderConnectionTestResultView, ProblemDetails>({
+        path: `/api/v1/configuration/secret-providers/vault-kv2/test`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8659,6 +8742,49 @@ export class Api<
         body: data,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name UpdateVaultKvV2SecretProvider
+     * @summary Update a Vault-compatible KV v2 secret provider
+     * @request PUT:/api/v1/configuration/secret-providers/vault-kv2/{id}
+     * @response `200` `SecretProviderView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateVaultKvV2SecretProvider: (
+      id: string,
+      data: UpdateVaultKvV2SecretProviderInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<SecretProviderView, ProblemDetails>({
+        path: `/api/v1/configuration/secret-providers/vault-kv2/${id}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ConfigurationEntries
+     * @name DeleteSecretProvider
+     * @summary Delete a secret provider
+     * @request DELETE:/api/v1/configuration/secret-providers/{id}
+     * @response `204` `void` No Content
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteSecretProvider: (id: string, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/configuration/secret-providers/${id}`,
+        method: "DELETE",
         ...params,
       }),
 

@@ -13810,6 +13810,69 @@
         }
       }
     },
+    "/api/v1/configuration/secrets/external/{id}": {
+      "put": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Update an external secret definition",
+        "operationId": "updateExternalSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Secret definition ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExternalSecretInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretDefinitionView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/configuration/secrets/external/test": {
       "post": {
         "tags": [
@@ -13844,6 +13907,57 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ExternalSecretTestResultView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/configuration/secret-providers/vault-kv2/test": {
+      "post": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Test a Vault-compatible KV v2 secret provider connection",
+        "operationId": "testVaultKvV2SecretProviderConnection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestVaultKvV2SecretProviderConnectionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretProviderConnectionTestResultView"
                 }
               }
             }
@@ -13939,6 +14053,115 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/configuration/secret-providers/vault-kv2/{id}": {
+      "put": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Update a Vault-compatible KV v2 secret provider",
+        "operationId": "updateVaultKvV2SecretProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Secret provider ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateVaultKvV2SecretProviderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretProviderView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/configuration/secret-providers/{id}": {
+      "delete": {
+        "tags": [
+          "ConfigurationEntries"
+        ],
+        "summary": "Delete a secret provider",
+        "operationId": "deleteSecretProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Secret provider ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
           },
           "429": {
             "description": "Too Many Requests",
@@ -27319,6 +27542,21 @@
         }
       },
       "SecretDeliveryMode": { },
+      "SecretProviderConnectionTestResultView": {
+        "required": [
+          "success",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "SecretProviderType": { },
       "SecretProviderView": {
         "required": [
@@ -28942,6 +29180,43 @@
           }
         }
       },
+      "TestVaultKvV2SecretProviderConnectionInput": {
+        "required": [
+          "providerId",
+          "name",
+          "address",
+          "mountPath",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "address": {
+            "type": "string"
+          },
+          "mountPath": {
+            "type": "string"
+          },
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "TimeZoneInfo": {
         "type": "object",
         "properties": {
@@ -29051,6 +29326,66 @@
           "Notify",
           "AutoDeploy"
         ]
+      },
+      "UpdateExternalSecretInput": {
+        "required": [
+          "name",
+          "providerId",
+          "externalPath",
+          "externalKey",
+          "externalVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "externalPath": {
+            "type": "string"
+          },
+          "externalKey": {
+            "type": "string"
+          },
+          "externalVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "UpdateVaultKvV2SecretProviderInput": {
+        "required": [
+          "name",
+          "address",
+          "mountPath",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "mountPath": {
+            "type": "string"
+          },
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
       },
       "UserResourceAccessInput": {
         "required": [

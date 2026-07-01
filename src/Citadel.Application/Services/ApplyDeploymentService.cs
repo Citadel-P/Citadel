@@ -136,7 +136,7 @@ internal sealed partial class ApplyDeploymentService(
 
         yield return Info("Resolving deployment variables and secrets...");
 
-        var configurationResult = await configurationResolver.ResolveAsync(Domain.Entities.Configuration.ConfigurationScope.Deployment, deployment.Id, ct);
+        var configurationResult = await configurationResolver.ResolveAsync(ConfigurationScope.Deployment, deployment.Id, ct);
         if (configurationResult.IsFailure(out var configurationError, out var resolvedConfiguration))
         {
             var safeMessage = configurationError.Message;

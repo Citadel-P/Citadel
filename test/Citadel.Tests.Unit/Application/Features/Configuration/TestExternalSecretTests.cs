@@ -1,5 +1,6 @@
 using Application.Features.Configuration.Commands;
 using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Configuration;
 using Moq;
@@ -8,6 +9,62 @@ namespace Tests.Unit.Application.Features.Configuration;
 
 public sealed class TestExternalSecretTests
 {
+    [Fact]
+    public async Task TestVaultProviderConnection_Should_Use_Stored_Token_When_Command_Token_Is_Blank()
+    {
+        var providerId = Guid.CreateVersion7();
+        var provider = CreateProvider(providerId);
+        var unitOfWork = CreateUnitOfWork(provider);
+        var externalClient = new Mock<IExternalSecretProviderClient>();
+        externalClient
+            .Setup(x => x.TestConnectionAsync(
+                It.Is<SecretProvider>(p =>
+                    p.Id == providerId &&
+                    p.Name == "vault-edit" &&
+                    p.Configuration.Address == "https://vault.local" &&
+                    p.Configuration.MountPath == "kv"),
+                "plain-token",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ExternalSecretProviderConnectionTestResult.Succeeded("ok"));
+        var handler = new TestVaultKvV2SecretProviderConnectionHandler(
+            unitOfWork.Object,
+            new TestSecretValueProtector(),
+            externalClient.Object);
+
+        var result = await handler.Handle(
+            new TestVaultKvV2SecretProviderConnection(providerId, "vault-edit", "https://vault.local/", "/kv/", ""),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var testResult, out var error), error?.Message);
+        Assert.True(testResult.Success);
+        Assert.Equal(
+            "Connection successful using the stored token. Vault is reachable and the token is valid.",
+            testResult.Message);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task TestVaultProviderConnection_Should_Return_Failure_When_Create_Token_Is_Blank()
+    {
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var externalClient = new Mock<IExternalSecretProviderClient>();
+        var handler = new TestVaultKvV2SecretProviderConnectionHandler(
+            unitOfWork.Object,
+            new TestSecretValueProtector(),
+            externalClient.Object);
+
+        var result = await handler.Handle(
+            new TestVaultKvV2SecretProviderConnection(null, "vault", "https://vault.local", "secret", ""),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var testResult, out var error), error?.Message);
+        Assert.False(testResult.Success);
+        Assert.Equal("Vault token is required to test the connection.", testResult.Message);
+        externalClient.Verify(
+            x => x.TestConnectionAsync(It.IsAny<SecretProvider>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     [Fact]
     public async Task TestExternalSecret_Should_Resolve_Reference_Without_Persisting_Secret_Value()
     {

@@ -22,4 +22,6 @@ public sealed record StackApplyCommand(
     IReadOnlyList<string>? SourceComposeFilePaths = null,
     IReadOnlyList<string>? SourceEnvFilePaths = null,
     string? LabelsOverrideFilePath = null,
-    string? GeneratedFilesDirectory = null);
+    string? GeneratedFilesDirectory = null,
+    IReadOnlyList<StackSecretFile>? SecretFiles = null,
+    IReadOnlyList<string>? SecretTargetServiceNames = null);

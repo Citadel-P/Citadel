@@ -11,17 +11,19 @@ using Mediator;
 namespace Application.Features.Configuration.Commands;
 
 [RequirePermission(ResourceType.Configuration, PermissionLevel.Write)]
-public sealed record CreateExternalSecret(
+public sealed record UpdateExternalSecret(
+    Guid Id,
     string Name,
     Guid ProviderId,
     string ExternalPath,
     string ExternalKey,
     int? ExternalVersion) : ICommand<Result<SecretDefinition>>
 {
-    internal sealed class Validator : AbstractValidator<CreateExternalSecret>
+    internal sealed class Validator : AbstractValidator<UpdateExternalSecret>
     {
         public Validator()
         {
+            RuleFor(x => x.Id).NotEmpty();
             RuleFor(x => x.Name)
                 .NotEmpty()
                 .MaximumLength(128)
@@ -35,12 +37,19 @@ public sealed record CreateExternalSecret(
     }
 }
 
-internal sealed class CreateExternalSecretHandler(IUnitOfWork unitOfWork)
-    : ICommandHandler<CreateExternalSecret, Result<SecretDefinition>>
+internal sealed class UpdateExternalSecretHandler(IUnitOfWork unitOfWork)
+    : ICommandHandler<UpdateExternalSecret, Result<SecretDefinition>>
 {
-    public async ValueTask<Result<SecretDefinition>> Handle(CreateExternalSecret command, CancellationToken cancellationToken)
+    public async ValueTask<Result<SecretDefinition>> Handle(UpdateExternalSecret command, CancellationToken cancellationToken)
     {
-        if (await unitOfWork.SecretDefinitions.ExistsByNameAsync(command.Name, cancellationToken))
+        var existing = await unitOfWork.SecretDefinitions.GetAsync(command.Id, cancellationToken);
+        if (existing is null)
+            return Result.Failure<SecretDefinition>(new NotFoundError("Secret definition not found."));
+
+        if (existing.ProviderType != SecretProviderType.VaultCompatibleKvV2)
+            return Result.Failure<SecretDefinition>(new BadRequestError("Only external Vault-compatible secrets can be updated with this operation."));
+
+        if (await unitOfWork.SecretDefinitions.ExistsByNameExceptAsync(command.Name, command.Id, cancellationToken))
             return Result.Failure<SecretDefinition>(new ConflictError("Name already exists"));
 
         var provider = await unitOfWork.SecretProviders.GetAsync(command.ProviderId, cancellationToken);
@@ -49,13 +58,14 @@ internal sealed class CreateExternalSecretHandler(IUnitOfWork unitOfWork)
         if (provider.ProviderType != SecretProviderType.VaultCompatibleKvV2)
             return Result.Failure<SecretDefinition>(new BadRequestError("The provided secret provider is not supported for external secrets."));
 
-        var secret = new SecretDefinition(
-            command.Name,
-            SecretProviderType.VaultCompatibleKvV2,
-            command.ProviderId,
-            command.ExternalPath.Trim('/'),
-            command.ExternalKey,
-            command.ExternalVersion);
+        var secret = existing with
+        {
+            Name = command.Name,
+            ProviderId = command.ProviderId,
+            ExternalPath = command.ExternalPath.Trim('/'),
+            ExternalKey = command.ExternalKey,
+            ExternalVersion = command.ExternalVersion
+        };
 
         try
         {
@@ -66,7 +76,7 @@ internal sealed class CreateExternalSecretHandler(IUnitOfWork unitOfWork)
             return Result.Failure<SecretDefinition>(new BadRequestError(ex.Message));
         }
 
-        await unitOfWork.SecretDefinitions.AddAsync(secret, value: null, cancellationToken);
+        await unitOfWork.SecretDefinitions.UpdateAsync(secret, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return secret;

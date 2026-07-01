@@ -1,3 +1,4 @@
+using Domain;
 using Domain.Entities.Configuration;
 
 namespace Application.Services;
@@ -13,10 +14,24 @@ internal static class ConfigurationApplyMessageBuilder
             .Where(entry => referencedKeys.Contains(entry.Name))
             .OrderBy(entry => entry.Name, StringComparer.Ordinal)
             .ToArray();
+        var mountedSecrets = configuration.Entries
+            .Where(entry => entry.Kind == ConfigurationEntryKind.Secret
+                && entry.SecretDeliveryMode == SecretDeliveryMode.MountedFile)
+            .OrderBy(entry => entry.Name, StringComparer.Ordinal)
+            .Select(FormatSecretName)
+            .ToArray();
 
         var message = usedEntries.Length == 0
             ? "No Citadel variables or secrets were referenced by the compose files."
             : $"Resolved {FormatEntryGroups(usedEntries)} for compose interpolation.";
+
+        if (mountedSecrets.Length > 0)
+        {
+            var mountedMessage = $"Mounted {FormatNamedEntries(mountedSecrets, "secret file")}.";
+            message = usedEntries.Length == 0
+                ? mountedMessage
+                : $"{message} {mountedMessage}";
+        }
 
         if (sourceEnvironmentFileCount <= 0)
             return message;

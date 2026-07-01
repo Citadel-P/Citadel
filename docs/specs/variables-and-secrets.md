@@ -423,6 +423,7 @@ Important KV v2 rules:
 - `ExternalVersion` is optional. Empty means use the provider's latest version.
 - Do not include `/v1` in `MountPath`.
 - Do not include `/data` in `ExternalPath`; Citadel inserts the KV v2 `/data/` segment.
+- Do not include `MountPath` in `ExternalPath`; if the Vault UI shows `secret/apps/api/prod`, store `MountPath = secret` and `ExternalPath = apps/api/prod`.
 - Trim leading/trailing slashes from `MountPath` and `ExternalPath`.
 
 Do not log the request auth header or response body.
@@ -510,17 +511,29 @@ MVP support:
 
 - `EnvironmentVariable` for deployments
 - `EnvironmentVariable` for stacks, materialized by the Docker Compose backend through a generated compose env file
+- `MountedFile` for stack-scoped secrets only
 
-Unsupported delivery modes must fail validation and must also fail safely if bad persisted data reaches the resolver. Do not silently downgrade `MountedFile` or `NativePlatformSecret` to environment variables.
+Unsupported delivery modes must fail validation and must also fail safely if bad persisted data reaches the resolver. Do not silently downgrade unsupported modes to environment variables.
+
+Mounted-file support:
+
+- only stack-scoped secret entries may use `MountedFile`
+- `TargetPath` is required and must be an absolute Linux container file path
+- target paths cannot contain relative segments or protected system paths such as `/etc/passwd`, `/proc`, `/sys`, or `/dev`
+- the Docker Compose backend writes the secret value to Citadel's generated stack files directory
+- Citadel generates an extra compose override file that bind-mounts the secret file read-only into each service in the stack
+- mounted secret source files must persist after apply so containers can restart with the bind mount still available
+- mounted secret source files should be replaced on the next apply and removed when stack storage is destroyed
+- stale mounted secret source files should be removed after a successful apply when the current stack configuration no longer uses mounted-file secrets
+- mounted secret plaintext must still be included in redaction values and must not appear in activity, alert, release, or SignalR output
 
 Future support:
 
-- mounted file
 - Docker Compose secret wiring as a materializer implementation detail
 - Docker Swarm secrets
 - Kubernetes Secret resources
 
-`MountedFile` is the next delivery mode to implement after the environment-variable path is stable. It requires a separate materialization contract for generated secret files, target path validation, file permissions, Compose bind/secret wiring, cleanup, redaction, and release snapshot metadata.
+`NativePlatformSecret` is intentionally not supported yet.
 
 ## Stack Behavior
 
@@ -536,7 +549,8 @@ Manual stack flow:
 6. Persist only the referenced Citadel keys in the stack release configuration snapshot.
 7. Pass the environment list to the existing generated env file path.
 8. Redact selected secret values from stack apply output.
-9. Delete generated files containing secrets after apply.
+9. Delete generated env files containing environment-delivered secrets after apply.
+10. Keep mounted-file secret sources available for container restart until the next apply or stack storage cleanup.
 
 Git stack flow:
 
@@ -549,10 +563,15 @@ Git stack flow:
 7. Persist only the referenced Citadel keys in the stack release configuration snapshot.
 8. Redact selected secret values from output.
 9. Do not persist plaintext secrets in `StackReleaseSource`, release snapshots, or activity events.
+10. Generate mounted-file secret override files only after the Git source snapshot has been materialized.
 
 For Docker Compose, users should still write `${NAME}` placeholders. Citadel should generate the env file and let Docker Compose perform interpolation.
 
 The stack config tab is where users reference variables in compose content. The stack Variables & Secrets tab is where users manage stack-local entries and explicit overrides. Inherited global entries are resolved at deploy time but are not listed in every resource tab.
+
+Manual stacks should not introduce a separate inline `.env` editor as the primary model. Values that would normally live in a manual stack `.env` file belong in the stack Variables & Secrets tab and should be referenced from compose content with `${NAME}` placeholders. This avoids two competing sources of truth for precedence, permissions, release snapshots, diffs, and redaction.
+
+`StackSpec.EnvFilePath` is not a user variable editor. It is an advanced materialization override for the path, relative to the Docker Compose run directory, where Citadel writes its generated env file during apply. Leave it unset for the default temporary generated path.
 
 ## Deployment Behavior
 
@@ -849,9 +868,18 @@ Secrets:
 For MVP, supported delivery modes in UI:
 
 - Stack: `EnvironmentVariable` displayed as `Compose env`
+- Stack: `MountedFile` displayed as `Mounted file`
 - Deployment: `EnvironmentVariable` displayed as `Container env`
 
 Disable unsupported delivery modes instead of showing options that do nothing.
+
+Mounted-file UI rules:
+
+- show delivery mode only for secret keys
+- show `Target path` only when delivery is `MountedFile`
+- stack tabs may create mounted-file secret keys
+- global and deployment tabs must not offer mounted-file delivery
+- helper text should explain that the target path is the path inside the container, for example `/run/secrets/postgres_password`
 
 ### Dirty State And Preview Changes
 
@@ -998,7 +1026,7 @@ For deployments, validation should ensure every configured entry can be converte
 
 ### Slice 4: Safer Delivery Modes
 
-- Mounted files.
+- Mounted files for stack-scoped secrets.
 - Native Docker/Swarm/Kubernetes secret materialization.
 - Secret rotation workflow.
 
@@ -1014,6 +1042,7 @@ Backend tests should cover:
 - deployment apply resolves variables into container env
 - deployment apply resolves secrets into runtime env without persisting plaintext
 - stack apply resolves variables/secrets into generated compose env file
+- stack apply resolves mounted-file secrets into generated read-only compose bind mounts
 - stack release snapshot masks secret references
 - deployment activity events mask secrets
 - stack activity events mask secrets

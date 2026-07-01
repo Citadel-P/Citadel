@@ -1,3 +1,5 @@
+using SecretMode = Domain.SecretDeliveryMode;
+
 namespace Domain.Entities.Configuration;
 
 public sealed record ConfigurationEntry(
@@ -43,26 +45,41 @@ public sealed record ConfigurationEntry(
 
             if (SecretDeliveryMode is null)
                 throw new ArgumentException("Secret entries require a delivery mode.", nameof(SecretDeliveryMode));
+
+            if (SecretDeliveryMode == SecretMode.EnvironmentVariable && TargetPath is not null)
+                throw new ArgumentException("Environment variable secrets cannot define a target path.", nameof(TargetPath));
+
+            if (SecretDeliveryMode == SecretMode.MountedFile)
+                ValidateMountedFileTargetPath(TargetPath);
+
+            if (SecretDeliveryMode == SecretMode.NativePlatformSecret)
+                throw new ArgumentException("Native platform secret delivery is not supported yet.", nameof(SecretDeliveryMode));
         }
     }
-}
 
-public enum ConfigurationEntryKind
-{
-    Variable,
-    Secret
-}
+    private static void ValidateMountedFileTargetPath(string? targetPath)
+    {
+        if (string.IsNullOrWhiteSpace(targetPath))
+            throw new ArgumentException("Mounted file secrets require a target path.", nameof(TargetPath));
 
-public enum ConfigurationScope
-{
-    Global,
-    Stack,
-    Deployment
-}
+        if (!targetPath.StartsWith("/", StringComparison.Ordinal) || targetPath.Contains("\\", StringComparison.Ordinal))
+            throw new ArgumentException("Mounted file secret target path must be an absolute Linux container path.", nameof(TargetPath));
 
-public enum SecretDeliveryMode
-{
-    EnvironmentVariable,
-    MountedFile,
-    NativePlatformSecret
+        var normalized = targetPath.Trim();
+        if (normalized == "/" || normalized.EndsWith("/", StringComparison.Ordinal))
+            throw new ArgumentException("Mounted file secret target path must point to a file.", nameof(TargetPath));
+
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Any(segment => segment is "." or ".."))
+            throw new ArgumentException("Mounted file secret target path cannot contain relative path segments.", nameof(TargetPath));
+
+        if (normalized.Equals("/etc/passwd", StringComparison.Ordinal)
+            || normalized.Equals("/etc/shadow", StringComparison.Ordinal)
+            || normalized.StartsWith("/proc/", StringComparison.Ordinal)
+            || normalized.StartsWith("/sys/", StringComparison.Ordinal)
+            || normalized.StartsWith("/dev/", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Mounted file secret target path uses a protected container path.", nameof(TargetPath));
+        }
+    }
 }

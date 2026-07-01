@@ -727,3 +727,29 @@ public enum StackApplyEventType
     SystemMessage,
     CommandCompleted
 }
+
+public enum SecretProviderType
+{
+    InternalEncrypted,
+    VaultCompatibleKvV2
+}
+
+public enum ConfigurationEntryKind
+{
+    Variable,
+    Secret
+}
+
+public enum ConfigurationScope
+{
+    Global,
+    Stack,
+    Deployment
+}
+
+public enum SecretDeliveryMode
+{
+    EnvironmentVariable,
+    MountedFile,
+    NativePlatformSecret
+}

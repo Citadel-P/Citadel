@@ -484,9 +484,17 @@ public static class PublicEndpoints
             .WithName("createExternalSecret")
             .WithSummary("Create an external secret definition");
 
+        configuration.MapPut("secrets/external/{id:guid}", ConfigurationEntries.UpdateExternalSecret)
+            .WithName("updateExternalSecret")
+            .WithSummary("Update an external secret definition");
+
         configuration.MapPost("secrets/external/test", ConfigurationEntries.TestExternalSecret)
             .WithName("testExternalSecret")
             .WithSummary("Test an external secret reference");
+
+        configuration.MapPost("secret-providers/vault-kv2/test", ConfigurationEntries.TestVaultKvV2SecretProviderConnection)
+            .WithName("testVaultKvV2SecretProviderConnection")
+            .WithSummary("Test a Vault-compatible KV v2 secret provider connection");
 
         configuration.MapGet("secret-providers", ConfigurationEntries.ListSecretProviders)
             .WithName("listSecretProviders")
@@ -495,6 +503,14 @@ public static class PublicEndpoints
         configuration.MapPost("secret-providers/vault-kv2", ConfigurationEntries.CreateVaultKvV2SecretProvider)
             .WithName("createVaultKvV2SecretProvider")
             .WithSummary("Create a Vault-compatible KV v2 secret provider");
+
+        configuration.MapPut("secret-providers/vault-kv2/{id:guid}", ConfigurationEntries.UpdateVaultKvV2SecretProvider)
+            .WithName("updateVaultKvV2SecretProvider")
+            .WithSummary("Update a Vault-compatible KV v2 secret provider");
+
+        configuration.MapDelete("secret-providers/{id:guid}", ConfigurationEntries.DeleteSecretProvider)
+            .WithName("deleteSecretProvider")
+            .WithSummary("Delete a secret provider");
     }
 
     private static void MapAuthEndpoints(RouteGroupBuilder auth)

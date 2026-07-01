@@ -87,7 +87,7 @@ interface TaskStreamLayoutProps {
 
 function TaskStreamLayout({ title, refName, type, state }: TaskStreamLayoutProps) {
   const { status, elapsedLabel, text } = state;
-  const Icon = CitadelIcons[type];
+  const Icon = CitadelIcons[type] ?? CitadelIcons.Platform;
 
   return (
     <>

@@ -175,7 +175,7 @@ public class StackLifecycleTests
         var platformId = Guid.CreateVersion7();
         var actorId = Guid.CreateVersion7();
         var stack = Stack.Create(
-            name: "beszel",
+            name: "renamed-beszel",
             createdByActorId: actorId,
             StackSource: StackSource.WebEditor,
             platformId: platformId,
@@ -272,16 +272,31 @@ public class StackLifecycleTests
             .Setup(x => x.GetConnector(PlatformConnectorType.Local))
             .Returns(connector.Object);
         var stackHub = new Mock<IStackStreamManager>();
+        using var stackStorage = new TestStackStoragePathProvider();
+        var gitStoragePath = Path.Combine(stackStorage.StacksRoot, stack.Id.ToString("D"));
+        var currentNameStoragePath = Path.Combine(stackStorage.StacksRoot, "renamed-beszel");
+        var manualStoragePath = Path.Combine(stackStorage.StacksRoot, "beszel");
+        Directory.CreateDirectory(gitStoragePath);
+        Directory.CreateDirectory(currentNameStoragePath);
+        Directory.CreateDirectory(manualStoragePath);
+        await File.WriteAllTextAsync(
+            Path.Combine(manualStoragePath, "secret-file"),
+            "secret",
+            TestContext.Current.CancellationToken);
 
         var handler = new DeleteStacksHandler(
             unitOfWork.Object,
             platformCache,
             connectorFactory.Object,
-            stackHub.Object);
+            stackHub.Object,
+            stackStorage);
 
         var result = await handler.Handle(new DeleteStacks([stack.Id]), CancellationToken.None);
 
         Assert.True(result.IsSuccess());
+        Assert.False(Directory.Exists(gitStoragePath));
+        Assert.False(Directory.Exists(currentNameStoragePath));
+        Assert.False(Directory.Exists(manualStoragePath));
         connector.Verify(x => x.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()), Times.Once);
         stacks.Verify(x => x.RemoveRangeAsync(
             It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
@@ -316,7 +331,7 @@ public class StackLifecycleTests
             SizeRootFs: null,
             Mounts: [],
             Config: new ContainerConfiguration(
-                Hostname: null,
+            Hostname: null,
                 Domainname: null,
                 User: null,
                 AttachStdin: null,
@@ -337,6 +352,24 @@ public class StackLifecycleTests
                 OnBuild: [],
                 Labels: labels),
             NetworkSettings: null);
+
+    private sealed class TestStackStoragePathProvider : IStackStoragePathProvider, IDisposable
+    {
+        public string StacksRoot { get; } = Path.Combine(Path.GetTempPath(), $"citadel-stack-storage-{Guid.NewGuid():N}");
+
+        public TestStackStoragePathProvider()
+        {
+            Directory.CreateDirectory(StacksRoot);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(StacksRoot))
+            {
+                Directory.Delete(StacksRoot, recursive: true);
+            }
+        }
+    }
 
     private sealed class TestPlatformContainerCache(PlatformCacheEntry platform) : IPlatformContainerCache
     {

@@ -1,25 +1,6 @@
 import { ResourceType } from '@/api/types';
 import { Activity, Cable, ChevronsLeftRightEllipsis, createLucideIcon, GitBranch, KeyRound, Layers, Megaphone, Rocket, Rss, Server, Settings, Shield, TriangleAlert, User, UserKey, Users, Webhook } from 'lucide-react';
 
-export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ className?: string }>> = {
-  ['Deployment']: Rocket,
-  ['Registry']: Cable,
-  ['Platform']: Server,
-  ['Stack']: Layers,
-  ['Alert']:TriangleAlert, 
-  ['AlertRule']: Megaphone,
-  ['AlertChannel']: Rss,
-  ['GitRepository']: GitBranch,
-  ['GitAccount']: KeyRound,
-  ['Configuration']: Settings,
-  ['Webhook']: Webhook,
-  ['Access'] : UserKey,
-  ['Team'] : Users,
-  ['User']: User,
-  ['Role']: Shield,
-  ['Variable']: ChevronsLeftRightEllipsis,
-  ['Activity']: Activity
-};
 export const DockerIcon = createLucideIcon('DockerIcon', [
   [
     'path',
@@ -34,6 +15,30 @@ export const DockerIcon = createLucideIcon('DockerIcon', [
   ['rect', { x: '11', y: '7', width: '3', height: '3', rx: '0.5' }],
   ['rect', { x: '15', y: '7', width: '3', height: '3', rx: '0.5' }],
 ]);
+
+export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ className?: string }>> = {
+  ['Deployment']: Rocket,
+  ['Registry']: Cable,
+  ['Platform']: Server,
+  ['Stack']: Layers,
+  ['Container']: DockerIcon,
+  ['Image']: DockerIcon,
+  ['Network']: DockerIcon,
+  ['Volume']: DockerIcon,
+  ['Alert']:TriangleAlert, 
+  ['AlertRule']: Megaphone,
+  ['AlertChannel']: Rss,
+  ['GitRepository']: GitBranch,
+  ['GitAccount']: KeyRound,
+  ['Configuration']: Settings,
+  ['Webhook']: Webhook,
+  ['Access'] : UserKey,
+  ['Team'] : Users,
+  ['User']: User,
+  ['Role']: Shield,
+  ['Variable']: ChevronsLeftRightEllipsis,
+  ['Activity']: Activity
+};
 
 export const GitHubIcon = createLucideIcon('GitHubIcon', [
   [

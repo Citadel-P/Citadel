@@ -95,7 +95,7 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
     }
 
     [Fact]
-    public async Task Resource_Configuration_Should_Reject_Unsupported_Secret_Delivery_Mode()
+    public async Task Stack_Configuration_Should_Save_Mounted_File_Secret_Delivery()
     {
         var createSecretResponse = await Client.PostAsJsonAsync(
             "/api/v1/configuration/secrets",
@@ -118,6 +118,46 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
 
         var replaceResponse = await Client.PutAsync(
             $"/api/v1/configuration/Stack/{_stackId}",
+            new StringContent(resourceJson, Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+
+        replaceResponse.EnsureSuccessStatusCode();
+
+        var getResponse = await Client.GetAsync(
+            $"/api/v1/configuration/Stack/{_stackId}",
+            TestContext.Current.CancellationToken);
+        getResponse.EnsureSuccessStatusCode();
+
+        var responseBody = await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("\"secretDeliveryMode\":\"MountedFile\"", responseBody);
+        Assert.Contains("\"targetPath\":\"/run/secrets/file_secret\"", responseBody);
+        Assert.DoesNotContain("super-secret-value", responseBody);
+    }
+
+    [Fact]
+    public async Task Global_Configuration_Should_Reject_Mounted_File_Secret_Delivery()
+    {
+        var createSecretResponse = await Client.PostAsJsonAsync(
+            "/api/v1/configuration/secrets",
+            new { name = "FILE_SECRET", value = "super-secret-value" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        createSecretResponse.EnsureSuccessStatusCode();
+
+        var secretJson = await JsonDocument.ParseAsync(
+            await createSecretResponse.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+        var secretId = secretJson.RootElement.GetProperty("id").GetGuid();
+
+        var resourceJson = $$"""
+        {
+          "entries": [
+            { "name": "FILE_SECRET", "kind": "Secret", "value": null, "secretId": "{{secretId}}", "secretDeliveryMode": "MountedFile", "targetPath": "/run/secrets/file_secret" }
+          ]
+        }
+        """;
+
+        var replaceResponse = await Client.PutAsync(
+            "/api/v1/configuration/global",
             new StringContent(resourceJson, Encoding.UTF8, "application/json"),
             TestContext.Current.CancellationToken);
 

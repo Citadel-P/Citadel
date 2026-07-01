@@ -5,10 +5,11 @@ import {
   ConfigurationScope,
   CreateExternalSecretInput,
   CreateInternalSecretInput,
+  SecretProviderType,
   TestExternalSecretInput,
-  CreateVaultKvV2SecretProviderInput,
   SecretDefinitionView,
   SecretProviderView,
+  UpdateExternalSecretInput,
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,14 +32,24 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMutate, useRead } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ExternalLink, KeyRound, LoaderCircle, MoreHorizontal, Pencil, Plus, Trash2, Variable } from 'lucide-react';
+import {
+  ChevronDown,
+  ExternalLink,
+  KeyRound,
+  LoaderCircle,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+  Variable,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { FieldInput } from './form-builder';
 import { Link } from 'react-router';
 
 export const ENV_DELIVERY_MODE = 'EnvironmentVariable';
+export const MOUNTED_FILE_DELIVERY_MODE = 'MountedFile';
 const INTERNAL_SECRET_INPUT: CreateInternalSecretInput = { name: '', value: '' };
 const EXTERNAL_SECRET_INPUT: CreateExternalSecretInput = {
   name: '',
@@ -46,12 +57,6 @@ const EXTERNAL_SECRET_INPUT: CreateExternalSecretInput = {
   externalPath: '',
   externalKey: '',
   externalVersion: null,
-};
-const PROVIDER_INPUT: CreateVaultKvV2SecretProviderInput = {
-  name: '',
-  address: '',
-  mountPath: 'secret',
-  token: '',
 };
 type SecretSource = 'internal' | 'vault';
 
@@ -140,6 +145,7 @@ export const ConfigurationEntriesTab = ({
       originalInputs={originalInputs}
       secrets={secrets}
       canCreateSecret={canCreateSecret}
+      allowMountedFile={scope === ConfigurationScope.Stack}
     />
   );
 };
@@ -154,6 +160,7 @@ const ConfigurationEntriesTabEditor = ({
   originalInputs,
   secrets,
   canCreateSecret,
+  allowMountedFile,
 }: {
   scope: ConfigurationScope.Stack | ConfigurationScope.Deployment;
   resourceId: string;
@@ -164,14 +171,21 @@ const ConfigurationEntriesTabEditor = ({
   originalInputs: ConfigurationEntryInput[];
   secrets: SecretDefinitionView[];
   canCreateSecret: boolean;
+  allowMountedFile?: boolean;
 }) => {
   const queryClient = useQueryClient();
   const replace = useMutate('replaceResourceConfigurationEntries');
+  const updateExternalSecret = useMutate('updateExternalSecret');
+  const testExternalSecret = useMutate('testExternalSecret');
   const entries = initialEntries;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<EditableEntry | null>(null);
   const [entryInput, setEntryInput] = useState<ConfigurationEntryInput>(newVariableInput());
   const [deleteEntry, setDeleteEntry] = useState<EditableEntry | null>(null);
+  const [editingStoredSecret, setEditingStoredSecret] = useState<SecretDefinitionView | null>(null);
+  const [storedSecretInput, setStoredSecretInput] = useState<CreateExternalSecretInput>(EXTERNAL_SECRET_INPUT);
+  const { data: providersData } = useRead('listSecretProviders', undefined, { enabled: editingStoredSecret != null });
+  const providers = useMemo(() => providersData?.data.providers ?? [], [providersData?.data.providers]);
 
   const saveEntries = async (entriesToSave: ConfigurationEntryInput[], message: string) => {
     try {
@@ -205,14 +219,31 @@ const ConfigurationEntriesTabEditor = ({
     setDialogOpen(true);
   };
 
+  const openEditStoredSecret = (secret: SecretDefinitionView) => {
+    if (secret.providerType !== SecretProviderType.VaultCompatibleKvV2) {
+      toast.error('Only Vault-compatible stored secrets can be edited here.');
+      return;
+    }
+
+    setEditingStoredSecret(secret);
+    setStoredSecretInput(toExternalSecretInput(secret));
+  };
+
   const addSecretBinding = useCallback(
     async (secret?: SecretDefinitionView) => {
-      if (!secret) return;
-      await saveEntries([...originalInputs, newSecretInput(secret)], 'Secret created and added');
+      if (!secret) return false;
+      const next = [...originalInputs, newSecretInput(secret)];
+      if (hasDuplicateEntryName(next)) {
+        toast.error('A variable or secret key with this name already exists on this resource.');
+        return false;
+      }
+
+      await saveEntries(next, 'Secret added');
+      return true;
     },
     [originalInputs],
   );
-  const secretCreation = useSecretCreation(addSecretBinding);
+  const secretCreation = useSecretCreation(addSecretBinding, secrets);
 
   const saveDialogEntry = async () => {
     const next =
@@ -221,6 +252,11 @@ const ConfigurationEntriesTabEditor = ({
         : originalInputs.map((entry, index) =>
             entries[index].clientId === editingEntry.clientId ? normalizeEntryInput(entryInput) : entry,
           );
+
+    if (hasDuplicateEntryName(next)) {
+      toast.error('A variable or secret key with this name already exists on this resource.');
+      return;
+    }
 
     await saveEntries(next, editingEntry == null ? 'Configuration entry added' : 'Configuration entry updated');
     setDialogOpen(false);
@@ -234,6 +270,44 @@ const ConfigurationEntriesTabEditor = ({
       'Configuration entry deleted',
     );
     setDeleteEntry(null);
+  };
+
+  const saveStoredSecret = async () => {
+    if (!editingStoredSecret) return;
+
+    const payload: UpdateExternalSecretInput = normalizeExternalSecretInput(storedSecretInput);
+    try {
+      const result = await updateExternalSecret.mutateAsync({
+        id: editingStoredSecret.id,
+        data: payload,
+      } as any);
+      setEditingStoredSecret(null);
+      await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
+      await queryClient.invalidateQueries({ queryKey: ['getResourceConfigurationEntries', queryArgs] });
+      toast.success('Stored secret updated');
+
+      if (entryInput.secretId === editingStoredSecret.id) {
+        setEntryInput((prev) => ({ ...prev, name: prev.name || result.data.name }));
+      }
+    } catch {
+      toast.error(updateExternalSecret.validationErrors ?? 'Failed to update stored secret');
+    }
+  };
+
+  const testStoredSecret = async () => {
+    try {
+      const result = await testExternalSecret.mutateAsync({
+        data: toExternalSecretTestInput(storedSecretInput),
+      } as any);
+
+      if (result.data.success) {
+        toast.success(result.data.message);
+      } else {
+        toast.error(result.data.message);
+      }
+    } catch {
+      toast.error(testExternalSecret.validationErrors ?? 'Failed to test external secret');
+    }
   };
 
   return (
@@ -273,9 +347,22 @@ const ConfigurationEntriesTabEditor = ({
         secrets={secrets}
         isPending={replace.isPending}
         editing={editingEntry != null}
+        allowMountedFile={allowMountedFile}
         onOpenChange={setDialogOpen}
         onInputChange={setEntryInput}
         onSave={saveDialogEntry}
+        onEditStoredSecret={openEditStoredSecret}
+      />
+      <EditExternalSecretDialog
+        open={editingStoredSecret != null}
+        input={storedSecretInput}
+        providers={providers}
+        isPending={updateExternalSecret.isPending}
+        isTesting={testExternalSecret.isPending}
+        onOpenChange={(open) => !open && setEditingStoredSecret(null)}
+        onInputChange={setStoredSecretInput}
+        onSave={saveStoredSecret}
+        onTest={testStoredSecret}
       />
       <CreateSecretDialog {...secretCreation.dialogProps} />
       <Dialog open={deleteEntry != null} onOpenChange={(open) => !open && setDeleteEntry(null)}>
@@ -382,9 +469,20 @@ const ResourceConfigurationEntriesTable = ({
                 )}
               </td>
               <td className="px-3 py-2 align-middle">
-                <span className="text-xs text-muted-foreground">
-                  {entry.kind === ConfigurationEntryKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : '-'}
-                </span>
+                {entry.kind === ConfigurationEntryKind.Secret ? (
+                  <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                    <span>
+                      {entry.secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE
+                        ? 'Mounted file'
+                        : 'Environment variable'}
+                    </span>
+                    {entry.secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE && entry.targetPath && (
+                      <span className="font-mono">{entry.targetPath}</span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">-</span>
+                )}
               </td>
               <td className="px-2 py-2 align-middle">
                 <DropdownMenu>
@@ -419,7 +517,8 @@ const GlobalVariablesLink = () => (
     <div>
       <div className="font-medium">Global Variables</div>
       <div className="text-xs text-muted-foreground">
-        Global entries are inherited automatically and resolved during deploy. They are not listed in this resource table.
+        Global entries are inherited automatically and resolved during deploy. They are not listed in this resource
+        table.
       </div>
     </div>
     <Button asChild variant="outline" size="sm">
@@ -437,21 +536,32 @@ const ConfigurationEntryDialog = ({
   secrets,
   isPending,
   editing,
+  allowMountedFile,
   onOpenChange,
   onInputChange,
   onSave,
+  onEditStoredSecret,
 }: {
   open: boolean;
   input: ConfigurationEntryInput;
   secrets: SecretDefinitionView[];
   isPending: boolean;
   editing: boolean;
+  allowMountedFile?: boolean;
   onOpenChange: (open: boolean) => void;
-  onInputChange: (input: ConfigurationEntryInput | ((prev: ConfigurationEntryInput) => ConfigurationEntryInput)) => void;
+  onInputChange: (
+    input: ConfigurationEntryInput | ((prev: ConfigurationEntryInput) => ConfigurationEntryInput),
+  ) => void;
   onSave: () => void;
+  onEditStoredSecret?: (secret: SecretDefinitionView) => void;
 }) => {
   const isSecret = input.kind === ConfigurationEntryKind.Secret;
-  const canSave = input.name.trim().length > 0 && (!isSecret || Boolean(input.secretId));
+  const isMountedFile = input.secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE;
+  const selectedSecret = isSecret ? secrets.find((secret) => secret.id === input.secretId) : undefined;
+  const mountedFileTargetPathError = isMountedFile ? getMountedFileTargetPathError(input.targetPath) : null;
+  const canSave =
+    input.name.trim().length > 0 &&
+    (!isSecret || (Boolean(input.secretId) && (!isMountedFile || mountedFileTargetPathError == null)));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -474,24 +584,76 @@ const ConfigurationEntryDialog = ({
             />
           </div>
           {isSecret ? (
-            <div>
-              <Label>Secret</Label>
-              <Select
-                value={input.secretId ?? ''}
-                disabled={secrets.length === 0}
-                onValueChange={(secretId) => onInputChange((prev) => ({ ...prev, secretId }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder={secrets.length ? 'Select secret' : 'No secrets'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {secrets.map((secret) => (
-                    <SelectItem key={secret.id} value={secret.id}>
-                      {secret.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div>
+                <Label>Secret</Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={input.secretId ?? ''}
+                    disabled={secrets.length === 0}
+                    onValueChange={(secretId) => onInputChange((prev) => ({ ...prev, secretId }))}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder={secrets.length ? 'Select secret' : 'No secrets'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {secrets.map((secret) => (
+                        <SelectItem key={secret.id} value={secret.id}>
+                          {secret.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedSecret?.providerType === SecretProviderType.VaultCompatibleKvV2 && onEditStoredSecret && (
+                    <Button type="button" variant="outline" onClick={() => onEditStoredSecret(selectedSecret)}>
+                      Edit Stored Secret
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {allowMountedFile && (
+                <div>
+                  <Label>Delivery</Label>
+                  <Select
+                    value={input.secretDeliveryMode ?? ENV_DELIVERY_MODE}
+                    onValueChange={(secretDeliveryMode) =>
+                      onInputChange((prev) => ({
+                        ...prev,
+                        secretDeliveryMode,
+                        targetPath: secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE ? (prev.targetPath ?? '') : null,
+                      }))
+                    }>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ENV_DELIVERY_MODE}>Environment variable</SelectItem>
+                      <SelectItem value={MOUNTED_FILE_DELIVERY_MODE}>Mounted file</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Environment variables are used for compose interpolation. Mounted files are read-only container
+                    files for images that support *_FILE settings.
+                  </div>
+                </div>
+              )}
+              {allowMountedFile && isMountedFile && (
+                <div>
+                  <Label>Target path</Label>
+                  <Input
+                    value={input.targetPath ?? ''}
+                    placeholder="/run/secrets/postgres_password"
+                    onChange={(event) => onInputChange((prev) => ({ ...prev, targetPath: event.target.value }))}
+                  />
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Absolute container file path, for example /run/secrets/postgres_password. Reference this path from a
+                    compose *_FILE environment variable when the image supports it.
+                  </div>
+                  {mountedFileTargetPathError && (
+                    <div className="mt-1 text-xs text-destructive">{mountedFileTargetPathError}</div>
+                  )}
+                </div>
+              )}
+            </>
           ) : (
             <div>
               <Label>Value</Label>
@@ -514,6 +676,146 @@ const ConfigurationEntryDialog = ({
       </DialogContent>
     </Dialog>
   );
+};
+
+const EditExternalSecretDialog = ({
+  open,
+  input,
+  providers,
+  isPending,
+  isTesting,
+  onOpenChange,
+  onInputChange,
+  onSave,
+  onTest,
+}: {
+  open: boolean;
+  input: CreateExternalSecretInput;
+  providers: SecretProviderView[];
+  isPending: boolean;
+  isTesting: boolean;
+  onOpenChange: (open: boolean) => void;
+  onInputChange: (
+    input: CreateExternalSecretInput | ((prev: CreateExternalSecretInput) => CreateExternalSecretInput),
+  ) => void;
+  onSave: () => void;
+  onTest: () => void;
+}) => {
+  const canSave = Boolean(
+    input.name.trim() && input.providerId && input.externalPath.trim() && input.externalKey.trim(),
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-137.5" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>Edit Stored Secret</DialogTitle>
+          <DialogDescription>
+            Update the Vault reference used by resource secret keys. Existing bindings keep pointing to this stored
+            secret.
+          </DialogDescription>
+        </DialogHeader>
+        <ExternalSecretFields input={input} providers={providers} onInputChange={onInputChange} />
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending || isTesting}>
+            Cancel
+          </Button>
+          <Button type="button" variant="outline" onClick={onTest} disabled={!canSave || isPending || isTesting}>
+            Test {isTesting && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin" />}
+          </Button>
+          <Button type="button" onClick={onSave} disabled={!canSave || isPending || isTesting}>
+            Save {isPending && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin" />}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const ExternalSecretFields = ({
+  input,
+  providers,
+  onInputChange,
+}: {
+  input: CreateExternalSecretInput;
+  providers: SecretProviderView[];
+  onInputChange: (
+    input: CreateExternalSecretInput | ((prev: CreateExternalSecretInput) => CreateExternalSecretInput),
+  ) => void;
+}) => (
+  <div className="grid gap-4">
+    <LabeledInput
+      label="Name"
+      value={input.name}
+      onChange={(name) => onInputChange((prev) => ({ ...prev, name }))}
+      placeholder="API_KEY"
+      description="Default runtime key used when this secret is added to a resource."
+    />
+    <div className="grid gap-1.5 text-sm">
+      <span className="text-xs text-muted-foreground">Provider</span>
+      <Select
+        value={input.providerId}
+        disabled={providers.length === 0}
+        onValueChange={(providerId) => onInputChange((prev) => ({ ...prev, providerId }))}>
+        <SelectTrigger>
+          <SelectValue placeholder={providers.length ? 'Select provider' : 'No providers'} />
+        </SelectTrigger>
+        <SelectContent>
+          {providers.map((provider) => (
+            <SelectItem key={provider.id} value={provider.id}>
+              {provider.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span className="text-xs text-muted-foreground">
+        Create providers in the Secret Providers section. The secret value is fetched only during apply.
+      </span>
+    </div>
+    <LabeledInput
+      label="Path"
+      value={input.externalPath}
+      onChange={(externalPath) => onInputChange((prev) => ({ ...prev, externalPath }))}
+      placeholder="apps/api/prod"
+      description="Path inside the selected mount. Do not include the mount name, /v1, or /data."
+    />
+    <LabeledInput
+      label="Key"
+      value={input.externalKey}
+      onChange={(externalKey) => onInputChange((prev) => ({ ...prev, externalKey }))}
+      placeholder="api_key"
+      description="Field name inside the Vault secret data object."
+    />
+    <LabeledInput
+      label="Version"
+      type="number"
+      value={input.externalVersion?.toString() ?? ''}
+      onChange={(value) => onInputChange((prev) => ({ ...prev, externalVersion: value ? Number(value) : null }))}
+      placeholder="Latest"
+      description="Leave empty to resolve the latest version."
+    />
+  </div>
+);
+
+const getMountedFileTargetPathError = (targetPath?: string | null): string | null => {
+  const value = targetPath?.trim();
+  if (!value) return 'Target path is required.';
+  if (!value.startsWith('/') || value.includes('\\')) return 'Use an absolute Linux container path.';
+  if (value === '/' || value.endsWith('/')) return 'Target path must point to a file.';
+  if (value.split('/').some((segment) => segment === '.' || segment === '..')) {
+    return 'Target path cannot contain relative path segments.';
+  }
+  if (
+    value === '/etc/passwd' ||
+    value === '/etc/shadow' ||
+    value.startsWith('/proc/') ||
+    value.startsWith('/sys/') ||
+    value.startsWith('/dev/')
+  ) {
+    return 'Target path uses a protected container path.';
+  }
+
+  return null;
 };
 
 const LabeledInput = ({
@@ -586,7 +888,10 @@ export const ConfigurationAddDropdown = ({
   </DropdownMenu>
 );
 
-export const useSecretCreation = (addSecretBinding: (secret?: SecretDefinitionView) => void | Promise<void>) => {
+export const useSecretCreation = (
+  addSecretBinding: (secret?: SecretDefinitionView) => boolean | Promise<boolean>,
+  existingSecrets: SecretDefinitionView[] = EMPTY_SECRET_DEFINITIONS,
+) => {
   const queryClient = useQueryClient();
   const createInternalSecret = useMutate('createInternalSecret');
   const createExternalSecret = useMutate('createExternalSecret');
@@ -609,6 +914,16 @@ export const useSecretCreation = (addSecretBinding: (secret?: SecretDefinitionVi
   };
 
   const createSecret = async () => {
+    const requestedName = (source === 'internal' ? internalInput.name : externalInput.name).trim();
+    const existingSecret = existingSecrets.find((secret) => secret.name.toLowerCase() === requestedName.toLowerCase());
+    if (existingSecret) {
+      const added = await addSecretBinding(existingSecret);
+      if (!added) return;
+      resetSecretInputs();
+      setOpen(false);
+      return;
+    }
+
     try {
       const result =
         source === 'internal'
@@ -617,11 +932,11 @@ export const useSecretCreation = (addSecretBinding: (secret?: SecretDefinitionVi
               data: normalizeExternalSecretInput(externalInput),
             } as any);
 
-      await addSecretBinding(result.data);
+      const added = await addSecretBinding(result.data);
+      if (!added) return;
       resetSecretInputs();
       setOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
-      toast.success('Secret created');
     } catch {
       toast.error(
         source === 'internal'
@@ -670,7 +985,16 @@ export const useSecretCreation = (addSecretBinding: (secret?: SecretDefinitionVi
 const normalizeExternalSecretInput = (input: CreateExternalSecretInput): CreateExternalSecretInput => ({
   ...input,
   externalPath: input.externalPath.trim().replace(/^\/+|\/+$/g, ''),
-  externalVersion: input.externalVersion === '' || input.externalVersion === null ? null : Number(input.externalVersion),
+  externalVersion:
+    input.externalVersion === '' || input.externalVersion === null ? null : Number(input.externalVersion),
+});
+
+const toExternalSecretInput = (secret: SecretDefinitionView): CreateExternalSecretInput => ({
+  name: secret.name,
+  providerId: secret.providerId ?? '',
+  externalPath: secret.externalPath ?? '',
+  externalKey: secret.externalKey ?? '',
+  externalVersion: secret.externalVersion ?? null,
 });
 
 const toExternalSecretTestInput = (input: CreateExternalSecretInput): TestExternalSecretInput => {
@@ -681,171 +1005,6 @@ const toExternalSecretTestInput = (input: CreateExternalSecretInput): TestExtern
     externalKey: normalized.externalKey,
     externalVersion: normalized.externalVersion,
   };
-};
-
-export const SecretProvidersSection = ({ disabled }: { disabled?: boolean }) => {
-  const queryClient = useQueryClient();
-  const { data, isLoading } = useRead('listSecretProviders');
-  const createProvider = useMutate('createVaultKvV2SecretProvider');
-  const providers = data?.data.providers ?? [];
-  const [open, setOpen] = useState(false);
-  const [input, setInput] = useState<CreateVaultKvV2SecretProviderInput>(PROVIDER_INPUT);
-
-  const openAdd = () => {
-    setInput(PROVIDER_INPUT);
-    setOpen(true);
-  };
-
-  const save = async () => {
-    try {
-      await createProvider.mutateAsync({ data: input } as any);
-      setInput(PROVIDER_INPUT);
-      setOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ['listSecretProviders', {}] });
-      toast.success('Secret provider created');
-    } catch {
-      toast.error(createProvider.validationErrors ?? 'Failed to create secret provider');
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex justify-between">
-        <div className="flex items-center gap-3">
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <KeyRound className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="font-bold">Secret Providers</div>
-            <p className="text-xs text-muted-foreground">External providers used by Vault-backed secret definitions.</p>
-          </div>
-        </div>
-        <Button variant="outline" disabled={disabled} onClick={openAdd}>
-          <Plus className="h-3 w-3" /> Create Vault Provider
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-4">
-        {providers.map((provider) => (
-          <SecretProviderCard key={provider.id} provider={provider} />
-        ))}
-
-        {!isLoading && (
-          <button
-            type="button"
-            onClick={disabled ? undefined : openAdd}
-            disabled={disabled}
-            className={cn(
-              'flex h-35 flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-4 text-zinc-400 hover:text-zinc-600',
-              disabled && 'hover:cursor-not-allowed opacity-70',
-            )}>
-            <Plus className="h-5 w-5" />
-            <span className="text-sm font-medium">Create Vault Provider</span>
-          </button>
-        )}
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-137.5" onInteractOutside={(e) => e.preventDefault()}>
-          <DialogHeader>
-            <DialogTitle>Create Vault Provider</DialogTitle>
-            <DialogDescription>Configure a Vault-compatible KV v2 endpoint used by external secrets.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div>
-              <Label>Name</Label>
-              <FieldInput
-                className="max-w-full"
-                value={input.name}
-                placeholder="Production Vault"
-                onChange={(name) => setInput((prev) => ({ ...prev, name }))}
-              />
-            </div>
-            <div>
-              <Label>Address</Label>
-              <FieldInput
-                className="max-w-full"
-                value={input.address}
-                placeholder="https://vault.example.com"
-                onChange={(address) => setInput((prev) => ({ ...prev, address }))}
-              />
-              <div className="mt-1 text-xs text-muted-foreground">
-                Base Vault URL. Citadel appends the KV v2 API path.
-              </div>
-            </div>
-            <div>
-              <Label>Mount Path</Label>
-              <FieldInput
-                className="max-w-full"
-                value={input.mountPath}
-                placeholder="secret"
-                onChange={(mountPath) => setInput((prev) => ({ ...prev, mountPath }))}
-              />
-              <div className="mt-1 text-xs text-muted-foreground">KV v2 mount name, not the secret path.</div>
-            </div>
-            <div>
-              <Label>Token</Label>
-              <FieldInput
-                className="max-w-full"
-                type="password"
-                value={input.token}
-                placeholder="Vault token"
-                onChange={(token) => setInput((prev) => ({ ...prev, token }))}
-              />
-              <div className="mt-1 text-xs text-muted-foreground">
-                Stored encrypted and used only when resolving external secrets.
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="flex w-full justify-end items-center">
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setOpen(false)} disabled={createProvider.isPending}>
-                Cancel
-              </Button>
-              <Button
-                onClick={save}
-                disabled={
-                  createProvider.isPending ||
-                  !input.name.trim() ||
-                  !input.address.trim() ||
-                  !input.mountPath.trim() ||
-                  !input.token.trim()
-                }>
-                Save {createProvider.isPending && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin" />}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-};
-
-const SecretProviderCard = ({ provider }: { provider: SecretProviderView }) => {
-  const letter = provider.name.charAt(0).toUpperCase();
-
-  return (
-    <div className="group relative flex h-35 flex-col justify-between rounded-xl border border-muted bg-background p-4 transition-all hover:border-zinc-300 hover:shadow-md">
-      <div className="flex items-start justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-violet-600/10 bg-violet-600 font-bold text-white shadow-sm">
-            {letter}
-          </div>
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold">{provider.name}</h3>
-            <p className="truncate text-xs text-muted-foreground">{provider.address}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between border-t border-muted pt-4">
-        <span className="text-xs font-medium text-zinc-600">Vault KV v2</span>
-        <span className="rounded-sm border px-2 py-0.5 text-xs text-muted-foreground">{provider.mountPath}</span>
-      </div>
-    </div>
-  );
 };
 
 export const CreateSecretDialog = ({
@@ -968,7 +1127,7 @@ export const CreateSecretDialog = ({
                 value={externalInput.externalPath}
                 onChange={(externalPath) => onExternalInputChange((prev) => ({ ...prev, externalPath }))}
                 placeholder="apps/api/prod"
-                description="KV v2 secret path under the selected mount."
+                description="Path inside the selected mount. Do not include the mount name, /v1, or /data."
               />
               <LabeledInput
                 label="Key"
@@ -1055,6 +1214,17 @@ const normalizeEntryInput = (entry: ConfigurationEntryInput): ConfigurationEntry
     entry.kind === ConfigurationEntryKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
   targetPath: entry.kind === ConfigurationEntryKind.Secret ? (entry.targetPath ?? null) : null,
 });
+
+const hasDuplicateEntryName = (entries: ConfigurationEntryInput[]): boolean => {
+  const names = new Set<string>();
+  for (const entry of entries) {
+    const name = entry.name.trim().toLowerCase();
+    if (names.has(name)) return true;
+    names.add(name);
+  }
+
+  return false;
+};
 
 export const toInputFromView = (entry: ConfigurationEntryView): ConfigurationEntryInput => ({
   name: entry.name,

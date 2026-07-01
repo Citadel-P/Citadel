@@ -1,5 +1,6 @@
 using Application.Features.Configuration.Commands;
 using Application.Features.Configuration.Models;
+using Domain;
 using Domain.Entities.Configuration;
 using Hosting.Common.Attributes;
 using WebApi.Routes.Endpoints.Resources.Identity;
@@ -87,6 +88,13 @@ public sealed record CreateExternalSecretInput(
     string ExternalKey,
     int? ExternalVersion);
 
+public sealed record UpdateExternalSecretInput(
+    string Name,
+    Guid ProviderId,
+    string ExternalPath,
+    string ExternalKey,
+    int? ExternalVersion);
+
 public sealed record TestExternalSecretInput(
     Guid ProviderId,
     string ExternalPath,
@@ -96,6 +104,19 @@ public sealed record TestExternalSecretInput(
 public sealed record ExternalSecretTestResultView(bool Success, string Message)
 {
     internal static ExternalSecretTestResultView Map(ExternalSecretTestResult result)
+        => new(result.Success, result.Message);
+}
+
+public sealed record TestVaultKvV2SecretProviderConnectionInput(
+    Guid? ProviderId,
+    string? Name,
+    string Address,
+    string MountPath,
+    string? Token);
+
+public sealed record SecretProviderConnectionTestResultView(bool Success, string Message)
+{
+    internal static SecretProviderConnectionTestResultView Map(SecretProviderConnectionTestResult result)
         => new(result.Success, result.Message);
 }
 
@@ -127,3 +148,9 @@ public sealed record CreateVaultKvV2SecretProviderInput(
     string Address,
     string MountPath,
     string Token);
+
+public sealed record UpdateVaultKvV2SecretProviderInput(
+    string Name,
+    string Address,
+    string MountPath,
+    string? Token);

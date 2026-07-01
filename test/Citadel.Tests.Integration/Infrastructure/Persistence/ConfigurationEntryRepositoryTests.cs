@@ -1,3 +1,4 @@
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Configuration;
 using Microsoft.Extensions.DependencyInjection;

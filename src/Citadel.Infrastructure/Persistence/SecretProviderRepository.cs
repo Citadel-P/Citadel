@@ -39,6 +39,43 @@ internal sealed class SecretProviderRepository(IDbConnection db, Func<IDbTransac
             transaction: tx());
     }
 
+    public Task<int> UpdateAsync(SecretProvider provider, CancellationToken cancellationToken)
+    {
+        provider.Validate();
+
+        const string sql = """
+            UPDATE SecretProviders
+            SET Name = @Name,
+                ProviderType = @ProviderType,
+                Configuration = @Configuration,
+                UpdatedAt = @UpdatedAt
+            WHERE Id = @Id
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                provider.Id,
+                provider.Name,
+                ProviderType = EnumFormatter<SecretProviderType>.GetValue(provider.ProviderType),
+                Configuration = JsonSerializer.Serialize(
+                    provider.Configuration,
+                    ConfigurationJsonContext.Default.VaultKvV2SecretProviderConfiguration),
+                provider.UpdatedAt
+            },
+            transaction: tx());
+    }
+
+    public Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM SecretProviders WHERE Id = @Id";
+        return db.ExecuteAsync(
+            sql,
+            new { Id = id },
+            transaction: tx());
+    }
+
     public async Task<SecretProvider?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM SecretProviders WHERE Id = @Id LIMIT 1";
@@ -66,6 +103,24 @@ internal sealed class SecretProviderRepository(IDbConnection db, Func<IDbTransac
         return db.ExecuteScalarAsync<bool>(
             sql,
             new { Name = name },
+            transaction: tx());
+    }
+
+    public Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM SecretProviders WHERE lower(Name) = lower(@Name) AND Id <> @Id)";
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new { Name = name, Id = id },
+            transaction: tx());
+    }
+
+    public Task<bool> IsUsedBySecretDefinitionAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM SecretDefinitions WHERE ProviderId = @Id)";
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new { Id = id },
             transaction: tx());
     }
 }

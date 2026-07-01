@@ -1,4 +1,5 @@
 using Dapper;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Configuration;
 using Infrastructure.Persistence.Dtos;
@@ -68,6 +69,38 @@ internal sealed class SecretDefinitionRepository(IDbConnection db, Func<IDbTrans
         return result?.ToDomain();
     }
 
+    public async Task<int> UpdateAsync(SecretDefinition secret, CancellationToken cancellationToken)
+    {
+        secret.Validate();
+
+        const string sql = """
+            UPDATE SecretDefinitions
+            SET Name = @Name,
+                ProviderType = @ProviderType,
+                ProviderId = @ProviderId,
+                ExternalPath = @ExternalPath,
+                ExternalKey = @ExternalKey,
+                ExternalVersion = @ExternalVersion,
+                UpdatedAt = @UpdatedAt
+            WHERE Id = @Id
+        """;
+
+        return await db.ExecuteAsync(
+            sql,
+            new
+            {
+                secret.Id,
+                secret.Name,
+                ProviderType = EnumFormatter<SecretProviderType>.GetValue(secret.ProviderType),
+                secret.ProviderId,
+                secret.ExternalPath,
+                secret.ExternalKey,
+                secret.ExternalVersion,
+                UpdatedAt = DateTime.UtcNow
+            },
+            transaction: tx());
+    }
+
     public async Task<IEnumerable<SecretDefinition>> GetAllAsync(CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM SecretDefinitions ORDER BY Name ASC";
@@ -95,6 +128,15 @@ internal sealed class SecretDefinitionRepository(IDbConnection db, Func<IDbTrans
         return db.ExecuteScalarAsync<bool>(
             sql,
             new { Name = name },
+            transaction: tx());
+    }
+
+    public Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM SecretDefinitions WHERE lower(Name) = lower(@Name) AND Id <> @Id)";
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new { Name = name, Id = id },
             transaction: tx());
     }
 }

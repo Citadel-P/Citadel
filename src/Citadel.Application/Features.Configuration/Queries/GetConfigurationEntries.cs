@@ -7,6 +7,7 @@ using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Domain;
 
 namespace Application.Features.Configuration.Queries;
 

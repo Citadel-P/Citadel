@@ -86,7 +86,7 @@
     "postcss": "^8.5.14",
     "postcss-cli": "^11.0.1",
     "prettier-plugin-tailwindcss": "^0.8.0",
-    "swagger-typescript-api": "^13.7.2",
+    "swagger-typescript-api": "^13.12.3",
     "tailwindcss": "^4.1.11",
     "ts-morph": "^28.0.0",
     "tsx": "^4.21.0",

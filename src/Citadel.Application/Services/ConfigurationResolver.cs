@@ -1,4 +1,5 @@
 using Application.Configs;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Configuration;
 using Domain.Entities.Configuration;
@@ -74,9 +75,16 @@ internal sealed partial class ConfigurationResolver(
             }
 
             secretCount++;
-            if (entry.SecretDeliveryMode != SecretDeliveryMode.EnvironmentVariable)
+            if (entry.SecretDeliveryMode == SecretDeliveryMode.NativePlatformSecret)
                 return Result.Failure<ResolvedConfiguration>(
                     $"Secret {entry.Name} uses delivery mode {entry.SecretDeliveryMode}, which is not supported yet.");
+
+            if (entry.SecretDeliveryMode == SecretDeliveryMode.MountedFile
+                && (scope != ConfigurationScope.Stack || entry.Scope != ConfigurationScope.Stack))
+            {
+                return Result.Failure<ResolvedConfiguration>(
+                    $"Secret {entry.Name} uses mounted-file delivery, which is only supported for stack-scoped entries.");
+            }
 
             var secret = await uow.SecretDefinitions.GetAsync(entry.SecretId!.Value, cancellationToken);
             if (secret is null)
@@ -87,8 +95,18 @@ internal sealed partial class ConfigurationResolver(
                 return Result.Failure<ResolvedConfiguration>(plaintextError!);
 
             var plaintext = resolvedSecret.Plaintext;
-            environment[entry.Name] = plaintext;
-            resolvedEntries.Add(new ResolvedConfigurationEntry(entry.Name, entry.Kind, plaintext, secret.Name));
+            if (entry.SecretDeliveryMode == SecretDeliveryMode.EnvironmentVariable)
+            {
+                environment[entry.Name] = plaintext;
+            }
+
+            resolvedEntries.Add(new ResolvedConfigurationEntry(
+                entry.Name,
+                entry.Kind,
+                plaintext,
+                secret.Name,
+                entry.SecretDeliveryMode,
+                entry.TargetPath));
             snapshotEntries.Add(entry.ToSecretSnapshot(secret, resolvedSecret.Provider));
             if (!string.IsNullOrEmpty(plaintext))
             {
@@ -264,7 +282,13 @@ internal sealed record ResolvedConfiguration(
         return this with
         {
             Entries = selectedEntries,
-            EnvironmentVariables = [.. selectedEntries.Select(entry => $"{entry.Name}={entry.Value}")],
+            EnvironmentVariables =
+            [
+                .. selectedEntries
+                    .Where(entry => entry.Kind == ConfigurationEntryKind.Variable
+                        || entry.SecretDeliveryMode == SecretDeliveryMode.EnvironmentVariable)
+                    .Select(entry => $"{entry.Name}={entry.Value}")
+            ],
             RedactionValues =
             [
                 .. selectedEntries
@@ -283,6 +307,8 @@ internal sealed record ResolvedConfigurationEntry(
     string Name,
     ConfigurationEntryKind Kind,
     string Value,
-    string? SecretName = null);
+    string? SecretName = null,
+    SecretDeliveryMode? SecretDeliveryMode = null,
+    string? TargetPath = null);
 
 internal sealed record ResolvedSecretPlaintext(string Plaintext, SecretProvider? Provider);

@@ -58,6 +58,41 @@ services:
 
 At deploy time, Citadel resolves `POSTGRES_PASSWORD` from the stored secret `prod-db-password`. The plaintext value is never shown in the UI after creation and is redacted from logs and activity output.
 
+## Manual Stack Env Files
+
+Manual stacks do not have a separate `.env` file editor.
+
+Use the stack `Variables & Secrets` tab for values that would normally live in a local `.env` file. Reference those keys from the Compose editor with `${NAME}` placeholders.
+
+Example:
+
+```yaml
+services:
+  api:
+    image: ghcr.io/example/api:${IMAGE_TAG}
+    environment:
+      APP_ENV: ${APP_ENV}
+      API_KEY: ${API_KEY}
+```
+
+Then add `IMAGE_TAG`, `APP_ENV`, and `API_KEY` on the stack `Variables & Secrets` tab.
+
+This keeps one source of truth for scoped values, release snapshots, diffs, permissions, and secret redaction. The stack form's `Generated Env File Path` setting only controls where Citadel writes its temporary generated env file during deploy; it is not where users define variables.
+
+## Git Stack Env Files
+
+Git stacks can use repository env files through the stack form's `Compose Env Files` field.
+
+Use this for env files that are part of the Git source, such as `.env`, `compose.env`, or monorepo-specific env files committed beside the compose files. Citadel reads those files from the same resolved Git snapshot as the compose files, so the release records which env file paths were used.
+
+Precedence is explicit:
+
+1. Repository env files provide baseline values from Git.
+2. Stack `Variables & Secrets` entries are applied after repo env files.
+3. If both define the same key, the stack `Variables & Secrets` value wins.
+
+This lets Git define shared defaults while Citadel owns deployment-specific overrides and secrets.
+
 ## Add Secret Key Vs Create Stored Secret
 
 `Create stored secret` creates a stored secret value or external secret reference.
@@ -125,6 +160,15 @@ Key: stripe_api_key
 Version: empty
 ```
 
+If the Vault UI shows a full path like `secret/apps/api/prod`, use:
+
+```text
+Mount Path: secret
+Path: apps/api/prod
+```
+
+Do not enter `secret/apps/api/prod` as the secret path, because Citadel already adds the provider mount path.
+
 Citadel reads:
 
 ```text
@@ -176,9 +220,81 @@ At deploy time, Citadel fetches the external value and injects it as `STRIPE_API
 
 ## Delivery Mode
 
-The current production delivery mode is environment variable injection. Stacks receive referenced keys through Docker Compose interpolation, and deployments receive referenced keys as container environment entries.
+Citadel supports two delivery modes.
 
-Mounted secret files are planned, but not enabled yet. Citadel rejects mounted-file and native-platform secret delivery modes until the file materialization and cleanup path is implemented.
+### Environment Variable
+
+Environment variable delivery is supported for stacks and deployments.
+
+Stacks receive referenced keys through Docker Compose interpolation. Deployments receive referenced keys as container environment entries.
+
+Compose example:
+
+```yaml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+```
+
+### Mounted File
+
+Mounted file delivery is supported for stack secret keys.
+
+Use this when the image supports a file-based secret setting, often with a `_FILE` environment variable.
+
+Example:
+
+```yaml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+```
+
+Then create a stack secret key:
+
+```text
+Name: POSTGRES_PASSWORD
+Delivery: Mounted file
+Target path: /run/secrets/postgres_password
+```
+
+At deploy time, Citadel writes the secret value to a generated stack secret file and mounts it read-only at the target path inside each stack service.
+
+Mounted file delivery is not available for global entries or deployments. Native platform secrets are not supported yet.
+
+### Postgres Mounted File Example
+
+1. Create a stored secret:
+
+```text
+Name: postgres-prod-password
+Value: <your password>
+```
+
+2. On the stack `Variables & Secrets` tab, add a secret key:
+
+```text
+Name: POSTGRES_PASSWORD
+Secret: postgres-prod-password
+Delivery: Mounted file
+Target path: /run/secrets/postgres_password
+```
+
+3. In the compose file, point Postgres at the mounted file:
+
+```yaml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+```
+
+Do not also reference `${POSTGRES_PASSWORD}` in the compose file unless you intentionally want environment-variable delivery. With mounted-file delivery, Citadel mounts the secret at the target path and does not inject `POSTGRES_PASSWORD=<value>` into the generated env file.
 
 ### Safety Rules
 
