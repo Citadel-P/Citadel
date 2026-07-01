@@ -9,12 +9,12 @@ using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
-using Domain.Contracts.Resources.Configuration;
+using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
 using Domain.Entities.Stacks;
@@ -143,19 +143,19 @@ public class ApplyStackServiceTests
                 stackConnectorFactory.Object,
                 containerConnectorFactory.Object,
                 gitStackMaterializer,
-                new StaticConfigurationResolver(new ResolvedConfiguration(
+                new StaticResourceBindingResolver(new ResolvedResourceBindings(
                     ["APP_MODE=prod", "API_KEY=super-secret", "UNUSED_FLAG=true", "UNUSED_SECRET=unused-secret"],
                     [
-                        new ResolvedConfigurationEntry("APP_MODE", ConfigurationEntryKind.Variable, "prod"),
-                        new ResolvedConfigurationEntry(
+                        new ResolvedResourceBinding("APP_MODE", ResourceBindingKind.Variable, "prod"),
+                        new ResolvedResourceBinding(
                             "API_KEY",
-                            ConfigurationEntryKind.Secret,
+                            ResourceBindingKind.Secret,
                             "super-secret",
                             SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable),
-                        new ResolvedConfigurationEntry("UNUSED_FLAG", ConfigurationEntryKind.Variable, "true"),
-                        new ResolvedConfigurationEntry(
+                        new ResolvedResourceBinding("UNUSED_FLAG", ResourceBindingKind.Variable, "true"),
+                        new ResolvedResourceBinding(
                             "UNUSED_SECRET",
-                            ConfigurationEntryKind.Secret,
+                            ResourceBindingKind.Secret,
                             "unused-secret",
                             SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable)
                     ],
@@ -165,64 +165,36 @@ public class ApplyStackServiceTests
                 {
                     SnapshotEntries =
                     [
-                        new ConfigurationSnapshotEntry(
+                        new ResourceBindingSnapshot(
                             Name: "APP_MODE",
-                            Kind: ConfigurationEntryKind.Variable,
-                            Scope: ConfigurationScope.Stack,
-                            ResourceId: stack.Id,
+                            Kind: ResourceBindingKind.Variable,
+                            Scope: ResourceBindingScope.Stack,
                             Value: "prod",
                             SecretId: null,
-                            SecretName: null,
-                            SecretProviderType: null,
-                            SecretProviderName: null,
-                            ExternalPath: null,
-                            ExternalKey: null,
-                            ExternalVersion: null,
                             SecretDeliveryMode: null,
                             TargetPath: null),
-                        new ConfigurationSnapshotEntry(
+                        new ResourceBindingSnapshot(
                             Name: "API_KEY",
-                            Kind: ConfigurationEntryKind.Secret,
-                            Scope: ConfigurationScope.Stack,
-                            ResourceId: stack.Id,
+                            Kind: ResourceBindingKind.Secret,
+                            Scope: ResourceBindingScope.Stack,
                             Value: "********",
                             SecretId: Guid.CreateVersion7(),
-                            SecretName: "api-key",
-                            SecretProviderType: SecretProviderType.InternalEncrypted,
-                            SecretProviderName: null,
-                            ExternalPath: null,
-                            ExternalKey: null,
-                            ExternalVersion: null,
                             SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
                             TargetPath: null),
-                        new ConfigurationSnapshotEntry(
+                        new ResourceBindingSnapshot(
                             Name: "UNUSED_FLAG",
-                            Kind: ConfigurationEntryKind.Variable,
-                            Scope: ConfigurationScope.Stack,
-                            ResourceId: stack.Id,
+                            Kind: ResourceBindingKind.Variable,
+                            Scope: ResourceBindingScope.Stack,
                             Value: "true",
                             SecretId: null,
-                            SecretName: null,
-                            SecretProviderType: null,
-                            SecretProviderName: null,
-                            ExternalPath: null,
-                            ExternalKey: null,
-                            ExternalVersion: null,
                             SecretDeliveryMode: null,
                             TargetPath: null),
-                        new ConfigurationSnapshotEntry(
+                        new ResourceBindingSnapshot(
                             Name: "UNUSED_SECRET",
-                            Kind: ConfigurationEntryKind.Secret,
-                            Scope: ConfigurationScope.Stack,
-                            ResourceId: stack.Id,
+                            Kind: ResourceBindingKind.Secret,
+                            Scope: ResourceBindingScope.Stack,
                             Value: "********",
                             SecretId: Guid.CreateVersion7(),
-                            SecretName: "unused-secret",
-                            SecretProviderType: SecretProviderType.InternalEncrypted,
-                            SecretProviderName: null,
-                            ExternalPath: null,
-                            ExternalKey: null,
-                            ExternalVersion: null,
                             SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
                             TargetPath: null)
                     ]
@@ -264,7 +236,7 @@ public class ApplyStackServiceTests
             Assert.Equal(["stacks/app/.env"], stack.CurrentStackRelease?.Source?.EnvFilePaths);
             Assert.Equal("stacks/app", stack.CurrentStackRelease?.Source?.WorkingDirectory);
             Assert.Collection(
-                stack.CurrentStackRelease?.Configuration ?? [],
+                stack.CurrentStackRelease?.ResourceBindings ?? [],
                 entry =>
                 {
                     Assert.Equal("APP_MODE", entry.Name);
@@ -274,8 +246,6 @@ public class ApplyStackServiceTests
                 {
                     Assert.Equal("API_KEY", entry.Name);
                     Assert.Equal("********", entry.Value);
-                    Assert.Equal("api-key", entry.SecretName);
-                    Assert.Equal(SecretProviderType.InternalEncrypted, entry.SecretProviderType);
                 });
             Assert.Contains(
                 items,
@@ -464,7 +434,7 @@ public class ApplyStackServiceTests
             stackConnectorFactory.Object,
             containerConnectorFactory.Object,
             gitStackMaterializer.Object,
-            new EmptyConfigurationResolver(),
+            new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>());
 
@@ -590,28 +560,21 @@ public class ApplyStackServiceTests
             stackConnectorFactory.Object,
             containerConnectorFactory.Object,
             gitStackMaterializer.Object,
-            new StaticConfigurationResolver(new ResolvedConfiguration(
+            new StaticResourceBindingResolver(new ResolvedResourceBindings(
                 ["API_KEY=super-secret"],
-                [new ResolvedConfigurationEntry("API_KEY", ConfigurationEntryKind.Secret, "super-secret")],
+                [new ResolvedResourceBinding("API_KEY", ResourceBindingKind.Secret, "super-secret")],
                 ["super-secret"],
                 VariableCount: 0,
                 SecretCount: 1)
             {
                 SnapshotEntries =
                 [
-                    new ConfigurationSnapshotEntry(
+                    new ResourceBindingSnapshot(
                         Name: "API_KEY",
-                        Kind: ConfigurationEntryKind.Secret,
-                        Scope: ConfigurationScope.Stack,
-                        ResourceId: stack.Id,
+                        Kind: ResourceBindingKind.Secret,
+                        Scope: ResourceBindingScope.Stack,
                         Value: "********",
                         SecretId: Guid.CreateVersion7(),
-                        SecretName: "api-key",
-                        SecretProviderType: SecretProviderType.InternalEncrypted,
-                        SecretProviderName: null,
-                        ExternalPath: null,
-                        ExternalKey: null,
-                        ExternalVersion: null,
                         SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
                         TargetPath: null)
                 ]
@@ -634,7 +597,7 @@ public class ApplyStackServiceTests
 
         Assert.Contains(items, item => item.Message?.Contains("compose path missing", StringComparison.Ordinal) == true);
         var applied = Assert.IsType<StackApplied>(activity?.Info);
-        Assert.Null(applied.Result.Configuration);
+        Assert.Null(applied.Result.ResourceBindings);
     }
 
     [Fact]
@@ -763,7 +726,7 @@ public class ApplyStackServiceTests
             stackConnectorFactory.Object,
             containerConnectorFactory.Object,
             gitStackMaterializer.Object,
-            new EmptyConfigurationResolver(),
+            new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>());
 
@@ -860,7 +823,7 @@ public class ApplyStackServiceTests
             stackConnectorFactory.Object,
             containerConnectorFactory.Object,
             Mock.Of<IGitStackMaterializer>(),
-            new EmptyConfigurationResolver(),
+            new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>());
 
@@ -966,14 +929,14 @@ public class ApplyStackServiceTests
             stackConnectorFactory.Object,
             containerConnectorFactory.Object,
             Mock.Of<IGitStackMaterializer>(),
-            new StaticConfigurationResolver(new ResolvedConfiguration(
+            new StaticResourceBindingResolver(new ResolvedResourceBindings(
                 EnvironmentVariables: ["APP_MODE=prod"],
                 Entries:
                 [
-                    new ResolvedConfigurationEntry("APP_MODE", ConfigurationEntryKind.Variable, "prod"),
-                    new ResolvedConfigurationEntry(
+                    new ResolvedResourceBinding("APP_MODE", ResourceBindingKind.Variable, "prod"),
+                    new ResolvedResourceBinding(
                         "POSTGRES_PASSWORD",
-                        ConfigurationEntryKind.Secret,
+                        ResourceBindingKind.Secret,
                         "super-secret",
                         SecretName: "postgres-password",
                         SecretDeliveryMode: SecretDeliveryMode.MountedFile,
@@ -985,34 +948,20 @@ public class ApplyStackServiceTests
             {
                 SnapshotEntries =
                 [
-                    new ConfigurationSnapshotEntry(
+                    new ResourceBindingSnapshot(
                         Name: "APP_MODE",
-                        Kind: ConfigurationEntryKind.Variable,
-                        Scope: ConfigurationScope.Stack,
-                        ResourceId: stack.Id,
+                        Kind: ResourceBindingKind.Variable,
+                        Scope: ResourceBindingScope.Stack,
                         Value: "prod",
                         SecretId: null,
-                        SecretName: null,
-                        SecretProviderType: null,
-                        SecretProviderName: null,
-                        ExternalPath: null,
-                        ExternalKey: null,
-                        ExternalVersion: null,
                         SecretDeliveryMode: null,
                         TargetPath: null),
-                    new ConfigurationSnapshotEntry(
+                    new ResourceBindingSnapshot(
                         Name: "POSTGRES_PASSWORD",
-                        Kind: ConfigurationEntryKind.Secret,
-                        Scope: ConfigurationScope.Stack,
-                        ResourceId: stack.Id,
+                        Kind: ResourceBindingKind.Secret,
+                        Scope: ResourceBindingScope.Stack,
                         Value: "********",
                         SecretId: secretId,
-                        SecretName: "postgres-password",
-                        SecretProviderType: SecretProviderType.InternalEncrypted,
-                        SecretProviderName: null,
-                        ExternalPath: null,
-                        ExternalKey: null,
-                        ExternalVersion: null,
                         SecretDeliveryMode: SecretDeliveryMode.MountedFile,
                         TargetPath: "/run/secrets/postgres_password")
                 ]
@@ -1042,7 +991,7 @@ public class ApplyStackServiceTests
         Assert.Equal("super-secret", secretFile.Content);
         Assert.Equal(["db"], capturedCommand.SecretTargetServiceNames);
         Assert.Collection(
-            stack.CurrentStackRelease?.Configuration ?? [],
+            stack.CurrentStackRelease?.ResourceBindings ?? [],
             entry => Assert.Equal("APP_MODE", entry.Name),
             entry =>
             {
@@ -1604,19 +1553,19 @@ public class ApplyStackServiceTests
         public string StacksRoot { get; } = path;
     }
 
-    private sealed class EmptyConfigurationResolver : IConfigurationResolver
+    private sealed class EmptyResourceBindingResolver : IResourceBindingResolver
     {
-        public Task<Result<ResolvedConfiguration>> ResolveAsync(
-            ConfigurationScope scope,
+        public Task<Result<ResolvedResourceBindings>> ResolveAsync(
+            ResourceBindingScope scope,
             Guid resourceId,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result.Success(new ResolvedConfiguration([], [], [], 0, 0)));
+            => Task.FromResult(Result.Success(new ResolvedResourceBindings([], [], [], 0, 0)));
     }
 
-    private sealed class StaticConfigurationResolver(ResolvedConfiguration configuration) : IConfigurationResolver
+    private sealed class StaticResourceBindingResolver(ResolvedResourceBindings configuration) : IResourceBindingResolver
     {
-        public Task<Result<ResolvedConfiguration>> ResolveAsync(
-            ConfigurationScope scope,
+        public Task<Result<ResolvedResourceBindings>> ResolveAsync(
+            ResourceBindingScope scope,
             Guid resourceId,
             CancellationToken cancellationToken)
             => Task.FromResult(Result.Success(configuration));

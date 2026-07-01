@@ -1,6 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Infrastructure.Vault;
 using Refit;
 using System.Text.Json;

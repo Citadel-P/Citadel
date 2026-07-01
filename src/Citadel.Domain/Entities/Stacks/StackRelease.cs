@@ -1,4 +1,5 @@
-﻿using Domain.Entities.Platforms;
+using Domain.Entities.Platforms;
+using Domain.Contracts.Resources.ResourceBindings;
 
 namespace Domain.Entities.Stacks;
 
@@ -11,7 +12,7 @@ public sealed class StackRelease : IAuditedEntity
     public string Version { get; private set; } = string.Empty;
     public StackSpec Spec { get; private set; } = null!;
     public StackReleaseSource? Source { get; private set; }
-    public IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration { get; private set; }
+    public IReadOnlyList<ResourceBindingSnapshot>? ResourceBindings { get; private set; }
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -49,7 +50,7 @@ public sealed class StackRelease : IAuditedEntity
         string version,
         StackSpec spec,
         StackReleaseSource? source,
-        IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? configuration,
+        IReadOnlyList<ResourceBindingSnapshot>? resourceBindings,
         DateTime createdAt,
         Guid createdByActorId,
         Platform? platform = null,
@@ -66,7 +67,7 @@ public sealed class StackRelease : IAuditedEntity
             Version = version,
             Spec = spec,
             Source = source,
-            Configuration = configuration,
+            ResourceBindings = resourceBindings,
             CreatedAt = createdAt,
             CreatedByActorId = createdByActorId,
             Platform = platform,
@@ -85,7 +86,7 @@ public sealed class StackRelease : IAuditedEntity
     {
         Spec = spec;
         Source = null;
-        Configuration = null;
+        ResourceBindings = null;
     }
 
     public void UpdateDefinition(Guid platformId, StackSpec spec)
@@ -93,7 +94,7 @@ public sealed class StackRelease : IAuditedEntity
         PlatformId = platformId;
         Spec = spec;
         Source = null;
-        Configuration = null;
+        ResourceBindings = null;
     }
 
     public void UpdateSource(StackReleaseSource source)
@@ -101,9 +102,9 @@ public sealed class StackRelease : IAuditedEntity
         Source = source;
     }
 
-    public void UpdateConfiguration(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? configuration)
+    public void UpdateResourceBindings(IReadOnlyList<ResourceBindingSnapshot>? resourceBindings)
     {
-        Configuration = configuration;
+        ResourceBindings = resourceBindings;
     }
 
     public StackRelease CreateSnapshot()
@@ -115,7 +116,7 @@ public sealed class StackRelease : IAuditedEntity
             Version = Version,
             Spec = Spec,
             Source = Source,
-            Configuration = Configuration,
+            ResourceBindings = ResourceBindings,
             CreatedAt = CreatedAt,
             CreatedByActorId = CreatedByActorId,
         };

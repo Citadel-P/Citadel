@@ -1,4 +1,4 @@
-﻿using Domain;
+using Domain;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using Hosting.OpenApi;
@@ -36,7 +36,8 @@ public static class PublicEndpoints
     const string RegistriesName = nameof(Registries);
     const string DeploymentsName = nameof(Deployments);
     const string StacksName = nameof(Stacks);
-    const string ConfigurationName = nameof(ConfigurationEntries);
+    const string BindingsName = "Bindings";
+    const string ResourceBindingsName = nameof(ResourceBindings);
     const string AuthenticationName = nameof(Authentication);
     const string LookupName = nameof(Lookup);
 
@@ -104,9 +105,13 @@ public static class PublicEndpoints
             {
                 MapStackEndpoints(stacks);
             }
-            var configuration = group.MapGroup("/configuration").WithTags(ConfigurationName).RequireAuthorization();
+            var resourceBindings = group.MapGroup("/resourceBindings").WithTags(ResourceBindingsName).RequireAuthorization();
             {
-                MapConfigurationEndpoints(configuration);
+                MapResourceBindingEndpoints(resourceBindings);
+            }
+            var bindings = group.MapGroup("/bindings").WithTags(BindingsName).RequireAuthorization();
+            {
+                MapBindingSecretEndpoints(bindings);
             }
             var activities = group.MapGroup("/activities").WithTags(ActivitiesName).RequireAuthorization();
             {
@@ -454,61 +459,64 @@ public static class PublicEndpoints
             .WithName("deleteGitRepositories");
     }
 
-    private static void MapConfigurationEndpoints(RouteGroupBuilder configuration)
+    private static void MapResourceBindingEndpoints(RouteGroupBuilder resourceBindings)
     {
-        configuration.MapGet("global", ConfigurationEntries.GetGlobal)
-            .WithName("getGlobalConfigurationEntries")
-            .WithSummary("Get global variables and secrets");
+        resourceBindings.MapGet("global", ResourceBindings.GetGlobal)
+            .WithName("getGlobalResourceBindings")
+            .WithSummary("Get global bindings");
 
-        configuration.MapPut("global", ConfigurationEntries.ReplaceGlobal)
-            .WithName("replaceGlobalConfigurationEntries")
-            .WithSummary("Replace global variables and secrets");
+        resourceBindings.MapPut("global", ResourceBindings.ReplaceGlobal)
+            .WithName("replaceGlobalResourceBindings")
+            .WithSummary("Replace global bindings");
 
-        configuration.MapGet("{scope}/{resourceId:guid}", ConfigurationEntries.GetResource)
-            .WithName("getResourceConfigurationEntries")
-            .WithSummary("Get resource variables and secrets");
+        resourceBindings.MapGet("{scope}/{resourceId:guid}", ResourceBindings.GetResource)
+            .WithName("getResourceBindings")
+            .WithSummary("Get resource bindings");
 
-        configuration.MapPut("{scope}/{resourceId:guid}", ConfigurationEntries.ReplaceResource)
-            .WithName("replaceResourceConfigurationEntries")
-            .WithSummary("Replace resource variables and secrets");
+        resourceBindings.MapPut("{scope}/{resourceId:guid}", ResourceBindings.ReplaceResource)
+            .WithName("replaceResourceBindings")
+            .WithSummary("Replace resource bindings");
+    }
 
-        configuration.MapGet("secrets", ConfigurationEntries.ListSecrets)
+    private static void MapBindingSecretEndpoints(RouteGroupBuilder bindings)
+    {
+        bindings.MapGet("secrets", ResourceBindings.ListSecrets)
             .WithName("listSecretDefinitions")
             .WithSummary("List secret definitions");
 
-        configuration.MapPost("secrets", ConfigurationEntries.CreateInternalSecret)
+        bindings.MapPost("secrets", ResourceBindings.CreateInternalSecret)
             .WithName("createInternalSecret")
             .WithSummary("Create an internal encrypted secret");
 
-        configuration.MapPost("secrets/external", ConfigurationEntries.CreateExternalSecret)
+        bindings.MapPost("secrets/external", ResourceBindings.CreateExternalSecret)
             .WithName("createExternalSecret")
             .WithSummary("Create an external secret definition");
 
-        configuration.MapPut("secrets/external/{id:guid}", ConfigurationEntries.UpdateExternalSecret)
+        bindings.MapPut("secrets/external/{id:guid}", ResourceBindings.UpdateExternalSecret)
             .WithName("updateExternalSecret")
             .WithSummary("Update an external secret definition");
 
-        configuration.MapPost("secrets/external/test", ConfigurationEntries.TestExternalSecret)
+        bindings.MapPost("secrets/external/test", ResourceBindings.TestExternalSecret)
             .WithName("testExternalSecret")
             .WithSummary("Test an external secret reference");
 
-        configuration.MapPost("secret-providers/vault-kv2/test", ConfigurationEntries.TestVaultKvV2SecretProviderConnection)
+        bindings.MapPost("secret-providers/vault-kv2/test", ResourceBindings.TestVaultKvV2SecretProviderConnection)
             .WithName("testVaultKvV2SecretProviderConnection")
             .WithSummary("Test a Vault-compatible KV v2 secret provider connection");
 
-        configuration.MapGet("secret-providers", ConfigurationEntries.ListSecretProviders)
+        bindings.MapGet("secret-providers", ResourceBindings.ListSecretProviders)
             .WithName("listSecretProviders")
             .WithSummary("List secret providers");
 
-        configuration.MapPost("secret-providers/vault-kv2", ConfigurationEntries.CreateVaultKvV2SecretProvider)
+        bindings.MapPost("secret-providers/vault-kv2", ResourceBindings.CreateVaultKvV2SecretProvider)
             .WithName("createVaultKvV2SecretProvider")
             .WithSummary("Create a Vault-compatible KV v2 secret provider");
 
-        configuration.MapPut("secret-providers/vault-kv2/{id:guid}", ConfigurationEntries.UpdateVaultKvV2SecretProvider)
+        bindings.MapPut("secret-providers/vault-kv2/{id:guid}", ResourceBindings.UpdateVaultKvV2SecretProvider)
             .WithName("updateVaultKvV2SecretProvider")
             .WithSummary("Update a Vault-compatible KV v2 secret provider");
 
-        configuration.MapDelete("secret-providers/{id:guid}", ConfigurationEntries.DeleteSecretProvider)
+        bindings.MapDelete("secret-providers/{id:guid}", ResourceBindings.DeleteSecretProvider)
             .WithName("deleteSecretProvider")
             .WithSummary("Delete a secret provider");
     }

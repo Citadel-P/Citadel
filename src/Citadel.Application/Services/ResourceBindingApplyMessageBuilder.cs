@@ -1,12 +1,11 @@
 using Domain;
-using Domain.Entities.Configuration;
 
 namespace Application.Services;
 
-internal static class ConfigurationApplyMessageBuilder
+internal static class ResourceBindingApplyMessageBuilder
 {
     public static string BuildComposeInterpolationMessage(
-        ResolvedConfiguration configuration,
+        ResolvedResourceBindings configuration,
         IReadOnlySet<string> referencedKeys,
         int sourceEnvironmentFileCount)
     {
@@ -15,7 +14,7 @@ internal static class ConfigurationApplyMessageBuilder
             .OrderBy(entry => entry.Name, StringComparer.Ordinal)
             .ToArray();
         var mountedSecrets = configuration.Entries
-            .Where(entry => entry.Kind == ConfigurationEntryKind.Secret
+            .Where(entry => entry.Kind == ResourceBindingKind.Secret
                 && entry.SecretDeliveryMode == SecretDeliveryMode.MountedFile)
             .OrderBy(entry => entry.Name, StringComparer.Ordinal)
             .Select(FormatSecretName)
@@ -39,7 +38,7 @@ internal static class ConfigurationApplyMessageBuilder
         return $"{message} Included {FormatCount(sourceEnvironmentFileCount, "repo env file")}.";
     }
 
-    public static string BuildDeploymentEnvironmentMessage(ResolvedConfiguration configuration)
+    public static string BuildDeploymentEnvironmentMessage(ResolvedResourceBindings configuration)
     {
         var entries = configuration.Entries
             .OrderBy(entry => entry.Name, StringComparer.Ordinal)
@@ -50,15 +49,15 @@ internal static class ConfigurationApplyMessageBuilder
             : $"Injected {FormatEntryGroups(entries)} into the deployment environment.";
     }
 
-    private static string FormatEntryGroups(IReadOnlyCollection<ResolvedConfigurationEntry> entries)
+    private static string FormatEntryGroups(IReadOnlyCollection<ResolvedResourceBinding> entries)
     {
         var variables = entries
-            .Where(entry => entry.Kind == ConfigurationEntryKind.Variable)
+            .Where(entry => entry.Kind == ResourceBindingKind.Variable)
             .Select(entry => $"{entry.Name}={FormatValue(entry.Value)}")
             .ToArray();
 
         var secrets = entries
-            .Where(entry => entry.Kind == ConfigurationEntryKind.Secret)
+            .Where(entry => entry.Kind == ResourceBindingKind.Secret)
             .Select(FormatSecretName)
             .ToArray();
 
@@ -89,7 +88,7 @@ internal static class ConfigurationApplyMessageBuilder
     private static string FormatCount(int count, string singular)
         => count == 1 ? $"1 {singular}" : $"{count} {singular}s";
 
-    private static string FormatSecretName(ResolvedConfigurationEntry entry)
+    private static string FormatSecretName(ResolvedResourceBinding entry)
     {
         if (string.IsNullOrWhiteSpace(entry.SecretName) || string.Equals(entry.SecretName, entry.Name, StringComparison.Ordinal))
             return entry.Name;

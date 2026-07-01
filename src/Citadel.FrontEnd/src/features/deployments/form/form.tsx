@@ -12,8 +12,8 @@ import {
   DeploymentConfigView,
   PatchDeploymentInput,
   LookupResourceType,
-  ConfigurationScope,
-  ConfigurationEntryView,
+  ResourceBindingScope,
+  ResourceBindingView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -33,7 +33,6 @@ import { useParams } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { ConfigurationSummary } from '@/components/custom/configuration-entries-tab';
 
 const enum ImageSource {
   local = 'Local',
@@ -141,7 +140,7 @@ const stop_signals = {
 
 type DeploymentInput = CreateDeploymentInput | PatchDeploymentInput;
 
-const EMPTY_CONFIGURATION_ENTRIES: ConfigurationEntryView[] = [];
+const EMPTY_RESOURCE_BINDINGS: ResourceBindingView[] = [];
 const environmentNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const environmentReferencePattern = /\$\{([^}]+)\}/g;
 
@@ -190,17 +189,13 @@ export const DeploymentForm = ({
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
   const { data: deploymentCfg } = useRead('getDeploymentConfig', { deploymentId: id });
   const deploymentConfigurationArgs = useMemo(
-    () => ({ scope: ConfigurationScope.Deployment, resourceId: id ?? '' }),
+    () => ({ scope: ResourceBindingScope.Deployment, resourceId: id ?? '' }),
     [id],
   );
-  const { data: deploymentConfigurationData } = useRead(
-    'getResourceConfigurationEntries',
-    deploymentConfigurationArgs,
-    {
-      enabled: mode === 'edit' && !!id,
-    },
-  );
-  const { data: globalConfigurationData } = useRead('getGlobalConfigurationEntries', undefined, {
+  const { data: deploymentConfigurationData } = useRead('getResourceBindings', deploymentConfigurationArgs, {
+    enabled: mode === 'edit' && !!id,
+  });
+  const { data: globalResourceBindingData } = useRead('getGlobalResourceBindings', undefined, {
     enabled: mode === 'add',
   });
 
@@ -213,16 +208,16 @@ export const DeploymentForm = ({
   const currentSpec = { ...original.spec, ...update.spec };
   const currentImage = update.spec?.image ?? original.spec?.image;
   const provider = currentImage?.$type;
-  const effectiveConfigurationEntries = useMemo(
+  const effectiveResourceBindings = useMemo(
     () =>
       mode === 'edit'
-        ? (deploymentConfigurationData?.data.effectiveEntries ?? EMPTY_CONFIGURATION_ENTRIES)
-        : (globalConfigurationData?.data.effectiveEntries ?? EMPTY_CONFIGURATION_ENTRIES),
-    [deploymentConfigurationData?.data.effectiveEntries, globalConfigurationData?.data.effectiveEntries, mode],
+        ? (deploymentConfigurationData?.data.effectiveEntries ?? EMPTY_RESOURCE_BINDINGS)
+        : (globalResourceBindingData?.data.effectiveEntries ?? EMPTY_RESOURCE_BINDINGS),
+    [deploymentConfigurationData?.data.effectiveEntries, globalResourceBindingData?.data.effectiveEntries, mode],
   );
   const effectiveConfigurationNames = useMemo(
-    () => [...new Set(effectiveConfigurationEntries.map((entry) => entry.name))].sort(),
-    [effectiveConfigurationEntries],
+    () => [...new Set(effectiveResourceBindings.map((entry) => entry.name))].sort(),
+    [effectiveResourceBindings],
   );
 
   const { data, isSuccess: imageInfoIsSuccess } = useRead('getExposedPorts', {
@@ -780,20 +775,17 @@ export const DeploymentForm = ({
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      {mode === 'edit' && id && <ConfigurationSummary scope={ConfigurationScope.Deployment} resourceId={id} />}
-      <FormShell
-        mode={mode}
-        schema={schema}
-        original={original}
-        update={update}
-        setUpdate={setUpdate}
-        onSave={handleSave}
-        pending={isPending}
-        disabled={disabled}
-        draftKey={`deployment:${id ?? 'new'}`}
-        draftVersion={1}
-      />
-    </div>
+    <FormShell
+      mode={mode}
+      schema={schema}
+      original={original}
+      update={update}
+      setUpdate={setUpdate}
+      onSave={handleSave}
+      pending={isPending}
+      disabled={disabled}
+      draftKey={`deployment:${id ?? 'new'}`}
+      draftVersion={1}
+    />
   );
 };

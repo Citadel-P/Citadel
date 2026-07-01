@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text;
 using Domain;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Infrastructure.HttpClients.Serializer;
 using Infrastructure.Repositories;
 using Infrastructure.Vault;

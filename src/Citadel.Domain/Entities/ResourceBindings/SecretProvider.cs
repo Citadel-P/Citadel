@@ -1,4 +1,4 @@
-namespace Domain.Entities.Configuration;
+namespace Domain.Entities.ResourceBindings;
 
 public sealed record SecretProvider(
     string Name,

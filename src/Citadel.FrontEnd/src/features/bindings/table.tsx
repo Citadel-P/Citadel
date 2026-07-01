@@ -1,16 +1,16 @@
 import {
-  ConfigurationEntryInput,
-  ConfigurationEntryKind,
-  ConfigurationEntryView,
+  ResourceBindingInput,
+  ResourceBindingKind,
+  ResourceBindingView,
   SecretDefinitionView,
 } from '@/api/generated/api.types';
 import {
-  ConfigurationAddDropdown,
+  ResourceBindingAddDropdown,
   CreateSecretDialog,
   ENV_DELIVERY_MODE,
   toInputFromView,
   useSecretCreation,
-} from '@/components/custom/configuration-entries-tab';
+} from '@/components/custom/resource-bindings-tab';
 import { ActionBar } from '@/components/custom/action-bar';
 import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';
 import { ContentCard } from '@/components/custom/content-card';
@@ -39,26 +39,26 @@ import { KeyRound, MoreHorizontal, Pencil, Trash2, Variable } from 'lucide-react
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-type VariablePageAction = 'add-variable' | 'add-secret-key' | 'create-secret';
+type BindingPageAction = 'add-variable' | 'add-secret-key' | 'create-secret';
 type EntryDialogMode = 'add-variable' | 'add-secret-key' | 'edit';
 
-const variableActions = new EventTarget();
-const EMPTY_ENTRIES: ConfigurationEntryView[] = [];
+const bindingActions = new EventTarget();
+const EMPTY_ENTRIES: ResourceBindingView[] = [];
 const EMPTY_SECRETS: SecretDefinitionView[] = [];
 
-export const VariablesAddButton = () => {
-  const { data: configData } = useRead('getGlobalConfigurationEntries');
+export const BindingsAddButton = () => {
+  const { data: configData } = useRead('getGlobalResourceBindings');
   const { data: secretsData } = useRead('listSecretDefinitions');
   const secrets = useMemo(() => secretsData?.data.secrets ?? EMPTY_SECRETS, [secretsData?.data.secrets]);
   const canWrite = Boolean(configData?.data.capabilities?.canWrite);
   const canCreateSecret = Boolean(secretsData?.data.capabilities.canWrite);
 
-  const dispatch = (action: VariablePageAction) => {
-    variableActions.dispatchEvent(new CustomEvent<VariablePageAction>('variables-action', { detail: action }));
+  const dispatch = (action: BindingPageAction) => {
+    bindingActions.dispatchEvent(new CustomEvent<BindingPageAction>('bindings-action', { detail: action }));
   };
 
   return (
-    <ConfigurationAddDropdown
+    <ResourceBindingAddDropdown
       disabled={!canWrite}
       hasSecrets={secrets.length > 0}
       canCreateSecret={canCreateSecret}
@@ -69,16 +69,16 @@ export const VariablesAddButton = () => {
   );
 };
 
-export const VariablesGroupActions = ({ items }: { items: ConfigurationEntryView[] }) => (
-  <ActionBar type="Variable" items={items} actions={[DeleteSelectedVariablesAction]} />
+export const BindingsGroupActions = ({ items }: { items: ResourceBindingView[] }) => (
+  <ActionBar type="Binding" items={items} actions={[DeleteSelectedVariablesAction]} />
 );
 
-const DeleteSelectedVariablesAction: ButtonGroupComponent<ConfigurationEntryView> = ({ resources }) => {
+const DeleteSelectedVariablesAction: ButtonGroupComponent<ResourceBindingView> = ({ resources }) => {
   const selected = Array.isArray(resources) ? resources : [resources];
   const queryClient = useQueryClient();
-  const { data } = useRead('getGlobalConfigurationEntries');
-  const replace = useMutate('replaceGlobalConfigurationEntries');
-  const [, setSelectedResources] = useSelectedResources<ConfigurationEntryView>('Variable');
+  const { data } = useRead('getGlobalResourceBindings');
+  const replace = useMutate('replaceGlobalResourceBindings');
+  const [, setSelectedResources] = useSelectedResources<ResourceBindingView>('Binding');
   const [open, setOpen] = useState(false);
   const allEntries = data?.data.entries ?? EMPTY_ENTRIES;
   const canWrite = Boolean(data?.data.capabilities?.canWrite);
@@ -106,7 +106,7 @@ const DeleteSelectedVariablesAction: ButtonGroupComponent<ConfigurationEntryView
         Delete
       </Button>
       <ConfirmDeleteDialog
-        type="Variable"
+        type="Binding"
         open={open}
         count={selected.length}
         isPending={replace.isPending}
@@ -117,23 +117,23 @@ const DeleteSelectedVariablesAction: ButtonGroupComponent<ConfigurationEntryView
   );
 };
 
-export const VariablesTable = ({
+export const BindingsTable = ({
   items,
   isLoading,
 }: {
-  items: ConfigurationEntryView[];
+  items: ResourceBindingView[];
   isLoading: boolean;
   isFiltered?: boolean;
   actions?: Record<
     string,
-    React.FC<{ resource: ConfigurationEntryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: ResourceBindingView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
   const queryClient = useQueryClient();
-  const { data } = useRead('getGlobalConfigurationEntries');
+  const { data } = useRead('getGlobalResourceBindings');
   const { data: secretsData } = useRead('listSecretDefinitions');
-  const replace = useMutate('replaceGlobalConfigurationEntries');
-  const [, setSelectedResources] = useSelectedResources<ConfigurationEntryView>('Variable');
+  const replace = useMutate('replaceGlobalResourceBindings');
+  const [, setSelectedResources] = useSelectedResources<ResourceBindingView>('Binding');
   const allEntries = data?.data.entries ?? EMPTY_ENTRIES;
   const canWrite = Boolean(data?.data.capabilities?.canWrite);
   const canCreateSecret = Boolean(secretsData?.data.capabilities.canWrite);
@@ -141,13 +141,13 @@ export const VariablesTable = ({
   const secrets = useMemo(() => secretsData?.data.secrets ?? EMPTY_SECRETS, [secretsData?.data.secrets]);
   const secretNames = useMemo(() => new Map(secrets.map((secret) => [secret.id, secret.name])), [secrets]);
   const [dialogMode, setDialogMode] = useState<EntryDialogMode>('add-variable');
-  const [editingEntry, setEditingEntry] = useState<ConfigurationEntryView | null>(null);
-  const [entryInput, setEntryInput] = useState<ConfigurationEntryInput>(newVariableInput());
+  const [editingEntry, setEditingEntry] = useState<ResourceBindingView | null>(null);
+  const [entryInput, setEntryInput] = useState<ResourceBindingInput>(newVariableInput());
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
-  const [deletingEntry, setDeletingEntry] = useState<ConfigurationEntryView | null>(null);
+  const [deletingEntry, setDeletingEntry] = useState<ResourceBindingView | null>(null);
 
   const saveEntries = useCallback(
-    async (entries: ConfigurationEntryInput[], successMessage?: string) => {
+    async (entries: ResourceBindingInput[], successMessage?: string) => {
       await replace.mutateAsync({ data: { entries } } as any);
       await invalidateConfigurationQueries(queryClient);
       if (successMessage) {
@@ -158,7 +158,7 @@ export const VariablesTable = ({
   );
 
   const openEntryDialog = useCallback(
-    (mode: EntryDialogMode, entry?: ConfigurationEntryView) => {
+    (mode: EntryDialogMode, entry?: ResourceBindingView) => {
       if (!canWrite) return;
 
       setDialogMode(mode);
@@ -190,7 +190,7 @@ export const VariablesTable = ({
   const openCreateSecretDialog = useCallback(
     (open: boolean) => {
       if (open && !canCreateSecret) {
-        toast.error('Configuration write permission is required to create secrets');
+        toast.error('Binding write permission is required to create secrets');
         return;
       }
 
@@ -203,14 +203,14 @@ export const VariablesTable = ({
     const listener = (event: Event) => {
       if (!canWrite) return;
 
-      const action = (event as CustomEvent<VariablePageAction>).detail;
+      const action = (event as CustomEvent<BindingPageAction>).detail;
       if (action === 'add-variable') openEntryDialog('add-variable');
       if (action === 'add-secret-key') openEntryDialog('add-secret-key');
       if (action === 'create-secret') openCreateSecretDialog(true);
     };
 
-    variableActions.addEventListener('variables-action', listener);
-    return () => variableActions.removeEventListener('variables-action', listener);
+    bindingActions.addEventListener('bindings-action', listener);
+    return () => bindingActions.removeEventListener('bindings-action', listener);
   }, [canWrite, openCreateSecretDialog, openEntryDialog]);
 
   const saveEntry = async () => {
@@ -268,9 +268,9 @@ export const VariablesTable = ({
             <Variable className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-bold">Variables and Secrets</div>
+            <div className="font-bold">Bindings</div>
             <p className="text-xs text-muted-foreground">
-              Global configuration inherited by stacks and deployments. Resource values override global values.
+              Global variables, secret keys, and providers inherited by stacks and deployments.
             </p>
           </div>
         </div>
@@ -297,7 +297,7 @@ export const VariablesTable = ({
       />
       <CreateSecretDialog {...secretCreation.dialogProps} />
       <ConfirmDeleteDialog
-        type="Variable"
+        type="Binding"
         open={Boolean(deletingEntry)}
         count={1}
         isPending={replace.isPending}
@@ -316,9 +316,9 @@ const columns = ({
 }: {
   secretNames: Map<string, string>;
   disabled: boolean;
-  onEdit: (entry: ConfigurationEntryView) => void;
-  onDelete: (entry: ConfigurationEntryView) => void;
-}): ColumnDef<ConfigurationEntryView>[] => [
+  onEdit: (entry: ResourceBindingView) => void;
+  onDelete: (entry: ResourceBindingView) => void;
+}): ColumnDef<ResourceBindingView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -332,7 +332,7 @@ const columns = ({
       <Checkbox
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select variable"
+        aria-label="Select binding"
       />
     ),
     enableSorting: false,
@@ -359,7 +359,7 @@ const columns = ({
     accessorKey: 'secretDeliveryMode',
     header: ({ column }) => <SortableCell cellName="Delivery" column={column} />,
     cell: ({ row }) =>
-      row.original.kind === ConfigurationEntryKind.Secret ? (
+      row.original.kind === ResourceBindingKind.Secret ? (
         <span className="text-xs text-muted-foreground">{row.original.secretDeliveryMode ?? ENV_DELIVERY_MODE}</span>
       ) : (
         <span className="text-xs text-muted-foreground">-</span>
@@ -371,9 +371,9 @@ const columns = ({
   },
 ];
 
-const NameCell = ({ entry }: { entry: ConfigurationEntryView }) => (
+const NameCell = ({ entry }: { entry: ResourceBindingView }) => (
   <div className="flex items-center gap-2 py-2">
-    {entry.kind === ConfigurationEntryKind.Secret ? (
+    {entry.kind === ResourceBindingKind.Secret ? (
       <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
     ) : (
       <Variable className="h-3.5 w-3.5 text-muted-foreground" />
@@ -382,10 +382,10 @@ const NameCell = ({ entry }: { entry: ConfigurationEntryView }) => (
   </div>
 );
 
-const KindBadge = ({ kind }: { kind: ConfigurationEntryKind }) => (
-  <Badge variant={kind === ConfigurationEntryKind.Secret ? 'outline' : 'secondary'} className="gap-1">
-    {kind === ConfigurationEntryKind.Secret ? <KeyRound className="size-3" /> : <Variable className="size-3" />}
-    {kind === ConfigurationEntryKind.Secret ? 'Secret' : 'Variable'}
+const KindBadge = ({ kind }: { kind: ResourceBindingKind }) => (
+  <Badge variant={kind === ResourceBindingKind.Secret ? 'outline' : 'secondary'} className="gap-1">
+    {kind === ResourceBindingKind.Secret ? <KeyRound className="size-3" /> : <Variable className="size-3" />}
+    {kind === ResourceBindingKind.Secret ? 'Secret' : 'Binding'}
   </Badge>
 );
 
@@ -393,10 +393,10 @@ const ValueCell = ({
   entry,
   secretNames,
 }: {
-  entry: ConfigurationEntryView;
+  entry: ResourceBindingView;
   secretNames: Map<string, string>;
 }) => {
-  if (entry.kind === ConfigurationEntryKind.Secret) {
+  if (entry.kind === ResourceBindingKind.Secret) {
     const secretName = entry.secretId ? secretNames.get(entry.secretId) : undefined;
     return (
       <div className="flex flex-col gap-0.5 py-2">
@@ -415,10 +415,10 @@ const EntryActionsCell = ({
   onEdit,
   onDelete,
 }: {
-  entry: ConfigurationEntryView;
+  entry: ResourceBindingView;
   disabled: boolean;
-  onEdit: (entry: ConfigurationEntryView) => void;
-  onDelete: (entry: ConfigurationEntryView) => void;
+  onEdit: (entry: ResourceBindingView) => void;
+  onDelete: (entry: ResourceBindingView) => void;
 }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
@@ -453,14 +453,14 @@ const EntryEditorDialog = ({
 }: {
   open: boolean;
   mode: EntryDialogMode;
-  input: ConfigurationEntryInput;
+  input: ResourceBindingInput;
   secrets: SecretDefinitionView[];
   isPending: boolean;
   onOpenChange: (open: boolean) => void;
-  onInputChange: (input: ConfigurationEntryInput | ((prev: ConfigurationEntryInput) => ConfigurationEntryInput)) => void;
+  onInputChange: (input: ResourceBindingInput | ((prev: ResourceBindingInput) => ResourceBindingInput)) => void;
   onSave: () => void;
 }) => {
-  const isSecret = input.kind === ConfigurationEntryKind.Secret;
+  const isSecret = input.kind === ResourceBindingKind.Secret;
   const canSave = input.name.trim().length > 0 && (!isSecret || Boolean(input.secretId));
 
   return (
@@ -544,41 +544,41 @@ const getDialogTitle = (mode: EntryDialogMode) => {
 const getInitialEntryInput = (
   mode: EntryDialogMode,
   secrets: SecretDefinitionView[],
-  entry?: ConfigurationEntryView,
-): ConfigurationEntryInput => {
+  entry?: ResourceBindingView,
+): ResourceBindingInput => {
   if (entry) return toInputFromView(entry);
   if (mode === 'add-secret-key') return newSecretBindingInput(secrets[0]);
   return newVariableInput();
 };
 
-const newVariableInput = (): ConfigurationEntryInput => ({
+const newVariableInput = (): ResourceBindingInput => ({
   name: '',
-  kind: ConfigurationEntryKind.Variable,
+  kind: ResourceBindingKind.Variable,
   value: '',
   secretId: null,
   secretDeliveryMode: null,
   targetPath: null,
 });
 
-const newSecretBindingInput = (secret?: SecretDefinitionView): ConfigurationEntryInput => ({
+const newSecretBindingInput = (secret?: SecretDefinitionView): ResourceBindingInput => ({
   name: secret?.name ?? '',
-  kind: ConfigurationEntryKind.Secret,
+  kind: ResourceBindingKind.Secret,
   value: null,
   secretId: secret?.id ?? null,
   secretDeliveryMode: ENV_DELIVERY_MODE,
   targetPath: null,
 });
 
-const normalizeInput = (entry: ConfigurationEntryInput): ConfigurationEntryInput => ({
+const normalizeInput = (entry: ResourceBindingInput): ResourceBindingInput => ({
   name: entry.name,
   kind: entry.kind,
-  value: entry.kind === ConfigurationEntryKind.Variable ? (entry.value ?? '') : null,
-  secretId: entry.kind === ConfigurationEntryKind.Secret ? entry.secretId : null,
-  secretDeliveryMode: entry.kind === ConfigurationEntryKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
-  targetPath: entry.kind === ConfigurationEntryKind.Secret ? (entry.targetPath ?? null) : null,
+  value: entry.kind === ResourceBindingKind.Variable ? (entry.value ?? '') : null,
+  secretId: entry.kind === ResourceBindingKind.Secret ? entry.secretId : null,
+  secretDeliveryMode: entry.kind === ResourceBindingKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
+  targetPath: entry.kind === ResourceBindingKind.Secret ? (entry.targetPath ?? null) : null,
 });
 
-const hasDuplicateEntryName = (entries: ConfigurationEntryInput[]): boolean => {
+const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {
   const names = new Set<string>();
   for (const entry of entries) {
     const name = entry.name.trim().toLowerCase();
@@ -590,6 +590,6 @@ const hasDuplicateEntryName = (entries: ConfigurationEntryInput[]): boolean => {
 };
 
 const invalidateConfigurationQueries = async (queryClient: ReturnType<typeof useQueryClient>) => {
-  await queryClient.invalidateQueries({ queryKey: ['getGlobalConfigurationEntries'] });
-  await queryClient.invalidateQueries({ queryKey: ['getResourceConfigurationEntries'] });
+  await queryClient.invalidateQueries({ queryKey: ['getGlobalResourceBindings'] });
+  await queryClient.invalidateQueries({ queryKey: ['getResourceBindings'] });
 };

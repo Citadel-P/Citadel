@@ -1,6 +1,6 @@
 namespace Infrastructure.Persistence.Dtos;
 
-internal sealed record ConfigurationEntryDto(
+internal sealed record ResourceBindingDto(
     Guid Id,
     string Name,
     string Kind,

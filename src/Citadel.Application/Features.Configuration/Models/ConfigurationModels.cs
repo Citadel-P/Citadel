@@ -1,19 +1,19 @@
 using Domain;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 
 namespace Application.Features.Configuration.Models;
 
-public sealed record ConfigurationEntryInput(
+public sealed record ResourceBindingInput(
     string Name,
-    ConfigurationEntryKind Kind,
+    ResourceBindingKind Kind,
     string? Value,
     Guid? SecretId,
     SecretDeliveryMode? SecretDeliveryMode = null,
     string? TargetPath = null);
 
-public sealed record ConfigurationEntriesResult(
-    IReadOnlyList<ConfigurationEntry> Entries,
-    IReadOnlyList<ConfigurationEntry> EffectiveEntries);
+public sealed record ResourceBindingsResult(
+    IReadOnlyList<ResourceBinding> Entries,
+    IReadOnlyList<ResourceBinding> EffectiveEntries);
 
 public sealed record CreateExternalSecretInputModel(
     string Name,

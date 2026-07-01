@@ -10,6 +10,7 @@ using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
 using System.Text.Json;
+using Domain.Contracts.Resources.ResourceBindings;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
@@ -57,7 +58,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         sr.Version,
         sr.Spec,
         sr.Source,
-        sr.Configuration,
+        sr.ResourceBindings,
         sr.CreatedAt,
         sr.CreatedByActorId,
         p.Name AS Platform_Name,
@@ -97,7 +98,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.Version AS CurrentRelease_Version,
                 sr.Spec AS CurrentRelease_Spec,
                 sr.Source AS CurrentRelease_Source,
-                sr.Configuration AS CurrentRelease_Configuration,
+                sr.ResourceBindings AS CurrentRelease_ResourceBindings,
                 sr.CreatedAt AS CurrentRelease_CreatedAt,
                 sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
                 p.Name AS Platform_Name,
@@ -420,9 +421,9 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
         const string stackReleaseSql = """
             INSERT INTO StackReleases (
-                Id, StackId, PlatformId, Status, Version, Spec, Source, Configuration, CreatedAt, CreatedByActorId
+                Id, StackId, PlatformId, Status, Version, Spec, Source, ResourceBindings, CreatedAt, CreatedByActorId
             ) VALUES (
-                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseConfiguration::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
+                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
             )
         """;
 
@@ -450,7 +451,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ReleaseVersion = currentStackRelease.Version,
             ReleaseSpec = JsonSerializer.Serialize(currentStackRelease.Spec, StackJsonContext.Default.StackSpec),
             ReleaseSource = currentStackRelease.Source is null ? null : JsonSerializer.Serialize(currentStackRelease.Source, StackJsonContext.Default.StackReleaseSource),
-            ReleaseConfiguration = SerializeConfiguration(currentStackRelease.Configuration),
+            ReleaseResourceBindings = SerializeResourceBindings(currentStackRelease.ResourceBindings),
             ReleaseCreatedAt = currentStackRelease.CreatedAt,
             ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId
         }, transaction: tx());
@@ -460,9 +461,9 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
     {
         const string sql = """
             INSERT INTO StackReleases (
-                Id, StackId, PlatformId, Status, Version, Spec, Source, Configuration, CreatedAt, CreatedByActorId
+                Id, StackId, PlatformId, Status, Version, Spec, Source, ResourceBindings, CreatedAt, CreatedByActorId
             ) VALUES (
-                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseConfiguration::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
+                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
             )
         """;
 
@@ -475,7 +476,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ReleaseVersion = release.Version,
             ReleaseSpec = JsonSerializer.Serialize(release.Spec, StackJsonContext.Default.StackSpec),
             ReleaseSource = release.Source is null ? null : JsonSerializer.Serialize(release.Source, StackJsonContext.Default.StackReleaseSource),
-            ReleaseConfiguration = SerializeConfiguration(release.Configuration),
+            ReleaseResourceBindings = SerializeResourceBindings(release.ResourceBindings),
             ReleaseCreatedAt = release.CreatedAt,
             ReleaseCreatedByActorId = release.CreatedByActorId
         }, transaction: tx());
@@ -499,16 +500,16 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
         const string stackReleaseSql = """
             INSERT INTO StackReleases (
-                Id, StackId, PlatformId, Status, Version, Spec, Source, Configuration, CreatedAt, CreatedByActorId
+                Id, StackId, PlatformId, Status, Version, Spec, Source, ResourceBindings, CreatedAt, CreatedByActorId
             )
-            VALUES (@ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseConfiguration::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId)
+            VALUES (@ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId)
             ON CONFLICT (Id) DO UPDATE
             SET PlatformId = EXCLUDED.PlatformId,
                 Status = EXCLUDED.Status,
                 Version = EXCLUDED.Version,
                 Spec = EXCLUDED.Spec,
                 Source = EXCLUDED.Source,
-                Configuration = EXCLUDED.Configuration
+                ResourceBindings = EXCLUDED.ResourceBindings
         """;
 
         var currentStackRelease = stack.CurrentStackRelease ?? throw new InvalidOperationException("Stack must have a current stack release.");
@@ -532,7 +533,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ReleaseVersion = currentStackRelease.Version,
             ReleaseSpec = JsonSerializer.Serialize(currentStackRelease.Spec, StackJsonContext.Default.StackSpec),
             ReleaseSource = currentStackRelease.Source is null ? null : JsonSerializer.Serialize(currentStackRelease.Source, StackJsonContext.Default.StackReleaseSource),
-            ReleaseConfiguration = SerializeConfiguration(currentStackRelease.Configuration),
+            ReleaseResourceBindings = SerializeResourceBindings(currentStackRelease.ResourceBindings),
             ReleaseCreatedAt = currentStackRelease.CreatedAt,
             ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId
         }, transaction: tx());
@@ -635,7 +636,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 sr.Version AS CurrentRelease_Version,
                 sr.Spec AS CurrentRelease_Spec,
                 sr.Source AS CurrentRelease_Source,
-                sr.Configuration AS CurrentRelease_Configuration,
+                sr.ResourceBindings AS CurrentRelease_ResourceBindings,
                 sr.CreatedAt AS CurrentRelease_CreatedAt,
                 sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
                 p.Name AS Platform_Name,
@@ -715,9 +716,9 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         }, tx());
     }
 
-    private static string? SerializeConfiguration(
-        IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? configuration)
+    private static string? SerializeResourceBindings(
+        IReadOnlyList<ResourceBindingSnapshot>? configuration)
         => configuration is null
             ? null
-            : JsonSerializer.Serialize(configuration, StackJsonContext.Default.IReadOnlyListConfigurationSnapshotEntry);
+            : JsonSerializer.Serialize(configuration, StackJsonContext.Default.IReadOnlyListResourceBindingSnapshot);
 }

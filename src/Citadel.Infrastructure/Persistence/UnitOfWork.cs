@@ -1,4 +1,4 @@
-﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Interfaces;
 using Microsoft.Extensions.Logging;
 using System.Data;
 using System.Data.Common;
@@ -38,7 +38,7 @@ internal class UnitOfWork : IUnitOfWork
         ActivityEvents = new Lazy<IActivityEventRepository>(() => new ActivityEventRepository(connection, GetTransaction));
         GitAccounts = new Lazy<IGitAccountRepository>(() => new GitAccountRepository(connection, GetTransaction));
         GitRepositories = new Lazy<IGitReposRepository>(() => new GitReposRepository(connection, GetTransaction));
-        ConfigurationEntries = new Lazy<IConfigurationEntryRepository>(() => new ConfigurationEntryRepository(connection, GetTransaction));
+        ResourceBindings = new Lazy<IResourceBindingRepository>(() => new ResourceBindingRepository(connection, GetTransaction));
         SecretDefinitions = new Lazy<ISecretDefinitionRepository>(() => new SecretDefinitionRepository(connection, GetTransaction));
         SecretProviders = new Lazy<ISecretProviderRepository>(() => new SecretProviderRepository(connection, GetTransaction));
     }
@@ -58,7 +58,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IAlertEventRepository> AlertEvents { get; }
     private Lazy<IGitAccountRepository> GitAccounts { get; }
     private Lazy<IGitReposRepository> GitRepositories { get; }
-    private Lazy<IConfigurationEntryRepository> ConfigurationEntries { get; }
+    private Lazy<IResourceBindingRepository> ResourceBindings { get; }
     private Lazy<ISecretDefinitionRepository> SecretDefinitions { get; }
     private Lazy<ISecretProviderRepository> SecretProviders { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
@@ -85,7 +85,7 @@ internal class UnitOfWork : IUnitOfWork
     IGitReposRepository IUnitOfWork.GitRepositories => GitRepositories.Value;
     IContainerStatRepository IUnitOfWork.ContainerStats => ContainerStats.Value;
     IActivityEventRepository IUnitOfWork.ActivityEventRepository => ActivityEvents.Value;
-    IConfigurationEntryRepository IUnitOfWork.ConfigurationEntries => ConfigurationEntries.Value;
+    IResourceBindingRepository IUnitOfWork.ResourceBindings => ResourceBindings.Value;
     ISecretDefinitionRepository IUnitOfWork.SecretDefinitions => SecretDefinitions.Value;
     ISecretProviderRepository IUnitOfWork.SecretProviders => SecretProviders.Value;
 

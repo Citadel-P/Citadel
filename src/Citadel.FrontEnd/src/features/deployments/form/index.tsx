@@ -10,7 +10,7 @@ import {
   DeploymentStatus,
   DeploymentView,
   ContainerDataView,
-  ConfigurationScope,
+  ResourceBindingScope,
   LatestActivityView,
   ResourceControlState,
   UpdateBehavior,
@@ -28,7 +28,7 @@ import { ActivityAlertZone } from '@/components/custom/task-sheet';
 import { DeploymentLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { UpdateAvailableNotice } from '@/components/custom/common';
-import { ConfigurationEntriesTab } from '@/components/custom/configuration-entries-tab';
+import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -67,24 +67,24 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         },
       },
       {
-        label: 'Variables',
-        disabled: (resource: DeploymentView): boolean => !hasCapability(resource, 'canViewConfiguration'),
-        Content: ({ resource }: { resource: DeploymentView }) => {
-          return (
-            <ConfigurationEntriesTab
-              scope={ConfigurationScope.Deployment}
-              resourceId={resource.id}
-              disabled={!hasCapability(resource, 'canWrite')}
-            />
-          );
-        },
-      },
-      {
         label: 'Container',
         disabled: (resource: DeploymentView): boolean =>
           resource.status === DeploymentStatus.Degraded || resource.status === DeploymentStatus.Created,
         Content: ({ resource }: { resource: DeploymentView }) => {
           return <DeploymentRuntime key={resource.id} deployment={resource} />;
+        },
+      },
+      {
+        label: 'Bindings',
+        disabled: (resource: DeploymentView): boolean => !hasCapability(resource, 'canViewResourceBindings'),
+        Content: ({ resource }: { resource: DeploymentView }) => {
+          return (
+            <ResourceBindingsTab
+              scope={ResourceBindingScope.Deployment}
+              resourceId={resource.id}
+              disabled={!hasCapability(resource, 'canWrite')}
+            />
+          );
         },
       },
       {

@@ -1,4 +1,4 @@
-﻿using Domain;
+using Domain;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Microsoft.EntityFrameworkCore;
@@ -32,7 +32,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .ResourceAccessConfiguration()
             .RoleConfiguration()
             .ActorRoleConfiguration()
-            .ConfigurationEntryConfiguration()
+            .ResourceBindingConfiguration()
             .SecretProviderConfiguration()
             .SecretDefinitionConfiguration()
             .InternalSecretValueConfiguration()
@@ -747,10 +747,10 @@ internal static class Configuration
         return builder;
     }
 
-    public static ModelBuilder ConfigurationEntryConfiguration(this ModelBuilder builder)
+    public static ModelBuilder ResourceBindingConfiguration(this ModelBuilder builder)
     {
-        var tableName = "ConfigurationEntries";
-        var entry = builder.Entity("ConfigurationEntry");
+        var tableName = "ResourceBindings";
+        var entry = builder.Entity("ResourceBinding");
 
         entry.ToTable(tableName);
 
@@ -1093,7 +1093,7 @@ internal static class Configuration
         release.Property<string>("Version").HasColumnType(Text).IsRequired();
         release.Property<string>("Spec").HasColumnType(Json).IsRequired();
         release.Property<string>("Source").HasColumnType(Json).IsRequired(false);
-        release.Property<string>("Configuration").HasColumnType(Json).IsRequired(false);
+        release.Property<string>("ResourceBindings").HasColumnType(Json).IsRequired(false);
 
         release.AddAuditedMemebers();
 

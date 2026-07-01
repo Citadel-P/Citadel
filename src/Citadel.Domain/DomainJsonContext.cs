@@ -1,10 +1,10 @@
-﻿using Domain.Contracts.Resources.Role;
+using Domain.Contracts.Resources.Role;
 using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
@@ -13,6 +13,7 @@ using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using System.Text.Json.Serialization;
+using Domain.Contracts.Resources.ResourceBindings;
 
 namespace Domain;
 
@@ -79,8 +80,8 @@ public partial class ImagTagsContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<AutoUpdateStatus>),
         typeof(JsonStringEnumConverter<ResourceControlState>),
         typeof(JsonStringEnumConverter<ContainerRestartPolicy>),
-        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
-        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<ResourceBindingKind>),
+        typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
         typeof(JsonStringEnumConverter<SecretProviderType>),
     })]
@@ -88,8 +89,8 @@ public partial class ImagTagsContext : JsonSerializerContext
 [JsonSerializable(typeof(Deployment))]
 [JsonSerializable(typeof(DeploymentSpec))]
 [JsonSerializable(typeof(Domain.Contracts.Resources.Deployments.DeploymentResultSnapshot))]
-[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
-[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
+[JsonSerializable(typeof(ResourceBindingSnapshot))]
+[JsonSerializable(typeof(IReadOnlyList<ResourceBindingSnapshot>))]
 [JsonSerializable(typeof(HealthCheckConfig))]
 public partial class DeploymentJsonContext : JsonSerializerContext
 {
@@ -100,15 +101,15 @@ public partial class DeploymentJsonContext : JsonSerializerContext
     PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
-        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
-        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<ResourceBindingKind>),
+        typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
         typeof(JsonStringEnumConverter<SecretProviderType>)
     })]
-[JsonSerializable(typeof(ConfigurationEntry))]
-[JsonSerializable(typeof(IEnumerable<ConfigurationEntry>))]
-[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
-[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
+[JsonSerializable(typeof(ResourceBinding))]
+[JsonSerializable(typeof(IEnumerable<ResourceBinding>))]
+[JsonSerializable(typeof(ResourceBindingSnapshot))]
+[JsonSerializable(typeof(IReadOnlyList<ResourceBindingSnapshot>))]
 [JsonSerializable(typeof(SecretDefinition))]
 [JsonSerializable(typeof(InternalSecretValue))]
 [JsonSerializable(typeof(SecretProvider))]
@@ -123,8 +124,8 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
     Converters = new[]
     {
         typeof(JsonStringEnumConverter<ActivityEventType>),
-        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
-        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<ResourceBindingKind>),
+        typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
         typeof(JsonStringEnumConverter<SecretProviderType>),
     })]
@@ -157,8 +158,8 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackRollback))]
 [JsonSerializable(typeof(Domain.Contracts.Resources.Deployments.DeploymentResultSnapshot))]
 [JsonSerializable(typeof(Domain.Contracts.Resources.Stacks.StackResultSnapshot))]
-[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
-[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
+[JsonSerializable(typeof(ResourceBindingSnapshot))]
+[JsonSerializable(typeof(IReadOnlyList<ResourceBindingSnapshot>))]
 [JsonSerializable(typeof(AlertRuleCreated))]
 [JsonSerializable(typeof(AlertRuleUpdated))]
 [JsonSerializable(typeof(AlertRuleDeleted))]
@@ -246,8 +247,8 @@ public partial class AlertRuleJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<GitRepositorySyncMode>),
         typeof(JsonStringEnumConverter<WebhookProvider>),
         typeof(JsonStringEnumConverter<WebhookAuthScheme>),
-        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
-        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<ResourceBindingKind>),
+        typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>)
     })]
 [JsonSerializable(typeof(GitAccount))]
@@ -276,8 +277,8 @@ public partial class GitJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<ResourceControlState>),
         typeof(JsonStringEnumConverter<WebhookProvider>),
         typeof(JsonStringEnumConverter<WebhookAuthScheme>),
-        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
-        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<ResourceBindingKind>),
+        typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
         typeof(JsonStringEnumConverter<SecretProviderType>)
     })]
@@ -299,8 +300,8 @@ public partial class GitJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(StackRelease))]
 [JsonSerializable(typeof(StackReleaseSource))]
 [JsonSerializable(typeof(Domain.Contracts.Resources.Stacks.StackResultSnapshot))]
-[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
-[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.ResourceBindings.ResourceBindingSnapshot))]
+[JsonSerializable(typeof(IReadOnlyList<ResourceBindingSnapshot>))]
 [JsonSerializable(typeof(StackSpec))]
 [JsonSerializable(typeof(ManualStack))]
 [JsonSerializable(typeof(GitStack))]

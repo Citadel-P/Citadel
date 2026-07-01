@@ -17,7 +17,7 @@ import {
   StackReleaseView,
   StackSource,
   ActorType,
-  ConfigurationScope,
+  ResourceBindingScope,
 } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
@@ -69,7 +69,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { MonacoDiff } from '@/lib/monaco';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { hasActionableStackDrift } from '../actions';
-import { ConfigurationEntriesTab } from '@/components/custom/configuration-entries-tab';
+import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -104,19 +104,6 @@ export const StackFormComponents: RequiredFormComponents = {
         },
       },
       {
-        label: 'Variables',
-        disabled: (resource: StackView): boolean => !hasCapability(resource, 'canViewConfiguration'),
-        Content: ({ resource }: { resource: StackView }) => {
-          return (
-            <ConfigurationEntriesTab
-              scope={ConfigurationScope.Stack}
-              resourceId={resource.id}
-              disabled={!hasCapability(resource, 'canWrite')}
-            />
-          );
-        },
-      },
-      {
         label: 'Services',
         disabled: (resource: StackView): boolean => resource.status === StackReleaseStatus.Created,
         Content: ({ resource }: { resource: StackView }) => {
@@ -128,6 +115,19 @@ export const StackFormComponents: RequiredFormComponents = {
         disabled: (resource: StackView): boolean => !hasCapability(resource, 'canViewReleases'),
         Content: ({ resource }: { resource: StackView }) => {
           return <StackReleasesTab stack={resource} />;
+        },
+      },
+      {
+        label: 'Bindings',
+        disabled: (resource: StackView): boolean => !hasCapability(resource, 'canViewResourceBindings'),
+        Content: ({ resource }: { resource: StackView }) => {
+          return (
+            <ResourceBindingsTab
+              scope={ResourceBindingScope.Stack}
+              resourceId={resource.id}
+              disabled={!hasCapability(resource, 'canWrite')}
+            />
+          );
         },
       },
       {
@@ -378,7 +378,7 @@ const createStackPreviewConfig = (stack: StackView) => ({
   stackSource: stack.stackSource,
   platformId: stack.platformId,
   spec: stack.spec,
-  configuration: stack.configuration,
+  resourceBindings: stack.resourceBindings,
 });
 
 const createStackReleasePreviewConfig = (stack: StackView, release: StackReleaseView) => ({
@@ -387,7 +387,7 @@ const createStackReleasePreviewConfig = (stack: StackView, release: StackRelease
   stackSource: stack.stackSource,
   platformId: release.platformId,
   spec: release.spec,
-  configuration: release.configuration,
+  resourceBindings: release.resourceBindings,
 });
 
 const StackReleaseActorCell = ({ release }: { release: StackReleaseView }) => (

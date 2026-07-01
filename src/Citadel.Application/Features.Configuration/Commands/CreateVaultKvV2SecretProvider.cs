@@ -1,7 +1,7 @@
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -11,7 +11,7 @@ using Mediator;
 
 namespace Application.Features.Configuration.Commands;
 
-[RequirePermission(ResourceType.Configuration, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
 public sealed record CreateVaultKvV2SecretProvider(
     string Name,
     string Address,

@@ -1,4 +1,4 @@
-﻿using Domain.Entities.Deployments;
+using Domain.Entities.Deployments;
 
 namespace Domain.Contracts.Resources.Deployments;
 
@@ -23,4 +23,4 @@ public static class DeploymentSnapshotExtensions
 public sealed record DeploymentResultSnapshot(
     IEnumerable<string>? ContainerIds = null,
     string? Message = null,
-    IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration = null);
+    IReadOnlyList<ResourceBindings.ResourceBindingSnapshot>? ResourceBindings = null);

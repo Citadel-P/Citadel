@@ -1,7 +1,7 @@
 using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
@@ -9,14 +9,14 @@ using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
 
-internal sealed class ConfigurationEntryRepository(IDbConnection db, Func<IDbTransaction> tx) : IConfigurationEntryRepository
+internal sealed class ResourceBindingRepository(IDbConnection db, Func<IDbTransaction> tx) : IResourceBindingRepository
 {
-    public Task<int> AddAsync(ConfigurationEntry entry, CancellationToken cancellationToken)
+    public Task<int> AddAsync(ResourceBinding entry, CancellationToken cancellationToken)
     {
         entry.Validate();
 
         const string sql = """
-            INSERT INTO ConfigurationEntries (
+            INSERT INTO ResourceBindings (
                 Id, Name, Kind, Scope, ResourceId, Value, SecretId, SecretDeliveryMode, TargetPath, CreatedAt, UpdatedAt)
             VALUES (
                 @Id, @Name, @Kind, @Scope, @ResourceId, @Value, @SecretId, @SecretDeliveryMode, @TargetPath, @CreatedAt, @UpdatedAt)
@@ -28,8 +28,8 @@ internal sealed class ConfigurationEntryRepository(IDbConnection db, Func<IDbTra
             {
                 Id = entry.Id,
                 Name = entry.Name,
-                Kind = EnumFormatter<ConfigurationEntryKind>.GetValue(entry.Kind),
-                Scope = EnumFormatter<ConfigurationScope>.GetValue(entry.Scope),
+                Kind = EnumFormatter<ResourceBindingKind>.GetValue(entry.Kind),
+                Scope = EnumFormatter<ResourceBindingScope>.GetValue(entry.Scope),
                 ResourceId = entry.ResourceId,
                 Value = entry.Value,
                 SecretId = entry.SecretId,
@@ -43,18 +43,18 @@ internal sealed class ConfigurationEntryRepository(IDbConnection db, Func<IDbTra
             transaction: tx());
     }
 
-    public async Task<int> ReplaceResourceEntriesAsync(ConfigurationScope scope, Guid resourceId, IEnumerable<ConfigurationEntry> entries, CancellationToken cancellationToken)
+    public async Task<int> ReplaceResourceEntriesAsync(ResourceBindingScope scope, Guid resourceId, IEnumerable<ResourceBinding> entries, CancellationToken cancellationToken)
         => await ReplaceEntriesAsync(scope, resourceId, entries, cancellationToken);
 
-    public async Task<int> ReplaceEntriesAsync(ConfigurationScope scope, Guid? resourceId, IEnumerable<ConfigurationEntry> entries, CancellationToken cancellationToken)
+    public async Task<int> ReplaceEntriesAsync(ResourceBindingScope scope, Guid? resourceId, IEnumerable<ResourceBinding> entries, CancellationToken cancellationToken)
     {
-        if (scope == ConfigurationScope.Global && resourceId is not null)
+        if (scope == ResourceBindingScope.Global && resourceId is not null)
             throw new ArgumentException("Global entries cannot have a resource id.", nameof(resourceId));
 
-        if (scope != ConfigurationScope.Global && resourceId is null)
+        if (scope != ResourceBindingScope.Global && resourceId is null)
             throw new ArgumentException("Resource scoped entries require a resource id.", nameof(resourceId));
 
-        var entryArray = entries as ConfigurationEntry[] ?? [.. entries];
+        var entryArray = entries as ResourceBinding[] ?? [.. entries];
         foreach (var entry in entryArray)
         {
             entry.Validate();
@@ -62,10 +62,10 @@ internal sealed class ConfigurationEntryRepository(IDbConnection db, Func<IDbTra
                 throw new ArgumentException("All entries must match the requested scope.");
         }
 
-        var scopeValue = EnumFormatter<ConfigurationScope>.GetValue(scope);
+        var scopeValue = EnumFormatter<ResourceBindingScope>.GetValue(scope);
 
         const string deleteSql = """
-            DELETE FROM ConfigurationEntries
+            DELETE FROM ResourceBindings
             WHERE Scope = @Scope
               AND ((@ResourceId IS NULL AND ResourceId IS NULL) OR ResourceId = @ResourceId)
         """;
@@ -84,13 +84,13 @@ internal sealed class ConfigurationEntryRepository(IDbConnection db, Func<IDbTra
 
         const string replaceSql = """
             WITH deleted AS (
-                DELETE FROM ConfigurationEntries
+                DELETE FROM ResourceBindings
                 WHERE Scope = @Scope
                   AND ((@ResourceId IS NULL AND ResourceId IS NULL) OR ResourceId = @ResourceId)
                 RETURNING 1
             ),
             inserted AS (
-                INSERT INTO ConfigurationEntries (
+                INSERT INTO ResourceBindings (
                     Id, Name, Kind, Scope, ResourceId, Value, SecretId, SecretDeliveryMode, TargetPath, CreatedAt, UpdatedAt)
                 SELECT
                     item.Id,
@@ -143,8 +143,8 @@ internal sealed class ConfigurationEntryRepository(IDbConnection db, Func<IDbTra
                 ResourceId = resourceId,
                 Ids = entryArray.Select(x => x.Id).ToArray(),
                 Names = entryArray.Select(x => x.Name).ToArray(),
-                Kinds = entryArray.Select(x => EnumFormatter<ConfigurationEntryKind>.GetValue(x.Kind)).ToArray(),
-                Scopes = entryArray.Select(x => EnumFormatter<ConfigurationScope>.GetValue(x.Scope)).ToArray(),
+                Kinds = entryArray.Select(x => EnumFormatter<ResourceBindingKind>.GetValue(x.Kind)).ToArray(),
+                Scopes = entryArray.Select(x => EnumFormatter<ResourceBindingScope>.GetValue(x.Scope)).ToArray(),
                 ResourceIds = entryArray.Select(x => x.ResourceId).ToArray(),
                 Values = entryArray.Select(x => x.Value).ToArray(),
                 SecretIds = entryArray.Select(x => x.SecretId).ToArray(),
@@ -160,26 +160,26 @@ internal sealed class ConfigurationEntryRepository(IDbConnection db, Func<IDbTra
             transaction: tx());
     }
 
-    public async Task<IEnumerable<ConfigurationEntry>> GetEntriesAsync(ConfigurationScope scope, Guid? resourceId, CancellationToken cancellationToken)
+    public async Task<IEnumerable<ResourceBinding>> GetEntriesAsync(ResourceBindingScope scope, Guid? resourceId, CancellationToken cancellationToken)
     {
-        if (scope == ConfigurationScope.Global && resourceId is not null)
+        if (scope == ResourceBindingScope.Global && resourceId is not null)
             throw new ArgumentException("Global entries cannot have a resource id.", nameof(resourceId));
 
-        if (scope != ConfigurationScope.Global && resourceId is null)
+        if (scope != ResourceBindingScope.Global && resourceId is null)
             throw new ArgumentException("Resource scoped entries require a resource id.", nameof(resourceId));
 
         const string sql = """
-            SELECT * FROM ConfigurationEntries
+            SELECT * FROM ResourceBindings
             WHERE Scope = @Scope
               AND ((@ResourceId IS NULL AND ResourceId IS NULL) OR ResourceId = @ResourceId)
             ORDER BY Name ASC
         """;
 
-        var result = await db.QueryAsync<ConfigurationEntryDto>(
+        var result = await db.QueryAsync<ResourceBindingDto>(
             sql,
             new
             {
-                Scope = EnumFormatter<ConfigurationScope>.GetValue(scope),
+                Scope = EnumFormatter<ResourceBindingScope>.GetValue(scope),
                 ResourceId = resourceId
             },
             transaction: tx());
@@ -187,21 +187,21 @@ internal sealed class ConfigurationEntryRepository(IDbConnection db, Func<IDbTra
         return result.Select(x => x.ToDomain());
     }
 
-    public async Task<IEnumerable<ConfigurationEntry>> GetEffectiveEntriesAsync(ConfigurationScope scope, Guid resourceId, CancellationToken cancellationToken)
+    public async Task<IEnumerable<ResourceBinding>> GetEffectiveEntriesAsync(ResourceBindingScope scope, Guid resourceId, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT * FROM ConfigurationEntries
+            SELECT * FROM ResourceBindings
             WHERE Scope = @GlobalScope
                OR (Scope = @Scope AND ResourceId = @ResourceId)
             ORDER BY Name ASC, Scope ASC
         """;
 
-        var result = await db.QueryAsync<ConfigurationEntryDto>(
+        var result = await db.QueryAsync<ResourceBindingDto>(
             sql,
             new
             {
-                GlobalScope = EnumFormatter<ConfigurationScope>.GetValue(ConfigurationScope.Global),
-                Scope = EnumFormatter<ConfigurationScope>.GetValue(scope),
+                GlobalScope = EnumFormatter<ResourceBindingScope>.GetValue(ResourceBindingScope.Global),
+                Scope = EnumFormatter<ResourceBindingScope>.GetValue(scope),
                 ResourceId = resourceId
             },
             transaction: tx());

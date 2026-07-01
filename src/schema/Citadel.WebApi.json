@@ -13428,13 +13428,13 @@
         ]
       }
     },
-    "/api/v1/configuration/global": {
+    "/api/v1/resourceBindings/global": {
       "get": {
         "tags": [
-          "ConfigurationEntries"
+          "ResourceBindings"
         ],
-        "summary": "Get global variables and secrets",
-        "operationId": "getGlobalConfigurationEntries",
+        "summary": "Get global bindings",
+        "operationId": "getGlobalResourceBindings",
         "responses": {
           "500": {
             "description": "Internal Server Error",
@@ -13451,7 +13451,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConfigurationEntriesView"
+                  "$ref": "#/components/schemas/ResourceBindingsView"
                 }
               }
             }
@@ -13470,15 +13470,15 @@
       },
       "put": {
         "tags": [
-          "ConfigurationEntries"
+          "ResourceBindings"
         ],
-        "summary": "Replace global variables and secrets",
-        "operationId": "replaceGlobalConfigurationEntries",
+        "summary": "Replace global bindings",
+        "operationId": "replaceGlobalResourceBindings",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReplaceConfigurationEntriesInput"
+                "$ref": "#/components/schemas/ReplaceResourceBindingsInput"
               }
             }
           },
@@ -13500,7 +13500,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConfigurationEntriesView"
+                  "$ref": "#/components/schemas/ResourceBindingsView"
                 }
               }
             }
@@ -13518,21 +13518,21 @@
         }
       }
     },
-    "/api/v1/configuration/{scope}/{resourceId}": {
+    "/api/v1/resourceBindings/{scope}/{resourceId}": {
       "get": {
         "tags": [
-          "ConfigurationEntries"
+          "ResourceBindings"
         ],
-        "summary": "Get resource variables and secrets",
-        "operationId": "getResourceConfigurationEntries",
+        "summary": "Get resource bindings",
+        "operationId": "getResourceBindings",
         "parameters": [
           {
             "name": "scope",
             "in": "path",
-            "description": "Configuration scope",
+            "description": "Resource binding scope",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/ConfigurationScope"
+              "$ref": "#/components/schemas/ResourceBindingScope"
             }
           },
           {
@@ -13562,7 +13562,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConfigurationEntriesView"
+                  "$ref": "#/components/schemas/ResourceBindingsView"
                 }
               }
             }
@@ -13581,18 +13581,18 @@
       },
       "put": {
         "tags": [
-          "ConfigurationEntries"
+          "ResourceBindings"
         ],
-        "summary": "Replace resource variables and secrets",
-        "operationId": "replaceResourceConfigurationEntries",
+        "summary": "Replace resource bindings",
+        "operationId": "replaceResourceBindings",
         "parameters": [
           {
             "name": "scope",
             "in": "path",
-            "description": "Configuration scope",
+            "description": "Resource binding scope",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/ConfigurationScope"
+              "$ref": "#/components/schemas/ResourceBindingScope"
             }
           },
           {
@@ -13610,7 +13610,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReplaceConfigurationEntriesInput"
+                "$ref": "#/components/schemas/ReplaceResourceBindingsInput"
               }
             }
           },
@@ -13632,7 +13632,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConfigurationEntriesView"
+                  "$ref": "#/components/schemas/ResourceBindingsView"
                 }
               }
             }
@@ -13650,10 +13650,10 @@
         }
       }
     },
-    "/api/v1/configuration/secrets": {
+    "/api/v1/bindings/secrets": {
       "get": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "List secret definitions",
         "operationId": "listSecretDefinitions",
@@ -13661,9 +13661,9 @@
           {
             "name": "scope",
             "in": "query",
-            "description": "Optional resource configuration scope",
+            "description": "Optional resource binding scope",
             "schema": {
-              "$ref": "#/components/schemas/ConfigurationScope"
+              "$ref": "#/components/schemas/ResourceBindingScope"
             }
           },
           {
@@ -13711,7 +13711,7 @@
       },
       "post": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "Create an internal encrypted secret",
         "operationId": "createInternalSecret",
@@ -13759,10 +13759,10 @@
         }
       }
     },
-    "/api/v1/configuration/secrets/external": {
+    "/api/v1/bindings/secrets/external": {
       "post": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "Create an external secret definition",
         "operationId": "createExternalSecret",
@@ -13810,10 +13810,10 @@
         }
       }
     },
-    "/api/v1/configuration/secrets/external/{id}": {
+    "/api/v1/bindings/secrets/external/{id}": {
       "put": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "Update an external secret definition",
         "operationId": "updateExternalSecret",
@@ -13873,10 +13873,10 @@
         }
       }
     },
-    "/api/v1/configuration/secrets/external/test": {
+    "/api/v1/bindings/secrets/external/test": {
       "post": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "Test an external secret reference",
         "operationId": "testExternalSecret",
@@ -13924,10 +13924,10 @@
         }
       }
     },
-    "/api/v1/configuration/secret-providers/vault-kv2/test": {
+    "/api/v1/bindings/secret-providers/vault-kv2/test": {
       "post": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "Test a Vault-compatible KV v2 secret provider connection",
         "operationId": "testVaultKvV2SecretProviderConnection",
@@ -13975,10 +13975,10 @@
         }
       }
     },
-    "/api/v1/configuration/secret-providers": {
+    "/api/v1/bindings/secret-providers": {
       "get": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "List secret providers",
         "operationId": "listSecretProviders",
@@ -14016,10 +14016,10 @@
         }
       }
     },
-    "/api/v1/configuration/secret-providers/vault-kv2": {
+    "/api/v1/bindings/secret-providers/vault-kv2": {
       "post": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "Create a Vault-compatible KV v2 secret provider",
         "operationId": "createVaultKvV2SecretProvider",
@@ -14067,10 +14067,10 @@
         }
       }
     },
-    "/api/v1/configuration/secret-providers/vault-kv2/{id}": {
+    "/api/v1/bindings/secret-providers/vault-kv2/{id}": {
       "put": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "Update a Vault-compatible KV v2 secret provider",
         "operationId": "updateVaultKvV2SecretProvider",
@@ -14130,10 +14130,10 @@
         }
       }
     },
-    "/api/v1/configuration/secret-providers/{id}": {
+    "/api/v1/bindings/secret-providers/{id}": {
       "delete": {
         "tags": [
-          "ConfigurationEntries"
+          "Bindings"
         ],
         "summary": "Delete a secret provider",
         "operationId": "deleteSecretProvider",
@@ -19723,265 +19723,6 @@
           }
         }
       },
-      "ConfigurationEntriesView": {
-        "required": [
-          "entries",
-          "effectiveEntries"
-        ],
-        "type": "object",
-        "properties": {
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfigurationEntryView"
-            }
-          },
-          "effectiveEntries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfigurationEntryView"
-            }
-          },
-          "capabilities": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ResourceCapabilities"
-              }
-            ]
-          }
-        }
-      },
-      "ConfigurationEntryInput": {
-        "required": [
-          "name",
-          "kind",
-          "value",
-          "secretId"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ConfigurationEntryKind"
-          },
-          "value": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "secretId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "secretDeliveryMode": { },
-          "targetPath": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
-      "ConfigurationEntryKind": {
-        "enum": [
-          "Variable",
-          "Secret"
-        ]
-      },
-      "ConfigurationEntryView": {
-        "required": [
-          "id",
-          "name",
-          "kind",
-          "scope",
-          "resourceId",
-          "value",
-          "secretId",
-          "secretDeliveryMode",
-          "targetPath",
-          "isInherited"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ConfigurationEntryKind"
-          },
-          "scope": {
-            "$ref": "#/components/schemas/ConfigurationScope"
-          },
-          "resourceId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "value": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "secretId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "secretDeliveryMode": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SecretDeliveryMode"
-              }
-            ]
-          },
-          "targetPath": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "isInherited": {
-            "type": "boolean"
-          }
-        }
-      },
-      "ConfigurationScope": {
-        "enum": [
-          "Global",
-          "Stack",
-          "Deployment"
-        ]
-      },
-      "ConfigurationSnapshotEntry": {
-        "required": [
-          "name",
-          "kind",
-          "scope",
-          "resourceId",
-          "value",
-          "secretId",
-          "secretName",
-          "secretProviderType",
-          "secretProviderName",
-          "externalPath",
-          "externalKey",
-          "externalVersion",
-          "secretDeliveryMode",
-          "targetPath"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ConfigurationEntryKind"
-          },
-          "scope": {
-            "$ref": "#/components/schemas/ConfigurationScope"
-          },
-          "resourceId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "value": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "secretId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "secretName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "secretProviderType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SecretProviderType"
-              }
-            ]
-          },
-          "secretProviderName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "externalPath": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "externalKey": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "externalVersion": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "secretDeliveryMode": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SecretDeliveryMode"
-              }
-            ]
-          },
-          "targetPath": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
       "ContainerConfiguration": {
         "required": [
           "hostname",
@@ -21883,7 +21624,7 @@
           "canOpenTerminal",
           "canPull",
           "canApply",
-          "canViewConfiguration",
+          "canViewResourceBindings",
           "canRead",
           "canWrite",
           "canExecute"
@@ -21905,7 +21646,7 @@
           "canApply": {
             "type": "boolean"
           },
-          "canViewConfiguration": {
+          "canViewResourceBindings": {
             "type": "boolean"
           },
           "canRead": {
@@ -22033,13 +21774,13 @@
               "string"
             ]
           },
-          "configuration": {
+          "resourceBindings": {
             "type": [
               "null",
               "array"
             ],
             "items": {
-              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+              "$ref": "#/components/schemas/ResourceBindingSnapshot"
             }
           }
         }
@@ -25946,7 +25687,9 @@
       "PermissionMatrixViewItem": {
         "required": [
           "maximumLevel",
-          "specificPermissions"
+          "specificPermissions",
+          "label",
+          "specificPermissionLabels"
         ],
         "type": "object",
         "properties": {
@@ -25954,6 +25697,15 @@
             "type": "string"
           },
           "specificPermissions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "label": {
+            "type": "string"
+          },
+          "specificPermissionLabels": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
@@ -27132,7 +26884,7 @@
           }
         }
       },
-      "ReplaceConfigurationEntriesInput": {
+      "ReplaceResourceBindingsInput": {
         "required": [
           "entries"
         ],
@@ -27141,7 +26893,7 @@
           "entries": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ConfigurationEntryInput"
+              "$ref": "#/components/schemas/ResourceBindingInput"
             }
           }
         }
@@ -27267,6 +27019,208 @@
           }
         }
       },
+      "ResourceBindingInput": {
+        "required": [
+          "name",
+          "kind",
+          "value",
+          "secretId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ResourceBindingKind"
+          },
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "secretId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "secretDeliveryMode": { },
+          "targetPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ResourceBindingKind": {
+        "enum": [
+          "Variable",
+          "Secret"
+        ]
+      },
+      "ResourceBindingScope": {
+        "enum": [
+          "Global",
+          "Stack",
+          "Deployment"
+        ]
+      },
+      "ResourceBindingSnapshot": {
+        "required": [
+          "name",
+          "kind",
+          "scope",
+          "value",
+          "secretId",
+          "secretDeliveryMode",
+          "targetPath"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ResourceBindingKind"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ResourceBindingScope"
+          },
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "secretId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "secretDeliveryMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SecretDeliveryMode"
+              }
+            ]
+          },
+          "targetPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ResourceBindingView": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "scope",
+          "resourceId",
+          "value",
+          "secretId",
+          "secretDeliveryMode",
+          "targetPath",
+          "isInherited"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ResourceBindingKind"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ResourceBindingScope"
+          },
+          "resourceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "secretId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "secretDeliveryMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SecretDeliveryMode"
+              }
+            ]
+          },
+          "targetPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isInherited": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ResourceBindingsView": {
+        "required": [
+          "entries",
+          "effectiveEntries"
+        ],
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceBindingView"
+            }
+          },
+          "effectiveEntries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceBindingView"
+            }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
+          }
+        }
+      },
       "ResourceCapabilities": {
         "required": [
           "canRead",
@@ -27348,7 +27302,7 @@
           "User",
           "Team",
           "Role",
-          "Configuration"
+          "Binding"
         ]
       },
       "RestartPolicy": {
@@ -27557,7 +27511,12 @@
           }
         }
       },
-      "SecretProviderType": { },
+      "SecretProviderType": {
+        "enum": [
+          "InternalEncrypted",
+          "VaultCompatibleKvV2"
+        ]
+      },
       "SecretProviderView": {
         "required": [
           "id",
@@ -27612,7 +27571,7 @@
           "Apply",
           "Pull",
           "Terminal",
-          "Configuration",
+          "ResourceBindings",
           "Releases"
         ]
       },
@@ -27631,7 +27590,7 @@
           "canOpenTerminal",
           "canPull",
           "canApply",
-          "canViewConfiguration",
+          "canViewResourceBindings",
           "canViewReleases",
           "canRead",
           "canWrite",
@@ -27654,7 +27613,7 @@
           "canApply": {
             "type": "boolean"
           },
-          "canViewConfiguration": {
+          "canViewResourceBindings": {
             "type": "boolean"
           },
           "canViewReleases": {
@@ -28206,13 +28165,13 @@
               }
             ]
           },
-          "configuration": {
+          "resourceBindings": {
             "type": [
               "null",
               "array"
             ],
             "items": {
-              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+              "$ref": "#/components/schemas/ResourceBindingSnapshot"
             }
           }
         }
@@ -28333,7 +28292,7 @@
           "version",
           "spec",
           "source",
-          "configuration",
+          "resourceBindings",
           "createdAt",
           "createdByActorId",
           "actorName",
@@ -28372,13 +28331,13 @@
               }
             ]
           },
-          "configuration": {
+          "resourceBindings": {
             "type": [
               "null",
               "array"
             ],
             "items": {
-              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+              "$ref": "#/components/schemas/ResourceBindingSnapshot"
             }
           },
           "createdAt": {
@@ -28437,13 +28396,13 @@
               "string"
             ]
           },
-          "configuration": {
+          "resourceBindings": {
             "type": [
               "null",
               "array"
             ],
             "items": {
-              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+              "$ref": "#/components/schemas/ResourceBindingSnapshot"
             }
           }
         }
@@ -28910,13 +28869,13 @@
               }
             ]
           },
-          "configuration": {
+          "resourceBindings": {
             "type": [
               "null",
               "array"
             ],
             "items": {
-              "$ref": "#/components/schemas/ConfigurationSnapshotEntry"
+              "$ref": "#/components/schemas/ResourceBindingSnapshot"
             }
           },
           "platformStatus": {
@@ -29859,7 +29818,10 @@
       "name": "Stacks"
     },
     {
-      "name": "ConfigurationEntries"
+      "name": "ResourceBindings"
+    },
+    {
+      "name": "Bindings"
     },
     {
       "name": "Activities"

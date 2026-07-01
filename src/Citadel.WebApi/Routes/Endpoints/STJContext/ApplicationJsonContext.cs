@@ -1,4 +1,4 @@
-﻿using Application.Features.Identity.Auth.Models;
+using Application.Features.Identity.Auth.Models;
 using Application.Features.Images.Queries;
 using Application.Features.Configuration.Models;
 using Application.Features.GitRepositories.Queries;
@@ -14,7 +14,7 @@ using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
@@ -27,7 +27,7 @@ using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;
-using WebApi.Routes.Endpoints.Resources.Configuration;
+using WebApi.Routes.Endpoints.Resources.ResourceBindings;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
@@ -46,6 +46,7 @@ using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 using Application.Features.Webhooks.Commands;
+using Domain.Contracts.Resources.ResourceBindings;
 using ApiActorView = WebApi.Routes.Endpoints.Resources.Identity.Actors.ActorView;
 using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageResponseItem;
 
@@ -56,8 +57,8 @@ namespace Application.Models;
     Converters = new[]
     {
         typeof(JsonStringEnumConverter<ActorType>),
-        typeof(JsonStringEnumConverter<ConfigurationEntryKind>),
-        typeof(JsonStringEnumConverter<ConfigurationScope>),
+        typeof(JsonStringEnumConverter<ResourceBindingKind>),
+        typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
         typeof(JsonStringEnumConverter<SecretProviderType>)
     })]
@@ -67,16 +68,16 @@ namespace Application.Models;
 [JsonSerializable(typeof(LookupResourceType?))]
 [JsonSerializable(typeof(ResourceType))]
 [JsonSerializable(typeof(ResourceType?))]
-[JsonSerializable(typeof(ConfigurationEntryKind))]
-[JsonSerializable(typeof(ConfigurationEntryKind?))]
-[JsonSerializable(typeof(ConfigurationScope))]
-[JsonSerializable(typeof(ConfigurationScope?))]
+[JsonSerializable(typeof(ResourceBindingKind))]
+[JsonSerializable(typeof(ResourceBindingKind?))]
+[JsonSerializable(typeof(ResourceBindingScope))]
+[JsonSerializable(typeof(ResourceBindingScope?))]
 [JsonSerializable(typeof(SecretDeliveryMode))]
 [JsonSerializable(typeof(SecretDeliveryMode?))]
 [JsonSerializable(typeof(SecretProviderType))]
 [JsonSerializable(typeof(SecretProviderType?))]
-[JsonSerializable(typeof(Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry))]
-[JsonSerializable(typeof(IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>))]
+[JsonSerializable(typeof(ResourceBindingSnapshot))]
+[JsonSerializable(typeof(IReadOnlyList<ResourceBindingSnapshot>))]
 [JsonSerializable(typeof(ActorType))]
 [JsonSerializable(typeof(ActorType?))]
 [JsonSerializable(typeof(TargetResource))]
@@ -346,10 +347,10 @@ namespace Application.Models;
 [JsonSerializable(typeof(WebhookProvider))]
 [JsonSerializable(typeof(WebhookAuthScheme))]
 [JsonSerializable(typeof(WebhookExecution))]
-[JsonSerializable(typeof(ConfigurationEntryInput))]
-[JsonSerializable(typeof(ConfigurationEntryView))]
-[JsonSerializable(typeof(ConfigurationEntriesView))]
-[JsonSerializable(typeof(ReplaceConfigurationEntriesInput))]
+[JsonSerializable(typeof(ResourceBindingInput))]
+[JsonSerializable(typeof(ResourceBindingView))]
+[JsonSerializable(typeof(ResourceBindingsView))]
+[JsonSerializable(typeof(ReplaceResourceBindingsInput))]
 [JsonSerializable(typeof(SecretDefinitionView))]
 [JsonSerializable(typeof(SecretDefinitionsView))]
 [JsonSerializable(typeof(CreateInternalSecretInput))]

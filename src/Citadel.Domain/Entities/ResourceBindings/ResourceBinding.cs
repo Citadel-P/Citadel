@@ -1,11 +1,11 @@
 using SecretMode = Domain.SecretDeliveryMode;
 
-namespace Domain.Entities.Configuration;
+namespace Domain.Entities.ResourceBindings;
 
-public sealed record ConfigurationEntry(
+public sealed record ResourceBinding(
     string Name,
-    ConfigurationEntryKind Kind,
-    ConfigurationScope Scope,
+    ResourceBindingKind Kind,
+    ResourceBindingScope Scope,
     Guid? ResourceId,
     string? Value,
     Guid? SecretId,
@@ -19,15 +19,15 @@ public sealed record ConfigurationEntry(
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(Name))
-            throw new ArgumentException("Configuration entry name is required.", nameof(Name));
+            throw new ArgumentException("Resource binding name is required.", nameof(Name));
 
-        if (Scope != ConfigurationScope.Global && ResourceId is null)
-            throw new ArgumentException("Resource scoped configuration entries require a resource id.", nameof(ResourceId));
+        if (Scope != ResourceBindingScope.Global && ResourceId is null)
+            throw new ArgumentException("Resource scoped resource bindings require a resource id.", nameof(ResourceId));
 
-        if (Scope == ConfigurationScope.Global && ResourceId is not null)
-            throw new ArgumentException("Global configuration entries cannot have a resource id.", nameof(ResourceId));
+        if (Scope == ResourceBindingScope.Global && ResourceId is not null)
+            throw new ArgumentException("Global resource bindings cannot have a resource id.", nameof(ResourceId));
 
-        if (Kind == ConfigurationEntryKind.Variable)
+        if (Kind == ResourceBindingKind.Variable)
         {
             if (Value is null)
                 throw new ArgumentException("Variable entries require a value.", nameof(Value));

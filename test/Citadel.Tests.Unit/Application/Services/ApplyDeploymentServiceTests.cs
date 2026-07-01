@@ -1,21 +1,16 @@
 using System.Collections.Immutable;
-using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
-using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
-using Domain.Contracts.Resources.Configuration;
+using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Contracts.Resources.Deployments;
-using Domain.Entities;
 using Domain.Entities.Activities;
-using Domain.Entities.Configuration;
 using Domain.Entities.Deployments;
 using Domain.Entities.Identity;
-using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -99,13 +94,13 @@ public sealed class ApplyDeploymentServiceTests
                 "http://docker.local",
                 PlatformConnectorType.Local,
                 ImmutableDictionary<string, Guid>.Empty)),
-            new StaticConfigurationResolver(new ResolvedConfiguration(
+            new StaticResourceBindingResolver(new ResolvedResourceBindings(
                 EnvironmentVariables: ["APP_MODE=prod", "API_KEY=used-secret", "UNUSED_SECRET=orphan-token"],
                 Entries:
                 [
-                    new ResolvedConfigurationEntry("APP_MODE", ConfigurationEntryKind.Variable, "prod"),
-                    new ResolvedConfigurationEntry("API_KEY", ConfigurationEntryKind.Secret, "used-secret"),
-                    new ResolvedConfigurationEntry("UNUSED_SECRET", ConfigurationEntryKind.Secret, "orphan-token")
+                    new ResolvedResourceBinding("APP_MODE", ResourceBindingKind.Variable, "prod"),
+                    new ResolvedResourceBinding("API_KEY", ResourceBindingKind.Secret, "used-secret"),
+                    new ResolvedResourceBinding("UNUSED_SECRET", ResourceBindingKind.Secret, "orphan-token")
                 ],
                 RedactionValues: ["used-secret", "orphan-token"],
                 VariableCount: 1,
@@ -113,49 +108,28 @@ public sealed class ApplyDeploymentServiceTests
             {
                 SnapshotEntries =
                 [
-                    new ConfigurationSnapshotEntry(
+                    new ResourceBindingSnapshot(
                         Name: "APP_MODE",
-                        Kind: ConfigurationEntryKind.Variable,
-                        Scope: ConfigurationScope.Deployment,
-                        ResourceId: deployment.Id,
+                        Kind: ResourceBindingKind.Variable,
+                        Scope: ResourceBindingScope.Deployment,
                         Value: "prod",
                         SecretId: null,
-                        SecretName: null,
-                        SecretProviderType: null,
-                        SecretProviderName: null,
-                        ExternalPath: null,
-                        ExternalKey: null,
-                        ExternalVersion: null,
                         SecretDeliveryMode: null,
                         TargetPath: null),
-                    new ConfigurationSnapshotEntry(
+                    new ResourceBindingSnapshot(
                         Name: "API_KEY",
-                        Kind: ConfigurationEntryKind.Secret,
-                        Scope: ConfigurationScope.Deployment,
-                        ResourceId: deployment.Id,
+                        Kind: ResourceBindingKind.Secret,
+                        Scope: ResourceBindingScope.Deployment,
                         Value: "********",
                         SecretId: Guid.CreateVersion7(),
-                        SecretName: "api-key",
-                        SecretProviderType: SecretProviderType.InternalEncrypted,
-                        SecretProviderName: null,
-                        ExternalPath: null,
-                        ExternalKey: null,
-                        ExternalVersion: null,
                         SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
                         TargetPath: null),
-                    new ConfigurationSnapshotEntry(
+                    new ResourceBindingSnapshot(
                         Name: "UNUSED_SECRET",
-                        Kind: ConfigurationEntryKind.Secret,
-                        Scope: ConfigurationScope.Deployment,
-                        ResourceId: deployment.Id,
+                        Kind: ResourceBindingKind.Secret,
+                        Scope: ResourceBindingScope.Deployment,
                         Value: "********",
                         SecretId: Guid.CreateVersion7(),
-                        SecretName: "unused-secret",
-                        SecretProviderType: SecretProviderType.InternalEncrypted,
-                        SecretProviderName: null,
-                        ExternalPath: null,
-                        ExternalKey: null,
-                        ExternalVersion: null,
                         SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
                         TargetPath: null)
                 ]
@@ -181,13 +155,13 @@ public sealed class ApplyDeploymentServiceTests
 
         var applied = Assert.IsType<DeploymentApplied>(capturedActivity?.Info);
         Assert.Equal("failed with ******** and orphan-token", applied.Result?.Message);
-        Assert.Equal(["APP_MODE", "API_KEY"], applied.Result?.Configuration?.Select(entry => entry.Name));
+        Assert.Equal(["APP_MODE", "API_KEY"], applied.Result?.ResourceBindings?.Select(entry => entry.Name));
     }
 
-    private sealed class StaticConfigurationResolver(ResolvedConfiguration configuration) : IConfigurationResolver
+    private sealed class StaticResourceBindingResolver(ResolvedResourceBindings configuration) : IResourceBindingResolver
     {
-        public Task<Result<ResolvedConfiguration>> ResolveAsync(
-            ConfigurationScope scope,
+        public Task<Result<ResolvedResourceBindings>> ResolveAsync(
+            ResourceBindingScope scope,
             Guid resourceId,
             CancellationToken cancellationToken)
             => Task.FromResult(Result.Success(configuration));

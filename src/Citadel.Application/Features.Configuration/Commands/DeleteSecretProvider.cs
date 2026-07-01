@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.Configuration.Commands;
 
-[RequirePermission(ResourceType.Configuration, PermissionLevel.Write)]
+[RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
 public sealed record DeleteSecretProvider(Guid Id) : ICommand<Result>;
 
 internal sealed class DeleteSecretProviderHandler(IUnitOfWork unitOfWork)

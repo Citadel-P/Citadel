@@ -45,9 +45,9 @@ internal static class StackMappers
                 source: string.IsNullOrWhiteSpace(dto.CurrentRelease_Source)
                     ? null
                     : JsonSerializer.Deserialize(dto.CurrentRelease_Source, StackJsonContext.Default.StackReleaseSource),
-                configuration: string.IsNullOrWhiteSpace(dto.CurrentRelease_Configuration)
+                resourceBindings: string.IsNullOrWhiteSpace(dto.CurrentRelease_ResourceBindings)
                     ? null
-                    : JsonSerializer.Deserialize(dto.CurrentRelease_Configuration, StackJsonContext.Default.IReadOnlyListConfigurationSnapshotEntry),
+                    : JsonSerializer.Deserialize(dto.CurrentRelease_ResourceBindings, StackJsonContext.Default.IReadOnlyListResourceBindingSnapshot),
                 createdAt: dto.CurrentRelease_CreatedAt!.Value,
                 createdByActorId: dto.CurrentRelease_CreatedByActorId!.Value,
                 platform: platform);
@@ -120,9 +120,9 @@ internal static class StackMappers
             source: string.IsNullOrWhiteSpace(dto.Source)
                 ? null
                 : JsonSerializer.Deserialize(dto.Source, StackJsonContext.Default.StackReleaseSource),
-            configuration: string.IsNullOrWhiteSpace(dto.Configuration)
+            resourceBindings: string.IsNullOrWhiteSpace(dto.ResourceBindings)
                 ? null
-                : JsonSerializer.Deserialize(dto.Configuration, StackJsonContext.Default.IReadOnlyListConfigurationSnapshotEntry),
+                : JsonSerializer.Deserialize(dto.ResourceBindings, StackJsonContext.Default.IReadOnlyListResourceBindingSnapshot),
             createdAt: dto.CreatedAt,
             createdByActorId: dto.CreatedByActorId,
             platform: platform,

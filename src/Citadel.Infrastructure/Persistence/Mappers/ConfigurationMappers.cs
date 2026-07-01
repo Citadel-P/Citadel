@@ -1,5 +1,5 @@
 using Domain;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
 
@@ -7,11 +7,11 @@ namespace Infrastructure.Persistence.Mappers;
 
 internal static class ConfigurationMappers
 {
-    internal static ConfigurationEntry ToDomain(this ConfigurationEntryDto dto)
+    internal static ResourceBinding ToDomain(this ResourceBindingDto dto)
         => new(
             Name: dto.Name,
-            Kind: Enum.Parse<ConfigurationEntryKind>(dto.Kind),
-            Scope: Enum.Parse<ConfigurationScope>(dto.Scope),
+            Kind: Enum.Parse<ResourceBindingKind>(dto.Kind),
+            Scope: Enum.Parse<ResourceBindingScope>(dto.Scope),
             ResourceId: dto.ResourceId,
             Value: dto.Value,
             SecretId: dto.SecretId,

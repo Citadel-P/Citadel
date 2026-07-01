@@ -1,5 +1,5 @@
 import {
-  ConfigurationEntryView,
+  ResourceBindingView,
   CreateVaultKvV2SecretProviderInput,
   ResourceCapabilities,
   SecretProviderView,
@@ -26,7 +26,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { KeyRound, LoaderCircle, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { VariablesAddButton, VariablesGroupActions, VariablesTable } from './table';
+import { BindingsAddButton, BindingsGroupActions, BindingsTable } from './table';
 
 const EMPTY_CAPABILITIES: ResourceCapabilities = { canRead: false, canWrite: false, canExecute: false };
 const PROVIDER_INPUT: CreateVaultKvV2SecretProviderInput = {
@@ -80,7 +80,7 @@ function SecretProviderCard({
 
 function SecretProvidersSection() {
   const queryClient = useQueryClient();
-  const { data: configurationData } = useRead('getGlobalConfigurationEntries');
+  const { data: configurationData } = useRead('getGlobalResourceBindings');
   const { data, isLoading, refetch } = useRead('listSecretProviders');
   const createProvider = useMutate('createVaultKvV2SecretProvider');
   const updateProvider = useMutate('updateVaultKvV2SecretProvider');
@@ -303,25 +303,25 @@ function SecretProvidersSection() {
   );
 }
 
-export const VariableComponents: RequiredComponents<ConfigurationEntryView> = {
-  Icon: CitadelIcons.Variable,
+export const BindingComponents: RequiredComponents<ResourceBindingView> = {
+  Icon: CitadelIcons.Binding,
   Content: ({ items, isLoading, isFiltered }) => (
     <div className="flex flex-col gap-6">
-      <VariablesTable items={items} isLoading={isLoading} isFiltered={isFiltered} />
+      <BindingsTable items={items} isLoading={isLoading} isFiltered={isFiltered} />
       <div className="border-b border-dashed" />
       <SecretProvidersSection />
     </div>
   ),
-  GroupActions: VariablesGroupActions,
+  GroupActions: BindingsGroupActions,
   header: {
-    title: 'Variables',
-    subtitle: 'Manage global variables and stored secret keys inherited by stacks and deployments.',
+    title: 'Bindings',
+    subtitle: 'Manage global variables, secret keys, and providers inherited by stacks and deployments.',
     showSearch: true,
     showAdd: false,
-    Extra: VariablesAddButton,
+    Extra: BindingsAddButton,
   },
-  useData(): ResourceDataHookResult<ConfigurationEntryView> {
-    const { data, isLoading } = useRead('getGlobalConfigurationEntries');
+  useData(): ResourceDataHookResult<ResourceBindingView> {
+    const { data, isLoading } = useRead('getGlobalResourceBindings');
     return { items: data?.data.entries ?? [], isLoading, capabilities: data?.data.capabilities ?? EMPTY_CAPABILITIES };
   },
   filterItems: (items, search) => {

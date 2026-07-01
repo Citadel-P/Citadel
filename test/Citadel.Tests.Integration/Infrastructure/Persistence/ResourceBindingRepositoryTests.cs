@@ -1,35 +1,35 @@
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Infrastructure.Persistence;
 
-public sealed class ConfigurationEntryRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
+public sealed class ResourceBindingRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task ReplaceResourceEntriesAsync_Should_Delete_And_Bulk_Insert_Resource_Entries()
     {
         var stackId = Guid.CreateVersion7();
         var secretId = Guid.CreateVersion7();
-        var original = new ConfigurationEntry(
+        var original = new ResourceBinding(
             Name: "APP_MODE",
-            Kind: ConfigurationEntryKind.Variable,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Variable,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: stackId,
             Value: "old",
             SecretId: null);
-        var replacementVariable = new ConfigurationEntry(
+        var replacementVariable = new ResourceBinding(
             Name: "APP_MODE",
-            Kind: ConfigurationEntryKind.Variable,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Variable,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: stackId,
             Value: "new",
             SecretId: null);
-        var replacementSecret = new ConfigurationEntry(
+        var replacementSecret = new ResourceBinding(
             Name: "API_KEY",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: stackId,
             Value: null,
             SecretId: secretId,
@@ -41,22 +41,22 @@ public sealed class ConfigurationEntryRepositoryTests(PostgresTestFixture fixtur
             new SecretDefinition("API_KEY", SecretProviderType.InternalEncrypted) { Id = secretId },
             new InternalSecretValue(secretId, "encrypted"),
             TestContext.Current.CancellationToken);
-        await uow.ConfigurationEntries.ReplaceResourceEntriesAsync(
-            ConfigurationScope.Stack,
+        await uow.ResourceBindings.ReplaceResourceEntriesAsync(
+            ResourceBindingScope.Stack,
             stackId,
             [original],
             TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
-        var affected = await uow.ConfigurationEntries.ReplaceResourceEntriesAsync(
-            ConfigurationScope.Stack,
+        var affected = await uow.ResourceBindings.ReplaceResourceEntriesAsync(
+            ResourceBindingScope.Stack,
             stackId,
             [replacementVariable, replacementSecret],
             TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
-        var entries = (await uow.ConfigurationEntries.GetEffectiveEntriesAsync(
-            ConfigurationScope.Stack,
+        var entries = (await uow.ResourceBindings.GetEffectiveEntriesAsync(
+            ResourceBindingScope.Stack,
             stackId,
             TestContext.Current.CancellationToken)).ToArray();
 

@@ -2,7 +2,7 @@ using Application.Features.Configuration.Commands;
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Moq;
 
 namespace Tests.Unit.Application.Features.Configuration;

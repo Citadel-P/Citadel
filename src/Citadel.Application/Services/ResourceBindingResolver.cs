@@ -1,8 +1,8 @@
 using Application.Configs;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Configuration;
-using Domain.Entities.Configuration;
+using Domain.Contracts.Resources.ResourceBindings;
+using Domain.Entities.ResourceBindings;
 using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,9 +13,9 @@ using System.Text.RegularExpressions;
 
 namespace Application.Services;
 
-internal interface IConfigurationResolver
+internal interface IResourceBindingResolver
 {
-    Task<Result<ResolvedConfiguration>> ResolveAsync(ConfigurationScope scope, Guid resourceId, CancellationToken cancellationToken);
+    Task<Result<ResolvedResourceBindings>> ResolveAsync(ResourceBindingScope scope, Guid resourceId, CancellationToken cancellationToken);
 }
 
 internal interface ISecretValueProtector
@@ -29,23 +29,23 @@ internal interface ISecretRedactor
     string Redact(string? value, IEnumerable<string> secrets);
 }
 
-internal sealed partial class ConfigurationResolver(
+internal sealed partial class ResourceBindingResolver(
     IServiceScopeFactory scopeFactory,
     ISecretValueProtector secretValueProtector,
-    IExternalSecretProviderClient externalSecretProviderClient) : IConfigurationResolver
+    IExternalSecretProviderClient externalSecretProviderClient) : IResourceBindingResolver
 {
     private static readonly Regex NameRegex = GetNameRegex();
 
-    public async Task<Result<ResolvedConfiguration>> ResolveAsync(ConfigurationScope scope, Guid resourceId, CancellationToken cancellationToken)
+    public async Task<Result<ResolvedResourceBindings>> ResolveAsync(ResourceBindingScope scope, Guid resourceId, CancellationToken cancellationToken)
     {
         await using var serviceScope = scopeFactory.CreateAsyncScope();
         var uow = serviceScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var entries = await uow.ConfigurationEntries.GetEffectiveEntriesAsync(scope, resourceId, cancellationToken);
+        var entries = await uow.ResourceBindings.GetEffectiveEntriesAsync(scope, resourceId, cancellationToken);
 
         var effective = MergeEffective(entries);
         var environment = new Dictionary<string, string>(StringComparer.Ordinal);
-        var resolvedEntries = new List<ResolvedConfigurationEntry>();
-        var snapshotEntries = new List<ConfigurationSnapshotEntry>();
+        var resolvedEntries = new List<ResolvedResourceBinding>();
+        var snapshotEntries = new List<ResourceBindingSnapshot>();
         var redactionValues = new List<string>();
         var variableCount = 0;
         var secretCount = 0;
@@ -53,7 +53,7 @@ internal sealed partial class ConfigurationResolver(
         foreach (var entry in effective)
         {
             if (!NameRegex.IsMatch(entry.Name))
-                return Result.Failure<ResolvedConfiguration>($"Configuration key '{entry.Name}' is not a valid environment variable name.");
+                return Result.Failure<ResolvedResourceBindings>($"Configuration key '{entry.Name}' is not a valid environment variable name.");
 
             try
             {
@@ -61,38 +61,38 @@ internal sealed partial class ConfigurationResolver(
             }
             catch (ArgumentException ex)
             {
-                return Result.Failure<ResolvedConfiguration>(ex.Message);
+                return Result.Failure<ResolvedResourceBindings>(ex.Message);
             }
 
-            if (entry.Kind == ConfigurationEntryKind.Variable)
+            if (entry.Kind == ResourceBindingKind.Variable)
             {
                 variableCount++;
                 var variableValue = entry.Value ?? string.Empty;
                 environment[entry.Name] = variableValue;
-                resolvedEntries.Add(new ResolvedConfigurationEntry(entry.Name, entry.Kind, variableValue));
+                resolvedEntries.Add(new ResolvedResourceBinding(entry.Name, entry.Kind, variableValue));
                 snapshotEntries.Add(entry.ToVariableSnapshot(variableValue));
                 continue;
             }
 
             secretCount++;
             if (entry.SecretDeliveryMode == SecretDeliveryMode.NativePlatformSecret)
-                return Result.Failure<ResolvedConfiguration>(
+                return Result.Failure<ResolvedResourceBindings>(
                     $"Secret {entry.Name} uses delivery mode {entry.SecretDeliveryMode}, which is not supported yet.");
 
             if (entry.SecretDeliveryMode == SecretDeliveryMode.MountedFile
-                && (scope != ConfigurationScope.Stack || entry.Scope != ConfigurationScope.Stack))
+                && (scope != ResourceBindingScope.Stack || entry.Scope != ResourceBindingScope.Stack))
             {
-                return Result.Failure<ResolvedConfiguration>(
+                return Result.Failure<ResolvedResourceBindings>(
                     $"Secret {entry.Name} uses mounted-file delivery, which is only supported for stack-scoped entries.");
             }
 
             var secret = await uow.SecretDefinitions.GetAsync(entry.SecretId!.Value, cancellationToken);
             if (secret is null)
-                return Result.Failure<ResolvedConfiguration>($"Secret {entry.Name} is not available.");
+                return Result.Failure<ResolvedResourceBindings>($"Secret {entry.Name} is not available.");
 
             var plaintextResult = await ResolveSecretPlaintextAsync(uow, entry.Name, secret, cancellationToken);
             if (!plaintextResult.IsSuccess(out var resolvedSecret, out var plaintextError))
-                return Result.Failure<ResolvedConfiguration>(plaintextError!);
+                return Result.Failure<ResolvedResourceBindings>(plaintextError!);
 
             var plaintext = resolvedSecret.Plaintext;
             if (entry.SecretDeliveryMode == SecretDeliveryMode.EnvironmentVariable)
@@ -100,7 +100,7 @@ internal sealed partial class ConfigurationResolver(
                 environment[entry.Name] = plaintext;
             }
 
-            resolvedEntries.Add(new ResolvedConfigurationEntry(
+            resolvedEntries.Add(new ResolvedResourceBinding(
                 entry.Name,
                 entry.Kind,
                 plaintext,
@@ -114,7 +114,7 @@ internal sealed partial class ConfigurationResolver(
             }
         }
 
-        return new ResolvedConfiguration(
+        return new ResolvedResourceBindings(
             EnvironmentVariables: [.. environment.Select(kv => $"{kv.Key}={kv.Value}")],
             Entries: resolvedEntries,
             RedactionValues: [.. redactionValues],
@@ -174,10 +174,10 @@ internal sealed partial class ConfigurationResolver(
         }
     }
 
-    private static IReadOnlyList<ConfigurationEntry> MergeEffective(IEnumerable<ConfigurationEntry> entries)
+    private static IReadOnlyList<ResourceBinding> MergeEffective(IEnumerable<ResourceBinding> entries)
     {
-        var effective = new Dictionary<string, ConfigurationEntry>(StringComparer.Ordinal);
-        foreach (var entry in entries.OrderBy(x => x.Scope == ConfigurationScope.Global ? 0 : 1))
+        var effective = new Dictionary<string, ResourceBinding>(StringComparer.Ordinal);
+        foreach (var entry in entries.OrderBy(x => x.Scope == ResourceBindingScope.Global ? 0 : 1))
         {
             effective[entry.Name] = entry;
         }
@@ -262,19 +262,19 @@ internal sealed class SecretRedactor : ISecretRedactor
     }
 }
 
-internal sealed record ResolvedConfiguration(
+internal sealed record ResolvedResourceBindings(
     IReadOnlyList<string> EnvironmentVariables,
-    IReadOnlyList<ResolvedConfigurationEntry> Entries,
+    IReadOnlyList<ResolvedResourceBinding> Entries,
     IReadOnlyList<string> RedactionValues,
     int VariableCount,
     int SecretCount)
 {
-    public IReadOnlyList<ConfigurationSnapshotEntry> SnapshotEntries { get; init; } = [];
+    public IReadOnlyList<ResourceBindingSnapshot> SnapshotEntries { get; init; } = [];
 
     public IReadOnlyDictionary<string, string> ToValueDictionary()
         => Entries.ToDictionary(x => x.Name, x => x.Value, StringComparer.Ordinal);
 
-    public ResolvedConfiguration SelectEntries(IEnumerable<string> names)
+    public ResolvedResourceBindings SelectEntries(IEnumerable<string> names)
     {
         var selectedNames = names.ToHashSet(StringComparer.Ordinal);
         var selectedEntries = Entries.Where(entry => selectedNames.Contains(entry.Name)).ToArray();
@@ -285,27 +285,27 @@ internal sealed record ResolvedConfiguration(
             EnvironmentVariables =
             [
                 .. selectedEntries
-                    .Where(entry => entry.Kind == ConfigurationEntryKind.Variable
+                    .Where(entry => entry.Kind == ResourceBindingKind.Variable
                         || entry.SecretDeliveryMode == SecretDeliveryMode.EnvironmentVariable)
                     .Select(entry => $"{entry.Name}={entry.Value}")
             ],
             RedactionValues =
             [
                 .. selectedEntries
-                    .Where(entry => entry.Kind == ConfigurationEntryKind.Secret)
+                    .Where(entry => entry.Kind == ResourceBindingKind.Secret)
                     .Select(entry => entry.Value)
                     .Where(value => !string.IsNullOrEmpty(value))
             ],
             SnapshotEntries = [.. SnapshotEntries.Where(entry => selectedNames.Contains(entry.Name))],
-            VariableCount = selectedEntries.Count(entry => entry.Kind == ConfigurationEntryKind.Variable),
-            SecretCount = selectedEntries.Count(entry => entry.Kind == ConfigurationEntryKind.Secret)
+            VariableCount = selectedEntries.Count(entry => entry.Kind == ResourceBindingKind.Variable),
+            SecretCount = selectedEntries.Count(entry => entry.Kind == ResourceBindingKind.Secret)
         };
     }
 }
 
-internal sealed record ResolvedConfigurationEntry(
+internal sealed record ResolvedResourceBinding(
     string Name,
-    ConfigurationEntryKind Kind,
+    ResourceBindingKind Kind,
     string Value,
     string? SecretName = null,
     SecretDeliveryMode? SecretDeliveryMode = null,

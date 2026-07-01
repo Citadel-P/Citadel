@@ -1,6 +1,6 @@
-# Variables And Secrets
+# Bindings
 
-Citadel variables and secrets let you reuse configuration across stacks and deployments without hard-coding values in compose files or deployment forms.
+Citadel bindings let you attach variables and secret keys to stacks and deployments without hard-coding values in compose files or deployment forms.
 
 ## Variables
 
@@ -62,7 +62,7 @@ At deploy time, Citadel resolves `POSTGRES_PASSWORD` from the stored secret `pro
 
 Manual stacks do not have a separate `.env` file editor.
 
-Use the stack `Variables & Secrets` tab for values that would normally live in a local `.env` file. Reference those keys from the Compose editor with `${NAME}` placeholders.
+Use the stack `Bindings` tab for values that would normally live in a local `.env` file. Reference those keys from the Compose editor with `${NAME}` placeholders.
 
 Example:
 
@@ -75,7 +75,7 @@ services:
       API_KEY: ${API_KEY}
 ```
 
-Then add `IMAGE_TAG`, `APP_ENV`, and `API_KEY` on the stack `Variables & Secrets` tab.
+Then add `IMAGE_TAG`, `APP_ENV`, and `API_KEY` on the stack `Bindings` tab.
 
 This keeps one source of truth for scoped values, release snapshots, diffs, permissions, and secret redaction. The stack form's `Generated Env File Path` setting only controls where Citadel writes its temporary generated env file during deploy; it is not where users define variables.
 
@@ -88,8 +88,8 @@ Use this for env files that are part of the Git source, such as `.env`, `compose
 Precedence is explicit:
 
 1. Repository env files provide baseline values from Git.
-2. Stack `Variables & Secrets` entries are applied after repo env files.
-3. If both define the same key, the stack `Variables & Secrets` value wins.
+2. Stack `Bindings` entries are applied after repo env files.
+3. If both define the same key, the stack `Bindings` value wins.
 
 This lets Git define shared defaults while Citadel owns deployment-specific overrides and secrets.
 
@@ -113,7 +113,7 @@ The key and the stored secret can have the same name, but they do not have to. K
 - an external provider path/key does not match your compose environment name
 - a stack or deployment needs to override a global secret key
 
-Stored secret names must be unique. Secret keys are scoped configuration entries, so a resource can override a global secret key by using the same key name.
+Stored secret names must be unique. Secret keys are scoped resource bindings, so a resource can override a global secret key by using the same key name.
 
 ## External KV v2 Providers
 
@@ -275,7 +275,7 @@ Name: postgres-prod-password
 Value: <your password>
 ```
 
-2. On the stack `Variables & Secrets` tab, add a secret key:
+2. On the stack `Bindings` tab, add a secret key:
 
 ```text
 Name: POSTGRES_PASSWORD
@@ -336,7 +336,7 @@ For that stack, `${APP_ENV}` resolves to `staging`.
 
 Use the global `Variables` page for reusable values shared by multiple resources.
 
-Use the stack or deployment `Variables & Secrets` tab for resource-specific values and overrides.
+Use the stack or deployment `Bindings` tab for resource-specific values and overrides.
 
 Resource tabs list only resource-specific entries. Global entries are inherited automatically at deploy time and remain searchable on the global `Variables` page.
 

@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace Domain;
 
@@ -734,13 +734,13 @@ public enum SecretProviderType
     VaultCompatibleKvV2
 }
 
-public enum ConfigurationEntryKind
+public enum ResourceBindingKind
 {
     Variable,
     Secret
 }
 
-public enum ConfigurationScope
+public enum ResourceBindingScope
 {
     Global,
     Stack,

@@ -1,5 +1,5 @@
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
@@ -8,13 +8,13 @@ using Mediator;
 
 namespace Application.Features.Configuration.Queries;
 
-[RequirePermission(ResourceType.Configuration, PermissionLevel.Read)]
+[RequirePermission(ResourceType.Binding, PermissionLevel.Read)]
 public sealed record GetSecretDefinitions : IQuery<Result<IReadOnlyList<SecretDefinition>>>;
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Read, SpecificPermission.Configuration)]
+[RequirePermission(ResourceType.Stack, PermissionLevel.Read, SpecificPermission.ResourceBindings)]
 public sealed record GetStackSecretDefinitions(Guid Id) : IQuery<Result<IReadOnlyList<SecretDefinition>>>;
 
-[RequirePermission(ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.Configuration)]
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.ResourceBindings)]
 public sealed record GetDeploymentSecretDefinitions(Guid Id) : IQuery<Result<IReadOnlyList<SecretDefinition>>>;
 
 internal sealed class GetSecretDefinitionsHandler(IUnitOfWork unitOfWork)

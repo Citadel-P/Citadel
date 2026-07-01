@@ -63,7 +63,7 @@ export const RESOURCE_ICONS: Record<ResourceType, ResourceIcon> = {
   Registry: CitadelIcons.Registry,
   GitRepository: CitadelIcons.GitRepository,
   GitAccount: CitadelIcons.GitAccount,
-  Configuration: CitadelIcons.Configuration,
+  Binding: CitadelIcons.Binding,
   Alert: CitadelIcons.Alert,
   AlertChannel: CitadelIcons.AlertChannel,
   User: CitadelIcons.User,
@@ -443,7 +443,7 @@ const PermissionMatrixRow = ({
       <TableCell className="font-normal text-sm">
         <div className="flex items-center gap-3">
           <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-          <span>{resource}</span>
+          <span>{matrixData.label ?? resource}</span>
         </div>
       </TableCell>
       <TableCell>
@@ -464,7 +464,7 @@ const PermissionMatrixRow = ({
       <TableCell>
         {currentLevel && availableSpecific.length > 0 ? (
           <MultiSelect
-            options={availableSpecific.map((sp) => ({ label: sp, value: sp }))}
+            options={availableSpecific.map((sp) => ({ label: matrixData.specificPermissionLabels?.[sp] ?? sp, value: sp }))}
             defaultValue={currentSpecific}
             onValueChange={(v) => handlePermissionChange(undefined, v)}
             placeholder="Select capabilities"

@@ -9,12 +9,12 @@ public sealed class PermissionTests
     [Fact]
     public void Admin_Permissions_Should_Include_All_Current_Specific_Capabilities()
     {
-        Assert.True(Helpers.AdminPermissions.Has(PermissionLevel.Read, SpecificPermission.Configuration));
+        Assert.True(Helpers.AdminPermissions.Has(PermissionLevel.Read, SpecificPermission.ResourceBindings));
         Assert.True(Helpers.AdminPermissions.Has(PermissionLevel.Read, SpecificPermission.Releases));
     }
 
     [Fact]
-    public void Deployment_Execute_Permission_Should_Include_Configuration()
+    public void Deployment_Execute_Permission_Should_Include_ResourceBindings()
     {
         var specifics = PermissionMatrix.GetAll()[ResourceType.Deployment]
             .SpecificPermissionMinimumLevels
@@ -22,11 +22,11 @@ public sealed class PermissionTests
 
         var mask = (SpecificPermission)Permission.ToSpecificPermissionsMask(specifics);
 
-        Assert.True((mask & SpecificPermission.Configuration) == SpecificPermission.Configuration);
+        Assert.True((mask & SpecificPermission.ResourceBindings) == SpecificPermission.ResourceBindings);
     }
 
     [Fact]
-    public void Stack_Execute_Permission_Should_Include_Configuration_And_Releases()
+    public void Stack_Execute_Permission_Should_Include_ResourceBindings_And_Releases()
     {
         var specifics = PermissionMatrix.GetAll()[ResourceType.Stack]
             .SpecificPermissionMinimumLevels
@@ -34,7 +34,7 @@ public sealed class PermissionTests
 
         var mask = (SpecificPermission)Permission.ToSpecificPermissionsMask(specifics);
 
-        Assert.True((mask & SpecificPermission.Configuration) == SpecificPermission.Configuration);
+        Assert.True((mask & SpecificPermission.ResourceBindings) == SpecificPermission.ResourceBindings);
         Assert.True((mask & SpecificPermission.Releases) == SpecificPermission.Releases);
     }
 }

@@ -92,9 +92,9 @@ const MenuItems: IMenuItem[] = [
             route: '/alert-rules',
           },
           {
-            icon: renderIcon(CitadelIcons.Variable),
-            label: 'Variables',
-            route: '/variables',
+            icon: renderIcon(CitadelIcons.Binding),
+            label: 'Bindings',
+            route: '/bindings',
           },
           {
             icon: renderIcon(CitadelIcons.Access),

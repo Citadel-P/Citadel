@@ -10,8 +10,8 @@ import {
   StackDriftPolicy,
   GitRepositoryRefView,
   GitComposeProjectCandidate,
-  ConfigurationScope,
-  ConfigurationEntryView,
+  ResourceBindingScope,
+  ResourceBindingView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -31,7 +31,6 @@ import { useParams } from 'react-router';
 import { ResourceSelectorField } from '@/components/custom/common';
 import { MonacoEditor, MonacoToArrayEditor, type MonacoDiagnostic } from '@/lib/monaco';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
-import { ConfigurationSummary } from '@/components/custom/configuration-entries-tab';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -74,7 +73,7 @@ type StackInput = CreateStackInput | PatchStackInput;
 const EMPTY_STACK_CONFIG = {} as StackConfigView;
 const EMPTY_GIT_REFS: GitRepositoryRefView[] = [];
 const EMPTY_COMPOSE_PROJECTS: GitComposeProjectCandidate[] = [];
-const EMPTY_CONFIGURATION_ENTRIES: ConfigurationEntryView[] = [];
+const EMPTY_RESOURCE_BINDINGS: ResourceBindingView[] = [];
 
 const DEFAULT_DRIFT_POLICY: StackDriftPolicy = {
   mode: StackDriftMode.DetectOnly,
@@ -182,7 +181,10 @@ const composeVariableNamePattern = /^([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-+?]).*)?$/;
 
 const shouldWarnForMissingVariable = (operator?: string) => !operator || operator.includes('?');
 
-const getComposeVariableDiagnostics = (compose: string | undefined, configurationNames: string[]): MonacoDiagnostic[] => {
+const getComposeVariableDiagnostics = (
+  compose: string | undefined,
+  configurationNames: string[],
+): MonacoDiagnostic[] => {
   if (!compose?.trim()) return [];
 
   const knownNames = new Set(configurationNames);
@@ -438,10 +440,14 @@ const GitDiscoveredPathsField = ({
             <Button
               type="button"
               variant="outline"
-              className='ml-2 rounded-none font-normal'
+              className="ml-2 rounded-none font-normal"
               disabled={!canDiscover || discovering}
               title={canDiscover ? title : unavailableMessage}>
-              {discovering ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-3.5 text-muted-foreground" />}
+              {discovering ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Search className="size-3.5 text-muted-foreground" />
+              )}
               <span className="text-xs">Discover Paths</span>
             </Button>
           </PopoverTrigger>
@@ -505,11 +511,11 @@ export const StackForm = ({
   const { mutateAsync: updateStack } = useMutate('updateStack');
   const { data: stackCfg } = useRead('getStackConfig', { stackId: id });
   const { data: stackViewData } = useRead('getStack', { stackId: id }, { enabled: mode === 'edit' && !!id });
-  const stackConfigurationArgs = useMemo(() => ({ scope: ConfigurationScope.Stack, resourceId: id ?? '' }), [id]);
-  const { data: stackConfigurationData } = useRead('getResourceConfigurationEntries', stackConfigurationArgs, {
+  const stackResourceBindingArgs = useMemo(() => ({ scope: ResourceBindingScope.Stack, resourceId: id ?? '' }), [id]);
+  const { data: stackResourceBindingData } = useRead('getResourceBindings', stackResourceBindingArgs, {
     enabled: mode === 'edit' && !!id,
   });
-  const { data: globalConfigurationData } = useRead('getGlobalConfigurationEntries', undefined, {
+  const { data: globalResourceBindingData } = useRead('getGlobalResourceBindings', undefined, {
     enabled: mode === 'add',
   });
 
@@ -554,16 +560,16 @@ export const StackForm = ({
     ...(original.driftPolicy ?? {}),
     ...((update as Partial<StackInput>).driftPolicy ?? {}),
   });
-  const effectiveConfigurationEntries = useMemo(
+  const effectiveResourceBindings = useMemo(
     () =>
       mode === 'edit'
-        ? (stackConfigurationData?.data.effectiveEntries ?? EMPTY_CONFIGURATION_ENTRIES)
-        : (globalConfigurationData?.data.effectiveEntries ?? EMPTY_CONFIGURATION_ENTRIES),
-    [globalConfigurationData?.data.effectiveEntries, mode, stackConfigurationData?.data.effectiveEntries],
+        ? (stackResourceBindingData?.data.effectiveEntries ?? EMPTY_RESOURCE_BINDINGS)
+        : (globalResourceBindingData?.data.effectiveEntries ?? EMPTY_RESOURCE_BINDINGS),
+    [globalResourceBindingData?.data.effectiveEntries, mode, stackResourceBindingData?.data.effectiveEntries],
   );
   const effectiveConfigurationNames = useMemo(
-    () => [...new Set(effectiveConfigurationEntries.map((entry) => entry.name))].sort(),
-    [effectiveConfigurationEntries],
+    () => [...new Set(effectiveResourceBindings.map((entry) => entry.name))].sort(),
+    [effectiveResourceBindings],
   );
 
   const refreshData = useCallback(() => {
@@ -898,7 +904,10 @@ export const StackForm = ({
                             language="yaml"
                             filename="compose.yaml"
                             value={value ?? DEFAULT_STACK_FILE_CONTENTS}
-                            diagnostics={getComposeVariableDiagnostics(value ?? DEFAULT_STACK_FILE_CONTENTS, effectiveConfigurationNames)}
+                            diagnostics={getComposeVariableDiagnostics(
+                              value ?? DEFAULT_STACK_FILE_CONTENTS,
+                              effectiveConfigurationNames,
+                            )}
                             completionItems={effectiveConfigurationNames}
                             completionItemDetail="Citadel variable or secret"
                             completionMode="variable"
@@ -1378,27 +1387,18 @@ export const StackForm = ({
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      {mode === 'edit' && id && (
-        <ConfigurationSummary
-          scope={ConfigurationScope.Stack}
-          resourceId={id}
-          description="Reference variables and secret bindings in compose content as ${NAME}. Secrets are resolved only during deploy."
-        />
-      )}
-      <FormShell
-        mode={mode}
-        schema={schema}
-        original={formOriginal}
-        update={formUpdate}
-        setUpdate={setUpdate}
-        onSave={handleSave}
-        pending={isPending}
-        disabled={disabled}
-        draftKey={`stack:${id ?? 'new'}`}
-        draftVersion={1}
-      />
-    </div>
+    <FormShell
+      mode={mode}
+      schema={schema}
+      original={formOriginal}
+      update={formUpdate}
+      setUpdate={setUpdate}
+      onSave={handleSave}
+      pending={isPending}
+      disabled={disabled}
+      draftKey={`stack:${id ?? 'new'}`}
+      draftVersion={1}
+    />
   );
 };
 

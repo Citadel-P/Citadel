@@ -1,17 +1,17 @@
 using Application.Services;
 using Domain;
-using Domain.Contracts.Resources.Configuration;
+using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Activities;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using System.Text.Json;
 
 namespace Tests.Unit.Application.Services;
 
-public class ConfigurationResolverTests
+public class ResourceBindingResolverTests
 {
     [Fact]
     public async Task ResolveAsync_Should_Overlay_Resource_Entries_Over_Global_Entries()
@@ -19,24 +19,24 @@ public class ConfigurationResolverTests
         var stackId = Guid.CreateVersion7();
         var entries = new[]
         {
-            new ConfigurationEntry(
+            new ResourceBinding(
                 Name: "APP_MODE",
-                Kind: ConfigurationEntryKind.Variable,
-                Scope: ConfigurationScope.Global,
+                Kind: ResourceBindingKind.Variable,
+                Scope: ResourceBindingScope.Global,
                 ResourceId: null,
                 Value: "global",
                 SecretId: null),
-            new ConfigurationEntry(
+            new ResourceBinding(
                 Name: "APP_MODE",
-                Kind: ConfigurationEntryKind.Variable,
-                Scope: ConfigurationScope.Stack,
+                Kind: ResourceBindingKind.Variable,
+                Scope: ResourceBindingScope.Stack,
                 ResourceId: stackId,
                 Value: "stack",
                 SecretId: null),
-            new ConfigurationEntry(
+            new ResourceBinding(
                 Name: "SHARED",
-                Kind: ConfigurationEntryKind.Variable,
-                Scope: ConfigurationScope.Global,
+                Kind: ResourceBindingKind.Variable,
+                Scope: ResourceBindingScope.Global,
                 ResourceId: null,
                 Value: "true",
                 SecretId: null)
@@ -44,7 +44,7 @@ public class ConfigurationResolverTests
 
         var resolver = CreateResolver(entries);
 
-        var result = await resolver.ResolveAsync(ConfigurationScope.Stack, stackId, TestContext.Current.CancellationToken);
+        var result = await resolver.ResolveAsync(ResourceBindingScope.Stack, stackId, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
         Assert.Equal(["APP_MODE=stack", "SHARED=true"], resolved.EnvironmentVariables);
@@ -58,10 +58,10 @@ public class ConfigurationResolverTests
     {
         var deploymentId = Guid.CreateVersion7();
         var secretId = Guid.CreateVersion7();
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "API_KEY",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Deployment,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Deployment,
             ResourceId: deploymentId,
             Value: null,
             SecretId: secretId,
@@ -82,7 +82,7 @@ public class ConfigurationResolverTests
             },
             unprotectedSecretValue: "plain-secret");
 
-        var result = await resolver.ResolveAsync(ConfigurationScope.Deployment, deploymentId, TestContext.Current.CancellationToken);
+        var result = await resolver.ResolveAsync(ResourceBindingScope.Deployment, deploymentId, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
         Assert.Equal(["API_KEY=plain-secret"], resolved.EnvironmentVariables);
@@ -91,14 +91,10 @@ public class ConfigurationResolverTests
         Assert.Equal(1, resolved.SecretCount);
         var snapshot = Assert.Single(resolved.SnapshotEntries);
         Assert.Equal("API_KEY", snapshot.Name);
-        Assert.Equal(ConfigurationEntryKind.Secret, snapshot.Kind);
-        Assert.Equal(ConfigurationScope.Deployment, snapshot.Scope);
-        Assert.Equal(deploymentId, snapshot.ResourceId);
+        Assert.Equal(ResourceBindingKind.Secret, snapshot.Kind);
+        Assert.Equal(ResourceBindingScope.Deployment, snapshot.Scope);
         Assert.Equal("********", snapshot.Value);
         Assert.Equal(secretId, snapshot.SecretId);
-        Assert.Equal("API_KEY", snapshot.SecretName);
-        Assert.Equal(SecretProviderType.InternalEncrypted, snapshot.SecretProviderType);
-        Assert.Null(snapshot.SecretProviderName);
         Assert.Equal(SecretDeliveryMode.EnvironmentVariable, snapshot.SecretDeliveryMode);
     }
 
@@ -108,10 +104,10 @@ public class ConfigurationResolverTests
         var stackId = Guid.CreateVersion7();
         var secretId = Guid.CreateVersion7();
         var providerId = Guid.CreateVersion7();
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "API_TOKEN",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: stackId,
             Value: null,
             SecretId: secretId,
@@ -149,7 +145,7 @@ public class ConfigurationResolverTests
                     .ReturnsAsync(ExternalSecretValueResult.Success("vault-token"));
             });
 
-        var result = await resolver.ResolveAsync(ConfigurationScope.Stack, stackId, TestContext.Current.CancellationToken);
+        var result = await resolver.ResolveAsync(ResourceBindingScope.Stack, stackId, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
         Assert.Equal(["API_TOKEN=vault-token"], resolved.EnvironmentVariables);
@@ -160,11 +156,6 @@ public class ConfigurationResolverTests
         Assert.Equal("API_TOKEN", snapshot.Name);
         Assert.Equal("********", snapshot.Value);
         Assert.Equal(secretId, snapshot.SecretId);
-        Assert.Equal("API_TOKEN", snapshot.SecretName);
-        Assert.Equal(SecretProviderType.VaultCompatibleKvV2, snapshot.SecretProviderType);
-        Assert.Equal("vault", snapshot.SecretProviderName);
-        Assert.Equal("apps/api", snapshot.ExternalPath);
-        Assert.Equal("token", snapshot.ExternalKey);
         Assert.Equal(SecretDeliveryMode.EnvironmentVariable, snapshot.SecretDeliveryMode);
     }
 
@@ -173,10 +164,10 @@ public class ConfigurationResolverTests
     {
         var deploymentId = Guid.CreateVersion7();
         var secretId = Guid.CreateVersion7();
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "API_KEY",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Deployment,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Deployment,
             ResourceId: deploymentId,
             Value: null,
             SecretId: secretId,
@@ -197,7 +188,7 @@ public class ConfigurationResolverTests
             },
             unprotectException: new FormatException("raw payload parse failure"));
 
-        var result = await resolver.ResolveAsync(ConfigurationScope.Deployment, deploymentId, TestContext.Current.CancellationToken);
+        var result = await resolver.ResolveAsync(ResourceBindingScope.Deployment, deploymentId, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess(out _, out var error));
         Assert.Equal("Secret API_KEY could not be decrypted.", error.Message);
@@ -211,10 +202,10 @@ public class ConfigurationResolverTests
         var stackId = Guid.CreateVersion7();
         var secretId = Guid.CreateVersion7();
         var providerId = Guid.CreateVersion7();
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "API_TOKEN",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: stackId,
             Value: null,
             SecretId: secretId,
@@ -247,7 +238,7 @@ public class ConfigurationResolverTests
             },
             unprotectException: new FormatException("raw token parse failure"));
 
-        var result = await resolver.ResolveAsync(ConfigurationScope.Stack, stackId, TestContext.Current.CancellationToken);
+        var result = await resolver.ResolveAsync(ResourceBindingScope.Stack, stackId, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess(out _, out var error));
         Assert.Equal("Secret provider token for API_TOKEN could not be decrypted.", error.Message);
@@ -280,19 +271,19 @@ public class ConfigurationResolverTests
     public void SelectEntries_Should_Filter_Environment_Snapshots_And_Redaction_Values()
     {
         var resourceId = Guid.CreateVersion7();
-        var configuration = new ResolvedConfiguration(
+        var configuration = new ResolvedResourceBindings(
             EnvironmentVariables: ["APP_MODE=prod", "API_KEY=plain-secret", "UNUSED_SECRET=unused-secret"],
             Entries:
             [
-                new ResolvedConfigurationEntry("APP_MODE", ConfigurationEntryKind.Variable, "prod"),
-                new ResolvedConfigurationEntry(
+                new ResolvedResourceBinding("APP_MODE", ResourceBindingKind.Variable, "prod"),
+                new ResolvedResourceBinding(
                     "API_KEY",
-                    ConfigurationEntryKind.Secret,
+                    ResourceBindingKind.Secret,
                     "plain-secret",
                     SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable),
-                new ResolvedConfigurationEntry(
+                new ResolvedResourceBinding(
                     "UNUSED_SECRET",
-                    ConfigurationEntryKind.Secret,
+                    ResourceBindingKind.Secret,
                     "unused-secret",
                     SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable)
             ],
@@ -302,49 +293,28 @@ public class ConfigurationResolverTests
         {
             SnapshotEntries =
             [
-                new ConfigurationSnapshotEntry(
+                new ResourceBindingSnapshot(
                     Name: "APP_MODE",
-                    Kind: ConfigurationEntryKind.Variable,
-                    Scope: ConfigurationScope.Stack,
-                    ResourceId: resourceId,
+                    Kind: ResourceBindingKind.Variable,
+                    Scope: ResourceBindingScope.Stack,
                     Value: "prod",
                     SecretId: null,
-                    SecretName: null,
-                    SecretProviderType: null,
-                    SecretProviderName: null,
-                    ExternalPath: null,
-                    ExternalKey: null,
-                    ExternalVersion: null,
                     SecretDeliveryMode: null,
                     TargetPath: null),
-                new ConfigurationSnapshotEntry(
+                new ResourceBindingSnapshot(
                     Name: "API_KEY",
-                    Kind: ConfigurationEntryKind.Secret,
-                    Scope: ConfigurationScope.Stack,
-                    ResourceId: resourceId,
+                    Kind: ResourceBindingKind.Secret,
+                    Scope: ResourceBindingScope.Stack,
                     Value: "********",
                     SecretId: Guid.CreateVersion7(),
-                    SecretName: "api-key",
-                    SecretProviderType: SecretProviderType.InternalEncrypted,
-                    SecretProviderName: null,
-                    ExternalPath: null,
-                    ExternalKey: null,
-                    ExternalVersion: null,
                     SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
                     TargetPath: null),
-                new ConfigurationSnapshotEntry(
+                new ResourceBindingSnapshot(
                     Name: "UNUSED_SECRET",
-                    Kind: ConfigurationEntryKind.Secret,
-                    Scope: ConfigurationScope.Stack,
-                    ResourceId: resourceId,
+                    Kind: ResourceBindingKind.Secret,
+                    Scope: ResourceBindingScope.Stack,
                     Value: "********",
                     SecretId: Guid.CreateVersion7(),
-                    SecretName: "unused-secret",
-                    SecretProviderType: SecretProviderType.InternalEncrypted,
-                    SecretProviderName: null,
-                    ExternalPath: null,
-                    ExternalKey: null,
-                    ExternalVersion: null,
                     SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
                     TargetPath: null)
             ]
@@ -364,10 +334,10 @@ public class ConfigurationResolverTests
     {
         var stackId = Guid.CreateVersion7();
         var secretId = Guid.CreateVersion7();
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "API_KEY",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: stackId,
             Value: null,
             SecretId: secretId,
@@ -389,7 +359,7 @@ public class ConfigurationResolverTests
             },
             unprotectedSecretValue: "plain-secret");
 
-        var result = await resolver.ResolveAsync(ConfigurationScope.Stack, stackId, TestContext.Current.CancellationToken);
+        var result = await resolver.ResolveAsync(ResourceBindingScope.Stack, stackId, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
         Assert.Empty(resolved.EnvironmentVariables);
@@ -408,17 +378,17 @@ public class ConfigurationResolverTests
     public async Task ResolveAsync_Should_Reject_Native_Platform_Secret_Delivery_Mode()
     {
         var stackId = Guid.CreateVersion7();
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "API_KEY",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: stackId,
             Value: null,
             SecretId: Guid.CreateVersion7(),
             SecretDeliveryMode: SecretDeliveryMode.NativePlatformSecret);
         var resolver = CreateResolver([entry]);
 
-        var result = await resolver.ResolveAsync(ConfigurationScope.Stack, stackId, TestContext.Current.CancellationToken);
+        var result = await resolver.ResolveAsync(ResourceBindingScope.Stack, stackId, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess(out _, out var error));
         Assert.Contains("Native platform secret delivery is not supported", error.Message);
@@ -428,10 +398,10 @@ public class ConfigurationResolverTests
     public async Task ResolveAsync_Should_Reject_Mounted_File_Secrets_For_Deployments()
     {
         var deploymentId = Guid.CreateVersion7();
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "API_KEY",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Deployment,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Deployment,
             ResourceId: deploymentId,
             Value: null,
             SecretId: Guid.CreateVersion7(),
@@ -439,7 +409,7 @@ public class ConfigurationResolverTests
             TargetPath: "/run/secrets/api_key");
         var resolver = CreateResolver([entry]);
 
-        var result = await resolver.ResolveAsync(ConfigurationScope.Deployment, deploymentId, TestContext.Current.CancellationToken);
+        var result = await resolver.ResolveAsync(ResourceBindingScope.Deployment, deploymentId, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess(out _, out var error));
         Assert.Equal("Secret API_KEY uses mounted-file delivery, which is only supported for stack-scoped entries.", error.Message);
@@ -449,10 +419,10 @@ public class ConfigurationResolverTests
     public async Task ResolveAsync_Should_Reject_Global_Mounted_File_Secrets_For_Stacks()
     {
         var stackId = Guid.CreateVersion7();
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "API_KEY",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Global,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Global,
             ResourceId: null,
             Value: null,
             SecretId: Guid.CreateVersion7(),
@@ -460,7 +430,7 @@ public class ConfigurationResolverTests
             TargetPath: "/run/secrets/api_key");
         var resolver = CreateResolver([entry]);
 
-        var result = await resolver.ResolveAsync(ConfigurationScope.Stack, stackId, TestContext.Current.CancellationToken);
+        var result = await resolver.ResolveAsync(ResourceBindingScope.Stack, stackId, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess(out _, out var error));
         Assert.Equal("Secret API_KEY uses mounted-file delivery, which is only supported for stack-scoped entries.", error.Message);
@@ -474,21 +444,14 @@ public class ConfigurationResolverTests
             new DeploymentResultSnapshot(
                 ContainerIds: ["container-1"],
                 Message: "Deployment applied.",
-                Configuration:
+                ResourceBindings:
                 [
-                    new ConfigurationSnapshotEntry(
+                    new ResourceBindingSnapshot(
                         Name: "DATABASE_PASSWORD",
-                        Kind: ConfigurationEntryKind.Secret,
-                        Scope: ConfigurationScope.Deployment,
-                        ResourceId: Guid.CreateVersion7(),
+                        Kind: ResourceBindingKind.Secret,
+                        Scope: ResourceBindingScope.Deployment,
                         Value: "********",
                         SecretId: Guid.CreateVersion7(),
-                        SecretName: "prod-db-password",
-                        SecretProviderType: SecretProviderType.VaultCompatibleKvV2,
-                        SecretProviderName: "vault",
-                        ExternalPath: "apps/api/prod",
-                        ExternalKey: "database_password",
-                        ExternalVersion: null,
                         SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
                         TargetPath: null)
                 ]));
@@ -496,23 +459,22 @@ public class ConfigurationResolverTests
         var json = JsonSerializer.Serialize(info, EventInfoJsonContext.Default.ActivityEventInfo);
 
         Assert.Contains("DATABASE_PASSWORD", json, StringComparison.Ordinal);
-        Assert.Contains("prod-db-password", json, StringComparison.Ordinal);
         Assert.Contains("********", json, StringComparison.Ordinal);
         Assert.DoesNotContain("plain-secret", json, StringComparison.Ordinal);
         Assert.DoesNotContain("vault-token", json, StringComparison.Ordinal);
     }
 
-    private static ConfigurationResolver CreateResolver(
-        IReadOnlyList<ConfigurationEntry> entries,
+    private static ResourceBindingResolver CreateResolver(
+        IReadOnlyList<ResourceBinding> entries,
         Action<Mock<ISecretDefinitionRepository>>? configureSecrets = null,
         Action<Mock<ISecretProviderRepository>>? configureProviders = null,
         Action<Mock<IExternalSecretProviderClient>>? configureExternalClient = null,
         string unprotectedSecretValue = "plain-token",
         Exception? unprotectException = null)
     {
-        var configurationEntries = new Mock<IConfigurationEntryRepository>();
-        configurationEntries
-            .Setup(x => x.GetEffectiveEntriesAsync(It.IsAny<ConfigurationScope>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        var resourceBindings = new Mock<IResourceBindingRepository>();
+        resourceBindings
+            .Setup(x => x.GetEffectiveEntriesAsync(It.IsAny<ResourceBindingScope>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(entries);
 
         var secrets = new Mock<ISecretDefinitionRepository>();
@@ -522,7 +484,7 @@ public class ConfigurationResolverTests
         configureProviders?.Invoke(providers);
 
         var uow = new Mock<IUnitOfWork>();
-        uow.Setup(x => x.ConfigurationEntries).Returns(configurationEntries.Object);
+        uow.Setup(x => x.ResourceBindings).Returns(resourceBindings.Object);
         uow.Setup(x => x.SecretDefinitions).Returns(secrets.Object);
         uow.Setup(x => x.SecretProviders).Returns(providers.Object);
 
@@ -533,7 +495,7 @@ public class ConfigurationResolverTests
             .AddSingleton(uow.Object)
             .BuildServiceProvider();
 
-        return new ConfigurationResolver(
+        return new ResourceBindingResolver(
             services.GetRequiredService<IServiceScopeFactory>(),
             new TestSecretValueProtector(unprotectedSecretValue, unprotectException),
             externalClient.Object);

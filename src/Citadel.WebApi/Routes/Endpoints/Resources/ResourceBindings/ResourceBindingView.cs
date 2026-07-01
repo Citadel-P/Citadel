@@ -1,17 +1,17 @@
 using Application.Features.Configuration.Commands;
 using Application.Features.Configuration.Models;
 using Domain;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Hosting.Common.Attributes;
 using WebApi.Routes.Endpoints.Resources.Identity;
 
-namespace WebApi.Routes.Endpoints.Resources.Configuration;
+namespace WebApi.Routes.Endpoints.Resources.ResourceBindings;
 
-public sealed record ConfigurationEntryView(
+public sealed record ResourceBindingView(
     Guid Id,
     string Name,
-    ConfigurationEntryKind Kind,
-    ConfigurationScope Scope,
+    ResourceBindingKind Kind,
+    ResourceBindingScope Scope,
     Guid? ResourceId,
     string? Value,
     Guid? SecretId,
@@ -19,34 +19,34 @@ public sealed record ConfigurationEntryView(
     string? TargetPath,
     bool IsInherited);
 
-public sealed record ConfigurationEntriesView(
-    IReadOnlyList<ConfigurationEntryView> Entries,
-    IReadOnlyList<ConfigurationEntryView> EffectiveEntries,
+public sealed record ResourceBindingsView(
+    IReadOnlyList<ResourceBindingView> Entries,
+    IReadOnlyList<ResourceBindingView> EffectiveEntries,
     ResourceCapabilities? Capabilities = null)
 {
-    internal static ConfigurationEntriesView Map(ConfigurationEntriesResult result, PermissionMetadata? permissions = null)
+    internal static ResourceBindingsView Map(ResourceBindingsResult result, PermissionMetadata? permissions = null)
     {
         var localIds = result.Entries.Select(x => x.Id).ToHashSet();
-        return new ConfigurationEntriesView(
+        return new ResourceBindingsView(
             [.. result.Entries.Select(x => Map(x, isInherited: false))],
             [.. result.EffectiveEntries.Select(x => Map(x, isInherited: !localIds.Contains(x.Id)))],
             permissions is null ? null : CapabilityMapper.ToResourceCapabilities(permissions.Value));
     }
 
-    private static ConfigurationEntryView Map(ConfigurationEntry entry, bool isInherited) => new(
+    private static ResourceBindingView Map(ResourceBinding entry, bool isInherited) => new(
         Id: entry.Id,
         Name: entry.Name,
         Kind: entry.Kind,
         Scope: entry.Scope,
         ResourceId: entry.ResourceId,
-        Value: entry.Kind == ConfigurationEntryKind.Variable ? entry.Value : null,
+        Value: entry.Kind == ResourceBindingKind.Variable ? entry.Value : null,
         SecretId: entry.SecretId,
         SecretDeliveryMode: entry.SecretDeliveryMode,
         TargetPath: entry.TargetPath,
         IsInherited: isInherited);
 }
 
-public sealed record ReplaceConfigurationEntriesInput(IReadOnlyList<ConfigurationEntryInput> Entries);
+public sealed record ReplaceResourceBindingsInput(IReadOnlyList<ResourceBindingInput> Entries);
 
 public sealed record SecretDefinitionView(
     Guid Id,

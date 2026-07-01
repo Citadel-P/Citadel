@@ -329,6 +329,7 @@ CREATE TABLE stackreleases (
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     createdbyactorid uuid NOT NULL,
     platformid uuid NOT NULL,
+    resourcebindings json,
     source json,
     spec json NOT NULL,
     stackid uuid NOT NULL,
@@ -356,7 +357,16 @@ CREATE TABLE usersteams (
     CONSTRAINT fk_usersteams_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
 );
 
-CREATE TABLE configurationentries (
+CREATE TABLE internalsecretvalues (
+    secretid uuid NOT NULL,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    encryptedvalue text NOT NULL,
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    CONSTRAINT pk_internalsecretvalues PRIMARY KEY (secretid),
+    CONSTRAINT fk_internalsecretvalues_secretdefinitions_secretid FOREIGN KEY (secretid) REFERENCES secretdefinitions (id) ON DELETE CASCADE
+);
+
+CREATE TABLE resourcebindings (
     id uuid NOT NULL,
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     kind text NOT NULL,
@@ -368,17 +378,8 @@ CREATE TABLE configurationentries (
     targetpath text,
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     value text,
-    CONSTRAINT pk_configurationentries PRIMARY KEY (id),
-    CONSTRAINT fk_configurationentries_secretdefinitions_secretid FOREIGN KEY (secretid) REFERENCES secretdefinitions (id) ON DELETE RESTRICT
-);
-
-CREATE TABLE internalsecretvalues (
-    secretid uuid NOT NULL,
-    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    encryptedvalue text NOT NULL,
-    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    CONSTRAINT pk_internalsecretvalues PRIMARY KEY (secretid),
-    CONSTRAINT fk_internalsecretvalues_secretdefinitions_secretid FOREIGN KEY (secretid) REFERENCES secretdefinitions (id) ON DELETE CASCADE
+    CONSTRAINT pk_resourcebindings PRIMARY KEY (id),
+    CONSTRAINT fk_resourcebindings_secretdefinitions_secretid FOREIGN KEY (secretid) REFERENCES secretdefinitions (id) ON DELETE RESTRICT
 );
 
 CREATE TABLE gitrepositoryrefs (
@@ -619,12 +620,6 @@ CREATE INDEX ix_alertrules_type ON alertrules (type);
 
 CREATE INDEX ix_alertrulestates_createdbyactorid ON alertrulestates (createdbyactorid);
 
-CREATE UNIQUE INDEX ix_configurationentries_scope_name_global ON configurationentries (scope, name) WHERE resourceid IS NULL;
-
-CREATE UNIQUE INDEX ix_configurationentries_scope_resourceid_name ON configurationentries (scope, resourceid, name) WHERE resourceid IS NOT NULL;
-
-CREATE INDEX ix_configurationentries_secretid ON configurationentries (secretid);
-
 CREATE UNIQUE INDEX ix__containers_dockercontainerid_platformid ON containers (dockercontainerid, platformid);
 
 CREATE INDEX ix_containers_controltriggeredby ON containers (controltriggeredby);
@@ -691,6 +686,12 @@ CREATE INDEX ix_resourceaccesses_permissionlookup ON resourceaccesses (resourcet
 
 CREATE UNIQUE INDEX ix_resourceaccesses_resourcetype_resourceid_actorid ON resourceaccesses (resourcetype, resourceid, actorid);
 
+CREATE UNIQUE INDEX ix_resourcebindings_scope_name_global ON resourcebindings (scope, name) WHERE resourceid IS NULL;
+
+CREATE UNIQUE INDEX ix_resourcebindings_scope_resourceid_name ON resourcebindings (scope, resourceid, name) WHERE resourceid IS NOT NULL;
+
+CREATE INDEX ix_resourcebindings_secretid ON resourcebindings (secretid);
+
 CREATE INDEX ix_secretdefinitions_name ON secretdefinitions (name);
 
 CREATE INDEX ix_secretdefinitions_providerid ON secretdefinitions (providerid);
@@ -722,15 +723,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260629162100_migration0001', '10.0.9');
-
-COMMIT;
-
-START TRANSACTION;
-ALTER TABLE stackreleases ADD configuration json;
-
-INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260629190701_migration0002', '10.0.9');
+VALUES ('20260701182638_migration0001', '10.0.9');
 
 COMMIT;
 

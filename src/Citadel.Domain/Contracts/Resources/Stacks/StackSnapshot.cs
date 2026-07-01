@@ -1,4 +1,4 @@
-﻿using Domain.Entities.Stacks;
+using Domain.Entities.Stacks;
 
 namespace Domain.Contracts.Resources.Stacks;
 
@@ -21,7 +21,7 @@ public sealed record StackReleaseSnapshot(
     Guid CreatedByActorId,
     string? Version,
     StackReleaseSource? Source = null,
-    IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration = null);
+    IReadOnlyList<ResourceBindings.ResourceBindingSnapshot>? ResourceBindings = null);
 
 public static class StackSnapshotExtensions
 {
@@ -50,10 +50,10 @@ public static class StackSnapshotExtensions
             CreatedByActorId: stackRelease.CreatedByActorId,
             Version: stackRelease.Version,
             Source: stackRelease.Source,
-            Configuration: stackRelease.Configuration);
+            ResourceBindings: stackRelease.ResourceBindings);
 }
 
 public sealed record StackResultSnapshot(
     IEnumerable<string>? ContainerIds = null,
     string? Message = null,
-    IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration = null);
+    IReadOnlyList<ResourceBindings.ResourceBindingSnapshot>? ResourceBindings = null);

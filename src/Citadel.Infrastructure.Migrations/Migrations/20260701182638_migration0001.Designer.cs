@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260629162100_migration0001")]
+    [Migration("20260701182638_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -747,79 +747,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_alertrulestates_createdbyactorid");
 
                     b.ToTable("alertrulestates", (string)null);
-                });
-
-            modelBuilder.Entity("ConfigurationEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("createdat")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("kind");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("name");
-
-                    b.Property<Guid?>("ResourceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("resourceid");
-
-                    b.Property<string>("Scope")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("scope");
-
-                    b.Property<string>("SecretDeliveryMode")
-                        .HasColumnType("text")
-                        .HasColumnName("secretdeliverymode");
-
-                    b.Property<Guid?>("SecretId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("secretid");
-
-                    b.Property<string>("TargetPath")
-                        .HasColumnType("text")
-                        .HasColumnName("targetpath");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updatedat")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("Value")
-                        .HasColumnType("text")
-                        .HasColumnName("value");
-
-                    b.HasKey("Id")
-                        .HasName("pk_configurationentries");
-
-                    b.HasIndex("SecretId")
-                        .HasDatabaseName("ix_configurationentries_secretid");
-
-                    b.HasIndex("Scope", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("ix_configurationentries_scope_name_global")
-                        .HasFilter("resourceid IS NULL");
-
-                    b.HasIndex("Scope", "ResourceId", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("ix_configurationentries_scope_resourceid_name")
-                        .HasFilter("resourceid IS NOT NULL");
-
-                    b.ToTable("configurationentries", (string)null);
                 });
 
             modelBuilder.Entity("Container", b =>
@@ -2006,6 +1933,79 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("resourceaccesses", (string)null);
                 });
 
+            modelBuilder.Entity("ResourceBinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("ResourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resourceid");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("SecretDeliveryMode")
+                        .HasColumnType("text")
+                        .HasColumnName("secretdeliverymode");
+
+                    b.Property<Guid?>("SecretId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("secretid");
+
+                    b.Property<string>("TargetPath")
+                        .HasColumnType("text")
+                        .HasColumnName("targetpath");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_resourcebindings");
+
+                    b.HasIndex("SecretId")
+                        .HasDatabaseName("ix_resourcebindings_secretid");
+
+                    b.HasIndex("Scope", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_resourcebindings_scope_name_global")
+                        .HasFilter("resourceid IS NULL");
+
+                    b.HasIndex("Scope", "ResourceId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_resourcebindings_scope_resourceid_name")
+                        .HasFilter("resourceid IS NOT NULL");
+
+                    b.ToTable("resourcebindings", (string)null);
+                });
+
             modelBuilder.Entity("Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2252,6 +2252,10 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<Guid>("PlatformId")
                         .HasColumnType("uuid")
                         .HasColumnName("platformid");
+
+                    b.Property<string>("ResourceBindings")
+                        .HasColumnType("json")
+                        .HasColumnName("resourcebindings");
 
                     b.Property<string>("Source")
                         .HasColumnType("json")
@@ -2508,15 +2512,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_alertrulestates_actors_createdbyactorid");
                 });
 
-            modelBuilder.Entity("ConfigurationEntry", b =>
-                {
-                    b.HasOne("SecretDefinition", null)
-                        .WithMany()
-                        .HasForeignKey("SecretId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_configurationentries_secretdefinitions_secretid");
-                });
-
             modelBuilder.Entity("Container", b =>
                 {
                     b.HasOne("Actor", null)
@@ -2696,6 +2691,15 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_registries_actors_createdbyactorid");
+                });
+
+            modelBuilder.Entity("ResourceBinding", b =>
+                {
+                    b.HasOne("SecretDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("SecretId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_resourcebindings_secretdefinitions_secretid");
                 });
 
             modelBuilder.Entity("SecretDefinition", b =>

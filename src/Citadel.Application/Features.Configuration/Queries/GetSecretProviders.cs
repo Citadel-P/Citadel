@@ -1,5 +1,5 @@
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using LightResults;
@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.Configuration.Queries;
 
-[RequirePermission(ResourceType.Configuration, PermissionLevel.Read)]
+[RequirePermission(ResourceType.Binding, PermissionLevel.Read)]
 public sealed record GetSecretProviders : IQuery<Result<IReadOnlyList<SecretProvider>>>;
 
 internal sealed class GetSecretProvidersHandler(IUnitOfWork unitOfWork)

@@ -1,4 +1,4 @@
-﻿using Application.Permissions;
+using Application.Permissions;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.Identity;
@@ -90,7 +90,7 @@ public static class ApplicationModule
             .AddSingleton<IGitStackMaterializer, GitStackMaterializer>()
             .AddSingleton<ISecretValueProtector, SecretValueProtector>()
             .AddSingleton<ISecretRedactor, SecretRedactor>()
-            .AddSingleton<IConfigurationResolver, ConfigurationResolver>()
+            .AddSingleton<IResourceBindingResolver, ResourceBindingResolver>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 
     private static IServiceCollection AddLookups(this IServiceCollection services)

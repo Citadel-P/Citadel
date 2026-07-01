@@ -1,8 +1,8 @@
 import {
-  ConfigurationEntryInput,
-  ConfigurationEntryKind,
-  ConfigurationEntryView,
-  ConfigurationScope,
+  ResourceBindingInput,
+  ResourceBindingKind,
+  ResourceBindingView,
+  ResourceBindingScope,
   CreateExternalSecretInput,
   CreateInternalSecretInput,
   SecretProviderType,
@@ -60,32 +60,32 @@ const EXTERNAL_SECRET_INPUT: CreateExternalSecretInput = {
 };
 type SecretSource = 'internal' | 'vault';
 
-export type EditableEntry = ConfigurationEntryInput & {
+export type EditableEntry = ResourceBindingInput & {
   clientId: string;
 };
 
-const EMPTY_CONFIGURATION_ENTRIES: ConfigurationEntryView[] = [];
+const EMPTY_RESOURCE_BINDINGS: ResourceBindingView[] = [];
 const EMPTY_SECRET_DEFINITIONS: SecretDefinitionView[] = [];
 
-export const ConfigurationSummary = ({
+export const ResourceBindingSummary = ({
   scope,
   resourceId,
-  title = 'Variables',
-  description = 'Resource-specific values are managed in the Variables tab. Global values are resolved during deploy.',
+  title = 'Bindings',
+  description = 'Resource-specific values are managed in the Bindings tab. Global bindings are resolved during deploy.',
 }: {
-  scope: ConfigurationScope.Stack | ConfigurationScope.Deployment;
+  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
   resourceId: string;
   title?: string;
   description?: string;
 }) => {
   const args = useMemo(() => ({ scope, resourceId }), [resourceId, scope]);
-  const { data, isLoading } = useRead('getResourceConfigurationEntries', args);
+  const { data, isLoading } = useRead('getResourceBindings', args);
   const effectiveEntries = data?.data.effectiveEntries ?? [];
-  const variableCount = effectiveEntries.filter((entry) => entry.kind === ConfigurationEntryKind.Variable).length;
-  const secretCount = effectiveEntries.filter((entry) => entry.kind === ConfigurationEntryKind.Secret).length;
+  const variableCount = effectiveEntries.filter((entry) => entry.kind === ResourceBindingKind.Variable).length;
+  const secretCount = effectiveEntries.filter((entry) => entry.kind === ResourceBindingKind.Secret).length;
 
   const openEnvironmentTab = () => {
-    window.location.hash = 'variables';
+    window.location.hash = 'bindings';
   };
 
   return (
@@ -105,7 +105,7 @@ export const ConfigurationSummary = ({
             {isLoading ? '-' : secretCount} effective secrets
           </span>
           <Button type="button" variant="outline" size="sm" onClick={openEnvironmentTab}>
-            Open Variables
+            Open Bindings
           </Button>
         </div>
       </div>
@@ -113,20 +113,20 @@ export const ConfigurationSummary = ({
   );
 };
 
-export const ConfigurationEntriesTab = ({
+export const ResourceBindingsTab = ({
   scope,
   resourceId,
   disabled,
 }: {
-  scope: ConfigurationScope.Stack | ConfigurationScope.Deployment;
+  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
   resourceId: string;
   disabled?: boolean;
 }) => {
   const args = useMemo(() => ({ scope, resourceId }), [resourceId, scope]);
   const secretQueryArgs = useMemo(() => ({ query: { scope, resourceId } }), [resourceId, scope]);
-  const { data, isLoading } = useRead('getResourceConfigurationEntries', args);
+  const { data, isLoading } = useRead('getResourceBindings', args);
   const { data: secretsData } = useRead('listSecretDefinitions', secretQueryArgs);
-  const serverEntries = data?.data.entries ?? EMPTY_CONFIGURATION_ENTRIES;
+  const serverEntries = data?.data.entries ?? EMPTY_RESOURCE_BINDINGS;
   const secrets = useMemo(() => secretsData?.data.secrets ?? EMPTY_SECRET_DEFINITIONS, [secretsData?.data.secrets]);
   const canCreateSecret = Boolean(secretsData?.data.capabilities.canWrite);
   const initialEntries = useMemo(() => serverEntries.map(toEditableEntry), [serverEntries]);
@@ -134,7 +134,7 @@ export const ConfigurationEntriesTab = ({
   const resetKey = useMemo(() => JSON.stringify(originalInputs), [originalInputs]);
 
   return (
-    <ConfigurationEntriesTabEditor
+    <ResourceBindingsTabEditor
       key={resetKey}
       scope={scope}
       resourceId={resourceId}
@@ -145,12 +145,12 @@ export const ConfigurationEntriesTab = ({
       originalInputs={originalInputs}
       secrets={secrets}
       canCreateSecret={canCreateSecret}
-      allowMountedFile={scope === ConfigurationScope.Stack}
+      allowMountedFile={scope === ResourceBindingScope.Stack}
     />
   );
 };
 
-const ConfigurationEntriesTabEditor = ({
+const ResourceBindingsTabEditor = ({
   scope,
   resourceId,
   queryArgs,
@@ -162,39 +162,39 @@ const ConfigurationEntriesTabEditor = ({
   canCreateSecret,
   allowMountedFile,
 }: {
-  scope: ConfigurationScope.Stack | ConfigurationScope.Deployment;
+  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
   resourceId: string;
-  queryArgs: { scope: ConfigurationScope.Stack | ConfigurationScope.Deployment; resourceId: string };
+  queryArgs: { scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment; resourceId: string };
   disabled?: boolean;
   isLoading: boolean;
   initialEntries: EditableEntry[];
-  originalInputs: ConfigurationEntryInput[];
+  originalInputs: ResourceBindingInput[];
   secrets: SecretDefinitionView[];
   canCreateSecret: boolean;
   allowMountedFile?: boolean;
 }) => {
   const queryClient = useQueryClient();
-  const replace = useMutate('replaceResourceConfigurationEntries');
+  const replace = useMutate('replaceResourceBindings');
   const updateExternalSecret = useMutate('updateExternalSecret');
   const testExternalSecret = useMutate('testExternalSecret');
   const entries = initialEntries;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<EditableEntry | null>(null);
-  const [entryInput, setEntryInput] = useState<ConfigurationEntryInput>(newVariableInput());
+  const [entryInput, setEntryInput] = useState<ResourceBindingInput>(newVariableInput());
   const [deleteEntry, setDeleteEntry] = useState<EditableEntry | null>(null);
   const [editingStoredSecret, setEditingStoredSecret] = useState<SecretDefinitionView | null>(null);
   const [storedSecretInput, setStoredSecretInput] = useState<CreateExternalSecretInput>(EXTERNAL_SECRET_INPUT);
   const { data: providersData } = useRead('listSecretProviders', undefined, { enabled: editingStoredSecret != null });
   const providers = useMemo(() => providersData?.data.providers ?? [], [providersData?.data.providers]);
 
-  const saveEntries = async (entriesToSave: ConfigurationEntryInput[], message: string) => {
+  const saveEntries = async (entriesToSave: ResourceBindingInput[], message: string) => {
     try {
       await replace.mutateAsync({
         scope,
         resourceId,
         data: { entries: entriesToSave },
       } as any);
-      await queryClient.invalidateQueries({ queryKey: ['getResourceConfigurationEntries', queryArgs] });
+      await queryClient.invalidateQueries({ queryKey: ['getResourceBindings', queryArgs] });
       toast.success(message);
     } catch {
       toast.error(replace.validationErrors ?? 'Failed to save variables and secrets');
@@ -258,7 +258,7 @@ const ConfigurationEntriesTabEditor = ({
       return;
     }
 
-    await saveEntries(next, editingEntry == null ? 'Configuration entry added' : 'Configuration entry updated');
+    await saveEntries(next, editingEntry == null ? 'Resource binding added' : 'Resource binding updated');
     setDialogOpen(false);
     setEditingEntry(null);
   };
@@ -267,7 +267,7 @@ const ConfigurationEntriesTabEditor = ({
     if (!deleteEntry) return;
     await saveEntries(
       entries.filter((entry) => entry.clientId !== deleteEntry.clientId).map(toInput),
-      'Configuration entry deleted',
+      'Resource binding deleted',
     );
     setDeleteEntry(null);
   };
@@ -283,7 +283,7 @@ const ConfigurationEntriesTabEditor = ({
       } as any);
       setEditingStoredSecret(null);
       await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
-      await queryClient.invalidateQueries({ queryKey: ['getResourceConfigurationEntries', queryArgs] });
+      await queryClient.invalidateQueries({ queryKey: ['getResourceBindings', queryArgs] });
       toast.success('Stored secret updated');
 
       if (entryInput.secretId === editingStoredSecret.id) {
@@ -314,11 +314,11 @@ const ConfigurationEntriesTabEditor = ({
     <div className="flex w-full flex-col gap-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-muted-foreground">
-          Define resource-specific variables and secrets. Values here override global Variables entries with the same
+          Define resource-specific variables and secrets. Values here override global Bindings entries with the same
           name.
         </div>
         <div className="flex flex-wrap gap-2">
-          <ConfigurationAddDropdown
+          <ResourceBindingAddDropdown
             disabled={disabled}
             hasSecrets={secrets.length > 0}
             canCreateSecret={canCreateSecret}
@@ -329,7 +329,7 @@ const ConfigurationEntriesTabEditor = ({
         </div>
       </div>
 
-      <ResourceConfigurationEntriesTable
+      <ResourceBindingsTable
         entries={entries}
         secrets={secrets}
         isLoading={isLoading}
@@ -339,9 +339,9 @@ const ConfigurationEntriesTabEditor = ({
         onDelete={setDeleteEntry}
       />
 
-      <GlobalVariablesLink />
+      <GlobalBindingsLink />
 
-      <ConfigurationEntryDialog
+      <ResourceBindingDialog
         open={dialogOpen}
         input={entryInput}
         secrets={secrets}
@@ -368,7 +368,7 @@ const ConfigurationEntriesTabEditor = ({
       <Dialog open={deleteEntry != null} onOpenChange={(open) => !open && setDeleteEntry(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete configuration entry</DialogTitle>
+            <DialogTitle>Delete resource binding</DialogTitle>
             <DialogDescription>
               Delete `{deleteEntry?.name}` from this resource. Global entries with the same name will become effective
               again.
@@ -388,7 +388,7 @@ const ConfigurationEntriesTabEditor = ({
   );
 };
 
-const ResourceConfigurationEntriesTable = ({
+const ResourceBindingsTable = ({
   entries,
   secrets,
   isLoading,
@@ -441,9 +441,9 @@ const ResourceConfigurationEntriesTable = ({
                 <div
                   className={cn(
                     'inline-flex h-9 items-center gap-2 rounded-sm border px-3 text-xs text-muted-foreground',
-                    entry.kind === ConfigurationEntryKind.Secret ? 'border-dashed' : '',
+                    entry.kind === ResourceBindingKind.Secret ? 'border-dashed' : '',
                   )}>
-                  {entry.kind === ConfigurationEntryKind.Secret ? (
+                  {entry.kind === ResourceBindingKind.Secret ? (
                     <>
                       <KeyRound className="size-3.5" />
                       Secret key
@@ -457,7 +457,7 @@ const ResourceConfigurationEntriesTable = ({
                 </div>
               </td>
               <td className="px-3 py-2 align-middle">
-                {entry.kind === ConfigurationEntryKind.Variable ? (
+                {entry.kind === ResourceBindingKind.Variable ? (
                   <span className="font-mono text-xs">{entry.value}</span>
                 ) : (
                   <div className="flex flex-col gap-0.5">
@@ -469,7 +469,7 @@ const ResourceConfigurationEntriesTable = ({
                 )}
               </td>
               <td className="px-3 py-2 align-middle">
-                {entry.kind === ConfigurationEntryKind.Secret ? (
+                {entry.kind === ResourceBindingKind.Secret ? (
                   <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
                     <span>
                       {entry.secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE
@@ -512,25 +512,25 @@ const ResourceConfigurationEntriesTable = ({
   );
 };
 
-const GlobalVariablesLink = () => (
+const GlobalBindingsLink = () => (
   <div className="flex items-center justify-between rounded-sm border border-dashed px-4 py-3 text-sm">
     <div>
-      <div className="font-medium">Global Variables</div>
+      <div className="font-medium">Global Bindings</div>
       <div className="text-xs text-muted-foreground">
         Global entries are inherited automatically and resolved during deploy. They are not listed in this resource
         table.
       </div>
     </div>
     <Button asChild variant="outline" size="sm">
-      <Link to="/variables">
+      <Link to="/bindings">
         <ExternalLink className="size-3.5" />
-        Open Variables
+        Open Bindings
       </Link>
     </Button>
   </div>
 );
 
-const ConfigurationEntryDialog = ({
+const ResourceBindingDialog = ({
   open,
   input,
   secrets,
@@ -543,19 +543,19 @@ const ConfigurationEntryDialog = ({
   onEditStoredSecret,
 }: {
   open: boolean;
-  input: ConfigurationEntryInput;
+  input: ResourceBindingInput;
   secrets: SecretDefinitionView[];
   isPending: boolean;
   editing: boolean;
   allowMountedFile?: boolean;
   onOpenChange: (open: boolean) => void;
   onInputChange: (
-    input: ConfigurationEntryInput | ((prev: ConfigurationEntryInput) => ConfigurationEntryInput),
+    input: ResourceBindingInput | ((prev: ResourceBindingInput) => ResourceBindingInput),
   ) => void;
   onSave: () => void;
   onEditStoredSecret?: (secret: SecretDefinitionView) => void;
 }) => {
-  const isSecret = input.kind === ConfigurationEntryKind.Secret;
+  const isSecret = input.kind === ResourceBindingKind.Secret;
   const isMountedFile = input.secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE;
   const selectedSecret = isSecret ? secrets.find((secret) => secret.id === input.secretId) : undefined;
   const mountedFileTargetPathError = isMountedFile ? getMountedFileTargetPathError(input.targetPath) : null;
@@ -848,7 +848,7 @@ const LabeledInput = ({
   </label>
 );
 
-export const ConfigurationAddDropdown = ({
+export const ResourceBindingAddDropdown = ({
   disabled,
   hasSecrets,
   canCreateSecret,
@@ -1167,7 +1167,7 @@ export const CreateSecretDialog = ({
   );
 };
 
-export const toEditableEntry = (entry: ConfigurationEntryView): EditableEntry => ({
+export const toEditableEntry = (entry: ResourceBindingView): EditableEntry => ({
   clientId: entry.id,
   name: entry.name,
   kind: entry.kind,
@@ -1177,45 +1177,45 @@ export const toEditableEntry = (entry: ConfigurationEntryView): EditableEntry =>
   targetPath: entry.targetPath,
 });
 
-export const toInput = (entry: EditableEntry): ConfigurationEntryInput => ({
+export const toInput = (entry: EditableEntry): ResourceBindingInput => ({
   name: entry.name,
   kind: entry.kind,
-  value: entry.kind === ConfigurationEntryKind.Variable ? (entry.value ?? '') : null,
-  secretId: entry.kind === ConfigurationEntryKind.Secret ? entry.secretId : null,
+  value: entry.kind === ResourceBindingKind.Variable ? (entry.value ?? '') : null,
+  secretId: entry.kind === ResourceBindingKind.Secret ? entry.secretId : null,
   secretDeliveryMode:
-    entry.kind === ConfigurationEntryKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
-  targetPath: entry.kind === ConfigurationEntryKind.Secret ? (entry.targetPath ?? null) : null,
+    entry.kind === ResourceBindingKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
+  targetPath: entry.kind === ResourceBindingKind.Secret ? (entry.targetPath ?? null) : null,
 });
 
-const newVariableInput = (): ConfigurationEntryInput => ({
+const newVariableInput = (): ResourceBindingInput => ({
   name: '',
-  kind: ConfigurationEntryKind.Variable,
+  kind: ResourceBindingKind.Variable,
   value: '',
   secretId: null,
   secretDeliveryMode: null,
   targetPath: null,
 });
 
-const newSecretInput = (secret?: SecretDefinitionView): ConfigurationEntryInput => ({
+const newSecretInput = (secret?: SecretDefinitionView): ResourceBindingInput => ({
   name: secret?.name ?? '',
-  kind: ConfigurationEntryKind.Secret,
+  kind: ResourceBindingKind.Secret,
   value: null,
   secretId: secret?.id ?? null,
   secretDeliveryMode: ENV_DELIVERY_MODE,
   targetPath: null,
 });
 
-const normalizeEntryInput = (entry: ConfigurationEntryInput): ConfigurationEntryInput => ({
+const normalizeEntryInput = (entry: ResourceBindingInput): ResourceBindingInput => ({
   name: entry.name,
   kind: entry.kind,
-  value: entry.kind === ConfigurationEntryKind.Variable ? (entry.value ?? '') : null,
-  secretId: entry.kind === ConfigurationEntryKind.Secret ? entry.secretId : null,
+  value: entry.kind === ResourceBindingKind.Variable ? (entry.value ?? '') : null,
+  secretId: entry.kind === ResourceBindingKind.Secret ? entry.secretId : null,
   secretDeliveryMode:
-    entry.kind === ConfigurationEntryKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
-  targetPath: entry.kind === ConfigurationEntryKind.Secret ? (entry.targetPath ?? null) : null,
+    entry.kind === ResourceBindingKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
+  targetPath: entry.kind === ResourceBindingKind.Secret ? (entry.targetPath ?? null) : null,
 });
 
-const hasDuplicateEntryName = (entries: ConfigurationEntryInput[]): boolean => {
+const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {
   const names = new Set<string>();
   for (const entry of entries) {
     const name = entry.name.trim().toLowerCase();
@@ -1226,12 +1226,12 @@ const hasDuplicateEntryName = (entries: ConfigurationEntryInput[]): boolean => {
   return false;
 };
 
-export const toInputFromView = (entry: ConfigurationEntryView): ConfigurationEntryInput => ({
+export const toInputFromView = (entry: ResourceBindingView): ResourceBindingInput => ({
   name: entry.name,
   kind: entry.kind,
-  value: entry.kind === ConfigurationEntryKind.Variable ? (entry.value ?? '') : null,
-  secretId: entry.kind === ConfigurationEntryKind.Secret ? entry.secretId : null,
+  value: entry.kind === ResourceBindingKind.Variable ? (entry.value ?? '') : null,
+  secretId: entry.kind === ResourceBindingKind.Secret ? entry.secretId : null,
   secretDeliveryMode:
-    entry.kind === ConfigurationEntryKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
-  targetPath: entry.kind === ConfigurationEntryKind.Secret ? (entry.targetPath ?? null) : null,
+    entry.kind === ResourceBindingKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
+  targetPath: entry.kind === ResourceBindingKind.Secret ? (entry.targetPath ?? null) : null,
 });

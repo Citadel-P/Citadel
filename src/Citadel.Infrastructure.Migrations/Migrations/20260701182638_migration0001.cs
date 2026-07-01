@@ -628,6 +628,7 @@ namespace Infrastructure.Migrations.Migrations
                     createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    resourcebindings = table.Column<string>(type: "json", nullable: true),
                     source = table.Column<string>(type: "json", nullable: true),
                     spec = table.Column<string>(type: "json", nullable: false),
                     stackid = table.Column<Guid>(type: "uuid", nullable: false),
@@ -701,33 +702,6 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "configurationentries",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    kind = table.Column<string>(type: "text", nullable: false),
-                    name = table.Column<string>(type: "text", nullable: false),
-                    resourceid = table.Column<Guid>(type: "uuid", nullable: true),
-                    scope = table.Column<string>(type: "text", nullable: false),
-                    secretdeliverymode = table.Column<string>(type: "text", nullable: true),
-                    secretid = table.Column<Guid>(type: "uuid", nullable: true),
-                    targetpath = table.Column<string>(type: "text", nullable: true),
-                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    value = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_configurationentries", x => x.id);
-                    table.ForeignKey(
-                        name: "fk_configurationentries_secretdefinitions_secretid",
-                        column: x => x.secretid,
-                        principalTable: "secretdefinitions",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "internalsecretvalues",
                 columns: table => new
                 {
@@ -745,6 +719,33 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "secretdefinitions",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "resourcebindings",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    kind = table.Column<string>(type: "text", nullable: false),
+                    name = table.Column<string>(type: "text", nullable: false),
+                    resourceid = table.Column<Guid>(type: "uuid", nullable: true),
+                    scope = table.Column<string>(type: "text", nullable: false),
+                    secretdeliverymode = table.Column<string>(type: "text", nullable: true),
+                    secretid = table.Column<Guid>(type: "uuid", nullable: true),
+                    targetpath = table.Column<string>(type: "text", nullable: true),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    value = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_resourcebindings", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_resourcebindings_secretdefinitions_secretid",
+                        column: x => x.secretid,
+                        principalTable: "secretdefinitions",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1057,25 +1058,6 @@ namespace Infrastructure.Migrations.Migrations
                 column: "createdbyactorid");
 
             migrationBuilder.CreateIndex(
-                name: "ix_configurationentries_scope_name_global",
-                table: "configurationentries",
-                columns: new[] { "scope", "name" },
-                unique: true,
-                filter: "resourceid IS NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_configurationentries_scope_resourceid_name",
-                table: "configurationentries",
-                columns: new[] { "scope", "resourceid", "name" },
-                unique: true,
-                filter: "resourceid IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_configurationentries_secretid",
-                table: "configurationentries",
-                column: "secretid");
-
-            migrationBuilder.CreateIndex(
                 name: "ix__containers_dockercontainerid_platformid",
                 table: "containers",
                 columns: new[] { "dockercontainerid", "platformid" },
@@ -1253,6 +1235,25 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_resourcebindings_scope_name_global",
+                table: "resourcebindings",
+                columns: new[] { "scope", "name" },
+                unique: true,
+                filter: "resourceid IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_resourcebindings_scope_resourceid_name",
+                table: "resourcebindings",
+                columns: new[] { "scope", "resourceid", "name" },
+                unique: true,
+                filter: "resourceid IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_resourcebindings_secretid",
+                table: "resourcebindings",
+                column: "secretid");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_secretdefinitions_name",
                 table: "secretdefinitions",
                 column: "name");
@@ -1351,9 +1352,6 @@ namespace Infrastructure.Migrations.Migrations
                 name: "alertrulestates");
 
             migrationBuilder.DropTable(
-                name: "configurationentries");
-
-            migrationBuilder.DropTable(
                 name: "containerstats");
 
             migrationBuilder.DropTable(
@@ -1375,6 +1373,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "resourceaccesses");
 
             migrationBuilder.DropTable(
+                name: "resourcebindings");
+
+            migrationBuilder.DropTable(
                 name: "stackreleases");
 
             migrationBuilder.DropTable(
@@ -1393,10 +1394,10 @@ namespace Infrastructure.Migrations.Migrations
                 name: "gitrepositories");
 
             migrationBuilder.DropTable(
-                name: "secretdefinitions");
+                name: "roles");
 
             migrationBuilder.DropTable(
-                name: "roles");
+                name: "secretdefinitions");
 
             migrationBuilder.DropTable(
                 name: "teams");

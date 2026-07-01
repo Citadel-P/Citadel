@@ -1,4 +1,4 @@
-# Variables And Secrets
+# Bindings
 
 ## Purpose
 
@@ -6,7 +6,7 @@ Citadel needs one platform-agnostic variable and secret model that works for bot
 
 The feature must support:
 
-- global reusable variables/secrets
+- global reusable bindings
 - resource-level overrides for stacks and deployments
 - stack compose interpolation
 - deployment container environment variables
@@ -103,7 +103,7 @@ Secret plaintext must never be returned after creation and must never be persist
 
 ## Scope And Precedence
 
-Configuration entries can be defined globally or on a resource.
+Resource bindings can be defined globally or on a resource.
 
 Initial scopes:
 
@@ -143,22 +143,22 @@ Resource scope > Project scope > Team scope > Global scope
 
 ## Domain Shape
 
-Use explicit configuration entries instead of raw `KEY=value` strings for new data.
+Use explicit resource bindings instead of raw `KEY=value` strings for new data.
 
 Suggested shared model:
 
 ```csharp
-public sealed record ConfigurationEntry(
+public sealed record ResourceBinding(
     string Name,
-    ConfigurationEntryKind Kind,
-    ConfigurationScope Scope,
+    ResourceBindingKind Kind,
+    ResourceBindingScope Scope,
     Guid? ResourceId,
     string? Value,
     Guid? SecretId,
     SecretDeliveryMode? SecretDeliveryMode = null,
     string? TargetPath = null);
 
-public enum ConfigurationEntryKind
+public enum ResourceBindingKind
 {
     Variable,
     Secret
@@ -187,11 +187,11 @@ SecretDeliveryMode = required
 TargetPath = required only when the delivery mode needs it
 ```
 
-Use a dedicated `ConfigurationEntries` table instead of storing entries inside resource specs. Resource specs can project the effective configuration for view purposes, but the canonical variable/secret definitions should live in the configuration subsystem.
+Use a dedicated `ResourceBindings` table instead of storing entries inside resource specs. Resource specs can project the effective configuration for view purposes, but the canonical binding definitions should live in the configuration subsystem.
 
-Secret plaintext must still live outside configuration entries.
+Secret plaintext must still live outside resource bindings.
 
-`ConfigurationEntry` is the binding. It describes how a global/resource configuration key is used by Citadel.
+`ResourceBinding` is the binding. It describes how a global or resource binding key is used by Citadel.
 
 `SecretDefinition` is the source. It describes where a secret value comes from.
 
@@ -206,7 +206,7 @@ A `SecretDefinition` is the stored secret source:
 - internal encrypted value, or
 - external provider reference, for example Vault/OpenBao KV v2 path/key/version.
 
-A secret `ConfigurationEntry` is the runtime key exposed to a stack or deployment. It points to a `SecretDefinition` through `SecretId`.
+A secret `ResourceBinding` is the runtime key exposed to a stack or deployment. It points to a `SecretDefinition` through `SecretId`.
 
 Example:
 
@@ -215,7 +215,7 @@ SecretDefinition:
   Name = prod-db-password
   Provider = Internal
 
-ConfigurationEntry:
+ResourceBinding:
   Name = POSTGRES_PASSWORD
   Kind = Secret
   SecretId = prod-db-password
@@ -237,7 +237,7 @@ UI wording should avoid exposing the domain term "binding" as the primary user a
 - `Add secret key`
 - `Create stored secret`
 
-Implementation may still use "binding" internally because the configuration entry is a binding from runtime key to stored secret.
+Implementation may still use "binding" internally because the resource binding is a binding from runtime key to stored secret.
 
 Stored secret names must be unique case-insensitively. Duplicate stored secret names make the default key flow ambiguous and should be rejected before provider lookup or value persistence.
 
@@ -256,10 +256,10 @@ Remove `EnvVars` from both:
 - `StackSpec`
 - `DeploymentSpec`
 
-Replace it with structured configuration entries:
+Replace it with structured resource bindings:
 
 ```csharp
-IReadOnlyList<ConfigurationEntry>? Configuration
+IReadOnlyList<ResourceBinding>? Configuration
 ```
 
 or a similarly named view/command property if the implementation chooses a more precise name.
@@ -270,7 +270,7 @@ Do not keep a second legacy environment editor in the API or UI.
 
 Patch behavior:
 
-- patching resource configuration replaces the resource-scoped configuration entry set
+- patching resource configuration replaces the resource-scoped resource binding set
 - entries are validated as a collection
 - duplicate names are rejected within the same scope
 - resource entries may use the same name as global entries to create explicit overrides
@@ -340,7 +340,7 @@ SecretDefinition:
   ExternalPath = apps/api/prod
   ExternalKey = stripe_api_key
 
-ConfigurationEntry:
+ResourceBinding:
   Name = STRIPE_API_KEY
   Kind = Secret
   Scope = Stack
@@ -350,7 +350,7 @@ ConfigurationEntry:
 
 The `SecretDefinition` answers "where does the value come from?"
 
-The `ConfigurationEntry` answers "which key should this resource expose and how should it be delivered?"
+The `ResourceBinding` answers "which key should this resource expose and how should it be delivered?"
 
 ## Secret Providers
 
@@ -451,15 +451,15 @@ Resolver failure behavior:
 Deployment and stack apply should call a shared resolver before materialization.
 
 ```csharp
-public interface IConfigurationResolver
+public interface IResourceBindingResolver
 {
-    Task<ResolvedConfiguration> ResolveAsync(
-        ResourceConfigurationScope scope,
+    Task<ResolvedResourceBindings> ResolveAsync(
+        ResourceBindingScope scope,
         Guid resourceId,
         CancellationToken cancellationToken);
 }
 
-public sealed class ResolvedConfiguration
+public sealed class ResolvedResourceBindings
 {
     public IReadOnlyDictionary<string, string> Variables { get; init; } = new Dictionary<string, string>();
     public IReadOnlyList<ResolvedSecret> Secrets { get; init; } = [];
@@ -567,9 +567,9 @@ Git stack flow:
 
 For Docker Compose, users should still write `${NAME}` placeholders. Citadel should generate the env file and let Docker Compose perform interpolation.
 
-The stack config tab is where users reference variables in compose content. The stack Variables & Secrets tab is where users manage stack-local entries and explicit overrides. Inherited global entries are resolved at deploy time but are not listed in every resource tab.
+The stack config tab is where users reference variables in compose content. The stack Bindings tab is where users manage stack-local entries and explicit overrides. Inherited global entries are resolved at deploy time but are not listed in every resource tab.
 
-Manual stacks should not introduce a separate inline `.env` editor as the primary model. Values that would normally live in a manual stack `.env` file belong in the stack Variables & Secrets tab and should be referenced from compose content with `${NAME}` placeholders. This avoids two competing sources of truth for precedence, permissions, release snapshots, diffs, and redaction.
+Manual stacks should not introduce a separate inline `.env` editor as the primary model. Values that would normally live in a manual stack `.env` file belong in the stack Bindings tab and should be referenced from compose content with `${NAME}` placeholders. This avoids two competing sources of truth for precedence, permissions, release snapshots, diffs, and redaction.
 
 `StackSpec.EnvFilePath` is not a user variable editor. It is an advanced materialization override for the path, relative to the Docker Compose run directory, where Citadel writes its generated env file during apply. Leave it unset for the default temporary generated path.
 
@@ -715,12 +715,12 @@ Do not reveal provider tokens or secret values in authorization errors.
 
 ## UI
 
-Citadel should expose variables/secrets in two places:
+Citadel should expose bindings in two places:
 
-- a global `Variables & Secrets` page
-- a `Variables & Secrets` tab on resources that support configuration injection
+- a global `Bindings` page
+- a `Bindings` tab on resources that support configuration injection
 
-The stack/deployment `Config` tab should reference keys, but it should not be the primary place to manage variable/secret definitions.
+The stack/deployment `Config` tab should reference keys, but it should not be the primary place to manage binding definitions.
 
 Use shared components where possible, for example:
 
@@ -735,7 +735,7 @@ EffectiveConfigurationView
 Add a global page:
 
 ```text
-Variables & Secrets
+Bindings
 ```
 
 Purpose:
@@ -760,7 +760,7 @@ Global variables are visible according to normal permissions.
 
 Global secrets never expose plaintext. The UI should allow entering plaintext only when creating or rotating an internal secret.
 
-### Stack Variables & Secrets Tab
+### Stack Bindings Tab
 
 Add a stack page tab:
 
@@ -770,10 +770,10 @@ Stack
   Containers
   Releases
   Activity
-  Variables & Secrets
+  Bindings
 ```
 
-The tab manages only stack-scoped configuration entries.
+The tab manages only stack-scoped resource bindings.
 
 Do not list every inherited global entry in the stack tab. Citadel may have hundreds or thousands of global variables, and repeating them on every resource page creates noise and unnecessary query/render cost.
 
@@ -783,7 +783,7 @@ The stack `Config` tab remains the place where the user edits compose content an
 
 Stack copy:
 
-- title: `Variables & Secrets`
+- title: `Bindings`
 - description: `Values available to Docker Compose at deploy time. Reference them in compose files as ${NAME}.`
 - override helper: `Stack values override global values with the same name.`
 - secret helper: `Secrets resolve only during deploy and are never shown in plaintext.`
@@ -802,11 +802,11 @@ Behavior:
 - adding a stack entry with the same name as a global entry creates an explicit override
 - deleting a stack override makes the global value effective again at deploy time
 - global entries are not edited or listed from the stack tab
-- the config summary can show counts of effective variables/secrets, but it should not expand into a full inherited table
+- the config summary can show counts of effective bindings, but it should not expand into a full inherited table
 
 The stack form should no longer show `Env File Path` as a primary user field for Citadel-managed variables. The generated env file path is an implementation detail. If an advanced override remains useful, keep it under an advanced deploy/materialization setting, not in the main config.
 
-### Deployment Variables & Secrets Tab
+### Deployment Bindings Tab
 
 Add the same tab to deployment pages:
 
@@ -814,12 +814,12 @@ Add the same tab to deployment pages:
 Deployment
   Config
   Activity
-  Variables & Secrets
+  Bindings
 ```
 
 Deployment copy:
 
-- title: `Variables & Secrets`
+- title: `Bindings`
 - description: `Values injected into the container environment at deploy time.`
 - override helper: `Deployment values override global values with the same name.`
 
@@ -832,14 +832,14 @@ Deployment behavior:
 
 ### Config Tab Integration
 
-The stack config tab should help users reference variables/secrets without managing them inline.
+The stack config tab should help users reference bindings without managing them inline.
 
 Stack config tab:
 
 - Monaco autocomplete should suggest effective variable/secret names for `${NAME}` expressions.
 - Validation should warn when compose references `${NAME}` and no effective entry exists.
 - Validation should warn when duplicate or unsupported interpolation syntax is likely to fail.
-- Missing variables should link to the stack `Variables & Secrets` tab.
+- Missing variables should link to the stack `Bindings` tab.
 
 Deployment config tab:
 
@@ -847,7 +847,7 @@ Deployment config tab:
 - show a compact summary card instead:
   - number of effective variables
   - number of effective secrets
-  - link to `Variables & Secrets`
+  - link to `Bindings`
 - if useful, show a read-only preview of runtime env names, not secret values
 
 ### Component Behavior
@@ -894,7 +894,7 @@ Global entries should use the global page's own create/update/delete flow and sh
 
 ## Provider UI
 
-Add provider management after the internal provider is working. This can live under the global `Variables & Secrets` area.
+Add provider management after the internal provider is working. This can live under the global `Bindings` area.
 
 Minimum fields:
 
@@ -912,7 +912,7 @@ Provider test endpoints must not return secret values.
 
 Snapshots should show configuration metadata safely.
 
-The shared snapshot contract is `ConfigurationSnapshotEntry` under `Domain.Contracts.Resources.Configuration`. It is not the canonical configuration entry; it is a deployment-time evidence record used by activity events, stack releases, deployment result snapshots, and API views.
+The shared snapshot contract is `ResourceBindingSnapshot` under `Domain.Contracts.Resources.Configuration`. It is not the canonical resource binding; it is a deployment-time evidence record used by activity events, stack releases, deployment result snapshots, and API views.
 
 Allowed:
 
@@ -935,7 +935,7 @@ Stack releases and deployment snapshots should contain enough metadata to unders
 
 For global entries, snapshots should record the effective metadata used at apply time. This is important because a later global variable edit should not rewrite the meaning of an older release snapshot.
 
-Stack releases persist the safe `ConfigurationSnapshotEntry` list on the release row. Release preview and rollback views should read this persisted snapshot instead of re-resolving current global/resource configuration.
+Stack releases persist the safe `ResourceBindingSnapshot` list on the release row. Release preview and rollback views should read this persisted snapshot instead of re-resolving current global/resource bindings.
 
 Snapshot rules:
 
@@ -958,7 +958,7 @@ MVP alert types:
 - `StackConfigurationResolutionFailed`
 - `DeploymentConfigurationResolutionFailed`
 
-These alerts are emitted when stack/deployment apply cannot resolve the effective variables/secrets for that resource. The failure reason must be safe for users and notifications. It may include the configuration key or provider name, but must not include plaintext secret values, provider tokens, auth headers, or raw provider response bodies.
+These alerts are emitted when stack/deployment apply cannot resolve the effective bindings for that resource. The failure reason must be safe for users and notifications. It may include the configuration key or provider name, but must not include plaintext secret values, provider tokens, auth headers, or raw provider response bodies.
 
 Avoid noisy alerts for successful secret resolution.
 
@@ -993,11 +993,11 @@ For deployments, validation should ensure every configured entry can be converte
 
 ## Implementation Slices
 
-### Slice 1: Internal Variables And Secrets
+### Slice 1: Internal Bindings
 
-- Add domain models for global/resource configuration entries and internal secret definitions.
+- Add domain models for global/resource resource bindings and internal secret definitions.
 - Add encrypted secret value persistence.
-- Add resolver for internal variables/secrets.
+- Add resolver for internal bindings.
 - Implement deterministic merge precedence: `Resource scope > Global scope`.
 - Add authorization checks for global secret use.
 - Wire stack apply to resolver.
@@ -1007,9 +1007,9 @@ For deployments, validation should ensure every configured entry can be converte
 
 ### Slice 2: UI
 
-- Add global `Variables & Secrets` page.
-- Add stack `Variables & Secrets` tab.
-- Add deployment `Variables & Secrets` tab.
+- Add global `Bindings` page.
+- Add stack `Bindings` tab.
+- Add deployment `Bindings` tab.
 - Keep resource tab tables local-only; do not list inherited global entries on every resource.
 - Add explicit override support by allowing resource entries with the same key as global entries.
 - Add config-tab summaries and compose autocomplete/validation.
@@ -1041,7 +1041,7 @@ Backend tests should cover:
 - global secret use requires permission or resource assignment
 - deployment apply resolves variables into container env
 - deployment apply resolves secrets into runtime env without persisting plaintext
-- stack apply resolves variables/secrets into generated compose env file
+- stack apply resolves bindings into generated compose env file
 - stack apply resolves mounted-file secrets into generated read-only compose bind mounts
 - stack release snapshot masks secret references
 - deployment activity events mask secrets
@@ -1062,7 +1062,7 @@ Frontend tests are recommended for:
 - explicit override behavior when a local key matches a global key
 - global page create/edit/delete
 - preview diff masking
-- stack compose autocomplete from effective variables/secrets
+- stack compose autocomplete from effective bindings
 - missing variable validation in compose editor
 
 ## Non-Goals For First Slice

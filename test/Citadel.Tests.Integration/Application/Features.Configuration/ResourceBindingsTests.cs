@@ -1,6 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +13,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Configuration;
 
-public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
+public sealed class ResourceBindingsTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid _stackId;
 
@@ -35,10 +35,10 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
     }
 
     [Fact]
-    public async Task Resource_Configuration_Should_Save_Overrides_And_Not_Return_Secret_Value()
+    public async Task ResourceBinding_Should_Save_Overrides_And_Not_Return_Secret_Value()
     {
         var createSecretResponse = await Client.PostAsJsonAsync(
-            "/api/v1/configuration/secrets",
+            "/api/v1/bindings/secrets",
             new { name = "API_KEY", value = "super-secret-value" },
             cancellationToken: TestContext.Current.CancellationToken);
         createSecretResponse.EnsureSuccessStatusCode();
@@ -56,7 +56,7 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
         }
         """;
         var globalResponse = await Client.PutAsync(
-            "/api/v1/configuration/global",
+            "/api/v1/resourceBindings/global",
             new StringContent(globalJson, Encoding.UTF8, "application/json"),
             TestContext.Current.CancellationToken);
         globalResponse.EnsureSuccessStatusCode();
@@ -70,13 +70,13 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
         }
         """;
         var replaceResponse = await Client.PutAsync(
-            $"/api/v1/configuration/Stack/{_stackId}",
+            $"/api/v1/resourceBindings/Stack/{_stackId}",
             new StringContent(resourceJson, Encoding.UTF8, "application/json"),
             TestContext.Current.CancellationToken);
         replaceResponse.EnsureSuccessStatusCode();
 
         var getResponse = await Client.GetAsync(
-            $"/api/v1/configuration/Stack/{_stackId}",
+            $"/api/v1/resourceBindings/Stack/{_stackId}",
             TestContext.Current.CancellationToken);
         getResponse.EnsureSuccessStatusCode();
 
@@ -95,10 +95,10 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
     }
 
     [Fact]
-    public async Task Stack_Configuration_Should_Save_Mounted_File_Secret_Delivery()
+    public async Task Stack_ResourceBinding_Should_Save_Mounted_File_Secret_Delivery()
     {
         var createSecretResponse = await Client.PostAsJsonAsync(
-            "/api/v1/configuration/secrets",
+            "/api/v1/bindings/secrets",
             new { name = "FILE_SECRET", value = "super-secret-value" },
             cancellationToken: TestContext.Current.CancellationToken);
         createSecretResponse.EnsureSuccessStatusCode();
@@ -117,14 +117,14 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
         """;
 
         var replaceResponse = await Client.PutAsync(
-            $"/api/v1/configuration/Stack/{_stackId}",
+            $"/api/v1/resourceBindings/Stack/{_stackId}",
             new StringContent(resourceJson, Encoding.UTF8, "application/json"),
             TestContext.Current.CancellationToken);
 
         replaceResponse.EnsureSuccessStatusCode();
 
         var getResponse = await Client.GetAsync(
-            $"/api/v1/configuration/Stack/{_stackId}",
+            $"/api/v1/resourceBindings/Stack/{_stackId}",
             TestContext.Current.CancellationToken);
         getResponse.EnsureSuccessStatusCode();
 
@@ -135,10 +135,10 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
     }
 
     [Fact]
-    public async Task Global_Configuration_Should_Reject_Mounted_File_Secret_Delivery()
+    public async Task Global_ResourceBinding_Should_Reject_Mounted_File_Secret_Delivery()
     {
         var createSecretResponse = await Client.PostAsJsonAsync(
-            "/api/v1/configuration/secrets",
+            "/api/v1/bindings/secrets",
             new { name = "FILE_SECRET", value = "super-secret-value" },
             cancellationToken: TestContext.Current.CancellationToken);
         createSecretResponse.EnsureSuccessStatusCode();
@@ -157,7 +157,7 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
         """;
 
         var replaceResponse = await Client.PutAsync(
-            "/api/v1/configuration/global",
+            "/api/v1/resourceBindings/global",
             new StringContent(resourceJson, Encoding.UTF8, "application/json"),
             TestContext.Current.CancellationToken);
 
@@ -167,7 +167,7 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
     }
 
     [Fact]
-    public async Task Resource_Configuration_Should_Return_Forbidden_Without_Target_Resource_Permission()
+    public async Task ResourceBinding_Should_Return_Forbidden_Without_Target_Resource_Permission()
     {
         var subject = await CreateAuthorizationSubjectAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
@@ -175,7 +175,7 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
             CreateJwtToken(subject.UserId, subject.ActorId));
 
         var response = await Client.GetAsync(
-            $"/api/v1/configuration/Stack/{_stackId}",
+            $"/api/v1/resourceBindings/Stack/{_stackId}",
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -190,7 +190,7 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
             CreateJwtToken(subject.UserId, subject.ActorId));
 
         var response = await Client.GetAsync(
-            "/api/v1/configuration/secrets",
+            "/api/v1/bindings/secrets",
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -206,20 +206,20 @@ public sealed class ConfigurationEntriesTests(PostgresTestFixture fixture) : Int
                     ResourceType.Stack,
                     _stackId,
                     PermissionLevel.Read,
-                    SpecificPermission.Configuration)
+                    SpecificPermission.ResourceBindings)
             ]);
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
             CreateJwtToken(subject.UserId, subject.ActorId));
 
         var scopedResponse = await Client.GetAsync(
-            $"/api/v1/configuration/secrets?scope=Stack&resourceId={_stackId}",
+            $"/api/v1/bindings/secrets?scope=Stack&resourceId={_stackId}",
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, scopedResponse.StatusCode);
 
         var globalResponse = await Client.GetAsync(
-            "/api/v1/configuration/secrets",
+            "/api/v1/bindings/secrets",
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, globalResponse.StatusCode);

@@ -1,4 +1,4 @@
-namespace Domain.Entities.Configuration;
+namespace Domain.Entities.ResourceBindings;
 
 public sealed record SecretDefinition(
     string Name,

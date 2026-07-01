@@ -2,7 +2,6 @@ using Application.Features.Configuration.Commands;
 using Application.Features.Configuration.Models;
 using Application.Features.Configuration.Queries;
 using Application.Permissions;
-using Domain.Entities.Configuration;
 using Hosting.Extensions;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -10,88 +9,89 @@ using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
-using WebApi.Routes.Endpoints.Resources.Configuration;
+using WebApi.Routes.Endpoints.Resources.ResourceBindings;
+using Domain.Entities.ResourceBindings;
 using Domain;
 
 namespace WebApi.Routes.Endpoints;
 
-public static class ConfigurationEntries
+public static class ResourceBindings
 {
-    public static async Task<Results<Ok<ConfigurationEntriesView>, ProblemHttpResult>> GetGlobal(
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> GetGlobal(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetGlobalConfigurationEntries(), cancellationToken);
-        var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Configuration, cancellationToken);
-        return EndpointHandlers.HandleResult(result, data => ConfigurationEntriesView.Map(data, permissions));
+        var result = await mediator.Send(new GetGlobalResourceBindings(), cancellationToken);
+        var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Binding, cancellationToken);
+        return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data, permissions));
     }
 
-    public static async Task<Results<Ok<ConfigurationEntriesView>, ProblemHttpResult>> ReplaceGlobal(
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> ReplaceGlobal(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
-        [FromBody] ReplaceConfigurationEntriesInput input,
+        [FromBody] ReplaceResourceBindingsInput input,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(
-            new ReplaceGlobalConfigurationEntries(input.Entries),
+            new ReplaceGlobalResourceBindings(input.Entries),
             cancellationToken);
-        var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Configuration, cancellationToken);
-        return EndpointHandlers.HandleResult(result, data => ConfigurationEntriesView.Map(data, permissions));
+        var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Binding, cancellationToken);
+        return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data, permissions));
     }
 
-    public static async Task<Results<Ok<ConfigurationEntriesView>, ProblemHttpResult>> GetResource(
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> GetResource(
         IMediator mediator,
-        [FromRoute][Description("Configuration scope")] ConfigurationScope scope,
+        [FromRoute][Description("Resource binding scope")] ResourceBindingScope scope,
         [FromRoute][Description("Resource ID")] Guid resourceId,
         CancellationToken cancellationToken)
     {
         var result = scope switch
         {
-            ConfigurationScope.Stack => await mediator.Send(new GetStackConfigurationEntries(resourceId), cancellationToken),
-            ConfigurationScope.Deployment => await mediator.Send(new GetDeploymentConfigurationEntries(resourceId), cancellationToken),
-            ConfigurationScope.Global => Result.Failure<ConfigurationEntriesResult>(new BadRequestError("Global configuration does not target a resource.")),
-            _ => Result.Failure<ConfigurationEntriesResult>(new BadRequestError($"Unsupported configuration scope '{scope}'."))
+            ResourceBindingScope.Stack => await mediator.Send(new GetStackResourceBindings(resourceId), cancellationToken),
+            ResourceBindingScope.Deployment => await mediator.Send(new GetDeploymentResourceBindings(resourceId), cancellationToken),
+            ResourceBindingScope.Global => Result.Failure<ResourceBindingsResult>(new BadRequestError("Global resource bindings do not target a resource.")),
+            _ => Result.Failure<ResourceBindingsResult>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
         };
 
-        return EndpointHandlers.HandleResult(result, data => ConfigurationEntriesView.Map(data));
+        return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data));
     }
 
-    public static async Task<Results<Ok<ConfigurationEntriesView>, ProblemHttpResult>> ReplaceResource(
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> ReplaceResource(
         IMediator mediator,
-        [FromRoute][Description("Configuration scope")] ConfigurationScope scope,
+        [FromRoute][Description("Resource binding scope")] ResourceBindingScope scope,
         [FromRoute][Description("Resource ID")] Guid resourceId,
-        [FromBody] ReplaceConfigurationEntriesInput input,
+        [FromBody] ReplaceResourceBindingsInput input,
         CancellationToken cancellationToken)
     {
         var result = scope switch
         {
-            ConfigurationScope.Stack => await mediator.Send(new ReplaceStackConfigurationEntries(resourceId, input.Entries), cancellationToken),
-            ConfigurationScope.Deployment => await mediator.Send(new ReplaceDeploymentConfigurationEntries(resourceId, input.Entries), cancellationToken),
-            ConfigurationScope.Global => Result.Failure<ConfigurationEntriesResult>(new BadRequestError("Global configuration does not target a resource.")),
-            _ => Result.Failure<ConfigurationEntriesResult>(new BadRequestError($"Unsupported configuration scope '{scope}'."))
+            ResourceBindingScope.Stack => await mediator.Send(new ReplaceStackResourceBindings(resourceId, input.Entries), cancellationToken),
+            ResourceBindingScope.Deployment => await mediator.Send(new ReplaceDeploymentResourceBindings(resourceId, input.Entries), cancellationToken),
+            ResourceBindingScope.Global => Result.Failure<ResourceBindingsResult>(new BadRequestError("Global resource bindings do not target a resource.")),
+            _ => Result.Failure<ResourceBindingsResult>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
         };
 
-        return EndpointHandlers.HandleResult(result, data => ConfigurationEntriesView.Map(data));
+        return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data));
     }
 
     public static async Task<Results<Ok<SecretDefinitionsView>, ProblemHttpResult>> ListSecrets(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
-        [FromQuery][Description("Optional resource configuration scope")] ConfigurationScope? scope,
+        [FromQuery][Description("Optional resource binding scope")] ResourceBindingScope? scope,
         [FromQuery][Description("Optional resource ID")] Guid? resourceId,
         CancellationToken cancellationToken)
     {
         var result = (scope, resourceId) switch
         {
             (null, null) => await mediator.Send(new GetSecretDefinitions(), cancellationToken),
-            (ConfigurationScope.Stack, { } id) => await mediator.Send(new GetStackSecretDefinitions(id), cancellationToken),
-            (ConfigurationScope.Deployment, { } id) => await mediator.Send(new GetDeploymentSecretDefinitions(id), cancellationToken),
-            (ConfigurationScope.Global, _) => Result.Failure<IReadOnlyList<Domain.Entities.Configuration.SecretDefinition>>(new BadRequestError("Global configuration does not target a resource.")),
-            ({ }, null) => Result.Failure<IReadOnlyList<Domain.Entities.Configuration.SecretDefinition>>(new BadRequestError("resourceId must be provided when scope is provided.")),
-            _ => Result.Failure<IReadOnlyList<Domain.Entities.Configuration.SecretDefinition>>(new BadRequestError($"Unsupported configuration scope '{scope}'."))
+            (ResourceBindingScope.Stack, { } id) => await mediator.Send(new GetStackSecretDefinitions(id), cancellationToken),
+            (ResourceBindingScope.Deployment, { } id) => await mediator.Send(new GetDeploymentSecretDefinitions(id), cancellationToken),
+            (ResourceBindingScope.Global, _) => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError("Global resource bindings do not target a resource.")),
+            ({ }, null) => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError("resourceId must be provided when scope is provided.")),
+            _ => Result.Failure<IReadOnlyList<SecretDefinition>>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
         };
-        var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Configuration, cancellationToken);
+        var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Binding, cancellationToken);
         return EndpointHandlers.HandleResult(result, data => SecretDefinitionsView.Map(data, permissions));
     }
 

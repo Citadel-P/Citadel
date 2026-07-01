@@ -5,7 +5,7 @@ using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
@@ -35,7 +35,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IAlertEventRepository AlertEvents { get; }
     IDeploymentRepository Deployments { get; }
     IStackRepository Stacks { get; }
-    IConfigurationEntryRepository ConfigurationEntries { get; }
+    IResourceBindingRepository ResourceBindings { get; }
     ISecretDefinitionRepository SecretDefinitions { get; }
     ISecretProviderRepository SecretProviders { get; }
     IRefreshTokenRepository RefreshTokens { get; }
@@ -47,13 +47,13 @@ public interface IUnitOfWork : IAsyncDisposable
     Task RollbackAsync();
 }
 
-public interface IConfigurationEntryRepository
+public interface IResourceBindingRepository
 {
-    Task<int> AddAsync(ConfigurationEntry entry, CancellationToken cancellationToken);
-    Task<int> ReplaceEntriesAsync(ConfigurationScope scope, Guid? resourceId, IEnumerable<ConfigurationEntry> entries, CancellationToken cancellationToken);
-    Task<int> ReplaceResourceEntriesAsync(ConfigurationScope scope, Guid resourceId, IEnumerable<ConfigurationEntry> entries, CancellationToken cancellationToken);
-    Task<IEnumerable<ConfigurationEntry>> GetEntriesAsync(ConfigurationScope scope, Guid? resourceId, CancellationToken cancellationToken);
-    Task<IEnumerable<ConfigurationEntry>> GetEffectiveEntriesAsync(ConfigurationScope scope, Guid resourceId, CancellationToken cancellationToken);
+    Task<int> AddAsync(ResourceBinding entry, CancellationToken cancellationToken);
+    Task<int> ReplaceEntriesAsync(ResourceBindingScope scope, Guid? resourceId, IEnumerable<ResourceBinding> entries, CancellationToken cancellationToken);
+    Task<int> ReplaceResourceEntriesAsync(ResourceBindingScope scope, Guid resourceId, IEnumerable<ResourceBinding> entries, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceBinding>> GetEntriesAsync(ResourceBindingScope scope, Guid? resourceId, CancellationToken cancellationToken);
+    Task<IEnumerable<ResourceBinding>> GetEffectiveEntriesAsync(ResourceBindingScope scope, Guid resourceId, CancellationToken cancellationToken);
 }
 
 public interface ISecretDefinitionRepository

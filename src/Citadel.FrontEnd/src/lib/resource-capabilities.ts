@@ -7,7 +7,7 @@ export type CapabilityKey =
   | 'canViewLogs'
   | 'canOpenTerminal'
   | 'canPull'
-  | 'canViewConfiguration'
+  | 'canViewResourceBindings'
   | 'canViewReleases';
 
 type ResourceWithCapabilities = {

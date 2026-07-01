@@ -1,17 +1,17 @@
 using Domain;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 
 namespace Tests.Unit.Domain.Entities.Configuration;
 
-public class ConfigurationEntryTests
+public class ResourceBindingTests
 {
     [Fact]
     public void Validate_Should_Reject_Variable_With_Secret_Delivery_Metadata()
     {
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "APP_MODE",
-            Kind: ConfigurationEntryKind.Variable,
-            Scope: ConfigurationScope.Global,
+            Kind: ResourceBindingKind.Variable,
+            Scope: ResourceBindingScope.Global,
             ResourceId: null,
             Value: "production",
             SecretId: null,
@@ -25,10 +25,10 @@ public class ConfigurationEntryTests
     [Fact]
     public void Validate_Should_Reject_Secret_Without_Delivery_Mode()
     {
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "API_KEY",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: Guid.CreateVersion7(),
             Value: null,
             SecretId: Guid.CreateVersion7());
@@ -41,10 +41,10 @@ public class ConfigurationEntryTests
     [Fact]
     public void Validate_Should_Accept_Mounted_File_Secret_With_Absolute_Target_Path()
     {
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "POSTGRES_PASSWORD",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: Guid.CreateVersion7(),
             Value: null,
             SecretId: Guid.CreateVersion7(),
@@ -64,10 +64,10 @@ public class ConfigurationEntryTests
     [InlineData("/proc/self/environ")]
     public void Validate_Should_Reject_Invalid_Mounted_File_Target_Path(string? targetPath)
     {
-        var entry = new ConfigurationEntry(
+        var entry = new ResourceBinding(
             Name: "POSTGRES_PASSWORD",
-            Kind: ConfigurationEntryKind.Secret,
-            Scope: ConfigurationScope.Stack,
+            Kind: ResourceBindingKind.Secret,
+            Scope: ResourceBindingScope.Stack,
             ResourceId: Guid.CreateVersion7(),
             Value: null,
             SecretId: Guid.CreateVersion7(),

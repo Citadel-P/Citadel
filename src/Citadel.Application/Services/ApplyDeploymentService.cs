@@ -5,12 +5,11 @@ using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
-using Domain.Contracts.Resources.Configuration;
+using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
 using Domain.Entities.Activities;
-using Domain.Entities.Configuration;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using LightResults;
@@ -32,7 +31,7 @@ internal sealed partial class ApplyDeploymentService(
     ImageDigestCache imageDigestCache,
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformCache,
-    IConfigurationResolver configurationResolver,
+    IResourceBindingResolver configurationResolver,
     ISecretRedactor secretRedactor,
     IAlertService alertService,
     IDeploymentStreamManager deploymentHub,
@@ -136,7 +135,7 @@ internal sealed partial class ApplyDeploymentService(
 
         yield return Info("Resolving deployment variables and secrets...");
 
-        var configurationResult = await configurationResolver.ResolveAsync(ConfigurationScope.Deployment, deployment.Id, ct);
+        var configurationResult = await configurationResolver.ResolveAsync(ResourceBindingScope.Deployment, deployment.Id, ct);
         if (configurationResult.IsFailure(out var configurationError, out var resolvedConfiguration))
         {
             var safeMessage = configurationError.Message;
@@ -151,12 +150,12 @@ internal sealed partial class ApplyDeploymentService(
         if (environmentResult.IsFailure(out var environmentError, out var environmentVariables))
         {
             var safeMessage = environmentError.Message;
-            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, configuration: injectedConfiguration.SnapshotEntries, ct: ct);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, resourceBindings: injectedConfiguration.SnapshotEntries, ct: ct);
             yield return Error(400, safeMessage);
             yield break;
         }
 
-        yield return Info(ConfigurationApplyMessageBuilder.BuildDeploymentEnvironmentMessage(injectedConfiguration));
+        yield return Info(ResourceBindingApplyMessageBuilder.BuildDeploymentEnvironmentMessage(injectedConfiguration));
 
         yield return Info($"Applying deployment to {platform.Address}...");
 
@@ -167,7 +166,7 @@ internal sealed partial class ApplyDeploymentService(
         if (!result.IsSuccess(out var deploymentResult, out var error))
         {
             var safeMessage = secretRedactor.Redact(error.Message, injectedConfiguration.RedactionValues);
-            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, configuration: injectedConfiguration.SnapshotEntries, ct: ct);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, safeMessage, resourceBindings: injectedConfiguration.SnapshotEntries, ct: ct);
             yield return Error(500, safeMessage);
             yield break;
         }
@@ -244,7 +243,7 @@ internal sealed partial class ApplyDeploymentService(
 
     private static Result<IReadOnlyList<string>> BuildDeploymentEnvironmentVariables(
         Deployment deployment,
-        ResolvedConfiguration configuration)
+        ResolvedResourceBindings configuration)
     {
         var configured = deployment.Spec?.EnvironmentVariables ?? [];
         if (configured.Count == 0)
@@ -379,7 +378,7 @@ internal sealed partial class ApplyDeploymentService(
         string? message,
         string? containerId = null,
         AutoUpdateState? autoUpdateState = null,
-        IReadOnlyList<ConfigurationSnapshotEntry>? configuration = null,
+        IReadOnlyList<ResourceBindingSnapshot>? resourceBindings = null,
         CancellationToken ct = default)
         => dbWorkQueue.EnqueueAsync(
             new UpdateDeploymentStatusWorkItem(
@@ -392,7 +391,7 @@ internal sealed partial class ApplyDeploymentService(
                 deploymentHub,
                 activityHub,
                 notificationQueue,
-                configuration),
+                resourceBindings),
             ct);
     
     private async Task<Deployment?> LoadDeployment(Guid id, CancellationToken ct)
@@ -428,7 +427,7 @@ internal sealed partial class ApplyDeploymentService(
 }
 
 internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, string? containerId, AutoUpdateState? autoUpdateState, IDeploymentStreamManager deploymentHub,
-    IActivityStreamManager activityHub, INotificationQueue notificationQueue, IReadOnlyList<ConfigurationSnapshotEntry>? configuration) : IDbWorkItem
+    IActivityStreamManager activityHub, INotificationQueue notificationQueue, IReadOnlyList<ResourceBindingSnapshot>? resourceBindings) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -461,7 +460,7 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
                             resourceName: deployment.Name,
                             status: ActivityStatus.Failure,
                             eventType: ActivityEventType.DeploymentApplied,
-                            info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot(null, message, configuration))
+                            info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot(null, message, resourceBindings))
                             );
 
             await uow.ActivityEventRepository.AddAsync(activity, ct);
@@ -487,7 +486,7 @@ internal sealed class DeploymentSucceededWorkItem(
     Guid deploymentId, Guid actorId, string containerId, string imageDigest, AutoUpdateState? autoUpdateState, 
     IDeploymentStreamManager deploymentHub, IActivityStreamManager activityHub, 
     INotificationQueue notificationQueue,
-    IReadOnlyList<ConfigurationSnapshotEntry>? configuration) : IDbWorkItem
+    IReadOnlyList<ResourceBindingSnapshot>? resourceBindings) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -520,7 +519,7 @@ internal sealed class DeploymentSucceededWorkItem(
                         resourceName: deployment.Name,
                         status: ActivityStatus.Success,
                         eventType: ActivityEventType.DeploymentApplied,
-                        info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot([containerId], Configuration: configuration))
+                        info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot([containerId], ResourceBindings: resourceBindings))
                         );
 
         await uow.ActivityEventRepository.AddAsync(activity, ct);

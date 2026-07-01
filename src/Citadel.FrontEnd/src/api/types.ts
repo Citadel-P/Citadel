@@ -15,13 +15,12 @@ export type ResourceType =
   | 'Stack'
   | 'GitRepository'
   | 'GitAccount'
-  | 'Configuration'
   | 'Webhook'
   | 'Access'
   | 'User'
   | 'Team'
   | 'Role'
-  | 'Variable';
+  | 'Binding';
 export const PluralResourceMap = {
   Network: 'Networks',
   Volume: 'Volumes',
@@ -37,13 +36,12 @@ export const PluralResourceMap = {
   AlertChannel: 'AlertChannels',
   GitRepository: 'GitRepositories',
   GitAccount: 'GitAccounts',
-  Configuration: 'Configuration',
   Webhook: 'Webhooks',
   Access: 'Access',
   User: 'Users',
   Team: 'Teams',
   Role: 'Roles',
-  Variable: 'Variables',
+  Binding: 'Bindings',
 } as const satisfies Record<ResourceType, string>;
 
 export type AnyFn = (...args: any[]) => Promise<any>;

@@ -5,6 +5,7 @@ using Hosting.Common;
 using Hosting.Common.Attributes;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Identity;
+using Domain.Contracts.Resources.ResourceBindings;
 
 namespace WebApi.Routes.Endpoints.Resources.Stacks;
 
@@ -64,7 +65,7 @@ public sealed record StackView(
     string? Version = null,
     StackSpec? Spec = null,
     StackReleaseSource? Source = null,
-    IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration = null,
+    IReadOnlyList<ResourceBindingSnapshot>? ResourceBindings = null,
     PlatformStatus PlatformStatus = PlatformStatus.Offline,
     string? PlatformName = null,
     LatestActivityView? LatestActivityView = null,
@@ -86,7 +87,7 @@ public sealed record StackView(
         Version: stack.CurrentStackRelease?.Version,
         Spec: stack.CurrentStackRelease?.Spec,
         Source: stack.CurrentStackRelease?.Source,
-        Configuration: stack.CurrentStackRelease?.Configuration,
+        ResourceBindings: stack.CurrentStackRelease?.ResourceBindings,
         PlatformStatus: stack.CurrentStackRelease?.Platform?.Status ?? PlatformStatus.Offline,
         PlatformName: stack.CurrentStackRelease?.Platform?.Name,
         LatestActivityView: stack.LatestActivityEvent?.Map());
@@ -135,7 +136,7 @@ public sealed record StackReleaseView(
     string Version,
     StackSpec Spec,
     StackReleaseSource? Source,
-    IReadOnlyList<Domain.Contracts.Resources.Configuration.ConfigurationSnapshotEntry>? Configuration,
+    IReadOnlyList<ResourceBindingSnapshot>? ResourceBindings,
     DateTime CreatedAt,
     Guid CreatedByActorId,
     string ActorName,
@@ -151,7 +152,7 @@ public sealed record StackReleaseView(
         Version: release.Version,
         Spec: release.Spec,
         Source: release.Source,
-        Configuration: release.Configuration,
+        ResourceBindings: release.ResourceBindings,
         CreatedAt: release.CreatedAt,
         CreatedByActorId: release.CreatedByActorId,
         ActorName: release.Actor?.ActorMetadata?.Name ?? "Unknown",

@@ -1,40 +1,39 @@
 using Application.Features.Configuration.Models;
-using Application.Features.Configuration;
+using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Configuration;
+using Domain.Entities.ResourceBindings;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Domain;
 
 namespace Application.Features.Configuration.Commands;
 
-[RequirePermission(ResourceType.Configuration, PermissionLevel.Write)]
-public sealed record ReplaceGlobalConfigurationEntries(IReadOnlyList<ConfigurationEntryInput> Entries) : ICommand<Result<ConfigurationEntriesResult>>
+[RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
+public sealed record ReplaceGlobalResourceBindings(IReadOnlyList<ResourceBindingInput> Entries) : ICommand<Result<ResourceBindingsResult>>
 {
-    internal sealed class Validator : AbstractValidator<ReplaceGlobalConfigurationEntries>
+    internal sealed class Validator : AbstractValidator<ReplaceGlobalResourceBindings>
     {
         public Validator()
         {
             RuleFor(x => x.Entries).NotNull();
-            RuleForEach(x => x.Entries).SetValidator(new ConfigurationEntryInputValidator(allowMountedFile: false));
+            RuleForEach(x => x.Entries).SetValidator(new ResourceBindingInputValidator(allowMountedFile: false));
         }
     }
 
-    internal sealed class ConfigurationEntryInputValidator : AbstractValidator<ConfigurationEntryInput>
+    internal sealed class ResourceBindingInputValidator : AbstractValidator<ResourceBindingInput>
     {
-        public ConfigurationEntryInputValidator(bool allowMountedFile)
+        public ResourceBindingInputValidator(bool allowMountedFile)
         {
             RuleFor(x => x.Name)
                 .NotEmpty()
                 .MaximumLength(128)
                 .Matches("^[A-Za-z_][A-Za-z0-9_]*$")
-                .WithMessage("Configuration entry name must be a valid environment variable name.");
+                .WithMessage("Resource binding name must be a valid environment variable name.");
 
-            When(x => x.Kind == ConfigurationEntryKind.Variable, () =>
+            When(x => x.Kind == ResourceBindingKind.Variable, () =>
             {
                 RuleFor(x => x.Value).NotNull();
                 RuleFor(x => x.SecretId).Null();
@@ -42,7 +41,7 @@ public sealed record ReplaceGlobalConfigurationEntries(IReadOnlyList<Configurati
                 RuleFor(x => x.TargetPath).Null();
             });
 
-            When(x => x.Kind == ConfigurationEntryKind.Secret, () =>
+            When(x => x.Kind == ResourceBindingKind.Secret, () =>
             {
                 RuleFor(x => x.Value).Null();
                 RuleFor(x => x.SecretId).NotNull();
@@ -80,10 +79,10 @@ public sealed record ReplaceGlobalConfigurationEntries(IReadOnlyList<Configurati
         {
             try
             {
-                new ConfigurationEntry(
+                new ResourceBinding(
                     Name: "SECRET",
-                    Kind: ConfigurationEntryKind.Secret,
-                    Scope: ConfigurationScope.Stack,
+                    Kind: ResourceBindingKind.Secret,
+                    Scope: ResourceBindingScope.Stack,
                     ResourceId: Guid.CreateVersion7(),
                     Value: null,
                     SecretId: Guid.CreateVersion7(),
@@ -99,74 +98,74 @@ public sealed record ReplaceGlobalConfigurationEntries(IReadOnlyList<Configurati
     }
 }
 
-[RequirePermission(ResourceType.Stack, PermissionLevel.Write, SpecificPermission.Configuration)]
-public sealed record ReplaceStackConfigurationEntries(Guid Id, IReadOnlyList<ConfigurationEntryInput> Entries) : ICommand<Result<ConfigurationEntriesResult>>
+[RequirePermission(ResourceType.Stack, PermissionLevel.Write, SpecificPermission.ResourceBindings)]
+public sealed record ReplaceStackResourceBindings(Guid Id, IReadOnlyList<ResourceBindingInput> Entries) : ICommand<Result<ResourceBindingsResult>>
 {
-    internal sealed class Validator : AbstractValidator<ReplaceStackConfigurationEntries>
+    internal sealed class Validator : AbstractValidator<ReplaceStackResourceBindings>
     {
         public Validator()
         {
             RuleFor(x => x.Entries).NotNull();
-            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalConfigurationEntries.ConfigurationEntryInputValidator(allowMountedFile: true));
+            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalResourceBindings.ResourceBindingInputValidator(allowMountedFile: true));
         }
     }
 }
 
-[RequirePermission(ResourceType.Deployment, PermissionLevel.Write, SpecificPermission.Configuration)]
-public sealed record ReplaceDeploymentConfigurationEntries(Guid Id, IReadOnlyList<ConfigurationEntryInput> Entries) : ICommand<Result<ConfigurationEntriesResult>>
+[RequirePermission(ResourceType.Deployment, PermissionLevel.Write, SpecificPermission.ResourceBindings)]
+public sealed record ReplaceDeploymentResourceBindings(Guid Id, IReadOnlyList<ResourceBindingInput> Entries) : ICommand<Result<ResourceBindingsResult>>
 {
-    internal sealed class Validator : AbstractValidator<ReplaceDeploymentConfigurationEntries>
+    internal sealed class Validator : AbstractValidator<ReplaceDeploymentResourceBindings>
     {
         public Validator()
         {
             RuleFor(x => x.Entries).NotNull();
-            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalConfigurationEntries.ConfigurationEntryInputValidator(allowMountedFile: false));
+            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalResourceBindings.ResourceBindingInputValidator(allowMountedFile: false));
         }
     }
 }
 
-internal sealed class ReplaceGlobalConfigurationEntriesHandler(IUnitOfWork unitOfWork)
-    : ICommandHandler<ReplaceGlobalConfigurationEntries, Result<ConfigurationEntriesResult>>
+internal sealed class ReplaceGlobalResourceBindingsHandler(IUnitOfWork unitOfWork)
+    : ICommandHandler<ReplaceGlobalResourceBindings, Result<ResourceBindingsResult>>
 {
-    public async ValueTask<Result<ConfigurationEntriesResult>> Handle(ReplaceGlobalConfigurationEntries command, CancellationToken cancellationToken)
-        => await ConfigurationEntriesFeatureHelpers.ReplaceEntriesAsync(
+    public async ValueTask<Result<ResourceBindingsResult>> Handle(ReplaceGlobalResourceBindings command, CancellationToken cancellationToken)
+        => await ResourceBindingsFeatureHelpers.ReplaceEntriesAsync(
             unitOfWork,
-            ConfigurationScope.Global,
+            ResourceBindingScope.Global,
             null,
             command.Entries,
             cancellationToken);
 }
 
-internal sealed class ReplaceStackConfigurationEntriesHandler(IUnitOfWork unitOfWork)
-    : ICommandHandler<ReplaceStackConfigurationEntries, Result<ConfigurationEntriesResult>>
+internal sealed class ReplaceStackResourceBindingsHandler(IUnitOfWork unitOfWork)
+    : ICommandHandler<ReplaceStackResourceBindings, Result<ResourceBindingsResult>>
 {
-    public async ValueTask<Result<ConfigurationEntriesResult>> Handle(ReplaceStackConfigurationEntries command, CancellationToken cancellationToken)
+    public async ValueTask<Result<ResourceBindingsResult>> Handle(ReplaceStackResourceBindings command, CancellationToken cancellationToken)
     {
         var stack = await unitOfWork.Stacks.GetAsync(command.Id, cancellationToken);
         if (stack is null)
-            return Result.Failure<ConfigurationEntriesResult>(new NotFoundError($"Stack with ID {command.Id} does not exist."));
+            return Result.Failure<ResourceBindingsResult>(new NotFoundError($"Stack with ID {command.Id} does not exist."));
 
-        return await ConfigurationEntriesFeatureHelpers.ReplaceEntriesAsync(
+        return await ResourceBindingsFeatureHelpers.ReplaceEntriesAsync(
             unitOfWork,
-            ConfigurationScope.Stack,
+            ResourceBindingScope.Stack,
             command.Id,
             command.Entries,
             cancellationToken);
     }
 }
 
-internal sealed class ReplaceDeploymentConfigurationEntriesHandler(IUnitOfWork unitOfWork)
-    : ICommandHandler<ReplaceDeploymentConfigurationEntries, Result<ConfigurationEntriesResult>>
+internal sealed class ReplaceDeploymentResourceBindingsHandler(IUnitOfWork unitOfWork)
+    : ICommandHandler<ReplaceDeploymentResourceBindings, Result<ResourceBindingsResult>>
 {
-    public async ValueTask<Result<ConfigurationEntriesResult>> Handle(ReplaceDeploymentConfigurationEntries command, CancellationToken cancellationToken)
+    public async ValueTask<Result<ResourceBindingsResult>> Handle(ReplaceDeploymentResourceBindings command, CancellationToken cancellationToken)
     {
         var deployment = await unitOfWork.Deployments.GetAsync(command.Id, cancellationToken);
         if (deployment is null)
-            return Result.Failure<ConfigurationEntriesResult>(new NotFoundError($"Deployment with ID {command.Id} does not exist."));
+            return Result.Failure<ResourceBindingsResult>(new NotFoundError($"Deployment with ID {command.Id} does not exist."));
 
-        return await ConfigurationEntriesFeatureHelpers.ReplaceEntriesAsync(
+        return await ResourceBindingsFeatureHelpers.ReplaceEntriesAsync(
             unitOfWork,
-            ConfigurationScope.Deployment,
+            ResourceBindingScope.Deployment,
             command.Id,
             command.Entries,
             cancellationToken);

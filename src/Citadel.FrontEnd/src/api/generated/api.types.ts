@@ -106,8 +106,13 @@ export enum SpecificPermission {
   Apply = "Apply",
   Pull = "Pull",
   Terminal = "Terminal",
-  Configuration = "Configuration",
+  ResourceBindings = "ResourceBindings",
   Releases = "Releases",
+}
+
+export enum SecretProviderType {
+  InternalEncrypted = "InternalEncrypted",
+  VaultCompatibleKvV2 = "VaultCompatibleKvV2",
 }
 
 export enum ScheduleType {
@@ -132,12 +137,23 @@ export enum ResourceType {
   User = "User",
   Team = "Team",
   Role = "Role",
-  Configuration = "Configuration",
+  Binding = "Binding",
 }
 
 export enum ResourceControlState {
   Idle = "Idle",
   Processing = "Processing",
+}
+
+export enum ResourceBindingScope {
+  Global = "Global",
+  Stack = "Stack",
+  Deployment = "Deployment",
+}
+
+export enum ResourceBindingKind {
+  Variable = "Variable",
+  Secret = "Secret",
 }
 
 export enum RegistryType {
@@ -269,17 +285,6 @@ export enum ContainerRestartPolicy {
   Always = "Always",
   OnFailure = "OnFailure",
   UnlessStopped = "UnlessStopped",
-}
-
-export enum ConfigurationScope {
-  Global = "Global",
-  Stack = "Stack",
-  Deployment = "Deployment",
-}
-
-export enum ConfigurationEntryKind {
-  Variable = "Variable",
-  Secret = "Secret",
 }
 
 export enum AutoUpdateStatus {
@@ -1642,61 +1647,6 @@ export interface ConfigFromInput {
   network: string;
 }
 
-export interface ConfigurationEntriesView {
-  entries: ConfigurationEntryView[];
-  effectiveEntries: ConfigurationEntryView[];
-  capabilities?: null | ResourceCapabilities;
-}
-
-export interface ConfigurationEntryInput {
-  name: string;
-  kind: ConfigurationEntryKind;
-  value: null | string;
-  /** @format uuid */
-  secretId: null | string;
-  secretDeliveryMode?: any;
-  targetPath?: null | string;
-}
-
-export interface ConfigurationEntryView {
-  /** @format uuid */
-  id: string;
-  name: string;
-  kind: ConfigurationEntryKind;
-  scope: ConfigurationScope;
-  /** @format uuid */
-  resourceId: null | string;
-  value: null | string;
-  /** @format uuid */
-  secretId: null | string;
-  secretDeliveryMode: null | SecretDeliveryMode;
-  targetPath: null | string;
-  isInherited: boolean;
-}
-
-export interface ConfigurationSnapshotEntry {
-  name: string;
-  kind: ConfigurationEntryKind;
-  scope: ConfigurationScope;
-  /** @format uuid */
-  resourceId: null | string;
-  value: null | string;
-  /** @format uuid */
-  secretId: null | string;
-  secretName: null | string;
-  secretProviderType: null | SecretProviderType;
-  secretProviderName: null | string;
-  externalPath: null | string;
-  externalKey: null | string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  externalVersion: null | number | string;
-  secretDeliveryMode: null | SecretDeliveryMode;
-  targetPath: null | string;
-}
-
 export interface ContainerConfiguration {
   hostname: null | string;
   domainname: null | string;
@@ -2166,7 +2116,7 @@ export interface DeploymentCapabilities {
   canOpenTerminal: boolean;
   canPull: boolean;
   canApply: boolean;
-  canViewConfiguration: boolean;
+  canViewResourceBindings: boolean;
   canRead: boolean;
   canWrite: boolean;
   canExecute: boolean;
@@ -2198,7 +2148,7 @@ export interface DeploymentImageInfoLocalImage {
 export interface DeploymentResultSnapshot {
   containerIds?: null | string[];
   message?: null | string;
-  configuration?: null | ConfigurationSnapshotEntry[];
+  resourceBindings?: null | ResourceBindingSnapshot[];
 }
 
 export interface DeploymentSnapshot {
@@ -3189,6 +3139,8 @@ export interface PermissionInput {
 export interface PermissionMatrixViewItem {
   maximumLevel: string;
   specificPermissions: Record<string, string>;
+  label: string;
+  specificPermissionLabels: Record<string, string>;
 }
 
 export interface PermissionView {
@@ -3525,8 +3477,8 @@ export interface RenameResource {
   name: string;
 }
 
-export interface ReplaceConfigurationEntriesInput {
-  entries: ConfigurationEntryInput[];
+export interface ReplaceResourceBindingsInput {
+  entries: ResourceBindingInput[];
 }
 
 export interface RepoCommand {
@@ -3561,6 +3513,49 @@ export interface ResourceAccessView {
   resourceName: null | string;
   permissionLevel: PermissionLevel;
   specificPermissions: null | SpecificPermission[];
+}
+
+export interface ResourceBindingInput {
+  name: string;
+  kind: ResourceBindingKind;
+  value: null | string;
+  /** @format uuid */
+  secretId: null | string;
+  secretDeliveryMode?: any;
+  targetPath?: null | string;
+}
+
+export interface ResourceBindingSnapshot {
+  name: string;
+  kind: ResourceBindingKind;
+  scope: ResourceBindingScope;
+  value: null | string;
+  /** @format uuid */
+  secretId: null | string;
+  secretDeliveryMode: null | SecretDeliveryMode;
+  targetPath: null | string;
+}
+
+export interface ResourceBindingView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  kind: ResourceBindingKind;
+  scope: ResourceBindingScope;
+  /** @format uuid */
+  resourceId: null | string;
+  value: null | string;
+  /** @format uuid */
+  secretId: null | string;
+  secretDeliveryMode: null | SecretDeliveryMode;
+  targetPath: null | string;
+  isInherited: boolean;
+}
+
+export interface ResourceBindingsView {
+  entries: ResourceBindingView[];
+  effectiveEntries: ResourceBindingView[];
+  capabilities?: null | ResourceCapabilities;
 }
 
 export interface ResourceCapabilities {
@@ -3652,8 +3647,6 @@ export interface SecretProviderConnectionTestResultView {
   message: string;
 }
 
-export type SecretProviderType = any;
-
 export interface SecretProviderView {
   /** @format uuid */
   id: string;
@@ -3675,7 +3668,7 @@ export interface StackCapabilities {
   canOpenTerminal: boolean;
   canPull: boolean;
   canApply: boolean;
-  canViewConfiguration: boolean;
+  canViewResourceBindings: boolean;
   canViewReleases: boolean;
   canRead: boolean;
   canWrite: boolean;
@@ -3812,7 +3805,7 @@ export interface StackReleaseSnapshot {
   createdByActorId: string;
   version: null | string;
   source?: null | StackReleaseSource;
-  configuration?: null | ConfigurationSnapshotEntry[];
+  resourceBindings?: null | ResourceBindingSnapshot[];
 }
 
 export interface StackReleaseSource {
@@ -3843,7 +3836,7 @@ export interface StackReleaseView {
   version: string;
   spec: StackSpec;
   source: null | StackReleaseSource;
-  configuration: null | ConfigurationSnapshotEntry[];
+  resourceBindings: null | ResourceBindingSnapshot[];
   /** @format date-time */
   createdAt: any;
   /** @format uuid */
@@ -3861,7 +3854,7 @@ export interface StackReleasesView {
 export interface StackResultSnapshot {
   containerIds?: null | string[];
   message?: null | string;
-  configuration?: null | ConfigurationSnapshotEntry[];
+  resourceBindings?: null | ResourceBindingSnapshot[];
 }
 
 export interface StackSnapshot {
@@ -3960,7 +3953,7 @@ export interface StackView {
   version?: null | string;
   spec?: null | StackSpec;
   source?: null | StackReleaseSource;
-  configuration?: null | ConfigurationSnapshotEntry[];
+  resourceBindings?: null | ResourceBindingSnapshot[];
   platformStatus?: PlatformStatus;
   platformName?: null | string;
   latestActivityView?: null | LatestActivityView;
@@ -8461,17 +8454,17 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
-     * @name GetGlobalConfigurationEntries
+     * @tags ResourceBindings
+     * @name GetGlobalResourceBindings
      * @summary Get global variables and secrets
-     * @request GET:/api/v1/configuration/global
-     * @response `200` `ConfigurationEntriesView` OK
+     * @request GET:/api/v1/resourceBindings/global
+     * @response `200` `ResourceBindingsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getGlobalConfigurationEntries: (params: RequestParams = {}) =>
-      this.request<ConfigurationEntriesView, ProblemDetails>({
-        path: `/api/v1/configuration/global`,
+    getGlobalResourceBindings: (params: RequestParams = {}) =>
+      this.request<ResourceBindingsView, ProblemDetails>({
+        path: `/api/v1/resourceBindings/global`,
         method: "GET",
         format: "json",
         ...params,
@@ -8480,20 +8473,20 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
-     * @name ReplaceGlobalConfigurationEntries
+     * @tags ResourceBindings
+     * @name ReplaceGlobalResourceBindings
      * @summary Replace global variables and secrets
-     * @request PUT:/api/v1/configuration/global
-     * @response `200` `ConfigurationEntriesView` OK
+     * @request PUT:/api/v1/resourceBindings/global
+     * @response `200` `ResourceBindingsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replaceGlobalConfigurationEntries: (
-      data: ReplaceConfigurationEntriesInput,
+    replaceGlobalResourceBindings: (
+      data: ReplaceResourceBindingsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ConfigurationEntriesView, ProblemDetails>({
-        path: `/api/v1/configuration/global`,
+      this.request<ResourceBindingsView, ProblemDetails>({
+        path: `/api/v1/resourceBindings/global`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -8504,21 +8497,21 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
-     * @name GetResourceConfigurationEntries
+     * @tags ResourceBindings
+     * @name GetResourceBindings
      * @summary Get resource variables and secrets
-     * @request GET:/api/v1/configuration/{scope}/{resourceId}
-     * @response `200` `ConfigurationEntriesView` OK
+     * @request GET:/api/v1/resourceBindings/{scope}/{resourceId}
+     * @response `200` `ResourceBindingsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getResourceConfigurationEntries: (
-      scope: ConfigurationScope,
+    getResourceBindings: (
+      scope: ResourceBindingScope,
       resourceId: string,
       params: RequestParams = {},
     ) =>
-      this.request<ConfigurationEntriesView, ProblemDetails>({
-        path: `/api/v1/configuration/${scope}/${resourceId}`,
+      this.request<ResourceBindingsView, ProblemDetails>({
+        path: `/api/v1/resourceBindings/${scope}/${resourceId}`,
         method: "GET",
         format: "json",
         ...params,
@@ -8527,22 +8520,22 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
-     * @name ReplaceResourceConfigurationEntries
+     * @tags ResourceBindings
+     * @name ReplaceResourceBindings
      * @summary Replace resource variables and secrets
-     * @request PUT:/api/v1/configuration/{scope}/{resourceId}
-     * @response `200` `ConfigurationEntriesView` OK
+     * @request PUT:/api/v1/resourceBindings/{scope}/{resourceId}
+     * @response `200` `ResourceBindingsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replaceResourceConfigurationEntries: (
-      scope: ConfigurationScope,
+    replaceResourceBindings: (
+      scope: ResourceBindingScope,
       resourceId: string,
-      data: ReplaceConfigurationEntriesInput,
+      data: ReplaceResourceBindingsInput,
       params: RequestParams = {},
     ) =>
-      this.request<ConfigurationEntriesView, ProblemDetails>({
-        path: `/api/v1/configuration/${scope}/${resourceId}`,
+      this.request<ResourceBindingsView, ProblemDetails>({
+        path: `/api/v1/resourceBindings/${scope}/${resourceId}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -8553,18 +8546,18 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name ListSecretDefinitions
      * @summary List secret definitions
-     * @request GET:/api/v1/configuration/secrets
+     * @request GET:/api/v1/bindings/secrets
      * @response `200` `SecretDefinitionsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listSecretDefinitions: (
       query?: {
-        /** Optional resource configuration scope */
-        scope?: ConfigurationScope;
+        /** Optional resource binding scope */
+        scope?: ResourceBindingScope;
         /**
          * Optional resource ID
          * @format uuid
@@ -8574,7 +8567,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretDefinitionsView, ProblemDetails>({
-        path: `/api/v1/configuration/secrets`,
+        path: `/api/v1/bindings/secrets`,
         method: "GET",
         query: query,
         format: "json",
@@ -8584,10 +8577,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name CreateInternalSecret
      * @summary Create an internal encrypted secret
-     * @request POST:/api/v1/configuration/secrets
+     * @request POST:/api/v1/bindings/secrets
      * @response `200` `SecretDefinitionView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8597,7 +8590,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
-        path: `/api/v1/configuration/secrets`,
+        path: `/api/v1/bindings/secrets`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8608,10 +8601,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name CreateExternalSecret
      * @summary Create an external secret definition
-     * @request POST:/api/v1/configuration/secrets/external
+     * @request POST:/api/v1/bindings/secrets/external
      * @response `200` `SecretDefinitionView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8621,7 +8614,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
-        path: `/api/v1/configuration/secrets/external`,
+        path: `/api/v1/bindings/secrets/external`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8632,10 +8625,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name UpdateExternalSecret
      * @summary Update an external secret definition
-     * @request PUT:/api/v1/configuration/secrets/external/{id}
+     * @request PUT:/api/v1/bindings/secrets/external/{id}
      * @response `200` `SecretDefinitionView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8646,7 +8639,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
-        path: `/api/v1/configuration/secrets/external/${id}`,
+        path: `/api/v1/bindings/secrets/external/${id}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -8657,10 +8650,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name TestExternalSecret
      * @summary Test an external secret reference
-     * @request POST:/api/v1/configuration/secrets/external/test
+     * @request POST:/api/v1/bindings/secrets/external/test
      * @response `200` `ExternalSecretTestResultView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8670,7 +8663,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ExternalSecretTestResultView, ProblemDetails>({
-        path: `/api/v1/configuration/secrets/external/test`,
+        path: `/api/v1/bindings/secrets/external/test`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8681,10 +8674,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name TestVaultKvV2SecretProviderConnection
      * @summary Test a Vault-compatible KV v2 secret provider connection
-     * @request POST:/api/v1/configuration/secret-providers/vault-kv2/test
+     * @request POST:/api/v1/bindings/secret-providers/vault-kv2/test
      * @response `200` `SecretProviderConnectionTestResultView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8694,7 +8687,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretProviderConnectionTestResultView, ProblemDetails>({
-        path: `/api/v1/configuration/secret-providers/vault-kv2/test`,
+        path: `/api/v1/bindings/secret-providers/vault-kv2/test`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8705,17 +8698,17 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name ListSecretProviders
      * @summary List secret providers
-     * @request GET:/api/v1/configuration/secret-providers
+     * @request GET:/api/v1/bindings/secret-providers
      * @response `200` `SecretProvidersView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listSecretProviders: (params: RequestParams = {}) =>
       this.request<SecretProvidersView, ProblemDetails>({
-        path: `/api/v1/configuration/secret-providers`,
+        path: `/api/v1/bindings/secret-providers`,
         method: "GET",
         format: "json",
         ...params,
@@ -8724,10 +8717,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name CreateVaultKvV2SecretProvider
      * @summary Create a Vault-compatible KV v2 secret provider
-     * @request POST:/api/v1/configuration/secret-providers/vault-kv2
+     * @request POST:/api/v1/bindings/secret-providers/vault-kv2
      * @response `200` `SecretProviderView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8737,7 +8730,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretProviderView, ProblemDetails>({
-        path: `/api/v1/configuration/secret-providers/vault-kv2`,
+        path: `/api/v1/bindings/secret-providers/vault-kv2`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8748,10 +8741,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name UpdateVaultKvV2SecretProvider
      * @summary Update a Vault-compatible KV v2 secret provider
-     * @request PUT:/api/v1/configuration/secret-providers/vault-kv2/{id}
+     * @request PUT:/api/v1/bindings/secret-providers/vault-kv2/{id}
      * @response `200` `SecretProviderView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8762,7 +8755,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretProviderView, ProblemDetails>({
-        path: `/api/v1/configuration/secret-providers/vault-kv2/${id}`,
+        path: `/api/v1/bindings/secret-providers/vault-kv2/${id}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -8773,17 +8766,17 @@ export class Api<
     /**
      * No description
      *
-     * @tags ConfigurationEntries
+     * @tags Bindings
      * @name DeleteSecretProvider
      * @summary Delete a secret provider
-     * @request DELETE:/api/v1/configuration/secret-providers/{id}
+     * @request DELETE:/api/v1/bindings/secret-providers/{id}
      * @response `204` `void` No Content
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteSecretProvider: (id: string, params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
-        path: `/api/v1/configuration/secret-providers/${id}`,
+        path: `/api/v1/bindings/secret-providers/${id}`,
         method: "DELETE",
         ...params,
       }),
