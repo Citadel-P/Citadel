@@ -85,16 +85,12 @@ public sealed class StackRelease : IAuditedEntity
     public void UpdateSpec(StackSpec spec)
     {
         Spec = spec;
-        Source = null;
-        ResourceBindings = null;
     }
 
     public void UpdateDefinition(Guid platformId, StackSpec spec)
     {
         PlatformId = platformId;
         Spec = spec;
-        Source = null;
-        ResourceBindings = null;
     }
 
     public void UpdateSource(StackReleaseSource source)

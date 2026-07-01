@@ -1082,6 +1082,17 @@ public class ApplyStackServiceTests
             .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
+        var resourceBindings = new[]
+        {
+            new ResourceBindingSnapshot(
+                Name: "stripe_api_key",
+                Kind: ResourceBindingKind.Secret,
+                Scope: ResourceBindingScope.Stack,
+                Value: "********",
+                SecretId: Guid.CreateVersion7(),
+                SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
+                TargetPath: null)
+        };
         var notificationQueue = new TestNotificationQueue();
         var workItem = new StackSucceededWorkItem(
             stack.Id,
@@ -1090,11 +1101,13 @@ public class ApplyStackServiceTests
             Mock.Of<IStackStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
             notificationQueue,
-            StackApplyOperation.Apply);
+            StackApplyOperation.Apply,
+            resourceBindings: resourceBindings);
 
         await workItem.ExecuteAsync(unitOfWork.Object, CancellationToken.None);
 
         Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease?.Status);
+        Assert.Equal("stripe_api_key", Assert.Single(stack.CurrentStackRelease?.ResourceBindings ?? []).Name);
         Assert.Equal(ResourceControlState.Idle, stack.ControlState);
         Assert.Equal(2, upsertedContainers.Count);
         Assert.All(upsertedContainers, container => Assert.Equal(stack.Id, container.StackId));
@@ -1103,6 +1116,8 @@ public class ApplyStackServiceTests
 
         var applied = Assert.IsType<StackApplied>(activity?.Info);
         Assert.Equal(["beszel-container-id", "beszel-agent-container-id"], applied.Result.ContainerIds);
+        Assert.Equal("stripe_api_key", Assert.Single(applied.Stack?.StackRelease?.ResourceBindings ?? []).Name);
+        Assert.Equal("stripe_api_key", Assert.Single(applied.Result.ResourceBindings ?? []).Name);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
         Assert.Equal(2, notificationQueue.Items.Count);
     }

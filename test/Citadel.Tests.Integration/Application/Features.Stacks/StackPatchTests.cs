@@ -1,7 +1,9 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
+using Domain.Entities.ResourceBindings;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +52,17 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
             new ManualStack("docker-compose.yml", StackUpdateBehavior.ServiceAutoDeploy),
             description: "original-description");
         stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        stack.CurrentStackRelease!.UpdateResourceBindings(
+        [
+            new ResourceBindingSnapshot(
+                Name: "stripe_api_key",
+                Kind: ResourceBindingKind.Secret,
+                Scope: ResourceBindingScope.Stack,
+                Value: "********",
+                SecretId: Guid.CreateVersion7(),
+                SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable,
+                TargetPath: null)
+        ]);
 
         await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
@@ -91,12 +104,15 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         Assert.Equal(otherPlatformId, stack.CurrentStackRelease.PlatformId);
         Assert.Equal(stack.CurrentStackReleaseId, stack.CurrentStackRelease.Id);
         Assert.Equal("compose.updated.yml", Assert.IsType<ManualStack>(stack.CurrentStackRelease.Spec).ComposeFile);
+        var binding = Assert.Single(stack.CurrentStackRelease.ResourceBindings ?? []);
+        Assert.Equal("stripe_api_key", binding.Name);
 
         var rollbackSnapshot = Assert.Single(releases, release => release.Id != stack.CurrentStackReleaseId);
         Assert.Equal("1", rollbackSnapshot.Version);
         Assert.Equal(StackReleaseStatus.Healthy, rollbackSnapshot.Status);
         Assert.Equal(platformId, rollbackSnapshot.PlatformId);
         Assert.Equal("docker-compose.yml", Assert.IsType<ManualStack>(rollbackSnapshot.Spec).ComposeFile);
+        Assert.Equal("stripe_api_key", Assert.Single(rollbackSnapshot.ResourceBindings ?? []).Name);
     }
 
     [Fact]
@@ -202,6 +218,8 @@ public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(
         Assert.Equal(otherPlatformId, update.NewStack.StackRelease!.PlatformId);
         Assert.Equal("docker-compose.yml", Assert.IsType<ManualStack>(update.OldStack.StackRelease.Spec).ComposeFile);
         Assert.Equal("compose.updated.yml", Assert.IsType<ManualStack>(update.NewStack.StackRelease.Spec).ComposeFile);
+        Assert.Equal("stripe_api_key", Assert.Single(update.OldStack.StackRelease.ResourceBindings ?? []).Name);
+        Assert.Equal("stripe_api_key", Assert.Single(update.NewStack.StackRelease.ResourceBindings ?? []).Name);
     }
 
     [Fact]
