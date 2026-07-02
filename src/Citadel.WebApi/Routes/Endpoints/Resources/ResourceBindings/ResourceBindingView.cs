@@ -1,5 +1,5 @@
-using Application.Features.Configuration.Commands;
-using Application.Features.Configuration.Models;
+using Application.Features.ResourceBindings.Commands;
+using Application.Features.ResourceBindings.Models;
 using Domain;
 using Domain.Entities.ResourceBindings;
 using Hosting.Common.Attributes;
@@ -46,7 +46,14 @@ public sealed record ResourceBindingsView(
         IsInherited: isInherited);
 }
 
-public sealed record ReplaceResourceBindingsInput(IReadOnlyList<ResourceBindingInput> Entries);
+public sealed record UpdateResourceBindingInput(
+    Guid Id,
+    string Name,
+    ResourceBindingKind Kind,
+    string? Value,
+    Guid? SecretId,
+    SecretDeliveryMode? SecretDeliveryMode = null,
+    string? TargetPath = null);
 
 public sealed record SecretDefinitionView(
     Guid Id,
@@ -89,10 +96,10 @@ public sealed record CreateExternalSecretInput(
     int? ExternalVersion);
 
 public sealed record UpdateExternalSecretInput(
-    string Name,
-    Guid ProviderId,
-    string ExternalPath,
-    string ExternalKey,
+    string? Name,
+    Guid? ProviderId,
+    string? ExternalPath,
+    string? ExternalKey,
     int? ExternalVersion);
 
 public sealed record TestExternalSecretInput(
@@ -150,7 +157,7 @@ public sealed record CreateVaultKvV2SecretProviderInput(
     string Token);
 
 public sealed record UpdateVaultKvV2SecretProviderInput(
-    string Name,
-    string Address,
-    string MountPath,
+    string? Name,
+    string? Address,
+    string? MountPath,
     string? Token);

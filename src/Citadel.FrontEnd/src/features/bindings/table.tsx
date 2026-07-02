@@ -1,14 +1,22 @@
 import {
+  CreateExternalSecretInput,
   ResourceBindingInput,
   ResourceBindingKind,
   ResourceBindingView,
   SecretDefinitionView,
+  SecretProviderType,
+  UpdateExternalSecretInput,
+  UpdateResourceBindingInput,
 } from '@/api/generated/api.types';
 import {
   ResourceBindingAddDropdown,
   CreateSecretDialog,
+  EditExternalSecretDialog,
   ENV_DELIVERY_MODE,
+  normalizeExternalSecretInput,
   toInputFromView,
+  toExternalSecretInput,
+  toExternalSecretTestInput,
   useSecretCreation,
 } from '@/components/custom/resource-bindings-tab';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -45,6 +53,13 @@ type EntryDialogMode = 'add-variable' | 'add-secret-key' | 'edit';
 const bindingActions = new EventTarget();
 const EMPTY_ENTRIES: ResourceBindingView[] = [];
 const EMPTY_SECRETS: SecretDefinitionView[] = [];
+const EXTERNAL_SECRET_INPUT: CreateExternalSecretInput = {
+  name: '',
+  providerId: '',
+  externalPath: '',
+  externalKey: '',
+  externalVersion: null,
+};
 
 export const BindingsAddButton = () => {
   const { data: configData } = useRead('getGlobalResourceBindings');
@@ -77,25 +92,22 @@ const DeleteSelectedVariablesAction: ButtonGroupComponent<ResourceBindingView> =
   const selected = Array.isArray(resources) ? resources : [resources];
   const queryClient = useQueryClient();
   const { data } = useRead('getGlobalResourceBindings');
-  const replace = useMutate('replaceGlobalResourceBindings');
+  const remove = useMutate('deleteGlobalResourceBinding');
   const [, setSelectedResources] = useSelectedResources<ResourceBindingView>('Binding');
   const [open, setOpen] = useState(false);
-  const allEntries = data?.data.entries ?? EMPTY_ENTRIES;
   const canWrite = Boolean(data?.data.capabilities?.canWrite);
 
   const deleteSelected = async () => {
     if (!canWrite) return;
 
     try {
-      const ids = new Set(selected.map((entry) => entry.id));
-      const next = allEntries.filter((entry) => !ids.has(entry.id)).map(toInputFromView);
-      await replace.mutateAsync({ data: { entries: next } } as any);
+      await Promise.all(selected.map((entry) => remove.mutateAsync({ id: entry.id } as any)));
       await invalidateConfigurationQueries(queryClient);
       setSelectedResources([]);
       setOpen(false);
       toast.success(`${selected.length} ${selected.length === 1 ? 'entry' : 'entries'} deleted`);
     } catch {
-      toast.error(replace.validationErrors ?? 'Failed to delete selected entries');
+      toast.error(remove.validationErrors ?? 'Failed to delete selected entries');
     }
   };
 
@@ -109,7 +121,7 @@ const DeleteSelectedVariablesAction: ButtonGroupComponent<ResourceBindingView> =
         type="Binding"
         open={open}
         count={selected.length}
-        isPending={replace.isPending}
+        isPending={remove.isPending}
         onOpenChange={setOpen}
         onConfirm={deleteSelected}
       />
@@ -132,7 +144,11 @@ export const BindingsTable = ({
   const queryClient = useQueryClient();
   const { data } = useRead('getGlobalResourceBindings');
   const { data: secretsData } = useRead('listSecretDefinitions');
-  const replace = useMutate('replaceGlobalResourceBindings');
+  const create = useMutate('createGlobalResourceBinding');
+  const update = useMutate('updateGlobalResourceBinding');
+  const remove = useMutate('deleteGlobalResourceBinding');
+  const updateExternalSecret = useMutate('updateExternalSecret');
+  const testExternalSecret = useMutate('testExternalSecret');
   const [, setSelectedResources] = useSelectedResources<ResourceBindingView>('Binding');
   const allEntries = data?.data.entries ?? EMPTY_ENTRIES;
   const canWrite = Boolean(data?.data.capabilities?.canWrite);
@@ -145,16 +161,31 @@ export const BindingsTable = ({
   const [entryInput, setEntryInput] = useState<ResourceBindingInput>(newVariableInput());
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
   const [deletingEntry, setDeletingEntry] = useState<ResourceBindingView | null>(null);
+  const [editingStoredSecret, setEditingStoredSecret] = useState<SecretDefinitionView | null>(null);
+  const [storedSecretInput, setStoredSecretInput] = useState<CreateExternalSecretInput>(EXTERNAL_SECRET_INPUT);
+  const { data: providersData } = useRead('listSecretProviders', undefined, { enabled: editingStoredSecret != null });
+  const providers = useMemo(() => providersData?.data.providers ?? [], [providersData?.data.providers]);
 
-  const saveEntries = useCallback(
-    async (entries: ResourceBindingInput[], successMessage?: string) => {
-      await replace.mutateAsync({ data: { entries } } as any);
+  const updateEntry = useCallback(
+    async (entryId: string, entry: ResourceBindingInput, successMessage?: string) => {
+      await update.mutateAsync({ data: toUpdateInput(entryId, entry) } as any);
       await invalidateConfigurationQueries(queryClient);
       if (successMessage) {
         toast.success(successMessage);
       }
     },
-    [queryClient, replace],
+    [queryClient, update],
+  );
+
+  const createEntry = useCallback(
+    async (entry: ResourceBindingInput, successMessage?: string) => {
+      await create.mutateAsync({ data: entry } as any);
+      await invalidateConfigurationQueries(queryClient);
+      if (successMessage) {
+        toast.success(successMessage);
+      }
+    },
+    [create, queryClient],
   );
 
   const openEntryDialog = useCallback(
@@ -179,10 +210,10 @@ export const BindingsTable = ({
           return false;
         }
 
-        await saveEntries(next, 'Secret key added');
+        await createEntry(newSecretBindingInput(secret), 'Secret key added');
         return true;
       },
-      [originalInputs, saveEntries],
+      [createEntry, originalInputs],
     ),
     secrets,
   );
@@ -227,11 +258,15 @@ export const BindingsTable = ({
         return;
       }
 
-      await saveEntries(next, dialogMode === 'edit' ? 'Entry updated' : 'Entry created');
+      if (dialogMode === 'edit') {
+        await updateEntry(editingEntry!.id, normalizeInput(entryInput), 'Entry updated');
+      } else {
+        await createEntry(normalizeInput(entryInput), 'Entry created');
+      }
       setEntryDialogOpen(false);
       setEditingEntry(null);
     } catch {
-      toast.error(replace.validationErrors ?? 'Failed to save entry');
+      toast.error((dialogMode === 'edit' ? update.validationErrors : create.validationErrors) ?? 'Failed to save entry');
     }
   };
 
@@ -240,12 +275,60 @@ export const BindingsTable = ({
     if (!canWrite) return;
 
     try {
-      const next = allEntries.filter((entry) => entry.id !== deletingEntry.id).map(toInputFromView);
-      await saveEntries(next, 'Entry deleted');
+      await remove.mutateAsync({ id: deletingEntry.id } as any);
+      await invalidateConfigurationQueries(queryClient);
+      toast.success('Entry deleted');
       setDeletingEntry(null);
       setSelectedResources([]);
     } catch {
-      toast.error(replace.validationErrors ?? 'Failed to delete entry');
+      toast.error(remove.validationErrors ?? 'Failed to delete entry');
+    }
+  };
+
+  const openEditStoredSecret = (secret: SecretDefinitionView) => {
+    if (secret.providerType !== SecretProviderType.VaultCompatibleKvV2) {
+      toast.error('Only Vault-compatible stored secrets can be edited here.');
+      return;
+    }
+
+    setEditingStoredSecret(secret);
+    setStoredSecretInput(toExternalSecretInput(secret));
+  };
+
+  const saveStoredSecret = async () => {
+    if (!editingStoredSecret) return;
+
+    const payload: UpdateExternalSecretInput = normalizeExternalSecretInput(storedSecretInput);
+    try {
+      const result = await updateExternalSecret.mutateAsync({
+        id: editingStoredSecret.id,
+        data: payload,
+      } as any);
+      setEditingStoredSecret(null);
+      await invalidateConfigurationQueries(queryClient);
+      toast.success('Stored secret updated');
+
+      if (entryInput.secretId === editingStoredSecret.id) {
+        setEntryInput((prev) => ({ ...prev, name: prev.name || result.data.name }));
+      }
+    } catch {
+      toast.error(updateExternalSecret.validationErrors ?? 'Failed to update stored secret');
+    }
+  };
+
+  const testStoredSecret = async () => {
+    try {
+      const result = await testExternalSecret.mutateAsync({
+        data: toExternalSecretTestInput(storedSecretInput),
+      } as any);
+
+      if (result.data.success) {
+        toast.success(result.data.message);
+      } else {
+        toast.error(result.data.message);
+      }
+    } catch {
+      toast.error(testExternalSecret.validationErrors ?? 'Failed to test external secret');
     }
   };
 
@@ -290,17 +373,29 @@ export const BindingsTable = ({
         mode={dialogMode}
         input={entryInput}
         secrets={secrets}
-        isPending={replace.isPending}
+        isPending={update.isPending || create.isPending}
         onOpenChange={setEntryDialogOpen}
         onInputChange={setEntryInput}
         onSave={saveEntry}
+        onEditStoredSecret={openEditStoredSecret}
+      />
+      <EditExternalSecretDialog
+        open={editingStoredSecret != null}
+        input={storedSecretInput}
+        providers={providers}
+        isPending={updateExternalSecret.isPending}
+        isTesting={testExternalSecret.isPending}
+        onOpenChange={(open) => !open && setEditingStoredSecret(null)}
+        onInputChange={setStoredSecretInput}
+        onSave={saveStoredSecret}
+        onTest={testStoredSecret}
       />
       <CreateSecretDialog {...secretCreation.dialogProps} />
       <ConfirmDeleteDialog
         type="Binding"
         open={Boolean(deletingEntry)}
         count={1}
-        isPending={replace.isPending}
+        isPending={remove.isPending}
         onOpenChange={(open) => !open && setDeletingEntry(null)}
         onConfirm={deleteEntry}
       />
@@ -450,6 +545,7 @@ const EntryEditorDialog = ({
   onOpenChange,
   onInputChange,
   onSave,
+  onEditStoredSecret,
 }: {
   open: boolean;
   mode: EntryDialogMode;
@@ -459,8 +555,10 @@ const EntryEditorDialog = ({
   onOpenChange: (open: boolean) => void;
   onInputChange: (input: ResourceBindingInput | ((prev: ResourceBindingInput) => ResourceBindingInput)) => void;
   onSave: () => void;
+  onEditStoredSecret?: (secret: SecretDefinitionView) => void;
 }) => {
   const isSecret = input.kind === ResourceBindingKind.Secret;
+  const selectedSecret = isSecret ? secrets.find((secret) => secret.id === input.secretId) : undefined;
   const canSave = input.name.trim().length > 0 && (!isSecret || Boolean(input.secretId));
 
   return (
@@ -491,21 +589,28 @@ const EntryEditorDialog = ({
           {isSecret ? (
             <div>
               <Label>Secret</Label>
-              <Select
-                value={input.secretId ?? ''}
-                disabled={secrets.length === 0}
-                onValueChange={(secretId) => onInputChange((prev) => ({ ...prev, secretId }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder={secrets.length ? 'Select secret' : 'No secrets'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {secrets.map((secret) => (
-                    <SelectItem key={secret.id} value={secret.id}>
-                      {secret.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select
+                  value={input.secretId ?? ''}
+                  disabled={secrets.length === 0}
+                  onValueChange={(secretId) => onInputChange((prev) => ({ ...prev, secretId }))}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder={secrets.length ? 'Select secret' : 'No secrets'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {secrets.map((secret) => (
+                      <SelectItem key={secret.id} value={secret.id}>
+                        {secret.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedSecret?.providerType === SecretProviderType.VaultCompatibleKvV2 && onEditStoredSecret && (
+                  <Button type="button" variant="outline" onClick={() => onEditStoredSecret(selectedSecret)}>
+                    Edit Stored Secret
+                  </Button>
+                )}
+              </div>
               <div className="mt-1 text-xs text-muted-foreground">
                 The selected secret is redacted in logs and resolved during deployment.
               </div>
@@ -578,6 +683,11 @@ const normalizeInput = (entry: ResourceBindingInput): ResourceBindingInput => ({
   targetPath: entry.kind === ResourceBindingKind.Secret ? (entry.targetPath ?? null) : null,
 });
 
+const toUpdateInput = (id: string, entry: ResourceBindingInput): UpdateResourceBindingInput => ({
+  id,
+  ...normalizeInput(entry),
+});
+
 const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {
   const names = new Set<string>();
   for (const entry of entries) {
@@ -592,4 +702,5 @@ const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {
 const invalidateConfigurationQueries = async (queryClient: ReturnType<typeof useQueryClient>) => {
   await queryClient.invalidateQueries({ queryKey: ['getGlobalResourceBindings'] });
   await queryClient.invalidateQueries({ queryKey: ['getResourceBindings'] });
+  await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
 };

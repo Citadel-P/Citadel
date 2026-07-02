@@ -111,6 +111,40 @@ internal sealed class SecretDefinitionRepository(IDbConnection db, Func<IDbTrans
         return result.Select(x => x.ToDomain());
     }
 
+    public async Task<IEnumerable<SecretDefinition>> GetBoundAsync(ResourceBindingScope scope, Guid? resourceId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT DISTINCT sd.*
+            FROM SecretDefinitions sd
+            JOIN ResourceBindings rb ON rb.SecretId = sd.Id
+            WHERE rb.Scope = @Scope
+              AND ((@ResourceId IS NULL AND rb.ResourceId IS NULL) OR rb.ResourceId = @ResourceId)
+            ORDER BY sd.Name ASC
+        """;
+
+        var result = await db.QueryAsync<SecretDefinitionDto>(
+            sql,
+            new
+            {
+                Scope = EnumFormatter<ResourceBindingScope>.GetValue(scope),
+                ResourceId = resourceId
+            },
+            transaction: tx());
+
+        return result.Select(x => x.ToDomain());
+    }
+
+    public async Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string valueSql = "DELETE FROM InternalSecretValues WHERE SecretId = @Id";
+        var deletedValues = await db.ExecuteAsync(valueSql, new { Id = id }, transaction: tx());
+
+        const string secretSql = "DELETE FROM SecretDefinitions WHERE Id = @Id";
+        var deletedSecrets = await db.ExecuteAsync(secretSql, new { Id = id }, transaction: tx());
+
+        return deletedValues + deletedSecrets;
+    }
+
     public async Task<InternalSecretValue?> GetInternalValueAsync(Guid secretId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM InternalSecretValues WHERE SecretId = @SecretId LIMIT 1";
@@ -120,6 +154,24 @@ internal sealed class SecretDefinitionRepository(IDbConnection db, Func<IDbTrans
             transaction: tx());
 
         return result?.ToDomain();
+    }
+
+    public Task<int> DeleteExternalByProviderIdAsync(Guid providerId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            DELETE FROM SecretDefinitions
+            WHERE ProviderId = @ProviderId
+              AND ProviderType = @ProviderType
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                ProviderId = providerId,
+                ProviderType = EnumFormatter<SecretProviderType>.GetValue(SecretProviderType.VaultCompatibleKvV2)
+            },
+            transaction: tx());
     }
 
     public Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken)
@@ -137,6 +189,15 @@ internal sealed class SecretDefinitionRepository(IDbConnection db, Func<IDbTrans
         return db.ExecuteScalarAsync<bool>(
             sql,
             new { Name = name, Id = id },
+            transaction: tx());
+    }
+
+    public Task<bool> IsUsedByResourceBindingAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM ResourceBindings WHERE SecretId = @Id)";
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new { Id = id },
             transaction: tx());
     }
 }

@@ -1,6 +1,6 @@
 using Application.Features.Identity.Auth.Models;
 using Application.Features.Images.Queries;
-using Application.Features.Configuration.Models;
+using Application.Features.ResourceBindings.Models;
 using Application.Features.GitRepositories.Queries;
 using Domain;
 using Domain.Contracts.Resources;
@@ -14,7 +14,6 @@ using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
-using Domain.Entities.ResourceBindings;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
@@ -350,12 +349,13 @@ namespace Application.Models;
 [JsonSerializable(typeof(ResourceBindingInput))]
 [JsonSerializable(typeof(ResourceBindingView))]
 [JsonSerializable(typeof(ResourceBindingsView))]
-[JsonSerializable(typeof(ReplaceResourceBindingsInput))]
+[JsonSerializable(typeof(UpdateResourceBindingInput))]
 [JsonSerializable(typeof(SecretDefinitionView))]
 [JsonSerializable(typeof(SecretDefinitionsView))]
 [JsonSerializable(typeof(CreateInternalSecretInput))]
 [JsonSerializable(typeof(CreateExternalSecretInput))]
 [JsonSerializable(typeof(UpdateExternalSecretInput))]
+[JsonSerializable(typeof(UpdateExternalSecretPatchDocument))]
 [JsonSerializable(typeof(TestExternalSecretInput))]
 [JsonSerializable(typeof(ExternalSecretTestResultView))]
 [JsonSerializable(typeof(TestVaultKvV2SecretProviderConnectionInput))]
@@ -364,6 +364,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(SecretProvidersView))]
 [JsonSerializable(typeof(CreateVaultKvV2SecretProviderInput))]
 [JsonSerializable(typeof(UpdateVaultKvV2SecretProviderInput))]
+[JsonSerializable(typeof(UpdateVaultKvV2SecretProviderPatchDocument))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

@@ -43,6 +43,50 @@ internal sealed class ResourceBindingRepository(IDbConnection db, Func<IDbTransa
             transaction: tx());
     }
 
+    public Task<int> UpdateAsync(ResourceBinding entry, CancellationToken cancellationToken)
+    {
+        entry.Validate();
+
+        const string sql = """
+            UPDATE ResourceBindings
+            SET Name = @Name,
+                Kind = @Kind,
+                Scope = @Scope,
+                ResourceId = @ResourceId,
+                Value = @Value,
+                SecretId = @SecretId,
+                SecretDeliveryMode = @SecretDeliveryMode,
+                TargetPath = @TargetPath,
+                UpdatedAt = @UpdatedAt
+            WHERE Id = @Id
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = entry.Id,
+                Name = entry.Name,
+                Kind = EnumFormatter<ResourceBindingKind>.GetValue(entry.Kind),
+                Scope = EnumFormatter<ResourceBindingScope>.GetValue(entry.Scope),
+                ResourceId = entry.ResourceId,
+                Value = entry.Value,
+                SecretId = entry.SecretId,
+                SecretDeliveryMode = entry.SecretDeliveryMode is null
+                    ? null
+                    : EnumFormatter<SecretDeliveryMode>.GetValue(entry.SecretDeliveryMode.Value),
+                TargetPath = entry.TargetPath,
+                UpdatedAt = entry.UpdatedAt
+            },
+            transaction: tx());
+    }
+
+    public Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM ResourceBindings WHERE Id = @Id";
+        return db.ExecuteAsync(sql, new { Id = id }, transaction: tx());
+    }
+
     public async Task<int> ReplaceResourceEntriesAsync(ResourceBindingScope scope, Guid resourceId, IEnumerable<ResourceBinding> entries, CancellationToken cancellationToken)
         => await ReplaceEntriesAsync(scope, resourceId, entries, cancellationToken);
 

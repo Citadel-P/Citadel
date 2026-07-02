@@ -1,11 +1,11 @@
-using Application.Features.Configuration.Commands;
+using Application.Features.ResourceBindings.Commands;
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.ResourceBindings;
 using Moq;
 
-namespace Tests.Unit.Application.Features.Configuration;
+namespace Tests.Unit.Application.Features.ResourceBindings;
 
 public sealed class TestExternalSecretTests
 {

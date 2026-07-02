@@ -29,6 +29,21 @@ This file holds project-wide guidance that does not belong to a specific domain 
 - For batch container commands, avoid per-item authorization loops. Perform batch access checks in a single authorization call or CTE that validates all container IDs together.
 - When handling stale container stats batches, prefer using `IPlatformContainerCache` to validate container existence instead of querying the database again.
 
+## API And Resource Patterns
+
+- Keep Web API endpoint methods thin. Endpoint classes should bind route/body data, forward to the Application layer through Mediator, map the result, and avoid business logic.
+- Define public routes in `src\Citadel.WebApi\Routes\PublicEndpoints.cs`. Do not add separate ad hoc endpoint registration methods unless there is an established route-group pattern for that feature.
+- Use `POST` for creating a new resource or child resource.
+- Use `PATCH` for updating an existing resource or child resource.
+- Use `DELETE` for deleting an existing resource or child resource.
+- Do not use `PATCH` to create resources.
+- Do not send a full collection to update one child item. For child resources such as resource bindings, `PATCH` should receive only the item being patched, including its `id`.
+- Prefer single-item commands for child-resource mutation, for example `CreateResourceBinding`, `UpdateResourceBinding`, and `DeleteResourceBinding`, instead of replacing an entire collection from the UI.
+- Collection replacement commands are acceptable only when the user action is explicitly a full reorder/replace operation and the API name makes that clear.
+- Keep generated frontend API metadata aligned with public routes: update `src\Citadel.FrontEnd\src\api\generated\resources.ts`, `src\Citadel.FrontEnd\src\api\generated\api.types.ts`, and the checked-in OpenAPI snapshots when route shapes change.
+- Add focused unit or integration tests for route-shape regressions. For create/update/delete flows, cover `POST` creates one item, `PATCH` updates one item, and `DELETE` removes one item.
+- For JSON merge patch endpoints, distinguish omitted properties from explicit `null` in the endpoint layer and pass that intent to Application commands.
+
 ## Database Migrations
 
 - Do not hand-write new migration scripts under `src\Citadel.Infrastructure\Scripts`.

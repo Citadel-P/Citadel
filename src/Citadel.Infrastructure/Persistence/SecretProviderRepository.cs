@@ -115,9 +115,16 @@ internal sealed class SecretProviderRepository(IDbConnection db, Func<IDbTransac
             transaction: tx());
     }
 
-    public Task<bool> IsUsedBySecretDefinitionAsync(Guid id, CancellationToken cancellationToken)
+    public Task<bool> IsUsedByResourceBindingAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT EXISTS (SELECT 1 FROM SecretDefinitions WHERE ProviderId = @Id)";
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM ResourceBindings rb
+                JOIN SecretDefinitions sd ON sd.Id = rb.SecretId
+                WHERE sd.ProviderId = @Id
+            )
+        """;
         return db.ExecuteScalarAsync<bool>(
             sql,
             new { Id = id },

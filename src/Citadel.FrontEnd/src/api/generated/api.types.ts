@@ -3477,10 +3477,6 @@ export interface RenameResource {
   name: string;
 }
 
-export interface ReplaceResourceBindingsInput {
-  entries: ResourceBindingInput[];
-}
-
 export interface RepoCommand {
   commands: string[];
   /** @default "./" */
@@ -4076,11 +4072,11 @@ export interface UnresolvedAlertsCountView {
 }
 
 export interface UpdateExternalSecretInput {
-  name: string;
+  name: null | string;
   /** @format uuid */
-  providerId: string;
-  externalPath: string;
-  externalKey: string;
+  providerId: null | string;
+  externalPath: null | string;
+  externalKey: null | string;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -4088,10 +4084,22 @@ export interface UpdateExternalSecretInput {
   externalVersion: null | number | string;
 }
 
-export interface UpdateVaultKvV2SecretProviderInput {
+export interface UpdateResourceBindingInput {
+  /** @format uuid */
+  id: string;
   name: string;
-  address: string;
-  mountPath: string;
+  kind: ResourceBindingKind;
+  value: null | string;
+  /** @format uuid */
+  secretId: null | string;
+  secretDeliveryMode?: any;
+  targetPath?: null | string;
+}
+
+export interface UpdateVaultKvV2SecretProviderInput {
+  name: null | string;
+  address: null | string;
+  mountPath: null | string;
   token: null | string;
 }
 
@@ -8456,7 +8464,7 @@ export class Api<
      *
      * @tags ResourceBindings
      * @name GetGlobalResourceBindings
-     * @summary Get global variables and secrets
+     * @summary Get global bindings
      * @request GET:/api/v1/resourceBindings/global
      * @response `200` `ResourceBindingsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
@@ -8474,20 +8482,20 @@ export class Api<
      * No description
      *
      * @tags ResourceBindings
-     * @name ReplaceGlobalResourceBindings
-     * @summary Replace global variables and secrets
-     * @request PUT:/api/v1/resourceBindings/global
+     * @name CreateGlobalResourceBinding
+     * @summary Create a global binding
+     * @request POST:/api/v1/resourceBindings/global
      * @response `200` `ResourceBindingsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replaceGlobalResourceBindings: (
-      data: ReplaceResourceBindingsInput,
+    createGlobalResourceBinding: (
+      data: ResourceBindingInput,
       params: RequestParams = {},
     ) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/global`,
-        method: "PUT",
+        method: "POST",
         body: data,
         type: ContentType.Json,
         format: "json",
@@ -8498,8 +8506,51 @@ export class Api<
      * No description
      *
      * @tags ResourceBindings
+     * @name UpdateGlobalResourceBinding
+     * @summary Update a global binding
+     * @request PATCH:/api/v1/resourceBindings/global
+     * @response `200` `ResourceBindingsView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateGlobalResourceBinding: (
+      data: UpdateResourceBindingInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceBindingsView, ProblemDetails>({
+        path: `/api/v1/resourceBindings/global`,
+        method: "PATCH",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceBindings
+     * @name DeleteGlobalResourceBinding
+     * @summary Delete a global binding
+     * @request DELETE:/api/v1/resourceBindings/global/{id}
+     * @response `200` `ResourceBindingsView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteGlobalResourceBinding: (id: string, params: RequestParams = {}) =>
+      this.request<ResourceBindingsView, ProblemDetails>({
+        path: `/api/v1/resourceBindings/global/${id}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceBindings
      * @name GetResourceBindings
-     * @summary Get resource variables and secrets
+     * @summary Get resource bindings
      * @request GET:/api/v1/resourceBindings/{scope}/{resourceId}
      * @response `200` `ResourceBindingsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
@@ -8521,22 +8572,22 @@ export class Api<
      * No description
      *
      * @tags ResourceBindings
-     * @name ReplaceResourceBindings
-     * @summary Replace resource variables and secrets
-     * @request PUT:/api/v1/resourceBindings/{scope}/{resourceId}
+     * @name CreateResourceBinding
+     * @summary Create a resource binding
+     * @request POST:/api/v1/resourceBindings/{scope}/{resourceId}
      * @response `200` `ResourceBindingsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replaceResourceBindings: (
+    createResourceBinding: (
       scope: ResourceBindingScope,
       resourceId: string,
-      data: ReplaceResourceBindingsInput,
+      data: ResourceBindingInput,
       params: RequestParams = {},
     ) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/${scope}/${resourceId}`,
-        method: "PUT",
+        method: "POST",
         body: data,
         type: ContentType.Json,
         format: "json",
@@ -8546,10 +8597,60 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
+     * @name UpdateResourceBinding
+     * @summary Update a resource binding
+     * @request PATCH:/api/v1/resourceBindings/{scope}/{resourceId}
+     * @response `200` `ResourceBindingsView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateResourceBinding: (
+      scope: ResourceBindingScope,
+      resourceId: string,
+      data: UpdateResourceBindingInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceBindingsView, ProblemDetails>({
+        path: `/api/v1/resourceBindings/${scope}/${resourceId}`,
+        method: "PATCH",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceBindings
+     * @name DeleteResourceBinding
+     * @summary Delete a resource binding
+     * @request DELETE:/api/v1/resourceBindings/{scope}/{resourceId}/{id}
+     * @response `200` `ResourceBindingsView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteResourceBinding: (
+      scope: ResourceBindingScope,
+      resourceId: string,
+      id: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceBindingsView, ProblemDetails>({
+        path: `/api/v1/resourceBindings/${scope}/${resourceId}/${id}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceBindings
      * @name ListSecretDefinitions
      * @summary List secret definitions
-     * @request GET:/api/v1/bindings/secrets
+     * @request GET:/api/v1/resourceBindings/secrets
      * @response `200` `SecretDefinitionsView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8567,7 +8668,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretDefinitionsView, ProblemDetails>({
-        path: `/api/v1/bindings/secrets`,
+        path: `/api/v1/resourceBindings/secrets`,
         method: "GET",
         query: query,
         format: "json",
@@ -8577,10 +8678,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
      * @name CreateInternalSecret
      * @summary Create an internal encrypted secret
-     * @request POST:/api/v1/bindings/secrets
+     * @request POST:/api/v1/resourceBindings/secrets
      * @response `200` `SecretDefinitionView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8590,7 +8691,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
-        path: `/api/v1/bindings/secrets`,
+        path: `/api/v1/resourceBindings/secrets`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8601,10 +8702,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
      * @name CreateExternalSecret
      * @summary Create an external secret definition
-     * @request POST:/api/v1/bindings/secrets/external
+     * @request POST:/api/v1/resourceBindings/secrets/external
      * @response `200` `SecretDefinitionView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8614,7 +8715,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
-        path: `/api/v1/bindings/secrets/external`,
+        path: `/api/v1/resourceBindings/secrets/external`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8625,10 +8726,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
      * @name UpdateExternalSecret
      * @summary Update an external secret definition
-     * @request PUT:/api/v1/bindings/secrets/external/{id}
+     * @request PATCH:/api/v1/resourceBindings/secrets/external/{id}
      * @response `200` `SecretDefinitionView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8639,8 +8740,8 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
-        path: `/api/v1/bindings/secrets/external/${id}`,
-        method: "PUT",
+        path: `/api/v1/resourceBindings/secrets/external/${id}`,
+        method: "PATCH",
         body: data,
         type: ContentType.Json,
         format: "json",
@@ -8650,10 +8751,28 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
+     * @name DeleteSecretDefinition
+     * @summary Delete an unused stored secret definition
+     * @request DELETE:/api/v1/resourceBindings/secrets/{id}
+     * @response `204` `void` No Content
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteSecretDefinition: (id: string, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/resourceBindings/secrets/${id}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ResourceBindings
      * @name TestExternalSecret
      * @summary Test an external secret reference
-     * @request POST:/api/v1/bindings/secrets/external/test
+     * @request POST:/api/v1/resourceBindings/secrets/external/test
      * @response `200` `ExternalSecretTestResultView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8663,7 +8782,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ExternalSecretTestResultView, ProblemDetails>({
-        path: `/api/v1/bindings/secrets/external/test`,
+        path: `/api/v1/resourceBindings/secrets/external/test`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8674,10 +8793,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
      * @name TestVaultKvV2SecretProviderConnection
      * @summary Test a Vault-compatible KV v2 secret provider connection
-     * @request POST:/api/v1/bindings/secret-providers/vault-kv2/test
+     * @request POST:/api/v1/resourceBindings/secret-providers/vault-kv2/test
      * @response `200` `SecretProviderConnectionTestResultView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8687,7 +8806,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretProviderConnectionTestResultView, ProblemDetails>({
-        path: `/api/v1/bindings/secret-providers/vault-kv2/test`,
+        path: `/api/v1/resourceBindings/secret-providers/vault-kv2/test`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8698,17 +8817,17 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
      * @name ListSecretProviders
      * @summary List secret providers
-     * @request GET:/api/v1/bindings/secret-providers
+     * @request GET:/api/v1/resourceBindings/secret-providers
      * @response `200` `SecretProvidersView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listSecretProviders: (params: RequestParams = {}) =>
       this.request<SecretProvidersView, ProblemDetails>({
-        path: `/api/v1/bindings/secret-providers`,
+        path: `/api/v1/resourceBindings/secret-providers`,
         method: "GET",
         format: "json",
         ...params,
@@ -8717,10 +8836,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
      * @name CreateVaultKvV2SecretProvider
      * @summary Create a Vault-compatible KV v2 secret provider
-     * @request POST:/api/v1/bindings/secret-providers/vault-kv2
+     * @request POST:/api/v1/resourceBindings/secret-providers/vault-kv2
      * @response `200` `SecretProviderView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8730,7 +8849,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretProviderView, ProblemDetails>({
-        path: `/api/v1/bindings/secret-providers/vault-kv2`,
+        path: `/api/v1/resourceBindings/secret-providers/vault-kv2`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -8741,10 +8860,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
      * @name UpdateVaultKvV2SecretProvider
      * @summary Update a Vault-compatible KV v2 secret provider
-     * @request PUT:/api/v1/bindings/secret-providers/vault-kv2/{id}
+     * @request PATCH:/api/v1/resourceBindings/secret-providers/vault-kv2/{id}
      * @response `200` `SecretProviderView` OK
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
@@ -8755,8 +8874,8 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SecretProviderView, ProblemDetails>({
-        path: `/api/v1/bindings/secret-providers/vault-kv2/${id}`,
-        method: "PUT",
+        path: `/api/v1/resourceBindings/secret-providers/vault-kv2/${id}`,
+        method: "PATCH",
         body: data,
         type: ContentType.Json,
         format: "json",
@@ -8766,17 +8885,17 @@ export class Api<
     /**
      * No description
      *
-     * @tags Bindings
+     * @tags ResourceBindings
      * @name DeleteSecretProvider
      * @summary Delete a secret provider
-     * @request DELETE:/api/v1/bindings/secret-providers/{id}
+     * @request DELETE:/api/v1/resourceBindings/secret-providers/{id}
      * @response `204` `void` No Content
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteSecretProvider: (id: string, params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
-        path: `/api/v1/bindings/secret-providers/${id}`,
+        path: `/api/v1/resourceBindings/secret-providers/${id}`,
         method: "DELETE",
         ...params,
       }),

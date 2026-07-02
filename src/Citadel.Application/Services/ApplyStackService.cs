@@ -47,7 +47,7 @@ internal class ApplyStackService(
     IConnectorFactory<IStackConnector> stackConnectorFactory,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IGitStackMaterializer gitStackMaterializer,
-    IResourceBindingResolver configurationResolver,
+    IResourceBindingResolver resourceBinderResolver,
     ISecretRedactor secretRedactor,
     IAlertService alertService) : IApplyStackService
 {
@@ -64,13 +64,13 @@ internal class ApplyStackService(
 
         if (stack is null)
         {
-            yield return StackStreamItem.FromStdErr($"? Stack with ID {stackId} not found.", 1);
+            yield return StackStreamItem.FromStdErr($"Stack with ID {stackId} not found.", 1);
             yield break;
         }
 
         if (stack.CurrentStackRelease?.Spec is null)
         {
-            var message = $"? Stack with ID {stackId} has no spec defined.";
+            var message = $"Stack with ID {stackId} has no spec defined.";
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
@@ -78,7 +78,7 @@ internal class ApplyStackService(
 
         if (!platformCache.TryGetCacheEntry(stack.CurrentStackRelease.PlatformId, out var platform, out _))
         {
-            var message = "? Platform not found or disconnected.";
+            var message = "Platform not found or disconnected.";
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
@@ -96,7 +96,7 @@ internal class ApplyStackService(
 
         if (currentRelease.Spec is ManualStack manualStack && string.IsNullOrWhiteSpace(manualStack.ComposeFile))
         {
-            var message = "? Manual stack compose file is required.";
+            var message = "Manual stack compose file is required.";
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
@@ -111,7 +111,7 @@ internal class ApplyStackService(
         catch (InvalidOperationException ex)
         {
             projectName = string.Empty;
-            projectSetupError = $"? {ex.Message}";
+            projectSetupError = ex.Message;
         }
 
         if (projectSetupError is not null)
@@ -129,7 +129,7 @@ internal class ApplyStackService(
             var registry = await LoadRegistry(registryId, ct);
             if (registry is null)
             {
-                var message = $"? Registry with ID {registryId} not found.";
+                var message = $"Registry with ID {registryId} not found.";
                 await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
                 yield return StackStreamItem.FromStdErr(message, 1);
                 yield break;
@@ -149,14 +149,14 @@ internal class ApplyStackService(
         if (!string.IsNullOrWhiteSpace(collisionMessage))
         {
             await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, collisionMessage, operation: operation, ct: ct);
-            yield return StackStreamItem.FromStdErr($"? {collisionMessage}", 1);
+            yield return StackStreamItem.FromStdErr(collisionMessage, 1);
             yield break;
         }
 
         var markResult = await MarkProcessingAsync(stack.Id, actorId, ct);
         if (!markResult.IsSuccess)
         {
-            var message = markResult.ErrorMessage ?? "? Stack is already being processed.";
+            var message = markResult.ErrorMessage ?? "Stack is already being processed.";
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
@@ -178,7 +178,7 @@ internal class ApplyStackService(
         IReadOnlyList<string>? secretTargetServiceNames = null;
         StackReleaseSource? releaseSource = null;
         yield return StackStreamItem.SystemMessage("Resolving stack variables and secrets...", 0);
-        var configurationResult = await configurationResolver.ResolveAsync(ResourceBindingScope.Stack, stack.Id, ct);
+        var configurationResult = await resourceBinderResolver.ResolveAsync(ResourceBindingScope.Stack, stack.Id, ct);
         if (configurationResult.IsFailure(out var configurationError, out var resolvedConfiguration))
         {
             var message = configurationError.Message;
@@ -203,7 +203,7 @@ internal class ApplyStackService(
             var gitRepository = await LoadGitRepository(gitStack.GitRepoId, ct);
             if (gitRepository is null)
             {
-                var message = $"? Git repository with ID {gitStack.GitRepoId} not found.";
+                var message = $"Git repository with ID {gitStack.GitRepoId} not found.";
                 await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
                 yield return StackStreamItem.FromStdErr(message, 1);
                 yield break;
@@ -212,7 +212,7 @@ internal class ApplyStackService(
             var materialization = await gitStackMaterializer.MaterializeAsync(stack, gitStack, gitRepository, ct);
             if (materialization.IsFailure(out var materializationError, out var payload))
             {
-                var message = $"? {materializationError.Message}";
+                var message = materializationError.Message;
                 await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
                 yield return StackStreamItem.FromStdErr(message, 1);
                 yield break;
@@ -365,11 +365,11 @@ internal class ApplyStackService(
                     {
                         var explicitFailure = errorLogs.Count > 0
                             ? string.Join(Environment.NewLine, errorLogs)
-                            : $"? Pipeline command failed with exit code {result.ExitCode}.";
+                            : $"Pipeline command failed with exit code {result.ExitCode}.";
 
                         await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
                         await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, ct: ct);
-                        yield return StackStreamItem.FromStdErr($"? {explicitFailure}", result.ExitCode.Value);
+                        yield return StackStreamItem.FromStdErr(explicitFailure, result.ExitCode.Value);
                         yield break;
                     }
                 }
@@ -387,7 +387,7 @@ internal class ApplyStackService(
             {
                 await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
                 await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, ct: ct);
-                yield return StackStreamItem.FromStdErr($"? {errorMessage}", exitCode ?? 1 );
+                yield return StackStreamItem.FromStdErr(errorMessage, exitCode ?? 1 );
                 yield break;
             }
 
@@ -425,13 +425,13 @@ internal class ApplyStackService(
                     selectedConfiguration.SnapshotEntries),
                 ct);
 
-            yield return StackStreamItem.SystemMessage("? Stack is now running.", 0);
+            yield return StackStreamItem.SystemMessage("Stack is now running.", 0);
             yield break;
         }
 
         var finalFailureMessage = errorLogs.Count > 0
             ? string.Join(Environment.NewLine, errorLogs)
-            : (exitCode is int code ? $"? docker compose exited with code {code}." : "? Stack apply did not report a completion exit code.");
+            : (exitCode is int code ? $"docker compose exited with code {code}." : "Stack apply did not report a completion exit code.");
 
         await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
         await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, ct: ct);

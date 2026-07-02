@@ -5,7 +5,7 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
-namespace Application.Features.Configuration.Commands;
+namespace Application.Features.ResourceBindings.Commands;
 
 [RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
 public sealed record DeleteSecretProvider(Guid Id) : ICommand<Result>;
@@ -19,9 +19,10 @@ internal sealed class DeleteSecretProviderHandler(IUnitOfWork unitOfWork)
         if (provider is null)
             return Result.Failure(new NotFoundError("Secret provider not found."));
 
-        if (await unitOfWork.SecretProviders.IsUsedBySecretDefinitionAsync(command.Id, cancellationToken))
+        if (await unitOfWork.SecretProviders.IsUsedByResourceBindingAsync(command.Id, cancellationToken))
             return Result.Failure(new ConflictError("Secret provider is used by one or more external secrets."));
 
+        await unitOfWork.SecretDefinitions.DeleteExternalByProviderIdAsync(command.Id, cancellationToken);
         await unitOfWork.SecretProviders.DeleteAsync(command.Id, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

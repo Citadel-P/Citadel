@@ -1,7 +1,7 @@
 using Domain;
 using Domain.Entities.ResourceBindings;
 
-namespace Application.Features.Configuration.Models;
+namespace Application.Features.ResourceBindings.Models;
 
 public sealed record ResourceBindingInput(
     string Name,

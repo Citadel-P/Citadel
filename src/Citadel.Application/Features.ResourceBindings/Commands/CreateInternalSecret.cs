@@ -9,7 +9,7 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
-namespace Application.Features.Configuration.Commands;
+namespace Application.Features.ResourceBindings.Commands;
 
 [RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
 public sealed record CreateInternalSecret(string Name, string Value) : ICommand<Result<SecretDefinition>>

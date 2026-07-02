@@ -1,7 +1,6 @@
-using Application.Features.Configuration.Models;
+using Application.Features.ResourceBindings.Models;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.ResourceBindings;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -9,7 +8,7 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
-namespace Application.Features.Configuration.Commands;
+namespace Application.Features.ResourceBindings.Commands;
 
 [RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
 public sealed record ReplaceGlobalResourceBindings(IReadOnlyList<ResourceBindingInput> Entries) : ICommand<Result<ResourceBindingsResult>>
@@ -22,80 +21,6 @@ public sealed record ReplaceGlobalResourceBindings(IReadOnlyList<ResourceBinding
             RuleForEach(x => x.Entries).SetValidator(new ResourceBindingInputValidator(allowMountedFile: false));
         }
     }
-
-    internal sealed class ResourceBindingInputValidator : AbstractValidator<ResourceBindingInput>
-    {
-        public ResourceBindingInputValidator(bool allowMountedFile)
-        {
-            RuleFor(x => x.Name)
-                .NotEmpty()
-                .MaximumLength(128)
-                .Matches("^[A-Za-z_][A-Za-z0-9_]*$")
-                .WithMessage("Resource binding name must be a valid environment variable name.");
-
-            When(x => x.Kind == ResourceBindingKind.Variable, () =>
-            {
-                RuleFor(x => x.Value).NotNull();
-                RuleFor(x => x.SecretId).Null();
-                RuleFor(x => x.SecretDeliveryMode).Null();
-                RuleFor(x => x.TargetPath).Null();
-            });
-
-            When(x => x.Kind == ResourceBindingKind.Secret, () =>
-            {
-                RuleFor(x => x.Value).Null();
-                RuleFor(x => x.SecretId).NotNull();
-                RuleFor(x => x.SecretDeliveryMode).NotNull();
-                When(x => x.SecretDeliveryMode == SecretDeliveryMode.EnvironmentVariable, () =>
-                {
-                    RuleFor(x => x.TargetPath).Null();
-                });
-                When(x => x.SecretDeliveryMode == SecretDeliveryMode.MountedFile, () =>
-                {
-                    if (allowMountedFile)
-                    {
-                        RuleFor(x => x.TargetPath)
-                            .NotEmpty()
-                            .Must(BeValidMountedFileTargetPath)
-                            .WithMessage("Mounted file target path must be an absolute Linux file path outside protected system paths.");
-                    }
-                    else
-                    {
-                        RuleFor(x => x.SecretDeliveryMode)
-                            .Equal(SecretDeliveryMode.EnvironmentVariable)
-                            .WithMessage("Only environment variable secret delivery is supported.");
-                    }
-                });
-                When(x => x.SecretDeliveryMode == SecretDeliveryMode.NativePlatformSecret, () =>
-                {
-                    RuleFor(x => x.SecretDeliveryMode)
-                        .Equal(SecretDeliveryMode.EnvironmentVariable)
-                        .WithMessage("Native platform secret delivery is not supported.");
-                });
-            });
-        }
-
-        private static bool BeValidMountedFileTargetPath(string? targetPath)
-        {
-            try
-            {
-                new ResourceBinding(
-                    Name: "SECRET",
-                    Kind: ResourceBindingKind.Secret,
-                    Scope: ResourceBindingScope.Stack,
-                    ResourceId: Guid.CreateVersion7(),
-                    Value: null,
-                    SecretId: Guid.CreateVersion7(),
-                    SecretDeliveryMode: SecretDeliveryMode.MountedFile,
-                    TargetPath: targetPath).Validate();
-                return true;
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
-        }
-    }
 }
 
 [RequirePermission(ResourceType.Stack, PermissionLevel.Write, SpecificPermission.ResourceBindings)]
@@ -106,7 +31,7 @@ public sealed record ReplaceStackResourceBindings(Guid Id, IReadOnlyList<Resourc
         public Validator()
         {
             RuleFor(x => x.Entries).NotNull();
-            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalResourceBindings.ResourceBindingInputValidator(allowMountedFile: true));
+            RuleForEach(x => x.Entries).SetValidator(new ResourceBindingInputValidator(allowMountedFile: true));
         }
     }
 }
@@ -119,7 +44,7 @@ public sealed record ReplaceDeploymentResourceBindings(Guid Id, IReadOnlyList<Re
         public Validator()
         {
             RuleFor(x => x.Entries).NotNull();
-            RuleForEach(x => x.Entries).SetValidator(new ReplaceGlobalResourceBindings.ResourceBindingInputValidator(allowMountedFile: false));
+            RuleForEach(x => x.Entries).SetValidator(new ResourceBindingInputValidator(allowMountedFile: false));
         }
     }
 }

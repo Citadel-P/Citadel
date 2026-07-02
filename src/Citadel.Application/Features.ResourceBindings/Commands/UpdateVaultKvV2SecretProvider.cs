@@ -8,14 +8,14 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
-namespace Application.Features.Configuration.Commands;
+namespace Application.Features.ResourceBindings.Commands;
 
 [RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
 public sealed record UpdateVaultKvV2SecretProvider(
     Guid Id,
-    string Name,
-    string Address,
-    string MountPath,
+    string? Name,
+    string? Address,
+    string? MountPath,
     string? Token) : ICommand<Result<SecretProvider>>
 {
     internal sealed class Validator : AbstractValidator<UpdateVaultKvV2SecretProvider>
@@ -23,9 +23,18 @@ public sealed record UpdateVaultKvV2SecretProvider(
         public Validator()
         {
             RuleFor(x => x.Id).NotEmpty();
-            RuleFor(x => x.Name).NotEmpty().MaximumLength(128);
-            RuleFor(x => x.Address).NotEmpty().MaximumLength(512);
-            RuleFor(x => x.MountPath).NotEmpty().MaximumLength(128);
+            RuleFor(x => x.Name)
+                .NotEmpty()
+                .MaximumLength(128)
+                .When(x => x.Name is not null);
+            RuleFor(x => x.Address)
+                .NotEmpty()
+                .MaximumLength(512)
+                .When(x => x.Address is not null);
+            RuleFor(x => x.MountPath)
+                .NotEmpty()
+                .MaximumLength(128)
+                .When(x => x.MountPath is not null);
         }
     }
 }
@@ -41,7 +50,11 @@ internal sealed class UpdateVaultKvV2SecretProviderHandler(
         if (existing is null)
             return Result.Failure<SecretProvider>(new NotFoundError("Secret provider not found."));
 
-        if (await unitOfWork.SecretProviders.ExistsByNameExceptAsync(command.Name, command.Id, cancellationToken))
+        var name = command.Name ?? existing.Name;
+        var address = command.Address ?? existing.Configuration.Address;
+        var mountPath = command.MountPath ?? existing.Configuration.MountPath;
+
+        if (await unitOfWork.SecretProviders.ExistsByNameExceptAsync(name, command.Id, cancellationToken))
             return Result.Failure<SecretProvider>(new ConflictError("Name already exists"));
 
         var protectedToken = string.IsNullOrWhiteSpace(command.Token)
@@ -50,10 +63,10 @@ internal sealed class UpdateVaultKvV2SecretProviderHandler(
 
         var provider = existing with
         {
-            Name = command.Name,
+            Name = name,
             Configuration = new VaultKvV2SecretProviderConfiguration(
-                command.Address.TrimEnd('/'),
-                command.MountPath.Trim('/'),
+                address.TrimEnd('/'),
+                mountPath.Trim('/'),
                 protectedToken),
             UpdatedAt = DateTime.UtcNow
         };

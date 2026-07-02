@@ -1,4 +1,4 @@
-using Application.Features.Configuration.Models;
+using Application.Features.ResourceBindings.Models;
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -6,7 +6,7 @@ using LightResults;
 using Mediator;
 using Domain;
 
-namespace Application.Features.Configuration.Queries;
+namespace Application.Features.ResourceBindings.Queries;
 
 [RequirePermission(ResourceType.Binding, PermissionLevel.Read)]
 public sealed record GetGlobalResourceBindings : IQuery<Result<ResourceBindingsResult>>;

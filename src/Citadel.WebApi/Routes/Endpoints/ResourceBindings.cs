@@ -1,9 +1,10 @@
-using Application.Features.Configuration.Commands;
-using Application.Features.Configuration.Models;
-using Application.Features.Configuration.Queries;
+using Application.Features.ResourceBindings.Commands;
+using Application.Features.ResourceBindings.Models;
+using Application.Features.ResourceBindings.Queries;
+using Application.Models;
 using Application.Permissions;
-using Hosting.Extensions;
 using Hosting.Common.ErrorTypes;
+using Hosting.Extensions;
 using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -27,15 +28,13 @@ public static class ResourceBindings
         return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data, permissions));
     }
 
-    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> ReplaceGlobal(
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> CreateGlobal(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
-        [FromBody] ReplaceResourceBindingsInput input,
+        [FromBody] ResourceBindingInput input,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(
-            new ReplaceGlobalResourceBindings(input.Entries),
-            cancellationToken);
+        var result = await mediator.Send(new CreateGlobalResourceBinding(input), cancellationToken);
         var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Binding, cancellationToken);
         return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data, permissions));
     }
@@ -57,17 +56,17 @@ public static class ResourceBindings
         return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data));
     }
 
-    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> ReplaceResource(
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> CreateResource(
         IMediator mediator,
         [FromRoute][Description("Resource binding scope")] ResourceBindingScope scope,
         [FromRoute][Description("Resource ID")] Guid resourceId,
-        [FromBody] ReplaceResourceBindingsInput input,
+        [FromBody] ResourceBindingInput input,
         CancellationToken cancellationToken)
     {
         var result = scope switch
         {
-            ResourceBindingScope.Stack => await mediator.Send(new ReplaceStackResourceBindings(resourceId, input.Entries), cancellationToken),
-            ResourceBindingScope.Deployment => await mediator.Send(new ReplaceDeploymentResourceBindings(resourceId, input.Entries), cancellationToken),
+            ResourceBindingScope.Stack => await mediator.Send(new CreateStackResourceBinding(resourceId, input), cancellationToken),
+            ResourceBindingScope.Deployment => await mediator.Send(new CreateDeploymentResourceBinding(resourceId, input), cancellationToken),
             ResourceBindingScope.Global => Result.Failure<ResourceBindingsResult>(new BadRequestError("Global resource bindings do not target a resource.")),
             _ => Result.Failure<ResourceBindingsResult>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
         };
@@ -124,9 +123,13 @@ public static class ResourceBindings
     public static async Task<Results<Ok<SecretDefinitionView>, ProblemHttpResult>> UpdateExternalSecret(
         IMediator mediator,
         [FromRoute][Description("Secret definition ID")] Guid id,
-        [FromBody] UpdateExternalSecretInput input,
+        UpdateExternalSecretPatchDocument patchInput,
         CancellationToken cancellationToken)
     {
+        var input = patchInput.ApplyTo(
+            new UpdateExternalSecretInput(null, null, null, null, null),
+            ApplicationJsonContext.Default.UpdateExternalSecretInput);
+
         var result = await mediator.Send(
             new UpdateExternalSecret(
                 id,
@@ -134,10 +137,20 @@ public static class ResourceBindings
                 input.ProviderId,
                 input.ExternalPath,
                 input.ExternalKey,
-                input.ExternalVersion),
+                input.ExternalVersion,
+                patchInput.ContainsProperty("externalVersion")),
             cancellationToken);
 
         return EndpointHandlers.HandleResult(result, SecretDefinitionView.Map);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteSecretDefinition(
+        IMediator mediator,
+        [FromRoute][Description("Secret definition ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new DeleteSecretDefinition(id), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
     }
 
     public static async Task<Results<Ok<ExternalSecretTestResultView>, ProblemHttpResult>> TestExternalSecret(
@@ -200,9 +213,13 @@ public static class ResourceBindings
     public static async Task<Results<Ok<SecretProviderView>, ProblemHttpResult>> UpdateVaultKvV2SecretProvider(
         IMediator mediator,
         [FromRoute][Description("Secret provider ID")] Guid id,
-        [FromBody] UpdateVaultKvV2SecretProviderInput input,
+        UpdateVaultKvV2SecretProviderPatchDocument patchInput,
         CancellationToken cancellationToken)
     {
+        var input = patchInput.ApplyTo(
+            new UpdateVaultKvV2SecretProviderInput(null, null, null, null),
+            ApplicationJsonContext.Default.UpdateVaultKvV2SecretProviderInput);
+
         var result = await mediator.Send(
             new UpdateVaultKvV2SecretProvider(
                 id,
@@ -223,4 +240,72 @@ public static class ResourceBindings
         var result = await mediator.Send(new DeleteSecretProvider(id), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
+
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> UpdateGlobal(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromBody] UpdateResourceBindingInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new UpdateGlobalResourceBinding(ToCommandInput(input)), cancellationToken);
+        var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Binding, cancellationToken);
+        return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data, permissions));
+    }
+
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> DeleteGlobal(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromRoute][Description("Resource binding ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new DeleteGlobalResourceBinding(id), cancellationToken);
+        var permissions = await permissionEvaluator.EvaluateAsync(Hosting.Common.ResourceType.Binding, cancellationToken);
+        return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data, permissions));
+    }
+
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> UpdateResource(
+        IMediator mediator,
+        [FromRoute][Description("Resource binding scope")] ResourceBindingScope scope,
+        [FromRoute][Description("Resource ID")] Guid resourceId,
+        [FromBody] UpdateResourceBindingInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = scope switch
+        {
+            ResourceBindingScope.Stack => await mediator.Send(new UpdateStackResourceBinding(resourceId, ToCommandInput(input)), cancellationToken),
+            ResourceBindingScope.Deployment => await mediator.Send(new UpdateDeploymentResourceBinding(resourceId, ToCommandInput(input)), cancellationToken),
+            ResourceBindingScope.Global => Result.Failure<ResourceBindingsResult>(new BadRequestError("Global resource bindings do not target a resource.")),
+            _ => Result.Failure<ResourceBindingsResult>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
+        };
+
+        return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data));
+    }
+
+    public static async Task<Results<Ok<ResourceBindingsView>, ProblemHttpResult>> DeleteResource(
+        IMediator mediator,
+        [FromRoute][Description("Resource binding scope")] ResourceBindingScope scope,
+        [FromRoute][Description("Resource ID")] Guid resourceId,
+        [FromRoute][Description("Resource binding ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = scope switch
+        {
+            ResourceBindingScope.Stack => await mediator.Send(new DeleteStackResourceBinding(resourceId, id), cancellationToken),
+            ResourceBindingScope.Deployment => await mediator.Send(new DeleteDeploymentResourceBinding(resourceId, id), cancellationToken),
+            ResourceBindingScope.Global => Result.Failure<ResourceBindingsResult>(new BadRequestError("Global resource bindings do not target a resource.")),
+            _ => Result.Failure<ResourceBindingsResult>(new BadRequestError($"Unsupported resource binding scope '{scope}'."))
+        };
+
+        return EndpointHandlers.HandleResult(result, data => ResourceBindingsView.Map(data));
+    }
+
+    private static UpdateResourceBindingInputModel ToCommandInput(UpdateResourceBindingInput input)
+        => new(
+            input.Id,
+            input.Name,
+            input.Kind,
+            input.Value,
+            input.SecretId,
+            input.SecretDeliveryMode,
+            input.TargetPath);
 }

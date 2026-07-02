@@ -196,7 +196,7 @@ internal sealed partial class ApplyDeploymentService(
                 injectedConfiguration.SnapshotEntries),
             ct);
 
-        yield return Info("✅ Deployment is now running.");
+        yield return Info("Deployment is now running.");
     }
 
     private static ApplyDeploymentCommand BuildApplyCommand(
@@ -341,7 +341,7 @@ internal sealed partial class ApplyDeploymentService(
         => new(ProgressMessage: message);
 
     private static DeploymentStreamItem Error(int code, string message)
-        => new(ErrorMessage: $"❌ {message}", Error: new DeploymentApplyError(code, $"❌ {message}"));
+        => new(ErrorMessage: message, Error: new DeploymentApplyError(code, message));
 
     private AutoUpdateState? ResolveAutoUpdateState(Deployment deployment, string? imageDigest)
     {

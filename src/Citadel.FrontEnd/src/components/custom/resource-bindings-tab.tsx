@@ -10,6 +10,7 @@ import {
   SecretDefinitionView,
   SecretProviderView,
   UpdateExternalSecretInput,
+  UpdateResourceBindingInput,
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import {
@@ -174,7 +175,9 @@ const ResourceBindingsTabEditor = ({
   allowMountedFile?: boolean;
 }) => {
   const queryClient = useQueryClient();
-  const replace = useMutate('replaceResourceBindings');
+  const create = useMutate('createResourceBinding');
+  const update = useMutate('updateResourceBinding');
+  const remove = useMutate('deleteResourceBinding');
   const updateExternalSecret = useMutate('updateExternalSecret');
   const testExternalSecret = useMutate('testExternalSecret');
   const entries = initialEntries;
@@ -187,19 +190,54 @@ const ResourceBindingsTabEditor = ({
   const { data: providersData } = useRead('listSecretProviders', undefined, { enabled: editingStoredSecret != null });
   const providers = useMemo(() => providersData?.data.providers ?? [], [providersData?.data.providers]);
 
-  const saveEntries = async (entriesToSave: ResourceBindingInput[], message: string) => {
+  const updateEntry = async (entryId: string, entry: ResourceBindingInput, message: string) => {
     try {
-      await replace.mutateAsync({
+      await update.mutateAsync({
         scope,
         resourceId,
-        data: { entries: entriesToSave },
+        data: toUpdateInput(entryId, entry),
       } as any);
       await queryClient.invalidateQueries({ queryKey: ['getResourceBindings', queryArgs] });
+      await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
       toast.success(message);
     } catch {
-      toast.error(replace.validationErrors ?? 'Failed to save variables and secrets');
+      toast.error(update.validationErrors ?? 'Failed to update resource binding');
+      throw new Error('Failed to update resource binding');
     }
   };
+
+  const deleteEntryById = async (entryId: string, message: string) => {
+    try {
+      await remove.mutateAsync({
+        scope,
+        resourceId,
+        id: entryId,
+      } as any);
+      await queryClient.invalidateQueries({ queryKey: ['getResourceBindings', queryArgs] });
+      await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
+      toast.success(message);
+    } catch {
+      toast.error(remove.validationErrors ?? 'Failed to delete resource binding');
+      throw new Error('Failed to delete resource binding');
+    }
+  };
+
+  const createEntry = useCallback(async (entry: ResourceBindingInput, message: string) => {
+    try {
+      await create.mutateAsync({
+        scope,
+        resourceId,
+        data: entry,
+      } as any);
+      await queryClient.invalidateQueries({ queryKey: ['getResourceBindings', queryArgs] });
+      await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
+      toast.success(message);
+      return true;
+    } catch {
+      toast.error(create.validationErrors ?? 'Failed to create variable or secret');
+      return false;
+    }
+  }, [create, queryClient, queryArgs, resourceId, scope]);
 
   const openAddVariable = () => {
     setEditingEntry(null);
@@ -238,19 +276,19 @@ const ResourceBindingsTabEditor = ({
         return false;
       }
 
-      await saveEntries(next, 'Secret added');
-      return true;
+      return await createEntry(newSecretInput(secret), 'Secret added');
     },
-    [originalInputs],
+    [createEntry, originalInputs],
   );
   const secretCreation = useSecretCreation(addSecretBinding, secrets);
 
   const saveDialogEntry = async () => {
+    const normalized = normalizeEntryInput(entryInput);
     const next =
       editingEntry == null
-        ? [...originalInputs, normalizeEntryInput(entryInput)]
+        ? [...originalInputs, normalized]
         : originalInputs.map((entry, index) =>
-            entries[index].clientId === editingEntry.clientId ? normalizeEntryInput(entryInput) : entry,
+            entries[index].clientId === editingEntry.clientId ? normalized : entry,
           );
 
     if (hasDuplicateEntryName(next)) {
@@ -258,17 +296,18 @@ const ResourceBindingsTabEditor = ({
       return;
     }
 
-    await saveEntries(next, editingEntry == null ? 'Resource binding added' : 'Resource binding updated');
+    if (editingEntry == null) {
+      if (!await createEntry(normalized, 'Resource binding added')) return;
+    } else {
+      await updateEntry(editingEntry.clientId, normalized, 'Resource binding updated');
+    }
     setDialogOpen(false);
     setEditingEntry(null);
   };
 
   const confirmDelete = async () => {
     if (!deleteEntry) return;
-    await saveEntries(
-      entries.filter((entry) => entry.clientId !== deleteEntry.clientId).map(toInput),
-      'Resource binding deleted',
-    );
+    await deleteEntryById(deleteEntry.clientId, 'Resource binding deleted');
     setDeleteEntry(null);
   };
 
@@ -345,7 +384,7 @@ const ResourceBindingsTabEditor = ({
         open={dialogOpen}
         input={entryInput}
         secrets={secrets}
-        isPending={replace.isPending}
+        isPending={update.isPending || create.isPending}
         editing={editingEntry != null}
         allowMountedFile={allowMountedFile}
         onOpenChange={setDialogOpen}
@@ -375,10 +414,10 @@ const ResourceBindingsTabEditor = ({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteEntry(null)} disabled={replace.isPending}>
+            <Button variant="outline" onClick={() => setDeleteEntry(null)} disabled={remove.isPending}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={replace.isPending}>
+            <Button variant="destructive" onClick={confirmDelete} disabled={remove.isPending}>
               Delete
             </Button>
           </DialogFooter>
@@ -678,7 +717,7 @@ const ResourceBindingDialog = ({
   );
 };
 
-const EditExternalSecretDialog = ({
+export const EditExternalSecretDialog = ({
   open,
   input,
   providers,
@@ -982,14 +1021,14 @@ export const useSecretCreation = (
   };
 };
 
-const normalizeExternalSecretInput = (input: CreateExternalSecretInput): CreateExternalSecretInput => ({
+export const normalizeExternalSecretInput = (input: CreateExternalSecretInput): CreateExternalSecretInput => ({
   ...input,
   externalPath: input.externalPath.trim().replace(/^\/+|\/+$/g, ''),
   externalVersion:
     input.externalVersion === '' || input.externalVersion === null ? null : Number(input.externalVersion),
 });
 
-const toExternalSecretInput = (secret: SecretDefinitionView): CreateExternalSecretInput => ({
+export const toExternalSecretInput = (secret: SecretDefinitionView): CreateExternalSecretInput => ({
   name: secret.name,
   providerId: secret.providerId ?? '',
   externalPath: secret.externalPath ?? '',
@@ -997,7 +1036,7 @@ const toExternalSecretInput = (secret: SecretDefinitionView): CreateExternalSecr
   externalVersion: secret.externalVersion ?? null,
 });
 
-const toExternalSecretTestInput = (input: CreateExternalSecretInput): TestExternalSecretInput => {
+export const toExternalSecretTestInput = (input: CreateExternalSecretInput): TestExternalSecretInput => {
   const normalized = normalizeExternalSecretInput(input);
   return {
     providerId: normalized.providerId,
@@ -1213,6 +1252,11 @@ const normalizeEntryInput = (entry: ResourceBindingInput): ResourceBindingInput 
   secretDeliveryMode:
     entry.kind === ResourceBindingKind.Secret ? (entry.secretDeliveryMode ?? ENV_DELIVERY_MODE) : null,
   targetPath: entry.kind === ResourceBindingKind.Secret ? (entry.targetPath ?? null) : null,
+});
+
+const toUpdateInput = (id: string, entry: ResourceBindingInput): UpdateResourceBindingInput => ({
+  id,
+  ...normalizeEntryInput(entry),
 });
 
 const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {

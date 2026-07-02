@@ -1,11 +1,11 @@
-using Application.Features.Configuration.Commands;
+using Application.Features.ResourceBindings.Commands;
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.ResourceBindings;
 using Moq;
 
-namespace Tests.Unit.Application.Features.Configuration;
+namespace Tests.Unit.Application.Features.ResourceBindings;
 
 public sealed class CreateSecretTests
 {
@@ -103,7 +103,7 @@ public sealed class CreateSecretTests
             .Setup(x => x.GetAsync(providerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(provider);
         providers
-            .Setup(x => x.IsUsedBySecretDefinitionAsync(providerId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.IsUsedByResourceBindingAsync(providerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         var unitOfWork = CreateUnitOfWork(new Mock<ISecretDefinitionRepository>().Object, providers.Object);
         var handler = new DeleteSecretProviderHandler(unitOfWork.Object);
@@ -114,6 +114,73 @@ public sealed class CreateSecretTests
         Assert.Equal("Secret provider is used by one or more external secrets.", error.Message);
         providers.Verify(x => x.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteSecretProvider_Should_Delete_Unused_External_Secrets()
+    {
+        var providerId = Guid.CreateVersion7();
+        var provider = new SecretProvider(
+            "vault",
+            SecretProviderType.VaultCompatibleKvV2,
+            new VaultKvV2SecretProviderConfiguration("https://vault.local", "secret", "protected:old"))
+        {
+            Id = providerId
+        };
+        var secrets = new Mock<ISecretDefinitionRepository>();
+        var providers = new Mock<ISecretProviderRepository>();
+        providers
+            .Setup(x => x.GetAsync(providerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(provider);
+        providers
+            .Setup(x => x.IsUsedByResourceBindingAsync(providerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var unitOfWork = CreateUnitOfWork(secrets.Object, providers.Object);
+        var handler = new DeleteSecretProviderHandler(unitOfWork.Object);
+
+        var result = await handler.Handle(new DeleteSecretProvider(providerId), TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        secrets.Verify(x => x.DeleteExternalByProviderIdAsync(providerId, It.IsAny<CancellationToken>()), Times.Once);
+        providers.Verify(x => x.DeleteAsync(providerId, It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteSecretDefinition_Should_Reject_Secret_Used_By_Binding()
+    {
+        var secretId = Guid.CreateVersion7();
+        var secret = new SecretDefinition("API_KEY", SecretProviderType.InternalEncrypted) { Id = secretId };
+        var secrets = new Mock<ISecretDefinitionRepository>();
+        secrets.Setup(x => x.GetAsync(secretId, It.IsAny<CancellationToken>())).ReturnsAsync(secret);
+        secrets.Setup(x => x.IsUsedByResourceBindingAsync(secretId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        var unitOfWork = CreateUnitOfWork(secrets.Object);
+        var handler = new DeleteSecretDefinitionHandler(unitOfWork.Object);
+
+        var result = await handler.Handle(new DeleteSecretDefinition(secretId), TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        Assert.Equal("Secret is used by one or more resource bindings.", error.Message);
+        secrets.Verify(x => x.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteSecretDefinition_Should_Delete_Unused_Secret()
+    {
+        var secretId = Guid.CreateVersion7();
+        var secret = new SecretDefinition("API_KEY", SecretProviderType.InternalEncrypted) { Id = secretId };
+        var secrets = new Mock<ISecretDefinitionRepository>();
+        secrets.Setup(x => x.GetAsync(secretId, It.IsAny<CancellationToken>())).ReturnsAsync(secret);
+        secrets.Setup(x => x.IsUsedByResourceBindingAsync(secretId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        var unitOfWork = CreateUnitOfWork(secrets.Object);
+        var handler = new DeleteSecretDefinitionHandler(unitOfWork.Object);
+
+        var result = await handler.Handle(new DeleteSecretDefinition(secretId), TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        secrets.Verify(x => x.DeleteAsync(secretId, It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

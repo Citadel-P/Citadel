@@ -13468,22 +13468,124 @@
           }
         }
       },
-      "put": {
+      "post": {
         "tags": [
           "ResourceBindings"
         ],
-        "summary": "Replace global bindings",
-        "operationId": "replaceGlobalResourceBindings",
+        "summary": "Create a global binding",
+        "operationId": "createGlobalResourceBinding",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReplaceResourceBindingsInput"
+                "$ref": "#/components/schemas/ResourceBindingInput"
               }
             }
           },
           "required": true
         },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceBindingsView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "ResourceBindings"
+        ],
+        "summary": "Update a global binding",
+        "operationId": "updateGlobalResourceBinding",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateResourceBindingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceBindingsView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resourceBindings/global/{id}": {
+      "delete": {
+        "tags": [
+          "ResourceBindings"
+        ],
+        "summary": "Delete a global binding",
+        "operationId": "deleteGlobalResourceBinding",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource binding ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "500": {
             "description": "Internal Server Error",
@@ -13579,12 +13681,12 @@
           }
         }
       },
-      "put": {
+      "post": {
         "tags": [
           "ResourceBindings"
         ],
-        "summary": "Replace resource bindings",
-        "operationId": "replaceResourceBindings",
+        "summary": "Create a resource binding",
+        "operationId": "createResourceBinding",
         "parameters": [
           {
             "name": "scope",
@@ -13610,7 +13712,77 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReplaceResourceBindingsInput"
+                "$ref": "#/components/schemas/ResourceBindingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceBindingsView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "ResourceBindings"
+        ],
+        "summary": "Update a resource binding",
+        "operationId": "updateResourceBinding",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Resource binding scope",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ResourceBindingScope"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateResourceBindingInput"
               }
             }
           },
@@ -13650,10 +13822,82 @@
         }
       }
     },
-    "/api/v1/bindings/secrets": {
+    "/api/v1/resourceBindings/{scope}/{resourceId}/{id}": {
+      "delete": {
+        "tags": [
+          "ResourceBindings"
+        ],
+        "summary": "Delete a resource binding",
+        "operationId": "deleteResourceBinding",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Resource binding scope",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ResourceBindingScope"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource binding ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceBindingsView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resourceBindings/secrets": {
       "get": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "List secret definitions",
         "operationId": "listSecretDefinitions",
@@ -13711,7 +13955,7 @@
       },
       "post": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "Create an internal encrypted secret",
         "operationId": "createInternalSecret",
@@ -13759,10 +14003,10 @@
         }
       }
     },
-    "/api/v1/bindings/secrets/external": {
+    "/api/v1/resourceBindings/secrets/external": {
       "post": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "Create an external secret definition",
         "operationId": "createExternalSecret",
@@ -13810,10 +14054,10 @@
         }
       }
     },
-    "/api/v1/bindings/secrets/external/{id}": {
-      "put": {
+    "/api/v1/resourceBindings/secrets/external/{id}": {
+      "patch": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "Update an external secret definition",
         "operationId": "updateExternalSecret",
@@ -13831,6 +14075,11 @@
         ],
         "requestBody": {
           "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExternalSecretInput"
+              }
+            },
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateExternalSecretInput"
@@ -13873,10 +14122,56 @@
         }
       }
     },
-    "/api/v1/bindings/secrets/external/test": {
+    "/api/v1/resourceBindings/secrets/{id}": {
+      "delete": {
+        "tags": [
+          "ResourceBindings"
+        ],
+        "summary": "Delete an unused stored secret definition",
+        "operationId": "deleteSecretDefinition",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Secret definition ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resourceBindings/secrets/external/test": {
       "post": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "Test an external secret reference",
         "operationId": "testExternalSecret",
@@ -13924,10 +14219,10 @@
         }
       }
     },
-    "/api/v1/bindings/secret-providers/vault-kv2/test": {
+    "/api/v1/resourceBindings/secret-providers/vault-kv2/test": {
       "post": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "Test a Vault-compatible KV v2 secret provider connection",
         "operationId": "testVaultKvV2SecretProviderConnection",
@@ -13975,10 +14270,10 @@
         }
       }
     },
-    "/api/v1/bindings/secret-providers": {
+    "/api/v1/resourceBindings/secret-providers": {
       "get": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "List secret providers",
         "operationId": "listSecretProviders",
@@ -14016,10 +14311,10 @@
         }
       }
     },
-    "/api/v1/bindings/secret-providers/vault-kv2": {
+    "/api/v1/resourceBindings/secret-providers/vault-kv2": {
       "post": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "Create a Vault-compatible KV v2 secret provider",
         "operationId": "createVaultKvV2SecretProvider",
@@ -14067,10 +14362,10 @@
         }
       }
     },
-    "/api/v1/bindings/secret-providers/vault-kv2/{id}": {
-      "put": {
+    "/api/v1/resourceBindings/secret-providers/vault-kv2/{id}": {
+      "patch": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "Update a Vault-compatible KV v2 secret provider",
         "operationId": "updateVaultKvV2SecretProvider",
@@ -14088,6 +14383,11 @@
         ],
         "requestBody": {
           "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateVaultKvV2SecretProviderInput"
+              }
+            },
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateVaultKvV2SecretProviderInput"
@@ -14130,10 +14430,10 @@
         }
       }
     },
-    "/api/v1/bindings/secret-providers/{id}": {
+    "/api/v1/resourceBindings/secret-providers/{id}": {
       "delete": {
         "tags": [
-          "Bindings"
+          "ResourceBindings"
         ],
         "summary": "Delete a secret provider",
         "operationId": "deleteSecretProvider",
@@ -26884,20 +27184,6 @@
           }
         }
       },
-      "ReplaceResourceBindingsInput": {
-        "required": [
-          "entries"
-        ],
-        "type": "object",
-        "properties": {
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ResourceBindingInput"
-            }
-          }
-        }
-      },
       "RepoCommand": {
         "required": [
           "commands"
@@ -29297,17 +29583,29 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "providerId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           },
           "externalPath": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "externalKey": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "externalVersion": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -29317,6 +29615,48 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "UpdateResourceBindingInput": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "value",
+          "secretId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ResourceBindingKind"
+          },
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "secretId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "secretDeliveryMode": { },
+          "targetPath": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -29330,13 +29670,22 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "address": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "mountPath": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "token": {
             "type": [
@@ -29819,9 +30168,6 @@
     },
     {
       "name": "ResourceBindings"
-    },
-    {
-      "name": "Bindings"
     },
     {
       "name": "Activities"

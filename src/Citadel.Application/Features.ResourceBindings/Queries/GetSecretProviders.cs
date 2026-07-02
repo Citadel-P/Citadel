@@ -5,7 +5,7 @@ using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
 
-namespace Application.Features.Configuration.Queries;
+namespace Application.Features.ResourceBindings.Queries;
 
 [RequirePermission(ResourceType.Binding, PermissionLevel.Read)]
 public sealed record GetSecretProviders : IQuery<Result<IReadOnlyList<SecretProvider>>>;

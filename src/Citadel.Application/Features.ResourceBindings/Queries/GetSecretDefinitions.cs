@@ -1,3 +1,4 @@
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.ResourceBindings;
 using Hosting.Common;
@@ -6,7 +7,7 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
-namespace Application.Features.Configuration.Queries;
+namespace Application.Features.ResourceBindings.Queries;
 
 [RequirePermission(ResourceType.Binding, PermissionLevel.Read)]
 public sealed record GetSecretDefinitions : IQuery<Result<IReadOnlyList<SecretDefinition>>>;
@@ -22,7 +23,7 @@ internal sealed class GetSecretDefinitionsHandler(IUnitOfWork unitOfWork)
 {
     public async ValueTask<Result<IReadOnlyList<SecretDefinition>>> Handle(GetSecretDefinitions query, CancellationToken cancellationToken)
     {
-        var secrets = await unitOfWork.SecretDefinitions.GetAllAsync(cancellationToken);
+        var secrets = await unitOfWork.SecretDefinitions.GetBoundAsync(ResourceBindingScope.Global, null, cancellationToken);
         return Result.Success<IReadOnlyList<SecretDefinition>>([.. secrets]);
     }
 }
@@ -36,7 +37,7 @@ internal sealed class GetStackSecretDefinitionsHandler(IUnitOfWork unitOfWork)
         if (stack is null)
             return Result.Failure<IReadOnlyList<SecretDefinition>>(new NotFoundError($"Stack with ID {query.Id} does not exist."));
 
-        var secrets = await unitOfWork.SecretDefinitions.GetAllAsync(cancellationToken);
+        var secrets = await unitOfWork.SecretDefinitions.GetBoundAsync(ResourceBindingScope.Stack, query.Id, cancellationToken);
         return Result.Success<IReadOnlyList<SecretDefinition>>([.. secrets]);
     }
 }
@@ -50,7 +51,7 @@ internal sealed class GetDeploymentSecretDefinitionsHandler(IUnitOfWork unitOfWo
         if (deployment is null)
             return Result.Failure<IReadOnlyList<SecretDefinition>>(new NotFoundError($"Deployment with ID {query.Id} does not exist."));
 
-        var secrets = await unitOfWork.SecretDefinitions.GetAllAsync(cancellationToken);
+        var secrets = await unitOfWork.SecretDefinitions.GetBoundAsync(ResourceBindingScope.Deployment, query.Id, cancellationToken);
         return Result.Success<IReadOnlyList<SecretDefinition>>([.. secrets]);
     }
 }

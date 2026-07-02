@@ -8,6 +8,50 @@ namespace Tests.Integration.Infrastructure.Persistence;
 public sealed class ResourceBindingRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
+    public async Task SecretProviderUsage_Should_Only_Count_Bound_External_Secrets()
+    {
+        var provider = new SecretProvider(
+            "vault-usage",
+            SecretProviderType.VaultCompatibleKvV2,
+            new VaultKvV2SecretProviderConfiguration("https://vault.local", "secret", "protected"));
+        var secret = new SecretDefinition(
+            "API_KEY_USAGE",
+            SecretProviderType.VaultCompatibleKvV2,
+            provider.Id,
+            "apps/api/prod",
+            "api_key");
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.SecretProviders.AddAsync(provider, TestContext.Current.CancellationToken);
+        await uow.SecretDefinitions.AddAsync(secret, value: null, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var usedBeforeBinding = await uow.SecretProviders.IsUsedByResourceBindingAsync(
+            provider.Id,
+            TestContext.Current.CancellationToken);
+
+        await uow.ResourceBindings.AddAsync(
+            new ResourceBinding(
+                Name: "API_KEY_USAGE",
+                Kind: ResourceBindingKind.Secret,
+                Scope: ResourceBindingScope.Stack,
+                ResourceId: Guid.CreateVersion7(),
+                Value: null,
+                SecretId: secret.Id,
+                SecretDeliveryMode: SecretDeliveryMode.EnvironmentVariable),
+            TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var usedAfterBinding = await uow.SecretProviders.IsUsedByResourceBindingAsync(
+            provider.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(usedBeforeBinding);
+        Assert.True(usedAfterBinding);
+    }
+
+    [Fact]
     public async Task ReplaceResourceEntriesAsync_Should_Delete_And_Bulk_Insert_Resource_Entries()
     {
         var stackId = Guid.CreateVersion7();

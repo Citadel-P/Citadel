@@ -10,7 +10,7 @@ using LightResults;
 using Mediator;
 using System.Security.Cryptography;
 
-namespace Application.Features.Configuration.Commands;
+namespace Application.Features.ResourceBindings.Commands;
 
 [RequirePermission(ResourceType.Binding, PermissionLevel.Write)]
 public sealed record TestExternalSecret(

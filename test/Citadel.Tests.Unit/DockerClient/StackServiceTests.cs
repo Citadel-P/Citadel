@@ -131,6 +131,42 @@ public class StackServiceTests
     }
 
     [Fact]
+    public async Task ApplyStreamAsync_Should_Suppress_Missing_Variable_Warnings_During_Down_Only()
+    {
+        using var temp = new TempDirectory();
+        var warning = """time="2026-07-02T14:22:18Z" level=warning msg="The \"stripe_api_key\" variable is not set. Defaulting to a blank string." """;
+        var executor = new CapturingCommandExecutor(stdErr: warning);
+        var service = new StackService(executor);
+
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: "services:\n  app:\n    image: nginx\n    environment:\n      API_KEY: ${stripe_api_key}\n",
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: null,
+            RegistryName: null,
+            RegistryHost: null,
+            DestroyBeforeDeploy: true,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            ServiceNames: null,
+            PullImages: false,
+            GeneratedFilesDirectory: temp.Path);
+
+        var results = new List<StackApplyResult>();
+        await foreach (var result in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+        {
+            results.Add(result);
+        }
+
+        Assert.Equal(2, executor.Invocations.Count);
+        Assert.Equal(1, results.Count(result => result.Type == StackApplyEventType.StdErr && result.Message == warning));
+        Assert.Equal("up -d", string.Join(' ', executor.Invocations[1].Arguments[^2..]));
+    }
+
+    [Fact]
     public async Task ApplyStreamAsync_Should_Delete_Generated_Docker_Config_After_Apply()
     {
         using var temp = new TempDirectory();
@@ -351,7 +387,7 @@ public class StackServiceTests
         Assert.True(Directory.GetFiles(Path.Combine(generatedDirectory, "secrets"), "POSTGRES_PASSWORD", SearchOption.AllDirectories).Length >= 2);
     }
 
-    private sealed class CapturingCommandExecutor(int exitCode = 0) : ICommandExecutor
+    private sealed class CapturingCommandExecutor(int exitCode = 0, string? stdOut = null, string? stdErr = null) : ICommandExecutor
     {
         public List<Invocation> Invocations { get; } = [];
 
@@ -377,6 +413,16 @@ public class StackServiceTests
                 new Dictionary<string, string>(environmentVariables ?? new Dictionary<string, string>()),
                 workingDirectory,
                 dockerConfigDirectory));
+            if (!string.IsNullOrWhiteSpace(stdOut))
+            {
+                yield return new ProcessOutput(stdOut, null);
+            }
+
+            if (!string.IsNullOrWhiteSpace(stdErr))
+            {
+                yield return new ProcessOutput(null, stdErr);
+            }
+
             yield return new ProcessOutput(null, null, exitCode);
             await Task.CompletedTask;
         }

@@ -50,6 +50,8 @@ public interface IUnitOfWork : IAsyncDisposable
 public interface IResourceBindingRepository
 {
     Task<int> AddAsync(ResourceBinding entry, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(ResourceBinding entry, CancellationToken cancellationToken);
+    Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
     Task<int> ReplaceEntriesAsync(ResourceBindingScope scope, Guid? resourceId, IEnumerable<ResourceBinding> entries, CancellationToken cancellationToken);
     Task<int> ReplaceResourceEntriesAsync(ResourceBindingScope scope, Guid resourceId, IEnumerable<ResourceBinding> entries, CancellationToken cancellationToken);
     Task<IEnumerable<ResourceBinding>> GetEntriesAsync(ResourceBindingScope scope, Guid? resourceId, CancellationToken cancellationToken);
@@ -60,11 +62,15 @@ public interface ISecretDefinitionRepository
 {
     Task<int> AddAsync(SecretDefinition secret, InternalSecretValue? value, CancellationToken cancellationToken);
     Task<int> UpdateAsync(SecretDefinition secret, CancellationToken cancellationToken);
+    Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
     Task<SecretDefinition?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<SecretDefinition>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<SecretDefinition>> GetBoundAsync(ResourceBindingScope scope, Guid? resourceId, CancellationToken cancellationToken);
     Task<InternalSecretValue?> GetInternalValueAsync(Guid secretId, CancellationToken cancellationToken);
+    Task<int> DeleteExternalByProviderIdAsync(Guid providerId, CancellationToken cancellationToken);
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken);
+    Task<bool> IsUsedByResourceBindingAsync(Guid id, CancellationToken cancellationToken);
 }
 
 public interface ISecretProviderRepository
@@ -76,7 +82,7 @@ public interface ISecretProviderRepository
     Task<IEnumerable<SecretProvider>> GetAllAsync(CancellationToken cancellationToken);
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken);
-    Task<bool> IsUsedBySecretDefinitionAsync(Guid id, CancellationToken cancellationToken);
+    Task<bool> IsUsedByResourceBindingAsync(Guid id, CancellationToken cancellationToken);
 }
 
 public interface IExternalSecretProviderClient

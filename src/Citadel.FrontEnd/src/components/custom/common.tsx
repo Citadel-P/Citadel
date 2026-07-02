@@ -78,6 +78,7 @@ import {
   RefreshCcwDot,
   RefreshCwOff,
   Timer,
+  TriangleAlert,
   WrapText,
   X,
 } from 'lucide-react';
@@ -792,7 +793,10 @@ export interface LogEntry {
 interface RenderedLogEntry extends LogEntry {
   html: string;
   containerName?: string;
+  severity?: LogSeverity;
 }
+
+type LogSeverity = 'info' | 'success' | 'warning' | 'error';
 
 interface LogViewerProps {
   logs: string | string[] | LogEntry[];
@@ -844,6 +848,8 @@ const ansiConverter = new Convert({
 const LogRow = memo(
   ({ log, showTimestamps, wrapLines }: { log: RenderedLogEntry; showTimestamps: boolean; wrapLines: boolean }) => {
     const containerColor = log.containerName ? getContainerSeriesColor(log.containerName) : undefined;
+    const severity = log.severity ? logSeverityConfig[log.severity] : undefined;
+    const SeverityIcon = severity?.Icon;
 
     return (
       <div className={cn('flex gap-2 min-h-[1.2rem]', wrapLines ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}>
@@ -855,12 +861,36 @@ const LogRow = memo(
         {log.containerName && (
           <span className={cn('shrink-0 select-none font-semibold', containerColor?.text)}>[{log.containerName}]</span>
         )}
-        <span dangerouslySetInnerHTML={{ __html: log.html }} />
+        {SeverityIcon && <SeverityIcon className={cn('mt-0.5 size-3.5 shrink-0', severity.iconClassName)} />}
+        <span className={severity?.textClassName} dangerouslySetInnerHTML={{ __html: log.html }} />
       </div>
     );
   },
 );
 LogRow.displayName = 'LogRow';
+
+const logSeverityConfig = {
+  info: {
+    Icon: Info,
+    iconClassName: 'text-blue-500',
+    textClassName: 'text-blue-700',
+  },
+  success: {
+    Icon: CircleCheck,
+    iconClassName: 'text-success',
+    textClassName: 'text-success',
+  },
+  warning: {
+    Icon: TriangleAlert,
+    iconClassName: 'text-amber-500',
+    textClassName: 'text-amber-700',
+  },
+  error: {
+    Icon: CircleX,
+    iconClassName: 'text-destructive',
+    textClassName: 'text-destructive',
+  },
+} satisfies Record<LogSeverity, { Icon: LucideIcon; iconClassName: string; textClassName: string }>;
 
 const parseLogContainerLabel = (message: string): { containerName?: string; message: string } => {
   const match = message.match(/^\[([^\]]+)\]\s?(.*)$/s);
@@ -1015,13 +1045,14 @@ export const LogViewer = memo(
 
       return normalizedLogs.map((log): RenderedLogEntry => {
         const parsed = containerFilteringEnabled ? parseLogContainerLabel(log.message) : { message: log.message };
-        const message = parsed.message;
+        const formatted = formatLogMessage(parsed.message);
+        const message = formatted.message;
         let html = ansiCache.get(message);
         if (html === undefined) {
           html = ansiConverter.toHtml(message);
           ansiCache.set(message, html);
         }
-        return { ...log, message, containerName: parsed.containerName, html };
+        return { ...log, message, containerName: parsed.containerName, html, severity: formatted.severity };
       });
     }, [containerFilteringEnabled, normalizedLogs]);
 
@@ -1214,6 +1245,55 @@ function collapseDockerComposeFrames(value: string) {
 function getDockerComposeResourceKey(value: string) {
   const match = value.match(/\b(Container|Network|Volume|Image|Service)\s+(\S+)/);
   return match ? `${match[1]} ${match[2]}` : undefined;
+}
+
+function formatLogMessage(message: string): { message: string; severity?: LogSeverity } {
+  const plainMessage = stripAnsiCodes(message).trim();
+  if (isTaskSuccessMessage(plainMessage)) {
+    return { message, severity: 'success' };
+  }
+
+  const levelMatch = plainMessage.match(/\blevel=(debug|info|warning|warn|error|fatal|panic)\b/i);
+  if (!levelMatch) return { message };
+
+  const msg = parseLogfmtMessageValue(plainMessage);
+  if (!msg) return { message };
+
+  const level = levelMatch[1].toLowerCase();
+  if (level === 'warning' || level === 'warn') {
+    return { message: msg, severity: 'warning' };
+  }
+
+  if (level === 'error' || level === 'fatal' || level === 'panic') {
+    return { message: msg, severity: 'error' };
+  }
+
+  if (level === 'info') {
+    return { message: msg, severity: 'info' };
+  }
+
+  return { message: msg };
+}
+
+function isTaskSuccessMessage(message: string): boolean {
+  return message === 'Stack is now running.'
+    || message === 'Deployment is now running.'
+    || message === 'Stack rolled back successfully.'
+    || message === 'Stack applied successfully.';
+}
+
+function parseLogfmtMessageValue(value: string): string | undefined {
+  const quoted = value.match(/\bmsg="((?:\\.|[^"\\])*)"/);
+  if (quoted) {
+    return quoted[1]
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\')
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t');
+  }
+
+  const unquoted = value.match(/\bmsg=([^\s].*)$/);
+  return unquoted?.[1]?.trim();
 }
 
 function removeCursorControls(value: string) {
