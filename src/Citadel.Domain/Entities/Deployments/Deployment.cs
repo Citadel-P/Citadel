@@ -1,5 +1,6 @@
 ﻿using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
+using Domain.Entities.Tags;
 
 namespace Domain.Entities.Deployments;
 
@@ -37,6 +38,7 @@ public sealed class Deployment(
     public Image? Image { get; private set; } = null;
     public Container? Container { get; private set; } = null;
     public ActivityEvent? LatestActivityEvent { get; private set; } = null;
+    public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
 
     public void MarkProcessing(Guid controlTriggeredBy)
     {
@@ -118,6 +120,11 @@ public sealed class Deployment(
     public void AssignActivityEvent(ActivityEvent activityEvent)
     {
         LatestActivityEvent = activityEvent;
+    }
+
+    public void AssignTags(IReadOnlyList<TagSummary> tags)
+    {
+        Tags = tags;
     }
 
     public static DeploymentStatus ToDeploymentStatus(ContainerStateStatus status)

@@ -21,9 +21,13 @@ public static class GitRepositories
         return EndpointHandlers.HandleResult(result, GitRepositoryView.Map);
     }
 
-    public static async Task<Results<Ok<GitRepositoriesView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<GitRepositoriesView>, ProblemHttpResult>> List(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromQuery] Guid[]? tagIds,
+        CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetAllGitRepositories(), cancellationToken);
+        var result = await mediator.Send(new GetAllGitRepositories(tagIds), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, GitRepositoriesView.Map);
     }
 

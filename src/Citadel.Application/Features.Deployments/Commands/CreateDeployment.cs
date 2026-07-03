@@ -1,4 +1,4 @@
-﻿using Application.Features.Deployments.Notifications;
+using Application.Features.Deployments.Notifications;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
@@ -14,8 +14,6 @@ using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
@@ -24,7 +22,8 @@ public sealed record CreateDeployment(
     string Name,
     Guid PlatformId,
     string? Description,
-    DeploymentSpec Spec) 
+    DeploymentSpec Spec,
+    IReadOnlyCollection<Guid>? TagIds = null)
     : ICommand<Result<Deployment>>
 {
     internal sealed class Validator : AbstractValidator<CreateDeployment>
@@ -40,7 +39,7 @@ public sealed record CreateDeployment(
 internal class CreateDeploymentHandler(
     IUnitOfWork unitOfWork,
     IDeploymentStreamManager deploymentHub,
-    INotificationQueue notificationQueue, 
+    INotificationQueue notificationQueue,
     IActivityStreamManager activityHub,
     IUserContextAccessor userContext) : ICommandHandler<CreateDeployment, Result<Deployment>>
 {
@@ -69,18 +68,17 @@ internal class CreateDeploymentHandler(
             }
         }
 
-        // Add deployment
         var deployment = new Deployment(
             name: command.Name,
             description: command.Description,
             createdByActorId: actorId,
             platformId: command.PlatformId,
-            spec: command.Spec
-            );
+            spec: command.Spec);
 
-        var result = await unitOfWork.Deployments.AddAsync(deployment, cancellationToken);
+        var result = await unitOfWork.Deployments.AddAsync(deployment, cancellationToken, command.TagIds, actorId);
+        if (result == 0)
+            return Result.Failure<Deployment>(new BadRequestError("One or more tags do not exist."));
 
-        // Add activity
         var activity = new ActivityEvent(
             actorId: actorId,
             resourceId: deployment.Id,
@@ -88,14 +86,12 @@ internal class CreateDeploymentHandler(
             resourceName: deployment.Name,
             eventType: ActivityEventType.DeploymentCreated,
             status: ActivityStatus.Information,
-            info: new DeploymentCreated(deployment.ToSnapshot())
-            );
+            info: new DeploymentCreated(deployment.ToSnapshot()));
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
 
-        // Notify
         var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment, "create");
 
         await notificationQueue.EnqueueAsync(workItem, cancellationToken);

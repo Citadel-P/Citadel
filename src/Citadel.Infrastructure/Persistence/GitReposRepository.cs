@@ -16,21 +16,27 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
     public Task<bool> ExistsAsync(string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM GitRepositories WHERE Name = @Name)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name }, transaction: tx());
     }
 
-    public Task<int> AddAsync(GitRepository gitRepository, CancellationToken cancellationToken)
+    public async Task<int> AddAsync(GitRepository gitRepository, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null)
     {
-        const string sql = """
-            INSERT INTO GitRepositories (
-                Id, Name, Description, Url, DefaultBranch, Status, SyncMode, SyncIntervalMinutes, GitAccountId, CreatedAt, CreatedByActorId, Webhook, OnClone, OnPull,
-                ControlState, ControlStartedAt, ControlTriggeredBy, RowVersion)
-            VALUES (
-                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @SyncMode, @SyncIntervalMinutes, @GitAccountId, @CreatedAt, @CreatedByActorId, @Webhook::jsonb, @OnClone::json, @OnPull::json,
-                @ControlState, @ControlStartedAt, @ControlTriggeredBy, @RowVersion)
-        """;
+        string sql = ResourceTagSql.InputTagsCte + """
+            inserted_repository AS (
+                INSERT INTO GitRepositories (
+                    Id, Name, Description, Url, DefaultBranch, Status, SyncMode, SyncIntervalMinutes, GitAccountId, CreatedAt, CreatedByActorId, Webhook, OnClone, OnPull,
+                    ControlState, ControlStartedAt, ControlTriggeredBy, RowVersion)
+                SELECT
+                    @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @SyncMode, @SyncIntervalMinutes, @GitAccountId, @CreatedAt, @CreatedByActorId, @Webhook::jsonb, @OnClone::json, @OnPull::json,
+                    @ControlState, @ControlStartedAt, @ControlTriggeredBy, @RowVersion
+                WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
+                RETURNING Id
+            ),
+            """ + ResourceTagSql.InsertTagsCte("inserted_repository", "r") + "\n"
+            + ResourceTagSql.InsertResultSelect("inserted_repository", "inserted_repository", "inserted_tags");
 
-        return db.ExecuteAsync(sql, new
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QuerySingleAsync<ResourceInsertWithTagsResult>(sql, new
         {
             Id = gitRepository.Id,
             Name = gitRepository.Name,
@@ -49,20 +55,27 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             ControlState = EnumFormatter<ResourceControlState>.GetValue(gitRepository.ControlState),
             ControlStartedAt = gitRepository.ControlStartedAt,
             ControlTriggeredBy = gitRepository.ControlTriggeredBy,
-            RowVersion = gitRepository.RowVersion
+            RowVersion = gitRepository.RowVersion,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.GitRepository),
+            TagIds = tagIdArray,
+            TagCreatedByActorId = tagCreatedByActorId ?? gitRepository.CreatedByActorId
         }, transaction: tx());
+
+        gitRepository.AssignTags(result.TagsJson.ToTagSummaries());
+        return result.AffectedRows;
     }
 
     public async Task<GitRepository?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = """
+        string sql = $$"""
             SELECT 
                 g.*,
                 ei.Info AS ActivityEvent_ActivityEventInfo,
                 ei.EventType AS ActivityEvent_EventType,
                 ei.Status AS ActivityEvent_Status,
                 ei.Id AS ActivityEvent_Id,
-                ei.CreatedAt AS ActivityEvent_CreatedAt
+                ei.CreatedAt AS ActivityEvent_CreatedAt,
+                {{ResourceTagSql.TagAggregate("g")}}
             FROM GitRepositories g
             LEFT JOIN LATERAL (
                 SELECT e.Id, e.EventType, e.Status, e.Info, e.CreatedAt
@@ -76,7 +89,11 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             WHERE g.Id = @Id LIMIT 1
             
             """;
-        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new
+        {
+            Id = id,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.GitRepository)
+        }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -97,50 +114,71 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             LIMIT 1
             """;
             
-        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id }, transaction: tx());
         return result?.ToDomain();
     }
 
     public async Task<IEnumerable<GitRepository>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM GitRepositories gr WHERE gr.Id = ANY(@Ids)";
-        var result = await db.QueryAsync<GitRepositoryDto>(sql, new { Ids = ids.ToArray(), cancellationToken }, transaction: tx());
+        var result = await db.QueryAsync<GitRepositoryDto>(sql, new { Ids = ids.ToArray() }, transaction: tx());
         return result.ToDomain();
     }
 
     public async Task<GitRepository?> GetByNameAsync(string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM GitRepositories WHERE Name = @Name LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Name = name, cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Name = name }, transaction: tx());
         return result?.ToDomain();
     }
 
     public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM GitRepositories WHERE Name = @Name AND Id != @Id)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id, cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id }, transaction: tx());
     }
 
-    public async Task<IEnumerable<GitRepository>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<IEnumerable<GitRepository>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = "SELECT * FROM GitRepositories";
-        var result = await db.QueryAsync<GitRepositoryDto>(sql, transaction: tx());
+        string sql = $$"""
+            SELECT gr.*,
+                {{ResourceTagSql.TagAggregate("gr")}}
+            FROM GitRepositories gr
+            WHERE {{ResourceTagSql.FilterPredicate("gr")}}
+            ORDER BY gr.CreatedAt DESC
+            """;
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<GitRepositoryDto>(sql, new
+        {
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.GitRepository),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
+        }, transaction: tx());
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<GitRepository>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
+    public async Task<IEnumerable<GitRepository>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT * FROM GitRepositories gr WHERE "
+        string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte
+            + $$"""
+             SELECT gr.*,
+                {{ResourceTagSql.TagAggregate("gr")}}
+            FROM GitRepositories gr WHERE 
+            """
             + AuthorizationSql.ResourcePredicatePrefix + "gr.Id" + AuthorizationSql.ResourcePredicateSuffix
+            + " AND " + ResourceTagSql.FilterPredicate("gr")
             + " ORDER BY gr.CreatedAt DESC;";
 
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
         var result = await db.QueryAsync<GitRepositoryDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
             GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
             SpecificPermission = (int)specificPermission,
-            cancellationToken
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.GitRepository),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
         }, transaction: tx());
 
         return result.ToDomain();
@@ -214,7 +252,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
 
         var result = await db.QuerySingleOrDefaultAsync<GitRepositoryRefDto>(
             sql,
-            new { GitRepositoryId = gitRepositoryId, Branch = branch, cancellationToken },
+            new { GitRepositoryId = gitRepositoryId, Branch = branch },
             transaction: tx());
 
         return result?.ToDomain();
@@ -231,7 +269,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
 
         var result = await db.QueryAsync<GitRepositoryRefDto>(
             sql,
-            new { GitRepositoryId = gitRepositoryId, cancellationToken },
+            new { GitRepositoryId = gitRepositoryId },
             transaction: tx());
 
         return result.ToDomain();
@@ -261,8 +299,7 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             gitRepositoryRef.ResolvedCommitSha,
             Status = EnumFormatter<GitReposStatus>.GetValue(gitRepositoryRef.Status),
             gitRepositoryRef.LastError,
-            gitRepositoryRef.LastSyncedAt,
-            cancellationToken
+            gitRepositoryRef.LastSyncedAt
         }, transaction: tx());
     }
 }

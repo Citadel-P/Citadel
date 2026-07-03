@@ -27,6 +27,7 @@ using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.ResourceBindings;
+using WebApi.Routes.Endpoints.Resources.Tags;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
@@ -97,6 +98,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(LoginResponse))]
 [JsonSerializable(typeof(RefreshTokenResponse))]
 [JsonSerializable(typeof(PlatformInput))]
+[JsonSerializable(typeof(CreatePlatformInput))]
 [JsonSerializable(typeof(PlatformsView))]
 [JsonSerializable(typeof(PlatformDescriptor))]
 [JsonSerializable(typeof(DockerPlatformDescriptor))]
@@ -365,6 +367,13 @@ namespace Application.Models;
 [JsonSerializable(typeof(CreateVaultKvV2SecretProviderInput))]
 [JsonSerializable(typeof(UpdateVaultKvV2SecretProviderInput))]
 [JsonSerializable(typeof(UpdateVaultKvV2SecretProviderPatchDocument))]
+[JsonSerializable(typeof(TagView))]
+[JsonSerializable(typeof(TagsView))]
+[JsonSerializable(typeof(TagSummaryView))]
+[JsonSerializable(typeof(ResourceTagsView))]
+[JsonSerializable(typeof(ReplaceResourceTagsInput))]
+[JsonSerializable(typeof(CreateTagInput))]
+[JsonSerializable(typeof(PatchTagInput))]
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

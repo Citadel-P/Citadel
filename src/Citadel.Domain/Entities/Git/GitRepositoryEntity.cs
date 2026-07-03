@@ -1,4 +1,5 @@
 using Domain.Entities.Activities;
+using Domain.Entities.Tags;
 
 namespace Domain.Entities.Git;
 
@@ -46,6 +47,7 @@ public class GitRepository(
     #endregion
 
     public ActivityEvent? LatestActivityEvent { get; private set; } = null;
+    public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
 
     // Helper for the RepoCache path
     public string GetCachePath()
@@ -109,6 +111,11 @@ public class GitRepository(
     public void AssignActivityEvent(ActivityEvent activityEvent)
     {
         LatestActivityEvent = activityEvent;
+    }
+
+    public void AssignTags(IReadOnlyList<TagSummary> tags)
+    {
+        Tags = tags;
     }
 
     public void UpdateSyncPolicy(GitRepositorySyncMode syncMode, int? syncIntervalMinutes)

@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Serialization;
+using Domain.Entities.Tags;
 
 namespace Domain.Entities.Platforms;
 
@@ -32,6 +33,7 @@ public class Platform(
     public string? ServerVersion { get; private set; } = serverVersion;
     public PlatformDescriptor PlatformDescriptor { get; private set; } = platformDescriptor;
     public IReadOnlyCollection<PlatformStat>? Stats => stats;
+    public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
 
     public static Platform FromPersistence(
         Guid id,
@@ -105,5 +107,10 @@ public class Platform(
     {
         stats.Add(stat);
         return this;
-    }   
+    }
+
+    public void AssignTags(IReadOnlyList<TagSummary> tags)
+    {
+        Tags = tags;
+    }
 }

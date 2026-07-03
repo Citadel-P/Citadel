@@ -6,6 +6,7 @@ using Hosting.Common;
 using Hosting.Common.Attributes;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Identity;
+using WebApi.Routes.Endpoints.Resources.Tags;
 
 namespace WebApi.Routes.Endpoints.Resources.Platforms;
 
@@ -25,7 +26,8 @@ public sealed record PlatformView(
     PlatformConnectorType ConnectorType,
     IEnumerable<PlatformStatView>? Stats,
     PlatformDescriptor? PlatformDescriptor,
-     PlatformCapabilities? Capabilities = null
+    IReadOnlyList<TagSummaryView> Tags = null!,
+    PlatformCapabilities? Capabilities = null
     )
 {
     internal static List<PlatformView> Map(IEnumerable<Platform> platforms)
@@ -109,7 +111,8 @@ internal static class PlatformMapperExtension
         ServerVersion: platform.ServerVersion,
         AgentVersion: platform.AgentVersion,
         PlatformDescriptor: platform.PlatformDescriptor,
-        Stats: platform.Stats?.Select(Map)?.ToList());
+        Stats: platform.Stats?.Select(Map)?.ToList(),
+        Tags: [.. platform.Tags.Select(TagSummaryView.Map)]);
 
     private static PlatformType GetPlatformType(PlatformDescriptor platformDescriptor) =>
         platformDescriptor switch

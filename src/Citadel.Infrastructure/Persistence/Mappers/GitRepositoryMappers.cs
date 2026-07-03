@@ -21,7 +21,7 @@ internal static class GitRepositoryMappers
             && !string.IsNullOrWhiteSpace(dto.GitAccount_AuthType)
             && !string.IsNullOrWhiteSpace(dto.GitAccount_Configuration);
 
-        return GitRepository.FromPersistence(
+        var gitRepository = GitRepository.FromPersistence(
             id: dto.Id,
             name: dto.Name,
             description: dto.Description,
@@ -61,6 +61,9 @@ internal static class GitRepositoryMappers
                 createdAt: DateTime.MinValue,
                 createdByActorId: Guid.Empty,
                 configuration: JsonSerializer.Deserialize(dto.GitAccount_Configuration!, GitJsonContext.Default.GitAuthConfiguration)));
+
+        gitRepository.AssignTags(dto.TagsJson.ToTagSummaries());
+        return gitRepository;
     }
 
     private static GitRepositorySyncMode ParseSyncMode(string? syncMode)

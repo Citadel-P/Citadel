@@ -1,14 +1,13 @@
-﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
 using FluentValidation;
+using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Hosting.Common;
 
 namespace Application.Features.Platforms.Queries;
-
 
 [RequirePermission(ResourceType.Platform, PermissionLevel.Read)]
 public sealed record GetPlatformById(Guid Id) : IQuery<Result<Platform>>
@@ -16,7 +15,7 @@ public sealed record GetPlatformById(Guid Id) : IQuery<Result<Platform>>
     internal class Validator : AbstractValidator<GetPlatformById>
     {
         public Validator()
-            => RuleFor(s => s.Id).NotNull();        
+            => RuleFor(s => s.Id).NotNull();
     }
 }
 

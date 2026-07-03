@@ -23,5 +23,6 @@
     OsType: linux,
     Architecture: x86_64
   },
-  Stats: null
+  Stats: null,
+  Tags: null
 }

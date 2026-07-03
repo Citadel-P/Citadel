@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.GitRepositories.Queries;
 
-public sealed record GetAllGitRepositories() : IQuery<Result<IEnumerable<GitRepository>>>;
+public sealed record GetAllGitRepositories(IReadOnlyCollection<Guid>? TagIds = null) : IQuery<Result<IEnumerable<GitRepository>>>;
 
 internal sealed class GetAllGitRepositoriesHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor) : IQueryHandler<GetAllGitRepositories, Result<IEnumerable<GitRepository>>>
 {
@@ -15,10 +15,9 @@ internal sealed class GetAllGitRepositoriesHandler(IUnitOfWork unitOfWork, IUser
     {
         var user = userContextAccessor.Current;
         var gitRepositories = user is not null && !user.IsAdmin
-            ? await unitOfWork.GitRepositories.GetAuthorizedAsync(user.UserId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
-            : await unitOfWork.GitRepositories.GetAllAsync(cancellationToken);
+            ? await unitOfWork.GitRepositories.GetAuthorizedAsync(user.UserId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken, query.TagIds)
+            : await unitOfWork.GitRepositories.GetAllAsync(cancellationToken, query.TagIds);
 
-        IEnumerable<GitRepository> orderedGitRepositories = gitRepositories.OrderByDescending(x => x.CreatedAt);
-        return Result.Success(orderedGitRepositories);
+        return Result.Success(gitRepositories);
     }
 }

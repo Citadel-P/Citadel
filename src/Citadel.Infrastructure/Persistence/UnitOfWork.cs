@@ -41,6 +41,8 @@ internal class UnitOfWork : IUnitOfWork
         ResourceBindings = new Lazy<IResourceBindingRepository>(() => new ResourceBindingRepository(connection, GetTransaction));
         SecretDefinitions = new Lazy<ISecretDefinitionRepository>(() => new SecretDefinitionRepository(connection, GetTransaction));
         SecretProviders = new Lazy<ISecretProviderRepository>(() => new SecretProviderRepository(connection, GetTransaction));
+        Tags = new Lazy<ITagRepository>(() => new TagRepository(connection, GetTransaction));
+        ResourceTags = new Lazy<IResourceTagRepository>(() => new ResourceTagRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -61,6 +63,8 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IResourceBindingRepository> ResourceBindings { get; }
     private Lazy<ISecretDefinitionRepository> SecretDefinitions { get; }
     private Lazy<ISecretProviderRepository> SecretProviders { get; }
+    private Lazy<ITagRepository> Tags { get; }
+    private Lazy<IResourceTagRepository> ResourceTags { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
     private Lazy<IActivityEventRepository> ActivityEvents { get; }
@@ -88,6 +92,8 @@ internal class UnitOfWork : IUnitOfWork
     IResourceBindingRepository IUnitOfWork.ResourceBindings => ResourceBindings.Value;
     ISecretDefinitionRepository IUnitOfWork.SecretDefinitions => SecretDefinitions.Value;
     ISecretProviderRepository IUnitOfWork.SecretProviders => SecretProviders.Value;
+    ITagRepository IUnitOfWork.Tags => Tags.Value;
+    IResourceTagRepository IUnitOfWork.ResourceTags => ResourceTags.Value;
 
     // Lazily creates a transaction
     private IDbTransaction GetTransaction()

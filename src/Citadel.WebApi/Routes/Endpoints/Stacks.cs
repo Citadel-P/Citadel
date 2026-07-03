@@ -30,9 +30,13 @@ public static class Stacks
         return EndpointHandlers.HandleResult(result, StackConfigView.Map);
     }
 
-    public static async Task<Results<Ok<StacksView>, ProblemHttpResult>> List(IMediator mediator, IPermissionEvaluator permissionEvaluator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<StacksView>, ProblemHttpResult>> List(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromQuery] Guid[]? tagIds,
+        CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetAllStacks(), cancellationToken);
+        var result = await mediator.Send(new GetAllStacks(tagIds), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, StacksView.Map);
     }
 

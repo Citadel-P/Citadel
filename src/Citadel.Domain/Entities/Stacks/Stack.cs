@@ -1,4 +1,5 @@
 ﻿using Domain.Entities.Activities;
+using Domain.Entities.Tags;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
@@ -28,6 +29,7 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
     
     public StackRelease? CurrentStackRelease { get; private set; }
     public ActivityEvent? LatestActivityEvent { get; private set; } = null;
+    public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
 
     public static Stack Create(
         string name,
@@ -106,6 +108,11 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
     public void AssignActivityEvent(ActivityEvent activityEvent)
     {
         LatestActivityEvent = activityEvent;
+    }
+
+    public void AssignTags(IReadOnlyList<TagSummary> tags)
+    {
+        Tags = tags;
     }
 
     public bool MarkProcessing(Guid controlTriggeredBy)

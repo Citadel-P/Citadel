@@ -11,6 +11,7 @@ using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Domain.Entities.Tags;
 using Hosting.Common;
 using System.Text.Json.Serialization;
 using Domain.Contracts.Resources.ResourceBindings;
@@ -340,5 +341,11 @@ public partial class StackJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(PatchUserModel))]
 [JsonSerializable(typeof(PatchTeamModel))]
 public partial class RoleJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(IReadOnlyList<TagSummary>))]
+public partial class TagJsonContext : JsonSerializerContext
 {
 }

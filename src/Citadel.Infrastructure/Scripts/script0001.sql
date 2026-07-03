@@ -131,6 +131,18 @@ CREATE TABLE stacks (
     CONSTRAINT fk_stacks_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT
 );
 
+CREATE TABLE tags (
+    id uuid NOT NULL,
+    color text NOT NULL,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    name text NOT NULL,
+    normalizedname text NOT NULL,
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    CONSTRAINT pk_tags PRIMARY KEY (id),
+    CONSTRAINT fk_tags_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT
+);
+
 CREATE TABLE teams (
     id uuid NOT NULL,
     actorid uuid NOT NULL,
@@ -341,6 +353,17 @@ CREATE TABLE stackreleases (
     CONSTRAINT fk_stackreleases_stacks_stackid FOREIGN KEY (stackid) REFERENCES stacks (id) ON DELETE CASCADE
 );
 
+CREATE TABLE resourcetags (
+    resourcetype text NOT NULL,
+    resourceid uuid NOT NULL,
+    tagid uuid NOT NULL,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    CONSTRAINT pk_resourcetags PRIMARY KEY (resourcetype, resourceid, tagid),
+    CONSTRAINT fk_resourcetags_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_resourcetags_tags_tagid FOREIGN KEY (tagid) REFERENCES tags (id) ON DELETE CASCADE
+);
+
 CREATE TABLE refreshtokens (
     id uuid NOT NULL,
     createdat timestamp with time zone NOT NULL,
@@ -507,6 +530,8 @@ VALUES ('030c8f34-4447-d6b0-bc28-62b9626999c7', 1, 1, '30000000-0000-0000-0000-0
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('07b143ad-6b02-c7ff-3d7d-48af137b2bbc', 2, 0, '30000000-0000-0000-0000-000000000002', 27);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('197f429f-cbe9-0e6c-239b-2f24196ec817', 2, 2, '30000000-0000-0000-0000-000000000002', 103);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('2533e6f2-53e3-1281-01f7-cc28045cbc4f', 2, 10, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9', 4, 3, '30000000-0000-0000-0000-000000000001', 0);
@@ -521,17 +546,17 @@ VALUES ('440deb9d-ace8-5e15-ef80-3a42f11a0c42', 4, 10, '30000000-0000-0000-0000-
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('44debca1-5d97-b691-196c-8e421143e307', 2, 8, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('4bc13990-838c-6f0c-0ad1-a456e6821ff7', 4, 2, '30000000-0000-0000-0000-000000000001', 103);
+VALUES ('51ac9abd-9f17-8530-e1a4-8fe69e44ac1d', 4, 1, '30000000-0000-0000-0000-000000000001', 55);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('645b4c54-7937-2180-7186-be24ac6bf330', 4, 5, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('656ccf45-65a9-33b3-de65-d18d5988151a', 4, 12, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('672ebf04-40e5-547b-29f2-6daf5c3c3856', 1, 8, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('6e1cf352-66c2-0671-eb47-b70b01f27406', 2, 11, '30000000-0000-0000-0000-000000000002', 0);
+VALUES ('7125b1ec-d593-d356-f559-c4655a392c31', 2, 1, '30000000-0000-0000-0000-000000000002', 55);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('80aa1c34-79dd-6587-52db-52605326fe77', 2, 7, '30000000-0000-0000-0000-000000000002', 0);
-INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('81be1cc9-0daf-0b6e-7278-0a279754f8a0', 2, 2, '30000000-0000-0000-0000-000000000002', 103);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('86dadd60-fced-3dcd-cdbe-8d262bec7d22', 2, 5, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -541,23 +566,27 @@ VALUES ('936632a5-4e74-0a17-fb8e-497c960c3005', 1, 0, '30000000-0000-0000-0000-0
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('94717f37-cc1a-de60-9bca-dc6379444bfb', 1, 5, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('96ca4b3c-b503-941b-2d70-83f41e529cd7', 2, 11, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('97597a3e-c415-667b-039a-a7a287daefea', 1, 4, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('987e89d0-2c8f-87d8-830f-7461a7db392e', 4, 4, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('9b075e03-6326-7b95-ae78-2b296990ce26', 2, 4, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('a3cd7182-baa1-324f-79f0-3a04d7647032', 4, 11, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('a4b222e3-7452-b5f4-377b-c05652533f67', 4, 0, '30000000-0000-0000-0000-000000000001', 27);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('a60ba8de-ff46-b387-85ed-913d96170a2a', 1, 7, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('abc5b80b-4722-4a2e-f881-448642fc4207', 1, 11, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('b104e60e-87ef-a58f-f04a-ba2fc634f037', 1, 6, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('b2298835-c351-7367-ad8d-e5884be235f3', 2, 12, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('b3abb382-80da-8170-b011-05af044e7908', 2, 3, '30000000-0000-0000-0000-000000000002', 0);
-INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('c94d72c9-1e1a-a3e0-4855-c3b2c5f74306', 4, 1, '30000000-0000-0000-0000-000000000001', 55);
-INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('ca880835-6808-358a-bebb-8ea95efdea97', 1, 11, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('d5fa8563-b0a2-4f11-7e16-7c1877e43dda', 4, 6, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -565,15 +594,15 @@ VALUES ('dbb104e4-d7e2-5173-b0b2-6d1519c2f682', 4, 8, '30000000-0000-0000-0000-0
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('e04cd0d3-47bf-2d28-e099-c7a9b61e3875', 1, 3, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('ea27984d-f6fa-54f1-d8a4-1ddeb122a98f', 2, 1, '30000000-0000-0000-0000-000000000002', 55);
+VALUES ('e89ccf24-0132-149c-c8bc-33265af98ed8', 1, 12, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('ee9254c3-9b59-15a0-aa85-898f5974a603', 2, 6, '30000000-0000-0000-0000-000000000002', 0);
-INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
-VALUES ('f7aa549c-bcc2-d9b2-449d-0f223e0f9752', 4, 11, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('fb710f21-c146-e381-00f0-820f58ecb69a', 1, 9, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('fbb8ef70-2ec3-134f-0c18-1533173d5849', 4, 9, '30000000-0000-0000-0000-000000000001', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('fd0c028a-8225-0f65-8a7b-cb058f29c740', 4, 2, '30000000-0000-0000-0000-000000000001', 103);
 
 INSERT INTO registries (id, configuration, createdat, createdbyactorid, description, name, registryhost, status)
 VALUES ('00000000-0000-0000-0000-000000000100', '{
@@ -692,6 +721,14 @@ CREATE UNIQUE INDEX ix_resourcebindings_scope_resourceid_name ON resourcebinding
 
 CREATE INDEX ix_resourcebindings_secretid ON resourcebindings (secretid);
 
+CREATE INDEX ix_resourcetags_createdbyactorid ON resourcetags (createdbyactorid);
+
+CREATE INDEX ix_resourcetags_filter ON resourcetags (resourcetype, tagid, resourceid);
+
+CREATE INDEX ix_resourcetags_resource ON resourcetags (resourcetype, resourceid);
+
+CREATE INDEX ix_resourcetags_tagid ON resourcetags (tagid);
+
 CREATE INDEX ix_secretdefinitions_name ON secretdefinitions (name);
 
 CREATE INDEX ix_secretdefinitions_providerid ON secretdefinitions (providerid);
@@ -710,6 +747,10 @@ CREATE INDEX ix_stacks_createdbyactorid ON stacks (createdbyactorid);
 
 CREATE INDEX ix_stacks_currentstackreleaseid ON stacks (currentstackreleaseid);
 
+CREATE INDEX ix_tags_createdbyactorid ON tags (createdbyactorid);
+
+CREATE UNIQUE INDEX ix_tags_normalizedname ON tags (normalizedname);
+
 CREATE UNIQUE INDEX ix_teams_actorid ON teams (actorid);
 
 CREATE UNIQUE INDEX ix_users_actorid ON users (actorid);
@@ -723,7 +764,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260701182638_migration0001', '10.0.9');
+VALUES ('20260703182743_migration0001', '10.0.9');
 
 COMMIT;
 

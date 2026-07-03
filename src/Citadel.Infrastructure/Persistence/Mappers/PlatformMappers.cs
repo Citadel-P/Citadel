@@ -10,8 +10,7 @@ internal static class PlatformMappers
 {
     internal static Platform ToDomain(this PlatformDto platform)
     {
-        return
-        Platform.FromPersistence(
+        var result = Platform.FromPersistence(
             id: platform.Id,
             name: platform.Name,
             address: platform.Address,
@@ -26,8 +25,10 @@ internal static class PlatformMappers
                 ?? throw new NotImplementedException($"PlatformDescriptor is missing for platform id {platform.Id}"),
             serverVersion: platform.ServerVersion,
             agentVersion: platform.AgentVersion,
-            stats: platform.Stats?.Select(ToDomain).ToList()
-            );
+            stats: platform.Stats?.Select(ToDomain).ToList());
+
+        result.AssignTags(platform.TagsJson.ToTagSummaries());
+        return result;
     }
 
     internal static IEnumerable<Platform> ToDomain(this IEnumerable<PlatformWithSingleStatDto> platforms)
@@ -35,8 +36,7 @@ internal static class PlatformMappers
 
     internal static Platform ToDomain(this PlatformWithSingleStatDto platform)
     {
-        return
-        Platform.FromPersistence(
+        var result = Platform.FromPersistence(
             id: platform.Id,
             name: platform.Name,
             address: platform.Address,
@@ -58,8 +58,10 @@ internal static class PlatformMappers
                 RxBytes: platform?.Stat_RxBytes ?? 0,
                 TxBytes: platform?.Stat_TxBytes ?? 0,
                 PlatformId: platform?.Id ?? Guid.Empty
-                )]
-            );
+                )]);
+
+        result.AssignTags(platform.TagsJson.ToTagSummaries());
+        return result;
     }
 
     internal static IEnumerable<PlatformStat> ToDomain(this IEnumerable<PlatformStatDto> stats)

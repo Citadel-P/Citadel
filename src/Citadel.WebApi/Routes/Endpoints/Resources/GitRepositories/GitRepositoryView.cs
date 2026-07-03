@@ -4,6 +4,7 @@ using Domain.Entities.Git;
 using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Identity;
+using WebApi.Routes.Endpoints.Resources.Tags;
 
 namespace WebApi.Routes.Endpoints.Resources.GitRepositories;
 
@@ -24,6 +25,7 @@ public sealed record GitRepositoryView(
     DateTime CreatedAt,
     ResourceControlState ControlState,
     LatestActivityView? LatestActivityView,
+    IReadOnlyList<TagSummaryView> Tags = null!,
     ResourceCapabilities? Capabilities = null)
 {
     internal static GitRepositoryView Map(GitRepository gitRepository) => new(
@@ -42,7 +44,8 @@ public sealed record GitRepositoryView(
         gitRepository.OnPull,
         gitRepository.CreatedAt,
         gitRepository.ControlState,
-        gitRepository.LatestActivityEvent?.Map());
+        gitRepository.LatestActivityEvent?.Map(),
+        [.. gitRepository.Tags.Select(TagSummaryView.Map)]);
 
     internal static async Task<GitRepositoryView> Map(GitRepository gitRepository, IPermissionEvaluator permissionEvaluator)
     {

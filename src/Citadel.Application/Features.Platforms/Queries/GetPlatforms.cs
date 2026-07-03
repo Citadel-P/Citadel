@@ -1,4 +1,4 @@
-﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.Platforms.Queries;
 
-public sealed record GetPlatforms() : IQuery<Result<IEnumerable<Platform>>>;
+public sealed record GetPlatforms(IReadOnlyCollection<Guid>? TagIds = null) : IQuery<Result<IEnumerable<Platform>>>;
 
 internal class GetPlatformsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor) : IQueryHandler<GetPlatforms, Result<IEnumerable<Platform>>>
 {
@@ -15,8 +15,8 @@ internal class GetPlatformsHandler(IUnitOfWork unitOfWork, IUserContextAccessor 
     {
         var user = userContextAccessor.Current;
         var platforms = user is not null && !user.IsAdmin
-            ? await unitOfWork.Platforms.GetAuthorizedWithLatestStatAsync(user.UserId, ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
-            : await unitOfWork.Platforms.GetPlatformsWithLatestStatAsync(cancellationToken) ?? [];
+            ? await unitOfWork.Platforms.GetAuthorizedWithLatestStatAsync(user.UserId, ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken, request.TagIds)
+            : await unitOfWork.Platforms.GetPlatformsWithLatestStatAsync(cancellationToken, request.TagIds) ?? [];
 
         return Result.Success(platforms ?? []);
     }

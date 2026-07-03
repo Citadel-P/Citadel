@@ -65,7 +65,7 @@ internal static class StackMappers
                 eventType: Enum.Parse<ActivityEventType>(dto.ActivityEvent_EventType)
                 );
 
-        return Stack.FromPersistence(
+        var stack = Stack.FromPersistence(
             id: dto.Id,
             currentStackReleaseId: dto.CurrentStackReleaseId,
             name: dto.Name,
@@ -83,6 +83,9 @@ internal static class StackMappers
             rowVersion: dto.RowVersion,
             currentStackRelease: currentRelease,
             latestActivityEvent: latestActivityEvent);
+
+        stack.AssignTags(dto.TagsJson.ToTagSummaries());
+        return stack;
     }
 
     internal static IEnumerable<StackRelease> ToDomain(this IEnumerable<StackReleaseDto> dtos)

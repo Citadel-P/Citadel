@@ -10,7 +10,8 @@ public sealed record CreateStackInput(
     string? Description,
     StackSource StackSource,
     StackSpec Spec,
-    StackDriftPolicy? DriftPolicy = null)
+    StackDriftPolicy? DriftPolicy = null,
+    IReadOnlyCollection<Guid>? TagIds = null)
 {
-    internal CreateStack ToCommand() => new(Name, PlatformId, Description, StackSource, Spec, DriftPolicy);
+    internal CreateStack ToCommand() => new(Name, PlatformId, Description, StackSource, Spec, DriftPolicy, TagIds);
 }

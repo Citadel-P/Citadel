@@ -15,7 +15,7 @@ internal static class DeploymentMappers
 
     internal static Deployment ToDomain(this DeploymentDto dto)
     {
-        return Deployment.FromPersistence(
+        var deployment = Deployment.FromPersistence(
             id: dto.Id,
             name: dto.Name,
             rowVersion: dto.RowVersion,
@@ -64,5 +64,8 @@ internal static class DeploymentMappers
                 networkCount:0, volumeCount: 0, imageCount: 0, cpuCount: 0, memTotal: 0, status: dto.Platform_Status != null ? Enum.Parse<PlatformStatus>(dto.Platform_Status) : PlatformStatus.Offline, connectorType: PlatformConnectorType.Unknown, platformDescriptor: null),
             image: dto.Image_Id == null ? null : Image.FromPersistence(id: dto.Image_Id.Value, name: dto.Image_Name, tags: [], dockerImageId: dto.Image_DockerImageId, size: 0, containers: 0, platformId: Guid.Empty, createdAt: DateTime.MinValue, rowVersion:0, controlStartedAt: null, controlState: ResourceControlState.Idle),
             spec: dto.Spec == null ? null : JsonSerializer.Deserialize(dto.Spec, DeploymentJsonContext.Default.DeploymentSpec));
+
+        deployment.AssignTags(dto.TagsJson.ToTagSummaries());
+        return deployment;
     }
 }

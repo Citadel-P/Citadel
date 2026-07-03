@@ -13,7 +13,8 @@ internal record PlatformDto(
     string ConnectorType, // PlatformConnectorType
     string PlatformDescriptor, //PlatformDescriptor
     string? ServerVersion,
-    string? AgentVersion)
+    string? AgentVersion,
+    string? TagsJson = null)
 {
     public ICollection<PlatformStatDto> Stats { get; init; } = [];
     public PlatformDto() : this(Guid.Empty, string.Empty, string.Empty, 0, 0, 0, 0, 0, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty)

@@ -81,8 +81,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             PlatformId = platformId,
             ResourceType = (int)ResourceType.Platform,
             GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read),
-            SpecificPermission = (int)SpecificPermission.None,
-            cancellationToken
+            SpecificPermission = (int)SpecificPermission.None
         }, transaction: tx());
     }
 
@@ -113,8 +112,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             ResourceType = (int)ResourceType.Deployment,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)SpecificPermission.None,
-            PlatformId = platformId,
-            cancellationToken
+            PlatformId = platformId
         }, transaction: tx());
     }
 
@@ -146,8 +144,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             ResourceType = (int)ResourceType.Stack,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)SpecificPermission.None,
-            PlatformId = platformId,
-            cancellationToken
+            PlatformId = platformId
         }, transaction: tx());
     }
 
@@ -179,8 +176,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             ResourceType = (int)ResourceType.Registry,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)SpecificPermission.None,
-            PlatformId = platformId,
-            cancellationToken
+            PlatformId = platformId
         }, transaction: tx());
     }
 
@@ -190,15 +186,21 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return db.ExecuteScalarAsync<bool>(sql, new { Id = id }, transaction: tx());
     }
 
-    public Task<int> AddAsync(Platform platform, CancellationToken cancellationToken)
+    public async Task<int> AddAsync(Platform platform, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null)
     {
-        const string sql = """
-            INSERT INTO Platforms (
-                Id, Name, Address, NetworkCount, VolumeCount,  ImageCount, CpuCount, MemTotal, ServerVersion, AgentVersion, Status, ConnectorType, PlatformDescriptor)
-            VALUES (
-                @Id, @Name, @Address, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor::json)
-        """;
-        return db.ExecuteAsync(sql, new
+        string sql = ResourceTagSql.InputTagsCte + """
+            inserted_platform AS (
+                INSERT INTO Platforms (
+                    Id, Name, Address, NetworkCount, VolumeCount,  ImageCount, CpuCount, MemTotal, ServerVersion, AgentVersion, Status, ConnectorType, PlatformDescriptor)
+                SELECT
+                    @Id, @Name, @Address, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor::json
+                WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
+                RETURNING Id
+            ),
+            """ + ResourceTagSql.InsertTagsCte("inserted_platform", "p") + "\n"
+            + ResourceTagSql.InsertResultSelect("inserted_platform", "inserted_platform", "inserted_tags");
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QuerySingleAsync<ResourceInsertWithTagsResult>(sql, new
         {
             Id = platform.Id,
             Name = platform.Name,
@@ -212,8 +214,15 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             AgentVersion = platform.AgentVersion,
             Status = EnumFormatter<PlatformStatus>.GetValue(platform.Status),
             ConnectorType = EnumFormatter<PlatformConnectorType>.GetValue(platform.ConnectorType),
-            PlatformDescriptor = JsonSerializer.Serialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor)
+            PlatformDescriptor = JsonSerializer.Serialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor),
+            CreatedAt = DateTime.UtcNow,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform),
+            TagIds = tagIdArray,
+            TagCreatedByActorId = tagCreatedByActorId ?? Constants.SystemId
         }, transaction: tx());
+
+        platform.AssignTags(result.TagsJson.ToTagSummaries());
+        return result.AffectedRows;
     }
 
     public Task<int> DeleteAsync(Guid platformId, CancellationToken cancellationToken)
@@ -259,14 +268,15 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public async Task<Platform?> GetPlatformWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken)
     {
-        const string sql = """
+        string sql = $$"""
             SELECT p.*,
                 s.Id as Stat_Id,
                 s.Created as Stat_Created,
                 s.CpuUsage as Stat_CpuUsage,
                 s.MemoryUsage as Stat_MemoryUsage,
                 s.RxBytes as Stat_RxBytes,
-                s.TxBytes as Stat_TxBytes
+                s.TxBytes as Stat_TxBytes,
+                {{ResourceTagSql.TagAggregate("p")}}
             FROM Platforms p
             LEFT JOIN PlatformStats s ON s.Id = (
                 SELECT Id FROM PlatformStats
@@ -278,20 +288,25 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             LIMIT 1;
         """;
 
-        var result = await db.QuerySingleOrDefaultAsync<PlatformWithSingleStatDto>(sql, new { Id = platformId }, tx());
+        var result = await db.QuerySingleOrDefaultAsync<PlatformWithSingleStatDto>(sql, new
+        {
+            Id = platformId,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform)
+        }, tx());
         return result?.ToDomain();
     }
 
-    public async Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken)
+    public async Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = @"
+        string sql = $$"""
             SELECT p.*,
                 s.Id as Stat_Id,
                 s.Created as Stat_Created,
                 s.CpuUsage as Stat_CpuUsage,
                 s.MemoryUsage as Stat_MemoryUsage,
                 s.RxBytes as Stat_RxBytes,
-                s.TxBytes as Stat_TxBytes
+                s.TxBytes as Stat_TxBytes,
+                {{ResourceTagSql.TagAggregate("p")}}
             FROM Platforms p
             LEFT JOIN PlatformStats s ON s.Id = (
                 SELECT Id FROM PlatformStats
@@ -299,16 +314,23 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 ORDER BY Created DESC
                 LIMIT 1
             )
+            WHERE {{ResourceTagSql.FilterPredicate("p")}}
             ORDER BY p.Name;
-        ";
+        """;
 
-        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, transaction: tx());
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new
+        {
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
+        }, transaction: tx());
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Platform>> GetAuthorizedWithLatestStatAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Platform>> GetAuthorizedWithLatestStatAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = $$"""
+        string sql = $$"""
             WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
             
             SELECT p.*,
@@ -317,7 +339,8 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 s.CpuUsage as Stat_CpuUsage,
                 s.MemoryUsage as Stat_MemoryUsage,
                 s.RxBytes as Stat_RxBytes,
-                s.TxBytes as Stat_TxBytes
+                s.TxBytes as Stat_TxBytes,
+                {{ResourceTagSql.TagAggregate("p")}}
             FROM Platforms p
             LEFT JOIN PlatformStats s ON s.Id = (
                 SELECT Id FROM PlatformStats
@@ -326,17 +349,21 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 LIMIT 1
             )
             WHERE {{AuthorizationSql.ResourcePredicatePrefix}}p.Id {{AuthorizationSql.ResourcePredicateSuffix}}
+              AND {{ResourceTagSql.FilterPredicate("p")}}
             ORDER BY p.Name
          """;
 
         var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
         var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
-            cancellationToken
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
         }, transaction: tx());
 
         return result.ToDomain();
@@ -358,8 +385,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             UserId = userId,
             ResourceType = (int)resourceType,
             GrantedPermissionMask = grantedPermissionMask,
-            SpecificPermission = (int)specificPermission,
-            cancellationToken
+            SpecificPermission = (int)specificPermission
         }, transaction: tx());
 
         return result.ToDomain();

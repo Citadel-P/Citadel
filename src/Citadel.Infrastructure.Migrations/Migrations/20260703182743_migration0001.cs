@@ -230,6 +230,29 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "tags",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    color = table.Column<string>(type: "text", maxLength: 7, nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    normalizedname = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tags", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_tags_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "teams",
                 columns: table => new
                 {
@@ -659,6 +682,33 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "resourcetags",
+                columns: table => new
+                {
+                    resourcetype = table.Column<string>(type: "text", nullable: false),
+                    resourceid = table.Column<Guid>(type: "uuid", nullable: false),
+                    tagid = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_resourcetags", x => new { x.resourcetype, x.resourceid, x.tagid });
+                    table.ForeignKey(
+                        name: "fk_resourcetags_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_resourcetags_tags_tagid",
+                        column: x => x.tagid,
+                        principalTable: "tags",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "refreshtokens",
                 columns: table => new
                 {
@@ -920,6 +970,7 @@ namespace Infrastructure.Migrations.Migrations
                 {
                     { new Guid("030c8f34-4447-d6b0-bc28-62b9626999c7"), 1, 1, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("07b143ad-6b02-c7ff-3d7d-48af137b2bbc"), 2, 0, new Guid("30000000-0000-0000-0000-000000000002"), 27 },
+                    { new Guid("197f429f-cbe9-0e6c-239b-2f24196ec817"), 2, 2, new Guid("30000000-0000-0000-0000-000000000002"), 103 },
                     { new Guid("2533e6f2-53e3-1281-01f7-cc28045cbc4f"), 2, 10, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9"), 4, 3, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("361e1bf8-ef0f-1409-9137-6fa885696a19"), 4, 7, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
@@ -927,33 +978,35 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("4032d1e2-fe5e-16ef-f554-69bd2c2ac19d"), 1, 10, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("440deb9d-ace8-5e15-ef80-3a42f11a0c42"), 4, 10, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("44debca1-5d97-b691-196c-8e421143e307"), 2, 8, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
-                    { new Guid("4bc13990-838c-6f0c-0ad1-a456e6821ff7"), 4, 2, new Guid("30000000-0000-0000-0000-000000000001"), 103 },
+                    { new Guid("51ac9abd-9f17-8530-e1a4-8fe69e44ac1d"), 4, 1, new Guid("30000000-0000-0000-0000-000000000001"), 55 },
                     { new Guid("645b4c54-7937-2180-7186-be24ac6bf330"), 4, 5, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("656ccf45-65a9-33b3-de65-d18d5988151a"), 4, 12, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("672ebf04-40e5-547b-29f2-6daf5c3c3856"), 1, 8, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
-                    { new Guid("6e1cf352-66c2-0671-eb47-b70b01f27406"), 2, 11, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("7125b1ec-d593-d356-f559-c4655a392c31"), 2, 1, new Guid("30000000-0000-0000-0000-000000000002"), 55 },
                     { new Guid("80aa1c34-79dd-6587-52db-52605326fe77"), 2, 7, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
-                    { new Guid("81be1cc9-0daf-0b6e-7278-0a279754f8a0"), 2, 2, new Guid("30000000-0000-0000-0000-000000000002"), 103 },
                     { new Guid("86dadd60-fced-3dcd-cdbe-8d262bec7d22"), 2, 5, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("909763b4-50a0-e1c7-6df1-61add076910c"), 1, 2, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("936632a5-4e74-0a17-fb8e-497c960c3005"), 1, 0, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("94717f37-cc1a-de60-9bca-dc6379444bfb"), 1, 5, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("96ca4b3c-b503-941b-2d70-83f41e529cd7"), 2, 11, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("97597a3e-c415-667b-039a-a7a287daefea"), 1, 4, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("987e89d0-2c8f-87d8-830f-7461a7db392e"), 4, 4, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("9b075e03-6326-7b95-ae78-2b296990ce26"), 2, 4, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("a3cd7182-baa1-324f-79f0-3a04d7647032"), 4, 11, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("a4b222e3-7452-b5f4-377b-c05652533f67"), 4, 0, new Guid("30000000-0000-0000-0000-000000000001"), 27 },
                     { new Guid("a60ba8de-ff46-b387-85ed-913d96170a2a"), 1, 7, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("abc5b80b-4722-4a2e-f881-448642fc4207"), 1, 11, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("b104e60e-87ef-a58f-f04a-ba2fc634f037"), 1, 6, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("b2298835-c351-7367-ad8d-e5884be235f3"), 2, 12, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("b3abb382-80da-8170-b011-05af044e7908"), 2, 3, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
-                    { new Guid("c94d72c9-1e1a-a3e0-4855-c3b2c5f74306"), 4, 1, new Guid("30000000-0000-0000-0000-000000000001"), 55 },
-                    { new Guid("ca880835-6808-358a-bebb-8ea95efdea97"), 1, 11, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("d5fa8563-b0a2-4f11-7e16-7c1877e43dda"), 4, 6, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("dbb104e4-d7e2-5173-b0b2-6d1519c2f682"), 4, 8, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("e04cd0d3-47bf-2d28-e099-c7a9b61e3875"), 1, 3, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
-                    { new Guid("ea27984d-f6fa-54f1-d8a4-1ddeb122a98f"), 2, 1, new Guid("30000000-0000-0000-0000-000000000002"), 55 },
+                    { new Guid("e89ccf24-0132-149c-c8bc-33265af98ed8"), 1, 12, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("ee9254c3-9b59-15a0-aa85-898f5974a603"), 2, 6, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
-                    { new Guid("f7aa549c-bcc2-d9b2-449d-0f223e0f9752"), 4, 11, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("fb710f21-c146-e381-00f0-820f58ecb69a"), 1, 9, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
-                    { new Guid("fbb8ef70-2ec3-134f-0c18-1533173d5849"), 4, 9, new Guid("30000000-0000-0000-0000-000000000001"), 0 }
+                    { new Guid("fbb8ef70-2ec3-134f-0c18-1533173d5849"), 4, 9, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("fd0c028a-8225-0f65-8a7b-cb058f29c740"), 4, 2, new Guid("30000000-0000-0000-0000-000000000001"), 103 }
                 });
 
             migrationBuilder.InsertData(
@@ -1254,6 +1307,26 @@ namespace Infrastructure.Migrations.Migrations
                 column: "secretid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_resourcetags_createdbyactorid",
+                table: "resourcetags",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_resourcetags_filter",
+                table: "resourcetags",
+                columns: new[] { "resourcetype", "tagid", "resourceid" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_resourcetags_resource",
+                table: "resourcetags",
+                columns: new[] { "resourcetype", "resourceid" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_resourcetags_tagid",
+                table: "resourcetags",
+                column: "tagid");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_secretdefinitions_name",
                 table: "secretdefinitions",
                 column: "name");
@@ -1298,6 +1371,17 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_stacks_currentstackreleaseid",
                 table: "stacks",
                 column: "currentstackreleaseid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tags_createdbyactorid",
+                table: "tags",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tags_normalizedname",
+                table: "tags",
+                column: "normalizedname",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_teams_actorid",
@@ -1376,6 +1460,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "resourcebindings");
 
             migrationBuilder.DropTable(
+                name: "resourcetags");
+
+            migrationBuilder.DropTable(
                 name: "stackreleases");
 
             migrationBuilder.DropTable(
@@ -1398,6 +1485,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "secretdefinitions");
+
+            migrationBuilder.DropTable(
+                name: "tags");
 
             migrationBuilder.DropTable(
                 name: "teams");

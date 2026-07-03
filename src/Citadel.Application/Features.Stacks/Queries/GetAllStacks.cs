@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.Stacks.Queries;
 
-public sealed record GetAllStacks : IQuery<Result<IEnumerable<Stack>>>;
+public sealed record GetAllStacks(IReadOnlyCollection<Guid>? TagIds = null) : IQuery<Result<IEnumerable<Stack>>>;
 
 internal sealed class GetAllStacksHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor) : IQueryHandler<GetAllStacks, Result<IEnumerable<Stack>>>
 {
@@ -15,8 +15,8 @@ internal sealed class GetAllStacksHandler(IUnitOfWork unitOfWork, IUserContextAc
     {
         var user = userContextAccessor.Current;
         var stacks = user is not null && !user.IsAdmin
-            ? await unitOfWork.Stacks.GetAuthorizedInfoAsync(user.UserId, ResourceType.Stack, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
-            : await unitOfWork.Stacks.GetInfoAsync(cancellationToken);
+            ? await unitOfWork.Stacks.GetAuthorizedInfoAsync(user.UserId, ResourceType.Stack, PermissionLevel.Read, SpecificPermission.None, cancellationToken, query.TagIds)
+            : await unitOfWork.Stacks.GetInfoAsync(cancellationToken, query.TagIds);
 
         return Result.Success(stacks);
     }

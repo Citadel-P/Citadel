@@ -6,6 +6,7 @@ using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Identity;
 using Hosting.Common.Attributes;
+using WebApi.Routes.Endpoints.Resources.Tags;
 namespace WebApi.Routes.Endpoints.Resources.Deployments;
 
 public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments, ResourceCapabilities Capabilities)
@@ -67,6 +68,7 @@ public sealed record DeploymentView(
     Guid? ContainerId = null,
     string? DockerContainerId = null,
     string? DockerImageId = null,
+    IReadOnlyList<TagSummaryView> Tags = null!,
     LatestActivityView? LatestActivityView = null,
     DeploymentCapabilities? Capabilities = null
     )
@@ -89,6 +91,7 @@ public sealed record DeploymentView(
         ContainerId: deployment.Container?.Id,
         DockerContainerId: deployment.Container?.DockerContainerId,
         DockerImageId: deployment.Container?.DockerImageId ?? deployment.Image?.DockerImageId,
+        Tags: [.. deployment.Tags.Select(TagSummaryView.Map)],
         LatestActivityView: deployment.LatestActivityEvent?.Map()
         );
 

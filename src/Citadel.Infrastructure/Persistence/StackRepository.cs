@@ -17,7 +17,7 @@ namespace Infrastructure.Persistence;
 
 internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx) : IStackRepository
 {
-    private const string InfoSelect = """
+    private static readonly string InfoSelect = $$"""
     SELECT
         s.Id,
         s.CurrentStackReleaseId,
@@ -41,7 +41,8 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         sr.CreatedAt AS CurrentRelease_CreatedAt,
         sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
         p.Name AS Platform_Name,
-        p.Status AS Platform_Status
+        p.Status AS Platform_Status,
+        {{ResourceTagSql.TagAggregate("s")}}
     FROM Stacks s
     LEFT JOIN StackReleases sr
         ON s.CurrentStackReleaseId = sr.Id
@@ -76,7 +77,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
     public async Task<Stack?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = """
+        string sql = $$"""
             SELECT
                 s.Id,
                 s.CurrentStackReleaseId,
@@ -107,7 +108,8 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 ei.EventType AS ActivityEvent_EventType,
                 ei.Status AS ActivityEvent_Status,
                 ei.Id AS ActivityEvent_Id,
-                ei.CreatedAt AS ActivityEvent_CreatedAt
+                ei.CreatedAt AS ActivityEvent_CreatedAt,
+                {{ResourceTagSql.TagAggregate("s")}}
             FROM Stacks s
             LEFT JOIN StackReleases sr
                 ON s.CurrentStackReleaseId = sr.Id
@@ -125,14 +127,22 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             WHERE s.Id = @Id LIMIT 1
             """;
 
-        var result = await db.QuerySingleOrDefaultAsync<StackDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<StackDto>(sql, new
+        {
+            Id = id,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack)
+        }, transaction: tx());
         return result?.ToDomain();
     }
 
     public async Task<Stack?> GetInfoAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = InfoSelect + " " + "WHERE s.Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<StackDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
+        string sql = InfoSelect + " " + "WHERE s.Id = @Id LIMIT 1";
+        var result = await db.QuerySingleOrDefaultAsync<StackDto>(sql, new
+        {
+            Id = id,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack)
+        }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -206,46 +216,59 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
     public async Task<IEnumerable<Stack>> GetAllAsync(CancellationToken cancellationToken)
     {
-        const string sql = InfoSelect + " " + "ORDER BY s.CreatedAt DESC, s.Name ASC";
-        var result = await db.QueryAsync<StackDto>(sql, transaction: tx());
+        string sql = InfoSelect + " " + "ORDER BY s.CreatedAt DESC, s.Name ASC";
+        var result = await db.QueryAsync<StackDto>(sql, new
+        {
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack)
+        }, transaction: tx());
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken)
+    public async Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = InfoSelect + " " + "ORDER BY s.CreatedAt DESC, s.Name ASC";
-        var result = await db.QueryAsync<StackDto>(sql, transaction: tx());
+        string sql = InfoSelect + " WHERE " + ResourceTagSql.FilterPredicate("s") + " ORDER BY s.CreatedAt DESC, s.Name ASC";
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<StackDto>(sql, new
+        {
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
+        }, transaction: tx());
         return result.ToDomain();
     }
 
     public async Task<IEnumerable<Container>> GetContainersAsync(Guid stackId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Containers WHERE StackId = @StackId";
-        var result = await db.QueryAsync<ContainerDto>(sql, new { StackId = stackId, cancellationToken }, transaction: tx());
+        var result = await db.QueryAsync<ContainerDto>(sql, new { StackId = stackId }, transaction: tx());
         return result.ToDomain();
     }
 
     public Task<IEnumerable<string>> GetContainerIdsAsync(Guid stackId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT DockerContainerId FROM Containers WHERE StackId = @StackId";
-        var result = db.QueryAsync<string>(sql, new { StackId = stackId, cancellationToken }, transaction: tx());
+        var result = db.QueryAsync<string>(sql, new { StackId = stackId }, transaction: tx());
         return result;
     }
 
-    public async Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + InfoSelect + " WHERE "
+        string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + InfoSelect + " WHERE "
                         + AuthorizationSql.ResourcePredicatePrefix + "s.Id" + AuthorizationSql.ResourcePredicateSuffix
+                        + " AND " + ResourceTagSql.FilterPredicate("s")
                         + " ORDER BY s.CreatedAt DESC, s.Name ASC";
 
         var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
         var result = await db.QueryAsync<StackDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
-            cancellationToken
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
         }, transaction: tx());
 
         return result.ToDomain();
@@ -265,16 +288,19 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             StackId = stackId,
             ResourceType = (int)ResourceType.Stack,
             GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read),
-            SpecificPermission = (int)SpecificPermission.None,
-            cancellationToken
+            SpecificPermission = (int)SpecificPermission.None
         }, transaction: tx());
     }
 
     public async Task<IEnumerable<Stack>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = InfoSelect + " " + "WHERE s.Id = ANY(@Ids) ORDER BY s.CreatedAt DESC, s.Name ASC";
+        string sql = InfoSelect + " " + "WHERE s.Id = ANY(@Ids) ORDER BY s.CreatedAt DESC, s.Name ASC";
         var idArray = ids as Guid[] ?? [.. ids];
-        var result = await db.QueryAsync<StackDto>(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
+        var result = await db.QueryAsync<StackDto>(sql, new
+        {
+            Ids = idArray,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack)
+        }, transaction: tx());
         return result.ToDomain();
     }
 
@@ -307,8 +333,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ResourceType = (int)ResourceType.Platform,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)SpecificPermission.None,
-            StackId = stackId,
-            cancellationToken
+            StackId = stackId
         }, transaction: tx());
     }
 
@@ -341,8 +366,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ResourceType = (int)ResourceType.Registry,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)SpecificPermission.None,
-            StackId = stackId,
-            cancellationToken
+            StackId = stackId
         }, transaction: tx());
     }
 
@@ -377,59 +401,68 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)SpecificPermission.None,
             StackId = stackId,
-            StackSource = EnumFormatter<StackSource>.GetValue(StackSource.Git),
-            cancellationToken
+            StackSource = EnumFormatter<StackSource>.GetValue(StackSource.Git)
         }, transaction: tx());
     }
 
     public async Task<IEnumerable<StackRelease>> GetReleasesByStackIdAsync(Guid stackId, CancellationToken cancellationToken)
     {
         const string sql = ReleaseBaseSelect + " " + "WHERE sr.StackId = @StackId ORDER BY sr.CreatedAt DESC, sr.Version DESC";
-        var result = await db.QueryAsync<StackReleaseDto>(sql, new { StackId = stackId, cancellationToken }, transaction: tx());
+        var result = await db.QueryAsync<StackReleaseDto>(sql, new { StackId = stackId }, transaction: tx());
         return result.ToDomain();
     }
 
     public Task<bool> ExistsAsync(string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Stacks WHERE Name = @Name)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name }, transaction: tx());
     }
 
     public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Stacks WHERE Id = @Id)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Id = id, cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Id = id }, transaction: tx());
     }
 
     public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Stacks WHERE Name = @Name AND Id != @Id)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id, cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id }, transaction: tx());
     }
 
-    public Task<int> AddAsync(Stack stack, CancellationToken cancellationToken)
+    public async Task<int> AddAsync(Stack stack, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null)
     {
-        const string stackSql = """
-            INSERT INTO Stacks (
-                Id, CurrentStackReleaseId, Name, Description, StackSource, StackUpdateState,
-                DriftPolicy, CreatedAt, CreatedByActorId, ControlState, ControlStartedAt, RowVersion, ControlTriggeredBy
-            ) VALUES (
-                @Id, @CurrentStackReleaseId, @Name, @Description, @StackSource, @StackUpdateState::json,
-                @DriftPolicy::json, @CreatedAt, @CreatedByActorId, @ControlState, @ControlStartedAt, @RowVersion, @ControlTriggeredBy
+        string stackSql = ResourceTagSql.InputTagsCte + """
+            inserted_stack AS (
+                INSERT INTO Stacks (
+                    Id, CurrentStackReleaseId, Name, Description, StackSource, StackUpdateState,
+                    DriftPolicy, CreatedAt, CreatedByActorId, ControlState, ControlStartedAt, RowVersion, ControlTriggeredBy
+                )
+                SELECT
+                    @Id, @CurrentStackReleaseId, @Name, @Description, @StackSource, @StackUpdateState::json,
+                    @DriftPolicy::json, @CreatedAt, @CreatedByActorId, @ControlState, @ControlStartedAt, @RowVersion, @ControlTriggeredBy
+                WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
+                RETURNING Id
             )
         """;
 
-        const string stackReleaseSql = """
-            INSERT INTO StackReleases (
-                Id, StackId, PlatformId, Status, Version, Spec, Source, ResourceBindings, CreatedAt, CreatedByActorId
-            ) VALUES (
-                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
-            )
-        """;
+        string stackReleaseSql = """
+            , inserted_release AS (
+                INSERT INTO StackReleases (
+                    Id, StackId, PlatformId, Status, Version, Spec, Source, ResourceBindings, CreatedAt, CreatedByActorId
+                )
+                SELECT
+                    @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
+                FROM inserted_stack
+                RETURNING Id
+            ),
+            """ + ResourceTagSql.InsertTagsCte("inserted_stack", "s") + "\n"
+            + ResourceTagSql.InsertResultSelect("inserted_stack", "inserted_stack", "inserted_release", "inserted_tags");
 
         var currentStackRelease = stack.CurrentStackRelease ?? throw new InvalidOperationException("Stack must have a current stack release.");
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
 
-        return db.ExecuteAsync(stackSql + ";\n" + stackReleaseSql, new
+        var result = await db.QuerySingleAsync<ResourceInsertWithTagsResult>(stackSql + "\n" + stackReleaseSql, new
         {
             Id = stack.Id,
             CurrentStackReleaseId = stack.CurrentStackReleaseId,
@@ -453,8 +486,14 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             ReleaseSource = currentStackRelease.Source is null ? null : JsonSerializer.Serialize(currentStackRelease.Source, StackJsonContext.Default.StackReleaseSource),
             ReleaseResourceBindings = SerializeResourceBindings(currentStackRelease.ResourceBindings),
             ReleaseCreatedAt = currentStackRelease.CreatedAt,
-            ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId
+            ReleaseCreatedByActorId = currentStackRelease.CreatedByActorId,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack),
+            TagIds = tagIdArray,
+            TagCreatedByActorId = tagCreatedByActorId ?? stack.CreatedByActorId
         }, transaction: tx());
+
+        stack.AssignTags(result.TagsJson.ToTagSummaries());
+        return result.AffectedRows;
     }
 
     public Task<int> AddReleaseAsync(StackRelease release, CancellationToken cancellationToken)
@@ -550,8 +589,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         return db.ExecuteAsync(sql, new
         {
             ReleaseId = releaseId,
-            Status = EnumFormatter<StackReleaseStatus>.GetValue(status),
-            cancellationToken
+            Status = EnumFormatter<StackReleaseStatus>.GetValue(status)
         }, transaction: tx());
     }
 
@@ -562,13 +600,13 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
         return db.ExecuteAsync(
             sql,
-            new { Ids = idArray, cancellationToken },
+            new { Ids = idArray },
             transaction: tx());
     }
 
     public async Task<IEnumerable<Stack>> GetStuckStacksAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
     {
-        const string sql = InfoSelect + " " + """
+        string sql = InfoSelect + " " + """
             WHERE 
                 s.ControlState = 'Processing'
                 AND s.ControlStartedAt < @ControlStartedAt
@@ -578,7 +616,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         var result = await db.QueryAsync<StackDto>(sql, new
         {
             ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
-            cancellationToken
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack)
         }, transaction: tx());
 
         return result.ToDomain();
@@ -606,8 +644,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             sql,
             new
             {
-                StackSource = EnumFormatter<StackSource>.GetValue(StackSource.Git),
-                cancellationToken
+                StackSource = EnumFormatter<StackSource>.GetValue(StackSource.Git)
             },
             transaction: tx());
     }
@@ -671,8 +708,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                     EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Created),
                     EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Applying),
                     EnumFormatter<StackReleaseStatus>.GetValue(StackReleaseStatus.Pending)
-                },
-                cancellationToken
+                }
             },
             transaction: tx());
 

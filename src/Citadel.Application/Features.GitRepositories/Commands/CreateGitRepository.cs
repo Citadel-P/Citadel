@@ -28,7 +28,8 @@ public sealed record CreateGitRepository(
     RepoCommand? OnClone = null,
     RepoCommand? OnPull = null,
     GitRepositorySyncMode SyncMode = GitRepositorySyncMode.PullInterval,
-    int? SyncIntervalMinutes = 5) : ICommand<Result<GitRepository>>
+    int? SyncIntervalMinutes = 5,
+    IReadOnlyCollection<Guid>? TagIds = null) : ICommand<Result<GitRepository>>
 {
     internal sealed class Validator : AbstractValidator<CreateGitRepository>
     {
@@ -69,7 +70,6 @@ internal sealed class CreateGitRepositoryHandler(
         if (validation.IsFailure())
             return Result.Failure<GitRepository>(validation.Errors);
 
-        // Add repository
         var gitRepository = new GitRepository(
             command.Name,
             command.Description,
@@ -85,9 +85,10 @@ internal sealed class CreateGitRepositoryHandler(
 
         gitRepository.MarkProcessing(actorId);
 
-        await unitOfWork.GitRepositories.AddAsync(gitRepository, cancellationToken);
+        var result = await unitOfWork.GitRepositories.AddAsync(gitRepository, cancellationToken, command.TagIds, actorId);
+        if (result == 0)
+            return Result.Failure<GitRepository>(new BadRequestError("One or more tags do not exist."));
 
-        // Add activity
         var activity = new ActivityEvent(
             actorId: actorId,
             resourceId: gitRepository.Id,
@@ -95,8 +96,7 @@ internal sealed class CreateGitRepositoryHandler(
             resourceName: gitRepository.Name,
             eventType: ActivityEventType.GitRepoCreated,
             status: ActivityStatus.Information,
-            info: new GitRepoCreated(gitRepository.ToSnapshot())
-            );
+            info: new GitRepoCreated(gitRepository.ToSnapshot()));
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 
@@ -105,10 +105,8 @@ internal sealed class CreateGitRepositoryHandler(
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, gitRepository, "create"), cancellationToken);
 
-        // Clone the repo.
         await gitSyncWriter.WriteAsync(new GitRepoSyncRequest(gitRepository.Id), CancellationToken.None);
 
         return gitRepository;
     }
 }
-

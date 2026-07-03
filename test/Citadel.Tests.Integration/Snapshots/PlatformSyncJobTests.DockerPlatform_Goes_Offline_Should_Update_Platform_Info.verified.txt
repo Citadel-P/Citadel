@@ -23,5 +23,6 @@
     OsType: null,
     Architecture: null
   },
-  Stats: null
+  Stats: null,
+  Tags: null
 }

@@ -17,7 +17,7 @@ namespace Infrastructure.Persistence;
 
 internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) : IDeploymentRepository
 {
-    private const string BaseSelect = """
+    private static readonly string BaseSelect = $$"""
     SELECT
         d.Id,
         d.Name, 
@@ -41,7 +41,8 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         p.Status AS Platform_Status,
         i.Name as Image_Name,
         i.Id AS Image_Id,
-        i.DockerImageId AS Image_DockerImageId
+        i.DockerImageId AS Image_DockerImageId,
+        {{ResourceTagSql.TagAggregate("d")}}
     FROM Deployments d 
     LEFT JOIN Containers c
         ON d.Id = c.DeploymentId
@@ -53,7 +54,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
     public async Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = """
+        string sql = $$"""
             SELECT 
                 d.*,
                 c.Id AS Container_ContainerId,
@@ -62,7 +63,8 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 ei.EventType AS ActivityEvent_EventType,
                 ei.Status AS ActivityEvent_Status,
                 ei.Id AS ActivityEvent_Id,
-                ei.CreatedAt AS ActivityEvent_CreatedAt
+                ei.CreatedAt AS ActivityEvent_CreatedAt,
+                {{ResourceTagSql.TagAggregate("d")}}
                 FROM Deployments d
             LEFT JOIN Containers c 
                 ON c.DeploymentId = d.Id
@@ -78,16 +80,23 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             WHERE d.Id = @Id LIMIT 1
             """;
             
-        var result = await db.QuerySingleOrDefaultAsync<DeploymentDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<DeploymentDto>(sql, new
+        {
+            Id = id,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment)
+        }, transaction: tx());
         return result?.ToDomain();
     }
     
     public async Task<Deployment?> GetInfoAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = BaseSelect + " "+ "WHERE d.Id = @Id LIMIT 1";
+        string sql = BaseSelect + " "+ "WHERE d.Id = @Id LIMIT 1";
 
-        var result = await db.QuerySingleOrDefaultAsync<DeploymentDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
-        var d = result?.ToDomain();
+        var result = await db.QuerySingleOrDefaultAsync<DeploymentDto>(sql, new
+        {
+            Id = id,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment)
+        }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -108,13 +117,13 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             WHERE d.Id = ANY(@Ids)
             ORDER BY d.CreatedAt DESC, d.Name ASC
         """;
-        var result = await db.QueryAsync<DeploymentDto>(sql, new { Ids = ids.ToArray(), cancellationToken }, transaction: tx());
+        var result = await db.QueryAsync<DeploymentDto>(sql, new { Ids = ids.ToArray() }, transaction: tx());
         return result.ToDomain();
     }
 
     public async Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
     {
-        const string sql = BaseSelect + " " + """
+        string sql = BaseSelect + " " + """
             WHERE 
                 d.ControlState = 'Processing'
                 AND d.ControlStartedAt < @ControlStartedAt
@@ -124,7 +133,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         var result = await db.QueryAsync<DeploymentDto>(sql, new 
         {
             ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
-            cancellationToken 
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment)
         }, transaction: tx());
 
         return result.ToDomain();
@@ -133,34 +142,40 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
     public Task<bool> ExistsAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE PlatformId = @PlatformId)";
-        return db.ExecuteScalarAsync<bool>(sql, new { PlatformId = platformId, cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { PlatformId = platformId }, transaction: tx());
     }
 
     public Task<bool> ExistsAsync(string name, Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE name = @Name AND PlatformId = @PlatformId)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, PlatformId = platformId, cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, PlatformId = platformId }, transaction: tx());
     }
 
     public Task<bool> ExistsAsync(Guid id, string name, Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE Name=@Name AND Id != @Id AND PlatformId = @PlatformId)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id, PlatformId = platformId, cancellationToken }, transaction: tx());
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id, PlatformId = platformId }, transaction: tx());
     }
 
-    public Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken)
+    public async Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null)
     {
-        const string sql = """
-            INSERT INTO Deployments (
-                Id, Name, Description, PlatformId, Status, CreatedAt, CreatedByActorId, Spec, AutoUpdateState_LastCheckedAt, AutoUpdateState_Status, AutoUpdateState_CurrentDigest,
-                AutoUpdateState_RemoteDigest, AutoUpdateState_LastError
-            ) VALUES (
-                 @Id, @Name, @Description, @PlatformId, @Status, @CreatedAt, @CreatedByActorId, @Spec::json,
-                 @AutoUpdateState_LastCheckedAt, @AutoUpdateState_Status, @AutoUpdateState_CurrentDigest,
-                 @AutoUpdateState_RemoteDigest, @AutoUpdateState_LastError
-            )
-        """;
-        return db.ExecuteAsync(sql, new
+        string sql = ResourceTagSql.InputTagsCte + """
+            inserted_deployment AS (
+                INSERT INTO Deployments (
+                    Id, Name, Description, PlatformId, Status, CreatedAt, CreatedByActorId, Spec, AutoUpdateState_LastCheckedAt, AutoUpdateState_Status, AutoUpdateState_CurrentDigest,
+                    AutoUpdateState_RemoteDigest, AutoUpdateState_LastError
+                )
+                SELECT
+                     @Id, @Name, @Description, @PlatformId, @Status, @CreatedAt, @CreatedByActorId, @Spec::json,
+                     @AutoUpdateState_LastCheckedAt, @AutoUpdateState_Status, @AutoUpdateState_CurrentDigest,
+                     @AutoUpdateState_RemoteDigest, @AutoUpdateState_LastError
+                WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
+                RETURNING Id
+            ),
+            """ + ResourceTagSql.InsertTagsCte("inserted_deployment", "d") + "\n"
+            + ResourceTagSql.InsertResultSelect("inserted_deployment", "inserted_deployment", "inserted_tags");
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QuerySingleAsync<ResourceInsertWithTagsResult>(sql, new
         {
             Id = deployment.Id,
             Name = deployment.Name,
@@ -175,8 +190,13 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AutoUpdateState_CurrentDigest = deployment.AutoUpdateState?.CurrentDigest,
             AutoUpdateState_RemoteDigest = deployment.AutoUpdateState?.RemoteDigest,
             AutoUpdateState_LastError = deployment.AutoUpdateState?.LastError,
-
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment),
+            TagIds = tagIdArray,
+            TagCreatedByActorId = tagCreatedByActorId ?? deployment.CreatedByActorId
         }, transaction: tx());
+
+        deployment.AssignTags(result.TagsJson.ToTagSummaries());
+        return result.AffectedRows;
     }
 
     public Task<IEnumerable<ResourceInfo>> GetImageLookupAsync(Guid deploymentId, CancellationToken cancellationToken)
@@ -191,8 +211,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
         return db.QueryAsync<ResourceInfo>(sql, new
         {
-            DeploymentId = deploymentId,
-            cancellationToken
+            DeploymentId = deploymentId
         }, transaction: tx());
     }
 
@@ -211,9 +230,9 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken)
+    public async Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = """
+        string sql = $$"""
             SELECT
                 d.Id,
                 d.Name, 
@@ -235,7 +254,8 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 p.Status AS Platform_Status,
                 i.Name as Image_Name,
                 i.Id AS Image_Id,
-                i.DockerImageId AS Image_DockerImageId
+                i.DockerImageId AS Image_DockerImageId,
+                {{ResourceTagSql.TagAggregate("d")}}
             FROM Deployments d 
             LEFT JOIN Platforms p 
                 ON d.PlatformId = p.Id
@@ -243,11 +263,18 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 ON d.Id = c.DeploymentId
             LEFT JOIN Images i 
                 ON c.ImageId = i.Id
+            WHERE {{ResourceTagSql.FilterPredicate("d")}}
             ORDER BY 
                 d.CreatedAt DESC,
                 d.Name ASC
             """;
-        var result = await db.QueryAsync<DeploymentDto>(sql, transaction: tx());
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<DeploymentDto>(sql, new
+        {
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
+        }, transaction: tx());
         return result.ToDomain();
     }
 
@@ -272,23 +299,27 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
     public Task<string?> GetContainerIdAsync(Guid deploymentId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT c.DockerContainerId FROM Deployments d JOIN Containers c ON c.DeploymentId = d.Id WHERE d.Id = @DeploymentId LIMIT 1";
-        return db.QuerySingleOrDefaultAsync<string>(sql, new { DeploymentId = deploymentId, cancellationToken }, transaction: tx());
+        return db.QuerySingleOrDefaultAsync<string>(sql, new { DeploymentId = deploymentId }, transaction: tx());
     }
 
-    public async Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + BaseSelect + " WHERE "
+        string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + BaseSelect + " WHERE "
             + AuthorizationSql.ResourcePredicatePrefix + "d.Id" + AuthorizationSql.ResourcePredicateSuffix
+            + " AND " + ResourceTagSql.FilterPredicate("d")
             + " ORDER BY d.CreatedAt DESC, d.Name ASC";
 
         var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
         var result = await db.QueryAsync<DeploymentDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
-            cancellationToken
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
         }, transaction: tx());
 
         return result.ToDomain();
@@ -308,8 +339,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             DeploymentId = deploymentId,
             ResourceType = (int)ResourceType.Deployment,
             GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(PermissionLevel.Read),
-            SpecificPermission = (int)SpecificPermission.None,
-            cancellationToken
+            SpecificPermission = (int)SpecificPermission.None
         }, transaction: tx());
     }
 
@@ -341,8 +371,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             ResourceType = (int)ResourceType.Platform,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)SpecificPermission.None,
-            DeploymentId = deploymentId,
-            cancellationToken
+            DeploymentId = deploymentId
         }, transaction: tx());
     }
 
@@ -375,18 +404,21 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             ResourceType = (int)ResourceType.Registry,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)SpecificPermission.None,
-            DeploymentId = deploymentId,
-            cancellationToken
+            DeploymentId = deploymentId
         }, transaction: tx());
     }
 
     public async Task<IEnumerable<Deployment>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken)
     {
-        const string sql = BaseSelect + " " + """
+        string sql = BaseSelect + " " + """
             WHERE d.PlatformId = @PlatformId
             ORDER BY d.CreatedAt DESC, d.Name ASC
         """;
-        var result = await db.QueryAsync<DeploymentDto>(sql, new { PlatformId = platformId, cancellationToken }, transaction: tx());
+        var result = await db.QueryAsync<DeploymentDto>(sql, new
+        {
+            PlatformId = platformId,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment)
+        }, transaction: tx());
         return result.ToDomain();
     }
 

@@ -6,6 +6,7 @@ using Hosting.Common.Attributes;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Identity;
 using Domain.Contracts.Resources.ResourceBindings;
+using WebApi.Routes.Endpoints.Resources.Tags;
 
 namespace WebApi.Routes.Endpoints.Resources.Stacks;
 
@@ -68,6 +69,7 @@ public sealed record StackView(
     IReadOnlyList<ResourceBindingSnapshot>? ResourceBindings = null,
     PlatformStatus PlatformStatus = PlatformStatus.Offline,
     string? PlatformName = null,
+    IReadOnlyList<TagSummaryView> Tags = null!,
     LatestActivityView? LatestActivityView = null,
     StackCapabilities? Capabilities = null)
 {
@@ -90,6 +92,7 @@ public sealed record StackView(
         ResourceBindings: stack.CurrentStackRelease?.ResourceBindings,
         PlatformStatus: stack.CurrentStackRelease?.Platform?.Status ?? PlatformStatus.Offline,
         PlatformName: stack.CurrentStackRelease?.Platform?.Name,
+        Tags: [.. stack.Tags.Select(TagSummaryView.Map)],
         LatestActivityView: stack.LatestActivityEvent?.Map());
 
     internal static async Task<StackView> Map(Stack stack, IPermissionEvaluator permissionEvaluator)

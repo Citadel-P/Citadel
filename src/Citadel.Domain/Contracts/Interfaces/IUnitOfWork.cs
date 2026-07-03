@@ -6,6 +6,7 @@ using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.ResourceBindings;
+using Domain.Entities.Tags;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
@@ -38,6 +39,8 @@ public interface IUnitOfWork : IAsyncDisposable
     IResourceBindingRepository ResourceBindings { get; }
     ISecretDefinitionRepository SecretDefinitions { get; }
     ISecretProviderRepository SecretProviders { get; }
+    ITagRepository Tags { get; }
+    IResourceTagRepository ResourceTags { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
@@ -83,6 +86,43 @@ public interface ISecretProviderRepository
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken);
     Task<bool> IsUsedByResourceBindingAsync(Guid id, CancellationToken cancellationToken);
+}
+
+public interface ITagRepository
+{
+    Task<IReadOnlyList<TagWithUsage>> ListAsync(CancellationToken cancellationToken);
+    Task<Tag?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<Tag?> GetByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
+    Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
+    Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
+    Task<int> AddAsync(Tag tag, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(Tag tag, CancellationToken cancellationToken);
+    Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
+}
+
+public interface IResourceTagRepository
+{
+    Task<IReadOnlyList<TagSummary>> GetForResourceAsync(
+        TaggableResourceType resourceType,
+        Guid resourceId,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<TagSummary>>> GetForResourcesAsync(
+        TaggableResourceType resourceType,
+        IReadOnlyCollection<Guid> resourceIds,
+        CancellationToken cancellationToken);
+
+    Task<int> ReplaceForResourceAsync(
+        TaggableResourceType resourceType,
+        Guid resourceId,
+        IReadOnlyCollection<Guid> tagIds,
+        Guid createdByActorId,
+        DateTime now,
+        CancellationToken cancellationToken);
+
+    Task<bool> AllTagsExistAsync(
+        IReadOnlyCollection<Guid> tagIds,
+        CancellationToken cancellationToken);
 }
 
 public interface IExternalSecretProviderClient
@@ -195,9 +235,9 @@ public interface IStackRepository
     Task<IEnumerable<StackDriftStack>> GetDriftMonitorStacksAsync(CancellationToken cancellationToken);
     Task<IEnumerable<string>> GetContainerIdsAsync(Guid stackId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetAllAsync(CancellationToken cancellationToken);
-    Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<IEnumerable<Container>> GetContainersAsync(Guid stackId, CancellationToken cancellationToken);
-    Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<bool> CanAccessAsync(Guid userId, Guid stackId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken);
@@ -207,7 +247,7 @@ public interface IStackRepository
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
-    Task<int> AddAsync(Stack stack, CancellationToken cancellationToken);
+    Task<int> AddAsync(Stack stack, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
     Task<int> AddReleaseAsync(StackRelease release, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Stack stack, CancellationToken cancellationToken);
     Task<int> UpdateReleaseStatusAsync(Guid releaseId, StackReleaseStatus status, CancellationToken cancellationToken);
@@ -223,12 +263,12 @@ public interface IGitReposRepository
     Task<GitRepository?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<GitRepository?> GetWithAccountAsync(Guid id, CancellationToken cancellationToken);
     Task<GitRepository?> GetByNameAsync(string name, CancellationToken cancellationToken);
-    Task<IEnumerable<GitRepository>> GetAllAsync(CancellationToken cancellationToken);
-    Task<IEnumerable<GitRepository>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IEnumerable<GitRepository>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
+    Task<IEnumerable<GitRepository>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<IEnumerable<GitRepository>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
-    Task<int> AddAsync(GitRepository gitRepository, CancellationToken cancellationToken);
+    Task<int> AddAsync(GitRepository gitRepository, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
     Task<int> UpdateAsync(GitRepository gitRepository, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<GitRepositoryRef?> GetRefAsync(Guid gitRepositoryId, string branch, CancellationToken cancellationToken);
@@ -357,8 +397,8 @@ public interface IPlatformRepository
 {
     Task<Platform?> GetByIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<Platform?> GetByNameAsync(string name, CancellationToken cancellationToken);
-    Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken);
-    Task<IEnumerable<Platform>> GetAuthorizedWithLatestStatAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
+    Task<IEnumerable<Platform>> GetAuthorizedWithLatestStatAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<IEnumerable<Platform>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<Platform?> GetPlatformWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
     Task<PlatformConnectionInfo?> GetPlatformByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken);
@@ -372,7 +412,7 @@ public interface IPlatformRepository
     Task<int?> PlatformNameExistsAsync(string name, Guid excludePlatformId, CancellationToken cancellationToken);
     Task<bool> NameOrAddressExistsAsync(string name, string address, CancellationToken cancellationToken);
 
-    Task<int> AddAsync(Platform platform, CancellationToken cancellationToken);
+    Task<int> AddAsync(Platform platform, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
     Task<int> UpdateAsync(Platform platform, CancellationToken cancellationToken);
     public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
 
@@ -399,10 +439,10 @@ public interface IDeploymentRepository
     Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Deployment?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
-    Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<string?> GetContainerIdAsync(Guid deploymentId, CancellationToken cancellationToken);
     Task<PlatformConnectionInfo?> GetPlatformByDeploymentIdAsync(Guid id, CancellationToken cancellationToken);
-    Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<bool> CanAccessAsync(Guid userId, Guid deploymentId, CancellationToken cancellationToken);
     Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid deploymentId, Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid deploymentId, Guid userId, CancellationToken cancellationToken);
@@ -413,7 +453,7 @@ public interface IDeploymentRepository
     Task<bool> ExistsAsync(Guid platformId, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, Guid platformId, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, Guid platformId, CancellationToken cancellationToken);
-    Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken);
+    Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
     Task<int> UpdateAsync(Deployment deployment, CancellationToken cancellationToken);
     Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
     Task<int> UpdateStatusAsync(IEnumerable<Guid> ids, DeploymentStatus status, CancellationToken cancellationToken);

@@ -20,7 +20,8 @@ public sealed record CreateStack(
     string? Description,
     StackSource StackSource,
     StackSpec Spec,
-    StackDriftPolicy? DriftPolicy = null) : ICommand<Result<Stack>>
+    StackDriftPolicy? DriftPolicy = null,
+    IReadOnlyCollection<Guid>? TagIds = null) : ICommand<Result<Stack>>
 {
     internal sealed class Validator : AbstractValidator<CreateStack>
     {
@@ -76,7 +77,6 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IUserContextAcc
             }
         }
 
-        // Add DockerStack
         var stack = Stack.Create(
             name: command.Name,
             createdByActorId: actorId,
@@ -86,9 +86,10 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IUserContextAcc
             description: command.Description,
             driftPolicy: command.DriftPolicy);
 
-        await unitOfWork.Stacks.AddAsync(stack, cancellationToken);
+        var result = await unitOfWork.Stacks.AddAsync(stack, cancellationToken, command.TagIds, actorId);
+        if (result == 0)
+            return Result.Failure<Stack>(new BadRequestError("One or more tags do not exist."));
 
-        // Add activity
         var activity = new ActivityEvent(
             actorId: actorId,
             resourceId: stack.Id,
@@ -96,8 +97,7 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IUserContextAcc
             resourceName: stack.Name,
             eventType: ActivityEventType.StackCreated,
             status: ActivityStatus.Information,
-            info: new StackCreated(stack.ToSnapshot())
-            );
+            info: new StackCreated(stack.ToSnapshot()));
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 

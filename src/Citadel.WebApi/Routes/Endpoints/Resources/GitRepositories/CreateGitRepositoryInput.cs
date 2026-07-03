@@ -14,9 +14,9 @@ public sealed record CreateGitRepositoryInput(
     int? SyncIntervalMinutes,
     RepoWebhookConfig? Webhook,
     RepoCommand? OnClone,
-    RepoCommand? OnPull)
+    RepoCommand? OnPull,
+    IReadOnlyCollection<Guid>? TagIds = null)
 {
     internal CreateGitRepository ToCommand()
-        => new(Name, Description, Url, DefaultBranch, GitAccountId, Webhook, OnClone, OnPull, SyncMode, SyncIntervalMinutes);
-
+        => new(Name, Description, Url, DefaultBranch, GitAccountId, Webhook, OnClone, OnPull, SyncMode, SyncIntervalMinutes, TagIds);
 }

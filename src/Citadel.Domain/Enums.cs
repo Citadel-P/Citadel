@@ -747,6 +747,14 @@ public enum ResourceBindingScope
     Deployment
 }
 
+public enum TaggableResourceType
+{
+    Deployment,
+    Stack,
+    Platform,
+    GitRepository
+}
+
 public enum SecretDeliveryMode
 {
     EnvironmentVariable,

@@ -7,8 +7,8 @@ public sealed record CreateDeploymentInput(
     string Name,
     Guid PlatformId,
     string? Description,
-    DeploymentSpec Spec
-    )
+    DeploymentSpec Spec,
+    IReadOnlyCollection<Guid>? TagIds = null)
 {
-    internal CreateDeployment ToCommand() => new(Name, PlatformId, Description, Spec);
+    internal CreateDeployment ToCommand() => new(Name, PlatformId, Description, Spec, TagIds);
 }

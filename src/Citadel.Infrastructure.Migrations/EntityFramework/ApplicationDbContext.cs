@@ -33,6 +33,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .RoleConfiguration()
             .ActorRoleConfiguration()
             .ResourceBindingConfiguration()
+            .TagConfiguration()
+            .ResourceTagConfiguration()
             .SecretProviderConfiguration()
             .SecretDefinitionConfiguration()
             .InternalSecretValueConfiguration()
@@ -858,6 +860,61 @@ internal static class Configuration
             .WithMany()
             .HasForeignKey("SecretId")
             .OnDelete(DeleteBehavior.Cascade);
+
+        return builder;
+    }
+
+    public static ModelBuilder TagConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "Tags";
+        var tag = builder.Entity("Tag");
+
+        tag.ToTable(tableName);
+
+        tag.Property<Guid>("Id").IsRequired();
+        tag.HasKey("Id");
+
+        tag.Property<string>("Name").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        tag.Property<string>("NormalizedName").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        tag.Property<string>("Color").HasColumnType(Text).HasMaxLength(7).IsRequired();
+        tag.AddAuditedMemebers();
+        tag.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        tag.HasIndex("NormalizedName").IsUnique().HasDatabaseName($"IX_{tableName}_NormalizedName");
+
+        return builder;
+    }
+
+    public static ModelBuilder ResourceTagConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "ResourceTags";
+        var resourceTag = builder.Entity("ResourceTag");
+
+        resourceTag.ToTable(tableName);
+
+        resourceTag.Property<string>("ResourceType").HasColumnType(Text).IsRequired();
+        resourceTag.Property<Guid>("ResourceId").IsRequired();
+        resourceTag.Property<Guid>("TagId").IsRequired();
+        resourceTag.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        resourceTag.Property<Guid>("CreatedByActorId").IsRequired();
+
+        resourceTag.HasKey("ResourceType", "ResourceId", "TagId");
+
+        resourceTag
+            .HasOne("Tag")
+            .WithMany()
+            .HasForeignKey("TagId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        resourceTag
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("CreatedByActorId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        resourceTag.HasIndex("TagId").HasDatabaseName($"IX_{tableName}_TagId");
+        resourceTag.HasIndex("ResourceType", "ResourceId").HasDatabaseName($"IX_{tableName}_Resource");
+        resourceTag.HasIndex("ResourceType", "TagId", "ResourceId").HasDatabaseName($"IX_{tableName}_Filter");
 
         return builder;
     }

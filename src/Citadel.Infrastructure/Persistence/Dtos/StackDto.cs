@@ -30,9 +30,27 @@ internal sealed record StackDto(
     string? ActivityEvent_Status = null,
     string? ActivityEvent_EventType = null,
     string? ActivityEvent_ActivityEventInfo = null,
-    DateTime? ActivityEvent_CreatedAt = null
+    DateTime? ActivityEvent_CreatedAt = null,
+    string? TagsJson = null
     )
 {
+    public StackDto()
+        : this(
+            Guid.Empty,
+            Guid.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            null,
+            0,
+            DateTime.MinValue,
+            Guid.Empty,
+            string.Empty,
+            null,
+            null)
+    {
+    }
+
     internal bool HasCurrentReleaseIdentity
         => CurrentRelease_Id != null
         && CurrentRelease_PlatformId != null

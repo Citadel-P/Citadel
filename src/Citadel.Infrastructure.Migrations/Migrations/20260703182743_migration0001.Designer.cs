@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260701182638_migration0001")]
+    [Migration("20260703182743_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -1495,7 +1495,7 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("c94d72c9-1e1a-a3e0-4855-c3b2c5f74306"),
+                            Id = new Guid("51ac9abd-9f17-8530-e1a4-8fe69e44ac1d"),
                             PermissionLevel = 4,
                             ResourceType = 1,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
@@ -1511,7 +1511,7 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("ea27984d-f6fa-54f1-d8a4-1ddeb122a98f"),
+                            Id = new Guid("7125b1ec-d593-d356-f559-c4655a392c31"),
                             PermissionLevel = 2,
                             ResourceType = 1,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
@@ -1519,7 +1519,7 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("4bc13990-838c-6f0c-0ad1-a456e6821ff7"),
+                            Id = new Guid("fd0c028a-8225-0f65-8a7b-cb058f29c740"),
                             PermissionLevel = 4,
                             ResourceType = 2,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
@@ -1535,7 +1535,7 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("81be1cc9-0daf-0b6e-7278-0a279754f8a0"),
+                            Id = new Guid("197f429f-cbe9-0e6c-239b-2f24196ec817"),
                             PermissionLevel = 2,
                             ResourceType = 2,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
@@ -1591,7 +1591,7 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("f7aa549c-bcc2-d9b2-449d-0f223e0f9752"),
+                            Id = new Guid("a3cd7182-baa1-324f-79f0-3a04d7647032"),
                             PermissionLevel = 4,
                             ResourceType = 11,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
@@ -1599,7 +1599,7 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("ca880835-6808-358a-bebb-8ea95efdea97"),
+                            Id = new Guid("abc5b80b-4722-4a2e-f881-448642fc4207"),
                             PermissionLevel = 1,
                             ResourceType = 11,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
@@ -1607,9 +1607,33 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("6e1cf352-66c2-0671-eb47-b70b01f27406"),
+                            Id = new Guid("96ca4b3c-b503-941b-2d70-83f41e529cd7"),
                             PermissionLevel = 2,
                             ResourceType = 11,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("656ccf45-65a9-33b3-de65-d18d5988151a"),
+                            PermissionLevel = 4,
+                            ResourceType = 12,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("e89ccf24-0132-149c-c8bc-33265af98ed8"),
+                            PermissionLevel = 1,
+                            ResourceType = 12,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("b2298835-c351-7367-ad8d-e5884be235f3"),
+                            PermissionLevel = 2,
+                            ResourceType = 12,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
@@ -2006,6 +2030,48 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("resourcebindings", (string)null);
                 });
 
+            modelBuilder.Entity("ResourceTag", b =>
+                {
+                    b.Property<string>("ResourceType")
+                        .HasColumnType("text")
+                        .HasColumnName("resourcetype");
+
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resourceid");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tagid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.HasKey("ResourceType", "ResourceId", "TagId")
+                        .HasName("pk_resourcetags");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_resourcetags_createdbyactorid");
+
+                    b.HasIndex("TagId")
+                        .HasDatabaseName("ix_resourcetags_tagid");
+
+                    b.HasIndex("ResourceType", "ResourceId")
+                        .HasDatabaseName("ix_resourcetags_resource");
+
+                    b.HasIndex("ResourceType", "TagId", "ResourceId")
+                        .HasDatabaseName("ix_resourcetags_filter");
+
+                    b.ToTable("resourcetags", (string)null);
+                });
+
             modelBuilder.Entity("Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2293,6 +2359,60 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_stackreleases_stackid");
 
                     b.ToTable("stackreleases", (string)null);
+                });
+
+            modelBuilder.Entity("Tag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("text")
+                        .HasColumnName("color");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("normalizedname");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tags");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_tags_createdbyactorid");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tags_normalizedname");
+
+                    b.ToTable("tags", (string)null);
                 });
 
             modelBuilder.Entity("Team", b =>
@@ -2702,6 +2822,23 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_resourcebindings_secretdefinitions_secretid");
                 });
 
+            modelBuilder.Entity("ResourceTag", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_resourcetags_actors_createdbyactorid");
+
+                    b.HasOne("Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_resourcetags_tags_tagid");
+                });
+
             modelBuilder.Entity("SecretDefinition", b =>
                 {
                     b.HasOne("SecretProvider", null)
@@ -2749,6 +2886,16 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_stackreleases_stacks_stackid");
+                });
+
+            modelBuilder.Entity("Tag", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_tags_actors_createdbyactorid");
                 });
 
             modelBuilder.Entity("Team", b =>

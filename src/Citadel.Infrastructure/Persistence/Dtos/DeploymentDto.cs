@@ -30,5 +30,27 @@ internal sealed record DeploymentDto(
     string? ActivityEvent_Status = null,
     string? ActivityEvent_EventType = null,
     string? ActivityEvent_ActivityEventInfo = null,
-    DateTime? ActivityEvent_CreatedAt = null
-    );
+    DateTime? ActivityEvent_CreatedAt = null,
+    string? TagsJson = null
+    )
+{
+    public DeploymentDto()
+        : this(
+            Guid.Empty,
+            string.Empty,
+            string.Empty,
+            0,
+            DateTime.MinValue,
+            Guid.Empty,
+            Guid.Empty,
+            string.Empty,
+            null,
+            null,
+            DateTime.MinValue,
+            string.Empty,
+            null,
+            null,
+            null)
+    {
+    }
+}

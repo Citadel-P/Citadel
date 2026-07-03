@@ -38,6 +38,7 @@ public static class PublicEndpoints
     const string DeploymentsName = nameof(Deployments);
     const string StacksName = nameof(Stacks);
     const string ResourceBindingsName = nameof(ResourceBindings);
+    const string TagsName = nameof(Tags);
     const string AuthenticationName = nameof(Authentication);
     const string LookupName = nameof(Lookup);
 
@@ -109,6 +110,10 @@ public static class PublicEndpoints
             {
                 MapResourceBindingEndpoints(resourceBindings);
                 MapResourceBindingSecretEndpoints(resourceBindings);
+            }
+            var tags = group.MapGroup("/tags").WithTags(TagsName).RequireAuthorization();
+            {
+                MapTagEndpoints(tags);
             }
             var activities = group.MapGroup("/activities").WithTags(ActivitiesName).RequireAuthorization();
             {
@@ -378,6 +383,23 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getGitRepository");
 
+        gitRepositories.MapGet("{id}/tags", Tags.GetGitRepositoryTags)
+            .WithSummary("Get git repository tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getGitRepositoryTags");
+
+        gitRepositories.MapPut("{id}/tags", Tags.ReplaceGitRepositoryTags)
+            .WithSummary("Replace git repository tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("replaceGitRepositoryTags");
+
         gitRepositories.MapGet("{id}/_cfg", GitRepositories.GetConfig)
             .WithSummary("Get Git repo configuration")
             .ProducesValidationProblem()
@@ -540,6 +562,37 @@ public static class PublicEndpoints
             .WithSummary("Delete a secret provider");
     }
 
+    private static void MapTagEndpoints(RouteGroupBuilder tags)
+    {
+        tags.MapGet("/", Tags.List)
+            .WithName("listTags")
+            .WithSummary("List resource tags");
+
+        tags.MapPost("/", Tags.Create)
+            .WithName("createTag")
+            .WithSummary("Create a resource tag")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        tags.MapPatch("{id:guid}", Tags.Patch)
+            .WithName("patchTag")
+            .WithSummary("Update a resource tag")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        tags.MapDelete("{id:guid}", Tags.Delete)
+            .WithName("deleteTag")
+            .WithSummary("Delete a resource tag")
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+    }
+
     private static void MapAuthEndpoints(RouteGroupBuilder auth)
     {
         auth.MapGet("refresh", Authentication.RefreshToken)
@@ -676,6 +729,23 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getPlatfom");
+
+        platforms.MapGet("{id}/tags", Tags.GetPlatformTags)
+            .WithSummary("Get platform tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getPlatformTags");
+
+        platforms.MapPut("{id}/tags", Tags.ReplacePlatformTags)
+            .WithSummary("Replace platform tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("replacePlatformTags");
 
         platforms.MapGet("{id}/containers", Platforms.ListContainers)
             .WithSummary("Returns the list of containers of the given platform")
@@ -955,6 +1025,23 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getDeployment");
 
+        deployment.MapGet("/{deploymentId}/tags", Tags.GetDeploymentTags)
+            .WithSummary("Get deployment tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getDeploymentTags");
+
+        deployment.MapPut("/{deploymentId}/tags", Tags.ReplaceDeploymentTags)
+            .WithSummary("Replace deployment tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("replaceDeploymentTags");
+
         deployment.MapGet("{id}/stats", Deployments.GetStats)
             .WithSummary("Get deployment stats")
             .ProducesValidationProblem()
@@ -1096,6 +1183,23 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getStack");
+
+        stacks.MapGet("/{stackId}/tags", Tags.GetStackTags)
+            .WithSummary("Get stack tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getStackTags");
+
+        stacks.MapPut("/{stackId}/tags", Tags.ReplaceStackTags)
+            .WithSummary("Replace stack tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("replaceStackTags");
 
         stacks.MapGet("/{stackId}/_cfg", Stacks.GetConfig)
             .WithSummary("Get stack configuration")
