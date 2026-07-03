@@ -331,6 +331,30 @@ public sealed class SecretDefinition
 
 Internal encrypted secret values should be stored separately from the definition and never returned by normal view queries.
 
+At-rest encryption must use a dedicated secret encryption key.
+
+Configuration:
+
+```env
+Secrets__EncryptionKey=
+```
+
+Rules:
+
+- when `Secrets__EncryptionKey` is empty, Citadel must generate and reuse `./data/secret-encryption-key`
+- generated and configured keys must be base64 encoded and decode to exactly 32 bytes
+- startup must fail fast when a configured key or generated key file is invalid
+- the same key encrypts internal stored secrets and external provider tokens
+- JWT key rotation must not affect secret decryption
+- losing or changing the secret encryption key makes existing protected values undecryptable
+- the key must not be committed to source control
+
+Current payload format:
+
+```text
+base64(nonce[12 bytes] + tag[16 bytes] + ciphertext)
+```
+
 Example:
 
 ```text

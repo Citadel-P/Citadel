@@ -7,6 +7,7 @@ import {
   UpdateVaultKvV2SecretProviderInput,
 } from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
+import { ActionBar } from '@/components/custom/action-bar';
 import { IntegrationAddCard, IntegrationCard } from '@/components/custom/common';
 import { FieldInput } from '@/components/custom/form-builder';
 import { Button } from '@/components/ui/button';
@@ -24,9 +25,10 @@ import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { KeyRound, LoaderCircle, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { BindingsAddButton, BindingsGroupActions, BindingsTable } from './table';
+import { BindingDropdownActions, BindingGroupActions } from './actions';
+import { BindingsAddButton, BindingsTable } from './table';
 
 const EMPTY_CAPABILITIES: ResourceCapabilities = { canRead: false, canWrite: false, canExecute: false };
 const PROVIDER_INPUT: CreateVaultKvV2SecretProviderInput = {
@@ -305,14 +307,15 @@ function SecretProvidersSection() {
 
 export const BindingComponents: RequiredComponents<ResourceBindingView> = {
   Icon: CitadelIcons.Binding,
-  Content: ({ items, isLoading, isFiltered }) => (
+  Content: ({ items, actions, isLoading, isFiltered }) => (
     <div className="flex flex-col gap-6">
-      <BindingsTable items={items} isLoading={isLoading} isFiltered={isFiltered} />
+      <BindingsTable items={items} actions={actions} isLoading={isLoading} isFiltered={isFiltered} />
       <div className="border-b border-dashed" />
       <SecretProvidersSection />
     </div>
   ),
-  GroupActions: BindingsGroupActions,
+  DropdownActions: BindingDropdownActions,
+  GroupActions: ({ items }) => <ActionBar type="Binding" items={items} actions={Object.values(BindingGroupActions)} />,
   header: {
     title: 'Bindings',
     subtitle: 'Manage global variables, secret keys, and providers inherited by stacks and deployments.',
@@ -322,7 +325,12 @@ export const BindingComponents: RequiredComponents<ResourceBindingView> = {
   },
   useData(): ResourceDataHookResult<ResourceBindingView> {
     const { data, isLoading } = useRead('getGlobalResourceBindings');
-    return { items: data?.data.entries ?? [], isLoading, capabilities: data?.data.capabilities ?? EMPTY_CAPABILITIES };
+    const capabilities = data?.data.capabilities ?? EMPTY_CAPABILITIES;
+    const entries = useMemo(
+      () => (data?.data.entries ?? []).map((entry) => ({ ...entry, capabilities })),
+      [data?.data.entries, capabilities],
+    );
+    return { items: entries, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

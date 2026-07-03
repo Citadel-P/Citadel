@@ -237,6 +237,19 @@ internal static class WebApiModule
     internal static void AddIOptionsFromConfiguration(this WebApplicationBuilder builder)
     {
         builder.Services.AddOptions<JwtConfiguration>().BindConfiguration("Jwt").ValidateOnStart();
+
+        var secretsOptions = builder.Services
+            .AddOptions<SecretsConfiguration>()
+            .BindConfiguration(SecretsConfiguration.SectionName);
+        if (!Helpers.IsDesignTime())
+        {
+            secretsOptions
+                .Validate(
+                    options => SecretsConfiguration.IsValidEncryptionKey(options.EncryptionKey),
+                    "Secrets:EncryptionKey must be a base64-encoded 32-byte key.")
+                .ValidateOnStart();
+        }
+
         builder.Services.AddOptions<JobConfiguration>().BindConfiguration("JobConfiguration").ValidateOnStart();
     }
 }

@@ -50,7 +50,8 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
                 {
                     config.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["ConnectionStrings:Postgres"] = ConnectionString
+                        ["ConnectionStrings:Postgres"] = ConnectionString,
+                        ["Secrets:EncryptionKey"] = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
                     });
                 });
 

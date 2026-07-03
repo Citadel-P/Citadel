@@ -12,6 +12,9 @@ import {
   UpdateExternalSecretInput,
   UpdateResourceBindingInput,
 } from '@/api/generated/api.types';
+import { ActionBar } from '@/components/custom/action-bar';
+import { createActionsBuilder } from '@/components/custom/actions-builder';
+import { ResourceBindingsDataTable } from '@/components/custom/resource-bindings-table';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,20 +28,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useSelectedResources } from '@/lib/atoms';
 import { useMutate, useRead } from '@/lib/hooks';
-import { cn } from '@/lib/utils';
 import {
   ChevronDown,
   ExternalLink,
   KeyRound,
   LoaderCircle,
-  MoreHorizontal,
+  MoveUpRight,
   Pencil,
   Plus,
   Trash2,
@@ -60,10 +62,6 @@ const EXTERNAL_SECRET_INPUT: CreateExternalSecretInput = {
   externalVersion: null,
 };
 type SecretSource = 'internal' | 'vault';
-
-export type EditableEntry = ResourceBindingInput & {
-  clientId: string;
-};
 
 const EMPTY_RESOURCE_BINDINGS: ResourceBindingView[] = [];
 const EMPTY_SECRET_DEFINITIONS: SecretDefinitionView[] = [];
@@ -130,7 +128,6 @@ export const ResourceBindingsTab = ({
   const serverEntries = data?.data.entries ?? EMPTY_RESOURCE_BINDINGS;
   const secrets = useMemo(() => secretsData?.data.secrets ?? EMPTY_SECRET_DEFINITIONS, [secretsData?.data.secrets]);
   const canCreateSecret = Boolean(secretsData?.data.capabilities.canWrite);
-  const initialEntries = useMemo(() => serverEntries.map(toEditableEntry), [serverEntries]);
   const originalInputs = useMemo(() => serverEntries.map(toInputFromView), [serverEntries]);
   const resetKey = useMemo(() => JSON.stringify(originalInputs), [originalInputs]);
 
@@ -142,7 +139,7 @@ export const ResourceBindingsTab = ({
       queryArgs={args}
       disabled={disabled}
       isLoading={isLoading}
-      initialEntries={initialEntries}
+      serverEntries={serverEntries}
       originalInputs={originalInputs}
       secrets={secrets}
       canCreateSecret={canCreateSecret}
@@ -157,7 +154,7 @@ const ResourceBindingsTabEditor = ({
   queryArgs,
   disabled,
   isLoading,
-  initialEntries,
+  serverEntries,
   originalInputs,
   secrets,
   canCreateSecret,
@@ -168,7 +165,7 @@ const ResourceBindingsTabEditor = ({
   queryArgs: { scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment; resourceId: string };
   disabled?: boolean;
   isLoading: boolean;
-  initialEntries: EditableEntry[];
+  serverEntries: ResourceBindingView[];
   originalInputs: ResourceBindingInput[];
   secrets: SecretDefinitionView[];
   canCreateSecret: boolean;
@@ -177,14 +174,12 @@ const ResourceBindingsTabEditor = ({
   const queryClient = useQueryClient();
   const create = useMutate('createResourceBinding');
   const update = useMutate('updateResourceBinding');
-  const remove = useMutate('deleteResourceBinding');
   const updateExternalSecret = useMutate('updateExternalSecret');
   const testExternalSecret = useMutate('testExternalSecret');
-  const entries = initialEntries;
+  const [, setSelectedResources] = useSelectedResources<ResourceBindingView>('Binding');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<EditableEntry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<ResourceBindingView | null>(null);
   const [entryInput, setEntryInput] = useState<ResourceBindingInput>(newVariableInput());
-  const [deleteEntry, setDeleteEntry] = useState<EditableEntry | null>(null);
   const [editingStoredSecret, setEditingStoredSecret] = useState<SecretDefinitionView | null>(null);
   const [storedSecretInput, setStoredSecretInput] = useState<CreateExternalSecretInput>(EXTERNAL_SECRET_INPUT);
   const { data: providersData } = useRead('listSecretProviders', undefined, { enabled: editingStoredSecret != null });
@@ -206,38 +201,25 @@ const ResourceBindingsTabEditor = ({
     }
   };
 
-  const deleteEntryById = async (entryId: string, message: string) => {
-    try {
-      await remove.mutateAsync({
-        scope,
-        resourceId,
-        id: entryId,
-      } as any);
-      await queryClient.invalidateQueries({ queryKey: ['getResourceBindings', queryArgs] });
-      await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
-      toast.success(message);
-    } catch {
-      toast.error(remove.validationErrors ?? 'Failed to delete resource binding');
-      throw new Error('Failed to delete resource binding');
-    }
-  };
-
-  const createEntry = useCallback(async (entry: ResourceBindingInput, message: string) => {
-    try {
-      await create.mutateAsync({
-        scope,
-        resourceId,
-        data: entry,
-      } as any);
-      await queryClient.invalidateQueries({ queryKey: ['getResourceBindings', queryArgs] });
-      await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
-      toast.success(message);
-      return true;
-    } catch {
-      toast.error(create.validationErrors ?? 'Failed to create variable or secret');
-      return false;
-    }
-  }, [create, queryClient, queryArgs, resourceId, scope]);
+  const createEntry = useCallback(
+    async (entry: ResourceBindingInput, message: string) => {
+      try {
+        await create.mutateAsync({
+          scope,
+          resourceId,
+          data: entry,
+        } as any);
+        await queryClient.invalidateQueries({ queryKey: ['getResourceBindings', queryArgs] });
+        await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
+        toast.success(message);
+        return true;
+      } catch {
+        toast.error(create.validationErrors ?? 'Failed to create variable or secret');
+        return false;
+      }
+    },
+    [create, queryClient, queryArgs, resourceId, scope],
+  );
 
   const openAddVariable = () => {
     setEditingEntry(null);
@@ -251,11 +233,11 @@ const ResourceBindingsTabEditor = ({
     setDialogOpen(true);
   };
 
-  const openEdit = (entry: EditableEntry) => {
+  const openEdit = useCallback((entry: ResourceBindingView) => {
     setEditingEntry(entry);
     setEntryInput(toInput(entry));
     setDialogOpen(true);
-  };
+  }, []);
 
   const openEditStoredSecret = (secret: SecretDefinitionView) => {
     if (secret.providerType !== SecretProviderType.VaultCompatibleKvV2) {
@@ -287,9 +269,7 @@ const ResourceBindingsTabEditor = ({
     const next =
       editingEntry == null
         ? [...originalInputs, normalized]
-        : originalInputs.map((entry, index) =>
-            entries[index].clientId === editingEntry.clientId ? normalized : entry,
-          );
+        : originalInputs.map((entry, index) => (serverEntries[index].id === editingEntry.id ? normalized : entry));
 
     if (hasDuplicateEntryName(next)) {
       toast.error('A variable or secret key with this name already exists on this resource.');
@@ -297,18 +277,12 @@ const ResourceBindingsTabEditor = ({
     }
 
     if (editingEntry == null) {
-      if (!await createEntry(normalized, 'Resource binding added')) return;
+      if (!(await createEntry(normalized, 'Resource binding added'))) return;
     } else {
-      await updateEntry(editingEntry.clientId, normalized, 'Resource binding updated');
+      await updateEntry(editingEntry.id, normalized, 'Resource binding updated');
     }
     setDialogOpen(false);
     setEditingEntry(null);
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteEntry) return;
-    await deleteEntryById(deleteEntry.clientId, 'Resource binding deleted');
-    setDeleteEntry(null);
   };
 
   const saveStoredSecret = async () => {
@@ -349,6 +323,35 @@ const ResourceBindingsTabEditor = ({
     }
   };
 
+  const displayEntries = useMemo(
+    () =>
+      serverEntries.map((entry) => ({
+        ...entry,
+        capabilities: {
+          canRead: !disabled,
+          canWrite: !disabled,
+          canExecute: !disabled,
+        },
+      })),
+    [disabled, serverEntries],
+  );
+
+  const actions = useMemo(
+    () =>
+      createResourceBindingActions({
+        disabled,
+        scope,
+        resourceId,
+        queryArgs,
+        onEdit: openEdit,
+      }),
+    [disabled, openEdit, queryArgs, resourceId, scope],
+  );
+
+  useEffect(() => {
+    return () => setSelectedResources([]);
+  }, [setSelectedResources]);
+
   return (
     <div className="flex w-full flex-col gap-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -368,15 +371,14 @@ const ResourceBindingsTabEditor = ({
         </div>
       </div>
 
-      <ResourceBindingsTable
-        entries={entries}
+      <ResourceBindingsDataTable
+        items={displayEntries}
         secrets={secrets}
         isLoading={isLoading}
-        emptyText="No resource variables or secrets are defined."
-        disabled={disabled}
-        onEdit={openEdit}
-        onDelete={setDeleteEntry}
+        actions={actions.dropdown}
       />
+
+      <ActionBar type="Binding" items={displayEntries} actions={Object.values(actions.group)} />
 
       <GlobalBindingsLink />
 
@@ -404,168 +406,93 @@ const ResourceBindingsTabEditor = ({
         onTest={testStoredSecret}
       />
       <CreateSecretDialog {...secretCreation.dialogProps} />
-      <Dialog open={deleteEntry != null} onOpenChange={(open) => !open && setDeleteEntry(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete resource binding</DialogTitle>
-            <DialogDescription>
-              Delete `{deleteEntry?.name}` from this resource. Global entries with the same name will become effective
-              again.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteEntry(null)} disabled={remove.isPending}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={remove.isPending}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
 
-const ResourceBindingsTable = ({
-  entries,
-  secrets,
-  isLoading,
-  emptyText,
+const createResourceBindingActions = ({
   disabled,
+  scope,
+  resourceId,
+  queryArgs,
   onEdit,
-  onDelete,
 }: {
-  entries: EditableEntry[];
-  secrets: SecretDefinitionView[];
-  isLoading: boolean;
-  emptyText: string;
   disabled?: boolean;
-  onEdit: (entry: EditableEntry) => void;
-  onDelete: (entry: EditableEntry) => void;
-}) => {
-  const secretNames = useMemo(() => new Map(secrets.map((secret) => [secret.id, secret.name])), [secrets]);
+  scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment;
+  resourceId: string;
+  queryArgs: { scope: ResourceBindingScope.Stack | ResourceBindingScope.Deployment; resourceId: string };
+  onEdit: (entry: ResourceBindingView) => void;
+}) =>
+  createActionsBuilder<ResourceBindingView>()
+    .addAction({
+      key: 'edit',
+      type: 'command',
+      icon: Pencil,
+      requiredCapabilities: ['canWrite'],
+      useHandler: ({ resources }) => {
+        const selected = Array.isArray(resources) ? resources[0] : resources;
+        const multiSelect = Array.isArray(resources) && resources.length > 1;
 
-  if (isLoading) {
-    return <div className="rounded-sm border border-dashed px-4 py-6 text-sm text-muted-foreground">Loading...</div>;
-  }
+        return {
+          canExecute: !disabled && !!selected && !multiSelect,
+          run: () => {
+            if (disabled || !selected || multiSelect) return;
+            onEdit(selected);
+          },
+        };
+      },
+    })
+    .addAction({
+      key: 'delete',
+      type: 'command',
+      icon: Trash2,
+      confirm: true,
+      destructive: true,
+      resourceType: 'Binding',
+      requiredCapabilities: ['canWrite'],
+      useHandler: ({ resources }) => {
+        const selected = Array.isArray(resources) ? resources : [resources];
+        const queryClient = useQueryClient();
+        const remove = useMutate('deleteResourceBinding');
+        const [, setSelectedResources] = useSelectedResources<ResourceBindingView>('Binding');
 
-  if (!entries.length) {
-    return (
-      <div className="rounded-sm border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-        {emptyText}
-      </div>
-    );
-  }
+        return {
+          canExecute: !disabled && selected.length > 0,
+          isPending: remove.isPending,
+          run: async () => {
+            if (disabled || selected.length === 0) return;
 
-  return (
-    <div className="overflow-hidden rounded-sm border">
-      <table className="w-full text-sm">
-        <thead className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-          <tr>
-            <th className="px-3 py-2 font-normal">Name</th>
-            <th className="px-3 py-2 font-normal">Type</th>
-            <th className="px-3 py-2 font-normal">Value</th>
-            <th className="px-3 py-2 font-normal">Delivery</th>
-            <th className="w-10 px-2 py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => (
-            <tr key={entry.clientId} className="border-b last:border-0">
-              <td className="px-3 py-2 align-middle">
-                <span className="font-mono text-xs">{entry.name}</span>
-              </td>
-              <td className="px-3 py-2 align-middle">
-                <div
-                  className={cn(
-                    'inline-flex h-9 items-center gap-2 rounded-sm border px-3 text-xs text-muted-foreground',
-                    entry.kind === ResourceBindingKind.Secret ? 'border-dashed' : '',
-                  )}>
-                  {entry.kind === ResourceBindingKind.Secret ? (
-                    <>
-                      <KeyRound className="size-3.5" />
-                      Secret key
-                    </>
-                  ) : (
-                    <>
-                      <Variable className="size-3.5" />
-                      Variable
-                    </>
-                  )}
-                </div>
-              </td>
-              <td className="px-3 py-2 align-middle">
-                {entry.kind === ResourceBindingKind.Variable ? (
-                  <span className="font-mono text-xs">{entry.value}</span>
-                ) : (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-mono text-xs">
-                      {entry.secretId ? (secretNames.get(entry.secretId) ?? 'Unknown secret') : 'Unbound secret'}
-                    </span>
-                    <span className="font-mono text-xs text-muted-foreground">********</span>
-                  </div>
-                )}
-              </td>
-              <td className="px-3 py-2 align-middle">
-                {entry.kind === ResourceBindingKind.Secret ? (
-                  <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-                    <span>
-                      {entry.secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE
-                        ? 'Mounted file'
-                        : 'Environment variable'}
-                    </span>
-                    {entry.secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE && entry.targetPath && (
-                      <span className="font-mono">{entry.targetPath}</span>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground">-</span>
-                )}
-              </td>
-              <td className="px-2 py-2 align-middle">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon" disabled={disabled}>
-                      <MoreHorizontal className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-38 bg-background py-2">
-                    <DropdownMenuItem onClick={() => onEdit(entry)}>
-                      <Pencil className="size-3.5" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-danger hover:text-danger!" onClick={() => onDelete(entry)}>
-                      <Trash2 className="size-3.5" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
+            try {
+              await Promise.all(
+                selected.map((entry) =>
+                  remove.mutateAsync({
+                    scope,
+                    resourceId,
+                    id: entry.id,
+                  } as any),
+                ),
+              );
+              await queryClient.invalidateQueries({ queryKey: ['getResourceBindings', queryArgs] });
+              await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
+              setSelectedResources([]);
+              toast.success(`${selected.length} ${selected.length === 1 ? 'binding' : 'bindings'} deleted`);
+            } catch (error) {
+              toast.error(remove.validationErrors ?? 'Failed to delete resource bindings');
+              throw error;
+            }
+          },
+        };
+      },
+    })
+    .build();
 
 const GlobalBindingsLink = () => (
-  <div className="flex items-center justify-between rounded-sm border border-dashed px-4 py-3 text-sm">
-    <div>
-      <div className="font-medium">Global Bindings</div>
-      <div className="text-xs text-muted-foreground">
-        Global entries are inherited automatically and resolved during deploy. They are not listed in this resource
-        table.
-      </div>
-    </div>
-    <Button asChild variant="outline" size="sm">
-      <Link to="/bindings">
-        <ExternalLink className="size-3.5" />
-        Open Bindings
-      </Link>
-    </Button>
+  <div className="flex flex-row border border-dashed p-2 rounded-md items-center justify-center text-muted-foreground gap-2 ">
+    <div>Global entries are inherited automatically and resolved during deploy.</div>
+    <Link to="/bindings" className="flex gap-2 items-center justify-center cursor-pointer">
+      <span>Global Bindings</span>
+      <MoveUpRight className="h-3.5 w-3.5" />
+    </Link>
   </div>
 );
 
@@ -588,9 +515,7 @@ const ResourceBindingDialog = ({
   editing: boolean;
   allowMountedFile?: boolean;
   onOpenChange: (open: boolean) => void;
-  onInputChange: (
-    input: ResourceBindingInput | ((prev: ResourceBindingInput) => ResourceBindingInput),
-  ) => void;
+  onInputChange: (input: ResourceBindingInput | ((prev: ResourceBindingInput) => ResourceBindingInput)) => void;
   onSave: () => void;
   onEditStoredSecret?: (secret: SecretDefinitionView) => void;
 }) => {
@@ -634,7 +559,7 @@ const ResourceBindingDialog = ({
                     <SelectTrigger className="flex-1">
                       <SelectValue placeholder={secrets.length ? 'Select secret' : 'No secrets'} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-background">
                       {secrets.map((secret) => (
                         <SelectItem key={secret.id} value={secret.id}>
                           {secret.name}
@@ -661,10 +586,10 @@ const ResourceBindingDialog = ({
                         targetPath: secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE ? (prev.targetPath ?? '') : null,
                       }))
                     }>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-55">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-background">
                       <SelectItem value={ENV_DELIVERY_MODE}>Environment variable</SelectItem>
                       <SelectItem value={MOUNTED_FILE_DELIVERY_MODE}>Mounted file</SelectItem>
                     </SelectContent>
@@ -904,13 +829,12 @@ export const ResourceBindingAddDropdown = ({
 }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      <Button type="button" variant="outline" size="sm" disabled={disabled}>
-        <Plus className="size-3.5" />
-        Add
+      <Button type="button" variant="outline" size="sm" disabled={disabled} className='bg-primary hover:bg-primary/80 hover:text-primary-foreground text-primary-foreground h-9'>
+        Add Binding
         <ChevronDown className="size-3.5" />
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="min-w-40">
+    <DropdownMenuContent align="end" className="min-w-40 bg-background">
       <DropdownMenuItem onClick={onAddVariable}>
         <Variable className="size-3.5" />
         Add variable
@@ -1096,17 +1020,17 @@ export const CreateSecretDialog = ({
           <DialogTitle>Create Stored Secret</DialogTitle>
           <DialogDescription>
             Internal secrets are stored encrypted by Citadel. Vault secrets store only the provider reference and are
-            resolved during apply.
+            resolved during deploy.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <label className="grid gap-1.5 text-sm">
             <span className="text-xs text-muted-foreground">Source</span>
             <Select value={source} onValueChange={(value) => onSourceChange(value as SecretSource)}>
-              <SelectTrigger>
+              <SelectTrigger className="w-55">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-background">
                 <SelectItem value="internal">Internal encrypted</SelectItem>
                 <SelectItem value="vault">Vault-compatible KV v2</SelectItem>
               </SelectContent>
@@ -1146,10 +1070,10 @@ export const CreateSecretDialog = ({
                   value={externalInput.providerId}
                   disabled={providers.length === 0}
                   onValueChange={(providerId) => onExternalInputChange((prev) => ({ ...prev, providerId }))}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-55">
                     <SelectValue placeholder={providers.length ? 'Select provider' : 'No providers'} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-background">
                     {providers.map((provider) => (
                       <SelectItem key={provider.id} value={provider.id}>
                         {provider.name}
@@ -1206,17 +1130,7 @@ export const CreateSecretDialog = ({
   );
 };
 
-export const toEditableEntry = (entry: ResourceBindingView): EditableEntry => ({
-  clientId: entry.id,
-  name: entry.name,
-  kind: entry.kind,
-  value: entry.value,
-  secretId: entry.secretId,
-  secretDeliveryMode: entry.secretDeliveryMode,
-  targetPath: entry.targetPath,
-});
-
-export const toInput = (entry: EditableEntry): ResourceBindingInput => ({
+export const toInput = (entry: ResourceBindingView): ResourceBindingInput => ({
   name: entry.name,
   kind: entry.kind,
   value: entry.kind === ResourceBindingKind.Variable ? (entry.value ?? '') : null,

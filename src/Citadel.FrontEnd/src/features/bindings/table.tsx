@@ -19,38 +19,27 @@ import {
   toExternalSecretTestInput,
   useSecretCreation,
 } from '@/components/custom/resource-bindings-tab';
-import { ActionBar } from '@/components/custom/action-bar';
-import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';
-import { ContentCard } from '@/components/custom/content-card';
-import SortableCell from '@/components/custom/sortable-cell';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { DataTable } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useSelectedResources } from '@/lib/atoms';
 import { useMutate, useRead } from '@/lib/hooks';
-import { ActionData, ButtonGroupComponent } from '@/pages/types';
+import { ActionData } from '@/pages/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { ColumnDef } from '@tanstack/react-table';
-import { KeyRound, MoreHorizontal, Pencil, Trash2, Variable } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { ResourceBindingsDataTable } from '@/components/custom/resource-bindings-table';
+import {
+  BindingDropdownActions,
+  BindingPageAction,
+  dispatchBindingPageAction,
+  invalidateBindingQueries,
+  subscribeBindingPageActions,
+} from './actions';
 
-type BindingPageAction = 'add-variable' | 'add-secret-key' | 'create-secret';
 type EntryDialogMode = 'add-variable' | 'add-secret-key' | 'edit';
 
-const bindingActions = new EventTarget();
 const EMPTY_ENTRIES: ResourceBindingView[] = [];
 const EMPTY_SECRETS: SecretDefinitionView[] = [];
 const EXTERNAL_SECRET_INPUT: CreateExternalSecretInput = {
@@ -68,70 +57,22 @@ export const BindingsAddButton = () => {
   const canWrite = Boolean(configData?.data.capabilities?.canWrite);
   const canCreateSecret = Boolean(secretsData?.data.capabilities.canWrite);
 
-  const dispatch = (action: BindingPageAction) => {
-    bindingActions.dispatchEvent(new CustomEvent<BindingPageAction>('bindings-action', { detail: action }));
-  };
-
   return (
     <ResourceBindingAddDropdown
       disabled={!canWrite}
       hasSecrets={secrets.length > 0}
       canCreateSecret={canCreateSecret}
-      onAddVariable={() => dispatch('add-variable')}
-      onBindSecret={() => dispatch('add-secret-key')}
-      onCreateSecret={() => dispatch('create-secret')}
+      onAddVariable={() => dispatchBindingPageAction({ type: 'add-variable' })}
+      onBindSecret={() => dispatchBindingPageAction({ type: 'add-secret-key' })}
+      onCreateSecret={() => dispatchBindingPageAction({ type: 'create-secret' })}
     />
-  );
-};
-
-export const BindingsGroupActions = ({ items }: { items: ResourceBindingView[] }) => (
-  <ActionBar type="Binding" items={items} actions={[DeleteSelectedVariablesAction]} />
-);
-
-const DeleteSelectedVariablesAction: ButtonGroupComponent<ResourceBindingView> = ({ resources }) => {
-  const selected = Array.isArray(resources) ? resources : [resources];
-  const queryClient = useQueryClient();
-  const { data } = useRead('getGlobalResourceBindings');
-  const remove = useMutate('deleteGlobalResourceBinding');
-  const [, setSelectedResources] = useSelectedResources<ResourceBindingView>('Binding');
-  const [open, setOpen] = useState(false);
-  const canWrite = Boolean(data?.data.capabilities?.canWrite);
-
-  const deleteSelected = async () => {
-    if (!canWrite) return;
-
-    try {
-      await Promise.all(selected.map((entry) => remove.mutateAsync({ id: entry.id } as any)));
-      await invalidateConfigurationQueries(queryClient);
-      setSelectedResources([]);
-      setOpen(false);
-      toast.success(`${selected.length} ${selected.length === 1 ? 'entry' : 'entries'} deleted`);
-    } catch {
-      toast.error(remove.validationErrors ?? 'Failed to delete selected entries');
-    }
-  };
-
-  return (
-    <>
-      <Button type="button" variant="destructive" size="sm" disabled={!canWrite} onClick={() => setOpen(true)}>
-        <Trash2 className="h-3.5 w-3.5" />
-        Delete
-      </Button>
-      <ConfirmDeleteDialog
-        type="Binding"
-        open={open}
-        count={selected.length}
-        isPending={remove.isPending}
-        onOpenChange={setOpen}
-        onConfirm={deleteSelected}
-      />
-    </>
   );
 };
 
 export const BindingsTable = ({
   items,
   isLoading,
+  actions,
 }: {
   items: ResourceBindingView[];
   isLoading: boolean;
@@ -146,21 +87,17 @@ export const BindingsTable = ({
   const { data: secretsData } = useRead('listSecretDefinitions');
   const create = useMutate('createGlobalResourceBinding');
   const update = useMutate('updateGlobalResourceBinding');
-  const remove = useMutate('deleteGlobalResourceBinding');
   const updateExternalSecret = useMutate('updateExternalSecret');
   const testExternalSecret = useMutate('testExternalSecret');
-  const [, setSelectedResources] = useSelectedResources<ResourceBindingView>('Binding');
   const allEntries = data?.data.entries ?? EMPTY_ENTRIES;
   const canWrite = Boolean(data?.data.capabilities?.canWrite);
   const canCreateSecret = Boolean(secretsData?.data.capabilities.canWrite);
   const originalInputs = useMemo(() => allEntries.map(toInputFromView), [allEntries]);
   const secrets = useMemo(() => secretsData?.data.secrets ?? EMPTY_SECRETS, [secretsData?.data.secrets]);
-  const secretNames = useMemo(() => new Map(secrets.map((secret) => [secret.id, secret.name])), [secrets]);
   const [dialogMode, setDialogMode] = useState<EntryDialogMode>('add-variable');
   const [editingEntry, setEditingEntry] = useState<ResourceBindingView | null>(null);
   const [entryInput, setEntryInput] = useState<ResourceBindingInput>(newVariableInput());
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
-  const [deletingEntry, setDeletingEntry] = useState<ResourceBindingView | null>(null);
   const [editingStoredSecret, setEditingStoredSecret] = useState<SecretDefinitionView | null>(null);
   const [storedSecretInput, setStoredSecretInput] = useState<CreateExternalSecretInput>(EXTERNAL_SECRET_INPUT);
   const { data: providersData } = useRead('listSecretProviders', undefined, { enabled: editingStoredSecret != null });
@@ -169,7 +106,7 @@ export const BindingsTable = ({
   const updateEntry = useCallback(
     async (entryId: string, entry: ResourceBindingInput, successMessage?: string) => {
       await update.mutateAsync({ data: toUpdateInput(entryId, entry) } as any);
-      await invalidateConfigurationQueries(queryClient);
+      await invalidateBindingQueries(queryClient);
       if (successMessage) {
         toast.success(successMessage);
       }
@@ -180,7 +117,7 @@ export const BindingsTable = ({
   const createEntry = useCallback(
     async (entry: ResourceBindingInput, successMessage?: string) => {
       await create.mutateAsync({ data: entry } as any);
-      await invalidateConfigurationQueries(queryClient);
+      await invalidateBindingQueries(queryClient);
       if (successMessage) {
         toast.success(successMessage);
       }
@@ -231,17 +168,14 @@ export const BindingsTable = ({
   );
 
   useEffect(() => {
-    const listener = (event: Event) => {
+    return subscribeBindingPageActions((action: BindingPageAction) => {
       if (!canWrite) return;
 
-      const action = (event as CustomEvent<BindingPageAction>).detail;
-      if (action === 'add-variable') openEntryDialog('add-variable');
-      if (action === 'add-secret-key') openEntryDialog('add-secret-key');
-      if (action === 'create-secret') openCreateSecretDialog(true);
-    };
-
-    bindingActions.addEventListener('bindings-action', listener);
-    return () => bindingActions.removeEventListener('bindings-action', listener);
+      if (action.type === 'add-variable') openEntryDialog('add-variable');
+      if (action.type === 'add-secret-key') openEntryDialog('add-secret-key');
+      if (action.type === 'create-secret') openCreateSecretDialog(true);
+      if (action.type === 'edit-entry') openEntryDialog('edit', action.entry);
+    });
   }, [canWrite, openCreateSecretDialog, openEntryDialog]);
 
   const saveEntry = async () => {
@@ -270,21 +204,6 @@ export const BindingsTable = ({
     }
   };
 
-  const deleteEntry = async () => {
-    if (!deletingEntry) return;
-    if (!canWrite) return;
-
-    try {
-      await remove.mutateAsync({ id: deletingEntry.id } as any);
-      await invalidateConfigurationQueries(queryClient);
-      toast.success('Entry deleted');
-      setDeletingEntry(null);
-      setSelectedResources([]);
-    } catch {
-      toast.error(remove.validationErrors ?? 'Failed to delete entry');
-    }
-  };
-
   const openEditStoredSecret = (secret: SecretDefinitionView) => {
     if (secret.providerType !== SecretProviderType.VaultCompatibleKvV2) {
       toast.error('Only Vault-compatible stored secrets can be edited here.');
@@ -305,7 +224,7 @@ export const BindingsTable = ({
         data: payload,
       } as any);
       setEditingStoredSecret(null);
-      await invalidateConfigurationQueries(queryClient);
+      await invalidateBindingQueries(queryClient);
       toast.success('Stored secret updated');
 
       if (entryInput.secretId === editingStoredSecret.id) {
@@ -332,41 +251,14 @@ export const BindingsTable = ({
     }
   };
 
-  const cols = useMemo(
-    () =>
-      columns({
-        secretNames,
-        disabled: !canWrite,
-        onEdit: (entry) => openEntryDialog('edit', entry),
-        onDelete: setDeletingEntry,
-      }),
-    [canWrite, openEntryDialog, secretNames],
-  );
-
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-3">
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Variable className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="font-bold">Bindings</div>
-            <p className="text-xs text-muted-foreground">
-              Global variables, secret keys, and providers inherited by stacks and deployments.
-            </p>
-          </div>
-        </div>
-
-        <ContentCard>
-          <DataTable
-            columns={cols}
-            data={items ?? EMPTY_ENTRIES}
-            isLoading={isLoading}
-            onSelectionChange={setSelectedResources}
-          />
-        </ContentCard>
-      </div>
+      <ResourceBindingsDataTable
+        items={items ?? EMPTY_ENTRIES}
+        secrets={secrets}
+        isLoading={isLoading}
+        actions={actions ?? BindingDropdownActions}
+      />
 
       <EntryEditorDialog
         open={entryDialogOpen}
@@ -391,150 +283,9 @@ export const BindingsTable = ({
         onTest={testStoredSecret}
       />
       <CreateSecretDialog {...secretCreation.dialogProps} />
-      <ConfirmDeleteDialog
-        type="Binding"
-        open={Boolean(deletingEntry)}
-        count={1}
-        isPending={remove.isPending}
-        onOpenChange={(open) => !open && setDeletingEntry(null)}
-        onConfirm={deleteEntry}
-      />
     </div>
   );
 };
-
-const columns = ({
-  secretNames,
-  disabled,
-  onEdit,
-  onDelete,
-}: {
-  secretNames: Map<string, string>;
-  disabled: boolean;
-  onEdit: (entry: ResourceBindingView) => void;
-  onDelete: (entry: ResourceBindingView) => void;
-}): ColumnDef<ResourceBindingView>[] => [
-  {
-    id: 'select',
-    header: ({ table }) => (
-      <Checkbox
-        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select binding"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: 'name',
-    header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => <NameCell entry={row.original} />,
-    sortingFn: (rowA: any, rowB: any): number => rowA.original.name.localeCompare(rowB.original.name),
-  },
-  {
-    accessorKey: 'kind',
-    header: ({ column }) => <SortableCell cellName="Type" column={column} />,
-    cell: ({ row }) => <KindBadge kind={row.original.kind} />,
-    sortingFn: (rowA: any, rowB: any): number => rowA.original.kind.localeCompare(rowB.original.kind),
-  },
-  {
-    accessorKey: 'value',
-    header: ({ column }) => <SortableCell cellName="Value" column={column} />,
-    cell: ({ row }) => <ValueCell entry={row.original} secretNames={secretNames} />,
-  },
-  {
-    accessorKey: 'secretDeliveryMode',
-    header: ({ column }) => <SortableCell cellName="Delivery" column={column} />,
-    cell: ({ row }) =>
-      row.original.kind === ResourceBindingKind.Secret ? (
-        <span className="text-xs text-muted-foreground">{row.original.secretDeliveryMode ?? ENV_DELIVERY_MODE}</span>
-      ) : (
-        <span className="text-xs text-muted-foreground">-</span>
-      ),
-  },
-  {
-    id: 'actions',
-    cell: ({ row }) => <EntryActionsCell entry={row.original} disabled={disabled} onEdit={onEdit} onDelete={onDelete} />,
-  },
-];
-
-const NameCell = ({ entry }: { entry: ResourceBindingView }) => (
-  <div className="flex items-center gap-2 py-2">
-    {entry.kind === ResourceBindingKind.Secret ? (
-      <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-    ) : (
-      <Variable className="h-3.5 w-3.5 text-muted-foreground" />
-    )}
-    <span className="font-mono text-xs">{entry.name}</span>
-  </div>
-);
-
-const KindBadge = ({ kind }: { kind: ResourceBindingKind }) => (
-  <Badge variant={kind === ResourceBindingKind.Secret ? 'outline' : 'secondary'} className="gap-1">
-    {kind === ResourceBindingKind.Secret ? <KeyRound className="size-3" /> : <Variable className="size-3" />}
-    {kind === ResourceBindingKind.Secret ? 'Secret' : 'Binding'}
-  </Badge>
-);
-
-const ValueCell = ({
-  entry,
-  secretNames,
-}: {
-  entry: ResourceBindingView;
-  secretNames: Map<string, string>;
-}) => {
-  if (entry.kind === ResourceBindingKind.Secret) {
-    const secretName = entry.secretId ? secretNames.get(entry.secretId) : undefined;
-    return (
-      <div className="flex flex-col gap-0.5 py-2">
-        <span className="font-mono text-xs">{secretName ?? 'Unbound secret'}</span>
-        <span className="font-mono text-xs text-muted-foreground">********</span>
-      </div>
-    );
-  }
-
-  return <span className="font-mono text-xs">{entry.value}</span>;
-};
-
-const EntryActionsCell = ({
-  entry,
-  disabled,
-  onEdit,
-  onDelete,
-}: {
-  entry: ResourceBindingView;
-  disabled: boolean;
-  onEdit: (entry: ResourceBindingView) => void;
-  onDelete: (entry: ResourceBindingView) => void;
-}) => (
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button variant="ghost" className="h-8 w-8 p-0" disabled={disabled}>
-        <span className="sr-only">Open menu</span>
-        <MoreHorizontal className="h-4 w-4" />
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-38 bg-background py-2">
-      <DropdownMenuItem onClick={() => onEdit(entry)}>
-        <Pencil className="h-3.5 w-3.5" />
-        Edit
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem className="text-danger hover:text-danger!" onClick={() => onDelete(entry)}>
-        <Trash2 className="h-3.5 w-3.5" />
-        Delete
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
-);
 
 const EntryEditorDialog = ({
   open,
@@ -699,8 +450,3 @@ const hasDuplicateEntryName = (entries: ResourceBindingInput[]): boolean => {
   return false;
 };
 
-const invalidateConfigurationQueries = async (queryClient: ReturnType<typeof useQueryClient>) => {
-  await queryClient.invalidateQueries({ queryKey: ['getGlobalResourceBindings'] });
-  await queryClient.invalidateQueries({ queryKey: ['getResourceBindings'] });
-  await queryClient.invalidateQueries({ queryKey: ['listSecretDefinitions'] });
-};

@@ -3,7 +3,6 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Entities.ResourceBindings;
-using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -189,7 +188,7 @@ internal sealed partial class ResourceBindingResolver(
     private static partial Regex GetNameRegex();
 }
 
-internal sealed class SecretValueProtector(IOptions<JwtConfiguration> jwtOptions) : ISecretValueProtector
+internal sealed class SecretValueProtector(IOptions<SecretsConfiguration> secretsOptions) : ISecretValueProtector
 {
     private const int NonceSize = 12;
     private const int TagSize = 16;
@@ -230,16 +229,7 @@ internal sealed class SecretValueProtector(IOptions<JwtConfiguration> jwtOptions
     }
 
     private byte[] GetKey()
-    {
-        var keyMaterial = string.IsNullOrWhiteSpace(jwtOptions.Value.Key)
-            ? Helpers.GetJwtSecretFromFile()
-            : jwtOptions.Value.Key;
-
-        if (string.IsNullOrWhiteSpace(keyMaterial))
-            throw new InvalidOperationException("Secret encryption key material is missing.");
-
-        return SHA256.HashData(Encoding.UTF8.GetBytes(keyMaterial));
-    }
+        => secretsOptions.Value.GetEncryptionKey();
 }
 
 internal sealed class SecretRedactor : ISecretRedactor

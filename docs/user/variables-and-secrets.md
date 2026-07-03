@@ -314,6 +314,40 @@ Stack releases store a safe configuration snapshot from apply time. Variables ar
 
 This means an older release still shows what configuration metadata was deployed even if a global variable or secret mapping is changed later.
 
+### Local Secret Encryption Key
+
+Citadel encrypts local stored secrets and external provider tokens with a dedicated secret encryption key.
+
+Set it with:
+
+```env
+Secrets__EncryptionKey=
+```
+
+When the value is empty, Citadel generates a key and stores it in the data volume at `./data/secret-encryption-key`. Keep this file backed up with your Citadel data.
+
+You can also provide your own base64-encoded 32-byte key:
+
+```env
+Secrets__EncryptionKey=<base64-32-byte-key>
+```
+
+Generate a custom key with PowerShell:
+
+```powershell
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
+
+Or with OpenSSL:
+
+```bash
+openssl rand -base64 32
+```
+
+Keep this key outside source control and back it up with your Citadel data. Losing or changing the configured key or generated `./data/secret-encryption-key` file makes existing local stored secrets and provider tokens undecryptable.
+
+This key is intentionally separate from `Jwt__Key`. JWT signing keys may be rotated without breaking stored secrets.
+
 ## Scope And Overrides
 
 Variables and secrets can be defined globally or on a resource.
