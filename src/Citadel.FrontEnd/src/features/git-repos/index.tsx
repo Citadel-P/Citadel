@@ -461,6 +461,7 @@ export const GitRepoComponents: RequiredComponents = {
     subtitle: 'Manage your Git repository and account configurations.',
     showSearch: true,
     showAdd: true,
+    showTagFilter: true,
     addButtonTitle: 'Add Repository',
   },
   useData(): ResourceDataHookResult<GitRepositoryView> {

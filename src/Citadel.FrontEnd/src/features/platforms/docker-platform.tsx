@@ -14,6 +14,7 @@ import { fromNow } from '@/lib/dayjs.helper';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
+import { TagChips } from '@/features/tags/components';
 
 export const DockerPlatform = ({
   platform,
@@ -91,6 +92,7 @@ export const DockerPlatform = ({
                 {platform.networkCount ?? '-'} networks
               </Link>
             </div>
+            <TagChips tags={platform.tags} />
           </div>
 
           {/* Containers breakdown */}

@@ -37,6 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { GitBranch, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import * as monaco from 'monaco-editor';
+import { ResourceTagSelector } from '@/features/tags/components';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -635,6 +636,19 @@ export const StackForm = ({
                       required: false,
                       description: 'Optional description of this workload.',
                       render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+                    }),
+                    defineField({
+                      key: 'tagIds',
+                      label: 'Tags',
+                      required: false,
+                      description: 'Optional tags for filtering and grouping this stack.',
+                      render: (val, set) => (
+                        <ResourceTagSelector
+                          value={val}
+                          disabled={disabled}
+                          onChange={(tagIds) => set({ tagIds })}
+                        />
+                      ),
                     }),
                   ],
                 }),

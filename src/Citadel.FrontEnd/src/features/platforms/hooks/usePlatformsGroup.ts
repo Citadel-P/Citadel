@@ -4,6 +4,7 @@ import { HubConnection } from '@microsoft/signalr';
 import { PlatformStatsBatchView } from '@/api/types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
+import { useResourceTagFilter } from '@/features/tags/components';
 
 const normalizePlatform = (s: PlatformView): PlatformView => {
   if (Array.isArray(s.platformDescriptor)) {
@@ -20,7 +21,11 @@ const normalizePlatform = (s: PlatformView): PlatformView => {
 };
 
 export const usePlatformsGroup = () => {
-  const { data, isLoading } = useRead('listPlatforms');
+  const { selectedTagIds } = useResourceTagFilter();
+  const { data, isLoading } = useRead(
+    'listPlatforms',
+    selectedTagIds.length > 0 ? { query: { tagIds: selectedTagIds } } : undefined,
+  );
   const [realtimePlatforms, setRealtimePlatforms] = useState<PlatformView[] | null>(null);
   const capabilities = data?.data.capabilities;
 
@@ -140,5 +145,6 @@ export const usePlatformsGroup = () => {
     platformsMessage,
     capabilities,
     isLoading,
+    selectedTagIds,
   };
 };

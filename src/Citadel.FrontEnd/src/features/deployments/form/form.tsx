@@ -33,6 +33,7 @@ import { useParams } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
 import { AlertMessage } from '@/components/custom/alert-message';
+import { ResourceTagSelector } from '@/features/tags/components';
 
 const enum ImageSource {
   local = 'Local',
@@ -307,6 +308,19 @@ export const DeploymentForm = ({
                       required: false,
                       description: 'Optional description of this workload.',
                       render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+                    }),
+                    defineField({
+                      key: 'tagIds',
+                      label: 'Tags',
+                      required: false,
+                      description: 'Optional tags for filtering and grouping this deployment.',
+                      render: (val, set) => (
+                        <ResourceTagSelector
+                          value={val}
+                          disabled={disabled}
+                          onChange={(tagIds) => set({ tagIds })}
+                        />
+                      ),
                     }),
                   ],
                 }),

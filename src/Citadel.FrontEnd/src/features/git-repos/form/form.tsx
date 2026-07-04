@@ -22,6 +22,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MonacoToArrayEditor } from '@/lib/monaco';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
+import { ResourceTagSelector } from '@/features/tags/components';
 
 const GitAccountSelector = ({
   value,
@@ -150,6 +151,18 @@ export const GitRepoForm = ({
                           value={val}
                           onChange={(v) => set({ description: v || null })}
                           placeholder="Repository description..."
+                        />
+                      ),
+                    }),
+                    defineField({
+                      key: 'tagIds',
+                      label: 'Tags',
+                      description: 'Optional tags for filtering and grouping this repository.',
+                      render: (val, set) => (
+                        <ResourceTagSelector
+                          value={val}
+                          disabled={disabled}
+                          onChange={(tagIds) => set({ tagIds })}
                         />
                       ),
                     }),

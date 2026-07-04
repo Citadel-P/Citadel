@@ -97,6 +97,11 @@ const MenuItems: IMenuItem[] = [
             route: '/bindings',
           },
           {
+            icon: renderIcon(CitadelIcons.Tag),
+            label: 'Tags',
+            route: '/tags',
+          },
+          {
             icon: renderIcon(CitadelIcons.Access),
             label: 'Access',
             route: '/access',

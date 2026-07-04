@@ -11,6 +11,7 @@ export const StackComponents: RequiredComponents = {
     subtitle: 'Run and manage stacks on your servers.',
     showSearch: true,
     showAdd: true,
+    showTagFilter: true,
   },
   Content: ({ items, actions, isLoading }) => {
     return <StacksTable items={items} actions={actions} isLoading={isLoading} />;

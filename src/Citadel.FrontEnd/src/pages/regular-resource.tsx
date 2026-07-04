@@ -15,9 +15,11 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
   const navigate = useNavigate();
   const platformId = useParams().platformId ?? '';
   const [search, setSearch] = useState('');
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const { items, capabilities, isLoading = false } = Components.useData?.(platformId) ?? {};
   const headerCfg = Components.header ?? { showSearch: true, showAdd: true };
+  const AddDialog = headerCfg.AddDialog;
 
   const filtered = useMemo(
     () => (Components.filterItems ? Components.filterItems(items ?? [], search) : items),
@@ -42,12 +44,14 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
             subtitle={headerCfg.subtitle}
             showSearch={headerCfg.showSearch}
             showAdd={headerCfg.showAdd}
+            showTagFilter={headerCfg.showTagFilter}
             addDisabled={!capabilities?.canWrite}
             addButtonTitle={headerCfg.addButtonTitle}
             Extra={headerCfg.Extra}
             onSearch={setSearch}
-            onAdd={() => navigate('./add')}
+            onAdd={() => (AddDialog ? setAddDialogOpen(true) : navigate('./add'))}
           />
+          {AddDialog && <AddDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />}
 
           {Components.SubHeader && <Components.SubHeader />}
 

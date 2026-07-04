@@ -3,9 +3,14 @@ import { HubConnection } from '@microsoft/signalr';
 import { StackView, ResourceCapabilities } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
+import { useResourceTagFilter } from '@/features/tags/components';
 
 export const useStacksGroup = () => {
-  const { data, isLoading } = useRead('listStacks');
+  const { selectedTagIds } = useResourceTagFilter();
+  const { data, isLoading } = useRead(
+    'listStacks',
+    selectedTagIds.length > 0 ? { query: { tagIds: selectedTagIds } } : undefined,
+  );
   const [stacks, setStacks] = useState<StackView[] | undefined>();
   const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<StackView[]>([]);
@@ -61,5 +66,5 @@ export const useStacksGroup = () => {
     removeEventListeners,
   });
 
-  return { stacks, isLoading, capabilities };
+  return { stacks, isLoading, capabilities, selectedTagIds };
 };

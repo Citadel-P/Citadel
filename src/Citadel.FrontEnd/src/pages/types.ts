@@ -69,6 +69,7 @@ export interface RequiredFormComponents<T = any> {
       canEditTitle?: boolean;
       canEditDescription?: boolean;
       Indicator: React.FC<{ resource: T }>;
+      Tags?: React.FC<{ resource: T }>;
       ActionButtons: React.FC<{ resource: T }>;
     };
     skipMetadataUpdate?: boolean;
@@ -173,10 +174,14 @@ interface HeaderOptions {
   showSearch?: boolean;
   /** Whether to show the "Add" button. Defaults to true. */
   showAdd?: boolean;
+  /** Whether to show the tag filter control in the page header. */
+  showTagFilter?: boolean;
   /** Override add button title */
   addButtonTitle?: string;
   /** Additional custom header items (buttons, dropdowns, etc.). */
   Extra?: React.FC;
+  /** Optional add dialog opened by the standard Add button instead of navigating to an add route. */
+  AddDialog?: React.FC<{ open: boolean; onOpenChange: (open: boolean) => void }>;
 }
 
 export type ActionData = {

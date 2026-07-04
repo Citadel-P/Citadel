@@ -16,6 +16,7 @@ import { PlatformStatusCell, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/compon
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { fromNow } from '@/lib/dayjs.helper';
 import { truncate } from '@/lib/truncate';
+import { TagChips } from '@/features/tags/components';
 
 export const DeploymentsTable = ({
   items,
@@ -106,6 +107,15 @@ const columns = (
       />
     ),
     sortingFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
+  },
+  {
+    accessorKey: 'tags',
+    header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
+    cell: ({ row }) => <TagChips tags={row.original.tags} />,
+    sortingFn: (rowA, rowB) =>
+      (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
+        rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
+      ),
   },
   {
     id: 'actions',

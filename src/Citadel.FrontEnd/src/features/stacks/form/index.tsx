@@ -70,6 +70,7 @@ import { MonacoDiff } from '@/lib/monaco';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { hasActionableStackDrift } from '../actions';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
+import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -90,6 +91,14 @@ export const StackFormComponents: RequiredFormComponents = {
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(StackActions)} />;
       },
+      Tags: ({ resource }: { resource: StackView }) => (
+        <ResourceHeaderTagsEditor
+          resourceType="Stack"
+          resourceId={resource.id}
+          tags={resource.tags}
+          disabled={!hasCapability(resource, 'canWrite')}
+        />
+      ),
     },
     SubHeader: ({ resource }: { resource: StackView }) => {
       return <StackSubHeader latestActivity={resource.latestActivityView ?? null} stack={resource} />;

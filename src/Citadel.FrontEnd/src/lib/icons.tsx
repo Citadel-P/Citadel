@@ -1,5 +1,5 @@
 import { ResourceType } from '@/api/types';
-import { Activity, Cable, ChevronsLeftRightEllipsis, createLucideIcon, GitBranch, KeyRound, Layers, Megaphone, Rocket, Rss, Server, Shield, TriangleAlert, User, UserKey, Users, Webhook } from 'lucide-react';
+import { Activity, Cable, ChevronsLeftRightEllipsis, createLucideIcon, GitBranch, KeyRound, Layers, Megaphone, Rocket, Rss, Server, Shield, Tag as TagIcon, TriangleAlert, User, UserKey, Users, Webhook } from 'lucide-react';
 
 export const DockerIcon = createLucideIcon('DockerIcon', [
   [
@@ -36,6 +36,7 @@ export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ c
   ['User']: User,
   ['Role']: Shield,
   ['Binding']: ChevronsLeftRightEllipsis,
+  ['Tag']: TagIcon,
   ['Activity']: Activity
 };
 

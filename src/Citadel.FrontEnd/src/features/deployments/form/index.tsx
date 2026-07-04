@@ -29,6 +29,7 @@ import { DeploymentLogs } from '@/features/docker-resources/containers/container
 import { hasCapability } from '@/lib/resource-capabilities';
 import { UpdateAvailableNotice } from '@/components/custom/common';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
+import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -49,6 +50,14 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(DeploymentActions)} />;
       },
+      Tags: ({ resource }: { resource: DeploymentView }) => (
+        <ResourceHeaderTagsEditor
+          resourceType="Deployment"
+          resourceId={resource.id}
+          tags={resource.tags}
+          disabled={!hasCapability(resource, 'canWrite')}
+        />
+      ),
     },
     SubHeader: ({ resource }: { resource: DeploymentView }) => {
       return <DeploymentSubHeader latestActivity={resource.latestActivityView ?? null} deployment={resource} />;

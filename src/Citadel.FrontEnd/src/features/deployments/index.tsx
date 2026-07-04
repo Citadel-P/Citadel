@@ -11,6 +11,7 @@ export const DeploymentComponents: RequiredComponents = {
     subtitle: 'Run and manage containers on your servers.',
     showSearch: true,
     showAdd: true,
+    showTagFilter: true,
   },
   Content: ({ items, actions, isLoading }) => {
     return <DeploymentsTable items={items} actions={actions} isLoading={isLoading} />;

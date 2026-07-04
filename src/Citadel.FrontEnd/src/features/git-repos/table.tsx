@@ -11,6 +11,7 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { fromNow } from '@/lib/dayjs.helper';
+import { TagChips } from '@/features/tags/components';
 
 const columns = (
   actions: Record<
@@ -61,6 +62,15 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => <span className="text-[13px]">{fromNow(row.original.createdAt)}</span>,
     sortingFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
+  },
+  {
+    accessorKey: 'tags',
+    header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
+    cell: ({ row }) => <TagChips tags={row.original.tags} />,
+    sortingFn: (rowA, rowB) =>
+      (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
+        rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
+      ),
   },
   {
     id: 'actions',

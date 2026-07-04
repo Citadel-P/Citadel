@@ -44,7 +44,7 @@ for (const pathStr in doc.paths) {
     queryParams = qParams.map((p) => p.name);
     if (qParams.length > 0) {
       params.push('query');
-      requiredParams.push(...qParams.filter((p) => p.required).map((p) => p.name));
+      requiredParams.push(...qParams.filter((p) => p.required && p.name !== 'tagIds').map((p) => p.name));
     }
 
     // Request body (POST/PATCH/PUT)

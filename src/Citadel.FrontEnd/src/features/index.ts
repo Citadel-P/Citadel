@@ -25,6 +25,7 @@ import { TeamFormComponents } from './access/teams/form';
 import { StackFormComponents } from './stacks/form';
 import { StackComponents } from './stacks';
 import { BindingComponents } from './bindings';
+import { TagComponents } from './tags';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -47,6 +48,7 @@ export const ResourceComponents: {
   Team: AccessComponents,
   Role: AccessComponents,
   Binding: BindingComponents,
+  Tag: TagComponents,
 };
 
 export const ResourceFormComponents: {
@@ -72,6 +74,7 @@ export const ResourceFormComponents: {
   Team: TeamFormComponents,
   Role: undefined,
   Binding: undefined,
+  Tag: undefined,
 };
 
 export const DockerResourceInfoComponents: {

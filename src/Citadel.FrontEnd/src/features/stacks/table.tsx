@@ -23,6 +23,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { fromNow } from '@/lib/dayjs.helper';
 import { formatId } from '@/lib/utils';
 import { FileText, GitBranch } from 'lucide-react';
+import { TagChips } from '@/features/tags/components';
 
 export const StacksTable = ({
   items,
@@ -102,6 +103,15 @@ const columns = (
       />
     ),
     sortingFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
+  },
+  {
+    accessorKey: 'tags',
+    header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
+    cell: ({ row }) => <TagChips tags={row.original.tags} />,
+    sortingFn: (rowA, rowB) =>
+      (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
+        rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
+      ),
   },
   {
     id: 'actions',

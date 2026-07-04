@@ -16,6 +16,7 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { truncate } from '@/lib/truncate';
 import { GitCommitHorizontalIcon } from 'lucide-react';
 import { hasCapability } from '@/lib/resource-capabilities';
+import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 
 const title = 'Repository';
 export const GitRepoFormComponents: RequiredFormComponents = {
@@ -40,6 +41,14 @@ export const GitRepoFormComponents: RequiredFormComponents = {
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(GitRepoActions)} />;
       },
+      Tags: ({ resource }: { resource: GitRepositoryView }) => (
+        <ResourceHeaderTagsEditor
+          resourceType="GitRepository"
+          resourceId={resource.id}
+          tags={resource.tags}
+          disabled={!hasCapability(resource, 'canWrite')}
+        />
+      ),
     },
     SubHeader: ({ resource }: { resource: GitRepositoryView }) => (
       <GitRepoSubHeader latestActivity={resource.latestActivityView} />

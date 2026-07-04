@@ -3,9 +3,14 @@ import { HubConnection } from '@microsoft/signalr';
 import { DeploymentView, ResourceCapabilities } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
+import { useResourceTagFilter } from '@/features/tags/components';
 
 export const useDeploymentsGroup = () => {
-  const { data, isLoading } = useRead('listDeployments');
+  const { selectedTagIds } = useResourceTagFilter();
+  const { data, isLoading } = useRead(
+    'listDeployments',
+    selectedTagIds.length > 0 ? { query: { tagIds: selectedTagIds } } : undefined,
+  );
   const [deployments, setDeployments] = useState<DeploymentView[] | undefined>();
   const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<DeploymentView[]>([]);
@@ -61,5 +66,5 @@ export const useDeploymentsGroup = () => {
     removeEventListeners,
   });
 
-  return { deployments, isLoading, capabilities };
+  return { deployments, isLoading, capabilities, selectedTagIds };
 };

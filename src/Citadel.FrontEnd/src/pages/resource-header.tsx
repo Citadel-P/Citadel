@@ -1,6 +1,7 @@
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { SearchField } from '@/components/custom/search-field';
 import { Button } from '@/components/ui/button';
+import { ResourceTagFilter } from '@/features/tags/components';
 import { Plus } from 'lucide-react';
 
 type ResourceHeaderProps = {
@@ -10,6 +11,7 @@ type ResourceHeaderProps = {
   subtitle?: string;
   showSearch?: boolean;
   showAdd?: boolean;
+  showTagFilter?: boolean;
   addDisabled?: boolean;
   addButtonTitle?: string;
   Extra?: React.FC;
@@ -24,6 +26,7 @@ export const ResourceHeader = ({
   subtitle,
   showSearch,
   showAdd,
+  showTagFilter,
   addDisabled,
   addButtonTitle,
   Extra,
@@ -43,8 +46,9 @@ export const ResourceHeader = ({
           <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {showSearch && <SearchField onSearch={onSearch} />}
+        {showTagFilter && <ResourceTagFilter />}
         {showAdd && (
           <Button
             type="button"

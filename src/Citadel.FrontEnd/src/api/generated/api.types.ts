@@ -138,6 +138,7 @@ export enum ResourceType {
   Team = "Team",
   Role = "Role",
   Binding = "Binding",
+  Tag = "Tag",
 }
 
 export enum ResourceControlState {
@@ -1912,6 +1913,7 @@ export interface CreateDeploymentInput {
   platformId: string;
   description: null | string;
   spec: DeploymentSpec;
+  tagIds?: null | string[];
 }
 
 export interface CreateExternalSecretInput {
@@ -1943,6 +1945,7 @@ export interface CreateGitRepositoryInput {
   webhook: null | RepoWebhookConfig;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
+  tagIds?: null | string[];
 }
 
 export interface CreateInternalSecretInput {
@@ -1972,6 +1975,14 @@ export interface CreateNetworkView {
   id: string;
 }
 
+export interface CreatePlatformInput {
+  name: string;
+  address: null | string;
+  type?: PlatformType;
+  connectorType?: PlatformConnectorType;
+  tagIds?: null | string[];
+}
+
 export interface CreateRegistryInput {
   name: string;
   registryHost: string;
@@ -1988,6 +1999,12 @@ export interface CreateStackInput {
   stackSource: StackSource;
   spec: StackSpec;
   driftPolicy?: null | StackDriftPolicy;
+  tagIds?: null | string[];
+}
+
+export interface CreateTagInput {
+  name: string;
+  color: string;
 }
 
 export interface CreateTeamInput {
@@ -2208,6 +2225,7 @@ export interface DeploymentView {
   containerId?: null | string;
   dockerContainerId?: null | string;
   dockerImageId?: null | string;
+  tags?: TagSummaryView[];
   latestActivityView?: null | LatestActivityView;
   capabilities?: null | DeploymentCapabilities;
 }
@@ -2547,6 +2565,7 @@ export interface GitRepositoryView {
   createdAt: any;
   controlState: ResourceControlState;
   latestActivityView: null | LatestActivityView;
+  tags?: TagSummaryView[];
   capabilities?: null | ResourceCapabilities;
 }
 
@@ -3114,6 +3133,11 @@ export interface PatchStackInput {
   driftPolicy?: null | StackDriftPolicy;
 }
 
+export interface PatchTagInput {
+  name: null | string;
+  color: null | string;
+}
+
 export interface PatchTeamInput {
   isEnabled: null | boolean;
   userIds: null | string[];
@@ -3315,6 +3339,7 @@ export interface PlatformView {
   connectorType: PlatformConnectorType;
   stats: null | PlatformStatView[];
   platformDescriptor: null | PlatformDescriptor;
+  tags?: TagSummaryView[];
   capabilities?: null | PlatformCapabilities;
 }
 
@@ -3477,6 +3502,10 @@ export interface RenameResource {
   name: string;
 }
 
+export interface ReplaceResourceTagsInput {
+  tagIds: null | string[];
+}
+
 export interface RepoCommand {
   commands: string[];
   /** @default "./" */
@@ -3577,6 +3606,10 @@ export interface ResourceSpec {
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   memoryLimit: null | number | string;
+}
+
+export interface ResourceTagsView {
+  tags: TagSummaryView[];
 }
 
 export interface RestartPolicy {
@@ -3952,6 +3985,7 @@ export interface StackView {
   resourceBindings?: null | ResourceBindingSnapshot[];
   platformStatus?: PlatformStatus;
   platformName?: null | string;
+  tags?: TagSummaryView[];
   latestActivityView?: null | LatestActivityView;
   capabilities?: null | StackCapabilities;
 }
@@ -3975,6 +4009,36 @@ export interface StacksView {
 export interface SwarmPeer {
   nodeID: null | string;
   addr: null | string;
+}
+
+export interface TagSummaryView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface TagView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  normalizedName: string;
+  color: string;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  usageCount: number | string;
+}
+
+export interface TagsView {
+  tags: TagView[];
 }
 
 export interface TeamResourceAccessInput {
@@ -5924,13 +5988,19 @@ export class Api<
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    listPlatforms: (params: RequestParams = {}) =>
+    listPlatforms: (
+      query: {
+        tagIds: string[];
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<
         PlatformsView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/platforms`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -5952,7 +6022,7 @@ export class Api<
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createPlatform: (data: PlatformInput, params: RequestParams = {}) =>
+    createPlatform: (data: CreatePlatformInput, params: RequestParams = {}) =>
       this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
         {
           path: `/api/v1/platforms`,
@@ -6051,6 +6121,65 @@ export class Api<
           ...params,
         },
       ),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetPlatformTags
+     * @summary Get platform tags
+     * @request GET:/api/v1/platforms/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getPlatformTags: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/platforms/${id}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ReplacePlatformTags
+     * @summary Replace platform tags
+     * @request PUT:/api/v1/platforms/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replacePlatformTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceTagsView, ProblemDetails>({
+        path: `/api/v1/platforms/${id}/tags`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
 
     /**
      * No description
@@ -6516,13 +6645,19 @@ export class Api<
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    listGitRepositories: (params: RequestParams = {}) =>
+    listGitRepositories: (
+      query: {
+        tagIds: string[];
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<
         GitRepositoriesView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/gitRepositories`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -6647,6 +6782,65 @@ export class Api<
       >({
         path: `/api/v1/gitRepositories/${id}`,
         method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name GetGitRepositoryTags
+     * @summary Get git repository tags
+     * @request GET:/api/v1/gitRepositories/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getGitRepositoryTags: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/${id}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name ReplaceGitRepositoryTags
+     * @summary Replace git repository tags
+     * @request PUT:/api/v1/gitRepositories/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceGitRepositoryTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceTagsView, ProblemDetails>({
+        path: `/api/v1/gitRepositories/${id}/tags`,
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -7377,13 +7571,19 @@ export class Api<
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    listDeployments: (params: RequestParams = {}) =>
+    listDeployments: (
+      query: {
+        tagIds: string[];
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<
         DeploymentsView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/deployments`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -7472,6 +7672,65 @@ export class Api<
         path: `/api/v1/deployments/${deploymentId}`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name GetDeploymentTags
+     * @summary Get deployment tags
+     * @request GET:/api/v1/deployments/{deploymentId}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getDeploymentTags: (deploymentId: string, params: RequestParams = {}) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/${deploymentId}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name ReplaceDeploymentTags
+     * @summary Replace deployment tags
+     * @request PUT:/api/v1/deployments/{deploymentId}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceDeploymentTags: (
+      deploymentId: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceTagsView, ProblemDetails>({
+        path: `/api/v1/deployments/${deploymentId}/tags`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -7876,10 +8135,16 @@ export class Api<
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    listStacks: (params: RequestParams = {}) =>
+    listStacks: (
+      query: {
+        tagIds: string[];
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<StacksView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -7960,6 +8225,65 @@ export class Api<
         path: `/api/v1/stacks/${stackId}`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name GetStackTags
+     * @summary Get stack tags
+     * @request GET:/api/v1/stacks/{stackId}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getStackTags: (stackId: string, params: RequestParams = {}) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/${stackId}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name ReplaceStackTags
+     * @summary Replace stack tags
+     * @request PUT:/api/v1/stacks/{stackId}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceStackTags: (
+      stackId: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceTagsView, ProblemDetails>({
+        path: `/api/v1/stacks/${stackId}/tags`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -8897,6 +9221,103 @@ export class Api<
       this.request<void, ProblemDetails>({
         path: `/api/v1/resourceBindings/secret-providers/${id}`,
         method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Tags
+     * @name ListTags
+     * @summary List resource tags
+     * @request GET:/api/v1/tags
+     * @response `200` `TagsView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listTags: (params: RequestParams = {}) =>
+      this.request<TagsView, ProblemDetails>({
+        path: `/api/v1/tags`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Tags
+     * @name CreateTag
+     * @summary Create a resource tag
+     * @request POST:/api/v1/tags
+     * @secure
+     * @response `200` `TagView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createTag: (data: CreateTagInput, params: RequestParams = {}) =>
+      this.request<TagView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/tags`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Tags
+     * @name PatchTag
+     * @summary Update a resource tag
+     * @request PATCH:/api/v1/tags/{id}
+     * @secure
+     * @response `200` `TagView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    patchTag: (id: string, data: PatchTagInput, params: RequestParams = {}) =>
+      this.request<TagView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/tags/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Tags
+     * @name DeleteTag
+     * @summary Delete a resource tag
+     * @request DELETE:/api/v1/tags/{id}
+     * @secure
+     * @response `204` `void` No Content
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteTag: (id: string, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/tags/${id}`,
+        method: "DELETE",
+        secure: true,
         ...params,
       }),
 

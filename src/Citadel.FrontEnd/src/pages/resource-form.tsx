@@ -139,6 +139,7 @@ const EditFormContent = ({
         canEditDescription={canWrite && Header.canEditDescription !== false}
         item={item}
         Indicator={Header.Indicator}
+        Tags={Header.Tags}
         Actions={Header.ActionButtons}
         onRename={(name) => handleRenameResource(name)}
         onChangeDescription={updateMetadata ? (description) => handleUpdateMetadata({ description }) : undefined}
@@ -172,6 +173,7 @@ type EditHeaderProps<T> = {
   canEditDescription?: boolean;
   item: T;
   Indicator: React.ComponentType<{ resource: T }>;
+  Tags?: React.ComponentType<{ resource: T }>;
   Actions: React.ComponentType<{ resource: T }>;
   onRename: (name: string) => void;
   onChangeDescription?: (description: string) => void;
@@ -182,6 +184,7 @@ const EditHeader = <T extends RequiredFormFields>({
   canEditDescription = true,
   item,
   Indicator,
+  Tags,
   Actions,
   onRename,
   onChangeDescription,
@@ -199,6 +202,7 @@ const EditHeader = <T extends RequiredFormFields>({
       </div>
     </div>
     <div className="flex gap-4 items-center flex-wrap shrink-0">
+      {Tags && <Tags resource={item} />}
       <Actions resource={item} />
     </div>
   </div>

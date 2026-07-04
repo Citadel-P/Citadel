@@ -10,6 +10,7 @@ export const PlatformComponents: RequiredComponents = {
     subtitle: 'Connect platforms for real-time monitoring, alerts, and container workloads.',
     showSearch: true,
     showAdd: true,
+    showTagFilter: true,
   },
   Content: ({ items, actions, isLoading, isFiltered }) => {
     return <Platforms items={items} actions={actions} isLoading={isLoading} isFiltered={isFiltered} />;

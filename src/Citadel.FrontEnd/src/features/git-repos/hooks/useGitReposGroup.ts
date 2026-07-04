@@ -3,9 +3,14 @@ import { HubConnection } from '@microsoft/signalr';
 import { GitRepositoryView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
+import { useResourceTagFilter } from '@/features/tags/components';
 
 export const useGitReposGroup = () => {
-  const { data, isLoading } = useRead('listGitRepositories');
+  const { selectedTagIds } = useResourceTagFilter();
+  const { data, isLoading } = useRead(
+    'listGitRepositories',
+    selectedTagIds.length > 0 ? { query: { tagIds: selectedTagIds } } : undefined,
+  );
   const [gitRepos, setGitRepos] = useState<GitRepositoryView[] | undefined>();
   const lastFetchedRef = useRef<GitRepositoryView[] | undefined>(data?.data?.gitRepositories);
   const capabilities = data?.data.capabilities;
@@ -58,5 +63,5 @@ export const useGitReposGroup = () => {
     removeEventListeners,
   });
 
-  return { gitRepos, capabilities, isLoading };
+  return { gitRepos, capabilities, isLoading, selectedTagIds };
 };
