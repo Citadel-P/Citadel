@@ -4,9 +4,10 @@ import { RegistryActions } from './actions';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
-import { RegistryView } from '@/api/generated/api.types';
+import { RegistryConfigView, RegistryView } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
+import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 
 export const RegistryFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -22,6 +23,14 @@ export const RegistryFormComponents: RequiredFormComponents = {
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(RegistryActions)} />;
       },
+      Tags: ({ resource }: { resource: RegistryConfigView }) => (
+        <ResourceHeaderTagsEditor
+          resourceType="Registry"
+          resourceId={resource.id}
+          tags={resource.tags}
+          disabled={!hasCapability(resource, 'canWrite')}
+        />
+      ),
     },
     Tabs: [
       {

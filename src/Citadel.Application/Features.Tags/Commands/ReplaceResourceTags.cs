@@ -22,6 +22,9 @@ public sealed record ReplacePlatformTags(Guid Id, IReadOnlyCollection<Guid>? Tag
 [RequirePermission(ResourceType.GitRepository, PermissionLevel.Write)]
 public sealed record ReplaceGitRepositoryTags(Guid Id, IReadOnlyCollection<Guid>? TagIds) : ICommand<Result<IReadOnlyList<TagSummary>>>;
 
+[RequirePermission(ResourceType.Registry, PermissionLevel.Write)]
+public sealed record ReplaceRegistryTags(Guid Id, IReadOnlyCollection<Guid>? TagIds) : ICommand<Result<IReadOnlyList<TagSummary>>>;
+
 internal sealed class ReplaceDeploymentTagsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<ReplaceDeploymentTags, Result<IReadOnlyList<TagSummary>>>
 {
     public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(ReplaceDeploymentTags command, CancellationToken cancellationToken)
@@ -75,6 +78,20 @@ internal sealed class ReplaceGitRepositoryTagsHandler(IUnitOfWork unitOfWork, IU
             command.TagIds,
             async () => await unitOfWork.GitRepositories.GetAsync(command.Id, cancellationToken) is not null,
             "Git repository",
+            cancellationToken);
+}
+
+internal sealed class ReplaceRegistryTagsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<ReplaceRegistryTags, Result<IReadOnlyList<TagSummary>>>
+{
+    public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(ReplaceRegistryTags command, CancellationToken cancellationToken)
+        => await ResourceTagReplace.ReplaceAsync(
+            unitOfWork,
+            userContext,
+            TaggableResourceType.Registry,
+            command.Id,
+            command.TagIds,
+            async () => await unitOfWork.Registries.GetAsync(command.Id, cancellationToken) is not null,
+            "Registry",
             cancellationToken);
 }
 

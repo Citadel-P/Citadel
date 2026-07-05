@@ -4,6 +4,7 @@
   Description: null,
   RegistryHost: http://localhost:1234/registry,
   Status: Disabled,
+  Tags: null,
   CreatedAt: DateTime_1,
   CreatedByActorId: Guid_2,
   Configuration: {

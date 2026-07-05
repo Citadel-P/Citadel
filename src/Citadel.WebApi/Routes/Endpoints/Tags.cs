@@ -122,4 +122,23 @@ public static class Tags
         var result = await mediator.Send(new ReplaceGitRepositoryTags(id, input.TagIds), cancellationToken);
         return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
     }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> GetRegistryTags(
+        IMediator mediator,
+        [FromRoute][Description("Registry ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetRegistryTags(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> ReplaceRegistryTags(
+        IMediator mediator,
+        [FromRoute][Description("Registry ID")] Guid id,
+        [FromBody] ReplaceResourceTagsInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ReplaceRegistryTags(id, input.TagIds), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
 }

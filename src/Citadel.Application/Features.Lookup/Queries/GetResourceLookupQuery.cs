@@ -3,6 +3,7 @@ using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Domain.Entities.ResourceBindings;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.ErrorTypes;
@@ -70,9 +71,11 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Deployment, LookupResourceType.Registry) => await GetDeploymentRegistryLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Deployment, LookupResourceType.Image) => await GetDeploymentImageLookupAsync(sourceId, cancellationToken),
             (LookupResourceType.Deployment, LookupResourceType.Network) => await GetDeploymentNetworkLookupAsync(context, cancellationToken),
+            (LookupResourceType.Deployment, LookupResourceType.ResourceBinding) => await GetResourceBindingLookupAsync(ResourceBindingScope.Deployment, sourceId, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.Platform) => await GetStackPlatformLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.Registry) => await GetStackRegistryLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Stack, LookupResourceType.GitRepository) => await GetStackGitRepositoryLookupAsync(sourceId, userId, cancellationToken),
+            (LookupResourceType.Stack, LookupResourceType.ResourceBinding) => await GetResourceBindingLookupAsync(ResourceBindingScope.Stack, sourceId, cancellationToken),
             (LookupResourceType.User, LookupResourceType.Team) => await GetUserTeamLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.User, LookupResourceType.Role) => await GetUserRoleLookupAsync(sourceId, userId, cancellationToken),
             (LookupResourceType.Platform, LookupResourceType.Deployment) => await GetPlatformDeploymentLookupAsync(sourceId, userId, cancellationToken),
@@ -96,6 +99,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (null, LookupResourceType.Deployment) => await GetDeploymentLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Stack) => await GetStackLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Image) => await GetImageLookupAsync(userId, context, cancellationToken),
+            (null, LookupResourceType.ResourceBinding) => await GetGlobalResourceBindingLookupAsync(cancellationToken),
             _ => Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError(GetUnsupportedLookupMessage(sourceType, targetType)))
         };
     }
@@ -175,6 +179,33 @@ internal sealed class GetResourceLookupQueryHandler(
             ? Result.Success(await unitOfWork.Stacks.GetGitRepositoryLookupAsync(sourceId.Value, userId, cancellationToken))
             : Result.Success((await unitOfWork.GitRepositories.GetAuthorizedAsync(userId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
                 .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetResourceBindingLookupAsync(
+        ResourceBindingScope scope,
+        Guid? sourceId,
+        CancellationToken cancellationToken)
+    {
+        if (!sourceId.HasValue)
+        {
+            return await GetGlobalResourceBindingLookupAsync(cancellationToken);
+        }
+
+        var entries = await unitOfWork.ResourceBindings.GetEffectiveEntriesAsync(scope, sourceId.Value, cancellationToken);
+        return Result.Success(ToResourceBindingLookup(entries));
+    }
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetGlobalResourceBindingLookupAsync(CancellationToken cancellationToken)
+    {
+        var entries = await unitOfWork.ResourceBindings.GetEntriesAsync(ResourceBindingScope.Global, null, cancellationToken);
+        return Result.Success(ToResourceBindingLookup(entries));
+    }
+
+    private static IEnumerable<ResourceInfo> ToResourceBindingLookup(IEnumerable<ResourceBinding> entries)
+        => entries
+            .GroupBy(static entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(static group => group.First())
+            .OrderBy(static entry => entry.Name)
+            .Select(static entry => new ResourceInfo(entry.Id, entry.Name));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetUserTeamLookupAsync(Guid? sourceId, Guid userId, CancellationToken cancellationToken)
         => sourceId.HasValue

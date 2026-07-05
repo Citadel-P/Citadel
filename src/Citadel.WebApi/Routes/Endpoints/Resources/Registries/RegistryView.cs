@@ -3,6 +3,7 @@ using Domain;
 using Domain.Entities.Registries;
 using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Identity;
+using WebApi.Routes.Endpoints.Resources.Tags;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 
@@ -15,6 +16,7 @@ public sealed record RegistryView(
     string RegistryHost, 
     RegistryType Type,
     DateTime CreatedAt,
+    IReadOnlyList<TagSummaryView> Tags,
     ResourceCapabilities? Capabilities = null)
 {
     /// <summary>
@@ -36,7 +38,8 @@ public sealed record RegistryView(
          registry.CreatedByActorId,
          registry.Name, registry.Status, registry.Description,
          GetHost(registry.RegistryHost, registry.Configuration),
-         GetType(registry.Configuration), registry.CreatedAt);
+         GetType(registry.Configuration), registry.CreatedAt,
+         [.. registry.Tags.Select(TagSummaryView.Map)]);
 
     private static RegistryType GetType(RegistryConfiguration config)
     {

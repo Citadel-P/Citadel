@@ -859,6 +859,22 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("renameRegistry");
 
+        registries.MapGet("{id}/tags", Tags.GetRegistryTags)
+            .WithSummary("Get registry tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getRegistryTags");
+
+        registries.MapPut("{id}/tags", Tags.ReplaceRegistryTags)
+            .WithSummary("Replace registry tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("replaceRegistryTags");
+
         registries.MapDelete("/", Registries.Delete)
             .WithSummary("Delete registries")
             .ProducesValidationProblem()

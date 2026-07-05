@@ -4,6 +4,7 @@ import { ActionBar } from '@/components/custom/action-bar';
 import { RegistryDropdownActions, RegistryGroupActions } from './actions';
 import { RegistriesTable } from './table';
 import { CitadelIcons } from '@/lib/icons';
+import { useResourceTagFilter } from '@/features/tags/components';
 
 export const RegistryComponents: RequiredComponents = {
   Icon: CitadelIcons.Registry,
@@ -14,6 +15,7 @@ export const RegistryComponents: RequiredComponents = {
     subtitle: 'Connect and configure container image registries.',
     showSearch: true,
     showAdd: true,
+    showTagFilter: true,
   },
   DropdownActions: RegistryDropdownActions,
   GroupActions: ({ items }) => {
@@ -21,7 +23,10 @@ export const RegistryComponents: RequiredComponents = {
   },
 
   useData: function (): ResourceDataHookResult<any> {
-    const { data, isLoading } = useRead(`listRegistries`, { query: { includeDisabled: true } });
+    const { selectedTagIds } = useResourceTagFilter();
+    const { data, isLoading } = useRead(`listRegistries`, {
+      query: { includeDisabled: true, ...(selectedTagIds.length > 0 ? { tagIds: selectedTagIds } : {}) },
+    });
     return { items: data?.data?.registries ?? [], isLoading, capabilities: data?.data?.capabilities };
   },
   filterItems: (items, search) => {

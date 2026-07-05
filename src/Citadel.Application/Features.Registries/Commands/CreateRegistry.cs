@@ -22,7 +22,8 @@ public sealed record CreateRegistry(
     string RegistryHost,
     RegistryStatus Status,
     RegistryConfiguration Configuration, 
-    string? Description = null) : ICommand<Result<Registry>>
+    string? Description = null,
+    IReadOnlyCollection<Guid>? TagIds = null) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : AbstractValidator<CreateRegistry>
     {
@@ -172,7 +173,7 @@ internal class CreateRegistryHandler(
             );
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
-        await unitOfWork.Registries.AddAsync(registry, cancellationToken);
+        await unitOfWork.Registries.AddAsync(registry, cancellationToken, command.TagIds, actorId);
         await unitOfWork.CommitAsync(cancellationToken);
 
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);

@@ -13,6 +13,7 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
 import { ContentCard } from '@/components/custom/content-card';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { TagChips } from '@/features/tags/components';
 
 const getNonDefaultRows = (rows: Row<RegistryView>[]) => rows.filter((row) => !row.original.isDefault);
 
@@ -99,6 +100,15 @@ const columns = (
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       return rowA.original.registryHost.localeCompare(rowB.original.registryHost);
     },
+  },
+  {
+    accessorKey: 'tags',
+    header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
+    cell: ({ row }) => <TagChips tags={row.original.tags} />,
+    sortingFn: (rowA, rowB) =>
+      (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
+        rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
+      ),
   },
   {
     id: 'actions',

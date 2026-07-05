@@ -211,6 +211,7 @@ export enum LookupResourceType {
   User = "User",
   Team = "Team",
   Role = "Role",
+  ResourceBinding = "ResourceBinding",
 }
 
 export enum GitTransport {
@@ -1989,6 +1990,7 @@ export interface CreateRegistryInput {
   status: RegistryStatus;
   configuration: RegistryConfiguration;
   description?: null | string;
+  tagIds?: null | string[];
 }
 
 export interface CreateStackInput {
@@ -3409,6 +3411,7 @@ export interface RegistryConfigView {
   status: RegistryStatus;
   description: string;
   configuration: null | RegistryConfiguration;
+  tags: TagSummaryView[];
 }
 
 export interface RegistryConfigurationAWSRegistry {
@@ -3476,6 +3479,7 @@ export interface RegistryView {
   type: RegistryType;
   /** @format date-time */
   createdAt: any;
+  tags: TagSummaryView[];
   capabilities?: null | ResourceCapabilities;
   isDefault?: boolean;
 }
@@ -6225,8 +6229,9 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listRegistries: (
-      query?: {
+      query: {
         includeDisabled?: boolean;
+        tagIds: string[];
       },
       params: RequestParams = {},
     ) =>
@@ -6452,6 +6457,68 @@ export class Api<
           ...params,
         },
       ),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name GetRegistryTags
+     * @summary Get registry tags
+     * @request GET:/api/v1/registries/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getRegistryTags: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/registries/${id}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name ReplaceRegistryTags
+     * @summary Replace registry tags
+     * @request PUT:/api/v1/registries/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceRegistryTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/registries/${id}/tags`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
 
     /**
      * No description

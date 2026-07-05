@@ -9,9 +9,10 @@ public sealed record CreateRegistryInput(
     string RegistryHost,
     RegistryStatus Status,
     RegistryConfiguration Configuration,
-    string? Description = null)
+    string? Description = null,
+    IReadOnlyCollection<Guid>? TagIds = null)
 {
-    internal CreateRegistry ToCommand() => new(Name, GetRegistryHost(), Status, Configuration, Description);
+    internal CreateRegistry ToCommand() => new(Name, GetRegistryHost(), Status, Configuration, Description, TagIds);
 
     private string GetRegistryHost()
     {

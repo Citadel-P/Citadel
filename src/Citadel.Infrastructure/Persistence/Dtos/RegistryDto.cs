@@ -8,5 +8,6 @@ internal sealed record RegistryDto(
     DateTime CreatedAt,
     Guid CreatedByActorId,
     string Configuration, // RegistryConfiguration
-    string? Description = null
+    string? Description = null,
+    string? TagsJson = null
     );

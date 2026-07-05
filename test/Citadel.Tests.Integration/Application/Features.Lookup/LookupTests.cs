@@ -8,6 +8,7 @@ using Domain.Entities.Git;
 using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
+using Domain.Entities.ResourceBindings;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Tests.Integration.Helpers;
@@ -38,6 +39,9 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     private Guid _visibleRoleId;
     private Guid _hiddenRoleId;
     private Guid _extraRoleId;
+    private Guid _globalResourceBindingId;
+    private Guid _deploymentResourceBindingId;
+    private Guid _stackResourceBindingId;
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
@@ -226,6 +230,34 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         _hiddenRoleId = hiddenRole.Id;
         _extraRoleId = extraRole.Id;
 
+        var globalResourceBinding = new ResourceBinding(
+            Name: "GLOBAL_LOOKUP_VALUE",
+            Kind: ResourceBindingKind.Variable,
+            Scope: ResourceBindingScope.Global,
+            ResourceId: null,
+            Value: "global",
+            SecretId: null);
+        var deploymentResourceBinding = new ResourceBinding(
+            Name: "DEPLOYMENT_LOOKUP_VALUE",
+            Kind: ResourceBindingKind.Variable,
+            Scope: ResourceBindingScope.Deployment,
+            ResourceId: _visibleDeploymentId,
+            Value: "deployment",
+            SecretId: null);
+        var stackResourceBinding = new ResourceBinding(
+            Name: "STACK_LOOKUP_VALUE",
+            Kind: ResourceBindingKind.Variable,
+            Scope: ResourceBindingScope.Stack,
+            ResourceId: _gitStackId,
+            Value: "stack",
+            SecretId: null);
+        await uow.ResourceBindings.AddAsync(globalResourceBinding, TestContext.Current.CancellationToken);
+        await uow.ResourceBindings.AddAsync(deploymentResourceBinding, TestContext.Current.CancellationToken);
+        await uow.ResourceBindings.AddAsync(stackResourceBinding, TestContext.Current.CancellationToken);
+        _globalResourceBindingId = globalResourceBinding.Id;
+        _deploymentResourceBindingId = deploymentResourceBinding.Id;
+        _stackResourceBindingId = stackResourceBinding.Id;
+
         await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
 
@@ -392,6 +424,33 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleRegistryId);
         Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenRegistryId);
         Assert.Equal(2, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Lookup_Deployment_To_ResourceBinding_Should_Return_Effective_Bindings_With_Resource_Read_Access()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Deployment, _visibleDeploymentId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Deployment&sourceResourceId={_visibleDeploymentId}&targetResourceType=ResourceBinding", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _globalResourceBindingId && item.GetProperty("name").GetString() == "GLOBAL_LOOKUP_VALUE");
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _deploymentResourceBindingId && item.GetProperty("name").GetString() == "DEPLOYMENT_LOOKUP_VALUE");
     }
 
     [Fact]
@@ -664,6 +723,33 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _visibleRegistryId);
         Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _hiddenRegistryId);
         Assert.Equal(2, items.Select(item => item.GetProperty("id").GetGuid()).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Lookup_Stack_To_ResourceBinding_Should_Return_Effective_Bindings_With_Resource_Read_Access()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Stack, _gitStackId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync($"/api/v1/lookup?sourceResourceType=Stack&sourceResourceId={_gitStackId}&targetResourceType=ResourceBinding", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, items.Length);
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _globalResourceBindingId && item.GetProperty("name").GetString() == "GLOBAL_LOOKUP_VALUE");
+        Assert.Contains(items, item => item.GetProperty("id").GetGuid() == _stackResourceBindingId && item.GetProperty("name").GetString() == "STACK_LOOKUP_VALUE");
     }
 
     [Fact]

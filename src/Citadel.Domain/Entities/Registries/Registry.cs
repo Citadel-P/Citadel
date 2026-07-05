@@ -16,6 +16,7 @@ public class Registry(
     public string? Description { get; private set; } = description;
     public string RegistryHost { get; private set; } = registryHost;
     public RegistryStatus Status { get; private set; } = status;
+    public IReadOnlyList<Domain.Entities.Tags.TagSummary> Tags { get; private set; } = [];
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -39,6 +40,11 @@ public class Registry(
 
     }
 
+    public void AssignTags(IReadOnlyList<Domain.Entities.Tags.TagSummary> tags)
+    {
+        Tags = tags;
+    }
+
     public static Registry FromPersistence(
         Guid id,
         string name,
@@ -47,12 +53,16 @@ public class Registry(
         string registryHost,
         DateTime createdAt, 
         Guid createdByActorId,
-        RegistryConfiguration configuration)
+        RegistryConfiguration configuration,
+        IReadOnlyList<Domain.Entities.Tags.TagSummary>? tags = null)
     {
-        return new Registry(name, registryHost, status, createdByActorId, configuration, description)
+        var registry = new Registry(name, registryHost, status, createdByActorId, configuration, description)
         {
             Id = id,
             CreatedAt = createdAt
         };
+
+        registry.AssignTags(tags ?? []);
+        return registry;
     }
 }

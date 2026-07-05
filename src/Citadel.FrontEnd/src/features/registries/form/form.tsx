@@ -27,6 +27,7 @@ import { useParams } from 'react-router';
 import { Globe, MoveUpRight } from 'lucide-react';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
+import { ResourceTagSelector } from '@/features/tags/components';
 
 const registryInfo = {
   DockerHub: {
@@ -189,6 +190,19 @@ export const RegistryForm = ({
                       required: false,
                       description: 'Optional notes to describe the registry’s purpose or usage.',
                       render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+                    }),
+                    defineField({
+                      key: 'tagIds',
+                      label: 'Tags',
+                      required: false,
+                      description: 'Optional tags for filtering and grouping this registry.',
+                      render: (val, set) => (
+                        <ResourceTagSelector
+                          value={val}
+                          disabled={disabled}
+                          onChange={(tagIds) => set({ tagIds })}
+                        />
+                      ),
                     }),
                   ],
                 }),

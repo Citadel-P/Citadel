@@ -10,8 +10,6 @@ import {
   StackDriftPolicy,
   GitRepositoryRefView,
   GitComposeProjectCandidate,
-  ResourceBindingScope,
-  ResourceBindingView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -74,7 +72,7 @@ type StackInput = CreateStackInput | PatchStackInput;
 const EMPTY_STACK_CONFIG = {} as StackConfigView;
 const EMPTY_GIT_REFS: GitRepositoryRefView[] = [];
 const EMPTY_COMPOSE_PROJECTS: GitComposeProjectCandidate[] = [];
-const EMPTY_RESOURCE_BINDINGS: ResourceBindingView[] = [];
+const EMPTY_RESOURCE_BINDING_LOOKUP: { name: string }[] = [];
 
 const DEFAULT_DRIFT_POLICY: StackDriftPolicy = {
   mode: StackDriftMode.DetectOnly,
@@ -512,12 +510,12 @@ export const StackForm = ({
   const { mutateAsync: updateStack } = useMutate('updateStack');
   const { data: stackCfg } = useRead('getStackConfig', { stackId: id });
   const { data: stackViewData } = useRead('getStack', { stackId: id }, { enabled: mode === 'edit' && !!id });
-  const stackResourceBindingArgs = useMemo(() => ({ scope: ResourceBindingScope.Stack, resourceId: id ?? '' }), [id]);
-  const { data: stackResourceBindingData } = useRead('getResourceBindings', stackResourceBindingArgs, {
-    enabled: mode === 'edit' && !!id,
-  });
-  const { data: globalResourceBindingData } = useRead('getGlobalResourceBindings', undefined, {
-    enabled: mode === 'add',
+  const { data: resourceBindingLookupData } = useRead('lookup', {
+    query: {
+      TargetResourceType: LookupResourceType.ResourceBinding,
+      SourceResourceType: mode === 'edit' ? LookupResourceType.Stack : undefined,
+      SourceResourceId: mode === 'edit' ? id : undefined,
+    },
   });
 
   const resource: StackConfigView | undefined = stackCfg?.data;
@@ -561,13 +559,7 @@ export const StackForm = ({
     ...(original.driftPolicy ?? {}),
     ...((update as Partial<StackInput>).driftPolicy ?? {}),
   });
-  const effectiveResourceBindings = useMemo(
-    () =>
-      mode === 'edit'
-        ? (stackResourceBindingData?.data.effectiveEntries ?? EMPTY_RESOURCE_BINDINGS)
-        : (globalResourceBindingData?.data.effectiveEntries ?? EMPTY_RESOURCE_BINDINGS),
-    [globalResourceBindingData?.data.effectiveEntries, mode, stackResourceBindingData?.data.effectiveEntries],
-  );
+  const effectiveResourceBindings = resourceBindingLookupData?.data ?? EMPTY_RESOURCE_BINDING_LOOKUP;
   const effectiveConfigurationNames = useMemo(
     () => [...new Set(effectiveResourceBindings.map((entry) => entry.name))].sort(),
     [effectiveResourceBindings],

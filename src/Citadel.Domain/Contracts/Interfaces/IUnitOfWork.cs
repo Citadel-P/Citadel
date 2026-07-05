@@ -216,12 +216,12 @@ public interface IRegistryRepository
 {
     Task<Registry?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken);
-    Task<IEnumerable<Registry>> GetAllAsync(CancellationToken cancellationToken);
-    Task<IEnumerable<Registry>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IEnumerable<Registry>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
+    Task<IEnumerable<Registry>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<IEnumerable<Registry>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
-    Task<int> AddAsync(Registry registry, CancellationToken cancellationToken);
+    Task<int> AddAsync(Registry registry, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
     Task<int> UpdateAsync(Registry registry, CancellationToken cancellationToken);
 
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);

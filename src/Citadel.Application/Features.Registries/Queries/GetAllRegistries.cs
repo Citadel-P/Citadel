@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.Registries.Queries;
 
-public sealed record GetAllRegistries(bool? IncludeDisabled) : IQuery<Result<IEnumerable<Registry>>>;
+public sealed record GetAllRegistries(bool? IncludeDisabled, IReadOnlyCollection<Guid>? TagIds = null) : IQuery<Result<IEnumerable<Registry>>>;
 
 internal sealed class GetAllRegistriesHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor) : IQueryHandler<GetAllRegistries, Result<IEnumerable<Registry>>>
 {
@@ -16,8 +16,8 @@ internal sealed class GetAllRegistriesHandler(IUnitOfWork unitOfWork, IUserConte
     {
         var user = userContextAccessor.Current;
         var registries = user is not null && !user.IsAdmin
-            ? await unitOfWork.Registries.GetAuthorizedAsync(user.UserId, ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken)
-            : await unitOfWork.Registries.GetAllAsync(cancellationToken);
+            ? await unitOfWork.Registries.GetAuthorizedAsync(user.UserId, ResourceType.Registry, PermissionLevel.Read, SpecificPermission.None, cancellationToken, query.TagIds)
+            : await unitOfWork.Registries.GetAllAsync(cancellationToken, query.TagIds);
 
         if (query.IncludeDisabled == true)
         {

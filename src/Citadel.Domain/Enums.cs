@@ -718,6 +718,7 @@ public enum LookupResourceType
     User,
     Team,
     Role,
+    ResourceBinding,
 }
 
 public enum StackApplyEventType
@@ -752,7 +753,8 @@ public enum TaggableResourceType
     Deployment,
     Stack,
     Platform,
-    GitRepository
+    GitRepository,
+    Registry
 }
 
 public enum SecretDeliveryMode

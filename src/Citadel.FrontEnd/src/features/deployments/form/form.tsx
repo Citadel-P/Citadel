@@ -12,8 +12,6 @@ import {
   DeploymentConfigView,
   PatchDeploymentInput,
   LookupResourceType,
-  ResourceBindingScope,
-  ResourceBindingView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -141,7 +139,7 @@ const stop_signals = {
 
 type DeploymentInput = CreateDeploymentInput | PatchDeploymentInput;
 
-const EMPTY_RESOURCE_BINDINGS: ResourceBindingView[] = [];
+const EMPTY_RESOURCE_BINDING_LOOKUP: { name: string }[] = [];
 const environmentNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const environmentReferencePattern = /\$\{([^}]+)\}/g;
 
@@ -189,15 +187,12 @@ export const DeploymentForm = ({
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
   const { data: deploymentCfg } = useRead('getDeploymentConfig', { deploymentId: id });
-  const deploymentConfigurationArgs = useMemo(
-    () => ({ scope: ResourceBindingScope.Deployment, resourceId: id ?? '' }),
-    [id],
-  );
-  const { data: deploymentConfigurationData } = useRead('getResourceBindings', deploymentConfigurationArgs, {
-    enabled: mode === 'edit' && !!id,
-  });
-  const { data: globalResourceBindingData } = useRead('getGlobalResourceBindings', undefined, {
-    enabled: mode === 'add',
+  const { data: resourceBindingLookupData } = useRead('lookup', {
+    query: {
+      TargetResourceType: LookupResourceType.ResourceBinding,
+      SourceResourceType: mode === 'edit' ? LookupResourceType.Deployment : undefined,
+      SourceResourceId: mode === 'edit' ? id : undefined,
+    },
   });
 
   const resource: DeploymentConfigView | undefined = deploymentCfg?.data;
@@ -209,13 +204,7 @@ export const DeploymentForm = ({
   const currentSpec = { ...original.spec, ...update.spec };
   const currentImage = update.spec?.image ?? original.spec?.image;
   const provider = currentImage?.$type;
-  const effectiveResourceBindings = useMemo(
-    () =>
-      mode === 'edit'
-        ? (deploymentConfigurationData?.data.effectiveEntries ?? EMPTY_RESOURCE_BINDINGS)
-        : (globalResourceBindingData?.data.effectiveEntries ?? EMPTY_RESOURCE_BINDINGS),
-    [deploymentConfigurationData?.data.effectiveEntries, globalResourceBindingData?.data.effectiveEntries, mode],
-  );
+  const effectiveResourceBindings = resourceBindingLookupData?.data ?? EMPTY_RESOURCE_BINDING_LOOKUP;
   const effectiveConfigurationNames = useMemo(
     () => [...new Set(effectiveResourceBindings.map((entry) => entry.name))].sort(),
     [effectiveResourceBindings],

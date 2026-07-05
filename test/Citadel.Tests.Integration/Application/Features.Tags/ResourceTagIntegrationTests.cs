@@ -1,9 +1,9 @@
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
+using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
 using Domain.Entities.Tags;
 using Hosting.Common;
@@ -12,7 +12,6 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using Tests.Integration.Helpers;
 using StackEntity = Domain.Entities.Stacks.Stack;
 
 namespace Tests.Integration.Application.Features.Tags;
@@ -252,6 +251,107 @@ public class ResourceTagIntegrationTests(PostgresTestFixture fixture) : Integrat
     }
 
     [Fact]
+    public async Task Registry_Api_Should_Filter_Hydrate_And_Replace_Tags()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        Tag blueTag;
+        Tag greenTag;
+        Registry taggedRegistry;
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            blueTag = await CreateTagAsync(uow, "api-registry-blue", "#3366FF");
+            greenTag = await CreateTagAsync(uow, "api-registry-green", "#33AA66");
+
+            taggedRegistry = CreateRegistry("api-tagged-registry");
+            var otherRegistry = CreateRegistry("api-other-registry");
+
+            Assert.True(await uow.Registries.AddAsync(taggedRegistry, cancellationToken, [blueTag.Id], Constants.SystemId) > 0);
+            Assert.True(await uow.Registries.AddAsync(otherRegistry, cancellationToken, [greenTag.Id], Constants.SystemId) > 0);
+            await uow.CommitAsync(cancellationToken);
+        }
+
+        var listResponse = await Client.GetAsync($"/api/v1/registries?includeDisabled=true&tagIds={blueTag.Id}", cancellationToken);
+        listResponse.EnsureSuccessStatusCode();
+
+        using (var document = await ReadJsonAsync(listResponse))
+        {
+            var registry = Assert.Single(document.RootElement.GetProperty("registries").EnumerateArray());
+
+            Assert.Equal(taggedRegistry.Id, registry.GetProperty("id").GetGuid());
+            AssertContainsTag(registry.GetProperty("tags"), blueTag.Id);
+        }
+
+        var configResponse = await Client.GetAsync($"/api/v1/registries/{taggedRegistry.Id}/_cfg", cancellationToken);
+        configResponse.EnsureSuccessStatusCode();
+
+        using (var document = await ReadJsonAsync(configResponse))
+        {
+            AssertContainsTag(document.RootElement.GetProperty("tags"), blueTag.Id);
+        }
+
+        var replaceResponse = await Client.PutAsync(
+            $"/api/v1/registries/{taggedRegistry.Id}/tags",
+            JsonContent($$"""{ "tagIds": ["{{greenTag.Id}}"] }"""),
+            cancellationToken);
+
+        replaceResponse.EnsureSuccessStatusCode();
+
+        var oldTagResponse = await Client.GetAsync($"/api/v1/registries?includeDisabled=true&tagIds={blueTag.Id}", cancellationToken);
+        oldTagResponse.EnsureSuccessStatusCode();
+
+        using (var document = await ReadJsonAsync(oldTagResponse))
+        {
+            Assert.Empty(document.RootElement.GetProperty("registries").EnumerateArray());
+        }
+
+        var newTagResponse = await Client.GetAsync($"/api/v1/registries?includeDisabled=true&tagIds={greenTag.Id}", cancellationToken);
+        newTagResponse.EnsureSuccessStatusCode();
+
+        using (var document = await ReadJsonAsync(newTagResponse))
+        {
+            var registries = document.RootElement.GetProperty("registries").EnumerateArray().ToArray();
+
+            Assert.Contains(registries, registry => registry.GetProperty("id").GetGuid() == taggedRegistry.Id);
+        }
+    }
+
+    [Fact]
+    public async Task Registry_Repository_Should_Create_Filter_And_Hydrate_Tags()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        Tag matchTag;
+        Tag otherTag;
+        Registry taggedRegistry;
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            (matchTag, otherTag) = await CreateTagPairAsync(uow, "registry");
+
+            taggedRegistry = CreateRegistry("repo-tagged-registry");
+            var otherRegistry = CreateRegistry("repo-other-registry");
+
+            Assert.True(await uow.Registries.AddAsync(taggedRegistry, cancellationToken, [matchTag.Id], Constants.SystemId) > 0);
+            Assert.True(await uow.Registries.AddAsync(otherRegistry, cancellationToken, [otherTag.Id], Constants.SystemId) > 0);
+            await uow.CommitAsync(cancellationToken);
+        }
+
+        await using var verifyScope = Services.CreateAsyncScope();
+        var verifyUow = verifyScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var filtered = (await verifyUow.Registries.GetAllAsync(cancellationToken, [matchTag.Id])).ToArray();
+        var result = Assert.Single(filtered);
+
+        Assert.Equal(taggedRegistry.Id, result.Id);
+        Assert.Contains(result.Tags, tag => tag.Id == matchTag.Id);
+
+        var detail = await verifyUow.Registries.GetAsync(taggedRegistry.Id, cancellationToken);
+        Assert.NotNull(detail);
+        Assert.Contains(detail.Tags, tag => tag.Id == matchTag.Id);
+    }
+
+    [Fact]
     public async Task ResourceTag_Migration_Should_Keep_Query_Supporting_Indexes()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -378,4 +478,13 @@ public class ResourceTagIntegrationTests(PostgresTestFixture fixture) : Integrat
             defaultBranch: "main",
             gitAccountId: null,
             createdByActorId: Constants.SystemId);
+
+    private static Registry CreateRegistry(string name)
+        => new(
+            name,
+            $"{name}.registry.test",
+            RegistryStatus.Active,
+            Constants.SystemId,
+            DockerHubRegistry.Create("dummy-user", "dummy-pat123"),
+            $"{name} description");
 }

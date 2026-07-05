@@ -19,16 +19,22 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return db.ExecuteScalarAsync<bool>(sql, new { Name = name, cancellationToken }, transaction: tx());
     }
 
-    public Task<int> AddAsync(Registry registry, CancellationToken cancellationToken)
+    public async Task<int> AddAsync(Registry registry, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null)
     {
-        const string sql = """
-            INSERT INTO Registries (
-                Id, Name, Description, RegistryHost, Status, CreatedAt, CreatedByActorId, Configuration)
-            VALUES (
-                @Id, @Name, @Description, @RegistryHost, @Status, @CreatedAt, @CreatedByActorId, @Configuration::json)
-        """;
+        string sql = ResourceTagSql.InputTagsCte + """
+            inserted_registry AS (
+                INSERT INTO Registries (
+                    Id, Name, Description, RegistryHost, Status, CreatedAt, CreatedByActorId, Configuration)
+                SELECT
+                    @Id, @Name, @Description, @RegistryHost, @Status, @CreatedAt, @CreatedByActorId, @Configuration::json
+                WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
+                RETURNING Id
+            ),
+            """ + ResourceTagSql.InsertTagsCte("inserted_registry", "r") + "\n"
+            + ResourceTagSql.InsertResultSelect("inserted_registry", "inserted_registry", "inserted_tags");
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
 
-        return db.ExecuteAsync(sql, new
+        var result = await db.QuerySingleAsync<ResourceInsertWithTagsResult>(sql, new
         {
             Id = registry.Id,
             Name = registry.Name,
@@ -38,28 +44,66 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             CreatedByActorId = registry.CreatedByActorId,
             Status = EnumFormatter<RegistryStatus>.GetValue(registry.Status),
             Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfiguration),
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Registry),
+            TagIds = tagIdArray,
+            TagCreatedByActorId = tagCreatedByActorId ?? registry.CreatedByActorId
         }, transaction: tx());
+
+        registry.AssignTags(result.TagsJson.ToTagSummaries());
+        return result.AffectedRows;
     }
 
     public async Task<Registry?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Registries WHERE Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new { Id = id, cancellationToken }, transaction: tx());
+        string sql = $$"""
+            SELECT
+                r.*,
+                {{ResourceTagSql.TagAggregate("r")}}
+            FROM Registries r
+            WHERE r.Id = @Id
+            LIMIT 1
+        """;
+        var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new
+        {
+            Id = id,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Registry)
+        }, transaction: tx());
         return result?.ToDomain();
     }
 
     public async Task<IEnumerable<Registry>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Registries r WHERE r.Id = ANY(@Ids)";
+        string sql = $$"""
+            SELECT
+                r.*,
+                {{ResourceTagSql.TagAggregate("r")}}
+            FROM Registries r
+            WHERE r.Id = ANY(@Ids)
+        """;
         var idArray = ids as Guid[] ?? [.. ids];
-        var result = await db.QueryAsync<RegistryDto>(sql, new { Ids = idArray, cancellationToken }, transaction: tx());
+        var result = await db.QueryAsync<RegistryDto>(sql, new
+        {
+            Ids = idArray,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Registry)
+        }, transaction: tx());
         return result.ToDomain();
     }
 
     public async Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Registries WHERE Name = @Name LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new { Name = name, cancellationToken }, transaction: tx());
+        string sql = $$"""
+            SELECT
+                r.*,
+                {{ResourceTagSql.TagAggregate("r")}}
+            FROM Registries r
+            WHERE r.Name = @Name
+            LIMIT 1
+        """;
+        var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new
+        {
+            Name = name,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Registry)
+        }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -69,27 +113,49 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id, cancellationToken }, transaction: tx());
     }
 
-    public async Task<IEnumerable<Registry>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<IEnumerable<Registry>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = "SELECT * FROM Registries";
-        var result = await db.QueryAsync<RegistryDto>(sql, transaction: tx());
+        string sql = $$"""
+            SELECT
+                r.*,
+                {{ResourceTagSql.TagAggregate("r")}}
+            FROM Registries r
+            WHERE {{ResourceTagSql.FilterPredicate("r")}}
+        """;
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<RegistryDto>(sql, new
+        {
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Registry),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
+        }, transaction: tx());
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Registry>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Registry>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT * FROM Registries r WHERE "
+        string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + $$"""
+            SELECT
+                r.*,
+                {{ResourceTagSql.TagAggregate("r")}}
+            FROM Registries r
+            WHERE 
+            """
             + AuthorizationSql.ResourcePredicatePrefix + "r.Id" + AuthorizationSql.ResourcePredicateSuffix
+            + " AND " + ResourceTagSql.FilterPredicate("r")
             + " ORDER BY r.CreatedAt DESC;";
 
         var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
         var result = await db.QueryAsync<RegistryDto>(sql, new
         {
             UserId = userId,
             ResourceType = (int)resourceType,
             GrantedPermissionMask = grantedPermissionMask,
             SpecificPermission = (int)specificPermission,
-            cancellationToken
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Registry),
+            TagIds = tagIdArray,
+            TagIdsLength = tagIdArray.Length
         }, transaction: tx());
 
         return result.ToDomain();

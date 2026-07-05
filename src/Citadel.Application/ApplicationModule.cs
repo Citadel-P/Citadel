@@ -74,7 +74,7 @@ public static class ApplicationModule
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<CustomRegistryConnectorStrategy>()
             .AddSingleton<IPullImageService, PullImageService>()
-            .AddSingleton<IRegistryConnectorResolver, RegistryConnectorResolver>()
+            .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>()
             .AddSingleton<IDelayWithJitterService, DelayWithJitterService>()
             .AddScoped<IPermissionService, PermissionService>()
             .AddScoped<IContainerAuthorizationService, ContainerAuthorizationService>()

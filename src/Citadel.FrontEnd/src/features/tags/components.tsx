@@ -1,5 +1,4 @@
 import { TagSummaryView, TagView } from '@/api/generated/api.types';
-import { MultiSelect } from '@/components/ui/multi-select';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -9,6 +8,7 @@ import { LoaderCircle, Minus, Plus, Tag } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { getTagTextColor } from './tag-colors';
+import { toast } from 'sonner';
 
 const TAG_QUERY_KEY = 'tagIds';
 
@@ -110,34 +110,71 @@ export const ResourceTagSelector = ({
   onChange: (tagIds: string[]) => void;
   disabled?: boolean;
 }) => {
+  const [open, setOpen] = useState(false);
   const { data, isLoading } = useRead('listTags');
   const tags = useMemo(() => data?.data.tags ?? [], [data?.data.tags]);
+  const selectedTagIds = useMemo(() => value ?? [], [value]);
+  const selectedTags = useMemo(() => {
+    const selected = new Set(selectedTagIds);
+    return tags.filter((tag) => selected.has(tag.id));
+  }, [selectedTagIds, tags]);
 
-  const options = useMemo(
-    () =>
-      tags.map((tag) => ({
-        label: tag.name,
-        value: tag.id,
-        style: {
-          badgeColor: tag.color,
-        },
-      })),
-    [tags],
-  );
+  const availableTags = useMemo(() => {
+    const selected = new Set(selectedTagIds);
+    return tags.filter((tag) => !selected.has(tag.id));
+  }, [selectedTagIds, tags]);
+
+  const selectTag = (tagId: string) => onChange([...selectedTagIds, tagId]);
+  const removeTag = (tagId: string) => onChange(selectedTagIds.filter((id) => id !== tagId));
+  const isDisabled = disabled || isLoading || tags.length === 0;
 
   return (
-    <MultiSelect
-      options={options}
-      defaultValue={value ?? []}
-      onValueChange={onChange}
-      placeholder="Select tags"
-      maxCount={4}
-      hideSelectAll
-      resetOnDefaultValueChange
-      className="max-w-100"
-      popoverClassName="w-72"
-      disabled={disabled || isLoading || tags.length === 0}
-    />
+    <div className="flex min-w-0 max-w-100 flex-wrap items-center gap-2">
+      {selectedTags.map((tag) => (
+        <button
+          key={tag.id}
+          type="button"
+          className="inline-flex h-8 max-w-36 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium shadow-xs"
+          style={{ backgroundColor: tag.color, color: getTagTextColor(tag.color) }}
+          title={`Remove ${tag.name} tag`}
+          disabled={disabled}
+          onClick={() => removeTag(tag.id)}>
+          <Minus className="size-3 shrink-0" />
+          <span className="truncate">{tag.name}</span>
+        </button>
+      ))}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" size="icon-sm" variant="outline" className="rounded-sm" disabled={isDisabled}>
+            {isLoading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+            <span className="sr-only">Add tag</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-72 p-0 bg-background">
+          <Command filter={tagSearchFilter}>
+            <CommandInput placeholder="Search tags..." />
+            <CommandList className="max-h-72 overscroll-contain" onWheel={(event) => event.stopPropagation()}>
+              <CommandEmpty>{availableTags.length === 0 ? 'No more tags.' : 'No tags found.'}</CommandEmpty>
+              <CommandGroup>
+                {availableTags.map((tag) => (
+                  <CommandItem
+                    key={tag.id}
+                    value={tag.name}
+                    onSelect={() => selectTag(tag.id)}
+                    className="cursor-pointer">
+                    <span
+                      className="size-3 shrink-0 rounded-full border border-border"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    <span className="truncate">{tag.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 };
 
@@ -154,7 +191,7 @@ export const TagChips = ({ tags, max = 3 }: { tags?: TagSummaryView[] | TagView[
       {visibleTags.map((tag) => (
         <span
           key={tag.id}
-          className="inline-flex max-w-32 items-center gap-1 rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-xs text-foreground"
+          className="inline-flex max-w-32 items-center gap-1 rounded-sm bg-muted/40 px-2 py-1 text-[13px] text-foreground"
           style={{ backgroundColor: tag.color, color: getTagTextColor(tag.color) }}
           title={tag.name}>
           <span className="truncate">{tag.name}</span>
@@ -165,13 +202,14 @@ export const TagChips = ({ tags, max = 3 }: { tags?: TagSummaryView[] | TagView[
   );
 };
 
-type EditableResourceType = 'Deployment' | 'Stack' | 'GitRepository' | 'Platform';
+type EditableResourceType = 'Deployment' | 'Stack' | 'GitRepository' | 'Platform' | 'Registry';
 
 const replaceTagEndpoint = {
   Deployment: 'replaceDeploymentTags',
   Stack: 'replaceStackTags',
   GitRepository: 'replaceGitRepositoryTags',
   Platform: 'replacePlatformTags',
+  Registry: 'replaceRegistryTags',
 } as const;
 
 export const ResourceHeaderTagsEditor = ({
@@ -207,14 +245,19 @@ export const ResourceHeaderTagsEditor = ({
     return allTags.filter((tag) => !selected.has(tag.id));
   }, [allTags, selectedTagIds]);
 
-  const replace = async (tagIds: string[]) => {
+  const replace = async (tagIds: string[], successMessage: string) => {
     setDraft({ key: initialTagIdsKey, tagIds });
     await replaceTags.mutateAsync(buildReplaceVariables(resourceType, resourceId, tagIds) as any);
+    toast.success(successMessage);
     await queryClient.invalidateQueries();
   };
 
-  const selectTag = (tagId: string) => replace([...selectedTagIds, tagId]);
-  const removeTag = (tagId: string) => replace(selectedTagIds.filter((id) => id !== tagId));
+  const selectTag = (tagId: string) => replace([...selectedTagIds, tagId], 'Tag added');
+  const removeTag = (tagId: string) =>
+    replace(
+      selectedTagIds.filter((id) => id !== tagId),
+      'Tag removed',
+    );
   const isDisabled = disabled || isLoading || replaceTags.isPending;
 
   if (!isLoading && allTags.length === 0 && selectedTags.length === 0) return null;
@@ -287,6 +330,7 @@ const buildReplaceVariables = (resourceType: EditableResourceType, resourceId: s
       return { stackId: resourceId, data };
     case 'GitRepository':
     case 'Platform':
+    case 'Registry':
       return { id: resourceId, data };
   }
 };

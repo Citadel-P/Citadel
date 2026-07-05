@@ -21,6 +21,9 @@ public sealed record GetPlatformTags(Guid Id) : IQuery<Result<IReadOnlyList<TagS
 [RequirePermission(ResourceType.GitRepository, PermissionLevel.Read)]
 public sealed record GetGitRepositoryTags(Guid Id) : IQuery<Result<IReadOnlyList<TagSummary>>>;
 
+[RequirePermission(ResourceType.Registry, PermissionLevel.Read)]
+public sealed record GetRegistryTags(Guid Id) : IQuery<Result<IReadOnlyList<TagSummary>>>;
+
 internal sealed class GetDeploymentTagsHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetDeploymentTags, Result<IReadOnlyList<TagSummary>>>
 {
     public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(GetDeploymentTags query, CancellationToken cancellationToken)
@@ -66,6 +69,18 @@ internal sealed class GetGitRepositoryTagsHandler(IUnitOfWork unitOfWork) : IQue
             query.Id,
             async () => await unitOfWork.GitRepositories.GetAsync(query.Id, cancellationToken) is not null,
             "Git repository",
+            cancellationToken);
+}
+
+internal sealed class GetRegistryTagsHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetRegistryTags, Result<IReadOnlyList<TagSummary>>>
+{
+    public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(GetRegistryTags query, CancellationToken cancellationToken)
+        => await ResourceTagResourceAccess.GetAsync(
+            unitOfWork,
+            TaggableResourceType.Registry,
+            query.Id,
+            async () => await unitOfWork.Registries.GetAsync(query.Id, cancellationToken) is not null,
+            "Registry",
             cancellationToken);
 }
 
