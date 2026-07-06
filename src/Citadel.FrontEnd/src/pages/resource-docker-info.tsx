@@ -54,7 +54,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
                       <div className="flex flex-col text-md font-bold text-foreground min-w-0">
                         <span>{resource.name}</span>
 
-                        <span className="text-sm text-foreground/40 min-w-0 max-w-[200px] xl:max-w-full">
+                        <span className="text-sm text-foreground/40 min-w-0 max-w-50 xl:max-w-full">
                           <CopyToClipboard textToCopy={resource.id ?? '-'} />
                         </span>
                       </div>

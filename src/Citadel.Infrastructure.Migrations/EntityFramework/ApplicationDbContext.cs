@@ -35,6 +35,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .ResourceBindingConfiguration()
             .TagConfiguration()
             .ResourceTagConfiguration()
+            .OidcProviderConfiguration()
             .SecretProviderConfiguration()
             .SecretDefinitionConfiguration()
             .InternalSecretValueConfiguration()
@@ -837,6 +838,46 @@ internal static class Configuration
         provider.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
         provider.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
+
+        return builder;
+    }
+
+    public static ModelBuilder OidcProviderConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "OidcProviders";
+        var provider = builder.Entity("OidcProvider");
+
+        provider.ToTable(tableName);
+
+        provider.Property<Guid>("Id").IsRequired();
+        provider.HasKey("Id");
+
+        provider.Property<string>("Name").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        provider.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        provider.Property<string>("DisplayName").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        provider.Property<string>("Issuer").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        provider.Property<string>("ClientId").HasColumnType(Text).HasMaxLength(256).IsRequired();
+        provider.Property<string>("ClientSecretCiphertext").HasColumnType(Text).IsRequired(false);
+        provider.Property<string>("Scopes").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        provider.Property<bool>("Enabled").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
+        provider.Property<bool>("AutoProvisionUsers").HasColumnType("boolean").IsRequired().HasDefaultValue(false);
+        provider.Property<bool>("AllowEmailAutoLink").HasColumnType("boolean").IsRequired().HasDefaultValue(false);
+        provider.Property<bool>("RequireEmailVerified").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
+        provider.Property<string>("AllowedEmailDomains").HasColumnType(Text).HasMaxLength(1024).IsRequired(false);
+        provider.Property<string>("RequiredClaimName").HasColumnType(Text).HasMaxLength(256).IsRequired(false);
+        provider.Property<string>("RequiredClaimValues").HasColumnType(Text).HasMaxLength(1024).IsRequired(false);
+        provider.Property<Guid?>("DefaultRoleId").IsRequired(false);
+        provider.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        provider.AddAuditedMemebers();
+
+        provider
+            .HasOne("Role")
+            .WithMany()
+            .HasForeignKey("DefaultRoleId")
+            .OnDelete(DeleteBehavior.SetNull);
+
+        provider.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
+        provider.HasIndex("Enabled").HasDatabaseName($"IX_{tableName}_Enabled");
 
         return builder;
     }

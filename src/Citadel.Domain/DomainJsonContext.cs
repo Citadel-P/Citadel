@@ -175,6 +175,11 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(GitRepoCloned))]
 [JsonSerializable(typeof(GitRepoPulled))]
 [JsonSerializable(typeof(GitRepoWebhookReceived))]
+[JsonSerializable(typeof(OidcProviderActivitySnapshot))]
+[JsonSerializable(typeof(OidcProviderCreated))]
+[JsonSerializable(typeof(OidcProviderUpdated))]
+[JsonSerializable(typeof(OidcProviderRenamed))]
+[JsonSerializable(typeof(OidcProviderDeleted))]
 
 public partial class EventInfoJsonContext : JsonSerializerContext
 {

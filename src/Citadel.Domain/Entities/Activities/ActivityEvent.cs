@@ -119,6 +119,12 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.GitRepoWebhookReceived
                 => ActivityResourceType.GitRepository,
 
+            ActivityEventType.OidcProviderCreated
+            or ActivityEventType.OidcProviderUpdated
+            or ActivityEventType.OidcProviderRenamed
+            or ActivityEventType.OidcProviderDeleted
+                => ActivityResourceType.OidcProvider,
+
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
         };
@@ -216,6 +222,11 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.GitRepoCloned, GitRepoCloned) => true,
             (ActivityEventType.GitRepoPulled, GitRepoPulled) => true,
             (ActivityEventType.GitRepoWebhookReceived, GitRepoWebhookReceived) => true,
+
+            (ActivityEventType.OidcProviderCreated, OidcProviderCreated) => true,
+            (ActivityEventType.OidcProviderUpdated, OidcProviderUpdated) => true,
+            (ActivityEventType.OidcProviderRenamed, OidcProviderRenamed) => true,
+            (ActivityEventType.OidcProviderDeleted, OidcProviderDeleted) => true,
 
             _ => false
         };

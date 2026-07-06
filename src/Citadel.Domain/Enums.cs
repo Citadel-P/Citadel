@@ -489,7 +489,8 @@ public enum ActivityResourceType
     Deployment,
     Stack,
     AlertRule,
-    GitRepository
+    GitRepository,
+    OidcProvider
 }
 
 public enum ActivityEventType
@@ -534,6 +535,13 @@ public enum ActivityEventType
     GitRepoPulled,
     GitRepoCloned,
     GitRepoWebhookReceived,
+    #endregion
+
+    #region OIDC Provider Events
+    OidcProviderCreated,
+    OidcProviderUpdated,
+    OidcProviderRenamed,
+    OidcProviderDeleted,
     #endregion
 
     #region Stack Events
@@ -713,6 +721,7 @@ public enum LookupResourceType
     Registry,
     GitRepository,
     GitAccount,
+    OidcProvider,
     Alert,
     AlertChannel,
     User,

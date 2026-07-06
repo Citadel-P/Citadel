@@ -425,6 +425,47 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "oidcproviders",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    allowemailautolink = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    allowedemaildomains = table.Column<string>(type: "text", maxLength: 1024, nullable: true),
+                    autoprovisionusers = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    clientid = table.Column<string>(type: "text", maxLength: 256, nullable: false),
+                    clientsecretciphertext = table.Column<string>(type: "text", nullable: true),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    defaultroleid = table.Column<Guid>(type: "uuid", nullable: true),
+                    description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
+                    displayname = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    issuer = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    name = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    requireemailverified = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    requiredclaimname = table.Column<string>(type: "text", maxLength: 256, nullable: true),
+                    requiredclaimvalues = table.Column<string>(type: "text", maxLength: 1024, nullable: true),
+                    scopes = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_oidcproviders", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_oidcproviders_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_oidcproviders_roles_defaultroleid",
+                        column: x => x.defaultroleid,
+                        principalTable: "roles",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "permissions",
                 columns: table => new
                 {
@@ -1233,6 +1274,27 @@ namespace Infrastructure.Migrations.Migrations
                 column: "registryid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_oidcproviders_createdbyactorid",
+                table: "oidcproviders",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_oidcproviders_defaultroleid",
+                table: "oidcproviders",
+                column: "defaultroleid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_oidcproviders_enabled",
+                table: "oidcproviders",
+                column: "enabled");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_oidcproviders_name",
+                table: "oidcproviders",
+                column: "name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_permissions_roleid",
                 table: "permissions",
                 column: "roleid");
@@ -1443,6 +1505,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "internalsecretvalues");
+
+            migrationBuilder.DropTable(
+                name: "oidcproviders");
 
             migrationBuilder.DropTable(
                 name: "permissions");

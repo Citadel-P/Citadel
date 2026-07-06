@@ -206,6 +206,7 @@ export enum LookupResourceType {
   Registry = "Registry",
   GitRepository = "GitRepository",
   GitAccount = "GitAccount",
+  OidcProvider = "OidcProvider",
   Alert = "Alert",
   AlertChannel = "AlertChannel",
   User = "User",
@@ -395,6 +396,7 @@ export enum ActivityResourceType {
   Stack = "Stack",
   AlertRule = "AlertRule",
   GitRepository = "GitRepository",
+  OidcProvider = "OidcProvider",
 }
 
 export enum ActivityEventType {
@@ -425,6 +427,10 @@ export enum ActivityEventType {
   GitRepoPulled = "GitRepoPulled",
   GitRepoCloned = "GitRepoCloned",
   GitRepoWebhookReceived = "GitRepoWebhookReceived",
+  OidcProviderCreated = "OidcProviderCreated",
+  OidcProviderUpdated = "OidcProviderUpdated",
+  OidcProviderRenamed = "OidcProviderRenamed",
+  OidcProviderDeleted = "OidcProviderDeleted",
   StackCreated = "StackCreated",
   StackUpdated = "StackUpdated",
   StackRenamed = "StackRenamed",
@@ -835,6 +841,22 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoGitRepoWebhookReceived
       >
     | BaseActivityEventInfoTypeMapping<
+        "OidcProviderCreated",
+        ActivityEventInfoOidcProviderCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "OidcProviderUpdated",
+        ActivityEventInfoOidcProviderUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "OidcProviderRenamed",
+        ActivityEventInfoOidcProviderRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "OidcProviderDeleted",
+        ActivityEventInfoOidcProviderDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
         "StackWebhookReceived",
         ActivityEventInfoStackWebhookReceived
       >
@@ -967,6 +989,28 @@ export interface ActivityEventInfoGitRepoWebhookReceived {
   repositoryFullName: null | string;
   dispatchedBranch?: null | string;
   dispatchedCommitSha?: null | string;
+}
+
+export interface ActivityEventInfoOidcProviderCreated {
+  $type?: "OidcProviderCreated";
+  provider: OidcProviderActivitySnapshot;
+}
+
+export interface ActivityEventInfoOidcProviderDeleted {
+  $type?: "OidcProviderDeleted";
+  provider: OidcProviderActivitySnapshot;
+}
+
+export interface ActivityEventInfoOidcProviderRenamed {
+  $type?: "OidcProviderRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoOidcProviderUpdated {
+  $type?: "OidcProviderUpdated";
+  oldProvider: OidcProviderActivitySnapshot;
+  newProvider: OidcProviderActivitySnapshot;
 }
 
 export interface ActivityEventInfoRegistryCreated {
@@ -2986,6 +3030,93 @@ export interface NetworksView {
   capabilities: ResourceCapabilities;
 }
 
+export interface OidcDiscoveryResultView {
+  issuer: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  jwksUri: string;
+}
+
+export interface OidcLoginProviderView {
+  /** @format uuid */
+  id: string;
+  displayName: string;
+}
+
+export interface OidcLoginProvidersView {
+  providers: OidcLoginProviderView[];
+}
+
+export interface OidcProviderActivitySnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  displayName: string;
+  issuer: string;
+  clientId: string;
+  scopes: string;
+  enabled: boolean;
+  autoProvisionUsers: boolean;
+  allowEmailAutoLink: boolean;
+  requireEmailVerified: boolean;
+  allowedEmailDomains: null | string;
+  requiredClaimName: null | string;
+  requiredClaimValues: null | string;
+  /** @format uuid */
+  defaultRoleId: null | string;
+}
+
+export interface OidcProviderInput {
+  name: string;
+  description: null | string;
+  displayName: string;
+  issuer: string;
+  clientId: string;
+  clientSecret: null | string;
+  scopes: null | string;
+  enabled: boolean;
+  autoProvisionUsers: boolean;
+  allowEmailAutoLink: boolean;
+  requireEmailVerified: boolean;
+  allowedEmailDomains: null | string;
+  requiredClaimName: null | string;
+  requiredClaimValues: null | string;
+  /** @format uuid */
+  defaultRoleId: null | string;
+}
+
+export interface OidcProviderView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  displayName: string;
+  issuer: string;
+  clientId: string;
+  scopes: string;
+  enabled: boolean;
+  autoProvisionUsers: boolean;
+  allowEmailAutoLink: boolean;
+  requireEmailVerified: boolean;
+  allowedEmailDomains: null | string;
+  requiredClaimName: null | string;
+  requiredClaimValues: null | string;
+  /** @format uuid */
+  defaultRoleId: null | string;
+  hasClientSecret: boolean;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+}
+
+export interface OidcProvidersView {
+  providers: OidcProviderView[];
+}
+
 export interface PagedResultViewOfActivityView {
   items: ActivityView[];
   /**
@@ -4093,6 +4224,12 @@ export interface TestExternalSecretInput {
   externalVersion: null | number | string;
 }
 
+export interface TestOidcProviderDiscoveryInput {
+  /** @format uuid */
+  providerId: null | string;
+  issuer: null | string;
+}
+
 export interface TestVaultKvV2SecretProviderConnectionInput {
   /** @format uuid */
   providerId: null | string;
@@ -4150,6 +4287,25 @@ export interface UpdateExternalSecretInput {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   externalVersion: null | number | string;
+}
+
+export interface UpdateOidcProviderInput {
+  name?: null | string;
+  description?: null | string;
+  displayName?: null | string;
+  issuer?: null | string;
+  clientId?: null | string;
+  clientSecret?: null | string;
+  scopes?: null | string;
+  enabled?: null | boolean;
+  autoProvisionUsers?: null | boolean;
+  allowEmailAutoLink?: null | boolean;
+  requireEmailVerified?: null | boolean;
+  allowedEmailDomains?: null | string;
+  requiredClaimName?: null | string;
+  requiredClaimValues?: null | string;
+  /** @format uuid */
+  defaultRoleId?: null | string;
 }
 
 export interface UpdateResourceBindingInput {
@@ -4687,6 +4843,83 @@ export class Api<
         path: `/api/v1/authentication/logout`,
         method: "POST",
         secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Authentication
+     * @name ListOidcLoginProviders
+     * @summary List enabled OIDC login providers
+     * @request GET:/api/v1/authentication/oidc/providers
+     * @response `200` `OidcLoginProvidersView` OK
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listOidcLoginProviders: (params: RequestParams = {}) =>
+      this.request<OidcLoginProvidersView, ProblemDetails>({
+        path: `/api/v1/authentication/oidc/providers`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Authentication
+     * @name BeginOidcLogin
+     * @summary Start an OIDC login flow
+     * @request GET:/api/v1/authentication/oidc/{id}/login
+     * @response `302` `void` Found
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    beginOidcLogin: (
+      id: string,
+      query?: {
+        returnUrl?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<any, void | ProblemDetails>({
+        path: `/api/v1/authentication/oidc/${id}/login`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Authentication
+     * @name CompleteOidcLogin
+     * @summary Complete an OIDC login flow
+     * @request GET:/api/v1/authentication/oidc/{id}/callback
+     * @response `200` `void`
+     * @response `302` `void` Found
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    completeOidcLogin: (
+      id: string,
+      query?: {
+        code?: string;
+        state?: string;
+        error?: string;
+        error_description?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, void | ProblemDetails>({
+        path: `/api/v1/authentication/oidc/${id}/callback`,
+        method: "GET",
+        query: query,
         ...params,
       }),
 
@@ -9288,6 +9521,276 @@ export class Api<
       this.request<void, ProblemDetails>({
         path: `/api/v1/resourceBindings/secret-providers/${id}`,
         method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OidcProviders
+     * @name ListOidcProviders
+     * @summary List OIDC providers
+     * @request GET:/api/v1/oidcProviders
+     * @secure
+     * @response `200` `OidcProvidersView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listOidcProviders: (params: RequestParams = {}) =>
+      this.request<
+        OidcProvidersView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/oidcProviders`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OidcProviders
+     * @name CreateOidcProvider
+     * @summary Create OIDC provider
+     * @request POST:/api/v1/oidcProviders
+     * @secure
+     * @response `200` `OidcProviderView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createOidcProvider: (data: OidcProviderInput, params: RequestParams = {}) =>
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/oidcProviders`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OidcProviders
+     * @name GetOidcProvider
+     * @summary Get OIDC provider
+     * @request GET:/api/v1/oidcProviders/{id}
+     * @secure
+     * @response `200` `OidcProviderView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getOidcProvider: (id: string, params: RequestParams = {}) =>
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/oidcProviders/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OidcProviders
+     * @name UpdateOidcProvider
+     * @summary Update OIDC provider
+     * @request PATCH:/api/v1/oidcProviders/{id}
+     * @secure
+     * @response `200` `OidcProviderView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateOidcProvider: (
+      id: string,
+      data: UpdateOidcProviderInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/oidcProviders/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OidcProviders
+     * @name DeleteOidcProvider
+     * @summary Delete OIDC provider
+     * @request DELETE:/api/v1/oidcProviders/{id}
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteOidcProvider: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/oidcProviders/${id}`,
+        method: "DELETE",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OidcProviders
+     * @name RenameOidcProvider
+     * @summary Rename OIDC provider
+     * @request POST:/api/v1/oidcProviders/rename
+     * @secure
+     * @response `200` `OidcProviderView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameOidcProvider: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/oidcProviders/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OidcProviders
+     * @name UpdateOidcProviderMetadata
+     * @summary Update OIDC provider metadata
+     * @request PATCH:/api/v1/oidcProviders/{id}/_metadata
+     * @secure
+     * @response `200` `OidcProviderView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateOidcProviderMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/oidcProviders/${id}/_metadata`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OidcProviders
+     * @name TestOidcProviderDiscovery
+     * @summary Test OIDC provider discovery
+     * @request POST:/api/v1/oidcProviders/{id}/testDiscovery
+     * @secure
+     * @response `200` `OidcDiscoveryResultView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    testOidcProviderDiscovery: (id: string, params: RequestParams = {}) =>
+      this.request<
+        OidcDiscoveryResultView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/oidcProviders/${id}/testDiscovery`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OidcProviders
+     * @name TestOidcDiscovery
+     * @summary Test OIDC discovery
+     * @request POST:/api/v1/oidcProviders/testDiscovery
+     * @secure
+     * @response `200` `OidcDiscoveryResultView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    testOidcDiscovery: (
+      data: TestOidcProviderDiscoveryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OidcDiscoveryResultView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/oidcProviders/testDiscovery`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
 

@@ -164,6 +164,7 @@ export const useResourceParamType = (): { type: ResourceType; tab?: ResourceType
   if (type === 'activities') return { type: 'Activity' };
   if (type === 'alert-rules') return { type: 'AlertRule' };
   if (type === 'git-repos') return { type: 'GitRepository' };
+  if (type === 'oidc-providers') return { type: 'OidcProvider' };
   if (type === 'access') return { type: 'Access' };
 
   const typePlural = matchPlural(type);

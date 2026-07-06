@@ -53,7 +53,6 @@ const AddFormPage = ({ type }: { type: ResourceType }) => {
 
 const EditFormPage = ({ type, skipMetadataUpdate = false }: { type: ResourceType; skipMetadataUpdate?: boolean }) => {
   const { id } = useParams();
-  const { mutateAsync: renameResource } = useMutate(`rename${type}` as any);
 
   const Components = ResourceFormComponents[type]?.EditForm;
   const formData = Components?.useData?.(id!);
@@ -64,22 +63,21 @@ const EditFormPage = ({ type, skipMetadataUpdate = false }: { type: ResourceType
 
   const Content = skipMetadataUpdate ? EditFormContent : EditFormPageWithMetadata;
 
-  return <Content key={id} id={id!} item={item} renameResource={renameResource} Components={Components} type={type} />;
+  return <Content key={id} id={id!} item={item} Components={Components} type={type} />;
 };
 
 const EditFormPageWithMetadata = ({
   id,
   item,
-  renameResource,
   Components,
   type,
 }: {
   id: string;
   item: RequiredFormFields;
-  renameResource: (variables: { id: string; name: string }) => Promise<any>;
   Components: any;
   type: ResourceType;
 }) => {
+  const { mutateAsync: renameResource } = useMutate(`rename${type}` as any);
   const { mutateAsync: updateMetadata } = useMutate(`update${type}Metadata` as any);
 
   return (
@@ -105,7 +103,7 @@ const EditFormContent = ({
   id: string;
   item: RequiredFormFields;
   updateMetadata?: (variables: { id: string; data: Partial<PatchResourceMetadata> }) => Promise<any>;
-  renameResource: (variables: { id: string; name: string }) => Promise<any>;
+  renameResource?: (variables: { id: string; name: string }) => Promise<any>;
   Components: any;
   type: ResourceType;
 }) => {
@@ -127,6 +125,7 @@ const EditFormContent = ({
   };
 
   const handleRenameResource = async (name: string) => {
+    if (!renameResource) return;
     await renameResource({ id, name });
     await invalidateRelatedQueries();
     setMetaDataChanged(true);
@@ -175,7 +174,7 @@ type EditHeaderProps<T> = {
   Indicator: React.ComponentType<{ resource: T }>;
   Tags?: React.ComponentType<{ resource: T }>;
   Actions: React.ComponentType<{ resource: T }>;
-  onRename: (name: string) => void;
+  onRename?: (name: string) => void;
   onChangeDescription?: (description: string) => void;
 };
 
@@ -242,7 +241,7 @@ const EditableTitle = ({
 }: {
   value: string;
   readOnly?: boolean;
-  onSave: (v: string) => void;
+  onSave?: (v: string) => void;
 }) => {
   const edit = useInlineEdit(value);
   const inputRef = useRef<HTMLInputElement | null>(null);

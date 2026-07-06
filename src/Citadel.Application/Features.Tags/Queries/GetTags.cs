@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.Tags.Queries;
 
-[RequirePermission(ResourceType.Tag, PermissionLevel.Read)]
+//[RequirePermission(ResourceType.Tag, PermissionLevel.Read)]
 public sealed record GetTags : IQuery<Result<IReadOnlyList<TagWithUsage>>>;
 
 internal sealed class GetTagsHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetTags, Result<IReadOnlyList<TagWithUsage>>>

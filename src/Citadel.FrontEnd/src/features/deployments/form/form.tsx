@@ -774,7 +774,7 @@ export const DeploymentForm = ({
         ],
       }),
     }),
-    [provider, currentPlatformId, currentSpec.image, mode, id, effectiveConfigurationNames],
+    [provider, currentPlatformId, currentSpec.image, mode, id, effectiveConfigurationNames, disabled],
   );
 
   return (

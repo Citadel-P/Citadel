@@ -43,6 +43,9 @@ internal class UnitOfWork : IUnitOfWork
         SecretProviders = new Lazy<ISecretProviderRepository>(() => new SecretProviderRepository(connection, GetTransaction));
         Tags = new Lazy<ITagRepository>(() => new TagRepository(connection, GetTransaction));
         ResourceTags = new Lazy<IResourceTagRepository>(() => new ResourceTagRepository(connection, GetTransaction));
+        OidcProviders = new Lazy<IOidcProviderRepository>(() => new OidcProviderRepository(connection, GetTransaction));
+        OidcLoginStates = new Lazy<IOidcLoginStateRepository>(() => new OidcLoginStateRepository(connection, GetTransaction));
+        OidcExternalLogins = new Lazy<IOidcExternalLoginRepository>(() => new OidcExternalLoginRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -65,6 +68,9 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<ISecretProviderRepository> SecretProviders { get; }
     private Lazy<ITagRepository> Tags { get; }
     private Lazy<IResourceTagRepository> ResourceTags { get; }
+    private Lazy<IOidcProviderRepository> OidcProviders { get; }
+    private Lazy<IOidcLoginStateRepository> OidcLoginStates { get; }
+    private Lazy<IOidcExternalLoginRepository> OidcExternalLogins { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
     private Lazy<IActivityEventRepository> ActivityEvents { get; }
@@ -94,6 +100,9 @@ internal class UnitOfWork : IUnitOfWork
     ISecretProviderRepository IUnitOfWork.SecretProviders => SecretProviders.Value;
     ITagRepository IUnitOfWork.Tags => Tags.Value;
     IResourceTagRepository IUnitOfWork.ResourceTags => ResourceTags.Value;
+    IOidcProviderRepository IUnitOfWork.OidcProviders => OidcProviders.Value;
+    IOidcLoginStateRepository IUnitOfWork.OidcLoginStates => OidcLoginStates.Value;
+    IOidcExternalLoginRepository IUnitOfWork.OidcExternalLogins => OidcExternalLogins.Value;
 
     // Lazily creates a transaction
     private IDbTransaction GetTransaction()

@@ -1,18 +1,24 @@
-import { useState, FormEvent } from 'react';
+import { useMemo, useState, FormEvent } from 'react';
 import LogoIcon from '@/assets/logo.svg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, ShieldCheck } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { useAuthContext } from './auth-context';
 import { Constants } from '@/lib/constants';
+import { useRead } from '@/lib/hooks';
+import { useApiClientContext } from '@/api/api-client-context';
 
 const Login = () => {
   const { login, isPending, validationErrors } = useAuthContext();
+  const { apiClient } = useApiClientContext();
+  const { data: oidcProvidersData, isLoading: isLoadingOidcProviders } = useRead('listOidcLoginProviders');
 
   const [formData, setFormData] = useState({ emailOrName: '', password: '' });
 
   const [errors, setErrors] = useState<{ emailOrName?: string; password?: string }>({});
+  const oidcProviders = oidcProvidersData?.data.providers ?? [];
+  const apiBaseUrl = useMemo(() => (apiClient.baseUrl ?? '').replace(/\/+$/, ''), [apiClient.baseUrl]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -53,6 +59,11 @@ const Login = () => {
     if (validateForm()) {
       login(formData);
     }
+  };
+
+  const beginOidcLogin = (providerId: string) => {
+    const returnUrl = `${window.location.origin}/login`;
+    window.location.assign(`${apiBaseUrl}/api/v1/authentication/oidc/${providerId}/login?returnUrl=${encodeURIComponent(returnUrl)}`);
   };
 
   return (
@@ -116,6 +127,31 @@ const Login = () => {
                 {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
               </Button>
             </form>
+
+            {oidcProviders.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs font-medium text-muted-foreground">or</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+
+                <div className="space-y-2">
+                  {oidcProviders.map((provider) => (
+                    <Button
+                      key={provider.id}
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      disabled={isLoadingOidcProviders}
+                      onClick={() => beginOidcLogin(provider.id)}>
+                      <ShieldCheck />
+                      Continue with {provider.displayName}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -99,6 +99,11 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<GitRepoCloned>]
 [GenerateShapeFor<GitRepoPulled>]
 [GenerateShapeFor<GitRepoWebhookReceived>]
+[GenerateShapeFor<OidcProviderActivitySnapshot>]
+[GenerateShapeFor<OidcProviderCreated>]
+[GenerateShapeFor<OidcProviderUpdated>]
+[GenerateShapeFor<OidcProviderRenamed>]
+[GenerateShapeFor<OidcProviderDeleted>]
 [GenerateShapeFor<WebhookAuthenticationFailedAlertInfo>]
 [GenerateShapeFor<WebhookDispatchFailedAlertInfo>]
 [GenerateShapeFor<WebhookGitRepoSyncFailedAlertInfo>]
@@ -161,5 +166,9 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.GitRepoCloned)] = typeof(GitRepoCloned),
         [nameof(ActivityEventType.GitRepoPulled)] = typeof(GitRepoPulled),
         [nameof(ActivityEventType.GitRepoWebhookReceived)] = typeof(GitRepoWebhookReceived),
+        [nameof(ActivityEventType.OidcProviderCreated)] = typeof(OidcProviderCreated),
+        [nameof(ActivityEventType.OidcProviderUpdated)] = typeof(OidcProviderUpdated),
+        [nameof(ActivityEventType.OidcProviderRenamed)] = typeof(OidcProviderRenamed),
+        [nameof(ActivityEventType.OidcProviderDeleted)] = typeof(OidcProviderDeleted),
     };
 }

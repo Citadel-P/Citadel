@@ -18,6 +18,7 @@ const activityResourceIcons = {
   [ActivityResourceType.Stack]: CitadelIcons.Stack,
   [ActivityResourceType.AlertRule]: CitadelIcons.Alert,
   [ActivityResourceType.GitRepository]: CitadelIcons.GitRepository,
+  [ActivityResourceType.OidcProvider]: CitadelIcons.OidcProvider,
 } satisfies Record<ActivityResourceType, any>;
 
 const activityEventPrefixes = {
@@ -27,7 +28,18 @@ const activityEventPrefixes = {
   [ActivityResourceType.Stack]: 'Stack',
   [ActivityResourceType.AlertRule]: 'AlertRule',
   [ActivityResourceType.GitRepository]: 'GitRepo',
+  [ActivityResourceType.OidcProvider]: 'OidcProvider',
 } satisfies Record<ActivityResourceType, string>;
+
+const activityLookupTargets = {
+  [ActivityResourceType.Deployment]: LookupResourceType.Deployment,
+  [ActivityResourceType.Registry]: LookupResourceType.Registry,
+  [ActivityResourceType.Platform]: LookupResourceType.Platform,
+  [ActivityResourceType.Stack]: LookupResourceType.Stack,
+  [ActivityResourceType.AlertRule]: LookupResourceType.Alert,
+  [ActivityResourceType.GitRepository]: LookupResourceType.GitRepository,
+  [ActivityResourceType.OidcProvider]: LookupResourceType.OidcProvider,
+} satisfies Record<ActivityResourceType, LookupResourceType>;
 
 export const ActivityComponents: RequiredComponents = {
   Icon: Activity,
@@ -113,8 +125,7 @@ function SearchSection() {
       />
       {query.resourceType != 'All' && (
         <ResourceSelectorField
-          sourceType={LookupResourceType.None}
-          targetType={query.resourceType === 'AlertRule' ? 'Alert' : LookupResourceType[query.resourceType]}
+          targetType={activityLookupTargets[query.resourceType]}
           onSelect={handleResourceChange as any}
           selected={query.resourceId}
           placeholder={'Select ' + query.resourceType}

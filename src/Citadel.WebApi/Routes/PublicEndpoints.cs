@@ -2,6 +2,8 @@ using Domain;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using Hosting.OpenApi;
+using Mediator;
+using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Alerters;
@@ -11,6 +13,7 @@ using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
+using WebApi.Routes.Endpoints.Resources.Oidc;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.ResourceBindings;
@@ -38,6 +41,7 @@ public static class PublicEndpoints
     const string DeploymentsName = nameof(Deployments);
     const string StacksName = nameof(Stacks);
     const string ResourceBindingsName = nameof(ResourceBindings);
+    const string OidcProvidersName = "OidcProviders";
     const string TagsName = nameof(Tags);
     const string AuthenticationName = nameof(Authentication);
     const string LookupName = nameof(Lookup);
@@ -110,6 +114,10 @@ public static class PublicEndpoints
             {
                 MapResourceBindingEndpoints(resourceBindings);
                 MapResourceBindingSecretEndpoints(resourceBindings);
+            }
+            var oidcProviders = group.MapGroup("/oidcProviders").WithTags(OidcProvidersName).RequireAuthorization();
+            {
+                MapOidcProviderEndpoints(oidcProviders);
             }
             var tags = group.MapGroup("/tags").WithTags(TagsName).RequireAuthorization();
             {
@@ -619,6 +627,110 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("logout");
+
+        auth.MapGet("oidc/providers", Oidc.ListLoginProviders)
+            .WithSummary("List enabled OIDC login providers")
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .WithName("listOidcLoginProviders");
+
+        auth.MapGet("oidc/{id:guid}/login", Oidc.BeginLogin)
+            .WithSummary("Start an OIDC login flow")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status302Found)
+            .RequireRateLimiting("strict-auth")
+            .WithName("beginOidcLogin");
+
+        auth.MapGet("oidc/{id:guid}/callback", Oidc.CompleteLogin)
+            .WithSummary("Complete an OIDC login flow")
+            .ProduceCookie(Constants.RefreshToken)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status302Found)
+            .RequireRateLimiting("strict-auth")
+            .WithName("completeOidcLogin");
+    }
+
+    private static void MapOidcProviderEndpoints(RouteGroupBuilder oidcProviders)
+    {
+        oidcProviders.MapGet("/", Oidc.ListProviders)
+            .WithSummary("List OIDC providers")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("listOidcProviders");
+
+        oidcProviders.MapGet("{id:guid}", Oidc.GetProvider)
+            .WithSummary("Get OIDC provider")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getOidcProvider");
+
+        oidcProviders.MapPost("/", Oidc.CreateProvider)
+            .WithSummary("Create OIDC provider")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createOidcProvider");
+
+        oidcProviders.MapPost("rename", Oidc.RenameProvider)
+            .WithSummary("Rename OIDC provider")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameOidcProvider");
+
+        oidcProviders.MapPatch("{id:guid}", Oidc.UpdateProvider)
+            .WithSummary("Update OIDC provider")
+            .Accepts<UpdateOidcProviderInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateOidcProvider");
+
+        oidcProviders.MapPatch("{id:guid}/_metadata", Oidc.UpdateProviderMetadata)
+            .WithSummary("Update OIDC provider metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateOidcProviderMetadata");
+
+        oidcProviders.MapDelete("{id:guid}", Oidc.DeleteProvider)
+            .WithSummary("Delete OIDC provider")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("deleteOidcProvider");
+
+        oidcProviders.MapPost("{id:guid}/testDiscovery", (
+                IMediator mediator,
+                [FromRoute] Guid id,
+                CancellationToken cancellationToken)
+                => Oidc.TestDiscovery(mediator, new TestOidcProviderDiscoveryInput(id, null), cancellationToken))
+            .WithSummary("Test OIDC provider discovery")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("testOidcProviderDiscovery");
+
+        oidcProviders.MapPost("testDiscovery", Oidc.TestDiscovery)
+            .WithSummary("Test OIDC discovery")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("testOidcDiscovery");
     }
 
     private static void MapContainerEndpoints(RouteGroupBuilder containers)

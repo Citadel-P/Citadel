@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260703182743_migration0001")]
+    [Migration("20260706213435_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -1359,6 +1359,130 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable((string)null);
 
                     b.ToView("LatestActivityEvents", (string)null);
+                });
+
+            modelBuilder.Entity("OidcProvider", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AllowEmailAutoLink")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("allowemailautolink");
+
+                    b.Property<string>("AllowedEmailDomains")
+                        .HasMaxLength(1024)
+                        .HasColumnType("text")
+                        .HasColumnName("allowedemaildomains");
+
+                    b.Property<bool>("AutoProvisionUsers")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("autoprovisionusers");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("clientid");
+
+                    b.Property<string>("ClientSecretCiphertext")
+                        .HasColumnType("text")
+                        .HasColumnName("clientsecretciphertext");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<Guid?>("DefaultRoleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("defaultroleid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("displayname");
+
+                    b.Property<bool>("Enabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("issuer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("RequireEmailVerified")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("requireemailverified");
+
+                    b.Property<string>("RequiredClaimName")
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("requiredclaimname");
+
+                    b.Property<string>("RequiredClaimValues")
+                        .HasMaxLength(1024)
+                        .HasColumnType("text")
+                        .HasColumnName("requiredclaimvalues");
+
+                    b.Property<string>("Scopes")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("scopes");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id")
+                        .HasName("pk_oidcproviders");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_oidcproviders_createdbyactorid");
+
+                    b.HasIndex("DefaultRoleId")
+                        .HasDatabaseName("ix_oidcproviders_defaultroleid");
+
+                    b.HasIndex("Enabled")
+                        .HasDatabaseName("ix_oidcproviders_enabled");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_oidcproviders_name");
+
+                    b.ToTable("oidcproviders", (string)null);
                 });
 
             modelBuilder.Entity("Permission", b =>
@@ -2771,6 +2895,22 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_internalsecretvalues_secretdefinitions_secretid");
+                });
+
+            modelBuilder.Entity("OidcProvider", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_oidcproviders_actors_createdbyactorid");
+
+                    b.HasOne("Role", null)
+                        .WithMany()
+                        .HasForeignKey("DefaultRoleId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_oidcproviders_roles_defaultroleid");
                 });
 
             modelBuilder.Entity("Permission", b =>

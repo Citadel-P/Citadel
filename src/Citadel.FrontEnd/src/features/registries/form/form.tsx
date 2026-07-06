@@ -502,7 +502,7 @@ export const RegistryForm = ({
           }
         : {}),
     }),
-    [mode, provider, isGhcrAuthEnabled, isCustomAuthEnabled],
+    [mode, provider, isGhcrAuthEnabled, isCustomAuthEnabled, disabled],
   );
 
   return (

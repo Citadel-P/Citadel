@@ -2,9 +2,9 @@
 
 internal sealed record UserAuthInfoDto(
     Guid Id,
-    Guid ActorId,
     string Name, 
     string Email,
+    Guid ActorId,
     string Password, 
     string? RoleName,
     int? PermissionResourceType,

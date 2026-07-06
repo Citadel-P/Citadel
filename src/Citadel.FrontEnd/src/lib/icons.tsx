@@ -37,6 +37,7 @@ export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ c
   ['Role']: Shield,
   ['Binding']: ChevronsLeftRightEllipsis,
   ['Tag']: TagIcon,
+  ['OidcProvider']: Shield,
   ['Activity']: Activity
 };
 

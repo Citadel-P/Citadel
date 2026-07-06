@@ -240,7 +240,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   platformId,
   queryEnabled = true,
 }: {
-  sourceType: LookupResourceType;
+  sourceType?: LookupResourceType;
   targetType: LookupResourceType;
   selected?: T | string | undefined;
   onSelect?: (item: T | undefined) => void;

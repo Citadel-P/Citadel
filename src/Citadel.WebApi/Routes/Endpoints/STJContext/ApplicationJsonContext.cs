@@ -40,6 +40,7 @@ using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Lookup;
 using WebApi.Routes.Endpoints.Resources.Networks;
+using WebApi.Routes.Endpoints.Resources.Oidc;
 using WebApi.Routes.Endpoints.Resources.Paging;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
@@ -97,6 +98,15 @@ namespace Application.Models;
 [JsonSerializable(typeof(LoginRequest))]
 [JsonSerializable(typeof(LoginResponse))]
 [JsonSerializable(typeof(RefreshTokenResponse))]
+[JsonSerializable(typeof(OidcProviderInput))]
+[JsonSerializable(typeof(UpdateOidcProviderInput))]
+[JsonSerializable(typeof(UpdateOidcProviderPatchDocument))]
+[JsonSerializable(typeof(TestOidcProviderDiscoveryInput))]
+[JsonSerializable(typeof(OidcProviderView))]
+[JsonSerializable(typeof(OidcProvidersView))]
+[JsonSerializable(typeof(OidcLoginProviderView))]
+[JsonSerializable(typeof(OidcLoginProvidersView))]
+[JsonSerializable(typeof(OidcDiscoveryResultView))]
 [JsonSerializable(typeof(PlatformInput))]
 [JsonSerializable(typeof(CreatePlatformInput))]
 [JsonSerializable(typeof(PlatformsView))]

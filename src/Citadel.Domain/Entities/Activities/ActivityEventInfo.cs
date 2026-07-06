@@ -51,6 +51,10 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(GitRepoCloned), nameof(ActivityEventType.GitRepoCloned))]
 [JsonDerivedType(typeof(GitRepoPulled), nameof(ActivityEventType.GitRepoPulled))]
 [JsonDerivedType(typeof(GitRepoWebhookReceived), nameof(ActivityEventType.GitRepoWebhookReceived))]
+[JsonDerivedType(typeof(OidcProviderCreated), nameof(ActivityEventType.OidcProviderCreated))]
+[JsonDerivedType(typeof(OidcProviderUpdated), nameof(ActivityEventType.OidcProviderUpdated))]
+[JsonDerivedType(typeof(OidcProviderRenamed), nameof(ActivityEventType.OidcProviderRenamed))]
+[JsonDerivedType(typeof(OidcProviderDeleted), nameof(ActivityEventType.OidcProviderDeleted))]
 [JsonDerivedType(typeof(StackWebhookReceived), nameof(ActivityEventType.StackWebhookReceived))]
 
 public abstract record ActivityEventInfo;
@@ -140,3 +144,27 @@ public sealed record GitRepoWebhookReceived(
     string? RepositoryFullName,
     string? DispatchedBranch = null,
     string? DispatchedCommitSha = null) : ActivityEventInfo;
+
+public sealed record OidcProviderActivitySnapshot(
+    Guid Id,
+    string Name,
+    string? Description,
+    string DisplayName,
+    string Issuer,
+    string ClientId,
+    string Scopes,
+    bool Enabled,
+    bool AutoProvisionUsers,
+    bool AllowEmailAutoLink,
+    bool RequireEmailVerified,
+    string? AllowedEmailDomains,
+    string? RequiredClaimName,
+    string? RequiredClaimValues,
+    Guid? DefaultRoleId);
+
+public sealed record OidcProviderCreated(OidcProviderActivitySnapshot Provider) : ActivityEventInfo;
+public sealed record OidcProviderUpdated(
+    OidcProviderActivitySnapshot OldProvider,
+    OidcProviderActivitySnapshot NewProvider) : ActivityEventInfo;
+public sealed record OidcProviderRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record OidcProviderDeleted(OidcProviderActivitySnapshot Provider) : ActivityEventInfo;

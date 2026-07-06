@@ -8,13 +8,12 @@ import { TabbedResourceView } from './tabbed-resource';
 const ResourcePage = () => {
   const { type, tab } = useResourceParamType();
   const Components = ResourceComponents[type];
-
+  
   if (!Components) return <NotFound />;
 
   if (isTabbedResource(Components)) {
     return <TabbedResourceView key={type} Components={Components} type={type} tab={tab} />;
   }
-
   return <RegularResourceView key={type} Components={Components} type={type} />;
 };
 

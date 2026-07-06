@@ -90,6 +90,8 @@ public static class ApplicationModule
             .AddSingleton<IGitStackMaterializer, GitStackMaterializer>()
             .AddSingleton<ISecretValueProtector, SecretValueProtector>()
             .AddSingleton<ISecretRedactor, SecretRedactor>()
+            .AddSingleton<IOidcDiscoveryService, OidcDiscoveryService>()
+            .AddSingleton<IOidcAuthenticationService, OidcAuthenticationService>()
             .AddSingleton<IResourceBindingResolver, ResourceBindingResolver>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 

@@ -472,6 +472,24 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     </div>
   ),
   GitRepoWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
+
+  OidcProviderCreated: (info, activity) => (
+    <SpecViewer spec={info.provider} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+
+  OidcProviderUpdated: (info) => (
+    <MonacoDiff original={info.oldProvider} modified={info.newProvider} format="json" title="Configuration changes" />
+  ),
+
+  OidcProviderRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      OIDC provider renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  OidcProviderDeleted: (info, activity) => (
+    <SpecViewer spec={info.provider} resourceId={activity.resourceId} title="Deleted configuration" />
+  ),
 };
 
 export function ActivityAlertZone({

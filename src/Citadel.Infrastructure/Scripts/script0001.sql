@@ -224,6 +224,31 @@ CREATE TABLE actorroles (
     CONSTRAINT fk_actorroles_roles_roleid FOREIGN KEY (roleid) REFERENCES roles (id) ON DELETE CASCADE
 );
 
+CREATE TABLE oidcproviders (
+    id uuid NOT NULL,
+    allowemailautolink boolean NOT NULL DEFAULT FALSE,
+    allowedemaildomains text,
+    autoprovisionusers boolean NOT NULL DEFAULT FALSE,
+    clientid text NOT NULL,
+    clientsecretciphertext text,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    defaultroleid uuid,
+    description text,
+    displayname text NOT NULL,
+    enabled boolean NOT NULL DEFAULT TRUE,
+    issuer text NOT NULL,
+    name text NOT NULL,
+    requireemailverified boolean NOT NULL DEFAULT TRUE,
+    requiredclaimname text,
+    requiredclaimvalues text,
+    scopes text NOT NULL,
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    CONSTRAINT pk_oidcproviders PRIMARY KEY (id),
+    CONSTRAINT fk_oidcproviders_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_oidcproviders_roles_defaultroleid FOREIGN KEY (defaultroleid) REFERENCES roles (id) ON DELETE SET NULL
+);
+
 CREATE TABLE permissions (
     id uuid NOT NULL,
     permissionlevel integer NOT NULL,
@@ -695,6 +720,14 @@ CREATE INDEX ix_images_platformid ON images (platformid);
 
 CREATE INDEX ix_images_registryid ON images (registryid);
 
+CREATE INDEX ix_oidcproviders_createdbyactorid ON oidcproviders (createdbyactorid);
+
+CREATE INDEX ix_oidcproviders_defaultroleid ON oidcproviders (defaultroleid);
+
+CREATE INDEX ix_oidcproviders_enabled ON oidcproviders (enabled);
+
+CREATE UNIQUE INDEX ix_oidcproviders_name ON oidcproviders (name);
+
 CREATE INDEX ix_permissions_roleid ON permissions (roleid);
 
 CREATE UNIQUE INDEX ix_permissions_roleid_resourcetype ON permissions (roleid, resourcetype);
@@ -764,7 +797,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260703182743_migration0001', '10.0.9');
+VALUES ('20260706213435_migration0001', '10.0.9');
 
 COMMIT;
 

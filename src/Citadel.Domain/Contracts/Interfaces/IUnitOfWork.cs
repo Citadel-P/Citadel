@@ -1,5 +1,6 @@
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Identity;
+using Domain.Contracts.Resources.Oidc;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
@@ -10,6 +11,7 @@ using Domain.Entities.Tags;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
+using Domain.Entities.Oidc;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
@@ -41,6 +43,9 @@ public interface IUnitOfWork : IAsyncDisposable
     ISecretProviderRepository SecretProviders { get; }
     ITagRepository Tags { get; }
     IResourceTagRepository ResourceTags { get; }
+    IOidcProviderRepository OidcProviders { get; }
+    IOidcLoginStateRepository OidcLoginStates { get; }
+    IOidcExternalLoginRepository OidcExternalLogins { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
@@ -48,6 +53,35 @@ public interface IUnitOfWork : IAsyncDisposable
 
     Task CommitAsync(CancellationToken cancellationToken);
     Task RollbackAsync();
+}
+
+public interface IOidcProviderRepository
+{
+    Task<int> AddAsync(OidcProvider provider, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(OidcProvider provider, CancellationToken cancellationToken);
+    Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
+    Task<OidcProvider?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<OidcProvider>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<OidcProvider>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IEnumerable<OidcProvider>> GetEnabledAsync(CancellationToken cancellationToken);
+    Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken);
+}
+
+public interface IOidcLoginStateRepository
+{
+    Task<int> AddAsync(OidcLoginState state, CancellationToken cancellationToken);
+    Task<OidcLoginState?> GetByStateHashAsync(string stateHash, CancellationToken cancellationToken);
+    Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
+    Task<int> DeleteExpiredAsync(DateTime now, CancellationToken cancellationToken);
+}
+
+public interface IOidcExternalLoginRepository
+{
+    Task<OidcExternalLogin?> GetAsync(Guid providerId, string subject, CancellationToken cancellationToken);
+    Task<int> AddAsync(OidcExternalLogin externalLogin, CancellationToken cancellationToken);
+    Task<int> UpdateSeenAsync(Guid id, string? email, DateTime updatedAt, CancellationToken cancellationToken);
+    Task<int> DeleteByProviderIdAsync(Guid providerId, CancellationToken cancellationToken);
 }
 
 public interface IResourceBindingRepository
@@ -190,6 +224,8 @@ public interface IUserRepository
 
     Task<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
+    Task<UserAuthInfo?> GetUserAuthInfoByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken);
     Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken);

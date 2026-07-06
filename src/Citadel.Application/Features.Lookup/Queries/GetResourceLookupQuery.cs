@@ -96,6 +96,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (null, LookupResourceType.Role) => await GetRoleLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Registry) => await GetRegistryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.GitRepository) => await GetGitRepositoryLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.OidcProvider) => await GetOidcProviderLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Deployment) => await GetDeploymentLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Stack) => await GetStackLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Image) => await GetImageLookupAsync(userId, context, cancellationToken),
@@ -315,6 +316,10 @@ internal sealed class GetResourceLookupQueryHandler(
     private async Task<Result<IEnumerable<ResourceInfo>>> GetGitRepositoryLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.GitRepositories.GetAuthorizedAsync(userId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetOidcProviderLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.OidcProviders.GetAuthorizedAsync(userId, ResourceType.Binding, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.DisplayName)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Deployments.GetAuthorizedInfoAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, cancellationToken))

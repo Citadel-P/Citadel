@@ -26,6 +26,8 @@ import { StackFormComponents } from './stacks/form';
 import { StackComponents } from './stacks';
 import { BindingComponents } from './bindings';
 import { TagComponents } from './tags';
+import { OidcProviderComponents } from './oidc-providers';
+import { OidcProviderFormComponents } from './oidc-providers/form';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -49,6 +51,7 @@ export const ResourceComponents: {
   Role: AccessComponents,
   Binding: BindingComponents,
   Tag: TagComponents,
+  OidcProvider: OidcProviderComponents,
 };
 
 export const ResourceFormComponents: {
@@ -75,6 +78,7 @@ export const ResourceFormComponents: {
   Role: undefined,
   Binding: undefined,
   Tag: undefined,
+  OidcProvider: OidcProviderFormComponents,
 };
 
 export const DockerResourceInfoComponents: {

@@ -601,21 +601,125 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             LEFT JOIN Permissions ON Roles.Id = Permissions.RoleId
             """;
 
-        var result = await db.QueryAsync<UserAuthInfoDto>(sql,
-        new { EmailOrName = emailOrName },
-        transaction: tx());
+        var result = await db.QueryAsync<UserAuthInfoDto>(
+            sql,
+            new { EmailOrName = emailOrName },
+            transaction: tx());
 
-        return result
-        .GroupBy(r => new { r.Id, r.Name, r.Email, r.ActorId, r.Password })
-        .Select(g => new UserAuthInfo(
-            g.Key.Id,
-            g.Key.ActorId,
-            g.Key.Name,
-            g.Key.Email,
-            g.Key.Password,
-            [.. g.Where(r => !string.IsNullOrWhiteSpace(r.RoleName))
+        return MapUserAuthInfo(result);
+    }
+
+    public async Task<UserAuthInfo?> GetUserAuthInfoByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql =
+            """
+            WITH TargetUser AS (
+                SELECT Users.*
+                FROM Users
+                JOIN Actors userActor ON userActor.Id = Users.ActorId
+                WHERE Users.Id = @Id
+                  AND userActor.IsEnabled
+                LIMIT 1
+            ),
+            ActorScope AS (
+                SELECT TargetUser.ActorId
+                FROM TargetUser
+
+                UNION
+
+                SELECT Teams.ActorId
+                FROM TargetUser
+                JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
+                JOIN Teams ON Teams.Id = UsersTeams.TeamId
+                JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
+                WHERE teamActor.IsEnabled
+            )
+            SELECT 
+                TargetUser.Id, 
+                TargetUser.Name, 
+                TargetUser.Email,
+                TargetUser.ActorId,
+                TargetUser.Password,
+                Roles.Name as RoleName, 
+                Permissions.ResourceType::integer AS PermissionResourceType,
+                Permissions.PermissionLevel::integer AS PermissionLevel,
+                Permissions.SpecificPermissions::integer AS SpecificPermissions
+            FROM TargetUser
+            LEFT JOIN ActorScope ON 1 = 1
+            LEFT JOIN ActorRoles ON ActorRoles.ActorId = ActorScope.ActorId
+            LEFT JOIN Roles ON Roles.Id = ActorRoles.RoleId
+            LEFT JOIN Permissions ON Roles.Id = Permissions.RoleId
+            """;
+
+        var result = await db.QueryAsync<UserAuthInfoDto>(
+            sql,
+            new { Id = id },
+            transaction: tx());
+
+        return MapUserAuthInfo(result);
+    }
+
+    public async Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken)
+    {
+        const string sql =
+            """
+            WITH TargetUser AS (
+                SELECT Users.*
+                FROM Users
+                JOIN Actors userActor ON userActor.Id = Users.ActorId
+                WHERE Users.Email = @Email
+                  AND userActor.IsEnabled
+                LIMIT 1
+            ),
+            ActorScope AS (
+                SELECT TargetUser.ActorId
+                FROM TargetUser
+
+                UNION
+
+                SELECT Teams.ActorId
+                FROM TargetUser
+                JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
+                JOIN Teams ON Teams.Id = UsersTeams.TeamId
+                JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
+                WHERE teamActor.IsEnabled
+            )
+            SELECT 
+                TargetUser.Id, 
+                TargetUser.Name, 
+                TargetUser.Email,
+                TargetUser.ActorId,
+                TargetUser.Password,
+                Roles.Name as RoleName, 
+                Permissions.ResourceType::integer AS PermissionResourceType,
+                Permissions.PermissionLevel::integer AS PermissionLevel,
+                Permissions.SpecificPermissions::integer AS SpecificPermissions
+            FROM TargetUser
+            LEFT JOIN ActorScope ON 1 = 1
+            LEFT JOIN ActorRoles ON ActorRoles.ActorId = ActorScope.ActorId
+            LEFT JOIN Roles ON Roles.Id = ActorRoles.RoleId
+            LEFT JOIN Permissions ON Roles.Id = Permissions.RoleId
+            """;
+
+        var result = await db.QueryAsync<UserAuthInfoDto>(
+            sql,
+            new { Email = email },
+            transaction: tx());
+
+        return MapUserAuthInfo(result);
+    }
+
+    private static UserAuthInfo? MapUserAuthInfo(IEnumerable<UserAuthInfoDto> result)
+        => result
+            .GroupBy(r => new { r.Id, r.Name, r.Email, r.ActorId, r.Password })
+            .Select(g => new UserAuthInfo(
+                g.Key.Id,
+                g.Key.ActorId,
+                g.Key.Name,
+                g.Key.Email,
+                g.Key.Password,
+                [.. g.Where(r => !string.IsNullOrWhiteSpace(r.RoleName))
                     .Select(r => r.RoleName!)
                     .Distinct()]
-        )).FirstOrDefault();
-    }
+            )).FirstOrDefault();
 }

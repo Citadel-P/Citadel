@@ -238,6 +238,225 @@
         ]
       }
     },
+    "/api/v1/authentication/oidc/providers": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "List enabled OIDC login providers",
+        "operationId": "listOidcLoginProviders",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcLoginProvidersView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/authentication/oidc/{id}/login": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Start an OIDC login flow",
+        "operationId": "beginOidcLogin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "OIDC provider ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "returnUrl",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Found"
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/authentication/oidc/{id}/callback": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Complete an OIDC login flow",
+        "operationId": "completeOidcLogin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "OIDC provider ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error_description",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Found"
+          },
+          "200": {
+            "description": null,
+            "headers": {
+              "refresh_token": {
+                "description": "refresh_token",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/actors/{id}": {
       "get": {
         "tags": [
@@ -15564,6 +15783,896 @@
         }
       }
     },
+    "/api/v1/oidcProviders": {
+      "get": {
+        "tags": [
+          "OidcProviders"
+        ],
+        "summary": "List OIDC providers",
+        "operationId": "listOidcProviders",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProvidersView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "OidcProviders"
+        ],
+        "summary": "Create OIDC provider",
+        "operationId": "createOidcProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcProviderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/oidcProviders/{id}": {
+      "get": {
+        "tags": [
+          "OidcProviders"
+        ],
+        "summary": "Get OIDC provider",
+        "operationId": "getOidcProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "OIDC provider ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "OidcProviders"
+        ],
+        "summary": "Update OIDC provider",
+        "operationId": "updateOidcProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "OIDC provider ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOidcProviderInput"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOidcProviderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "OidcProviders"
+        ],
+        "summary": "Delete OIDC provider",
+        "operationId": "deleteOidcProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "OIDC provider ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/oidcProviders/rename": {
+      "post": {
+        "tags": [
+          "OidcProviders"
+        ],
+        "summary": "Rename OIDC provider",
+        "operationId": "renameOidcProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/oidcProviders/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "OidcProviders"
+        ],
+        "summary": "Update OIDC provider metadata",
+        "operationId": "updateOidcProviderMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "OIDC provider ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/oidcProviders/{id}/testDiscovery": {
+      "post": {
+        "tags": [
+          "OidcProviders"
+        ],
+        "summary": "Test OIDC provider discovery",
+        "operationId": "testOidcProviderDiscovery",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcDiscoveryResultView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/oidcProviders/testDiscovery": {
+      "post": {
+        "tags": [
+          "OidcProviders"
+        ],
+        "summary": "Test OIDC discovery",
+        "operationId": "testOidcDiscovery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestOidcProviderDiscoveryInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcDiscoveryResultView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/tags": {
       "get": {
         "tags": [
@@ -18225,6 +19334,18 @@
             "$ref": "#/components/schemas/ActivityEventInfoGitRepoWebhookReceived"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoOidcProviderCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoOidcProviderUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoOidcProviderRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoOidcProviderDeleted"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoStackWebhookReceived"
           }
         ],
@@ -18271,6 +19392,10 @@
             "GitRepoCloned": "#/components/schemas/ActivityEventInfoGitRepoCloned",
             "GitRepoPulled": "#/components/schemas/ActivityEventInfoGitRepoPulled",
             "GitRepoWebhookReceived": "#/components/schemas/ActivityEventInfoGitRepoWebhookReceived",
+            "OidcProviderCreated": "#/components/schemas/ActivityEventInfoOidcProviderCreated",
+            "OidcProviderUpdated": "#/components/schemas/ActivityEventInfoOidcProviderUpdated",
+            "OidcProviderRenamed": "#/components/schemas/ActivityEventInfoOidcProviderRenamed",
+            "OidcProviderDeleted": "#/components/schemas/ActivityEventInfoOidcProviderDeleted",
             "StackWebhookReceived": "#/components/schemas/ActivityEventInfoStackWebhookReceived"
           }
         }
@@ -18711,6 +19836,78 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ActivityEventInfoOidcProviderCreated": {
+        "required": [
+          "provider"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "OidcProviderCreated"
+            ],
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/OidcProviderActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoOidcProviderDeleted": {
+        "required": [
+          "provider"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "OidcProviderDeleted"
+            ],
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/OidcProviderActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoOidcProviderRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "OidcProviderRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoOidcProviderUpdated": {
+        "required": [
+          "oldProvider",
+          "newProvider"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "OidcProviderUpdated"
+            ],
+            "type": "string"
+          },
+          "oldProvider": {
+            "$ref": "#/components/schemas/OidcProviderActivitySnapshot"
+          },
+          "newProvider": {
+            "$ref": "#/components/schemas/OidcProviderActivitySnapshot"
           }
         }
       },
@@ -19259,6 +20456,10 @@
           "GitRepoPulled",
           "GitRepoCloned",
           "GitRepoWebhookReceived",
+          "OidcProviderCreated",
+          "OidcProviderUpdated",
+          "OidcProviderRenamed",
+          "OidcProviderDeleted",
           "StackCreated",
           "StackUpdated",
           "StackRenamed",
@@ -19285,7 +20486,8 @@
           "Deployment",
           "Stack",
           "AlertRule",
-          "GitRepository"
+          "GitRepository",
+          "OidcProvider"
         ]
       },
       "ActivityStatus": {
@@ -26648,6 +27850,7 @@
           "Registry",
           "GitRepository",
           "GitAccount",
+          "OidcProvider",
           "Alert",
           "AlertChannel",
           "User",
@@ -26944,6 +28147,347 @@
           },
           "capabilities": {
             "$ref": "#/components/schemas/ResourceCapabilities"
+          }
+        }
+      },
+      "OidcDiscoveryResultView": {
+        "required": [
+          "issuer",
+          "authorizationEndpoint",
+          "tokenEndpoint",
+          "jwksUri"
+        ],
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "authorizationEndpoint": {
+            "type": "string"
+          },
+          "tokenEndpoint": {
+            "type": "string"
+          },
+          "jwksUri": {
+            "type": "string"
+          }
+        }
+      },
+      "OidcLoginProviderView": {
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        }
+      },
+      "OidcLoginProvidersView": {
+        "required": [
+          "providers"
+        ],
+        "type": "object",
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OidcLoginProviderView"
+            }
+          }
+        }
+      },
+      "OidcProviderActivitySnapshot": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "displayName",
+          "issuer",
+          "clientId",
+          "scopes",
+          "enabled",
+          "autoProvisionUsers",
+          "allowEmailAutoLink",
+          "requireEmailVerified",
+          "allowedEmailDomains",
+          "requiredClaimName",
+          "requiredClaimValues",
+          "defaultRoleId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "autoProvisionUsers": {
+            "type": "boolean"
+          },
+          "allowEmailAutoLink": {
+            "type": "boolean"
+          },
+          "requireEmailVerified": {
+            "type": "boolean"
+          },
+          "allowedEmailDomains": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requiredClaimName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requiredClaimValues": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultRoleId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "OidcProviderInput": {
+        "required": [
+          "name",
+          "description",
+          "displayName",
+          "issuer",
+          "clientId",
+          "clientSecret",
+          "scopes",
+          "enabled",
+          "autoProvisionUsers",
+          "allowEmailAutoLink",
+          "requireEmailVerified",
+          "allowedEmailDomains",
+          "requiredClaimName",
+          "requiredClaimValues",
+          "defaultRoleId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scopes": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "autoProvisionUsers": {
+            "type": "boolean"
+          },
+          "allowEmailAutoLink": {
+            "type": "boolean"
+          },
+          "requireEmailVerified": {
+            "type": "boolean"
+          },
+          "allowedEmailDomains": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requiredClaimName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requiredClaimValues": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultRoleId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "OidcProviderView": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "displayName",
+          "issuer",
+          "clientId",
+          "scopes",
+          "enabled",
+          "autoProvisionUsers",
+          "allowEmailAutoLink",
+          "requireEmailVerified",
+          "allowedEmailDomains",
+          "requiredClaimName",
+          "requiredClaimValues",
+          "defaultRoleId",
+          "hasClientSecret",
+          "createdByActorId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "autoProvisionUsers": {
+            "type": "boolean"
+          },
+          "allowEmailAutoLink": {
+            "type": "boolean"
+          },
+          "requireEmailVerified": {
+            "type": "boolean"
+          },
+          "allowedEmailDomains": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requiredClaimName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requiredClaimValues": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultRoleId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "hasClientSecret": {
+            "type": "boolean"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "OidcProvidersView": {
+        "required": [
+          "providers"
+        ],
+        "type": "object",
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OidcProviderView"
+            }
           }
         }
       },
@@ -31107,6 +32651,28 @@
           }
         }
       },
+      "TestOidcProviderDiscoveryInput": {
+        "required": [
+          "providerId",
+          "issuer"
+        ],
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "issuer": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "TestVaultKvV2SecretProviderConnectionInput": {
         "required": [
           "providerId",
@@ -31297,6 +32863,102 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "UpdateOidcProviderInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "issuer": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scopes": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "autoProvisionUsers": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "allowEmailAutoLink": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "requireEmailVerified": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "allowedEmailDomains": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requiredClaimName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requiredClaimValues": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultRoleId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -31850,6 +33512,9 @@
     },
     {
       "name": "ResourceBindings"
+    },
+    {
+      "name": "OidcProviders"
     },
     {
       "name": "Tags"

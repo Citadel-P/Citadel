@@ -102,6 +102,11 @@ const MenuItems: IMenuItem[] = [
             route: '/tags',
           },
           {
+            icon: renderIcon(CitadelIcons.OidcProvider),
+            label: 'OIDC Providers',
+            route: '/oidc-providers',
+          },
+          {
             icon: renderIcon(CitadelIcons.Access),
             label: 'Access',
             route: '/access',
