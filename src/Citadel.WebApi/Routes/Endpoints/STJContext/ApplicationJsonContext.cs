@@ -4,6 +4,7 @@ using Application.Features.ResourceBindings.Models;
 using Application.Features.GitRepositories.Queries;
 using Domain;
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Automation;
 using Domain.Contracts.Resources.Compose;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
@@ -14,6 +15,7 @@ using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
+using Domain.Entities.Automation;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
@@ -23,6 +25,7 @@ using Hosting.Common;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Automation;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;
@@ -58,10 +61,16 @@ namespace Application.Models;
     Converters = new[]
     {
         typeof(JsonStringEnumConverter<ActorType>),
+        typeof(JsonStringEnumConverter<ActionRunTrigger>),
+        typeof(JsonStringEnumConverter<ActionRunStatus>),
+        typeof(JsonStringEnumConverter<ResourceControlState>),
         typeof(JsonStringEnumConverter<ResourceBindingKind>),
         typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
-        typeof(JsonStringEnumConverter<SecretProviderType>)
+        typeof(JsonStringEnumConverter<SecretProviderType>),
+        typeof(JsonStringEnumConverter<WebhookProvider>),
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>),
+        typeof(JsonStringEnumConverter<WebhookExecution>)
     })]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Guid[]))]
@@ -107,6 +116,16 @@ namespace Application.Models;
 [JsonSerializable(typeof(OidcLoginProviderView))]
 [JsonSerializable(typeof(OidcLoginProvidersView))]
 [JsonSerializable(typeof(OidcDiscoveryResultView))]
+[JsonSerializable(typeof(AutomationActionInput))]
+[JsonSerializable(typeof(UpdateAutomationActionInput))]
+[JsonSerializable(typeof(UpdateAutomationActionInputPatchDocument))]
+[JsonSerializable(typeof(RunAutomationActionInput))]
+[JsonSerializable(typeof(TestAutomationActionInput))]
+[JsonSerializable(typeof(AutomationActionView))]
+[JsonSerializable(typeof(AutomationActionsView))]
+[JsonSerializable(typeof(AutomationActionRunView))]
+[JsonSerializable(typeof(AutomationActionRunsView))]
+[JsonSerializable(typeof(AutomationActionRunLogsView))]
 [JsonSerializable(typeof(PlatformInput))]
 [JsonSerializable(typeof(CreatePlatformInput))]
 [JsonSerializable(typeof(PlatformsView))]
@@ -232,6 +251,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(CreateDeploymentInput))]
 [JsonSerializable(typeof(DeploymentConfigView))]
 [JsonSerializable(typeof(IAsyncEnumerable<DeploymentStreamItem>))]
+[JsonSerializable(typeof(IAsyncEnumerable<AutomationActionRunStreamItem>))]
+[JsonSerializable(typeof(AutomationActionRunStreamItem))]
 [JsonSerializable(typeof(IAsyncEnumerable<StackStreamItem>))]
 [JsonSerializable(typeof(ApplyDeploymentInput))]
 [JsonSerializable(typeof(StackInput))]
@@ -264,6 +285,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(GitStack))]
 [JsonSerializable(typeof(WebhookConfig))]
 [JsonSerializable(typeof(StackWebhookConfig))]
+[JsonSerializable(typeof(AutomationWebhookConfig))]
 [JsonSerializable(typeof(StackUpdateState))]
 [JsonSerializable(typeof(ManualStackUpdateState))]
 [JsonSerializable(typeof(GitStackUpdateState))]

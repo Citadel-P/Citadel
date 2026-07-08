@@ -84,6 +84,7 @@ public static class InfrastructureModule
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
             .AddSingleton<IGitCliRepository, GitCliRepository>()
+            .AddSingleton<IAutomationProcessRunner, AutomationProcessRunner>()
             .AddSingleton<IGitHubCrRepository, GitHubCrRepository>()
             .AddSingleton<IExternalSecretProviderClient, ExternalSecretProviderClient>()
             .AddSingleton<IShoutrrrCliRepository, ShoutrrrCliRepository>()

@@ -6,6 +6,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
+using Domain.Entities.Automation;
 using Domain.Entities.Git;
 using Domain.Entities.Stacks;
 using FluentValidation;
@@ -55,6 +56,7 @@ internal sealed class ReceiveWebhookHandler(
     IApplyStackService applyStackService,
     IRepoCacheManager repoCacheManager,
     IGitCliRepository gitCliRepository,
+    IAutomationRunQueueService automationRunQueueService,
     ILoggerFactory loggerFactory) : ICommandHandler<ReceiveWebhook, Result<WebhookReceiveResult>>
 {
     private const int MaxBodyBytes = 1024 * 1024;
@@ -84,7 +86,7 @@ internal sealed class ReceiveWebhookHandler(
         }
 
         var payload = ParsePayload(target.Provider, command.Headers, command.Body);
-        var dispatch = await DispatchAsync(target, payload, cancellationToken);
+        var dispatch = await DispatchAsync(command, target, payload, cancellationToken);
         await RecordActivityAsync(
             command,
             requestId,
@@ -130,6 +132,7 @@ internal sealed class ReceiveWebhookHandler(
                 Repository: repo,
                 Stack: null,
                 GitStack: null,
+                Action: null,
                 Error: null);
         }
 
@@ -156,6 +159,32 @@ internal sealed class ReceiveWebhookHandler(
                 Repository: null,
                 Stack: stack,
                 GitStack: gitStack,
+                Action: null,
+                Error: null);
+        }
+
+        if ((command.ResourceType.Equals("automation-action", StringComparison.OrdinalIgnoreCase)
+                || command.ResourceType.Equals("action", StringComparison.OrdinalIgnoreCase))
+            && command.Execution.Equals("run", StringComparison.OrdinalIgnoreCase))
+        {
+            var action = await unitOfWork.AutomationActions.GetAsync(command.ResourceId, cancellationToken);
+            var webhook = action?.Webhook;
+            if (action is null || webhook is null || !webhook.Enabled)
+                return WebhookTarget.NotFound();
+
+            if (webhook.Provider != provider)
+                return WebhookTarget.BadRequest("Webhook auth type does not match automation action webhook provider.");
+
+            return new WebhookTarget(
+                Provider: webhook.Provider,
+                AuthScheme: webhook.AuthScheme,
+                Execution: WebhookExecution.AutomationActionRun,
+                Secret: webhook.Secret,
+                BranchFilter: webhook.BranchFilter,
+                Repository: null,
+                Stack: null,
+                GitStack: null,
+                Action: action,
                 Error: null);
         }
 
@@ -163,6 +192,7 @@ internal sealed class ReceiveWebhookHandler(
     }
 
     private async Task<WebhookDispatchResult> DispatchAsync(
+        ReceiveWebhook command,
         WebhookTarget target,
         WebhookPayloadInfo payload,
         CancellationToken cancellationToken)
@@ -174,6 +204,7 @@ internal sealed class ReceiveWebhookHandler(
         {
             WebhookExecution.RepoPull => await DispatchRepoPullAsync(target, payload, cancellationToken),
             WebhookExecution.StackDeploy => await DispatchStackDeployAsync(target, payload, cancellationToken),
+            WebhookExecution.AutomationActionRun => await DispatchAutomationActionRunAsync(command, target, payload, cancellationToken),
             _ => WebhookDispatchResult.NoOp("Unsupported execution")
         };
     }
@@ -276,6 +307,38 @@ internal sealed class ReceiveWebhookHandler(
         }, CancellationToken.None);
 
         return WebhookDispatchResult.Queued(null, resolvedBranch, dispatchedCommit);
+    }
+
+    private async Task<WebhookDispatchResult> DispatchAutomationActionRunAsync(
+        ReceiveWebhook command,
+        WebhookTarget target,
+        WebhookPayloadInfo payload,
+        CancellationToken cancellationToken)
+    {
+        var action = target.Action;
+        if (action is null)
+            return WebhookDispatchResult.NoOp("Automation action not found");
+
+        var branch = ResolveBranch(target.BranchFilter, payload.Branch, fallbackBranch: null);
+        if (branch.NoOpReason is not null)
+            return WebhookDispatchResult.NoOp(branch.NoOpReason);
+
+        var result = await automationRunQueueService.QueueAsync(
+            action.Id,
+            ActionRunTrigger.Webhook,
+            NormalizePayload(command.Body),
+            timeoutSeconds: null,
+            triggeredByActorId: null,
+            requireEnabled: true,
+            cancellationToken);
+
+        if (result.IsFailure(out var error))
+            return WebhookDispatchResult.NoOp(error.Message);
+
+        return WebhookDispatchResult.Queued(
+            gitSyncRequest: null,
+            dispatchedBranch: branch.Branch,
+            dispatchedCommitSha: payload.CommitSha);
     }
 
     private async Task<(bool Relevant, string? Reason, string? ResolvedCommitSha)> ResolveStackWebhookChangeRelevanceAsync(
@@ -452,6 +515,24 @@ internal sealed class ReceiveWebhookHandler(
                 payload?.RepositoryFullName);
         }
 
+        if (target.Action is { } action)
+        {
+            return new WebhookAlertSnapshot(
+                action.Id,
+                action.Name,
+                AlertResourceType.Webhook,
+                "automation-action",
+                provider,
+                command.Execution,
+                reason,
+                requestId,
+                payload?.EventType,
+                payload?.DeliveryId,
+                payload?.Branch,
+                payload?.CommitSha,
+                payload?.RepositoryFullName);
+        }
+
         return null;
     }
 
@@ -589,6 +670,21 @@ internal sealed class ReceiveWebhookHandler(
             .TrimEnd('/')
             .Replace(".git", string.Empty, StringComparison.OrdinalIgnoreCase)
             .ToLowerInvariant();
+
+    private static string NormalizePayload(byte[] rawBody)
+    {
+        if (rawBody.Length == 0)
+            return "{}";
+
+        var payload = Encoding.UTF8.GetString(rawBody);
+        if (string.IsNullOrWhiteSpace(payload))
+            return "{}";
+
+        using var document = JsonDocument.Parse(rawBody);
+        return document.RootElement.ValueKind == JsonValueKind.Object
+            ? payload
+            : $$"""{"payload":{{payload}}}""";
+    }
 
     private static bool Authenticate(WebhookAuthScheme authScheme, IReadOnlyDictionary<string, string[]> headers, byte[] rawBody, string? secret)
     {
@@ -800,13 +896,14 @@ internal sealed class ReceiveWebhookHandler(
         GitRepository? Repository,
         Stack? Stack,
         GitStack? GitStack,
+        AutomationAction? Action,
         Error? Error)
     {
         public static WebhookTarget NotFound()
-            => new(default, default, default, null, null, null, null, null, new NotFoundError("Webhook target not found."));
+            => new(default, default, default, null, null, null, null, null, null, new NotFoundError("Webhook target not found."));
 
         public static WebhookTarget BadRequest(string reason)
-            => new(default, default, default, null, null, null, null, null, new BadRequestError(reason));
+            => new(default, default, default, null, null, null, null, null, null, new BadRequestError(reason));
     }
 
     private sealed record WebhookPayloadInfo(

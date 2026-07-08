@@ -3,6 +3,7 @@ using Domain.Contracts.Resources.Deployments;
 using Domain.Contracts.Resources.Git;
 using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
+using Domain.Entities.Automation;
 using Domain.Entities.Stacks;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
@@ -55,6 +56,17 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(OidcProviderUpdated), nameof(ActivityEventType.OidcProviderUpdated))]
 [JsonDerivedType(typeof(OidcProviderRenamed), nameof(ActivityEventType.OidcProviderRenamed))]
 [JsonDerivedType(typeof(OidcProviderDeleted), nameof(ActivityEventType.OidcProviderDeleted))]
+[JsonDerivedType(typeof(AutomationActionCreated), nameof(ActivityEventType.ActionCreated))]
+[JsonDerivedType(typeof(AutomationActionUpdated), nameof(ActivityEventType.ActionUpdated))]
+[JsonDerivedType(typeof(AutomationActionRenamed), nameof(ActivityEventType.ActionRenamed))]
+[JsonDerivedType(typeof(AutomationActionDeleted), nameof(ActivityEventType.ActionDeleted))]
+[JsonDerivedType(typeof(AutomationActionRunQueued), nameof(ActivityEventType.ActionRunQueued))]
+[JsonDerivedType(typeof(AutomationActionRunStarted), nameof(ActivityEventType.ActionRunStarted))]
+[JsonDerivedType(typeof(AutomationActionRunSucceeded), nameof(ActivityEventType.ActionRunSucceeded))]
+[JsonDerivedType(typeof(AutomationActionRunFailed), nameof(ActivityEventType.ActionRunFailed))]
+[JsonDerivedType(typeof(AutomationActionRunTimedOut), nameof(ActivityEventType.ActionRunTimedOut))]
+[JsonDerivedType(typeof(AutomationActionRunCancelled), nameof(ActivityEventType.ActionRunCancelled))]
+[JsonDerivedType(typeof(AutomationActionRunRejected), nameof(ActivityEventType.ActionRunRejected))]
 [JsonDerivedType(typeof(StackWebhookReceived), nameof(ActivityEventType.StackWebhookReceived))]
 
 public abstract record ActivityEventInfo;
@@ -168,3 +180,43 @@ public sealed record OidcProviderUpdated(
     OidcProviderActivitySnapshot NewProvider) : ActivityEventInfo;
 public sealed record OidcProviderRenamed(string OldName, string NewName) : ActivityEventInfo;
 public sealed record OidcProviderDeleted(OidcProviderActivitySnapshot Provider) : ActivityEventInfo;
+
+public sealed record AutomationActionSnapshot(
+    Guid Id,
+    string Name,
+    string? Description,
+    string Code,
+    string DefaultArgsJson,
+    bool Enabled,
+    bool ScheduleEnabled,
+    string? ScheduleCron,
+    string ScheduleTimeZone,
+    AutomationWebhookConfig? Webhook,
+    int TimeoutSeconds,
+    bool AlertOnFailure,
+    Guid RunAsActorId);
+
+public sealed record AutomationActionCreated(AutomationActionSnapshot Action) : ActivityEventInfo;
+public sealed record AutomationActionUpdated(AutomationActionSnapshot OldAction, AutomationActionSnapshot NewAction) : ActivityEventInfo;
+public sealed record AutomationActionRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record AutomationActionDeleted(AutomationActionSnapshot Action) : ActivityEventInfo;
+public sealed record AutomationActionRunQueued(Guid RunId, ActionRunTrigger Trigger) : ActivityEventInfo;
+public sealed record AutomationActionRunStarted(Guid RunId, ActionRunTrigger Trigger) : ActivityEventInfo;
+public sealed record AutomationActionRunSucceeded(
+    Guid RunId,
+    ActionRunTrigger Trigger,
+    int? ExitCode,
+    long? DurationMs) : ActivityEventInfo;
+public sealed record AutomationActionRunFailed(
+    Guid RunId,
+    ActionRunTrigger Trigger,
+    int? ExitCode,
+    long? DurationMs,
+    string? ErrorMessage) : ActivityEventInfo;
+public sealed record AutomationActionRunTimedOut(
+    Guid RunId,
+    ActionRunTrigger Trigger,
+    long? DurationMs,
+    string? ErrorMessage) : ActivityEventInfo;
+public sealed record AutomationActionRunCancelled(Guid RunId, ActionRunTrigger Trigger) : ActivityEventInfo;
+public sealed record AutomationActionRunRejected(Guid RunId, ActionRunTrigger Trigger, string Reason) : ActivityEventInfo;

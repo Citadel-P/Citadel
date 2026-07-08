@@ -19,6 +19,7 @@ const activityResourceIcons = {
   [ActivityResourceType.AlertRule]: CitadelIcons.Alert,
   [ActivityResourceType.GitRepository]: CitadelIcons.GitRepository,
   [ActivityResourceType.OidcProvider]: CitadelIcons.OidcProvider,
+  [ActivityResourceType.AutomationAction]: CitadelIcons.AutomationAction,
 } satisfies Record<ActivityResourceType, any>;
 
 const activityEventPrefixes = {
@@ -29,6 +30,7 @@ const activityEventPrefixes = {
   [ActivityResourceType.AlertRule]: 'AlertRule',
   [ActivityResourceType.GitRepository]: 'GitRepo',
   [ActivityResourceType.OidcProvider]: 'OidcProvider',
+  [ActivityResourceType.AutomationAction]: 'Action',
 } satisfies Record<ActivityResourceType, string>;
 
 const activityLookupTargets = {
@@ -39,6 +41,7 @@ const activityLookupTargets = {
   [ActivityResourceType.AlertRule]: LookupResourceType.Alert,
   [ActivityResourceType.GitRepository]: LookupResourceType.GitRepository,
   [ActivityResourceType.OidcProvider]: LookupResourceType.OidcProvider,
+  [ActivityResourceType.AutomationAction]: LookupResourceType.AutomationAction,
 } satisfies Record<ActivityResourceType, LookupResourceType>;
 
 export const ActivityComponents: RequiredComponents = {

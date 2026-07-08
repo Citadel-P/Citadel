@@ -79,6 +79,7 @@ import {
   RefreshCwOff,
   Timer,
   TriangleAlert,
+  Workflow,
   WrapText,
   X,
 } from 'lucide-react';
@@ -1383,6 +1384,7 @@ export const TargetCell = ({
     [ActivityResourceType.Platform]: { Icon: Server, path: `/platforms/edit/${resourceId}` },
     [ActivityResourceType.Stack]: { Icon: Layers, path: `/stacks/edit/${resourceId}` },
     [ActivityResourceType.GitRepository]: { Icon: GitBranch, path: `/git-repos/edit/${resourceId}` },
+    [ActivityResourceType.AutomationAction]: { Icon: Workflow, path: `/automation/actions/edit/${resourceId}` },
   };
 
   const config = resourceConfig[resourceType];
@@ -1627,6 +1629,7 @@ export function SelectField({
   allIcon: AllIcon,
   selectableLabel = true,
   className,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -1636,10 +1639,11 @@ export function SelectField({
   allIcon?: React.ComponentType<{ className?: string }>;
   selectableLabel?: boolean;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className={cn('min-w-50', className)}>
-      <Select value={value} onValueChange={onChange}>
+      <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="w-full bg-background">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>

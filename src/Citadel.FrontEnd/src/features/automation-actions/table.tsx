@@ -1,0 +1,152 @@
+import { ActionRunStatus, AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
+import { ContentCard } from '@/components/custom/content-card';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import SortableCell from '@/components/custom/sortable-cell';
+import { StateIndicator } from '@/components/custom/state-indicator';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DataTable } from '@/components/ui/data-table';
+import { fromNow } from '@/lib/dayjs.helper';
+import { useSelectedResources } from '@/lib/atoms';
+import { ActionData } from '@/pages/types';
+import { ColumnDef } from '@tanstack/react-table';
+import { CalendarClock, Link2, PlayCircle } from 'lucide-react';
+import { useMemo } from 'react';
+import { Link } from 'react-router';
+
+export function AutomationActionsTable({
+  items,
+  actions,
+  isLoading,
+}: {
+  items: AutomationActionView[];
+  isLoading: boolean;
+  actions: Record<
+    string,
+    React.FC<{ resource: AutomationActionView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+}) {
+  const [, setSelectedResources] = useSelectedResources<AutomationActionView>('AutomationAction');
+  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+
+  return (
+    <ContentCard>
+      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+    </ContentCard>
+  );
+}
+
+const columns = (
+  actions: Record<
+    string,
+    React.FC<{ resource: AutomationActionView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >,
+): ColumnDef<AutomationActionView>[] => [
+  {
+    id: 'select',
+    header: ({ table }) => (
+      <Checkbox
+        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select automation action"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    accessorKey: 'name',
+    header: ({ column }) => <SortableCell cellName="Name" column={column} />,
+    cell: ({ row }) => <ActionNameRow action={row.original} />,
+    sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
+  },
+  {
+    accessorKey: 'schedule',
+    header: ({ column }) => <SortableCell cellName="Schedule" column={column} />,
+    cell: ({ row }) => <ScheduleCell action={row.original} />,
+    sortingFn: (rowA, rowB) => Number(rowA.original.scheduleEnabled) - Number(rowB.original.scheduleEnabled),
+  },
+  {
+    accessorKey: 'webhook',
+    header: ({ column }) => <SortableCell cellName="Webhook" column={column} />,
+    cell: ({ row }) => <WebhookCell action={row.original} />,
+    sortingFn: (rowA, rowB) => Number(rowA.original.webhook?.enabled ?? false) - Number(rowB.original.webhook?.enabled ?? false),
+  },
+  {
+    accessorKey: 'latestRun',
+    header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
+    cell: ({ row }) => <LastRunCell action={row.original} />,
+    sortingFn: (rowA, rowB) =>
+      String(rowA.original.latestRun?.queuedAt ?? '').localeCompare(String(rowB.original.latestRun?.queuedAt ?? '')),
+  },
+  {
+    id: 'actions',
+    cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
+  },
+];
+
+const ActionNameRow = ({ action }: { action: AutomationActionView }) => {
+  const status = action.latestRun?.status ?? action.enabled;
+
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      <StateIndicator
+        value={status}
+        isProcessing={action.controlState === ResourceControlState.Processing}
+        enableLabel={typeof status === 'boolean'}
+      />
+      <div className="min-w-0">
+        <Link to={`../automation/actions/edit/${action.id}`} className="truncate text-sm font-medium hover:underline">
+          {action.name}
+        </Link>
+        {action.description && <div className="truncate text-xs text-muted-foreground">{action.description}</div>}
+      </div>
+    </div>
+  );
+};
+
+const ScheduleCell = ({ action }: { action: AutomationActionView }) => {
+  if (!action.scheduleEnabled) return <span className="text-sm text-muted-foreground">Off</span>;
+
+  return (
+    <span className="inline-flex max-w-60 items-center gap-2 truncate text-sm">
+      <CalendarClock className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="truncate" title={action.scheduleCron ?? undefined}>
+        {action.scheduleCron}
+      </span>
+    </span>
+  );
+};
+
+const WebhookCell = ({ action }: { action: AutomationActionView }) => {
+  if (!action.webhook?.enabled) return <span className="text-sm text-muted-foreground">Off</span>;
+
+  return (
+    <span className="inline-flex items-center gap-2 text-sm">
+      <Link2 className="size-3.5 text-muted-foreground" />
+      Enabled
+    </span>
+  );
+};
+
+const LastRunCell = ({ action }: { action: AutomationActionView }) => {
+  const run = action.latestRun;
+  if (!run) return <span className="text-sm text-muted-foreground">No runs</span>;
+
+  return (
+    <span className="inline-flex items-center gap-2 text-sm">
+      <StateIndicator
+        value={run.status ?? ActionRunStatus.Queued}
+        isProcessing={run.status === ActionRunStatus.Running || run.status === ActionRunStatus.Queued}
+      />
+      <PlayCircle className="size-3.5 text-muted-foreground" />
+      <span>{fromNow(run.queuedAt)}</span>
+    </span>
+  );
+};

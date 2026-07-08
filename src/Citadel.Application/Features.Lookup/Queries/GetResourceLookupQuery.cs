@@ -92,11 +92,13 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Image, LookupResourceType.Registry) => await GetImageRegistryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Platform) => await GetPlatformLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Alert) => await GetAlertLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.User) => await GetUserLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Team) => await GetTeamLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Role) => await GetRoleLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Registry) => await GetRegistryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.GitRepository) => await GetGitRepositoryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.OidcProvider) => await GetOidcProviderLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.AutomationAction) => await GetAutomationActionLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Deployment) => await GetDeploymentLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Stack) => await GetStackLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Image) => await GetImageLookupAsync(userId, context, cancellationToken),
@@ -297,6 +299,12 @@ internal sealed class GetResourceLookupQueryHandler(
     private async Task<Result<IEnumerable<ResourceInfo>>> GetTeamLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Teams.SearchAuthorizedAsync(userId, ResourceType.Team, PermissionLevel.Read, SpecificPermission.None, string.Empty, 50, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Users.GetAuthorizedPagedAsync(userId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, 1, 50, null, cancellationToken))
+            .Items
+            .Select(static item => new ResourceInfo(item.ActorId, item.Name)));
+
     private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Platforms.GetAuthorizedAsync(userId, ResourceType.Platform, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
@@ -320,6 +328,10 @@ internal sealed class GetResourceLookupQueryHandler(
     private async Task<Result<IEnumerable<ResourceInfo>>> GetOidcProviderLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.OidcProviders.GetAuthorizedAsync(userId, ResourceType.Binding, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.DisplayName)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetAutomationActionLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.AutomationActions.GetAuthorizedAsync(userId, ResourceType.AutomationAction, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Deployments.GetAuthorizedInfoAsync(userId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, cancellationToken))

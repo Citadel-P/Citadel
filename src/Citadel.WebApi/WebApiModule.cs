@@ -108,6 +108,7 @@ internal static class WebApiModule
         }
 
         app.UseAuthentication();
+        app.UseMiddleware<AutomationRunTokenSafetyMiddleware>();
         app.UseAuthorization();
 
         app.MapPublicEndpoints();
@@ -251,6 +252,14 @@ internal static class WebApiModule
         }
 
         builder.Services.AddOptions<JobConfiguration>().BindConfiguration("JobConfiguration").ValidateOnStart();
+        builder.Services
+            .AddOptions<AutomationOptions>()
+            .BindConfiguration(AutomationOptions.SectionName)
+            .Validate(options => options.MaxParallelRuns > 0, "Automations:MaxParallelRuns must be greater than zero.")
+            .Validate(options => options.DefaultTimeoutSeconds > 0, "Automations:DefaultTimeoutSeconds must be greater than zero.")
+            .Validate(options => options.MaxTimeoutSeconds >= options.DefaultTimeoutSeconds, "Automations:MaxTimeoutSeconds must be greater than or equal to Automations:DefaultTimeoutSeconds.")
+            .Validate(options => options.MaxLogBytes >= 4096, "Automations:MaxLogBytes must be at least 4096 bytes.")
+            .ValidateOnStart();
     }
 }
 

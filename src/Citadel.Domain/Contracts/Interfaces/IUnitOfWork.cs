@@ -6,6 +6,7 @@ using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
+using Domain.Entities.Automation;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Tags;
 using Domain.Entities.Deployments;
@@ -46,6 +47,8 @@ public interface IUnitOfWork : IAsyncDisposable
     IOidcProviderRepository OidcProviders { get; }
     IOidcLoginStateRepository OidcLoginStates { get; }
     IOidcExternalLoginRepository OidcExternalLogins { get; }
+    IAutomationActionRepository AutomationActions { get; }
+    IActionRunRepository ActionRuns { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
@@ -54,6 +57,48 @@ public interface IUnitOfWork : IAsyncDisposable
     Task CommitAsync(CancellationToken cancellationToken);
     Task RollbackAsync();
 }
+
+public interface IAutomationActionRepository
+{
+    Task<int> AddAsync(AutomationAction action, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(AutomationAction action, CancellationToken cancellationToken);
+    Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
+    Task<AutomationAction?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<AutomationAction>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<AutomationAction>> GetScheduledAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<AutomationAction>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(Guid userId, Guid id, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<bool> TryMarkScheduledAsync(Guid id, DateTime scheduledMinuteUtc, CancellationToken cancellationToken);
+    Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+    Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+}
+
+public interface IActionRunRepository
+{
+    Task<int> AddAsync(ActionRun run, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(ActionRun run, CancellationToken cancellationToken);
+    Task<ActionRun?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<ActionRun>> GetByActionAsync(Guid actionId, int limit, CancellationToken cancellationToken);
+    Task<IEnumerable<ActionRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken);
+    Task<ActionRun?> GetLatestByActionAsync(Guid actionId, CancellationToken cancellationToken);
+    Task<bool> HasActiveRunAsync(Guid actionId, CancellationToken cancellationToken);
+    Task<bool> TryMarkRunningAsync(Guid id, DateTime startedAt, CancellationToken cancellationToken);
+    Task<int> CancelQueuedOrRunningAsync(Guid id, DateTime cancelledAt, string reason, CancellationToken cancellationToken);
+}
+
+public interface IAutomationProcessRunner
+{
+    IAsyncEnumerable<AutomationProcessOutput> StreamAsync(
+        string fileName,
+        IEnumerable<string> arguments,
+        IDictionary<string, string>? environmentVariables,
+        string workingDirectory,
+        CancellationToken cancellationToken);
+}
+
+public sealed record AutomationProcessOutput(string? StdOut, string? StdErr, int? ExitCode = null);
 
 public interface IOidcProviderRepository
 {
@@ -225,6 +270,7 @@ public interface IUserRepository
     Task<Guid[]> GetActorScopeAsync(Guid userId, CancellationToken ct);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<UserAuthInfo?> GetUserAuthInfoByActorIdAsync(Guid actorId, CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken);
     Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken);

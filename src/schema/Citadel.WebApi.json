@@ -16673,6 +16673,1382 @@
         ]
       }
     },
+    "/api/v1/automation/actions": {
+      "get": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "List automation actions",
+        "operationId": "listAutomationActions",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Create automation action",
+        "operationId": "createAutomationAction",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutomationActionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/automation/actions/{id}": {
+      "get": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Get automation action",
+        "operationId": "getAutomationAction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Update automation action",
+        "operationId": "updateAutomationAction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAutomationActionInput"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAutomationActionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Delete automation action",
+        "operationId": "deleteAutomationAction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/automation/actions/rename": {
+      "post": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Rename automation action",
+        "operationId": "renameAutomationAction",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/automation/actions/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Update automation action metadata",
+        "operationId": "updateAutomationActionMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/automation/actions/{id}/run": {
+      "post": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Queue automation action run",
+        "operationId": "runAutomationAction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunAutomationActionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AutomationActionRunStreamItem"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/automation/actions/{id}/test": {
+      "post": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Queue automation action test run",
+        "operationId": "testAutomationAction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestAutomationActionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AutomationActionRunStreamItem"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/automation/actions/{id}/runs/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Cancel automation action run",
+        "operationId": "cancelAutomationActionRun",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "description": "Automation action run ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/automation/actions/{id}/runs": {
+      "get": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "List automation action runs",
+        "operationId": "listAutomationActionRuns",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionRunsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/automation/actions/{id}/runs/{runId}": {
+      "get": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Get automation action run",
+        "operationId": "getAutomationActionRun",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "description": "Automation action run ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionRunView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/automation/actions/{id}/runs/{runId}/logs": {
+      "get": {
+        "tags": [
+          "AutomationActions"
+        ],
+        "summary": "Get automation action run logs",
+        "operationId": "getAutomationActionRunLogs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Automation action ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "description": "Automation action run ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationActionRunLogsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/tags": {
       "get": {
         "tags": [
@@ -19196,6 +20572,25 @@
           }
         }
       },
+      "ActionRunStatus": {
+        "enum": [
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "TimedOut",
+          "Cancelled",
+          "Rejected"
+        ]
+      },
+      "ActionRunTrigger": {
+        "enum": [
+          "Manual",
+          "Test",
+          "Schedule",
+          "Webhook"
+        ]
+      },
       "ActivitiesView": {
         "required": [
           "pagedResult"
@@ -19346,6 +20741,39 @@
             "$ref": "#/components/schemas/ActivityEventInfoOidcProviderDeleted"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionRunQueued"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionRunStarted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionRunSucceeded"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionRunFailed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionRunTimedOut"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionRunCancelled"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAutomationActionRunRejected"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoStackWebhookReceived"
           }
         ],
@@ -19396,6 +20824,17 @@
             "OidcProviderUpdated": "#/components/schemas/ActivityEventInfoOidcProviderUpdated",
             "OidcProviderRenamed": "#/components/schemas/ActivityEventInfoOidcProviderRenamed",
             "OidcProviderDeleted": "#/components/schemas/ActivityEventInfoOidcProviderDeleted",
+            "ActionCreated": "#/components/schemas/ActivityEventInfoAutomationActionCreated",
+            "ActionUpdated": "#/components/schemas/ActivityEventInfoAutomationActionUpdated",
+            "ActionRenamed": "#/components/schemas/ActivityEventInfoAutomationActionRenamed",
+            "ActionDeleted": "#/components/schemas/ActivityEventInfoAutomationActionDeleted",
+            "ActionRunQueued": "#/components/schemas/ActivityEventInfoAutomationActionRunQueued",
+            "ActionRunStarted": "#/components/schemas/ActivityEventInfoAutomationActionRunStarted",
+            "ActionRunSucceeded": "#/components/schemas/ActivityEventInfoAutomationActionRunSucceeded",
+            "ActionRunFailed": "#/components/schemas/ActivityEventInfoAutomationActionRunFailed",
+            "ActionRunTimedOut": "#/components/schemas/ActivityEventInfoAutomationActionRunTimedOut",
+            "ActionRunCancelled": "#/components/schemas/ActivityEventInfoAutomationActionRunCancelled",
+            "ActionRunRejected": "#/components/schemas/ActivityEventInfoAutomationActionRunRejected",
             "StackWebhookReceived": "#/components/schemas/ActivityEventInfoStackWebhookReceived"
           }
         }
@@ -19469,6 +20908,293 @@
           },
           "newRule": {
             "$ref": "#/components/schemas/AlertRuleSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionCreated": {
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionCreated"
+            ],
+            "type": "string"
+          },
+          "action": {
+            "$ref": "#/components/schemas/AutomationActionSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionDeleted": {
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionDeleted"
+            ],
+            "type": "string"
+          },
+          "action": {
+            "$ref": "#/components/schemas/AutomationActionSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionRunCancelled": {
+        "required": [
+          "runId",
+          "trigger"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionRunCancelled"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionRunTrigger"
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionRunFailed": {
+        "required": [
+          "runId",
+          "trigger",
+          "exitCode",
+          "durationMs",
+          "errorMessage"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionRunFailed"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionRunTrigger"
+          },
+          "exitCode": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionRunQueued": {
+        "required": [
+          "runId",
+          "trigger"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionRunQueued"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionRunTrigger"
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionRunRejected": {
+        "required": [
+          "runId",
+          "trigger",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionRunRejected"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionRunTrigger"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionRunStarted": {
+        "required": [
+          "runId",
+          "trigger"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionRunStarted"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionRunTrigger"
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionRunSucceeded": {
+        "required": [
+          "runId",
+          "trigger",
+          "exitCode",
+          "durationMs"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionRunSucceeded"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionRunTrigger"
+          },
+          "exitCode": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionRunTimedOut": {
+        "required": [
+          "runId",
+          "trigger",
+          "durationMs",
+          "errorMessage"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionRunTimedOut"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionRunTrigger"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivityEventInfoAutomationActionUpdated": {
+        "required": [
+          "oldAction",
+          "newAction"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "ActionUpdated"
+            ],
+            "type": "string"
+          },
+          "oldAction": {
+            "$ref": "#/components/schemas/AutomationActionSnapshot"
+          },
+          "newAction": {
+            "$ref": "#/components/schemas/AutomationActionSnapshot"
           }
         }
       },
@@ -20460,6 +22186,17 @@
           "OidcProviderUpdated",
           "OidcProviderRenamed",
           "OidcProviderDeleted",
+          "ActionCreated",
+          "ActionUpdated",
+          "ActionRenamed",
+          "ActionDeleted",
+          "ActionRunQueued",
+          "ActionRunStarted",
+          "ActionRunSucceeded",
+          "ActionRunFailed",
+          "ActionRunTimedOut",
+          "ActionRunCancelled",
+          "ActionRunRejected",
           "StackCreated",
           "StackUpdated",
           "StackRenamed",
@@ -20487,7 +22224,8 @@
           "Stack",
           "AlertRule",
           "GitRepository",
-          "OidcProvider"
+          "OidcProvider",
+          "AutomationAction"
         ]
       },
       "ActivityStatus": {
@@ -22497,6 +24235,550 @@
           "Updating",
           "Failed"
         ]
+      },
+      "AutomationActionInput": {
+        "required": [
+          "name",
+          "description",
+          "code",
+          "defaultArgsJson",
+          "enabled",
+          "scheduleEnabled",
+          "scheduleCron",
+          "scheduleTimeZone",
+          "webhook",
+          "timeoutSeconds",
+          "alertOnFailure",
+          "runAsActorId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "defaultArgsJson": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "scheduleEnabled": {
+            "type": "boolean"
+          },
+          "scheduleCron": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scheduleTimeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AutomationWebhookConfig"
+              }
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "alertOnFailure": {
+            "type": "boolean"
+          },
+          "runAsActorId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "AutomationActionRunLogsView": {
+        "required": [
+          "runId",
+          "logs"
+        ],
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "logs": {
+            "type": "string"
+          }
+        }
+      },
+      "AutomationActionRunStreamError": {
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AutomationActionRunStreamItem": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "status": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stream": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "progressMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AutomationActionRunStreamError"
+              }
+            ]
+          }
+        }
+      },
+      "AutomationActionRunView": {
+        "required": [
+          "id",
+          "actionId",
+          "actionName",
+          "trigger",
+          "status",
+          "runAsActorId",
+          "triggeredByActorId",
+          "argsJson",
+          "codeSnapshot",
+          "codeHash",
+          "timeoutSeconds",
+          "queuedAt",
+          "startedAt",
+          "finishedAt",
+          "durationMs",
+          "exitCode",
+          "logs",
+          "errorMessage"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actionName": {
+            "type": "string"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionRunTrigger"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActionRunStatus"
+          },
+          "runAsActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "triggeredByActorId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "argsJson": {
+            "type": "string"
+          },
+          "codeSnapshot": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "codeHash": {
+            "type": "string"
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "queuedAt": {
+            "format": "date-time"
+          },
+          "startedAt": {
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "format": "date-time"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "exitCode": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "logs": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AutomationActionRunsView": {
+        "required": [
+          "runs"
+        ],
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutomationActionRunView"
+            }
+          }
+        }
+      },
+      "AutomationActionSnapshot": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "code",
+          "defaultArgsJson",
+          "enabled",
+          "scheduleEnabled",
+          "scheduleCron",
+          "scheduleTimeZone",
+          "webhook",
+          "timeoutSeconds",
+          "alertOnFailure",
+          "runAsActorId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "defaultArgsJson": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "scheduleEnabled": {
+            "type": "boolean"
+          },
+          "scheduleCron": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scheduleTimeZone": {
+            "type": "string"
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AutomationWebhookConfig"
+              }
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "alertOnFailure": {
+            "type": "boolean"
+          },
+          "runAsActorId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AutomationActionView": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "code",
+          "defaultArgsJson",
+          "enabled",
+          "scheduleEnabled",
+          "scheduleCron",
+          "scheduleTimeZone",
+          "webhook",
+          "timeoutSeconds",
+          "alertOnFailure",
+          "runAsActorId",
+          "lastScheduledRunAt",
+          "controlState",
+          "currentRunId",
+          "rowVersion",
+          "latestRun",
+          "createdByActorId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "defaultArgsJson": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "scheduleEnabled": {
+            "type": "boolean"
+          },
+          "scheduleCron": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scheduleTimeZone": {
+            "type": "string"
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AutomationWebhookConfig"
+              }
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "alertOnFailure": {
+            "type": "boolean"
+          },
+          "runAsActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lastScheduledRunAt": {
+            "format": "date-time"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "currentRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "rowVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "latestRun": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AutomationActionRunView"
+              }
+            ]
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "AutomationActionsView": {
+        "required": [
+          "actions"
+        ],
+        "type": "object",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutomationActionView"
+            }
+          }
+        }
+      },
+      "AutomationWebhookConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "provider": {
+            "$ref": "#/components/schemas/WebhookProvider"
+          },
+          "authScheme": {
+            "$ref": "#/components/schemas/WebhookAuthScheme"
+          },
+          "secret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branchFilter": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
       },
       "BindOptions": {
         "required": [
@@ -27851,6 +30133,7 @@
           "GitRepository",
           "GitAccount",
           "OidcProvider",
+          "AutomationAction",
           "Alert",
           "AlertChannel",
           "User",
@@ -30728,7 +33011,8 @@
           "Team",
           "Role",
           "Binding",
-          "Tag"
+          "Tag",
+          "AutomationAction"
         ]
       },
       "RestartPolicy": {
@@ -30838,6 +33122,30 @@
           "releaseId": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "RunAutomationActionInput": {
+        "required": [
+          "argsJson",
+          "timeoutSeconds"
+        ],
+        "type": "object",
+        "properties": {
+          "argsJson": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -32621,6 +34929,49 @@
           }
         }
       },
+      "TestAutomationActionInput": {
+        "required": [
+          "code",
+          "argsJson",
+          "defaultArgsJson",
+          "timeoutSeconds",
+          "runAsActorId"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "argsJson": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultArgsJson": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "runAsActorId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
       "TestExternalSecretInput": {
         "required": [
           "providerId",
@@ -32810,6 +35161,85 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "UpdateAutomationActionInput": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultArgsJson": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "scheduleEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "scheduleCron": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scheduleTimeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AutomationWebhookConfig"
+              }
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "alertOnFailure": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "runAsActorId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -33515,6 +35945,9 @@
     },
     {
       "name": "OidcProviders"
+    },
+    {
+      "name": "AutomationActions"
     },
     {
       "name": "Tags"

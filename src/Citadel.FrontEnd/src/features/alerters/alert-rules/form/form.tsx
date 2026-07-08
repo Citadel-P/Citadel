@@ -422,9 +422,34 @@ const DAY_OF_WEEK_OPTIONS = Object.values(DayOfWeek).map((day) => ({
   label: day,
 }));
 
-const getDefaultTimezone = () => {
+export const getDefaultTimezone = () => {
   return TIMEZONE_OPTIONS[0]?.value ?? 'UTC';
 };
+
+export function TimezoneSelectField({
+  value,
+  onChange,
+  disabled,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <SelectField
+      value={value}
+      onChange={onChange}
+      options={TIMEZONE_OPTIONS}
+      placeholder="Select timezone"
+      allLabel="Timezone"
+      selectableLabel={false}
+      disabled={disabled}
+      className={className}
+    />
+  );
+}
 
 const toMinutes = (time: string) => {
   const match = time.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
@@ -658,13 +683,9 @@ const QuietHoursField = ({ quietHours, onChange }: QuietHoursFieldProps) => {
             {timeValidationError && <p className="text-sm text-destructive">{timeValidationError}</p>}
             <div className="space-y-2">
               <Label>Timezone</Label>
-              <SelectField
+              <TimezoneSelectField
                 value={formState.timezone}
                 onChange={(value) => setFormState((prev) => ({ ...prev, timezone: value }))}
-                options={TIMEZONE_OPTIONS}
-                placeholder="Select timezone"
-                allLabel="Timezone"
-                selectableLabel={false}
               />
             </div>
             <div className="space-y-2">

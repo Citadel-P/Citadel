@@ -93,6 +93,9 @@ public static class ApplicationModule
             .AddSingleton<IOidcDiscoveryService, OidcDiscoveryService>()
             .AddSingleton<IOidcAuthenticationService, OidcAuthenticationService>()
             .AddSingleton<IResourceBindingResolver, ResourceBindingResolver>()
+            .AddScoped<IAutomationRunQueueService, AutomationRunQueueService>()
+            .AddScoped<IAutomationExecutionService, AutomationExecutionService>()
+            .AddSingleton<IAutomationRunCoordinator, AutomationRunCoordinator>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 
     private static IServiceCollection AddLookups(this IServiceCollection services)
@@ -153,6 +156,8 @@ public static class ApplicationModule
             .AddHostedService<StackDriftMonitorJob>()
             .AddHostedService<GitRepositoryPollingJob>()
             .AddHostedService<GitRepoSyncJob>()
+            .AddHostedService<AutomationActionSchedulerJob>()
+            .AddHostedService<AutomationActionRunWorkerJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()

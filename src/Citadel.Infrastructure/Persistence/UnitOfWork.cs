@@ -46,6 +46,8 @@ internal class UnitOfWork : IUnitOfWork
         OidcProviders = new Lazy<IOidcProviderRepository>(() => new OidcProviderRepository(connection, GetTransaction));
         OidcLoginStates = new Lazy<IOidcLoginStateRepository>(() => new OidcLoginStateRepository(connection, GetTransaction));
         OidcExternalLogins = new Lazy<IOidcExternalLoginRepository>(() => new OidcExternalLoginRepository(connection, GetTransaction));
+        AutomationActions = new Lazy<IAutomationActionRepository>(() => new AutomationActionRepository(connection, GetTransaction));
+        ActionRuns = new Lazy<IActionRunRepository>(() => new ActionRunRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -71,6 +73,8 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IOidcProviderRepository> OidcProviders { get; }
     private Lazy<IOidcLoginStateRepository> OidcLoginStates { get; }
     private Lazy<IOidcExternalLoginRepository> OidcExternalLogins { get; }
+    private Lazy<IAutomationActionRepository> AutomationActions { get; }
+    private Lazy<IActionRunRepository> ActionRuns { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
     private Lazy<IActivityEventRepository> ActivityEvents { get; }
@@ -103,6 +107,8 @@ internal class UnitOfWork : IUnitOfWork
     IOidcProviderRepository IUnitOfWork.OidcProviders => OidcProviders.Value;
     IOidcLoginStateRepository IUnitOfWork.OidcLoginStates => OidcLoginStates.Value;
     IOidcExternalLoginRepository IUnitOfWork.OidcExternalLogins => OidcExternalLogins.Value;
+    IAutomationActionRepository IUnitOfWork.AutomationActions => AutomationActions.Value;
+    IActionRunRepository IUnitOfWork.ActionRuns => ActionRuns.Value;
 
     // Lazily creates a transaction
     private IDbTransaction GetTransaction()

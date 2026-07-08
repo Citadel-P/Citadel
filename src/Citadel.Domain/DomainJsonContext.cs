@@ -4,6 +4,7 @@ using Domain.Contracts.Resources;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
+using Domain.Entities.Automation;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
@@ -85,6 +86,8 @@ public partial class ImagTagsContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
         typeof(JsonStringEnumConverter<SecretProviderType>),
+        typeof(JsonStringEnumConverter<WebhookProvider>),
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>),
     })]
 [JsonSerializable(typeof(IEnumerable<Guid>))]
 [JsonSerializable(typeof(Deployment))]
@@ -125,6 +128,8 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
     Converters = new[]
     {
         typeof(JsonStringEnumConverter<ActivityEventType>),
+        typeof(JsonStringEnumConverter<ActionRunTrigger>),
+        typeof(JsonStringEnumConverter<ActionRunStatus>),
         typeof(JsonStringEnumConverter<ResourceBindingKind>),
         typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
@@ -180,6 +185,18 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(OidcProviderUpdated))]
 [JsonSerializable(typeof(OidcProviderRenamed))]
 [JsonSerializable(typeof(OidcProviderDeleted))]
+[JsonSerializable(typeof(AutomationActionSnapshot))]
+[JsonSerializable(typeof(AutomationActionCreated))]
+[JsonSerializable(typeof(AutomationActionUpdated))]
+[JsonSerializable(typeof(AutomationActionRenamed))]
+[JsonSerializable(typeof(AutomationActionDeleted))]
+[JsonSerializable(typeof(AutomationActionRunQueued))]
+[JsonSerializable(typeof(AutomationActionRunStarted))]
+[JsonSerializable(typeof(AutomationActionRunSucceeded))]
+[JsonSerializable(typeof(AutomationActionRunFailed))]
+[JsonSerializable(typeof(AutomationActionRunTimedOut))]
+[JsonSerializable(typeof(AutomationActionRunCancelled))]
+[JsonSerializable(typeof(AutomationActionRunRejected))]
 
 public partial class EventInfoJsonContext : JsonSerializerContext
 {
@@ -321,6 +338,19 @@ public partial class GitJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(ImageUpdateState))]
 [JsonSerializable(typeof(IReadOnlyList<ImageUpdateState>))]
 public partial class StackJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<WebhookProvider>),
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>)
+    })]
+[JsonSerializable(typeof(AutomationWebhookConfig))]
+public partial class AutomationJsonContext : JsonSerializerContext
 {
 }
 

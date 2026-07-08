@@ -104,6 +104,18 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<OidcProviderUpdated>]
 [GenerateShapeFor<OidcProviderRenamed>]
 [GenerateShapeFor<OidcProviderDeleted>]
+[GenerateShapeFor<AutomationActionSnapshot>]
+[GenerateShapeFor<AutomationActionCreated>]
+[GenerateShapeFor<AutomationActionUpdated>]
+[GenerateShapeFor<AutomationActionRenamed>]
+[GenerateShapeFor<AutomationActionDeleted>]
+[GenerateShapeFor<AutomationActionRunQueued>]
+[GenerateShapeFor<AutomationActionRunStarted>]
+[GenerateShapeFor<AutomationActionRunSucceeded>]
+[GenerateShapeFor<AutomationActionRunFailed>]
+[GenerateShapeFor<AutomationActionRunTimedOut>]
+[GenerateShapeFor<AutomationActionRunCancelled>]
+[GenerateShapeFor<AutomationActionRunRejected>]
 [GenerateShapeFor<WebhookAuthenticationFailedAlertInfo>]
 [GenerateShapeFor<WebhookDispatchFailedAlertInfo>]
 [GenerateShapeFor<WebhookGitRepoSyncFailedAlertInfo>]
@@ -170,5 +182,16 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.OidcProviderUpdated)] = typeof(OidcProviderUpdated),
         [nameof(ActivityEventType.OidcProviderRenamed)] = typeof(OidcProviderRenamed),
         [nameof(ActivityEventType.OidcProviderDeleted)] = typeof(OidcProviderDeleted),
+        [nameof(ActivityEventType.ActionCreated)] = typeof(AutomationActionCreated),
+        [nameof(ActivityEventType.ActionUpdated)] = typeof(AutomationActionUpdated),
+        [nameof(ActivityEventType.ActionRenamed)] = typeof(AutomationActionRenamed),
+        [nameof(ActivityEventType.ActionDeleted)] = typeof(AutomationActionDeleted),
+        [nameof(ActivityEventType.ActionRunQueued)] = typeof(AutomationActionRunQueued),
+        [nameof(ActivityEventType.ActionRunStarted)] = typeof(AutomationActionRunStarted),
+        [nameof(ActivityEventType.ActionRunSucceeded)] = typeof(AutomationActionRunSucceeded),
+        [nameof(ActivityEventType.ActionRunFailed)] = typeof(AutomationActionRunFailed),
+        [nameof(ActivityEventType.ActionRunTimedOut)] = typeof(AutomationActionRunTimedOut),
+        [nameof(ActivityEventType.ActionRunCancelled)] = typeof(AutomationActionRunCancelled),
+        [nameof(ActivityEventType.ActionRunRejected)] = typeof(AutomationActionRunRejected),
     };
 }

@@ -125,6 +125,19 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.OidcProviderDeleted
                 => ActivityResourceType.OidcProvider,
 
+            ActivityEventType.ActionCreated
+            or ActivityEventType.ActionUpdated
+            or ActivityEventType.ActionRenamed
+            or ActivityEventType.ActionDeleted
+            or ActivityEventType.ActionRunQueued
+            or ActivityEventType.ActionRunStarted
+            or ActivityEventType.ActionRunSucceeded
+            or ActivityEventType.ActionRunFailed
+            or ActivityEventType.ActionRunTimedOut
+            or ActivityEventType.ActionRunCancelled
+            or ActivityEventType.ActionRunRejected
+                => ActivityResourceType.AutomationAction,
+
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
         };
@@ -227,6 +240,18 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.OidcProviderUpdated, OidcProviderUpdated) => true,
             (ActivityEventType.OidcProviderRenamed, OidcProviderRenamed) => true,
             (ActivityEventType.OidcProviderDeleted, OidcProviderDeleted) => true,
+
+            (ActivityEventType.ActionCreated, AutomationActionCreated) => true,
+            (ActivityEventType.ActionUpdated, AutomationActionUpdated) => true,
+            (ActivityEventType.ActionRenamed, AutomationActionRenamed) => true,
+            (ActivityEventType.ActionDeleted, AutomationActionDeleted) => true,
+            (ActivityEventType.ActionRunQueued, AutomationActionRunQueued) => true,
+            (ActivityEventType.ActionRunStarted, AutomationActionRunStarted) => true,
+            (ActivityEventType.ActionRunSucceeded, AutomationActionRunSucceeded) => true,
+            (ActivityEventType.ActionRunFailed, AutomationActionRunFailed) => true,
+            (ActivityEventType.ActionRunTimedOut, AutomationActionRunTimedOut) => true,
+            (ActivityEventType.ActionRunCancelled, AutomationActionRunCancelled) => true,
+            (ActivityEventType.ActionRunRejected, AutomationActionRunRejected) => true,
 
             _ => false
         };

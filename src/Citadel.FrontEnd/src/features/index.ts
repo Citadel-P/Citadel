@@ -28,6 +28,8 @@ import { BindingComponents } from './bindings';
 import { TagComponents } from './tags';
 import { OidcProviderComponents } from './oidc-providers';
 import { OidcProviderFormComponents } from './oidc-providers/form';
+import { AutomationActionComponents, AutomationComponents } from './automation-actions';
+import { AutomationActionFormComponents } from './automation-actions/form';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -52,6 +54,8 @@ export const ResourceComponents: {
   Binding: BindingComponents,
   Tag: TagComponents,
   OidcProvider: OidcProviderComponents,
+  Automation: AutomationComponents,
+  AutomationAction: AutomationActionComponents,
 };
 
 export const ResourceFormComponents: {
@@ -79,6 +83,8 @@ export const ResourceFormComponents: {
   Binding: undefined,
   Tag: undefined,
   OidcProvider: OidcProviderFormComponents,
+  Automation: undefined,
+  AutomationAction: AutomationActionFormComponents,
 };
 
 export const DockerResourceInfoComponents: {

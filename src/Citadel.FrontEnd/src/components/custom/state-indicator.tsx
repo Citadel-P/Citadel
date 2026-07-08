@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import {
   AlertRuleStatus,
+  ActionRunStatus,
   ContainerStateStatus,
   DeploymentStatus,
   GitReposStatus,
@@ -10,7 +11,15 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LoaderCircle } from 'lucide-react';
 
-type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus | StackReleaseStatus | AlertRuleStatus | GitReposStatus;
+type StateValue =
+  | boolean
+  | ContainerStateStatus
+  | RegistryStatus
+  | DeploymentStatus
+  | StackReleaseStatus
+  | AlertRuleStatus
+  | GitReposStatus
+  | ActionRunStatus;
 
 const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
   // Boolean-based statuses
@@ -61,6 +70,19 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
       return { colorClass: 'bg-green-500', tooltip: 'Enabled' };
     case AlertRuleStatus.Disabled:
       return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
+    // Automation action runs
+    case ActionRunStatus.Queued:
+      return { colorClass: 'bg-yellow-500', tooltip: 'Queued' };
+    case ActionRunStatus.Running:
+      return { colorClass: 'bg-blue-500', tooltip: 'Running' };
+    case ActionRunStatus.Succeeded:
+      return { colorClass: 'bg-green-500', tooltip: 'Succeeded' };
+    case ActionRunStatus.Failed:
+    case ActionRunStatus.TimedOut:
+      return { colorClass: 'bg-red-500', tooltip: String(value) };
+    case ActionRunStatus.Cancelled:
+    case ActionRunStatus.Rejected:
+      return { colorClass: 'bg-gray-500', tooltip: String(value) };
     // Git Repos
     case GitReposStatus.Unknown:
       return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };

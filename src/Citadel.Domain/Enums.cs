@@ -458,7 +458,8 @@ public enum WebhookAuthScheme
 public enum WebhookExecution
 {
     RepoPull = 1,
-    StackDeploy = 2
+    StackDeploy = 2,
+    AutomationActionRun = 3
 }
 
 public enum DeployedContainerState
@@ -490,7 +491,8 @@ public enum ActivityResourceType
     Stack,
     AlertRule,
     GitRepository,
-    OidcProvider
+    OidcProvider,
+    AutomationAction
 }
 
 public enum ActivityEventType
@@ -542,6 +544,20 @@ public enum ActivityEventType
     OidcProviderUpdated,
     OidcProviderRenamed,
     OidcProviderDeleted,
+    #endregion
+
+    #region Automation Action Events
+    ActionCreated,
+    ActionUpdated,
+    ActionRenamed,
+    ActionDeleted,
+    ActionRunQueued,
+    ActionRunStarted,
+    ActionRunSucceeded,
+    ActionRunFailed,
+    ActionRunTimedOut,
+    ActionRunCancelled,
+    ActionRunRejected,
     #endregion
 
     #region Stack Events
@@ -722,6 +738,7 @@ public enum LookupResourceType
     GitRepository,
     GitAccount,
     OidcProvider,
+    AutomationAction,
     Alert,
     AlertChannel,
     User,
@@ -771,4 +788,23 @@ public enum SecretDeliveryMode
     EnvironmentVariable,
     MountedFile,
     NativePlatformSecret
+}
+
+public enum ActionRunTrigger
+{
+    Manual,
+    Test,
+    Schedule,
+    Webhook
+}
+
+public enum ActionRunStatus
+{
+    Queued,
+    Running,
+    Succeeded,
+    Failed,
+    TimedOut,
+    Cancelled,
+    Rejected
 }

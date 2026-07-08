@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-apk add --no-cache curl ca-certificates tar gzip
+apk add --no-cache curl ca-certificates tar gzip deno
 
 ARCH=$(uname -m)
 case "$ARCH" in
@@ -19,6 +19,8 @@ echo "Downloading: $URL"
 curl -L "$URL" | tar -xz -C /usr/local/bin
 
 chmod +x /usr/local/bin/shoutrrr
+
+deno --version
 
 apk del curl tar gzip
 rm -rf /var/cache/apk/* /tmp/*

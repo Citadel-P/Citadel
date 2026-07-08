@@ -16,6 +16,8 @@ export type ResourceType =
   | 'GitRepository'
   | 'GitAccount'
   | 'Webhook'
+  | 'Automation'
+  | 'AutomationAction'
   | 'Access'
   | 'User'
   | 'Team'
@@ -39,6 +41,8 @@ export const PluralResourceMap = {
   GitRepository: 'GitRepositories',
   GitAccount: 'GitAccounts',
   Webhook: 'Webhooks',
+  Automation: 'Automation',
+  AutomationAction: 'Actions',
   Access: 'Access',
   User: 'Users',
   Team: 'Teams',

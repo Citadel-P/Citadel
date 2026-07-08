@@ -1,4 +1,4 @@
-import { memo, ReactNode, useCallback, useMemo } from 'react';
+import { memo, ReactNode, useCallback, useEffect, useMemo } from 'react';
 import {
   Calendar,
   Check,
@@ -43,7 +43,10 @@ import {
   ActivityEventInfoGitRepoWebhookReceived,
   ActivityEventInfoStackWebhookReceived,
   ApplyStackInput,
+  AutomationActionRunStreamItem,
   RollbackStackInput,
+  RunAutomationActionInput,
+  TestAutomationActionInput,
   StackReleaseSource,
   StackSnapshot,
   StackStreamItem,
@@ -54,6 +57,7 @@ import { MonacoDiff, MonacoEditor } from '@/lib/monaco';
 import { Button } from '@/components/ui/button';
 import { AlertMessage } from './alert-message';
 import { CitadelIcons } from '@/lib/icons';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface PullImageParams {
   imageTag: string;
@@ -63,6 +67,13 @@ interface PullImageParams {
 type DeployParams = { name: string } & ApplyDeploymentInput;
 type StackDeployParams = { name: string } & ApplyStackInput;
 type StackRollbackParams = { name: string; version?: string } & RollbackStackInput;
+type AutomationActionRunParams = {
+  id: string;
+  name: string;
+} & (
+  | ({ mode: 'run' } & RunAutomationActionInput)
+  | ({ mode: 'test' } & TestAutomationActionInput)
+);
 
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
@@ -71,7 +82,8 @@ export type TaskSpec =
   | { kind: 'alertEvent'; payload: AlertEventView }
   | { kind: 'build'; payload: Record<string, unknown> }
   | { kind: 'stack'; payload: Record<string, unknown> }
-  | { kind: 'stackRollback'; payload: StackRollbackParams };
+  | { kind: 'stackRollback'; payload: StackRollbackParams }
+  | { kind: 'automationActionRun'; payload: AutomationActionRunParams };
 
 export interface TaskSheetState {
   open: boolean;
@@ -490,6 +502,38 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   OidcProviderDeleted: (info, activity) => (
     <SpecViewer spec={info.provider} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
+
+  ActionCreated: (info, activity) => (
+    <SpecViewer spec={info.action} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+
+  ActionUpdated: (info) => (
+    <MonacoDiff original={info.oldAction} modified={info.newAction} format="json" title="Configuration changes" />
+  ),
+
+  ActionRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Action renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  ActionDeleted: (info, activity) => (
+    <SpecViewer spec={info.action} resourceId={activity.resourceId} title="Deleted configuration" />
+  ),
+
+  ActionRunQueued: (info) => <AutomationRunDetails info={info} status="Queued" />,
+
+  ActionRunStarted: (info) => <AutomationRunDetails info={info} status="Started" />,
+
+  ActionRunSucceeded: (info) => <AutomationRunDetails info={info} status="Succeeded" />,
+
+  ActionRunFailed: (info) => <AutomationRunDetails info={info} status="Failed" />,
+
+  ActionRunTimedOut: (info) => <AutomationRunDetails info={info} status="Timed out" />,
+
+  ActionRunCancelled: (info) => <AutomationRunDetails info={info} status="Cancelled" />,
+
+  ActionRunRejected: (info) => <AutomationRunDetails info={info} status="Rejected" />,
 };
 
 export function ActivityAlertZone({
@@ -543,6 +587,27 @@ function KeyValueBlock({ label, value }: { label: string; value: string | string
       </div>
     </div>
   );
+}
+
+function AutomationRunDetails({ info, status }: { info: any; status: string }) {
+  const details = [
+    `Status: ${status}`,
+    `Run ID: ${info.runId}`,
+    `Trigger: ${info.trigger}`,
+    info.exitCode !== undefined && info.exitCode !== null ? `Exit code: ${info.exitCode}` : null,
+    info.durationMs !== undefined && info.durationMs !== null ? `Duration: ${formatDurationMs(info.durationMs)}` : null,
+    info.reason ? `Reason: ${info.reason}` : null,
+    info.errorMessage ? `Error: ${info.errorMessage}` : null,
+  ].filter(Boolean) as string[];
+
+  return <KeyValueBlock label="Run details" value={details} />;
+}
+
+function formatDurationMs(value: unknown) {
+  const ms = Number(value);
+  if (!Number.isFinite(ms)) return String(value);
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(1)} s`;
 }
 
 function WebhookActivityDetails({
@@ -765,6 +830,12 @@ function RollbackStackTaskRenderer({ payload, type }: { payload: StackRollbackPa
   return <TaskStreamLayout title="Rollback" refName={refName} type={type} state={state as any} />;
 }
 
+function AutomationActionRunTaskRenderer({ payload }: { payload: AutomationActionRunParams; type: ResourceType }) {
+  const state = useAutomationActionRunProgress(payload);
+  const title = payload.mode === 'test' ? 'Test Action' : 'Run Action';
+  return <TaskStreamLayout title={title} refName={payload.name} type="AutomationAction" state={state as any} />;
+}
+
 function ActivityTaskRenderer({ payload }: { payload: ActivityView; type: ResourceType }) {
   return <TaskActivityLayout activityId={payload.id} />;
 }
@@ -778,6 +849,7 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   deploy: ApplyDeployTaskRenderer,
   stack: ApplyStackTaskRenderer,
   stackRollback: RollbackStackTaskRenderer,
+  automationActionRun: AutomationActionRunTaskRenderer,
   activity: ActivityTaskRenderer,
   alertEvent: AlertEventTaskRenderer,
 };
@@ -883,4 +955,42 @@ function useRollbackStackProgress(params: StackRollbackParams) {
     errorMessageDefault: 'Failed to rollback',
     getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
   });
+}
+
+function useAutomationActionRunProgress(params: AutomationActionRunParams) {
+  const { id, mode } = params;
+  const queryClient = useQueryClient();
+
+  const request: RunAutomationActionInput | TestAutomationActionInput = useMemo(() => {
+    if (params.mode === 'run') {
+      return { argsJson: params.argsJson, timeoutSeconds: params.timeoutSeconds };
+    }
+
+    return {
+      code: params.code,
+      argsJson: params.argsJson,
+      defaultArgsJson: params.defaultArgsJson,
+      timeoutSeconds: params.timeoutSeconds,
+      runAsActorId: params.runAsActorId,
+    };
+  }, [params]);
+
+  const state = useStreamProgress<RunAutomationActionInput | TestAutomationActionInput, AutomationActionRunStreamItem>({
+    endpoint: `api/v1/automation/actions/${encodeURIComponent(id)}/${mode}`,
+    request,
+    successMessage: mode === 'test' ? 'Automation test run finished' : 'Automation action finished',
+    errorMessageDefault: mode === 'test' ? 'Failed to run automation test' : 'Failed to run automation action',
+    pendingMessage: mode === 'test' ? 'Starting automation test...' : 'Starting automation action...',
+    getError: (item) => item.errorMessage ?? item.error?.message,
+  });
+
+  useEffect(() => {
+    if (!state.isSuccess && !state.error) return;
+
+    queryClient.invalidateQueries({ queryKey: ['listAutomationActions'] });
+    queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id }] });
+    queryClient.invalidateQueries({ queryKey: ['listAutomationActionRuns', { id }] });
+  }, [id, queryClient, state.error, state.isSuccess]);
+
+  return state;
 }

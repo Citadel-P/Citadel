@@ -6,6 +6,7 @@ using Mediator;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Automation;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
@@ -42,6 +43,7 @@ public static class PublicEndpoints
     const string StacksName = nameof(Stacks);
     const string ResourceBindingsName = nameof(ResourceBindings);
     const string OidcProvidersName = "OidcProviders";
+    const string AutomationActionsName = "AutomationActions";
     const string TagsName = nameof(Tags);
     const string AuthenticationName = nameof(Authentication);
     const string LookupName = nameof(Lookup);
@@ -118,6 +120,10 @@ public static class PublicEndpoints
             var oidcProviders = group.MapGroup("/oidcProviders").WithTags(OidcProvidersName).RequireAuthorization();
             {
                 MapOidcProviderEndpoints(oidcProviders);
+            }
+            var automationActions = group.MapGroup("/automation/actions").WithTags(AutomationActionsName).RequireAuthorization();
+            {
+                MapAutomationActionEndpoints(automationActions);
             }
             var tags = group.MapGroup("/tags").WithTags(TagsName).RequireAuthorization();
             {
@@ -731,6 +737,120 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .WithName("testOidcDiscovery");
+    }
+
+    private static void MapAutomationActionEndpoints(RouteGroupBuilder automationActions)
+    {
+        automationActions.MapGet("/", AutomationActions.List)
+            .WithSummary("List automation actions")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("listAutomationActions");
+
+        automationActions.MapGet("{id:guid}", AutomationActions.Get)
+            .WithSummary("Get automation action")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getAutomationAction");
+
+        automationActions.MapPost("/", AutomationActions.Create)
+            .WithSummary("Create automation action")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createAutomationAction");
+
+        automationActions.MapPost("rename", AutomationActions.Rename)
+            .WithSummary("Rename automation action")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameAutomationAction");
+
+        automationActions.MapPatch("{id:guid}", AutomationActions.Update)
+            .WithSummary("Update automation action")
+            .Accepts<UpdateAutomationActionInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateAutomationAction");
+
+        automationActions.MapPatch("{id:guid}/_metadata", AutomationActions.UpdateMetadata)
+            .WithSummary("Update automation action metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("updateAutomationActionMetadata");
+
+        automationActions.MapDelete("{id:guid}", AutomationActions.Delete)
+            .WithSummary("Delete automation action")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("deleteAutomationAction");
+
+        automationActions.MapPost("{id:guid}/run", AutomationActions.Run)
+            .WithSummary("Queue automation action run")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("runAutomationAction");
+
+        automationActions.MapPost("{id:guid}/test", AutomationActions.Test)
+            .WithSummary("Queue automation action test run")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("testAutomationAction");
+
+        automationActions.MapPost("{id:guid}/runs/{runId:guid}/cancel", AutomationActions.Cancel)
+            .WithSummary("Cancel automation action run")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("cancelAutomationActionRun");
+
+        automationActions.MapGet("{id:guid}/runs", AutomationActions.ListRuns)
+            .WithSummary("List automation action runs")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("listAutomationActionRuns");
+
+        automationActions.MapGet("{id:guid}/runs/{runId:guid}", AutomationActions.GetRun)
+            .WithSummary("Get automation action run")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getAutomationActionRun");
+
+        automationActions.MapGet("{id:guid}/runs/{runId:guid}/logs", AutomationActions.GetRunLogs)
+            .WithSummary("Get automation action run logs")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getAutomationActionRunLogs");
+
     }
 
     private static void MapContainerEndpoints(RouteGroupBuilder containers)

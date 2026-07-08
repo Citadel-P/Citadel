@@ -72,6 +72,18 @@ const MenuItems: IMenuItem[] = [
     separator: false,
     items: [
       {
+        icon: renderIcon(CitadelIcons.Automation),
+        label: 'Automation',
+        route: '/automation',
+        children: [
+          {
+            icon: renderIcon(CitadelIcons.AutomationAction),
+            label: 'Actions',
+            route: '/automation/actions',
+          },
+        ],
+      },
+      {
         icon: renderIcon(CitadelIcons.Alert),
         label: 'Alerts',
         route: '/alerts',

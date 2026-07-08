@@ -139,6 +139,7 @@ export enum ResourceType {
   Role = "Role",
   Binding = "Binding",
   Tag = "Tag",
+  AutomationAction = "AutomationAction",
 }
 
 export enum ResourceControlState {
@@ -207,6 +208,7 @@ export enum LookupResourceType {
   GitRepository = "GitRepository",
   GitAccount = "GitAccount",
   OidcProvider = "OidcProvider",
+  AutomationAction = "AutomationAction",
   Alert = "Alert",
   AlertChannel = "AlertChannel",
   User = "User",
@@ -397,6 +399,7 @@ export enum ActivityResourceType {
   AlertRule = "AlertRule",
   GitRepository = "GitRepository",
   OidcProvider = "OidcProvider",
+  AutomationAction = "AutomationAction",
 }
 
 export enum ActivityEventType {
@@ -431,6 +434,17 @@ export enum ActivityEventType {
   OidcProviderUpdated = "OidcProviderUpdated",
   OidcProviderRenamed = "OidcProviderRenamed",
   OidcProviderDeleted = "OidcProviderDeleted",
+  ActionCreated = "ActionCreated",
+  ActionUpdated = "ActionUpdated",
+  ActionRenamed = "ActionRenamed",
+  ActionDeleted = "ActionDeleted",
+  ActionRunQueued = "ActionRunQueued",
+  ActionRunStarted = "ActionRunStarted",
+  ActionRunSucceeded = "ActionRunSucceeded",
+  ActionRunFailed = "ActionRunFailed",
+  ActionRunTimedOut = "ActionRunTimedOut",
+  ActionRunCancelled = "ActionRunCancelled",
+  ActionRunRejected = "ActionRunRejected",
   StackCreated = "StackCreated",
   StackUpdated = "StackUpdated",
   StackRenamed = "StackRenamed",
@@ -448,6 +462,23 @@ export enum ActivityEventType {
   StackGitAutoUpdated = "StackGitAutoUpdated",
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
   StackWebhookReceived = "StackWebhookReceived",
+}
+
+export enum ActionRunTrigger {
+  Manual = "Manual",
+  Test = "Test",
+  Schedule = "Schedule",
+  Webhook = "Webhook",
+}
+
+export enum ActionRunStatus {
+  Queued = "Queued",
+  Running = "Running",
+  Succeeded = "Succeeded",
+  Failed = "Failed",
+  TimedOut = "TimedOut",
+  Cancelled = "Cancelled",
+  Rejected = "Rejected",
 }
 
 export type StackUpdateState = BaseStackUpdateState &
@@ -857,6 +888,50 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoOidcProviderDeleted
       >
     | BaseActivityEventInfoTypeMapping<
+        "ActionCreated",
+        ActivityEventInfoAutomationActionCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionUpdated",
+        ActivityEventInfoAutomationActionUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRenamed",
+        ActivityEventInfoAutomationActionRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionDeleted",
+        ActivityEventInfoAutomationActionDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunQueued",
+        ActivityEventInfoAutomationActionRunQueued
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunStarted",
+        ActivityEventInfoAutomationActionRunStarted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunSucceeded",
+        ActivityEventInfoAutomationActionRunSucceeded
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunFailed",
+        ActivityEventInfoAutomationActionRunFailed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunTimedOut",
+        ActivityEventInfoAutomationActionRunTimedOut
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunCancelled",
+        ActivityEventInfoAutomationActionRunCancelled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunRejected",
+        ActivityEventInfoAutomationActionRunRejected
+      >
+    | BaseActivityEventInfoTypeMapping<
         "StackWebhookReceived",
         ActivityEventInfoStackWebhookReceived
       >
@@ -890,6 +965,105 @@ export interface ActivityEventInfoAlertRuleUpdated {
   $type?: "AlertRuleUpdated";
   oldRule: AlertRuleSnapshot;
   newRule: AlertRuleSnapshot;
+}
+
+export interface ActivityEventInfoAutomationActionCreated {
+  $type?: "ActionCreated";
+  action: AutomationActionSnapshot;
+}
+
+export interface ActivityEventInfoAutomationActionDeleted {
+  $type?: "ActionDeleted";
+  action: AutomationActionSnapshot;
+}
+
+export interface ActivityEventInfoAutomationActionRenamed {
+  $type?: "ActionRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoAutomationActionRunCancelled {
+  $type?: "ActionRunCancelled";
+  /** @format uuid */
+  runId: string;
+  trigger: ActionRunTrigger;
+}
+
+export interface ActivityEventInfoAutomationActionRunFailed {
+  $type?: "ActionRunFailed";
+  /** @format uuid */
+  runId: string;
+  trigger: ActionRunTrigger;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  durationMs: null | number | string;
+  errorMessage: null | string;
+}
+
+export interface ActivityEventInfoAutomationActionRunQueued {
+  $type?: "ActionRunQueued";
+  /** @format uuid */
+  runId: string;
+  trigger: ActionRunTrigger;
+}
+
+export interface ActivityEventInfoAutomationActionRunRejected {
+  $type?: "ActionRunRejected";
+  /** @format uuid */
+  runId: string;
+  trigger: ActionRunTrigger;
+  reason: string;
+}
+
+export interface ActivityEventInfoAutomationActionRunStarted {
+  $type?: "ActionRunStarted";
+  /** @format uuid */
+  runId: string;
+  trigger: ActionRunTrigger;
+}
+
+export interface ActivityEventInfoAutomationActionRunSucceeded {
+  $type?: "ActionRunSucceeded";
+  /** @format uuid */
+  runId: string;
+  trigger: ActionRunTrigger;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  durationMs: null | number | string;
+}
+
+export interface ActivityEventInfoAutomationActionRunTimedOut {
+  $type?: "ActionRunTimedOut";
+  /** @format uuid */
+  runId: string;
+  trigger: ActionRunTrigger;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  durationMs: null | number | string;
+  errorMessage: null | string;
+}
+
+export interface ActivityEventInfoAutomationActionUpdated {
+  $type?: "ActionUpdated";
+  oldAction: AutomationActionSnapshot;
+  newAction: AutomationActionSnapshot;
 }
 
 export interface ActivityEventInfoDeploymentApplied {
@@ -1658,6 +1832,169 @@ export interface AutoUpdateState {
   currentDigest?: null | string;
   remoteDigest?: null | string;
   lastError?: null | string;
+}
+
+export interface AutomationActionInput {
+  name: string;
+  description: null | string;
+  code: string;
+  defaultArgsJson: null | string;
+  enabled: boolean;
+  scheduleEnabled: boolean;
+  scheduleCron: null | string;
+  scheduleTimeZone: null | string;
+  webhook: null | AutomationWebhookConfig;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: null | number | string;
+  alertOnFailure: boolean;
+  /** @format uuid */
+  runAsActorId: null | string;
+}
+
+export interface AutomationActionRunLogsView {
+  /** @format uuid */
+  runId: string;
+  logs: string;
+}
+
+export interface AutomationActionRunStreamError {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  code: null | number | string;
+  message: null | string;
+}
+
+export interface AutomationActionRunStreamItem {
+  /** @format uuid */
+  runId?: null | string;
+  status?: null | string;
+  stream?: null | string;
+  progressMessage?: null | string;
+  errorMessage?: null | string;
+  error?: null | AutomationActionRunStreamError;
+}
+
+export interface AutomationActionRunView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  actionId: string;
+  actionName: string;
+  trigger: ActionRunTrigger;
+  status: ActionRunStatus;
+  /** @format uuid */
+  runAsActorId: string;
+  /** @format uuid */
+  triggeredByActorId: null | string;
+  argsJson: string;
+  codeSnapshot: null | string;
+  codeHash: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: number | string;
+  /** @format date-time */
+  queuedAt: any;
+  /** @format date-time */
+  startedAt: any;
+  /** @format date-time */
+  finishedAt: any;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  durationMs: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  logs: null | string;
+  errorMessage: null | string;
+}
+
+export interface AutomationActionRunsView {
+  runs: AutomationActionRunView[];
+}
+
+export interface AutomationActionSnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  code: string;
+  defaultArgsJson: string;
+  enabled: boolean;
+  scheduleEnabled: boolean;
+  scheduleCron: null | string;
+  scheduleTimeZone: string;
+  webhook: null | AutomationWebhookConfig;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: number | string;
+  alertOnFailure: boolean;
+  /** @format uuid */
+  runAsActorId: string;
+}
+
+export interface AutomationActionView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  code: string;
+  defaultArgsJson: string;
+  enabled: boolean;
+  scheduleEnabled: boolean;
+  scheduleCron: null | string;
+  scheduleTimeZone: string;
+  webhook: null | AutomationWebhookConfig;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: number | string;
+  alertOnFailure: boolean;
+  /** @format uuid */
+  runAsActorId: string;
+  /** @format date-time */
+  lastScheduledRunAt: any;
+  controlState: ResourceControlState;
+  /** @format uuid */
+  currentRunId: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  rowVersion: number | string;
+  latestRun: null | AutomationActionRunView;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+}
+
+export interface AutomationActionsView {
+  actions: AutomationActionView[];
+}
+
+export interface AutomationWebhookConfig {
+  /** @default false */
+  enabled?: boolean;
+  provider?: WebhookProvider;
+  authScheme?: WebhookAuthScheme;
+  secret?: null | string;
+  branchFilter?: null | string;
 }
 
 export interface BindOptions {
@@ -3781,6 +4118,15 @@ export interface RollbackStackInput {
   releaseId: string;
 }
 
+export interface RunAutomationActionInput {
+  argsJson: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: null | number | string;
+}
+
 export interface SecretDefinitionView {
   /** @format uuid */
   id: string;
@@ -4212,6 +4558,19 @@ export interface TeamsView {
   capabilities: ResourceCapabilities;
 }
 
+export interface TestAutomationActionInput {
+  code: string;
+  argsJson: null | string;
+  defaultArgsJson: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: null | number | string;
+  /** @format uuid */
+  runAsActorId: null | string;
+}
+
 export interface TestExternalSecretInput {
   /** @format uuid */
   providerId: string;
@@ -4274,6 +4633,25 @@ export interface UnresolvedAlertsCountView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   count: number | string;
+}
+
+export interface UpdateAutomationActionInput {
+  description?: null | string;
+  code?: null | string;
+  defaultArgsJson?: null | string;
+  enabled?: null | boolean;
+  scheduleEnabled?: null | boolean;
+  scheduleCron?: null | string;
+  scheduleTimeZone?: null | string;
+  webhook?: null | AutomationWebhookConfig;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds?: null | number | string;
+  alertOnFailure?: null | boolean;
+  /** @format uuid */
+  runAsActorId?: null | string;
 }
 
 export interface UpdateExternalSecretInput {
@@ -9790,6 +10168,423 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name ListAutomationActions
+     * @summary List automation actions
+     * @request GET:/api/v1/automation/actions
+     * @secure
+     * @response `200` `AutomationActionsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listAutomationActions: (params: RequestParams = {}) =>
+      this.request<
+        AutomationActionsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name CreateAutomationAction
+     * @summary Create automation action
+     * @request POST:/api/v1/automation/actions
+     * @secure
+     * @response `200` `AutomationActionView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createAutomationAction: (
+      data: AutomationActionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name GetAutomationAction
+     * @summary Get automation action
+     * @request GET:/api/v1/automation/actions/{id}
+     * @secure
+     * @response `200` `AutomationActionView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAutomationAction: (id: string, params: RequestParams = {}) =>
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name UpdateAutomationAction
+     * @summary Update automation action
+     * @request PATCH:/api/v1/automation/actions/{id}
+     * @secure
+     * @response `200` `AutomationActionView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateAutomationAction: (
+      id: string,
+      data: UpdateAutomationActionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name DeleteAutomationAction
+     * @summary Delete automation action
+     * @request DELETE:/api/v1/automation/actions/{id}
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteAutomationAction: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/automation/actions/${id}`,
+        method: "DELETE",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name RenameAutomationAction
+     * @summary Rename automation action
+     * @request POST:/api/v1/automation/actions/rename
+     * @secure
+     * @response `200` `AutomationActionView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameAutomationAction: (
+      data: RenameResource,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name UpdateAutomationActionMetadata
+     * @summary Update automation action metadata
+     * @request PATCH:/api/v1/automation/actions/{id}/_metadata
+     * @secure
+     * @response `200` `AutomationActionView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateAutomationActionMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/${id}/_metadata`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name RunAutomationAction
+     * @summary Queue automation action run
+     * @request POST:/api/v1/automation/actions/{id}/run
+     * @secure
+     * @response `200` `(AutomationActionRunStreamItem)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    runAutomationAction: (
+      id: string,
+      data: RunAutomationActionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionRunStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/${id}/run`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name TestAutomationAction
+     * @summary Queue automation action test run
+     * @request POST:/api/v1/automation/actions/{id}/test
+     * @secure
+     * @response `200` `(AutomationActionRunStreamItem)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    testAutomationAction: (
+      id: string,
+      data: TestAutomationActionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionRunStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/${id}/test`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name CancelAutomationActionRun
+     * @summary Cancel automation action run
+     * @request POST:/api/v1/automation/actions/{id}/runs/{runId}/cancel
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    cancelAutomationActionRun: (
+      id: string,
+      runId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/automation/actions/${id}/runs/${runId}/cancel`,
+        method: "POST",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name ListAutomationActionRuns
+     * @summary List automation action runs
+     * @request GET:/api/v1/automation/actions/{id}/runs
+     * @secure
+     * @response `200` `AutomationActionRunsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listAutomationActionRuns: (
+      id: string,
+      query?: {
+        /**
+         * @format int32
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        limit?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionRunsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/${id}/runs`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name GetAutomationActionRun
+     * @summary Get automation action run
+     * @request GET:/api/v1/automation/actions/{id}/runs/{runId}
+     * @secure
+     * @response `200` `AutomationActionRunView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAutomationActionRun: (
+      id: string,
+      runId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionRunView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/${id}/runs/${runId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name GetAutomationActionRunLogs
+     * @summary Get automation action run logs
+     * @request GET:/api/v1/automation/actions/{id}/runs/{runId}/logs
+     * @secure
+     * @response `200` `AutomationActionRunLogsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAutomationActionRunLogs: (
+      id: string,
+      runId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionRunLogsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/${id}/runs/${runId}/logs`,
+        method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),

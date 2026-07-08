@@ -29,6 +29,8 @@ import { useParams, useNavigate } from 'react-router';
 import {
   ApplyDeploymentInput,
   ApplyStackInput,
+  RunAutomationActionInput,
+  TestAutomationActionInput,
   ProblemDetails,
   PullImageInput,
   RollbackStackInput,
@@ -377,13 +379,20 @@ export const useWindowDimensions = () => {
   return dimensions;
 };
 
-type PulledStreamProps = PullImageInput | ApplyDeploymentInput | ApplyStackInput | RollbackStackInput;
+type PulledStreamProps =
+  | PullImageInput
+  | ApplyDeploymentInput
+  | ApplyStackInput
+  | RollbackStackInput
+  | RunAutomationActionInput
+  | TestAutomationActionInput;
 
 const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: string, onMutate?: () => void) => {
   const { apiClient } = useApiClientContext();
   const { accessToken } = useAuthContext();
 
   const mutationFn = async (param: PulledStreamProps & Cancellable) => {
+    const { signal, ...body } = param;
     const normalizedBaseUrl = (apiClient?.baseUrl ?? '').replace(/\/+$/, '');
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const requestUrl = `${normalizedBaseUrl}${normalizedEndpoint}`;
@@ -391,12 +400,12 @@ const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: str
     const response = await fetch(requestUrl, {
       method: 'POST',
       credentials: 'include',
-      signal: param.signal,
+      signal,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify(param),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -460,6 +469,7 @@ interface UseStreamProgressOptions<TRequest, TItem> {
   request: TRequest;
   successMessage: string;
   errorMessageDefault: string;
+  pendingMessage?: string;
   // A predicate to check if an item in the stream represents an error
   getError?: (item: TItem) => string | undefined | null;
 }
@@ -484,6 +494,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   request,
   successMessage,
   errorMessageDefault,
+  pendingMessage,
   getError,
 }: UseStreamProgressOptions<TRequest, TItem>): StreamProgressState {
   const [history, setHistory] = useState<string[]>([]);
@@ -650,12 +661,12 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   const text = useMemo(() => {
     const activeLines = Array.from(activeItems.values());
     const combined = [...history, ...activeLines];
-    if (combined.length === 0 && isPending) return 'Connecting to registry...';
+    if (combined.length === 0 && isPending) return pendingMessage ?? 'Connecting to registry...';
     if (combined.length === 0 && (internalError || streamError)) {
       return internalError || (streamError as Error | null)?.message || errorMessageDefault;
     }
     return combined.join('\n');
-  }, [history, activeItems, isPending, internalError, streamError, errorMessageDefault]);
+  }, [history, activeItems, isPending, internalError, streamError, errorMessageDefault, pendingMessage]);
 
   useEffect(() => {
     const controller = new AbortController();

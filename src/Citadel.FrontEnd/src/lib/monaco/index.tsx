@@ -174,6 +174,7 @@ interface MonacoEditorProps {
   completionItems?: string[];
   completionItemDetail?: string;
   completionMode?: CompletionMode;
+  configureMonaco?: (monaco: Monaco) => void;
 }
 
 export const MonacoEditor = ({
@@ -192,12 +193,21 @@ export const MonacoEditor = ({
   completionItems,
   completionItemDetail,
   completionMode = 'line',
+  configureMonaco,
 }: MonacoEditorProps) => {
   const [editorInstance, setEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const markersOwner = useId();
   const lastEditorValueRef = useRef(value);
   const isApplyingExternalValueRef = useRef(false);
-  const { currentTheme, handleBeforeMount } = useThemeEditor();
+  const { currentTheme, handleBeforeMount: handleThemeBeforeMount } = useThemeEditor();
+
+  const handleBeforeMount = useCallback(
+    (monaco: Monaco) => {
+      handleThemeBeforeMount(monaco);
+      configureMonaco?.(monaco);
+    },
+    [configureMonaco, handleThemeBeforeMount],
+  );
 
   // Calculate dynamic height based on line count
   const containerHeight = useDynamicHeight(value, minHeight);

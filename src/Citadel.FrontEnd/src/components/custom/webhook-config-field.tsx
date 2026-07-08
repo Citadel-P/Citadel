@@ -1,4 +1,10 @@
-import { RepoWebhookConfig, StackWebhookConfig, WebhookAuthScheme, WebhookProvider } from '@/api/generated/api.types';
+import {
+  AutomationWebhookConfig,
+  RepoWebhookConfig,
+  StackWebhookConfig,
+  WebhookAuthScheme,
+  WebhookProvider,
+} from '@/api/generated/api.types';
 import { FieldInput, FieldSelect, FieldSwitch } from '@/components/custom/form-builder';
 import { Button } from '@/components/ui/button';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
@@ -6,15 +12,15 @@ import { cn } from '@/lib/utils';
 import { CheckCheck, Clipboard, KeyRound } from 'lucide-react';
 import { useState } from 'react';
 
-type WebhookConfigValue = RepoWebhookConfig | StackWebhookConfig;
+type WebhookConfigValue = RepoWebhookConfig | StackWebhookConfig | AutomationWebhookConfig;
 type WebhookCommonConfig = Pick<RepoWebhookConfig, 'enabled' | 'provider' | 'authScheme' | 'secret' | 'branchFilter'>;
 type NormalizedWebhookConfig = Required<Pick<WebhookCommonConfig, 'enabled' | 'provider' | 'authScheme'>> &
   Pick<WebhookCommonConfig, 'secret' | 'branchFilter'>;
 
 type WebhookConfigFieldProps = {
-  resourceType: 'repo' | 'stack';
+  resourceType: 'repo' | 'stack' | 'automation-action';
   resourceId?: string;
-  execution: 'pull' | 'deploy';
+  execution: 'pull' | 'deploy' | 'run';
   value?: WebhookConfigValue | null;
   defaultBranch?: string | null;
   showBranchFilter?: boolean;
