@@ -351,11 +351,32 @@ internal sealed class AutomationExecutionService(
             "--allow-env=NO_COLOR,DENO_DIR"
         };
 
-        if (!string.IsNullOrWhiteSpace(options.AllowNet))
-            args.Add($"--allow-net={options.AllowNet}");
+        var allowNet = ResolveAllowNet();
+        if (!string.IsNullOrWhiteSpace(allowNet))
+            args.Add($"--allow-net={allowNet}");
 
         args.Add(scriptPath);
         return args;
+    }
+
+    private string? ResolveAllowNet()
+    {
+        if (options.AllowNet is not null)
+            return options.AllowNet.Trim();
+
+        return TryBuildAllowNetTarget(options.InternalBaseUrl);
+    }
+
+    private static string? TryBuildAllowNetTarget(string baseUrl)
+    {
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
+            return null;
+
+        var host = uri.Host.Contains(':', StringComparison.Ordinal) && !uri.Host.StartsWith("[", StringComparison.Ordinal)
+            ? $"[{uri.Host}]"
+            : uri.Host;
+
+        return uri.IsDefaultPort ? host : $"{host}:{uri.Port}";
     }
 
     private Dictionary<string, string> BuildEnvironment(string denoCacheDir)

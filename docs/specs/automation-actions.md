@@ -142,28 +142,33 @@ Rejected
 
 ## Configuration
 
-Configuration is declared in `.env` under the .NET `Automations` section:
+Automation uses code defaults and does not require `.env` configuration for normal installs.
+
+Expose only operational settings that an admin may reasonably tune:
 
 ```env
-Automations__Enabled=true
-Automations__DenoPath=deno
-Automations__WorkDir=./data/automations/runs
-Automations__DenoCacheDir=./data/automations/deno-cache
-Automations__InternalBaseUrl=http://127.0.0.1:8000
-Automations__AllowNet=127.0.0.1:8000,localhost:8000
 Automations__MaxParallelRuns=4
-Automations__DefaultTimeoutSeconds=300
-Automations__MaxTimeoutSeconds=1800
-Automations__MaxLogBytes=1048576
-Automations__PollIntervalSeconds=2
-Automations__SchedulePollIntervalSeconds=30
 ```
 
-These values bind to `AutomationOptions`.
+All automation settings bind to `AutomationOptions`, but most of them are internal defaults and should not be shown as required install configuration.
 
-Do not hardcode Deno paths, work directories, timeouts, log limits, polling intervals, or max parallelism.
+Advanced overrides:
 
-`install-server-deps.sh` installs Deno into the Core image and verifies it with `deno --version` during image build. Container-based installs should use `Automations__DenoPath=deno` so Citadel resolves the executable from `PATH`.
+- `Automations__Enabled`
+- `Automations__DenoPath`
+- `Automations__WorkDir`
+- `Automations__DenoCacheDir`
+- `Automations__InternalBaseUrl`
+- `Automations__AllowNet`
+- `Automations__DefaultTimeoutSeconds`
+- `Automations__MaxTimeoutSeconds`
+- `Automations__MaxLogBytes`
+- `Automations__PollIntervalSeconds`
+- `Automations__SchedulePollIntervalSeconds`
+
+`Automations__AllowNet` is optional. When it is not configured, Citadel derives Deno's `--allow-net` target from `Automations__InternalBaseUrl`.
+
+`install-server-deps.sh` installs Deno into the Core image and verifies it with `deno --version` during image build. The default `Automations__DenoPath=deno` resolves the executable from `PATH`.
 
 ## Runtime
 
@@ -189,7 +194,7 @@ deno run
   --allow-read=<run-dir>
   --allow-write=<run-dir>
   --allow-env=NO_COLOR,DENO_DIR
-  --allow-net=<Automations__AllowNet>
+  --allow-net=<derived internal API host or Automations__AllowNet>
   <generated-action-file>.ts
 ```
 

@@ -9,7 +9,7 @@ public sealed class AutomationOptions
     public string WorkDir { get; set; } = "./data/automations/runs";
     public string DenoCacheDir { get; set; } = "./data/automations/deno-cache";
     public string InternalBaseUrl { get; set; } = "http://127.0.0.1:8000";
-    public string AllowNet { get; set; } = "127.0.0.1:8000,localhost:8000";
+    public string? AllowNet { get; set; }
     public int MaxParallelRuns { get; set; } = 4;
     public int DefaultTimeoutSeconds { get; set; } = 300;
     public int MaxTimeoutSeconds { get; set; } = 1800;

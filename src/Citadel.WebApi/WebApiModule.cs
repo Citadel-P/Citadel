@@ -259,8 +259,14 @@ internal static class WebApiModule
             .Validate(options => options.DefaultTimeoutSeconds > 0, "Automations:DefaultTimeoutSeconds must be greater than zero.")
             .Validate(options => options.MaxTimeoutSeconds >= options.DefaultTimeoutSeconds, "Automations:MaxTimeoutSeconds must be greater than or equal to Automations:DefaultTimeoutSeconds.")
             .Validate(options => options.MaxLogBytes >= 4096, "Automations:MaxLogBytes must be at least 4096 bytes.")
+            .Validate(IsValidAutomationInternalBaseUrl, "Automations:InternalBaseUrl must be an absolute HTTP or HTTPS URL.")
             .ValidateOnStart();
     }
+
+    private static bool IsValidAutomationInternalBaseUrl(AutomationOptions options)
+        => Uri.TryCreate(options.InternalBaseUrl, UriKind.Absolute, out var uri)
+           && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+           && !string.IsNullOrWhiteSpace(uri.Host);
 }
 
 // Required for integration tests to work properly
