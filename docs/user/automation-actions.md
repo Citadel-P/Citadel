@@ -82,7 +82,15 @@ console.log(deployments);
 
 The code editor knows the built-in globals and uses Citadel's generated API types for completions on `citadel`, `args`, and `run`.
 
-Shortcut helpers are available for common operations:
+Generated API operations are available through `citadel.api` and grouped resource helpers:
+
+```ts
+const platforms = await citadel.platforms.listPlatforms();
+const repos = await citadel.repositories.listGitRepositories();
+const volumes = await citadel.volumes.listVolumes(platforms.platforms[0].id);
+```
+
+Shortcut aliases are available for common deployment and stack operations:
 
 ```ts
 await citadel.deployments.apply({

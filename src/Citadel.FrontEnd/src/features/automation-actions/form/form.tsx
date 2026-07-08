@@ -39,7 +39,7 @@ type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
 const DEFAULT_CODE = `console.log("Action run", run.id);
 console.log("Arguments", args);
 
-const deployments = await citadel.get("/api/v1/deployments");
+const deployments = await citadel.deployments.listDeployments();
 console.log("Deployments:", deployments?.deployments?.length ?? 0);
 `;
 
@@ -361,6 +361,7 @@ export function AutomationActionForm({
                     value={value ?? 'UTC'}
                     disabled={disabled || !currentScheduleEnabled}
                     onChange={(scheduleTimeZone) => set({ scheduleTimeZone })}
+                    className='w-100'
                   />
                 ),
               }),

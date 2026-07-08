@@ -95,6 +95,48 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "actions",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    alertonfailure = table.Column<bool>(type: "boolean", nullable: false),
+                    code = table.Column<string>(type: "text", nullable: false),
+                    controlstate = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Idle"),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    currentrunid = table.Column<Guid>(type: "uuid", nullable: true),
+                    defaultargsjson = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'{}'::jsonb"),
+                    description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
+                    enabled = table.Column<bool>(type: "boolean", nullable: false),
+                    lastscheduledrunat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    name = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
+                    runasactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    schedulecron = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    scheduleenabled = table.Column<bool>(type: "boolean", nullable: false),
+                    scheduletimezone = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    timeoutseconds = table.Column<int>(type: "integer", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    webhook = table.Column<string>(type: "jsonb", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_actions", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_actions_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_actions_actors_runasactorid",
+                        column: x => x.runasactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "alertchannels",
                 columns: table => new
                 {
@@ -512,6 +554,52 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "actionruns",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    actionid = table.Column<Guid>(type: "uuid", nullable: false),
+                    actionname = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    argsjson = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'{}'::jsonb"),
+                    codehash = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    codesnapshot = table.Column<string>(type: "text", nullable: false),
+                    durationms = table.Column<long>(type: "bigint", nullable: true),
+                    errormessage = table.Column<string>(type: "text", nullable: true),
+                    exitcode = table.Column<int>(type: "integer", nullable: true),
+                    finishedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    logs = table.Column<string>(type: "text", nullable: true),
+                    queuedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    runasactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    startedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    status = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    timeoutseconds = table.Column<int>(type: "integer", nullable: false),
+                    trigger = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    triggeredbyactorid = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_actionruns", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_actionruns_actions_actionid",
+                        column: x => x.actionid,
+                        principalTable: "actions",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_actionruns_actors_runasactorid",
+                        column: x => x.runasactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_actionruns_actors_triggeredbyactorid",
+                        column: x => x.triggeredbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "alertevents",
                 columns: table => new
                 {
@@ -793,6 +881,59 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "oidcexternallogins",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    email = table.Column<string>(type: "text", maxLength: 320, nullable: true),
+                    providerid = table.Column<Guid>(type: "uuid", nullable: false),
+                    subject = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    userid = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_oidcexternallogins", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_oidcexternallogins_oidcproviders_providerid",
+                        column: x => x.providerid,
+                        principalTable: "oidcproviders",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_oidcexternallogins_users_userid",
+                        column: x => x.userid,
+                        principalTable: "users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "oidcloginstates",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    codeverifier = table.Column<string>(type: "text", maxLength: 256, nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    expiresat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    nonce = table.Column<string>(type: "text", maxLength: 256, nullable: false),
+                    providerid = table.Column<Guid>(type: "uuid", nullable: false),
+                    returnurl = table.Column<string>(type: "text", maxLength: 2048, nullable: false),
+                    statehash = table.Column<string>(type: "text", maxLength: 128, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_oidcloginstates", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_oidcloginstates_oidcproviders_providerid",
+                        column: x => x.providerid,
+                        principalTable: "oidcproviders",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "internalsecretvalues",
                 columns: table => new
                 {
@@ -1022,6 +1163,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("51ac9abd-9f17-8530-e1a4-8fe69e44ac1d"), 4, 1, new Guid("30000000-0000-0000-0000-000000000001"), 55 },
                     { new Guid("645b4c54-7937-2180-7186-be24ac6bf330"), 4, 5, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("656ccf45-65a9-33b3-de65-d18d5988151a"), 4, 12, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("662623f3-aa3b-220d-546b-971d2947f7cd"), 2, 13, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("672ebf04-40e5-547b-29f2-6daf5c3c3856"), 1, 8, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("7125b1ec-d593-d356-f559-c4655a392c31"), 2, 1, new Guid("30000000-0000-0000-0000-000000000002"), 55 },
                     { new Guid("80aa1c34-79dd-6587-52db-52605326fe77"), 2, 7, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
@@ -1033,6 +1175,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("97597a3e-c415-667b-039a-a7a287daefea"), 1, 4, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("987e89d0-2c8f-87d8-830f-7461a7db392e"), 4, 4, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("9b075e03-6326-7b95-ae78-2b296990ce26"), 2, 4, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("9e0c1481-c640-3182-c9a0-4687ef91bd6a"), 4, 13, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("a3cd7182-baa1-324f-79f0-3a04d7647032"), 4, 11, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("a4b222e3-7452-b5f4-377b-c05652533f67"), 4, 0, new Guid("30000000-0000-0000-0000-000000000001"), 27 },
                     { new Guid("a60ba8de-ff46-b387-85ed-913d96170a2a"), 1, 7, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
@@ -1045,6 +1188,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("e04cd0d3-47bf-2d28-e099-c7a9b61e3875"), 1, 3, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("e89ccf24-0132-149c-c8bc-33265af98ed8"), 1, 12, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("ee9254c3-9b59-15a0-aa85-898f5974a603"), 2, 6, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("f1633935-71e7-32f3-4264-d7120dcf22f1"), 1, 13, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("fb710f21-c146-e381-00f0-820f58ecb69a"), 1, 9, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("fbb8ef70-2ec3-134f-0c18-1533173d5849"), 4, 9, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("fd0c028a-8225-0f65-8a7b-cb058f29c740"), 4, 2, new Guid("30000000-0000-0000-0000-000000000001"), 103 }
@@ -1064,6 +1208,47 @@ namespace Infrastructure.Migrations.Migrations
                 table: "users",
                 columns: new[] { "id", "actorid", "createdat", "createdbyactorid", "email", "name", "password" },
                 values: new object[] { new Guid("10000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000002"), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), "admin@citadel.local", "admin", "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actionruns_actionid_queuedat",
+                table: "actionruns",
+                columns: new[] { "actionid", "queuedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actionruns_runasactorid",
+                table: "actionruns",
+                column: "runasactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actionruns_status_queuedat",
+                table: "actionruns",
+                columns: new[] { "status", "queuedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actionruns_triggeredbyactorid",
+                table: "actionruns",
+                column: "triggeredbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actions_createdbyactorid",
+                table: "actions",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actions_name",
+                table: "actions",
+                column: "name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actions_runasactorid",
+                table: "actions",
+                column: "runasactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actions_schedule",
+                table: "actions",
+                columns: new[] { "enabled", "scheduleenabled", "schedulecron" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_activityevents_createdbyactorid",
@@ -1272,6 +1457,33 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_images_registryid",
                 table: "images",
                 column: "registryid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_oidcexternallogins_providerid_subject",
+                table: "oidcexternallogins",
+                columns: new[] { "providerid", "subject" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_oidcexternallogins_userid",
+                table: "oidcexternallogins",
+                column: "userid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_oidcloginstates_expiresat",
+                table: "oidcloginstates",
+                column: "expiresat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_oidcloginstates_providerid",
+                table: "oidcloginstates",
+                column: "providerid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_oidcloginstates_statehash",
+                table: "oidcloginstates",
+                column: "statehash",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_oidcproviders_createdbyactorid",
@@ -1483,6 +1695,9 @@ namespace Infrastructure.Migrations.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "actionruns");
+
+            migrationBuilder.DropTable(
                 name: "activityevents");
 
             migrationBuilder.DropTable(
@@ -1507,7 +1722,10 @@ namespace Infrastructure.Migrations.Migrations
                 name: "internalsecretvalues");
 
             migrationBuilder.DropTable(
-                name: "oidcproviders");
+                name: "oidcexternallogins");
+
+            migrationBuilder.DropTable(
+                name: "oidcloginstates");
 
             migrationBuilder.DropTable(
                 name: "permissions");
@@ -1534,6 +1752,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "usersteams");
 
             migrationBuilder.DropTable(
+                name: "actions");
+
+            migrationBuilder.DropTable(
                 name: "alertchannels");
 
             migrationBuilder.DropTable(
@@ -1546,7 +1767,7 @@ namespace Infrastructure.Migrations.Migrations
                 name: "gitrepositories");
 
             migrationBuilder.DropTable(
-                name: "roles");
+                name: "oidcproviders");
 
             migrationBuilder.DropTable(
                 name: "secretdefinitions");
@@ -1571,6 +1792,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "gitaccounts");
+
+            migrationBuilder.DropTable(
+                name: "roles");
 
             migrationBuilder.DropTable(
                 name: "secretproviders");

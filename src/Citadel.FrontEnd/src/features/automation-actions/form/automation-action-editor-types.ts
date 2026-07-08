@@ -7,7 +7,11 @@ const MODULE_DETECTION_FORCE = 3;
 
 const automationActionTypesSource = `
 import type * as ApiTypes from "citadel-api-types";
-import type { ResourceName as CitadelGeneratedResourceName } from "citadel-api-resources";
+import type {
+  AutomationResourceGroupName as CitadelGeneratedResourceGroupName,
+  AutomationResourceName as CitadelGeneratedResourceName,
+  automationResourceGroups as citadelGeneratedResourceGroups
+} from "citadel-api-resources";
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -21,12 +25,43 @@ type CitadelGeneratedApi = Pick<
   Extract<CitadelGeneratedResourceName, keyof ApiTypes.Api<unknown>["api"]>
 >;
 
+type CitadelDropRequestParams<TArgs extends readonly unknown[]> = TArgs extends []
+  ? []
+  : TArgs extends [...infer TRest, infer TLast]
+    ? TLast extends ApiTypes.RequestParams | undefined
+      ? TRest
+      : TArgs
+    : TArgs;
+
 type CitadelActionMethod<TName extends keyof CitadelGeneratedApi> = CitadelGeneratedApi[TName] extends (
-  data: infer TData,
-  params?: unknown,
+  ...args: infer TArgs
 ) => Promise<infer TResult>
-  ? (data: TData) => Promise<TResult>
-  : CitadelGeneratedApi[TName];
+  ? (...args: CitadelDropRequestParams<TArgs>) => Promise<TResult>
+  : never;
+
+type CitadelGeneratedAutomationApi = {
+  [TName in keyof CitadelGeneratedApi]: CitadelActionMethod<TName>;
+};
+
+type CitadelResourceGroup<TGroup extends CitadelGeneratedResourceGroupName> = {
+  [TName in Extract<(typeof citadelGeneratedResourceGroups)[TGroup][number], keyof CitadelGeneratedApi>]: CitadelActionMethod<TName>;
+};
+
+type CitadelGeneratedResourceGroups = {
+  [TGroup in CitadelGeneratedResourceGroupName]: CitadelResourceGroup<TGroup>;
+};
+
+type CitadelDeploymentsClient = CitadelResourceGroup<"deployments"> & {
+  apply: CitadelActionMethod<"applyDeployment">;
+  applyDeployment: CitadelActionMethod<"applyDeployment">;
+};
+
+type CitadelStacksClient = CitadelResourceGroup<"stacks"> & {
+  apply: CitadelActionMethod<"applyStack">;
+  applyStack: CitadelActionMethod<"applyStack">;
+  rollback: CitadelActionMethod<"rollbackStack">;
+  rollbackStack: CitadelActionMethod<"rollbackStack">;
+};
 
 type CitadelAutomationTrigger = \`\${ApiTypes.ActionRunTrigger}\`;
 type CitadelHttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | string;
@@ -39,7 +74,7 @@ interface CitadelAutomationRun {
   queuedAt: string;
 }
 
-interface CitadelAutomationClient {
+type CitadelAutomationClient = Omit<CitadelGeneratedResourceGroups, "deployments" | "stacks"> & {
   request(method: "GET", path: "/api/v1/deployments"): Promise<ApiTypes.DeploymentsView>;
   request(method: "GET", path: "/api/v1/stacks"): Promise<ApiTypes.StacksView>;
   request(
@@ -68,17 +103,11 @@ interface CitadelAutomationClient {
   patch<TResponse = unknown, TBody = unknown>(path: string, body?: TBody): Promise<TResponse>;
   put<TResponse = unknown, TBody = unknown>(path: string, body?: TBody): Promise<TResponse>;
   delete<TResponse = unknown, TBody = unknown>(path: string, body?: TBody): Promise<TResponse>;
-  deployments: {
-    apply: CitadelActionMethod<"applyDeployment">;
-    applyDeployment: CitadelActionMethod<"applyDeployment">;
-  };
-  stacks: {
-    apply: CitadelActionMethod<"applyStack">;
-    applyStack: CitadelActionMethod<"applyStack">;
-    rollback: CitadelActionMethod<"rollbackStack">;
-    rollbackStack: CitadelActionMethod<"rollbackStack">;
-  };
-}
+  api: CitadelGeneratedAutomationApi;
+  repositories: CitadelResourceGroup<"gitRepositories">;
+  deployments: CitadelDeploymentsClient;
+  stacks: CitadelStacksClient;
+};
 
 declare global {
   const args: JsonObject;
@@ -88,6 +117,7 @@ declare global {
   namespace Citadel {
     export type Api = CitadelGeneratedApi;
     export type ResourceName = CitadelGeneratedResourceName;
+    export type ResourceGroupName = CitadelGeneratedResourceGroupName;
     export type ApplyDeploymentInput = ApiTypes.ApplyDeploymentInput;
     export type ApplyStackInput = ApiTypes.ApplyStackInput;
     export type RollbackStackInput = ApiTypes.RollbackStackInput;

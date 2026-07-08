@@ -58,6 +58,7 @@ namespace Application.Models;
 
 [JsonSourceGenerationOptions(
     GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
         typeof(JsonStringEnumConverter<ActorType>),

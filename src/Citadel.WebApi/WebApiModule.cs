@@ -1,5 +1,6 @@
 ﻿using Application.Configs;
 using Application.Permissions;
+using Application.Services;
 using Application.Services.Abstractions;
 using Hosting.Common;
 using Hosting.Common.Extensions;
@@ -44,6 +45,7 @@ internal static class WebApiModule
                 options.AddOperationTransformer<ExampleOperationTransformer>();
                 options.AddOperationTransformer<RateLimitOperationTransformer>();
             })
+            .AddSingleton<IAutomationApiEndpointCatalog, EndpointDataSourceAutomationApiEndpointCatalog>()
             .AddCors();
 
         services

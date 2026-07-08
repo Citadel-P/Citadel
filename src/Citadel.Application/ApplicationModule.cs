@@ -12,6 +12,7 @@ using Hosting.Common.Abstraction;
 using Hosting.Common.Pipelines;
 using Hosting.Common.Pipelines.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Threading.Channels;
 
 namespace Application;
@@ -49,7 +50,8 @@ public static class ApplicationModule
     }
 
     private static IServiceCollection AddServices(this IServiceCollection services)
-        => services
+    {
+        services
             .AddMemoryCache()
             .AddSingleton<IRoleCache, RoleCache>()
             .AddSingleton<IJwtService, JwtService>()
@@ -97,6 +99,11 @@ public static class ApplicationModule
             .AddScoped<IAutomationExecutionService, AutomationExecutionService>()
             .AddSingleton<IAutomationRunCoordinator, AutomationRunCoordinator>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
+
+        services.TryAddSingleton<IAutomationApiEndpointCatalog, EmptyAutomationApiEndpointCatalog>();
+
+        return services;
+    }
 
     private static IServiceCollection AddLookups(this IServiceCollection services)
         => services

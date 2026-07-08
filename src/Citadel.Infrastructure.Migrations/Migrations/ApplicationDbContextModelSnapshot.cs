@@ -22,6 +22,113 @@ namespace Infrastructure.Migrations.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ActionRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actionid");
+
+                    b.Property<string>("ActionName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("actionname");
+
+                    b.Property<string>("ArgsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("argsjson")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("codehash");
+
+                    b.Property<string>("CodeSnapshot")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("codesnapshot");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("durationms");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("errormessage");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("exitcode");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finishedat");
+
+                    b.Property<string>("Logs")
+                        .HasColumnType("text")
+                        .HasColumnName("logs");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("queuedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("RunAsActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("runasactorid");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("startedat");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TimeoutSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("timeoutseconds");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("trigger");
+
+                    b.Property<Guid?>("TriggeredByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("triggeredbyactorid");
+
+                    b.HasKey("Id")
+                        .HasName("pk_actionruns");
+
+                    b.HasIndex("RunAsActorId")
+                        .HasDatabaseName("ix_actionruns_runasactorid");
+
+                    b.HasIndex("TriggeredByActorId")
+                        .HasDatabaseName("ix_actionruns_triggeredbyactorid");
+
+                    b.HasIndex("ActionId", "QueuedAt")
+                        .HasDatabaseName("ix_actionruns_actionid_queuedat");
+
+                    b.HasIndex("Status", "QueuedAt")
+                        .HasDatabaseName("ix_actionruns_status_queuedat");
+
+                    b.ToTable("actionruns", (string)null);
+                });
+
             modelBuilder.Entity("ActivityEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -746,6 +853,128 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("alertrulestates", (string)null);
                 });
 
+            modelBuilder.Entity("AutomationAction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AlertOnFailure")
+                        .HasColumnType("boolean")
+                        .HasColumnName("alertonfailure");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("code");
+
+                    b.Property<string>("ControlState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Idle")
+                        .HasColumnName("controlstate");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<Guid?>("CurrentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("currentrunid");
+
+                    b.Property<string>("DefaultArgsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("defaultargsjson")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<DateTime?>("LastScheduledRunAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastscheduledrunat");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("rowversion");
+
+                    b.Property<Guid>("RunAsActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("runasactorid");
+
+                    b.Property<string>("ScheduleCron")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("schedulecron");
+
+                    b.Property<bool>("ScheduleEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("scheduleenabled");
+
+                    b.Property<string>("ScheduleTimeZone")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("scheduletimezone");
+
+                    b.Property<int>("TimeoutSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("timeoutseconds");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Webhook")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("webhook");
+
+                    b.HasKey("Id")
+                        .HasName("pk_actions");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_actions_createdbyactorid");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_actions_name");
+
+                    b.HasIndex("RunAsActorId")
+                        .HasDatabaseName("ix_actions_runasactorid");
+
+                    b.HasIndex("Enabled", "ScheduleEnabled", "ScheduleCron")
+                        .HasDatabaseName("ix_actions_schedule");
+
+                    b.ToTable("actions", (string)null);
+                });
+
             modelBuilder.Entity("Container", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1358,6 +1587,118 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToView("LatestActivityEvents", (string)null);
                 });
 
+            modelBuilder.Entity("OidcExternalLogin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("text")
+                        .HasColumnName("email");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("providerid");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("subject");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("userid");
+
+                    b.HasKey("Id")
+                        .HasName("pk_oidcexternallogins");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_oidcexternallogins_userid");
+
+                    b.HasIndex("ProviderId", "Subject")
+                        .IsUnique()
+                        .HasDatabaseName("ix_oidcexternallogins_providerid_subject");
+
+                    b.ToTable("oidcexternallogins", (string)null);
+                });
+
+            modelBuilder.Entity("OidcLoginState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CodeVerifier")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("codeverifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiresat");
+
+                    b.Property<string>("Nonce")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("nonce");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("providerid");
+
+                    b.Property<string>("ReturnUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("text")
+                        .HasColumnName("returnurl");
+
+                    b.Property<string>("StateHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("statehash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_oidcloginstates");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_oidcloginstates_expiresat");
+
+                    b.HasIndex("ProviderId")
+                        .HasDatabaseName("ix_oidcloginstates_providerid");
+
+                    b.HasIndex("StateHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_oidcloginstates_statehash");
+
+                    b.ToTable("oidcloginstates", (string)null);
+                });
+
             modelBuilder.Entity("OidcProvider", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1755,6 +2096,30 @@ namespace Infrastructure.Migrations.Migrations
                             Id = new Guid("b2298835-c351-7367-ad8d-e5884be235f3"),
                             PermissionLevel = 2,
                             ResourceType = 12,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("9e0c1481-c640-3182-c9a0-4687ef91bd6a"),
+                            PermissionLevel = 4,
+                            ResourceType = 13,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("f1633935-71e7-32f3-4264-d7120dcf22f1"),
+                            PermissionLevel = 1,
+                            ResourceType = 13,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("662623f3-aa3b-220d-546b-971d2947f7cd"),
+                            PermissionLevel = 2,
+                            ResourceType = 13,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
@@ -2656,6 +3021,29 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("usersteams", (string)null);
                 });
 
+            modelBuilder.Entity("ActionRun", b =>
+                {
+                    b.HasOne("AutomationAction", null)
+                        .WithMany()
+                        .HasForeignKey("ActionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_actionruns_actions_actionid");
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("RunAsActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_actionruns_actors_runasactorid");
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("TriggeredByActorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_actionruns_actors_triggeredbyactorid");
+                });
+
             modelBuilder.Entity("ActivityEvent", b =>
                 {
                     b.HasOne("Actor", null)
@@ -2751,6 +3139,23 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_alertrulestates_actors_createdbyactorid");
+                });
+
+            modelBuilder.Entity("AutomationAction", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_actions_actors_createdbyactorid");
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("RunAsActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_actions_actors_runasactorid");
                 });
 
             modelBuilder.Entity("Container", b =>
@@ -2892,6 +3297,33 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_internalsecretvalues_secretdefinitions_secretid");
+                });
+
+            modelBuilder.Entity("OidcExternalLogin", b =>
+                {
+                    b.HasOne("OidcProvider", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_oidcexternallogins_oidcproviders_providerid");
+
+                    b.HasOne("User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_oidcexternallogins_users_userid");
+                });
+
+            modelBuilder.Entity("OidcLoginState", b =>
+                {
+                    b.HasOne("OidcProvider", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_oidcloginstates_oidcproviders_providerid");
                 });
 
             modelBuilder.Entity("OidcProvider", b =>

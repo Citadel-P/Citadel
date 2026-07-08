@@ -36,11 +36,15 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .TagConfiguration()
             .ResourceTagConfiguration()
             .OidcProviderConfiguration()
+            .OidcLoginStateConfiguration()
+            .OidcExternalLoginConfiguration()
             .SecretProviderConfiguration()
             .SecretDefinitionConfiguration()
             .InternalSecretValueConfiguration()
             .DeploymentConfiguration()
             .ImageConfiguration()
+            .AutomationActionConfiguration()
+            .ActionRunConfiguration()
             .ActivityEventConfiguration()
             .AlertRuleConfiguration()
             .AlertEventConfiguration()
@@ -882,6 +886,72 @@ internal static class Configuration
         return builder;
     }
 
+    public static ModelBuilder OidcLoginStateConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "OidcLoginStates";
+        var state = builder.Entity("OidcLoginState");
+
+        state.ToTable(tableName);
+
+        state.Property<Guid>("Id").IsRequired();
+        state.HasKey("Id");
+
+        state.Property<Guid>("ProviderId").IsRequired();
+        state.Property<string>("StateHash").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        state.Property<string>("Nonce").HasColumnType(Text).HasMaxLength(256).IsRequired();
+        state.Property<string>("CodeVerifier").HasColumnType(Text).HasMaxLength(256).IsRequired();
+        state.Property<string>("ReturnUrl").HasColumnType(Text).HasMaxLength(2048).IsRequired();
+        state.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        state.Property<DateTime>("ExpiresAt").HasColumnType(Timestamp).IsRequired();
+
+        state
+            .HasOne("OidcProvider")
+            .WithMany()
+            .HasForeignKey("ProviderId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        state.HasIndex("StateHash").IsUnique().HasDatabaseName($"IX_{tableName}_StateHash");
+        state.HasIndex("ProviderId").HasDatabaseName($"IX_{tableName}_ProviderId");
+        state.HasIndex("ExpiresAt").HasDatabaseName($"IX_{tableName}_ExpiresAt");
+
+        return builder;
+    }
+
+    public static ModelBuilder OidcExternalLoginConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "OidcExternalLogins";
+        var login = builder.Entity("OidcExternalLogin");
+
+        login.ToTable(tableName);
+
+        login.Property<Guid>("Id").IsRequired();
+        login.HasKey("Id");
+
+        login.Property<Guid>("ProviderId").IsRequired();
+        login.Property<string>("Subject").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        login.Property<Guid>("UserId").IsRequired();
+        login.Property<string>("Email").HasColumnType(Text).HasMaxLength(320).IsRequired(false);
+        login.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        login.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        login
+            .HasOne("OidcProvider")
+            .WithMany()
+            .HasForeignKey("ProviderId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        login
+            .HasOne("User")
+            .WithMany()
+            .HasForeignKey("UserId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        login.HasIndex("ProviderId", "Subject").IsUnique().HasDatabaseName($"IX_{tableName}_ProviderId_Subject");
+        login.HasIndex("UserId").HasDatabaseName($"IX_{tableName}_UserId");
+
+        return builder;
+    }
+
     public static ModelBuilder InternalSecretValueConfiguration(this ModelBuilder builder)
     {
         var tableName = "InternalSecretValues";
@@ -1074,6 +1144,104 @@ internal static class Configuration
         latest.Property<string>("Info").HasColumnType(Text).HasColumnName("info");
         latest.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone").HasColumnName("createdat");
         latest.ToView("LatestActivityEvents");
+
+        return builder;
+    }
+
+    public static ModelBuilder AutomationActionConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "Actions";
+        var action = builder.Entity("AutomationAction");
+
+        action.ToTable(tableName);
+
+        action.Property<Guid>("Id").IsRequired();
+        action.HasKey("Id");
+
+        action.Property<string>("Name").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        action.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        action.Property<string>("Code").HasColumnType(Text).IsRequired();
+        action.Property<string>("DefaultArgsJson").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'{}'::jsonb");
+        action.Property<bool>("Enabled").HasColumnType("boolean").IsRequired();
+        action.Property<bool>("ScheduleEnabled").HasColumnType("boolean").IsRequired();
+        action.Property<string>("ScheduleCron").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        action.Property<string>("ScheduleTimeZone").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        action.Property<string>("Webhook").HasColumnType("jsonb").IsRequired(false);
+        action.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired();
+        action.Property<bool>("AlertOnFailure").HasColumnType("boolean").IsRequired();
+        action.Property<Guid>("RunAsActorId").IsRequired();
+        action.Property<DateTime?>("LastScheduledRunAt").HasColumnType(Timestamp).IsRequired(false);
+        action.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
+        action.Property<Guid?>("CurrentRunId").IsRequired(false);
+        action.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
+        action.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        action.AddAuditedMemebers();
+
+        action
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("RunAsActorId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        action.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
+        action.HasIndex("CreatedByActorId").HasDatabaseName($"IX_{tableName}_CreatedByActorId");
+        action.HasIndex("RunAsActorId").HasDatabaseName($"IX_{tableName}_RunAsActorId");
+        action.HasIndex("Enabled", "ScheduleEnabled", "ScheduleCron").HasDatabaseName($"IX_{tableName}_Schedule");
+
+        return builder;
+    }
+
+    public static ModelBuilder ActionRunConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "ActionRuns";
+        var run = builder.Entity("ActionRun");
+
+        run.ToTable(tableName);
+
+        run.Property<Guid>("Id").IsRequired();
+        run.HasKey("Id");
+
+        run.Property<Guid>("ActionId").IsRequired();
+        run.Property<string>("ActionName").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        run.Property<string>("Trigger").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        run.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        run.Property<Guid>("RunAsActorId").IsRequired();
+        run.Property<Guid?>("TriggeredByActorId").IsRequired(false);
+        run.Property<string>("ArgsJson").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'{}'::jsonb");
+        run.Property<string>("CodeSnapshot").HasColumnType(Text).IsRequired();
+        run.Property<string>("CodeHash").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        run.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired();
+        run.Property<DateTime>("QueuedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        run.Property<DateTime?>("StartedAt").HasColumnType(Timestamp).IsRequired(false);
+        run.Property<DateTime?>("FinishedAt").HasColumnType(Timestamp).IsRequired(false);
+        run.Property<long?>("DurationMs").HasColumnType(BigInt).IsRequired(false);
+        run.Property<int?>("ExitCode").HasColumnType(Integer).IsRequired(false);
+        run.Property<string>("Logs").HasColumnType(Text).IsRequired(false);
+        run.Property<string>("ErrorMessage").HasColumnType(Text).IsRequired(false);
+
+        run
+            .HasOne("AutomationAction")
+            .WithMany()
+            .HasForeignKey("ActionId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        run
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("RunAsActorId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        run
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("TriggeredByActorId")
+            .OnDelete(DeleteBehavior.SetNull);
+
+        run.HasIndex("ActionId", "QueuedAt").HasDatabaseName($"IX_{tableName}_ActionId_QueuedAt");
+        run.HasIndex("Status", "QueuedAt").HasDatabaseName($"IX_{tableName}_Status_QueuedAt");
+        run.HasIndex("RunAsActorId").HasDatabaseName($"IX_{tableName}_RunAsActorId");
+        run.HasIndex("TriggeredByActorId").HasDatabaseName($"IX_{tableName}_TriggeredByActorId");
 
         return builder;
     }

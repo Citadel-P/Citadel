@@ -231,7 +231,7 @@ console
 }
 ```
 
-The v1 helper API is intentionally small:
+The helper exposes both raw HTTP methods and generated OpenAPI operations:
 
 ```ts
 await citadel.request("GET", "/api/v1/deployments");
@@ -241,10 +241,19 @@ await citadel.patch("/api/v1/...");
 await citadel.put("/api/v1/...");
 await citadel.delete("/api/v1/...");
 
+await citadel.api.listPlatforms();
+await citadel.platforms.listPlatforms();
+await citadel.containers.getContainer(containerId);
+await citadel.images.listImages(platformId);
+await citadel.volumes.listVolumes(platformId);
+await citadel.repositories.listGitRepositories();
+
 await citadel.deployments.apply(input);
 await citadel.stacks.apply(input);
 await citadel.stacks.rollback(input);
 ```
+
+`citadel.api` exposes automation-safe generated operation names. Tag groups such as `citadel.platforms`, `citadel.containers`, `citadel.images`, `citadel.volumes`, `citadel.gitRepositories`, and `citadel.repositories` expose the same generated operations grouped by OpenAPI tag.
 
 The helper injects Citadel's internal base URL and a short-lived run token. Users do not configure base URLs or authorization headers in action code.
 

@@ -771,6 +771,7 @@ public sealed class ReceiveWebhookTests
             applyStackService ?? Mock.Of<IApplyStackService>(),
             repoCacheManager ?? Mock.Of<IRepoCacheManager>(),
             gitCliRepository ?? Mock.Of<IGitCliRepository>(),
+            Mock.Of<IAutomationRunQueueService>(),
             NullLoggerFactory.Instance);
     }
 

@@ -56,6 +56,32 @@ CREATE TABLE secretproviders (
     CONSTRAINT pk_secretproviders PRIMARY KEY (id)
 );
 
+CREATE TABLE actions (
+    id uuid NOT NULL,
+    alertonfailure boolean NOT NULL,
+    code text NOT NULL,
+    controlstate text NOT NULL DEFAULT 'Idle',
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    currentrunid uuid,
+    defaultargsjson jsonb NOT NULL DEFAULT ('{}'::jsonb),
+    description text,
+    enabled boolean NOT NULL,
+    lastscheduledrunat timestamp with time zone,
+    name text NOT NULL,
+    rowversion bigint NOT NULL DEFAULT 0,
+    runasactorid uuid NOT NULL,
+    schedulecron text,
+    scheduleenabled boolean NOT NULL,
+    scheduletimezone text NOT NULL,
+    timeoutseconds integer NOT NULL,
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    webhook jsonb,
+    CONSTRAINT pk_actions PRIMARY KEY (id),
+    CONSTRAINT fk_actions_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_actions_actors_runasactorid FOREIGN KEY (runasactorid) REFERENCES actors (id) ON DELETE RESTRICT
+);
+
 CREATE TABLE alertchannels (
     id uuid NOT NULL,
     alertdestination text NOT NULL,
@@ -273,6 +299,31 @@ CREATE TABLE secretdefinitions (
     CONSTRAINT fk_secretdefinitions_secretproviders_providerid FOREIGN KEY (providerid) REFERENCES secretproviders (id) ON DELETE RESTRICT
 );
 
+CREATE TABLE actionruns (
+    id uuid NOT NULL,
+    actionid uuid NOT NULL,
+    actionname text NOT NULL,
+    argsjson jsonb NOT NULL DEFAULT ('{}'::jsonb),
+    codehash text NOT NULL,
+    codesnapshot text NOT NULL,
+    durationms bigint,
+    errormessage text,
+    exitcode integer,
+    finishedat timestamp with time zone,
+    logs text,
+    queuedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    runasactorid uuid NOT NULL,
+    startedat timestamp with time zone,
+    status text NOT NULL,
+    timeoutseconds integer NOT NULL,
+    trigger text NOT NULL,
+    triggeredbyactorid uuid,
+    CONSTRAINT pk_actionruns PRIMARY KEY (id),
+    CONSTRAINT fk_actionruns_actions_actionid FOREIGN KEY (actionid) REFERENCES actions (id) ON DELETE CASCADE,
+    CONSTRAINT fk_actionruns_actors_runasactorid FOREIGN KEY (runasactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_actionruns_actors_triggeredbyactorid FOREIGN KEY (triggeredbyactorid) REFERENCES actors (id) ON DELETE SET NULL
+);
+
 CREATE TABLE alertevents (
     id uuid NOT NULL,
     acknowledgedat timestamp with time zone,
@@ -403,6 +454,32 @@ CREATE TABLE usersteams (
     CONSTRAINT pk_usersteams PRIMARY KEY (userid, teamid),
     CONSTRAINT fk_usersteams_teams_teamid FOREIGN KEY (teamid) REFERENCES teams (id) ON DELETE CASCADE,
     CONSTRAINT fk_usersteams_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE oidcexternallogins (
+    id uuid NOT NULL,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    email text,
+    providerid uuid NOT NULL,
+    subject text NOT NULL,
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    userid uuid NOT NULL,
+    CONSTRAINT pk_oidcexternallogins PRIMARY KEY (id),
+    CONSTRAINT fk_oidcexternallogins_oidcproviders_providerid FOREIGN KEY (providerid) REFERENCES oidcproviders (id) ON DELETE CASCADE,
+    CONSTRAINT fk_oidcexternallogins_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE oidcloginstates (
+    id uuid NOT NULL,
+    codeverifier text NOT NULL,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    expiresat timestamp with time zone NOT NULL,
+    nonce text NOT NULL,
+    providerid uuid NOT NULL,
+    returnurl text NOT NULL,
+    statehash text NOT NULL,
+    CONSTRAINT pk_oidcloginstates PRIMARY KEY (id),
+    CONSTRAINT fk_oidcloginstates_oidcproviders_providerid FOREIGN KEY (providerid) REFERENCES oidcproviders (id) ON DELETE CASCADE
 );
 
 CREATE TABLE internalsecretvalues (
@@ -577,6 +654,8 @@ VALUES ('645b4c54-7937-2180-7186-be24ac6bf330', 4, 5, '30000000-0000-0000-0000-0
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('656ccf45-65a9-33b3-de65-d18d5988151a', 4, 12, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('662623f3-aa3b-220d-546b-971d2947f7cd', 2, 13, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('672ebf04-40e5-547b-29f2-6daf5c3c3856', 1, 8, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('7125b1ec-d593-d356-f559-c4655a392c31', 2, 1, '30000000-0000-0000-0000-000000000002', 55);
@@ -598,6 +677,8 @@ INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificperm
 VALUES ('987e89d0-2c8f-87d8-830f-7461a7db392e', 4, 4, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('9b075e03-6326-7b95-ae78-2b296990ce26', 2, 4, '30000000-0000-0000-0000-000000000002', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('9e0c1481-c640-3182-c9a0-4687ef91bd6a', 4, 13, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('a3cd7182-baa1-324f-79f0-3a04d7647032', 4, 11, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -623,6 +704,8 @@ VALUES ('e89ccf24-0132-149c-c8bc-33265af98ed8', 1, 12, '30000000-0000-0000-0000-
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('ee9254c3-9b59-15a0-aa85-898f5974a603', 2, 6, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('f1633935-71e7-32f3-4264-d7120dcf22f1', 1, 13, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('fb710f21-c146-e381-00f0-820f58ecb69a', 1, 9, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('fbb8ef70-2ec3-134f-0c18-1533173d5849', 4, 9, '30000000-0000-0000-0000-000000000001', 0);
@@ -639,6 +722,22 @@ VALUES ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000
 
 INSERT INTO users (id, actorid, createdat, createdbyactorid, email, name, password)
 VALUES ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'admin@citadel.local', 'admin', 'o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1');
+
+CREATE INDEX ix_actionruns_actionid_queuedat ON actionruns (actionid, queuedat);
+
+CREATE INDEX ix_actionruns_runasactorid ON actionruns (runasactorid);
+
+CREATE INDEX ix_actionruns_status_queuedat ON actionruns (status, queuedat);
+
+CREATE INDEX ix_actionruns_triggeredbyactorid ON actionruns (triggeredbyactorid);
+
+CREATE INDEX ix_actions_createdbyactorid ON actions (createdbyactorid);
+
+CREATE UNIQUE INDEX ix_actions_name ON actions (name);
+
+CREATE INDEX ix_actions_runasactorid ON actions (runasactorid);
+
+CREATE INDEX ix_actions_schedule ON actions (enabled, scheduleenabled, schedulecron);
 
 CREATE INDEX ix_activityevents_createdbyactorid ON activityevents (createdbyactorid);
 
@@ -720,6 +819,16 @@ CREATE INDEX ix_images_platformid ON images (platformid);
 
 CREATE INDEX ix_images_registryid ON images (registryid);
 
+CREATE UNIQUE INDEX ix_oidcexternallogins_providerid_subject ON oidcexternallogins (providerid, subject);
+
+CREATE INDEX ix_oidcexternallogins_userid ON oidcexternallogins (userid);
+
+CREATE INDEX ix_oidcloginstates_expiresat ON oidcloginstates (expiresat);
+
+CREATE INDEX ix_oidcloginstates_providerid ON oidcloginstates (providerid);
+
+CREATE UNIQUE INDEX ix_oidcloginstates_statehash ON oidcloginstates (statehash);
+
 CREATE INDEX ix_oidcproviders_createdbyactorid ON oidcproviders (createdbyactorid);
 
 CREATE INDEX ix_oidcproviders_defaultroleid ON oidcproviders (defaultroleid);
@@ -797,7 +906,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260706213435_migration0001', '10.0.9');
+VALUES ('20260708165031_migration0001', '10.0.9');
 
 COMMIT;
 

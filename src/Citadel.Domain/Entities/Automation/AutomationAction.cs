@@ -1,3 +1,5 @@
+using Domain.Contracts.Resources;
+
 namespace Domain.Entities.Automation;
 
 public sealed class AutomationAction(
@@ -233,3 +235,10 @@ public sealed class AutomationAction(
     private static string NormalizeJson(string value)
         => string.IsNullOrWhiteSpace(value) ? "{}" : value.Trim();
 }
+
+public sealed record AutomationWebhookConfig(
+    bool Enabled = false,
+    WebhookProvider Provider = WebhookProvider.GitHub,
+    WebhookAuthScheme AuthScheme = WebhookAuthScheme.GitHubHmacSha256,
+    string? Secret = null,
+    string? BranchFilter = null) : WebhookConfig(Enabled, Provider, AuthScheme, Secret, BranchFilter);

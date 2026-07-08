@@ -55,6 +55,16 @@ public interface IAutomationRunCoordinator
     void Unregister(Guid runId);
 }
 
+public interface IAutomationApiEndpointCatalog
+{
+    string Json { get; }
+}
+
+internal sealed class EmptyAutomationApiEndpointCatalog : IAutomationApiEndpointCatalog
+{
+    public string Json => "[]";
+}
+
 internal sealed class AutomationRunCoordinator : IAutomationRunCoordinator
 {
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> runs = new();
@@ -93,6 +103,7 @@ internal sealed class AutomationExecutionService(
     IAutomationProcessRunner processRunner,
     IJwtService jwtService,
     IAutomationRunCoordinator runCoordinator,
+    IAutomationApiEndpointCatalog endpointCatalog,
     IOptions<AutomationOptions> options,
     ILogger<AutomationExecutionService> logger) : IAutomationExecutionService
 {
@@ -161,7 +172,7 @@ internal sealed class AutomationExecutionService(
                 var runPaths = PrepareRunDirectory(run.Id);
                 runDir = runPaths.RunDir;
                 var scriptPath = Path.Combine(runDir, "action.ts");
-                await File.WriteAllTextAsync(scriptPath, AutomationScriptBuilder.Build(options.InternalBaseUrl, token, run), cancellationToken);
+                await File.WriteAllTextAsync(scriptPath, AutomationScriptBuilder.Build(options.InternalBaseUrl, token, run, endpointCatalog.Json), cancellationToken);
 
                 args = BuildDenoArguments(scriptPath, runDir);
                 env = BuildEnvironment(runPaths.DenoCacheDir);
@@ -697,7 +708,7 @@ internal sealed class AutomationRunQueueService(
 
 internal static class AutomationScriptBuilder
 {
-    public static string Build(string baseUrl, string token, ActionRun run)
+    public static string Build(string baseUrl, string token, ActionRun run, string endpointCatalogJson)
     {
         var safeBaseUrl = baseUrl.TrimEnd('/');
         var baseUrlLiteral = JsonStringLiteral(safeBaseUrl);
@@ -709,6 +720,7 @@ internal static class AutomationScriptBuilder
         return $$"""
             const __citadelBaseUrl = {{baseUrlLiteral}};
             const __citadelToken = {{tokenLiteral}};
+            const __citadelEndpointCatalog = {{endpointCatalogJson}};
             const args = {{run.ArgsJson}};
             const run = Object.freeze({{runLiteral}});
 
@@ -735,22 +747,95 @@ internal static class AutomationScriptBuilder
               return text ? JSON.parse(text) : null;
             }
 
-            const __applyDeployment = (input) => __citadelRequest("POST", "/api/v1/deployments/apply", input);
-            const __applyStack = (input) => __citadelRequest("POST", "/api/v1/stacks/apply", input);
-            const __rollbackStack = (input) => __citadelRequest("POST", "/api/v1/stacks/rollback", input);
+            function __citadelAppendQuery(path, query) {
+              if (!query) {
+                return path;
+              }
+
+              const search = new URLSearchParams();
+              for (const [name, value] of Object.entries(query)) {
+                if (value === undefined || value === null) {
+                  continue;
+                }
+
+                if (Array.isArray(value)) {
+                  for (const item of value) {
+                    if (item !== undefined && item !== null) {
+                      search.append(name, String(item));
+                    }
+                  }
+                  continue;
+                }
+
+                search.append(name, String(value));
+              }
+
+              const queryString = search.toString();
+              return queryString ? `${path}?${queryString}` : path;
+            }
+
+            function __citadelBuildOperation(endpoint) {
+              return (...operationArgs) => {
+                let index = 0;
+                let path = endpoint.path.replace(/\{([^}:]+)(?::[^}]+)?\}/g, (_, name) => {
+                  const value = operationArgs[index++];
+                  if (value === undefined || value === null || value === "") {
+                    throw new Error(`Citadel API ${endpoint.key} requires path parameter '${name}'.`);
+                  }
+
+                  return encodeURIComponent(String(value));
+                });
+
+                const query = endpoint.method === "GET" ? operationArgs[index++] : undefined;
+                const body = endpoint.method === "GET" ? undefined : operationArgs[index++];
+                path = __citadelAppendQuery(path, query);
+                return __citadelRequest(endpoint.method, path, body);
+              };
+            }
+
+            function __citadelBuildGeneratedClients() {
+              const api = {};
+              const groups = {};
+
+              for (const endpoint of __citadelEndpointCatalog) {
+                const operation = __citadelBuildOperation(endpoint);
+                api[endpoint.key] = operation;
+                groups[endpoint.group] ??= {};
+                groups[endpoint.group][endpoint.key] = operation;
+              }
+
+              for (const key of Object.keys(groups)) {
+                groups[key] = Object.freeze(groups[key]);
+              }
+
+              return Object.freeze({
+                api: Object.freeze(api),
+                groups: Object.freeze(groups)
+              });
+            }
+
+            const __citadelGenerated = __citadelBuildGeneratedClients();
+            const __applyDeployment = __citadelGenerated.api.applyDeployment;
+            const __applyStack = __citadelGenerated.api.applyStack;
+            const __rollbackStack = __citadelGenerated.api.rollbackStack;
 
             const citadel = Object.freeze({
+              ...__citadelGenerated.groups,
               request: __citadelRequest,
               get: (path) => __citadelRequest("GET", path),
               post: (path, body) => __citadelRequest("POST", path, body),
               patch: (path, body) => __citadelRequest("PATCH", path, body),
               put: (path, body) => __citadelRequest("PUT", path, body),
               delete: (path, body) => __citadelRequest("DELETE", path, body),
+              api: __citadelGenerated.api,
+              repositories: __citadelGenerated.groups.gitRepositories,
               deployments: {
+                ...__citadelGenerated.groups.deployments,
                 apply: __applyDeployment,
                 applyDeployment: __applyDeployment
               },
               stacks: {
+                ...__citadelGenerated.groups.stacks,
                 apply: __applyStack,
                 applyStack: __applyStack,
                 rollback: __rollbackStack,
