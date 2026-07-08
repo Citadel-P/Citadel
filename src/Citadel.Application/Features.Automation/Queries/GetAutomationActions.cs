@@ -1,7 +1,9 @@
+using Application.Features.Tags.Queries;
 using Application.Features.Automation.Models;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Automation;
 using Hosting.Common;
+using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -10,7 +12,7 @@ using Mediator;
 namespace Application.Features.Automation.Queries;
 
 [RequirePermission(ResourceType.AutomationAction, PermissionLevel.Read)]
-public sealed record GetAutomationActions : IQuery<Result<AutomationActionListResult>>;
+public sealed record GetAutomationActions(IReadOnlyCollection<string>? Tags = null) : IQuery<Result<AutomationActionListResult>>;
 
 [RequirePermission(ResourceType.AutomationAction, PermissionLevel.Read)]
 public sealed record GetAutomationAction(Guid Id) : IQuery<Result<AutomationAction>>;
@@ -21,12 +23,19 @@ public sealed record GetAutomationActionRuns(Guid ActionId, int Limit = 50) : IQ
 [RequirePermission(ResourceType.AutomationAction, PermissionLevel.Read)]
 public sealed record GetAutomationActionRun(Guid ActionId, Guid RunId) : IQuery<Result<ActionRun>>;
 
-internal sealed class GetAutomationActionsHandler(IUnitOfWork unitOfWork)
+internal sealed class GetAutomationActionsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor)
     : IQueryHandler<GetAutomationActions, Result<AutomationActionListResult>>
 {
     public async ValueTask<Result<AutomationActionListResult>> Handle(GetAutomationActions query, CancellationToken cancellationToken)
     {
-        var actions = (await unitOfWork.AutomationActions.GetAllAsync(cancellationToken)).ToArray();
+        var tagFilter = await TagFilterResolver.ResolveAsync(unitOfWork, query.Tags, cancellationToken);
+        if (tagFilter.NoMatch)
+            return Result.Success(new AutomationActionListResult([], new Dictionary<Guid, ActionRun>()));
+
+        var user = userContextAccessor.Current;
+        var actions = (user is not null && !user.IsAdmin
+            ? await unitOfWork.AutomationActions.GetAuthorizedAsync(user.UserId, ResourceType.AutomationAction, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds)
+            : await unitOfWork.AutomationActions.GetAllAsync(cancellationToken, tagFilter.TagIds)).ToArray();
         var latest = new Dictionary<Guid, ActionRun>();
 
         foreach (var action in actions)

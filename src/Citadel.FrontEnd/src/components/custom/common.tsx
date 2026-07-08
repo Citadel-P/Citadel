@@ -1384,7 +1384,7 @@ export const TargetCell = ({
     [ActivityResourceType.Platform]: { Icon: Server, path: `/platforms/edit/${resourceId}` },
     [ActivityResourceType.Stack]: { Icon: Layers, path: `/stacks/edit/${resourceId}` },
     [ActivityResourceType.GitRepository]: { Icon: GitBranch, path: `/git-repos/edit/${resourceId}` },
-    [ActivityResourceType.AutomationAction]: { Icon: Workflow, path: `/automation/actions/edit/${resourceId}` },
+    [ActivityResourceType.AutomationAction]: { Icon: Workflow, path: `/automation/edit/${resourceId}` },
   };
 
   const config = resourceConfig[resourceType];

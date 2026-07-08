@@ -6,10 +6,10 @@ import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
 
 export const useDeploymentsGroup = () => {
-  const { selectedTagIds } = useResourceTagFilter();
+  const { selectedTagNames } = useResourceTagFilter();
   const { data, isLoading } = useRead(
     'listDeployments',
-    selectedTagIds.length > 0 ? { query: { tagIds: selectedTagIds } } : undefined,
+    selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined,
   );
   const [deployments, setDeployments] = useState<DeploymentView[] | undefined>();
   const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
@@ -66,5 +66,5 @@ export const useDeploymentsGroup = () => {
     removeEventListeners,
   });
 
-  return { deployments, isLoading, capabilities, selectedTagIds };
+  return { deployments, isLoading, capabilities, selectedTagNames };
 };

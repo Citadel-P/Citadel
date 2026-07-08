@@ -18,10 +18,10 @@ public static class Platforms
     public static async Task<Results<Ok<PlatformsView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
-        [FromQuery] Guid[]? tagIds,
-        CancellationToken cancellationToken)
+        [FromQuery] string[]? tags = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetPlatforms(tagIds), cancellationToken);
+        var result = await mediator.Send(new GetPlatforms(tags), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, PlatformsView.Map);
     }
 

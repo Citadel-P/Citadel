@@ -21,10 +21,10 @@ const normalizePlatform = (s: PlatformView): PlatformView => {
 };
 
 export const usePlatformsGroup = () => {
-  const { selectedTagIds } = useResourceTagFilter();
+  const { selectedTagNames } = useResourceTagFilter();
   const { data, isLoading } = useRead(
     'listPlatforms',
-    selectedTagIds.length > 0 ? { query: { tagIds: selectedTagIds } } : undefined,
+    selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined,
   );
   const [realtimePlatforms, setRealtimePlatforms] = useState<PlatformView[] | null>(null);
   const capabilities = data?.data.capabilities;
@@ -145,6 +145,6 @@ export const usePlatformsGroup = () => {
     platformsMessage,
     capabilities,
     isLoading,
-    selectedTagIds,
+    selectedTagNames,
   };
 };

@@ -1106,6 +1106,15 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.InsertData(
+                table: "actions",
+                columns: new[] { "id", "alertonfailure", "code", "controlstate", "createdat", "createdbyactorid", "currentrunid", "defaultargsjson", "description", "enabled", "lastscheduledrunat", "name", "runasactorid", "schedulecron", "scheduleenabled", "scheduletimezone", "timeoutseconds", "updatedat", "webhook" },
+                values: new object[,]
+                {
+                    { new Guid("41000000-0000-0000-0000-000000000001"), true, "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet deleted = 0;\n\nfor (const platform of platforms) {\n  const imagesResponse = await citadel.images.listImages(platform.id);\n  const unusedImageIds = (imagesResponse?.images ?? [])\n    .filter((image) => !image.isInUse)\n    .map((image) => image.dockerImageId);\n\n  if (unusedImageIds.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  await citadel.images.deleteImages({\n    platformId: platform.id,\n    ids: unusedImageIds,\n    force: false,\n    noPrune: false\n  });\n\n  console.log(`Requested deletion of ${unusedImageIds.length} unused image(s) on ${platform.name}.`);\n  deleted += unusedImageIds.length;\n}\n\nconsole.log(`Requested deletion of ${deleted} unused image(s).`);", "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Example action: deletes local Docker images that are not used by any container on every platform.", false, null, "Daily unused image prune", new Guid("00000000-0000-0000-0000-000000000002"), "0 12 * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null },
+                    { new Guid("41000000-0000-0000-0000-000000000002"), true, "const stacksResponse = await citadel.stacks.listStacks({ tags: [\"Prod\"] });\nconst stacks = stacksResponse?.stacks ?? [];\nconst unhealthyStacks = stacks.filter(\n  (stack) => stack.status !== \"Healthy\" && stack.controlState !== \"Processing\"\n);\n\nif (unhealthyStacks.length === 0) {\n  console.log(\"No unhealthy Prod stacks found.\");\n} else {\n  const stackIds = unhealthyStacks.map((stack) => stack.id);\n  await citadel.stacks.restartStacks(stackIds);\n  console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);\n}", "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Example action: restarts stacks tagged Prod when their current release is not healthy.", false, null, "Restart unhealthy Prod stacks", new Guid("00000000-0000-0000-0000-000000000002"), "*/15 * * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null }
+                });
+
+            migrationBuilder.InsertData(
                 table: "actorroles",
                 columns: new[] { "actorid", "roleid" },
                 values: new object[,]
@@ -1200,6 +1209,15 @@ namespace Infrastructure.Migrations.Migrations
                 values: new object[] { new Guid("00000000-0000-0000-0000-000000000100"), "{\r\n    \"$type\": \"DockerHub\"\r\n}", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), "Public Docker Hub Registry", "Docker Hub", "hub.docker.com", "Active" });
 
             migrationBuilder.InsertData(
+                table: "tags",
+                columns: new[] { "id", "color", "createdat", "createdbyactorid", "name", "normalizedname", "updatedat" },
+                values: new object[,]
+                {
+                    { new Guid("40000000-0000-0000-0000-000000000001"), "#2563EB", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), "Automation Examples", "automation examples", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) },
+                    { new Guid("40000000-0000-0000-0000-000000000002"), "#16A34A", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), "Prod", "prod", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc) }
+                });
+
+            migrationBuilder.InsertData(
                 table: "teams",
                 columns: new[] { "id", "actorid", "name" },
                 values: new object[] { new Guid("20000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000003"), "Operators" });
@@ -1208,6 +1226,16 @@ namespace Infrastructure.Migrations.Migrations
                 table: "users",
                 columns: new[] { "id", "actorid", "createdat", "createdbyactorid", "email", "name", "password" },
                 values: new object[] { new Guid("10000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000002"), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), "admin@citadel.local", "admin", "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1" });
+
+            migrationBuilder.InsertData(
+                table: "resourcetags",
+                columns: new[] { "resourceid", "resourcetype", "tagid", "createdat", "createdbyactorid" },
+                values: new object[,]
+                {
+                    { new Guid("41000000-0000-0000-0000-000000000001"), "AutomationAction", new Guid("40000000-0000-0000-0000-000000000001"), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001") },
+                    { new Guid("41000000-0000-0000-0000-000000000002"), "AutomationAction", new Guid("40000000-0000-0000-0000-000000000001"), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001") },
+                    { new Guid("41000000-0000-0000-0000-000000000002"), "AutomationAction", new Guid("40000000-0000-0000-0000-000000000002"), new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001") }
+                });
 
             migrationBuilder.CreateIndex(
                 name: "ix_actionruns_actionid_queuedat",

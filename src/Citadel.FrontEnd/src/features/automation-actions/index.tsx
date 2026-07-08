@@ -1,12 +1,10 @@
-import { AutomationActionView, ResourceCapabilities } from '@/api/generated/api.types';
+import { AutomationActionView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { CitadelIcons } from '@/lib/icons';
-import { useRead } from '@/lib/hooks';
-import { RequiredComponents, ResourceDataHookResult, TabbedResourceComponents } from '@/pages/types';
+import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { AutomationActionDropdownActions, AutomationActionGroupActions } from './actions';
 import { AutomationActionsTable } from './table';
-
-const AUTOMATION_CAPABILITIES: ResourceCapabilities = { canRead: true, canWrite: true, canExecute: true };
+import { useAutomationActionsGroup } from './hooks/useAutomationActionsGroup';
 
 export const AutomationActionComponents: RequiredComponents<AutomationActionView> = {
   Icon: CitadelIcons.AutomationAction,
@@ -14,10 +12,11 @@ export const AutomationActionComponents: RequiredComponents<AutomationActionView
     <AutomationActionsTable items={items} actions={actions} isLoading={isLoading} />
   ),
   header: {
-    title: 'Actions',
+    title: 'Automation',
     subtitle: 'Run TypeScript automations against Citadel resources.',
     showSearch: true,
     showAdd: true,
+    showTagFilter: true,
     addButtonTitle: 'Add Action',
   },
   DropdownActions: AutomationActionDropdownActions,
@@ -25,43 +24,9 @@ export const AutomationActionComponents: RequiredComponents<AutomationActionView
     <ActionBar type="AutomationAction" items={items} actions={Object.values(AutomationActionGroupActions)} />
   ),
   useData(): ResourceDataHookResult<AutomationActionView> {
-    const { data, isLoading } = useRead('listAutomationActions');
-    return { items: data?.data.actions ?? [], isLoading, capabilities: AUTOMATION_CAPABILITIES };
+    const { actions, isLoading, capabilities } = useAutomationActionsGroup();
+    return { items: actions ?? [], isLoading, capabilities };
   },
-  filterItems: filterAutomationActions,
-};
-
-export const AutomationComponents: TabbedResourceComponents = {
-  Icon: CitadelIcons.Automation,
-  header: {
-    title: 'Automation',
-    subtitle: 'Create and run operational actions.',
-    showSearch: false,
-    showAdd: false,
-  },
-  Tabs: [
-    {
-      label: 'Actions',
-      slug: 'actions',
-      Content: ({ items, actions, isLoading }) => (
-        <AutomationActionsTable items={items} actions={actions} isLoading={isLoading} />
-      ),
-      Header: {
-        showAdd: true,
-        showSearch: true,
-        addButtonTitle: 'Add Action',
-        addButtonUrl: '/automation/actions/add',
-      },
-      DropdownActions: AutomationActionDropdownActions,
-      GroupActions: ({ items }) => (
-        <ActionBar type="AutomationAction" items={items} actions={Object.values(AutomationActionGroupActions)} />
-      ),
-      useData: () => {
-        const { data, isLoading } = useRead('listAutomationActions');
-        return { items: data?.data.actions ?? [], isLoading, capabilities: AUTOMATION_CAPABILITIES };
-      },
-    },
-  ],
   filterItems: filterAutomationActions,
 };
 

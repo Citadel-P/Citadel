@@ -24,11 +24,11 @@ public static class Registries
     public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
-        bool? includeDisabled,
-        [FromQuery] Guid[]? tagIds,
-        CancellationToken cancellationToken)
+        bool? includeDisabled = null,
+        [FromQuery] string[]? tags = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetAllRegistries(includeDisabled, tagIds), cancellationToken);
+        var result = await mediator.Send(new GetAllRegistries(includeDisabled, tags), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, RegistriesView.Map);
     }
 

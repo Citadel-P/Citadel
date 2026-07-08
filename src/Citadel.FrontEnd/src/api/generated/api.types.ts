@@ -1852,6 +1852,7 @@ export interface AutomationActionInput {
   alertOnFailure: boolean;
   /** @format uuid */
   runAsActorId: null | string;
+  tagIds?: null | string[];
 }
 
 export interface AutomationActionRunLogsView {
@@ -1982,6 +1983,7 @@ export interface AutomationActionView {
   createdAt: any;
   /** @format date-time */
   updatedAt: any;
+  tags: TagSummaryView[];
 }
 
 export interface AutomationActionsView {
@@ -6604,8 +6606,8 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listPlatforms: (
-      query: {
-        tagIds: string[];
+      query?: {
+        tags?: string[];
       },
       params: RequestParams = {},
     ) =>
@@ -6840,9 +6842,9 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listRegistries: (
-      query: {
+      query?: {
         includeDisabled?: boolean;
-        tagIds: string[];
+        tags?: string[];
       },
       params: RequestParams = {},
     ) =>
@@ -7324,8 +7326,8 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listGitRepositories: (
-      query: {
-        tagIds: string[];
+      query?: {
+        tags?: string[];
       },
       params: RequestParams = {},
     ) =>
@@ -8250,8 +8252,8 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listDeployments: (
-      query: {
-        tagIds: string[];
+      query?: {
+        tags?: string[];
       },
       params: RequestParams = {},
     ) =>
@@ -8814,8 +8816,8 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listStacks: (
-      query: {
-        tagIds: string[];
+      query?: {
+        tags?: string[];
       },
       params: RequestParams = {},
     ) =>
@@ -9269,6 +9271,32 @@ export class Api<
     resumeStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/resume`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name RestartStacks
+     * @summary Restart stacks
+     * @request POST:/api/v1/stacks/restart
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    restartStacks: (data: string[], params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/stacks/restart`,
         method: "POST",
         body: data,
         secure: true,
@@ -10187,13 +10215,19 @@ export class Api<
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    listAutomationActions: (params: RequestParams = {}) =>
+    listAutomationActions: (
+      query?: {
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<
         AutomationActionsView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/automation/actions`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -10316,6 +10350,65 @@ export class Api<
         path: `/api/v1/automation/actions/${id}`,
         method: "DELETE",
         secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name GetAutomationActionTags
+     * @summary Get automation action tags
+     * @request GET:/api/v1/automation/actions/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAutomationActionTags: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/automation/actions/${id}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
+     * @name ReplaceAutomationActionTags
+     * @summary Replace automation action tags
+     * @request PUT:/api/v1/automation/actions/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceAutomationActionTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceTagsView, ProblemDetails>({
+        path: `/api/v1/automation/actions/${id}/tags`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
 

@@ -573,6 +573,49 @@ VALUES ('30000000-0000-0000-0000-000000000002', 'Operator', 'System');
 INSERT INTO roles (id, name, roletype)
 VALUES ('30000000-0000-0000-0000-000000000003', 'Viewer', 'System');
 
+INSERT INTO actions (id, alertonfailure, code, controlstate, createdat, createdbyactorid, currentrunid, defaultargsjson, description, enabled, lastscheduledrunat, name, runasactorid, schedulecron, scheduleenabled, scheduletimezone, timeoutseconds, updatedat, webhook)
+VALUES ('41000000-0000-0000-0000-000000000001', TRUE, 'const platformsResponse = await citadel.platforms.listPlatforms();
+const platforms = platformsResponse?.platforms ?? [];
+let deleted = 0;
+
+for (const platform of platforms) {
+  const imagesResponse = await citadel.images.listImages(platform.id);
+  const unusedImageIds = (imagesResponse?.images ?? [])
+    .filter((image) => !image.isInUse)
+    .map((image) => image.dockerImageId);
+
+  if (unusedImageIds.length === 0) {
+    console.log(`No unused images on ${platform.name}.`);
+    continue;
+  }
+
+  await citadel.images.deleteImages({
+    platformId: platform.id,
+    ids: unusedImageIds,
+    force: false,
+    noPrune: false
+  });
+
+  console.log(`Requested deletion of ${unusedImageIds.length} unused image(s) on ${platform.name}.`);
+  deleted += unusedImageIds.length;
+}
+
+console.log(`Requested deletion of ${deleted} unused image(s).`);', 'Idle', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '{}', 'Example action: deletes local Docker images that are not used by any container on every platform.', FALSE, NULL, 'Daily unused image prune', '00000000-0000-0000-0000-000000000002', '0 12 * * *', TRUE, 'UTC', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL);
+INSERT INTO actions (id, alertonfailure, code, controlstate, createdat, createdbyactorid, currentrunid, defaultargsjson, description, enabled, lastscheduledrunat, name, runasactorid, schedulecron, scheduleenabled, scheduletimezone, timeoutseconds, updatedat, webhook)
+VALUES ('41000000-0000-0000-0000-000000000002', TRUE, 'const stacksResponse = await citadel.stacks.listStacks({ tags: ["Prod"] });
+const stacks = stacksResponse?.stacks ?? [];
+const unhealthyStacks = stacks.filter(
+  (stack) => stack.status !== "Healthy" && stack.controlState !== "Processing"
+);
+
+if (unhealthyStacks.length === 0) {
+  console.log("No unhealthy Prod stacks found.");
+} else {
+  const stackIds = unhealthyStacks.map((stack) => stack.id);
+  await citadel.stacks.restartStacks(stackIds);
+  console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);
+}', 'Idle', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '{}', 'Example action: restarts stacks tagged Prod when their current release is not healthy.', FALSE, NULL, 'Restart unhealthy Prod stacks', '00000000-0000-0000-0000-000000000002', '*/15 * * * *', TRUE, 'UTC', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL);
+
 INSERT INTO actorroles (actorid, roleid)
 VALUES ('00000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001');
 INSERT INTO actorroles (actorid, roleid)
@@ -717,11 +760,23 @@ VALUES ('00000000-0000-0000-0000-000000000100', '{
     "$type": "DockerHub"
 }', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'Public Docker Hub Registry', 'Docker Hub', 'hub.docker.com', 'Active');
 
+INSERT INTO tags (id, color, createdat, createdbyactorid, name, normalizedname, updatedat)
+VALUES ('40000000-0000-0000-0000-000000000001', '#2563EB', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'Automation Examples', 'automation examples', TIMESTAMPTZ '2026-01-01T00:00:00Z');
+INSERT INTO tags (id, color, createdat, createdbyactorid, name, normalizedname, updatedat)
+VALUES ('40000000-0000-0000-0000-000000000002', '#16A34A', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'Prod', 'prod', TIMESTAMPTZ '2026-01-01T00:00:00Z');
+
 INSERT INTO teams (id, actorid, name)
 VALUES ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000003', 'Operators');
 
 INSERT INTO users (id, actorid, createdat, createdbyactorid, email, name, password)
 VALUES ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'admin@citadel.local', 'admin', 'o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1');
+
+INSERT INTO resourcetags (resourceid, resourcetype, tagid, createdat, createdbyactorid)
+VALUES ('41000000-0000-0000-0000-000000000001', 'AutomationAction', '40000000-0000-0000-0000-000000000001', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001');
+INSERT INTO resourcetags (resourceid, resourcetype, tagid, createdat, createdbyactorid)
+VALUES ('41000000-0000-0000-0000-000000000002', 'AutomationAction', '40000000-0000-0000-0000-000000000001', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001');
+INSERT INTO resourcetags (resourceid, resourcetype, tagid, createdat, createdbyactorid)
+VALUES ('41000000-0000-0000-0000-000000000002', 'AutomationAction', '40000000-0000-0000-0000-000000000002', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001');
 
 CREATE INDEX ix_actionruns_actionid_queuedat ON actionruns (actionid, queuedat);
 
@@ -906,7 +961,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260708165031_migration0001', '10.0.9');
+VALUES ('20260708175530_migration0001', '10.0.9');
 
 COMMIT;
 

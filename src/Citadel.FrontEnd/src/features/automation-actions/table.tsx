@@ -9,9 +9,10 @@ import { fromNow } from '@/lib/dayjs.helper';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { ColumnDef } from '@tanstack/react-table';
-import { CalendarClock, Link2, PlayCircle } from 'lucide-react';
+import { CalendarClock, PlayCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
+import { TagChips } from '../tags/components';
 
 export function AutomationActionsTable({
   items,
@@ -73,17 +74,20 @@ const columns = (
     sortingFn: (rowA, rowB) => Number(rowA.original.scheduleEnabled) - Number(rowB.original.scheduleEnabled),
   },
   {
-    accessorKey: 'webhook',
-    header: ({ column }) => <SortableCell cellName="Webhook" column={column} />,
-    cell: ({ row }) => <WebhookCell action={row.original} />,
-    sortingFn: (rowA, rowB) => Number(rowA.original.webhook?.enabled ?? false) - Number(rowB.original.webhook?.enabled ?? false),
-  },
-  {
     accessorKey: 'latestRun',
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
     cell: ({ row }) => <LastRunCell action={row.original} />,
     sortingFn: (rowA, rowB) =>
       String(rowA.original.latestRun?.queuedAt ?? '').localeCompare(String(rowB.original.latestRun?.queuedAt ?? '')),
+  },
+   {
+    accessorKey: 'tags',
+    header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
+    cell: ({ row }) => <TagChips tags={row.original.tags} />,
+    sortingFn: (rowA, rowB) =>
+      (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
+        rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
+      ),
   },
   {
     id: 'actions',
@@ -102,7 +106,7 @@ const ActionNameRow = ({ action }: { action: AutomationActionView }) => {
         enableLabel={typeof status === 'boolean'}
       />
       <div className="min-w-0">
-        <Link to={`../automation/actions/edit/${action.id}`} className="truncate text-sm font-medium hover:underline">
+        <Link to={`../automation/edit/${action.id}`} className="truncate text-sm font-medium hover:underline">
           {action.name}
         </Link>
         {action.description && <div className="truncate text-xs text-muted-foreground">{action.description}</div>}
@@ -120,17 +124,6 @@ const ScheduleCell = ({ action }: { action: AutomationActionView }) => {
       <span className="truncate" title={action.scheduleCron ?? undefined}>
         {action.scheduleCron}
       </span>
-    </span>
-  );
-};
-
-const WebhookCell = ({ action }: { action: AutomationActionView }) => {
-  if (!action.webhook?.enabled) return <span className="text-sm text-muted-foreground">Off</span>;
-
-  return (
-    <span className="inline-flex items-center gap-2 text-sm">
-      <Link2 className="size-3.5 text-muted-foreground" />
-      Enabled
     </span>
   );
 };

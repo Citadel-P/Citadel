@@ -60,13 +60,13 @@ public interface IUnitOfWork : IAsyncDisposable
 
 public interface IAutomationActionRepository
 {
-    Task<int> AddAsync(AutomationAction action, CancellationToken cancellationToken);
+    Task<int> AddAsync(AutomationAction action, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
     Task<int> UpdateAsync(AutomationAction action, CancellationToken cancellationToken);
     Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
     Task<AutomationAction?> GetAsync(Guid id, CancellationToken cancellationToken);
-    Task<IEnumerable<AutomationAction>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<AutomationAction>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<IEnumerable<AutomationAction>> GetScheduledAsync(CancellationToken cancellationToken);
-    Task<IEnumerable<AutomationAction>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IEnumerable<AutomationAction>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken);
     Task<bool> CanAccessAsync(Guid userId, Guid id, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);

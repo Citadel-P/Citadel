@@ -20,7 +20,8 @@ internal sealed record AutomationActionDto(
     long RowVersion,
     Guid CreatedByActorId,
     DateTime CreatedAt,
-    DateTime UpdatedAt)
+    DateTime UpdatedAt,
+    string? TagsJson = null)
 {
     public AutomationActionDto()
         : this(

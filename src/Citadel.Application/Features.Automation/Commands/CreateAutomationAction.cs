@@ -85,7 +85,15 @@ internal sealed class CreateAutomationActionHandler(
             return Result.Failure<AutomationActionResult>(new BadRequestError(ex.Message));
         }
 
-        await unitOfWork.AutomationActions.AddAsync(action, cancellationToken);
+        var affectedRows = await unitOfWork.AutomationActions.AddAsync(
+            action,
+            cancellationToken,
+            input.TagIds,
+            userContextAccessor.Current.ActorId);
+
+        if (affectedRows == 0)
+            return Result.Failure<AutomationActionResult>(new BadRequestError("One or more tags do not exist."));
+
         await unitOfWork.ActivityEventRepository.AddAsync(
             new ActivityEvent(
                 platformId: null,

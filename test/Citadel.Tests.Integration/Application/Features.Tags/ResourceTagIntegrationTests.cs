@@ -41,7 +41,7 @@ public class ResourceTagIntegrationTests(PostgresTestFixture fixture) : Integrat
         var taggedDeploymentId = await CreateDeploymentAsync("api-tagged-deployment", platformId, [blueTag.Id]);
         await CreateDeploymentAsync("api-untagged-deployment", platformId, []);
 
-        var listResponse = await Client.GetAsync($"/api/v1/deployments?tagIds={blueTag.Id}", cancellationToken);
+        var listResponse = await Client.GetAsync($"/api/v1/deployments?tags={Uri.EscapeDataString(blueTag.Name)}", cancellationToken);
         listResponse.EnsureSuccessStatusCode();
 
         using (var document = await ReadJsonAsync(listResponse))
@@ -51,6 +51,28 @@ public class ResourceTagIntegrationTests(PostgresTestFixture fixture) : Integrat
 
             Assert.Equal(taggedDeploymentId, deployment.GetProperty("id").GetGuid());
             AssertContainsTag(deployment.GetProperty("tags"), blueTag.Id);
+        }
+
+        var listByNameResponse = await Client.GetAsync(
+            $"/api/v1/deployments?tags={Uri.EscapeDataString(blueTag.Name)}",
+            cancellationToken);
+        listByNameResponse.EnsureSuccessStatusCode();
+
+        using (var document = await ReadJsonAsync(listByNameResponse))
+        {
+            var deployment = Assert.Single(document.RootElement.GetProperty("deployments").EnumerateArray());
+            Assert.Equal(taggedDeploymentId, deployment.GetProperty("id").GetGuid());
+            AssertContainsTag(deployment.GetProperty("tags"), blueTag.Id);
+        }
+
+        var missingTagResponse = await Client.GetAsync(
+            $"/api/v1/deployments?tags={Uri.EscapeDataString("missing-tag-name")}",
+            cancellationToken);
+        missingTagResponse.EnsureSuccessStatusCode();
+
+        using (var document = await ReadJsonAsync(missingTagResponse))
+        {
+            Assert.Empty(document.RootElement.GetProperty("deployments").EnumerateArray());
         }
 
         var getResponse = await Client.GetAsync($"/api/v1/deployments/{taggedDeploymentId}", cancellationToken);
@@ -68,7 +90,7 @@ public class ResourceTagIntegrationTests(PostgresTestFixture fixture) : Integrat
 
         replaceResponse.EnsureSuccessStatusCode();
 
-        var oldTagResponse = await Client.GetAsync($"/api/v1/deployments?tagIds={blueTag.Id}", cancellationToken);
+        var oldTagResponse = await Client.GetAsync($"/api/v1/deployments?tags={Uri.EscapeDataString(blueTag.Name)}", cancellationToken);
         oldTagResponse.EnsureSuccessStatusCode();
 
         using (var document = await ReadJsonAsync(oldTagResponse))
@@ -76,7 +98,7 @@ public class ResourceTagIntegrationTests(PostgresTestFixture fixture) : Integrat
             Assert.Empty(document.RootElement.GetProperty("deployments").EnumerateArray());
         }
 
-        var newTagResponse = await Client.GetAsync($"/api/v1/deployments?tagIds={greenTag.Id}", cancellationToken);
+        var newTagResponse = await Client.GetAsync($"/api/v1/deployments?tags={Uri.EscapeDataString(greenTag.Name)}", cancellationToken);
         newTagResponse.EnsureSuccessStatusCode();
 
         using (var document = await ReadJsonAsync(newTagResponse))
@@ -272,7 +294,7 @@ public class ResourceTagIntegrationTests(PostgresTestFixture fixture) : Integrat
             await uow.CommitAsync(cancellationToken);
         }
 
-        var listResponse = await Client.GetAsync($"/api/v1/registries?includeDisabled=true&tagIds={blueTag.Id}", cancellationToken);
+        var listResponse = await Client.GetAsync($"/api/v1/registries?includeDisabled=true&tags={Uri.EscapeDataString(blueTag.Name)}", cancellationToken);
         listResponse.EnsureSuccessStatusCode();
 
         using (var document = await ReadJsonAsync(listResponse))
@@ -298,7 +320,7 @@ public class ResourceTagIntegrationTests(PostgresTestFixture fixture) : Integrat
 
         replaceResponse.EnsureSuccessStatusCode();
 
-        var oldTagResponse = await Client.GetAsync($"/api/v1/registries?includeDisabled=true&tagIds={blueTag.Id}", cancellationToken);
+        var oldTagResponse = await Client.GetAsync($"/api/v1/registries?includeDisabled=true&tags={Uri.EscapeDataString(blueTag.Name)}", cancellationToken);
         oldTagResponse.EnsureSuccessStatusCode();
 
         using (var document = await ReadJsonAsync(oldTagResponse))
@@ -306,7 +328,7 @@ public class ResourceTagIntegrationTests(PostgresTestFixture fixture) : Integrat
             Assert.Empty(document.RootElement.GetProperty("registries").EnumerateArray());
         }
 
-        var newTagResponse = await Client.GetAsync($"/api/v1/registries?includeDisabled=true&tagIds={greenTag.Id}", cancellationToken);
+        var newTagResponse = await Client.GetAsync($"/api/v1/registries?includeDisabled=true&tags={Uri.EscapeDataString(greenTag.Name)}", cancellationToken);
         newTagResponse.EnsureSuccessStatusCode();
 
         using (var document = await ReadJsonAsync(newTagResponse))

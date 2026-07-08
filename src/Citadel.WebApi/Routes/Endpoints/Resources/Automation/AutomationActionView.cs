@@ -1,6 +1,7 @@
 using Application.Features.Automation.Models;
 using Domain;
 using Domain.Entities.Automation;
+using WebApi.Routes.Endpoints.Resources.Tags;
 
 namespace WebApi.Routes.Endpoints.Resources.Automation;
 
@@ -25,7 +26,8 @@ public sealed record AutomationActionView(
     AutomationActionRunView? LatestRun,
     Guid CreatedByActorId,
     DateTime CreatedAt,
-    DateTime UpdatedAt)
+    DateTime UpdatedAt,
+    IReadOnlyList<TagSummaryView> Tags)
 {
     internal static AutomationActionView Map(AutomationActionResult result)
         => Map(result.Action, null);
@@ -55,7 +57,8 @@ public sealed record AutomationActionView(
             latestRun is null ? null : AutomationActionRunView.Map(latestRun, includeLogs: false, includeCode: false),
             action.CreatedByActorId,
             action.CreatedAt,
-            action.UpdatedAt);
+            action.UpdatedAt,
+            [.. action.Tags.Select(TagSummaryView.Map)]);
 }
 
 public sealed record AutomationActionsView(IReadOnlyList<AutomationActionView> Actions)
@@ -134,7 +137,8 @@ public sealed record AutomationActionInput(
     AutomationWebhookConfig? Webhook,
     int? TimeoutSeconds,
     bool AlertOnFailure,
-    Guid? RunAsActorId)
+    Guid? RunAsActorId,
+    IReadOnlyCollection<Guid>? TagIds = null)
 {
     internal AutomationActionInputModel ToModel()
         => new(
@@ -149,7 +153,8 @@ public sealed record AutomationActionInput(
             Webhook,
             TimeoutSeconds,
             AlertOnFailure,
-            RunAsActorId);
+            RunAsActorId,
+            TagIds);
 }
 
 public sealed record UpdateAutomationActionInput(

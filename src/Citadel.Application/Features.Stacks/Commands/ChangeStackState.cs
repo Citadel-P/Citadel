@@ -23,7 +23,8 @@ public enum StackAction
     START = 0,
     STOP,
     PAUSE,
-    UNPAUSE
+    UNPAUSE,
+    RESTART
 }
 
 internal sealed class ChangeStackStateHandler(
@@ -174,6 +175,7 @@ internal sealed class ChangeStackStateHandler(
             StackAction.STOP => state is ContainerStateStatus.Running or ContainerStateStatus.Paused or ContainerStateStatus.Restarting,
             StackAction.PAUSE => state is ContainerStateStatus.Running,
             StackAction.UNPAUSE => state is ContainerStateStatus.Paused,
+            StackAction.RESTART => state is ContainerStateStatus.Running or ContainerStateStatus.Restarting,
             _ => false
         };
     }
@@ -195,6 +197,9 @@ internal sealed class ChangeStackStateHandler(
             StackAction.PAUSE or StackAction.UNPAUSE => containers.All(container =>
                 container.State is ContainerStateStatus.Paused
                     or ContainerStateStatus.Running),
+            StackAction.RESTART => containers.All(container =>
+                container.State is ContainerStateStatus.Running
+                    or ContainerStateStatus.Restarting),
             _ => false
         };
     }
@@ -253,6 +258,7 @@ internal sealed class ChangeStackStateHandler(
             [StackAction.START] = ContainerAction.START,
             [StackAction.STOP] = ContainerAction.STOP,
             [StackAction.PAUSE] = ContainerAction.PAUSE,
-            [StackAction.UNPAUSE] = ContainerAction.UNPAUSE
+            [StackAction.UNPAUSE] = ContainerAction.UNPAUSE,
+            [StackAction.RESTART] = ContainerAction.RESTART
         };
 }

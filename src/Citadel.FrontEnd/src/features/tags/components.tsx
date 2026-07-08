@@ -10,45 +10,47 @@ import { useSearchParams } from 'react-router';
 import { getTagTextColor } from './tag-colors';
 import { toast } from 'sonner';
 
-const TAG_QUERY_KEY = 'tagIds';
+const TAG_QUERY_KEY = 'tags';
+const normalizeTagName = (name: string) => name.trim().toLowerCase();
 
 export const useResourceTagFilter = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const selectedTagIds = useMemo(
+  const selectedTagNames = useMemo(
     () => searchParams.getAll(TAG_QUERY_KEY).filter((value) => value.trim().length > 0),
     [searchParams],
   );
 
-  const setSelectedTagIds = (tagIds: string[]) => {
+  const setSelectedTagNames = (tagNames: string[]) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete(TAG_QUERY_KEY);
-      tagIds.forEach((tagId) => next.append(TAG_QUERY_KEY, tagId));
+      tagNames.forEach((tagName) => next.append(TAG_QUERY_KEY, tagName));
       return next;
     });
   };
 
-  return { selectedTagIds, setSelectedTagIds };
+  return { selectedTagNames, setSelectedTagNames };
 };
 
 export const ResourceTagFilter = () => {
   const [open, setOpen] = useState(false);
-  const { selectedTagIds, setSelectedTagIds } = useResourceTagFilter();
+  const { selectedTagNames, setSelectedTagNames } = useResourceTagFilter();
   const { data, isLoading } = useRead('listTags');
   const tags = useMemo(() => data?.data.tags ?? [], [data?.data.tags]);
   const selectedTags = useMemo(() => {
-    const selected = new Set(selectedTagIds);
-    return tags.filter((tag) => selected.has(tag.id));
-  }, [selectedTagIds, tags]);
+    const selected = new Set(selectedTagNames.map(normalizeTagName));
+    return tags.filter((tag) => selected.has(normalizeTagName(tag.name)));
+  }, [selectedTagNames, tags]);
 
   const availableTags = useMemo(() => {
-    const selected = new Set(selectedTagIds);
-    return tags.filter((tag) => !selected.has(tag.id));
-  }, [selectedTagIds, tags]);
+    const selected = new Set(selectedTagNames.map(normalizeTagName));
+    return tags.filter((tag) => !selected.has(normalizeTagName(tag.name)));
+  }, [selectedTagNames, tags]);
 
-  const selectTag = (tagId: string) => setSelectedTagIds([...selectedTagIds, tagId]);
-  const removeTag = (tagId: string) => setSelectedTagIds(selectedTagIds.filter((id) => id !== tagId));
+  const selectTag = (tagName: string) => setSelectedTagNames([...selectedTagNames, tagName]);
+  const removeTag = (tagName: string) =>
+    setSelectedTagNames(selectedTagNames.filter((name) => normalizeTagName(name) !== normalizeTagName(tagName)));
 
   if (!isLoading && tags.length === 0) return null;
 
@@ -61,7 +63,7 @@ export const ResourceTagFilter = () => {
           className="inline-flex h-9 max-w-40 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium shadow-xs"
           style={{ backgroundColor: tag.color, color: getTagTextColor(tag.color) }}
           title={`Remove ${tag.name} tag filter`}
-          onClick={() => removeTag(tag.id)}>
+          onClick={() => removeTag(tag.name)}>
           <Minus className="size-3 shrink-0" />
           <span className="truncate">{tag.name}</span>
         </button>
@@ -83,7 +85,7 @@ export const ResourceTagFilter = () => {
                   <CommandItem
                     key={tag.id}
                     value={tag.name}
-                    onSelect={() => selectTag(tag.id)}
+                    onSelect={() => selectTag(tag.name)}
                     className="cursor-pointer">
                     <span
                       className="size-3 shrink-0 rounded-full border border-border"
@@ -202,7 +204,7 @@ export const TagChips = ({ tags, max = 3 }: { tags?: TagSummaryView[] | TagView[
   );
 };
 
-type EditableResourceType = 'Deployment' | 'Stack' | 'GitRepository' | 'Platform' | 'Registry';
+type EditableResourceType = 'Deployment' | 'Stack' | 'GitRepository' | 'Platform' | 'Registry' | 'AutomationAction';
 
 const replaceTagEndpoint = {
   Deployment: 'replaceDeploymentTags',
@@ -210,6 +212,7 @@ const replaceTagEndpoint = {
   GitRepository: 'replaceGitRepositoryTags',
   Platform: 'replacePlatformTags',
   Registry: 'replaceRegistryTags',
+  AutomationAction: 'replaceAutomationActionTags',
 } as const;
 
 export const ResourceHeaderTagsEditor = ({
@@ -331,6 +334,7 @@ const buildReplaceVariables = (resourceType: EditableResourceType, resourceId: s
     case 'GitRepository':
     case 'Platform':
     case 'Registry':
+    case 'AutomationAction':
       return { id: resourceId, data };
   }
 };

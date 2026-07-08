@@ -20,6 +20,7 @@ import { ResourceSelectorField } from '@/components/custom/common';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Button } from '@/components/ui/button';
 import { TimezoneSelectField } from '@/features/alerters/alert-rules/form/form';
+import { ResourceTagSelector } from '@/features/tags/components';
 import { MonacoEditor } from '@/lib/monaco';
 import { useMutate, useSaveResource } from '@/lib/hooks';
 import { useTaskSheet } from '@/lib/atoms';
@@ -34,6 +35,7 @@ type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
   id?: string;
   runAsActorId: string;
   webhook: AutomationWebhookConfig | null;
+  tagIds?: string[] | null;
 };
 
 const DEFAULT_CODE = `console.log("Action run", run.id);
@@ -56,6 +58,7 @@ const emptyAction = (): AutomationActionFormValue => ({
   timeoutSeconds: 300,
   alertOnFailure: false,
   runAsActorId: '',
+  tagIds: [],
 });
 
 export function AutomationActionForm({
@@ -90,11 +93,10 @@ export function AutomationActionForm({
 
   const { save: handleSave, isPending } = useSaveResource<AutomationActionFormValue, any>({
     mode,
-    basePath: 'automation/actions',
+    basePath: 'automation',
     entityName: 'Action',
     onCreate: (payload) => createAction.mutateAsync({ data: toCreateInput(payload) } as any),
-    onUpdate: (payload) =>
-      updateAction.mutateAsync({ id: id!, data: toUpdateInput(payload, update) } as any),
+    onUpdate: (payload) => updateAction.mutateAsync({ id: id!, data: toUpdateInput(payload, update) } as any),
     onRefresh: refreshData,
   });
 
@@ -155,7 +157,11 @@ export function AutomationActionForm({
                       required: true,
                       description: 'Stable name used in Citadel activity and run history.',
                       render: (value, set) => (
-                        <FieldInput value={value ?? ''} placeholder="restart-stale-services" onChange={(name) => set({ name })} />
+                        <FieldInput
+                          value={value ?? ''}
+                          placeholder="restart-stale-services"
+                          onChange={(name) => set({ name })}
+                        />
                       ),
                     }),
                     defineField({
@@ -168,6 +174,14 @@ export function AutomationActionForm({
                           placeholder="Restart stale services after maintenance"
                           onChange={(description) => set({ description })}
                         />
+                      ),
+                    }),
+                    defineField({
+                      key: 'tagIds',
+                      label: 'Tags',
+                      description: 'Optional tags for filtering and grouping this action.',
+                      render: (value, set) => (
+                        <ResourceTagSelector value={value} disabled={disabled} onChange={(tagIds) => set({ tagIds })} />
                       ),
                     }),
                   ]
@@ -341,7 +355,9 @@ export function AutomationActionForm({
                 required: currentScheduleEnabled,
                 disabled: !currentScheduleEnabled,
                 validate: (value) =>
-                  currentScheduleEnabled && !String(value ?? '').trim() ? 'Cron is required when schedule is enabled' : null,
+                  currentScheduleEnabled && !String(value ?? '').trim()
+                    ? 'Cron is required when schedule is enabled'
+                    : null,
                 render: (value, set) => (
                   <FieldInput
                     value={value ?? ''}
@@ -361,7 +377,7 @@ export function AutomationActionForm({
                     value={value ?? 'UTC'}
                     disabled={disabled || !currentScheduleEnabled}
                     onChange={(scheduleTimeZone) => set({ scheduleTimeZone })}
-                    className='w-100'
+                    className="w-100"
                   />
                 ),
               }),
@@ -391,14 +407,7 @@ export function AutomationActionForm({
         ],
       }),
     }),
-    [
-      currentScheduleEnabled,
-      disabled,
-      handleTestDraft,
-      id,
-      mode,
-      testDisabled,
-    ],
+    [currentScheduleEnabled, disabled, handleTestDraft, id, mode, testDisabled],
   );
 
   return (
@@ -434,6 +443,7 @@ function toFormValue(action?: AutomationActionView): AutomationActionFormValue {
     timeoutSeconds: Number(action.timeoutSeconds),
     alertOnFailure: action.alertOnFailure,
     runAsActorId: action.runAsActorId ?? '',
+    tagIds: action.tags?.map((tag) => tag.id) ?? [],
   };
 }
 
@@ -451,6 +461,7 @@ function toCreateInput(value: AutomationActionFormValue): AutomationActionInput 
     timeoutSeconds: Number(value.timeoutSeconds) || 300,
     alertOnFailure: value.alertOnFailure,
     runAsActorId: value.runAsActorId?.trim() || null,
+    tagIds: value.tagIds ?? [],
   };
 }
 

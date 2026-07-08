@@ -4,6 +4,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
 using Domain.Entities.Automation;
+using Domain.Entities.Tags;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -84,6 +85,107 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
         AssertJsonEqual("""{"source":"default"}""", action.DefaultArgsJson);
         Assert.Equal(Constants.DefaultAdminId, action.RunAsActorId);
         Assert.Contains(activities, activity => activity.EventType == ActivityEventType.ActionCreated);
+    }
+
+    [Fact]
+    public async Task SeededDefaultAutomationActions_ShouldBeDisabledAndTagged()
+    {
+        var response = await Client.GetAsync(
+            $"/api/v1/automation/actions?tags={Uri.EscapeDataString("Automation Examples")}",
+            TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.IsSuccessStatusCode, body);
+
+        using var document = JsonDocument.Parse(body);
+        var actions = document.RootElement.GetProperty("actions").EnumerateArray().ToArray();
+        var prune = Assert.Single(actions, action => action.GetProperty("name").GetString() == "Daily unused image prune");
+        var restart = Assert.Single(actions, action => action.GetProperty("name").GetString() == "Restart unhealthy Prod stacks");
+
+        Assert.False(prune.GetProperty("enabled").GetBoolean());
+        Assert.True(prune.GetProperty("scheduleEnabled").GetBoolean());
+        Assert.Equal("0 12 * * *", prune.GetProperty("scheduleCron").GetString());
+        AssertContainsTag(prune.GetProperty("tags"), "Automation Examples");
+
+        Assert.False(restart.GetProperty("enabled").GetBoolean());
+        Assert.True(restart.GetProperty("scheduleEnabled").GetBoolean());
+        Assert.Equal("*/15 * * * *", restart.GetProperty("scheduleCron").GetString());
+        AssertContainsTag(restart.GetProperty("tags"), "Automation Examples");
+        AssertContainsTag(restart.GetProperty("tags"), "Prod");
+    }
+
+    [Fact]
+    public async Task AutomationActionTags_ShouldCreateFilterByTagNameAndReplace()
+    {
+        Tag blueTag;
+        Tag greenTag;
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            blueTag = await CreateTagAsync(uow, "automation-blue", "#3366FF");
+            greenTag = await CreateTagAsync(uow, "automation-green", "#33AA66");
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var createResponse = await CreateActionAsync("action-tags", "console.log('tags');", tagIds: [blueTag.Id]);
+        var createBody = await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(createResponse.IsSuccessStatusCode, createBody);
+        var actionId = ReadId(createBody);
+
+        using (var document = JsonDocument.Parse(createBody))
+        {
+            AssertContainsTag(document.RootElement.GetProperty("tags"), blueTag.Name);
+        }
+
+        var getTagsResponse = await Client.GetAsync($"/api/v1/automation/actions/{actionId}/tags", TestContext.Current.CancellationToken);
+        getTagsResponse.EnsureSuccessStatusCode();
+
+        using (var document = JsonDocument.Parse(await getTagsResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
+        {
+            AssertContainsTag(document.RootElement.GetProperty("tags"), blueTag.Name);
+        }
+
+        var blueListResponse = await Client.GetAsync(
+            $"/api/v1/automation/actions?tags={Uri.EscapeDataString(blueTag.Name)}",
+            TestContext.Current.CancellationToken);
+        blueListResponse.EnsureSuccessStatusCode();
+
+        using (var document = JsonDocument.Parse(await blueListResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
+        {
+            var action = Assert.Single(document.RootElement.GetProperty("actions").EnumerateArray());
+            Assert.Equal(actionId, action.GetProperty("id").GetGuid());
+            AssertContainsTag(action.GetProperty("tags"), blueTag.Name);
+        }
+
+        var replaceResponse = await Client.PutAsync(
+            $"/api/v1/automation/actions/{actionId}/tags",
+            JsonContent($$"""{ "tagIds": ["{{greenTag.Id}}"] }"""),
+            TestContext.Current.CancellationToken);
+        replaceResponse.EnsureSuccessStatusCode();
+
+        var oldTagResponse = await Client.GetAsync(
+            $"/api/v1/automation/actions?tags={Uri.EscapeDataString(blueTag.Name)}",
+            TestContext.Current.CancellationToken);
+        oldTagResponse.EnsureSuccessStatusCode();
+
+        using (var document = JsonDocument.Parse(await oldTagResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
+        {
+            Assert.Empty(document.RootElement.GetProperty("actions").EnumerateArray());
+        }
+
+        var newTagResponse = await Client.GetAsync(
+            $"/api/v1/automation/actions?tags={Uri.EscapeDataString(greenTag.Name)}",
+            TestContext.Current.CancellationToken);
+        newTagResponse.EnsureSuccessStatusCode();
+
+        using (var document = JsonDocument.Parse(await newTagResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
+        {
+            var action = Assert.Single(document.RootElement.GetProperty("actions").EnumerateArray());
+            Assert.Equal(actionId, action.GetProperty("id").GetGuid());
+            AssertContainsTag(action.GetProperty("tags"), greenTag.Name);
+        }
     }
 
     [Fact]
@@ -462,8 +564,14 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
         Assert.Equal(scheduledMinuteUtc, persisted?.LastScheduledRunAt);
     }
 
-    private Task<HttpResponseMessage> CreateActionAsync(string name, string code, bool enabled = true)
+    private Task<HttpResponseMessage> CreateActionAsync(
+        string name,
+        string code,
+        bool enabled = true,
+        IReadOnlyCollection<Guid>? tagIds = null)
     {
+        var tagIdValues = tagIds is null ? null : string.Join(",", tagIds.Select(id => $"\"{id}\""));
+        var tagIdsJson = tagIdValues is null ? string.Empty : $",\n  \"tagIds\": [{tagIdValues}]";
         var createJson = $$"""
         {
           "name": "{{name}}",
@@ -477,7 +585,7 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
           "webhook": null,
           "timeoutSeconds": 30,
           "alertOnFailure": true,
-          "runAsActorId": "{{Constants.DefaultAdminId}}"
+          "runAsActorId": "{{Constants.DefaultAdminId}}"{{tagIdsJson}}
         }
         """;
 
@@ -545,6 +653,20 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
         Assert.True(
             JsonNode.DeepEquals(JsonNode.Parse(expectedJson), JsonNode.Parse(actualJson)),
             actualJson);
+    }
+
+    private static async Task<Tag> CreateTagAsync(IUnitOfWork uow, string name, string color)
+    {
+        var tag = Tag.Create(name, color, Constants.SystemId);
+        await uow.Tags.AddAsync(tag, TestContext.Current.CancellationToken);
+        return tag;
+    }
+
+    private static void AssertContainsTag(JsonElement tags, string name)
+    {
+        Assert.Contains(
+            tags.EnumerateArray(),
+            tag => tag.GetProperty("name").GetString() == name);
     }
 
     private static async Task<IReadOnlyList<ActivityEvent>> GetActivitiesAsync(

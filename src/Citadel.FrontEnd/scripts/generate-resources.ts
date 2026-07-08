@@ -48,7 +48,7 @@ for (const pathStr in doc.paths) {
     const queryParams = qParams.map((p) => p.name);
     if (qParams.length > 0) {
       params.push('query');
-      requiredParams.push(...qParams.filter((p) => p.required && p.name !== 'tagIds').map((p) => p.name));
+      requiredParams.push(...qParams.filter((p) => p.required && p.name !== 'tags').map((p) => p.name));
     }
 
     const hasBody = Boolean(op.requestBody && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method.toUpperCase()));

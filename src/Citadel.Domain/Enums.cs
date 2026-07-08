@@ -780,7 +780,8 @@ public enum TaggableResourceType
     Stack,
     Platform,
     GitRepository,
-    Registry
+    Registry,
+    AutomationAction
 }
 
 public enum SecretDeliveryMode

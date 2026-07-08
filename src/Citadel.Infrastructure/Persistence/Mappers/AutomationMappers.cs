@@ -8,7 +8,8 @@ namespace Infrastructure.Persistence.Mappers;
 internal static class AutomationMappers
 {
     internal static AutomationAction ToDomain(this AutomationActionDto dto)
-        => AutomationAction.FromPersistence(
+    {
+        var action = AutomationAction.FromPersistence(
             dto.Id,
             dto.Name,
             dto.Description,
@@ -31,6 +32,10 @@ internal static class AutomationMappers
             dto.CreatedByActorId,
             dto.CreatedAt,
             dto.UpdatedAt);
+
+        action.AssignTags(dto.TagsJson.ToTagSummaries());
+        return action;
+    }
 
     internal static IEnumerable<AutomationAction> ToDomain(this IEnumerable<AutomationActionDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());

@@ -14,7 +14,8 @@ public sealed record AutomationActionInputModel(
     AutomationWebhookConfig? Webhook,
     int? TimeoutSeconds,
     bool AlertOnFailure,
-    Guid? RunAsActorId);
+    Guid? RunAsActorId,
+    IReadOnlyCollection<Guid>? TagIds = null);
 
 public sealed record UpdateAutomationActionInputModel(
     string? Description,

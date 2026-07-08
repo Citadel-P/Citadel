@@ -1,4 +1,5 @@
 using Domain.Contracts.Resources;
+using Domain.Entities.Tags;
 
 namespace Domain.Entities.Automation;
 
@@ -44,6 +45,7 @@ public sealed class AutomationAction(
     public DateTime CreatedAt { get; private set; } = createdAt ?? DateTime.UtcNow;
     public Guid CreatedByActorId { get; private set; } = createdByActorId;
     public DateTime UpdatedAt { get; private set; } = updatedAt ?? DateTime.UtcNow;
+    public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
 
     public void Rename(string name)
     {
@@ -55,6 +57,11 @@ public sealed class AutomationAction(
     {
         Description = NormalizeOptional(description);
         Touch();
+    }
+
+    public void AssignTags(IReadOnlyList<TagSummary> tags)
+    {
+        Tags = tags;
     }
 
     public void Update(

@@ -28,7 +28,7 @@ const useAutomationRunTaskSheet = () => {
   const automationSheet = useTaskSheet('Automation');
   const automationActionSheet = useTaskSheet('AutomationAction');
   const location = useLocation();
-  const isFormRoute = /\/automation\/actions\/(?:add|edit)(?:\/|$)/.test(location.pathname);
+  const isFormRoute = /\/automation\/(?:actions\/)?(?:add|edit)(?:\/|$)/.test(location.pathname);
 
   return isFormRoute ? automationActionSheet : automationSheet;
 };
@@ -47,7 +47,7 @@ const { dropdown, group, info } = createActionsBuilder<AutomationActionView>()
         canExecute: !!selected && !multiSelect,
         run: () => {
           if (!selected || multiSelect) return;
-          navigate(`/automation/actions/edit/${selected.id}`);
+          navigate(`/automation/edit/${selected.id}`);
         },
       };
     },

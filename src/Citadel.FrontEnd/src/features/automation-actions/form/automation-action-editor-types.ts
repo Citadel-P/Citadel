@@ -33,10 +33,12 @@ type CitadelDropRequestParams<TArgs extends readonly unknown[]> = TArgs extends 
       : TArgs
     : TArgs;
 
+type CitadelUnwrapHttpResponse<TResult> = TResult extends ApiTypes.HttpResponse<infer TData, unknown> ? TData : TResult;
+
 type CitadelActionMethod<TName extends keyof CitadelGeneratedApi> = CitadelGeneratedApi[TName] extends (
   ...args: infer TArgs
 ) => Promise<infer TResult>
-  ? (...args: CitadelDropRequestParams<TArgs>) => Promise<TResult>
+  ? (...args: CitadelDropRequestParams<TArgs>) => Promise<CitadelUnwrapHttpResponse<TResult>>
   : never;
 
 type CitadelGeneratedAutomationApi = {

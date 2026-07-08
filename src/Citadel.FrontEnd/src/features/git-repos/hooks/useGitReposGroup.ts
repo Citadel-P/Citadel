@@ -6,10 +6,10 @@ import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
 
 export const useGitReposGroup = () => {
-  const { selectedTagIds } = useResourceTagFilter();
+  const { selectedTagNames } = useResourceTagFilter();
   const { data, isLoading } = useRead(
     'listGitRepositories',
-    selectedTagIds.length > 0 ? { query: { tagIds: selectedTagIds } } : undefined,
+    selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined,
   );
   const [gitRepos, setGitRepos] = useState<GitRepositoryView[] | undefined>();
   const lastFetchedRef = useRef<GitRepositoryView[] | undefined>(data?.data?.gitRepositories);
@@ -63,5 +63,5 @@ export const useGitReposGroup = () => {
     removeEventListeners,
   });
 
-  return { gitRepos, capabilities, isLoading, selectedTagIds };
+  return { gitRepos, capabilities, isLoading, selectedTagNames };
 };

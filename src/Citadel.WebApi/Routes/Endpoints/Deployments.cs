@@ -34,10 +34,10 @@ public static class Deployments
     public static async Task<Results<Ok<DeploymentsView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
-        [FromQuery] Guid[]? tagIds,
-        CancellationToken cancellationToken)
+        [FromQuery] string[]? tags = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetAllDeployments(tagIds), cancellationToken);
+        var result = await mediator.Send(new GetAllDeployments(tags), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, DeploymentsView.Map);
     }
 

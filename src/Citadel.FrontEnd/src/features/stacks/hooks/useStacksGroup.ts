@@ -6,10 +6,10 @@ import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
 
 export const useStacksGroup = () => {
-  const { selectedTagIds } = useResourceTagFilter();
+  const { selectedTagNames } = useResourceTagFilter();
   const { data, isLoading } = useRead(
     'listStacks',
-    selectedTagIds.length > 0 ? { query: { tagIds: selectedTagIds } } : undefined,
+    selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined,
   );
   const [stacks, setStacks] = useState<StackView[] | undefined>();
   const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
@@ -66,5 +66,5 @@ export const useStacksGroup = () => {
     removeEventListeners,
   });
 
-  return { stacks, isLoading, capabilities, selectedTagIds };
+  return { stacks, isLoading, capabilities, selectedTagNames };
 };

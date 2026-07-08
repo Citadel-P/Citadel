@@ -75,6 +75,14 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         var operatorRoleId = Guid.Parse("30000000-0000-0000-0000-000000000002");
         var viewerRoleId = Guid.Parse("30000000-0000-0000-0000-000000000003");
 
+        // Tags
+        var SystemTagId = Guid.Parse("40000000-0000-0000-0000-000000000001");
+        var prodTagId = Guid.Parse("40000000-0000-0000-0000-000000000002");
+
+        // Automation actions
+        var pruneImagesActionId = Guid.Parse("41000000-0000-0000-0000-000000000001");
+        var restartProdStacksActionId = Guid.Parse("41000000-0000-0000-0000-000000000002");
+
         // Actors
         modelBuilder.Entity("Actor").HasData(
             new { Id = systemActorId, Type = "System", IsEnabled = true },
@@ -163,6 +171,146 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         }
 
         modelBuilder.Entity("Permission").HasData(permissions);
+
+        // Tags
+        modelBuilder.Entity("Tag").HasData(
+            new
+            {
+                Id = SystemTagId,
+                Name = "System",
+                NormalizedName = "System",
+                Color = "#6b21a8",
+                CreatedByActorId = systemActorId,
+                CreatedAt = seedDate,
+                UpdatedAt = seedDate
+            },
+            new
+            {
+                Id = prodTagId,
+                Name = "Prod",
+                NormalizedName = "prod",
+                Color = "#f87171",
+                CreatedByActorId = systemActorId,
+                CreatedAt = seedDate,
+                UpdatedAt = seedDate
+            });
+
+        // Automation actions
+        modelBuilder.Entity("AutomationAction").HasData(
+            new
+            {
+                Id = pruneImagesActionId,
+                Name = "Prune images",
+                Description = "Deletes local Docker images that are not used by any container on every platform.",
+                Code = """
+                    const platformsResponse = await citadel.platforms.listPlatforms();
+                    const platforms = platformsResponse?.platforms ?? [];
+                    let deleted = 0;
+
+                    for (const platform of platforms) {
+                      const imagesResponse = await citadel.images.listImages(platform.id);
+                      const unusedImageIds = (imagesResponse?.images ?? [])
+                        .filter((image) => !image.isInUse)
+                        .map((image) => image.dockerImageId);
+
+                      if (unusedImageIds.length === 0) {
+                        console.log(`No unused images on ${platform.name}.`);
+                        continue;
+                      }
+
+                      await citadel.images.deleteImages({
+                        platformId: platform.id,
+                        ids: unusedImageIds,
+                        force: false,
+                        noPrune: false
+                      });
+
+                      console.log(`Requested deletion of ${unusedImageIds.length} unused image(s) on ${platform.name}.`);
+                      deleted += unusedImageIds.length;
+                    }
+
+                    console.log(`Requested deletion of ${deleted} unused image(s).`);
+                    """,
+                DefaultArgsJson = "{}",
+                Enabled = false,
+                ScheduleEnabled = true,
+                ScheduleCron = "0 12 * * *",
+                ScheduleTimeZone = "UTC",
+                Webhook = (string?)null,
+                TimeoutSeconds = 300,
+                AlertOnFailure = true,
+                RunAsActorId = adminActorId,
+                LastScheduledRunAt = (DateTime?)null,
+                ControlState = ResourceControlState.Idle.ToString(),
+                CurrentRunId = (Guid?)null,
+                RowVersion = 0L,
+                CreatedByActorId = systemActorId,
+                CreatedAt = seedDate,
+                UpdatedAt = seedDate
+            },
+            new
+            {
+                Id = restartProdStacksActionId,
+                Name = "Restart unhealthy stacks",
+                Description = "Restarts stacks tagged Prod when their current release is not healthy.",
+                Code = """
+                    const stacksResponse = await citadel.stacks.listStacks({ tags: ["Prod"] });
+                    const stacks = stacksResponse?.stacks ?? [];
+                    const unhealthyStacks = stacks.filter(
+                      (stack) => stack.status !== "Healthy" && stack.controlState !== "Processing"
+                    );
+
+                    if (unhealthyStacks.length === 0) {
+                      console.log("No unhealthy Prod stacks found.");
+                    } else {
+                      const stackIds = unhealthyStacks.map((stack) => stack.id);
+                      await citadel.stacks.restartStacks(stackIds);
+                      console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);
+                    }
+                    """,
+                DefaultArgsJson = "{}",
+                Enabled = false,
+                ScheduleEnabled = true,
+                ScheduleCron = "*/15 * * * *",
+                ScheduleTimeZone = "UTC",
+                Webhook = (string?)null,
+                TimeoutSeconds = 300,
+                AlertOnFailure = true,
+                RunAsActorId = adminActorId,
+                LastScheduledRunAt = (DateTime?)null,
+                ControlState = ResourceControlState.Idle.ToString(),
+                CurrentRunId = (Guid?)null,
+                RowVersion = 0L,
+                CreatedByActorId = systemActorId,
+                CreatedAt = seedDate,
+                UpdatedAt = seedDate
+            });
+
+        modelBuilder.Entity("ResourceTag").HasData(
+            new
+            {
+                ResourceType = TaggableResourceType.AutomationAction.ToString(),
+                ResourceId = pruneImagesActionId,
+                TagId = SystemTagId,
+                CreatedAt = seedDate,
+                CreatedByActorId = systemActorId
+            },
+            new
+            {
+                ResourceType = TaggableResourceType.AutomationAction.ToString(),
+                ResourceId = restartProdStacksActionId,
+                TagId = SystemTagId,
+                CreatedAt = seedDate,
+                CreatedByActorId = systemActorId
+            },
+            new
+            {
+                ResourceType = TaggableResourceType.AutomationAction.ToString(),
+                ResourceId = restartProdStacksActionId,
+                TagId = prodTagId,
+                CreatedAt = seedDate,
+                CreatedByActorId = systemActorId
+            });
 
         // --- Alert Rules ---
         modelBuilder.Entity("AlertRule").HasData(

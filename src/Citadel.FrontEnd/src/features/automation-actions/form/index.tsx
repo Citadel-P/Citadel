@@ -2,6 +2,7 @@ import { AutomationActionView, ResourceControlState } from '@/api/generated/api.
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ActivitiesTab } from '@/features/activities';
+import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { useRead } from '@/lib/hooks';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { AutomationActionInfoActions } from '../actions';
@@ -36,6 +37,13 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
         const { edit: _edit, ...actions } = AutomationActionInfoActions;
         return <GenericActionBarButtons resource={resource} actions={Object.values(actions)} />;
       },
+      Tags: ({ resource }) => (
+        <ResourceHeaderTagsEditor
+          resourceType="AutomationAction"
+          resourceId={resource.id}
+          tags={(resource as AutomationActionView).tags}
+        />
+      ),
     },
     Tabs: [
       {

@@ -17,9 +17,10 @@ public static class AutomationActions
 {
     public static async Task<Results<Ok<AutomationActionsView>, ProblemHttpResult>> List(
         IMediator mediator,
-        CancellationToken cancellationToken)
+        [FromQuery] string[]? tags = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetAutomationActions(), cancellationToken);
+        var result = await mediator.Send(new GetAutomationActions(tags), cancellationToken);
         return EndpointHandlers.HandleResult(result, AutomationActionsView.Map);
     }
 

@@ -756,6 +756,23 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getAutomationAction");
 
+        automationActions.MapGet("{id:guid}/tags", Tags.GetAutomationActionTags)
+            .WithSummary("Get automation action tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getAutomationActionTags");
+
+        automationActions.MapPut("{id:guid}/tags", Tags.ReplaceAutomationActionTags)
+            .WithSummary("Replace automation action tags")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("replaceAutomationActionTags");
+
         automationActions.MapPost("/", AutomationActions.Create)
             .WithSummary("Create automation action")
             .ProducesValidationProblem()
@@ -1556,6 +1573,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("resumeStacks");
+
+        stacks.MapPost("/restart", Stacks.Restart)
+            .WithSummary("Restart stacks")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("restartStacks");
 
         stacks.MapGet("{stackId}/data", Stacks.GetContainersData)
             .WithSummary("Get containers data")

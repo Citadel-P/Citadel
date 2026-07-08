@@ -141,4 +141,23 @@ public static class Tags
         var result = await mediator.Send(new ReplaceRegistryTags(id, input.TagIds), cancellationToken);
         return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
     }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> GetAutomationActionTags(
+        IMediator mediator,
+        [FromRoute][Description("Automation action ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetAutomationActionTags(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> ReplaceAutomationActionTags(
+        IMediator mediator,
+        [FromRoute][Description("Automation action ID")] Guid id,
+        [FromBody] ReplaceResourceTagsInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ReplaceAutomationActionTags(id, input.TagIds), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
 }

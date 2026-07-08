@@ -10,7 +10,7 @@ import { useMutate, useRead } from '@/lib/hooks';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ban, FileText } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 export function AutomationActionRunsTab({ resource }: { resource: AutomationActionView }) {
@@ -23,18 +23,16 @@ export function AutomationActionRunsTab({ resource }: { resource: AutomationActi
     { refetchInterval: resource.currentRunId ? 3000 : 10000 },
   );
 
-  const runs = data?.data.runs ?? [];
-
-  useEffect(() => {
-    if (!selectedRunId && runs.length > 0) {
-      setSelectedRunId(runs[0].id);
-    }
-  }, [runs, selectedRunId]);
+  const runs = useMemo(() => data?.data.runs ?? [], [data?.data.runs]);
+  const activeRunId = useMemo(
+    () => (runs.some((run) => run.id === selectedRunId) ? selectedRunId : runs[0]?.id),
+    [runs, selectedRunId],
+  );
 
   const logs = useRead(
     'getAutomationActionRunLogs',
-    { id: resource.id, runId: selectedRunId ?? '' },
-    { enabled: Boolean(selectedRunId) },
+    { id: resource.id, runId: activeRunId ?? '' },
+    { enabled: Boolean(activeRunId) },
   );
 
   const handleCancel = useCallback(async (run: AutomationActionRunView) => {
@@ -52,7 +50,7 @@ export function AutomationActionRunsTab({ resource }: { resource: AutomationActi
     () => runColumns(setSelectedRunId, handleCancel, cancelRun.isPending),
     [cancelRun.isPending, handleCancel],
   );
-  const selectedRun = runs.find((run) => run.id === selectedRunId);
+  const selectedRun = runs.find((run) => run.id === activeRunId);
 
   return (
     <div className="flex flex-col gap-4">

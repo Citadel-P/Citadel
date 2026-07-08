@@ -23,9 +23,9 @@ export const RegistryComponents: RequiredComponents = {
   },
 
   useData: function (): ResourceDataHookResult<any> {
-    const { selectedTagIds } = useResourceTagFilter();
+    const { selectedTagNames } = useResourceTagFilter();
     const { data, isLoading } = useRead(`listRegistries`, {
-      query: { includeDisabled: true, ...(selectedTagIds.length > 0 ? { tagIds: selectedTagIds } : {}) },
+      query: { includeDisabled: true, ...(selectedTagNames.length > 0 ? { tags: selectedTagNames } : {}) },
     });
     return { items: data?.data?.registries ?? [], isLoading, capabilities: data?.data?.capabilities };
   },

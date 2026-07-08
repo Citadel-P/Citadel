@@ -49,6 +49,11 @@ const MenuItems: IMenuItem[] = [
         label: 'Stacks',
         route: '/stacks',
       },
+      {
+        icon: renderIcon(CitadelIcons.AutomationAction),
+        label: 'Automation',
+        route: '/automation',
+      },
     ],
   },
   {
@@ -71,18 +76,6 @@ const MenuItems: IMenuItem[] = [
     group: 'System',
     separator: false,
     items: [
-      {
-        icon: renderIcon(CitadelIcons.Automation),
-        label: 'Automation',
-        route: '/automation',
-        children: [
-          {
-            icon: renderIcon(CitadelIcons.AutomationAction),
-            label: 'Actions',
-            route: '/automation/actions',
-          },
-        ],
-      },
       {
         icon: renderIcon(CitadelIcons.Alert),
         label: 'Alerts',

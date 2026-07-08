@@ -24,10 +24,10 @@ public static class GitRepositories
     public static async Task<Results<Ok<GitRepositoriesView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
-        [FromQuery] Guid[]? tagIds,
-        CancellationToken cancellationToken)
+        [FromQuery] string[]? tags = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetAllGitRepositories(tagIds), cancellationToken);
+        var result = await mediator.Send(new GetAllGitRepositories(tags), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, GitRepositoriesView.Map);
     }
 

@@ -13,26 +13,36 @@ namespace Infrastructure.Persistence;
 
 internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTransaction> tx) : IAutomationActionRepository
 {
-    public Task<int> AddAsync(AutomationAction action, CancellationToken cancellationToken)
+    public async Task<int> AddAsync(
+        AutomationAction action,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        Guid? tagCreatedByActorId = null)
     {
         action.Validate();
 
-        const string sql = """
-            INSERT INTO Actions (
+        string sql = ResourceTagSql.InputTagsCte + """
+            inserted_action AS (
+                INSERT INTO Actions (
                 Id, Name, Description, Code, DefaultArgsJson, Enabled,
                 ScheduleEnabled, ScheduleCron, ScheduleTimeZone,
                 Webhook, TimeoutSeconds, AlertOnFailure,
                 RunAsActorId, LastScheduledRunAt, ControlState, CurrentRunId, RowVersion,
                 CreatedByActorId, CreatedAt, UpdatedAt)
-            VALUES (
+                SELECT
                 @Id, @Name, @Description, @Code, @DefaultArgsJson::jsonb, @Enabled,
                 @ScheduleEnabled, @ScheduleCron, @ScheduleTimeZone,
                 @Webhook::jsonb, @TimeoutSeconds, @AlertOnFailure,
                 @RunAsActorId, @LastScheduledRunAt, @ControlState, @CurrentRunId, @RowVersion,
-                @CreatedByActorId, @CreatedAt, @UpdatedAt)
-            """;
+                @CreatedByActorId, @CreatedAt, @UpdatedAt
+                WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
+                RETURNING Id
+            ),
+            """ + ResourceTagSql.InsertTagsCte("inserted_action", "a") + "\n"
+            + ResourceTagSql.InsertResultSelect("inserted_action", "inserted_action", "inserted_tags");
 
-        return db.ExecuteAsync(
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QuerySingleAsync<ResourceInsertWithTagsResult>(
             sql,
             new
             {
@@ -57,9 +67,15 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
                 action.RowVersion,
                 action.CreatedByActorId,
                 action.CreatedAt,
-                action.UpdatedAt
+                action.UpdatedAt,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.AutomationAction),
+                TagIds = tagIdArray,
+                TagCreatedByActorId = tagCreatedByActorId ?? action.CreatedByActorId
             },
             transaction: tx());
+
+        action.AssignTags(result.TagsJson.ToTagSummaries());
+        return result.AffectedRows;
     }
 
     public Task<int> UpdateAsync(AutomationAction action, CancellationToken cancellationToken)
@@ -124,18 +140,46 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
 
     public async Task<AutomationAction?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Actions WHERE Id = @Id LIMIT 1";
+        string sql = $$"""
+            SELECT a.*,
+                {{ResourceTagSql.TagAggregate("a")}}
+            FROM Actions a
+            WHERE a.Id = @Id
+            LIMIT 1
+            """;
+
         var result = await db.QuerySingleOrDefaultAsync<AutomationActionDto>(
             sql,
-            new { Id = id },
+            new
+            {
+                Id = id,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.AutomationAction)
+            },
             transaction: tx());
         return result?.ToDomain();
     }
 
-    public async Task<IEnumerable<AutomationAction>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<IEnumerable<AutomationAction>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = "SELECT * FROM Actions ORDER BY Name ASC";
-        var result = await db.QueryAsync<AutomationActionDto>(sql, transaction: tx());
+        string sql = $$"""
+            SELECT a.*,
+                {{ResourceTagSql.TagAggregate("a")}}
+            FROM Actions a
+            WHERE {{ResourceTagSql.FilterPredicate("a")}}
+            ORDER BY Name ASC
+            """;
+
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<AutomationActionDto>(
+            sql,
+            new
+            {
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.AutomationAction),
+                TagIds = tagIdArray,
+                TagIdsLength = tagIdArray.Length
+            },
+            transaction: tx());
+
         return result.ToDomain();
     }
 
@@ -157,16 +201,20 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
         ResourceType resourceType,
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null)
     {
-        const string sql = $$"""
+        string sql = $$"""
             WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
-            SELECT a.*
+            SELECT a.*,
+                {{ResourceTagSql.TagAggregate("a")}}
             FROM Actions a
             WHERE {{AuthorizationSql.ResourcePredicatePrefix}}a.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+              AND {{ResourceTagSql.FilterPredicate("a")}}
             ORDER BY a.Name ASC
             """;
 
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
         var result = await db.QueryAsync<AutomationActionDto>(
             sql,
             new
@@ -174,7 +222,10 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
                 UserId = userId,
                 ResourceType = (int)resourceType,
                 GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
-                SpecificPermission = (int)specificPermission
+                SpecificPermission = (int)specificPermission,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.AutomationAction),
+                TagIds = tagIdArray,
+                TagIdsLength = tagIdArray.Length
             },
             transaction: tx());
 

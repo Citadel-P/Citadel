@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260708165031_migration0001")]
+    [Migration("20260708175530_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -976,6 +976,48 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_actions_schedule");
 
                     b.ToTable("actions", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("41000000-0000-0000-0000-000000000001"),
+                            AlertOnFailure = true,
+                            Code = "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet deleted = 0;\n\nfor (const platform of platforms) {\n  const imagesResponse = await citadel.images.listImages(platform.id);\n  const unusedImageIds = (imagesResponse?.images ?? [])\n    .filter((image) => !image.isInUse)\n    .map((image) => image.dockerImageId);\n\n  if (unusedImageIds.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  await citadel.images.deleteImages({\n    platformId: platform.id,\n    ids: unusedImageIds,\n    force: false,\n    noPrune: false\n  });\n\n  console.log(`Requested deletion of ${unusedImageIds.length} unused image(s) on ${platform.name}.`);\n  deleted += unusedImageIds.length;\n}\n\nconsole.log(`Requested deletion of ${deleted} unused image(s).`);",
+                            ControlState = "Idle",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            DefaultArgsJson = "{}",
+                            Description = "Example action: deletes local Docker images that are not used by any container on every platform.",
+                            Enabled = false,
+                            Name = "Daily unused image prune",
+                            RowVersion = 0L,
+                            RunAsActorId = new Guid("00000000-0000-0000-0000-000000000002"),
+                            ScheduleCron = "0 12 * * *",
+                            ScheduleEnabled = true,
+                            ScheduleTimeZone = "UTC",
+                            TimeoutSeconds = 300,
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("41000000-0000-0000-0000-000000000002"),
+                            AlertOnFailure = true,
+                            Code = "const stacksResponse = await citadel.stacks.listStacks({ tags: [\"Prod\"] });\nconst stacks = stacksResponse?.stacks ?? [];\nconst unhealthyStacks = stacks.filter(\n  (stack) => stack.status !== \"Healthy\" && stack.controlState !== \"Processing\"\n);\n\nif (unhealthyStacks.length === 0) {\n  console.log(\"No unhealthy Prod stacks found.\");\n} else {\n  const stackIds = unhealthyStacks.map((stack) => stack.id);\n  await citadel.stacks.restartStacks(stackIds);\n  console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);\n}",
+                            ControlState = "Idle",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            DefaultArgsJson = "{}",
+                            Description = "Example action: restarts stacks tagged Prod when their current release is not healthy.",
+                            Enabled = false,
+                            Name = "Restart unhealthy Prod stacks",
+                            RowVersion = 0L,
+                            RunAsActorId = new Guid("00000000-0000-0000-0000-000000000002"),
+                            ScheduleCron = "*/15 * * * *",
+                            ScheduleEnabled = true,
+                            ScheduleTimeZone = "UTC",
+                            TimeoutSeconds = 300,
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
                 });
 
             modelBuilder.Entity("Container", b =>
@@ -2559,6 +2601,32 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_resourcetags_filter");
 
                     b.ToTable("resourcetags", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            ResourceType = "AutomationAction",
+                            ResourceId = new Guid("41000000-0000-0000-0000-000000000001"),
+                            TagId = new Guid("40000000-0000-0000-0000-000000000001"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            ResourceType = "AutomationAction",
+                            ResourceId = new Guid("41000000-0000-0000-0000-000000000002"),
+                            TagId = new Guid("40000000-0000-0000-0000-000000000001"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            ResourceType = "AutomationAction",
+                            ResourceId = new Guid("41000000-0000-0000-0000-000000000002"),
+                            TagId = new Guid("40000000-0000-0000-0000-000000000002"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001")
+                        });
                 });
 
             modelBuilder.Entity("Role", b =>
@@ -2902,6 +2970,28 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_tags_normalizedname");
 
                     b.ToTable("tags", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("40000000-0000-0000-0000-000000000001"),
+                            Color = "#2563EB",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            Name = "Automation Examples",
+                            NormalizedName = "automation examples",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("40000000-0000-0000-0000-000000000002"),
+                            Color = "#16A34A",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            Name = "Prod",
+                            NormalizedName = "prod",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
                 });
 
             modelBuilder.Entity("Team", b =>

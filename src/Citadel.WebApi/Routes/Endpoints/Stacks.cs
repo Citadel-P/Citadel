@@ -33,10 +33,10 @@ public static class Stacks
     public static async Task<Results<Ok<StacksView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
-        [FromQuery] Guid[]? tagIds,
-        CancellationToken cancellationToken)
+        [FromQuery] string[]? tags = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetAllStacks(tagIds), cancellationToken);
+        var result = await mediator.Send(new GetAllStacks(tags), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, StacksView.Map);
     }
 
@@ -181,6 +181,12 @@ public static class Stacks
     public static async Task<Results<NoContent, ProblemHttpResult>> Resume(IMediator mediator, [FromBody] Guid[] stackIds, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new ChangeStackState(stackIds, StackAction.UNPAUSE), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Restart(IMediator mediator, [FromBody] Guid[] stackIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeStackState(stackIds, StackAction.RESTART), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 }
