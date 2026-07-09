@@ -9,6 +9,7 @@ using static Citadel.Networks.V1.NetworkService;
 using static Citadel.Platforms.V1.PlatformService;
 using static Citadel.Volumes.V1.VolumeService;
 using static Citadel.Deployments.V1.DeploymentService;
+using static Citadel.Stacks.V1.StackService;
 
 namespace Infrastructure.Repositories;
 
@@ -23,6 +24,7 @@ internal interface IGrpcClientFactory
     NetworkServiceClient GetNetworkClient(string address);
     VolumeServiceClient GetVolumeClient(string address);
     DeploymentServiceClient GetDeploymentClient(string address);
+    StackServiceClient GetStackClient(string address);
 }
 
 internal class GrpcClientFactory(params Interceptor[] interceptors) : IGrpcClientFactory
@@ -48,6 +50,9 @@ internal class GrpcClientFactory(params Interceptor[] interceptors) : IGrpcClien
 
     public DeploymentServiceClient GetDeploymentClient(string address) =>
         GetOrCreateClient(NormalizeAddress(address), invoker => new DeploymentServiceClient(invoker));
+
+    public StackServiceClient GetStackClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), invoker => new StackServiceClient(invoker));
 
     private TClient GetOrCreateClient<TClient>(string address, Func<CallInvoker, TClient> factory)
     {

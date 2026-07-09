@@ -20,6 +20,7 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerData
         <StateIndicator
           value={resource.state}
           isProcessing={resource.controlState === ResourceControlState.Processing}
+          kind="container"
         />
       );
     },

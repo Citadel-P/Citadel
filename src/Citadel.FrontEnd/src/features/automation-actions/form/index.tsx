@@ -31,6 +31,7 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
             value={status}
             isProcessing={action.controlState === ResourceControlState.Processing}
             enableLabel={typeof status === 'boolean'}
+            kind={typeof status === 'boolean' ? undefined : 'automationActionRun'}
           />
         );
       },

@@ -472,6 +472,7 @@ interface UseStreamProgressOptions<TRequest, TItem> {
   successMessage: string;
   errorMessageDefault: string;
   pendingMessage?: string;
+  compactDockerComposeOutput?: boolean;
   // A predicate to check if an item in the stream represents an error
   getError?: (item: TItem) => string | undefined | null;
 }
@@ -491,12 +492,161 @@ const getProgressBar = (current: number, total: number) => {
   return ` [${'='.repeat(Math.max(0, progress - 1))}>${' '.repeat(Math.max(0, size - progress))}]`;
 };
 
+type CompactedComposeLine = {
+  kind: 'active' | 'history' | 'ignore';
+  key?: string;
+  deletePrefixes?: string[];
+  line?: string;
+};
+
+const dockerComposeStatuses = [
+  'Pulling fs layer',
+  'Download complete',
+  'Pull complete',
+  'Already exists',
+  'Downloading',
+  'Extracting',
+  'Waiting',
+  'Pulling',
+  'Pulled',
+  'Recreating',
+  'Recreated',
+  'Creating',
+  'Created',
+  'Removing',
+  'Removed',
+  'Starting',
+  'Started',
+  'Stopping',
+  'Stopped',
+  'Running',
+  'Healthy',
+  'Unhealthy',
+  'Skipped',
+  'Error',
+  'Failed',
+];
+
+const dockerComposeLinePattern = new RegExp(
+  `^\\s*(?:(Network|Volume|Container)\\s+)?(.+?)\\s+(${dockerComposeStatuses.join('|')})(?:\\s+(.*))?\\s*$`,
+  'i',
+);
+
+const dockerComposeSplitPattern = new RegExp(
+  `\\s{2,}(?=(?:(?:Network|Volume|Container)\\s+)?\\S+\\s+(?:${dockerComposeStatuses.join('|')})\\b)`,
+  'i',
+);
+
+function splitDockerComposeOutput(value: string): string[] {
+  return value
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .flatMap((line) => line.split(dockerComposeSplitPattern))
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function compactDockerComposeLine(value: string): CompactedComposeLine | undefined {
+  const summary = value.match(/^\[\+\]\s*(.+)$/);
+  if (summary) {
+    return { kind: 'active', key: 'compose:summary', line: `Docker Compose: ${summary[1].trim()}` };
+  }
+
+  const match = value.match(dockerComposeLinePattern);
+  if (!match) return undefined;
+
+  const [, resourceType, name, rawStatus, details] = match;
+  const status = rawStatus.toLowerCase();
+  const keyName = name.trim();
+
+  if (isDockerLayerId(keyName)) {
+    const key = `compose:layer:${keyName}`;
+    if (status === 'download complete' || status === 'pull complete' || status === 'already exists') {
+      return { kind: 'ignore', key };
+    }
+
+    if (status === 'pulling fs layer' || status === 'waiting' || status === 'downloading' || status === 'extracting') {
+      return { kind: 'active', key, line: formatDockerLayerStatus(keyName, rawStatus, details) };
+    }
+
+    return undefined;
+  }
+
+  if (!resourceType && (status === 'pulling' || status === 'pulled')) {
+    const key = `compose:image:${keyName}`;
+    if (status === 'pulling') {
+      return { kind: 'active', key, line: `Pulling image ${keyName}...` };
+    }
+
+    return { kind: 'history', key, deletePrefixes: ['compose:layer:'], line: `Pulled image ${keyName}.` };
+  }
+
+  if (!resourceType) return undefined;
+
+  const key = `compose:${resourceType.toLowerCase()}:${keyName}`;
+  const resource = `${resourceType.toLowerCase()} ${keyName}`;
+
+  switch (status) {
+    case 'creating':
+    case 'removing':
+    case 'starting':
+    case 'stopping':
+    case 'recreating':
+      return { kind: 'active', key, line: `${toPresentParticiple(rawStatus)} ${resource}...` };
+    case 'created':
+    case 'removed':
+    case 'started':
+    case 'stopped':
+    case 'recreated':
+      return { kind: 'history', key, line: `${capitalize(rawStatus)} ${resource}.` };
+    case 'running':
+    case 'healthy':
+      return { kind: 'history', key, line: `${capitalize(resource)} is ${status}.` };
+    case 'unhealthy':
+    case 'error':
+    case 'failed':
+      return { kind: 'history', key, line: `${capitalize(resource)} ${status}.` };
+    default:
+      return undefined;
+  }
+}
+
+function isDockerLayerId(value: string) {
+  return /^[a-f0-9]{12,64}$/i.test(value);
+}
+
+function formatDockerLayerStatus(id: string, status: string, details?: string) {
+  const shortId = id.slice(0, 12);
+  const normalizedStatus = status.toLowerCase();
+  const suffix = details?.trim();
+
+  if (normalizedStatus === 'pulling fs layer') return `Preparing layer ${shortId}`;
+  if (normalizedStatus === 'waiting') return `Waiting for layer ${shortId}`;
+  if (normalizedStatus === 'extracting') return `Extracting layer ${shortId}${suffix ? ` (${suffix})` : ''}`;
+
+  return `Downloading layer ${shortId}${suffix ? ` ${suffix}` : ''}`;
+}
+
+function toPresentParticiple(value: string) {
+  const lower = value.toLowerCase();
+  if (lower.endsWith('ing')) return capitalize(value);
+  if (lower.endsWith('e')) return `${capitalize(value.slice(0, -1))}ing`;
+  return `${capitalize(value)}ing`;
+}
+
+function capitalize(value: string) {
+  if (!value) return value;
+  return `${value[0].toUpperCase()}${value.slice(1)}`;
+}
+
 export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   endpoint,
   request,
   successMessage,
   errorMessageDefault,
   pendingMessage,
+  compactDockerComposeOutput,
   getError,
 }: UseStreamProgressOptions<TRequest, TItem>): StreamProgressState {
   const [history, setHistory] = useState<string[]>([]);
@@ -518,9 +668,42 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
       let processedIndex = 0;
       let inString = false;
       let isEscaped = false;
+      const activeKeysToDelete = new Set<string>();
+      const activePrefixesToDelete = new Set<string>();
       const addText = (value: string | undefined | null) => {
         if (!value) return false;
-        newHistory.push(value.trimEnd());
+        if (!compactDockerComposeOutput) {
+          newHistory.push(value.trimEnd());
+          return true;
+        }
+
+        const entries = splitDockerComposeOutput(value);
+        if (entries.length === 0) return false;
+
+        for (const entry of entries) {
+          const compacted = compactDockerComposeLine(entry);
+          if (!compacted) {
+            newHistory.push(entry);
+            continue;
+          }
+
+          if (compacted.kind === 'active' && compacted.key && compacted.line) {
+            updatedActive.set(compacted.key, compacted.line);
+            activeKeysToDelete.delete(compacted.key);
+            continue;
+          }
+
+          if (compacted.key) {
+            activeKeysToDelete.add(compacted.key);
+          }
+
+          compacted.deletePrefixes?.forEach((prefix) => activePrefixesToDelete.add(prefix));
+
+          if (compacted.line) {
+            newHistory.push(compacted.line);
+          }
+        }
+
         return true;
       };
 
@@ -568,8 +751,9 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
                 progressMessage?: string;
                 stream?: string;
                 message?: string;
+                type?: string;
               };
-              const { id, status, progress, progressMessage, stream, message } = item;
+              const { id, status, progress, progressMessage, stream, message, type } = item;
               const errorMessage = getError?.(item);
 
               if (errorMessage) {
@@ -580,6 +764,11 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
 
               // Handle simple log messages
               if (addText(progressMessage) || addText(stream) || addText(message)) {
+                continue;
+              }
+
+              if (compactDockerComposeOutput && type === 'CommandCompleted') {
+                activePrefixesToDelete.add('compose:');
                 continue;
               }
 
@@ -611,11 +800,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
                 if (isFinished) {
                   // If it's done, move to history and remove from active map
                   newHistory.push(line);
-                  setActiveItems((prev) => {
-                    const next = new Map(prev);
-                    next.delete(id);
-                    return next;
-                  });
+                  activeKeysToDelete.add(id);
                 } else if (isProgressing) {
                   updatedActive.set(id, line);
                 } else {
@@ -637,15 +822,21 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
       bufferRef.current = bufferRef.current.slice(processedIndex);
 
       if (newHistory.length > 0) setHistory((prev) => [...prev, ...newHistory]);
-      if (updatedActive.size > 0) {
+      if (updatedActive.size > 0 || activeKeysToDelete.size > 0 || activePrefixesToDelete.size > 0) {
         setActiveItems((prev) => {
           const next = new Map(prev);
+          activePrefixesToDelete.forEach((prefix) => {
+            Array.from(next.keys())
+              .filter((key) => key.startsWith(prefix))
+              .forEach((key) => next.delete(key));
+          });
+          activeKeysToDelete.forEach((key) => next.delete(key));
           updatedActive.forEach((val, key) => next.set(key, val));
           return next;
         });
       }
     },
-    [getError],
+    [compactDockerComposeOutput, getError],
   );
 
   const resetTimer = useCallback(() => {

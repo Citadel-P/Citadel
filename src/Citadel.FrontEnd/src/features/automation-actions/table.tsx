@@ -104,6 +104,7 @@ const ActionNameRow = ({ action }: { action: AutomationActionView }) => {
         value={status}
         isProcessing={action.controlState === ResourceControlState.Processing}
         enableLabel={typeof status === 'boolean'}
+        kind={typeof status === 'boolean' ? undefined : 'automationActionRun'}
       />
       <Link to={`../automation/edit/${action.id}`} title={action.name} className="truncate text-sm hover:underline">
         {action.name}

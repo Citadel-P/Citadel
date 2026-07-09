@@ -88,6 +88,7 @@ const runColumns = (
         <StateIndicator
           value={row.original.status}
           isProcessing={isActiveRun(row.original)}
+          kind="automationActionRun"
         />
         {row.original.status}
       </span>

@@ -21,13 +21,70 @@ type StateValue =
   | GitReposStatus
   | ActionRunStatus;
 
-const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
+type StateIndicatorKind = 'automationActionRun' | 'container';
+
+type StatusStyle = {
+  colorClass: string;
+  tooltip: string;
+};
+
+const getAutomationActionRunStatusStyle = (value: StateValue): StatusStyle | undefined => {
+  switch (value) {
+    case ActionRunStatus.Queued:
+      return { colorClass: 'bg-yellow-500', tooltip: 'Queued' };
+    case ActionRunStatus.Running:
+      return { colorClass: 'bg-blue-500', tooltip: 'Running' };
+    case ActionRunStatus.Succeeded:
+      return { colorClass: 'bg-green-500', tooltip: 'Succeeded' };
+    case ActionRunStatus.Failed:
+    case ActionRunStatus.TimedOut:
+      return { colorClass: 'bg-red-500', tooltip: String(value) };
+    case ActionRunStatus.Cancelled:
+    case ActionRunStatus.Rejected:
+      return { colorClass: 'bg-gray-500', tooltip: String(value) };
+    default:
+      return undefined;
+  }
+};
+
+const getContainerStatusStyle = (value: StateValue): StatusStyle | undefined => {
+  switch (value) {
+    case ContainerStateStatus.Unknown:
+      return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
+    case ContainerStateStatus.Created:
+      return { colorClass: 'bg-blue-400', tooltip: 'Created' };
+    case ContainerStateStatus.Running:
+      return { colorClass: 'bg-green-500', tooltip: 'Running' };
+    case ContainerStateStatus.Paused:
+      return { colorClass: 'bg-orange-500', tooltip: 'Paused' };
+    case ContainerStateStatus.Restarting:
+    case ContainerStateStatus.Removing:
+      return { colorClass: 'bg-yellow-500', tooltip: String(value) };
+    case ContainerStateStatus.Exited:
+      return { colorClass: 'bg-gray-500', tooltip: 'Exited' };
+    case ContainerStateStatus.Dead:
+    case ContainerStateStatus.Offline:
+      return { colorClass: 'bg-red-500', tooltip: String(value) };
+    default:
+      return undefined;
+  }
+};
+
+const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIndicatorKind) => {
   // Boolean-based statuses
   if (typeof value === 'boolean') {
     return {
       colorClass: value ? 'bg-green-500' : 'bg-gray-500',
       tooltip: value ? (enableLabel ? 'Enabled' : 'In use') : enableLabel ? 'Disabled' : 'Unused',
     };
+  }
+
+  if (kind === 'automationActionRun') {
+    return getAutomationActionRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+  }
+
+  if (kind === 'container') {
+    return getContainerStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
   }
 
   // Enum-based statuses
@@ -50,7 +107,7 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
     case StackReleaseStatus.Healthy:
       return { colorClass: 'bg-green-500', tooltip: 'Healthy' };
     case DeploymentStatus.Failed:
-          case StackReleaseStatus.Failed:
+    case StackReleaseStatus.Failed:
       return { colorClass: 'bg-red-500', tooltip: 'Failed' };
     case DeploymentStatus.Stopped:
     case StackReleaseStatus.Stopped:
@@ -72,40 +129,41 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
       return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
     // Automation action runs
     case ActionRunStatus.Queued:
-      return { colorClass: 'bg-yellow-500', tooltip: 'Queued' };
     case ActionRunStatus.Running:
-      return { colorClass: 'bg-blue-500', tooltip: 'Running' };
     case ActionRunStatus.Succeeded:
-      return { colorClass: 'bg-green-500', tooltip: 'Succeeded' };
     case ActionRunStatus.Failed:
     case ActionRunStatus.TimedOut:
-      return { colorClass: 'bg-red-500', tooltip: String(value) };
     case ActionRunStatus.Cancelled:
     case ActionRunStatus.Rejected:
-      return { colorClass: 'bg-gray-500', tooltip: String(value) };
+      return getAutomationActionRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
     // Git Repos
     case GitReposStatus.Unknown:
       return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
     // Containers
     case ContainerStateStatus.Created:
-      return { colorClass: 'bg-blue-400', tooltip: 'Created' };
     case ContainerStateStatus.Exited:
-      return { colorClass: 'bg-gray-500', tooltip: 'Exited' };
     case ContainerStateStatus.Paused:
-      return { colorClass: 'bg-orange-500', tooltip: 'Paused' };
     case ContainerStateStatus.Running:
-      return { colorClass: 'bg-green-500', tooltip: 'Running' };
     case ContainerStateStatus.Offline:
-      return { colorClass: 'bg-red-500', tooltip: 'Offline' };
+      return getContainerStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
     default:
       return { colorClass: 'bg-gray-400', tooltip: String(value) };
   }
 };
 
 export const StateIndicator = memo(
-  ({ value, isProcessing, enableLabel }: { value: StateValue; isProcessing?: boolean; enableLabel?: boolean }) => {
-    const { colorClass, tooltip } = getStatusStyle(value, enableLabel);
-
+  ({
+    value,
+    isProcessing,
+    enableLabel,
+    kind,
+  }: {
+    value: StateValue;
+    isProcessing?: boolean;
+    enableLabel?: boolean;
+    kind?: StateIndicatorKind;
+  }) => {
+    const { colorClass, tooltip } = getStatusStyle(value, enableLabel, kind);
     if (isProcessing) return <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />;
     return (
       <TooltipProvider delayDuration={200}>

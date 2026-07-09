@@ -34,6 +34,7 @@
 	   <Protobuf Include="..\Citadel.Contracts\src\Citadel.Hosting.DockerClient\Protos\network_service.proto" GrpcServices="Client" Link="Protos\network_service.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\src\Citadel.Hosting.DockerClient\Protos\volume_service.proto" GrpcServices="Client" Link="Protos\volume_service.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\src\Citadel.Hosting.DockerClient\Protos\deployment_service.proto" GrpcServices="Client" Link="Protos\deployment_service.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\src\Citadel.Hosting.DockerClient\Protos\stack_service.proto" GrpcServices="Client" Link="Protos\stack_service.proto" />
 
 	   <Protobuf Include="..\Citadel.Contracts\src\Citadel.Hosting.DockerClient\Protos\shared_models.proto" GrpcServices="None" Link="Protos\Common\shared_models.proto" />
    </ItemGroup>

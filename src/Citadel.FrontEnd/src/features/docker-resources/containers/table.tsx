@@ -76,6 +76,7 @@ const columns = (
         <StateIndicator
           value={row.original.state ?? ContainerStateStatus.Exited}
           isProcessing={row.original.controlState === ResourceControlState.Processing}
+          kind="container"
         />
         <Link to={`./${formatId(row.original.containerId)}`} className="table-link truncate" title={row.original.name}>
           {row.original.name ? truncate(row.original.name?.slice(1), 24) : ''}

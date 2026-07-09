@@ -939,6 +939,7 @@ function useApplyStackProgress(params: StackDeployParams) {
     request,
     successMessage: 'Stack applied successfully',
     errorMessageDefault: 'Failed to deploy',
+    compactDockerComposeOutput: true,
     getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
   });
 }
@@ -953,6 +954,7 @@ function useRollbackStackProgress(params: StackRollbackParams) {
     request,
     successMessage: 'Stack rolled back successfully',
     errorMessageDefault: 'Failed to rollback',
+    compactDockerComposeOutput: true,
     getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
   });
 }

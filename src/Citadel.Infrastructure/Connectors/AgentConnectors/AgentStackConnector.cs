@@ -1,17 +1,23 @@
-﻿using Domain.Contracts.Interfaces;
+using Citadel.Stacks.V1;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
-using LightResults;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Grpc.Core;
+using Infrastructure.Connectors.Mappers;
+using Infrastructure.Repositories;
+using System.Runtime.CompilerServices;
 
 namespace Infrastructure.Connectors.AgentConnectors;
 
-internal class AgentStackConnector : IStackConnector
+internal class AgentStackConnector(IGrpcClientFactory clientFactory) : IStackConnector
 {
-    public IAsyncEnumerable<StackApplyResult> StackApplyAsync(StackApplyCommand applyCommand, CancellationToken cancellationToken)
+    public async IAsyncEnumerable<StackApplyResult> StackApplyAsync(
+        StackApplyCommand applyCommand,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // Will implement this later, do not implement this for now
-        throw new NotImplementedException();
+        var stackClient = clientFactory.GetStackClient(applyCommand.PlatformAddress);
+        using var call = stackClient.Apply(applyCommand.ToAgentRequest(), cancellationToken: cancellationToken);
+
+        await foreach (StackApplyResponse result in call.ResponseStream.ReadAllAsync(cancellationToken))
+            yield return result.Map();
     }
 }

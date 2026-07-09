@@ -35,7 +35,7 @@ public partial class Program
         // Configures the HTTP request pipeline.
         void Configure(WebApplication app)
         {
-            // var pubKey = Helpers.GetOrCreatePublicKey();
+            //var pubKey = Helpers.GetOrCreatePublicKey();
             if (app.Configuration.GetValue<bool>("EnableSwagger"))
             {
                 app.MapOpenApi();
