@@ -1,6 +1,10 @@
 using Application.Features.Automation.Models;
+using Application.Permissions;
 using Domain;
 using Domain.Entities.Automation;
+using Hosting.Common;
+using Hosting.Common.Attributes;
+using WebApi.Routes.Endpoints.Resources.Identity;
 using WebApi.Routes.Endpoints.Resources.Tags;
 
 namespace WebApi.Routes.Endpoints.Resources.Automation;
@@ -27,13 +31,26 @@ public sealed record AutomationActionView(
     Guid CreatedByActorId,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    IReadOnlyList<TagSummaryView> Tags)
+    IReadOnlyList<TagSummaryView> Tags,
+    ResourceCapabilities? Capabilities = null)
 {
     internal static AutomationActionView Map(AutomationActionResult result)
-        => Map(result.Action, null);
+        => Map(result.Action, (ActionRun?)null);
+
+    internal static Task<AutomationActionView> Map(AutomationActionResult result, IPermissionEvaluator permissionEvaluator)
+        => Map(result.Action, permissionEvaluator);
 
     internal static AutomationActionView Map(AutomationAction action)
-        => Map(action, null);
+        => Map(action, (ActionRun?)null);
+
+    internal static async Task<AutomationActionView> Map(AutomationAction action, IPermissionEvaluator permissionEvaluator)
+    {
+        var permissions = await permissionEvaluator.EvaluateAsync(action.Id, ResourceType.AutomationAction);
+        return Map(action) with
+        {
+            Capabilities = CapabilityMapper.ToResourceCapabilities(permissions)
+        };
+    }
 
     internal static AutomationActionView Map(AutomationAction action, ActionRun? latestRun)
         => new(
@@ -61,11 +78,44 @@ public sealed record AutomationActionView(
             [.. action.Tags.Select(TagSummaryView.Map)]);
 }
 
-public sealed record AutomationActionsView(IReadOnlyList<AutomationActionView> Actions)
+public sealed record AutomationActionsView(IReadOnlyList<AutomationActionView> Actions, ResourceCapabilities Capabilities)
 {
-    internal static AutomationActionsView Map(AutomationActionListResult result)
-        => new([.. result.Actions.Select(action =>
-            AutomationActionView.Map(action, result.LatestRuns.GetValueOrDefault(action.Id)))]);
+    internal static async Task<AutomationActionsView> Map(
+        AutomationActionListResult result,
+        IPermissionEvaluator permissionEvaluator)
+    {
+        var actions = result.Actions as AutomationAction[] ?? [.. result.Actions];
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.AutomationAction);
+
+        if (actions.Length == 0)
+            return new AutomationActionsView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
+
+        var ids = new Guid[actions.Length];
+
+        for (var i = 0; i < actions.Length; i++)
+        {
+            ids[i] = actions[i].Id;
+        }
+
+        var perms = await permissionEvaluator.EvaluateAsync(ids, ResourceType.AutomationAction);
+        var views = new AutomationActionView[actions.Length];
+
+        for (var i = 0; i < actions.Length; i++)
+        {
+            var action = actions[i];
+            var baseView = AutomationActionView.Map(action, result.LatestRuns.GetValueOrDefault(action.Id));
+
+            perms.TryGetValue(action.Id, out var meta);
+
+            views[i] = baseView with
+            {
+                Capabilities = CapabilityMapper.ToResourceCapabilities(
+                    meta == default ? PermissionMetadata.Empty : meta)
+            };
+        }
+
+        return new AutomationActionsView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
+    }
 }
 
 public sealed record AutomationActionRunView(

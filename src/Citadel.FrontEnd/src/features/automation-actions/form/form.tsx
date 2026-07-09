@@ -21,7 +21,7 @@ import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Button } from '@/components/ui/button';
 import { TimezoneSelectField } from '@/features/alerters/alert-rules/form/form';
 import { ResourceTagSelector } from '@/features/tags/components';
-import { MonacoEditor } from '@/lib/monaco';
+import { configureAutomationActionEditor, MonacoEditor } from '@/lib/monaco';
 import { useMutate, useSaveResource } from '@/lib/hooks';
 import { useTaskSheet } from '@/lib/atoms';
 import { useQueryClient } from '@tanstack/react-query';
@@ -29,7 +29,6 @@ import { TestTube2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { toast } from 'sonner';
-import { configureAutomationActionEditor } from './automation-action-editor-types';
 
 type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
   id?: string;
@@ -41,8 +40,8 @@ type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
 const DEFAULT_CODE = `console.log("Action run", run.id);
 console.log("Arguments", args);
 
-const deployments = await citadel.deployments.listDeployments();
-console.log("Deployments:", deployments?.deployments?.length ?? 0);
+const result = await citadel.deployments.listDeployments();
+console.log("Deployments:", result?.deployments?.length ?? 0);
 `;
 
 const emptyAction = (): AutomationActionFormValue => ({

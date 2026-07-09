@@ -178,7 +178,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             {
                 Id = SystemTagId,
                 Name = "System",
-                NormalizedName = "System",
+                NormalizedName = "system",
                 Color = "#6b21a8",
                 CreatedByActorId = systemActorId,
                 CreatedAt = seedDate,
@@ -230,7 +230,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                     }
 
                     console.log(`Requested deletion of ${deleted} unused image(s).`);
-                    """,
+                    """.Replace("\r\n", "\n"),
                 DefaultArgsJson = "{}",
                 Enabled = false,
                 ScheduleEnabled = true,
@@ -267,7 +267,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                       await citadel.stacks.restartStacks(stackIds);
                       console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);
                     }
-                    """,
+                    """.Replace("\r\n", "\n"),
                 DefaultArgsJson = "{}",
                 Enabled = false,
                 ScheduleEnabled = true,
@@ -346,7 +346,10 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             new { Id = Guid.Parse("019d0000-0001-7000-8001-00000000000f"), Name = "Webhook Authentication Failed", Type = "WebhookAuthenticationFailed", Severity = "Warning", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000010"), Name = "Webhook Dispatch Failed", Type = "WebhookDispatchFailed", Severity = "Warning", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000012"), Name = "Webhook Sync Failed - Git Repository", Type = "WebhookGitRepoSyncFailed", Severity = "Warning", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
-            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000013"), Name = "Webhook Deploy Failed - Git Stack", Type = "WebhookStackGitDeployFailed", Severity = "Critical", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate }
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000013"), Name = "Webhook Deploy Failed - Git Stack", Type = "WebhookStackGitDeployFailed", Severity = "Critical", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+
+            // Automation event alerts
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000018"), Name = "Automation Action Run Failed", Type = "AutomationActionRunFailed", Severity = "Critical", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate }
         );
 
         // --- Registries ---

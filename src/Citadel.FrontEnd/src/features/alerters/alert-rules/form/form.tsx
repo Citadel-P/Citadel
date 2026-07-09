@@ -101,11 +101,13 @@ export const AlertRuleForm = ({
     AlertType.StackDriftAutoReconciled,
     AlertType.DeploymentAutoUpdated,
     AlertType.DeploymentAutoDeployFailed,
+    AlertType.AutomationActionRunFailed,
   ];
   const showCooldown = !!merged.type && !noCooldownTypes.includes(merged.type);
 
   const resourceFromAlertType = useCallback((): ResourceType => {
     if (!merged.type) return 'Platform';
+    if (merged.type.startsWith('AutomationAction')) return 'AutomationAction';
     if (merged.type.startsWith('Webhook')) return 'Webhook';
     if (merged.type.startsWith('Deployment')) return 'Deployment';
     if (merged.type.includes('Stack')) return 'Stack';

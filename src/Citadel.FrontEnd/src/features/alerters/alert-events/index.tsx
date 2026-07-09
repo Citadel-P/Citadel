@@ -62,6 +62,7 @@ function SearchSection() {
       [AlertResourceType.Platform]: CitadelIcons.Platform,
       [AlertResourceType.Stack]: CitadelIcons.Stack,
       [AlertResourceType.Webhook]: CitadelIcons.Webhook,
+      [AlertResourceType.AutomationAction]: CitadelIcons.AutomationAction,
     };
 
     return Object.values(AlertResourceType).map((value) => ({
@@ -147,6 +148,7 @@ function SearchSection() {
 }
 
 function getAlertTypeResourceType(type: AlertType): AlertResourceType {
+  if (type.startsWith('AutomationAction')) return AlertResourceType.AutomationAction;
   if (type.startsWith('Webhook')) return AlertResourceType.Webhook;
   if (type.startsWith('Deployment')) return AlertResourceType.Deployment;
   if (type.startsWith('Stack')) return AlertResourceType.Stack;

@@ -373,6 +373,7 @@ public static class AlertTypeMetadata
         { AlertType.WebhookDispatchFailed, AlertResourceType.Webhook },
         { AlertType.WebhookGitRepoSyncFailed, AlertResourceType.Webhook },
         { AlertType.WebhookStackGitDeployFailed, AlertResourceType.Webhook },
+        { AlertType.AutomationActionRunFailed, AlertResourceType.AutomationAction },
     };
 
     private static readonly HashSet<AlertType> ThresholdTypes =
@@ -414,6 +415,7 @@ public static class AlertTypeMetadata
             (AlertType.WebhookDispatchFailed, WebhookDispatchFailedAlertInfo) => true,
             (AlertType.WebhookGitRepoSyncFailed, WebhookGitRepoSyncFailedAlertInfo) => true,
             (AlertType.WebhookStackGitDeployFailed, WebhookStackGitDeployFailedAlertInfo) => true,
+            (AlertType.AutomationActionRunFailed, AutomationActionRunFailedAlertInfo) => true,
             _ => false
         };
 }

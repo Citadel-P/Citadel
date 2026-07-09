@@ -16,7 +16,8 @@ public sealed record AlertEvaluationContext(
     IReadOnlyCollection<GitRepoWebhookSyncFailureAlertSnapshot>? GitRepoWebhookSyncFailures = null,
     IReadOnlyCollection<StackGitWebhookDeployFailureAlertSnapshot>? StackGitWebhookDeployFailures = null,
     IReadOnlyCollection<StackConfigurationResolutionFailureAlertSnapshot>? StackConfigurationFailures = null,
-    IReadOnlyCollection<DeploymentConfigurationResolutionFailureAlertSnapshot>? DeploymentConfigurationFailures = null);
+    IReadOnlyCollection<DeploymentConfigurationResolutionFailureAlertSnapshot>? DeploymentConfigurationFailures = null,
+    IReadOnlyCollection<AutomationActionRunFailureAlertSnapshot>? AutomationActionRunFailures = null);
 
 public sealed record AlertMatch(
     Guid ResourceId,
@@ -98,4 +99,14 @@ public sealed record StackConfigurationResolutionFailureAlertSnapshot(
 public sealed record DeploymentConfigurationResolutionFailureAlertSnapshot(
     Guid Id,
     string Name,
+    string Reason);
+
+public sealed record AutomationActionRunFailureAlertSnapshot(
+    Guid Id,
+    string Name,
+    Guid RunId,
+    ActionRunTrigger Trigger,
+    ActionRunStatus Status,
+    int? ExitCode,
+    long? DurationMs,
     string Reason);

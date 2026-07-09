@@ -1,4 +1,5 @@
 using Application.Configs;
+using Application.Services.Alerts;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Automation;
@@ -104,6 +105,7 @@ internal sealed class AutomationExecutionService(
     IJwtService jwtService,
     IAutomationRunCoordinator runCoordinator,
     IAutomationApiEndpointCatalog endpointCatalog,
+    IAlertService alertService,
     IOptions<AutomationOptions> options,
     ILogger<AutomationExecutionService> logger) : IAutomationExecutionService
 {
@@ -292,6 +294,7 @@ internal sealed class AutomationExecutionService(
 
             var completionToken = cancellationToken.IsCancellationRequested ? CancellationToken.None : cancellationToken;
             await dbWorkQueue.EnqueueAndWaitAsync(new AutomationRunCompletedWorkItem(run), completionToken);
+            await ProcessFailureAlertAsync(action, run, completionToken);
             yield return Info(run.Id, run.Status, $"Action \"{action.Name}\" finished with status {run.Status}.");
         }
         finally
@@ -340,6 +343,39 @@ internal sealed class AutomationExecutionService(
         run.Complete(ActionRunStatus.Failed, null, errorMessage, errorMessage, DateTime.UtcNow);
         await dbWorkQueue.EnqueueAndWaitAsync(new AutomationRunCompletedWorkItem(run), cancellationToken);
     }
+
+    private Task ProcessFailureAlertAsync(AutomationAction action, ActionRun run, CancellationToken cancellationToken)
+    {
+        if (!action.AlertOnFailure || run.Trigger is ActionRunTrigger.Test || !IsAlertableFailure(run.Status))
+            return Task.CompletedTask;
+
+        var reason = string.IsNullOrWhiteSpace(run.ErrorMessage)
+            ? $"Run finished with status {run.Status}."
+            : run.ErrorMessage;
+
+        var context = new AlertEvaluationContext(
+            UtcNow: DateTime.UtcNow,
+            Platforms: [],
+            Deployments: [],
+            Stacks: [],
+            AutomationActionRunFailures:
+            [
+                new AutomationActionRunFailureAlertSnapshot(
+                    action.Id,
+                    action.Name,
+                    run.Id,
+                    run.Trigger,
+                    run.Status,
+                    run.ExitCode,
+                    run.DurationMs,
+                    reason)
+            ]);
+
+        return alertService.ProcessAsync(AlertType.AutomationActionRunFailed, context, cancellationToken);
+    }
+
+    private static bool IsAlertableFailure(ActionRunStatus status)
+        => status is ActionRunStatus.Failed or ActionRunStatus.TimedOut;
 
     private AutomationRunPaths PrepareRunDirectory(Guid runId)
     {

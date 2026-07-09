@@ -62,6 +62,44 @@ public sealed class ConfigurationResolutionAlertEvaluatorTests
         Assert.True(AlertTypeMetadata.IsValidInfo(AlertType.DeploymentConfigurationResolutionFailed, info));
     }
 
+    [Fact]
+    public void AutomationActionRunFailedEvaluator_Should_Emit_Automation_Action_Alert()
+    {
+        var actionId = Guid.CreateVersion7();
+        var runId = Guid.CreateVersion7();
+        var reason = "Deno exited with code 7.";
+        var context = new AlertEvaluationContext(
+            UtcNow: DateTime.UtcNow,
+            Platforms: [],
+            Deployments: [],
+            Stacks: [],
+            AutomationActionRunFailures:
+            [
+                new AutomationActionRunFailureAlertSnapshot(
+                    actionId,
+                    "prune-images",
+                    runId,
+                    ActionRunTrigger.Schedule,
+                    ActionRunStatus.Failed,
+                    7,
+                    1250,
+                    reason)
+            ]);
+
+        var match = Assert.Single(new AutomationActionRunFailedEvaluator().Evaluate(CreateRule(AlertType.AutomationActionRunFailed), context));
+
+        Assert.True(match.IsMatch);
+        Assert.Equal(actionId, match.ResourceId);
+        Assert.Equal("prune-images", match.ResourceName);
+        Assert.Equal(AlertResourceType.AutomationAction, match.ResourceType);
+        Assert.Equal(runId.ToString("N"), match.DeduplicationComponent);
+        var info = Assert.IsType<AutomationActionRunFailedAlertInfo>(match.Info);
+        Assert.Equal("prune-images", info.ActionName);
+        Assert.Equal(runId, info.RunId);
+        Assert.Equal(reason, info.Reason);
+        Assert.True(AlertTypeMetadata.IsValidInfo(AlertType.AutomationActionRunFailed, info));
+    }
+
     private static AlertRule CreateRule(AlertType type)
         => new(
             name: type.ToString(),

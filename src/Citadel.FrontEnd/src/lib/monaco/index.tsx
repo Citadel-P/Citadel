@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Columns2, Rows4 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
+export { configureAutomationActionEditor } from './automation_action';
+
 // --- Configuration Constants ---
 const LINE_HEIGHT_PX = 18;
 const CONTAINER_PADDING_PX = 30; // Vertical padding buffer

@@ -4,6 +4,7 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { ActivitiesTab } from '@/features/activities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { useRead } from '@/lib/hooks';
+import { hasCapability } from '@/lib/resource-capabilities';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { AutomationActionInfoActions } from '../actions';
 import { AutomationActionForm } from './form';
@@ -42,6 +43,7 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
           resourceType="AutomationAction"
           resourceId={resource.id}
           tags={(resource as AutomationActionView).tags}
+          disabled={!hasCapability(resource, 'canWrite')}
         />
       ),
     },
@@ -53,6 +55,7 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
             mode="edit"
             resource={resource as AutomationActionFormResource}
             metadataChanged={metadataChanged}
+            disabled={!hasCapability(resource, 'canWrite')}
           />
         ),
       },
@@ -73,7 +76,6 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
               ...data.data,
               status: data.data.latestRun?.status ?? data.data.enabled,
               description: data.data.description,
-              capabilities: { canRead: true, canWrite: true, canExecute: true },
             } satisfies AutomationActionFormResource)
           : undefined,
         isLoading,

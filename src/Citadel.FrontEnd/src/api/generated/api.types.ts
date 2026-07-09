@@ -325,6 +325,7 @@ export enum AlertType {
   WebhookDispatchFailed = "WebhookDispatchFailed",
   WebhookGitRepoSyncFailed = "WebhookGitRepoSyncFailed",
   WebhookStackGitDeployFailed = "WebhookStackGitDeployFailed",
+  AutomationActionRunFailed = "AutomationActionRunFailed",
 }
 
 export enum AlertSeverity {
@@ -344,6 +345,7 @@ export enum AlertResourceType {
   Stack = "Stack",
   GitRepository = "GitRepository",
   Webhook = "Webhook",
+  AutomationAction = "AutomationAction",
 }
 
 export enum AlertEventStatus {
@@ -706,6 +708,10 @@ export type AlertEventInfo = BaseAlertEventInfo &
     | BaseAlertEventInfoTypeMapping<
         "WebhookStackGitDeployFailed",
         AlertEventInfoWebhookStackGitDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "AutomationActionRunFailed",
+        AlertEventInfoAutomationActionRunFailedAlertInfo
       >
   );
 
@@ -1410,6 +1416,27 @@ export interface AlertChannelsView {
   capabilities: ResourceCapabilities;
 }
 
+export interface AlertEventInfoAutomationActionRunFailedAlertInfo {
+  $type?: "AutomationActionRunFailed";
+  actionName: string;
+  /** @format uuid */
+  runId: string;
+  trigger: ActionRunTrigger;
+  status: ActionRunStatus;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  durationMs: null | number | string;
+  reason: string;
+  humanMessage?: null | string;
+}
+
 export interface AlertEventInfoDeploymentAutoDeployFailedAlertInfo {
   $type?: "DeploymentAutoDeployFailed";
   deploymentName: string;
@@ -1984,10 +2011,12 @@ export interface AutomationActionView {
   /** @format date-time */
   updatedAt: any;
   tags: TagSummaryView[];
+  capabilities?: null | ResourceCapabilities;
 }
 
 export interface AutomationActionsView {
   actions: AutomationActionView[];
+  capabilities: ResourceCapabilities;
 }
 
 export interface AutomationWebhookConfig {

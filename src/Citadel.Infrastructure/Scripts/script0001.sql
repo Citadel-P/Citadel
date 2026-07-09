@@ -600,7 +600,7 @@ for (const platform of platforms) {
   deleted += unusedImageIds.length;
 }
 
-console.log(`Requested deletion of ${deleted} unused image(s).`);', 'Idle', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '{}', 'Example action: deletes local Docker images that are not used by any container on every platform.', FALSE, NULL, 'Daily unused image prune', '00000000-0000-0000-0000-000000000002', '0 12 * * *', TRUE, 'UTC', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL);
+console.log(`Requested deletion of ${deleted} unused image(s).`);', 'Idle', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '{}', 'Deletes local Docker images that are not used by any container on every platform.', FALSE, NULL, 'Prune images', '00000000-0000-0000-0000-000000000002', '0 12 * * *', TRUE, 'UTC', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL);
 INSERT INTO actions (id, alertonfailure, code, controlstate, createdat, createdbyactorid, currentrunid, defaultargsjson, description, enabled, lastscheduledrunat, name, runasactorid, schedulecron, scheduleenabled, scheduletimezone, timeoutseconds, updatedat, webhook)
 VALUES ('41000000-0000-0000-0000-000000000002', TRUE, 'const stacksResponse = await citadel.stacks.listStacks({ tags: ["Prod"] });
 const stacks = stacksResponse?.stacks ?? [];
@@ -614,7 +614,7 @@ if (unhealthyStacks.length === 0) {
   const stackIds = unhealthyStacks.map((stack) => stack.id);
   await citadel.stacks.restartStacks(stackIds);
   console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);
-}', 'Idle', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '{}', 'Example action: restarts stacks tagged Prod when their current release is not healthy.', FALSE, NULL, 'Restart unhealthy Prod stacks', '00000000-0000-0000-0000-000000000002', '*/15 * * * *', TRUE, 'UTC', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL);
+}', 'Idle', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '{}', 'Restarts stacks tagged Prod when their current release is not healthy.', FALSE, NULL, 'Restart unhealthy stacks', '00000000-0000-0000-0000-000000000002', '*/15 * * * *', TRUE, 'UTC', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL);
 
 INSERT INTO actorroles (actorid, roleid)
 VALUES ('00000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001');
@@ -667,6 +667,10 @@ INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, descri
 VALUES ('019d0000-0001-7000-8001-000000000016', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Git Stack Auto Updated', '[]', NULL, 'Info', NULL, 'StackGitAutoUpdated');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000017', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Git Auto Deploy Failed - Stack', '[]', NULL, 'Critical', NULL, 'StackGitAutoDeployFailed');
+
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
+VALUES ('019d0000-0001-7000-8001-000000000018', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Automation Action Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'AutomationActionRunFailed');
+
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000022', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'RAM > 80% - Platform', '[]', 3, 'Warning', 80.0, 'PlatformRamHigh');
 
@@ -761,9 +765,9 @@ VALUES ('00000000-0000-0000-0000-000000000100', '{
 }', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'Public Docker Hub Registry', 'Docker Hub', 'hub.docker.com', 'Active');
 
 INSERT INTO tags (id, color, createdat, createdbyactorid, name, normalizedname, updatedat)
-VALUES ('40000000-0000-0000-0000-000000000001', '#2563EB', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'Automation Examples', 'automation examples', TIMESTAMPTZ '2026-01-01T00:00:00Z');
+VALUES ('40000000-0000-0000-0000-000000000001', '#6b21a8', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'System', 'system', TIMESTAMPTZ '2026-01-01T00:00:00Z');
 INSERT INTO tags (id, color, createdat, createdbyactorid, name, normalizedname, updatedat)
-VALUES ('40000000-0000-0000-0000-000000000002', '#16A34A', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'Prod', 'prod', TIMESTAMPTZ '2026-01-01T00:00:00Z');
+VALUES ('40000000-0000-0000-0000-000000000002', '#f87171', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', 'Prod', 'prod', TIMESTAMPTZ '2026-01-01T00:00:00Z');
 
 INSERT INTO teams (id, actorid, name)
 VALUES ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000003', 'Operators');
@@ -961,7 +965,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260708175530_migration0001', '10.0.9');
+VALUES ('20260709094528_migration0001', '10.0.9');
 
 COMMIT;
 

@@ -1,9 +1,7 @@
-import { AutomationActionView, ResourceCapabilities } from '@/api/generated/api.types';
+import { AutomationActionView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useEffect, useRef, useState } from 'react';
 import { useResourceTagFilter } from '@/features/tags/components';
-
-const AUTOMATION_CAPABILITIES: ResourceCapabilities = { canRead: true, canWrite: true, canExecute: true };
 
 export const useAutomationActionsGroup = () => {
   const { selectedTagNames } = useResourceTagFilter();
@@ -24,5 +22,5 @@ export const useAutomationActionsGroup = () => {
     }
   }, [data]);
 
-  return { actions, isLoading, capabilities: AUTOMATION_CAPABILITIES, selectedTagNames };
+  return { actions, isLoading, capabilities: data?.data.capabilities, selectedTagNames };
 };

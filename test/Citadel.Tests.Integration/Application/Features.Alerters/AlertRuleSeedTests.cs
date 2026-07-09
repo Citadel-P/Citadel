@@ -8,10 +8,11 @@ namespace Tests.Integration.Application.Features.Alerters;
 public sealed class AlertRuleSeedTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Theory]
-    [InlineData(AlertType.StackGitUpdateAvailable)]
-    [InlineData(AlertType.StackGitAutoUpdated)]
-    [InlineData(AlertType.StackGitAutoDeployFailed)]
-    public async Task Default_AlertRules_Should_Include_GitStack_Events(AlertType type)
+    [InlineData(AlertType.StackGitUpdateAvailable, AlertResourceType.Stack)]
+    [InlineData(AlertType.StackGitAutoUpdated, AlertResourceType.Stack)]
+    [InlineData(AlertType.StackGitAutoDeployFailed, AlertResourceType.Stack)]
+    [InlineData(AlertType.AutomationActionRunFailed, AlertResourceType.AutomationAction)]
+    public async Task Default_AlertRules_Should_Include_Seeded_Events(AlertType type, AlertResourceType resourceType)
     {
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -20,6 +21,6 @@ public sealed class AlertRuleSeedTests(PostgresTestFixture fixture) : Integratio
         var rule = Assert.Single(rules, rule => rule.Type == type);
 
         Assert.Equal(AlertRuleStatus.Enabled, rule.Status);
-        Assert.Equal(AlertResourceType.Stack, AlertTypeMetadata.GetResourceType(rule.Type));
+        Assert.Equal(resourceType, AlertTypeMetadata.GetResourceType(rule.Type));
     }
 }

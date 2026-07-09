@@ -22917,6 +22917,9 @@
           },
           {
             "$ref": "#/components/schemas/AlertEventInfoWebhookStackGitDeployFailedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoAutomationActionRunFailedAlertInfo"
           }
         ],
         "discriminator": {
@@ -22945,7 +22948,67 @@
             "WebhookAuthenticationFailed": "#/components/schemas/AlertEventInfoWebhookAuthenticationFailedAlertInfo",
             "WebhookDispatchFailed": "#/components/schemas/AlertEventInfoWebhookDispatchFailedAlertInfo",
             "WebhookGitRepoSyncFailed": "#/components/schemas/AlertEventInfoWebhookGitRepoSyncFailedAlertInfo",
-            "WebhookStackGitDeployFailed": "#/components/schemas/AlertEventInfoWebhookStackGitDeployFailedAlertInfo"
+            "WebhookStackGitDeployFailed": "#/components/schemas/AlertEventInfoWebhookStackGitDeployFailedAlertInfo",
+            "AutomationActionRunFailed": "#/components/schemas/AlertEventInfoAutomationActionRunFailedAlertInfo"
+          }
+        }
+      },
+      "AlertEventInfoAutomationActionRunFailedAlertInfo": {
+        "required": [
+          "actionName",
+          "runId",
+          "trigger",
+          "status",
+          "exitCode",
+          "durationMs",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "AutomationActionRunFailed"
+            ],
+            "type": "string"
+          },
+          "actionName": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionRunTrigger"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActionRunStatus"
+          },
+          "exitCode": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -23996,7 +24059,8 @@
           "Deployment",
           "Stack",
           "GitRepository",
-          "Webhook"
+          "Webhook",
+          "AutomationAction"
         ]
       },
       "AlertRuleConfigView": {
@@ -24452,7 +24516,8 @@
           "WebhookAuthenticationFailed",
           "WebhookDispatchFailed",
           "WebhookGitRepoSyncFailed",
-          "WebhookStackGitDeployFailed"
+          "WebhookStackGitDeployFailed",
+          "AutomationActionRunFailed"
         ]
       },
       "ApplyDeploymentInput": {
@@ -25052,12 +25117,23 @@
             "items": {
               "$ref": "#/components/schemas/TagSummaryView"
             }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
           }
         }
       },
       "AutomationActionsView": {
         "required": [
-          "actions"
+          "actions",
+          "capabilities"
         ],
         "type": "object",
         "properties": {
@@ -25066,6 +25142,9 @@
             "items": {
               "$ref": "#/components/schemas/AutomationActionView"
             }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
           }
         }
       },

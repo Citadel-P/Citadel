@@ -615,6 +615,10 @@ public enum AlertType
     WebhookGitRepoSyncFailed,
     WebhookStackGitDeployFailed,
     #endregion
+
+    #region Automation Alerts
+    AutomationActionRunFailed,
+    #endregion
 }
 
 public enum AlertSeverity
@@ -642,7 +646,8 @@ public enum AlertResourceType
     Deployment,
     Stack,
     GitRepository,
-    Webhook
+    Webhook,
+    AutomationAction
 }
 
 public enum AlertEventStatus

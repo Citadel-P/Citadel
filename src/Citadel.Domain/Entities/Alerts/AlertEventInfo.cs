@@ -31,6 +31,7 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(WebhookDispatchFailedAlertInfo), nameof(AlertType.WebhookDispatchFailed))]
 [JsonDerivedType(typeof(WebhookGitRepoSyncFailedAlertInfo), nameof(AlertType.WebhookGitRepoSyncFailed))]
 [JsonDerivedType(typeof(WebhookStackGitDeployFailedAlertInfo), nameof(AlertType.WebhookStackGitDeployFailed))]
+[JsonDerivedType(typeof(AutomationActionRunFailedAlertInfo), nameof(AlertType.AutomationActionRunFailed))]
 public abstract record AlertEventInfo
 {
     /// <summary>
@@ -284,6 +285,19 @@ public sealed record WebhookStackGitDeployFailedAlertInfo(
 {
     public override string HumanMessage =>
         $"Webhook-triggered deploy failed for Git stack '{StackName}' from {GitRepositoryName}/{Branch}: {Reason}";
+}
+
+public sealed record AutomationActionRunFailedAlertInfo(
+    string ActionName,
+    Guid RunId,
+    ActionRunTrigger Trigger,
+    ActionRunStatus Status,
+    int? ExitCode,
+    long? DurationMs,
+    string Reason) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Automation action '{ActionName}' {Status.ToString().ToLowerInvariant()} during {Trigger.ToString().ToLowerInvariant()} run: {Reason}";
 }
 
 file static class StackAlertMessageFormatter

@@ -86,6 +86,7 @@ public interface IActionRunRepository
     Task<bool> HasActiveRunAsync(Guid actionId, CancellationToken cancellationToken);
     Task<bool> TryMarkRunningAsync(Guid id, DateTime startedAt, CancellationToken cancellationToken);
     Task<int> CancelQueuedOrRunningAsync(Guid id, DateTime cancelledAt, string reason, CancellationToken cancellationToken);
+    Task<int> RemoveCompletedOlderThanAsync(DateTime completedBefore, CancellationToken cancellationToken);
 }
 
 public interface IAutomationProcessRunner

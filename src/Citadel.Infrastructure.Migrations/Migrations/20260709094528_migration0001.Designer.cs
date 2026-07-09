@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260708175530_migration0001")]
+    [Migration("20260709094528_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -795,6 +795,18 @@ namespace Infrastructure.Migrations.Migrations
                             QuietHours = "[]",
                             Severity = "Critical",
                             Type = "WebhookStackGitDeployFailed"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-000000000018"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Automation Action Run Failed",
+                            QuietHours = "[]",
+                            Severity = "Critical",
+                            Status = "Enabled",
+                            Type = "AutomationActionRunFailed"
                         });
                 });
 
@@ -987,9 +999,9 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
                             DefaultArgsJson = "{}",
-                            Description = "Example action: deletes local Docker images that are not used by any container on every platform.",
+                            Description = "Deletes local Docker images that are not used by any container on every platform.",
                             Enabled = false,
-                            Name = "Daily unused image prune",
+                            Name = "Prune images",
                             RowVersion = 0L,
                             RunAsActorId = new Guid("00000000-0000-0000-0000-000000000002"),
                             ScheduleCron = "0 12 * * *",
@@ -1007,9 +1019,9 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
                             DefaultArgsJson = "{}",
-                            Description = "Example action: restarts stacks tagged Prod when their current release is not healthy.",
+                            Description = "Restarts stacks tagged Prod when their current release is not healthy.",
                             Enabled = false,
-                            Name = "Restart unhealthy Prod stacks",
+                            Name = "Restart unhealthy stacks",
                             RowVersion = 0L,
                             RunAsActorId = new Guid("00000000-0000-0000-0000-000000000002"),
                             ScheduleCron = "*/15 * * * *",
@@ -2975,17 +2987,17 @@ namespace Infrastructure.Migrations.Migrations
                         new
                         {
                             Id = new Guid("40000000-0000-0000-0000-000000000001"),
-                            Color = "#2563EB",
+                            Color = "#6b21a8",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
-                            Name = "Automation Examples",
-                            NormalizedName = "automation examples",
+                            Name = "System",
+                            NormalizedName = "system",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = new Guid("40000000-0000-0000-0000-000000000002"),
-                            Color = "#16A34A",
+                            Color = "#f87171",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
                             Name = "Prod",

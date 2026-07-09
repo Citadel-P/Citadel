@@ -1,8 +1,10 @@
 using Application.Configs;
 using Application.Services;
+using Application.Services.Alerts;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
+using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
 using Domain.Entities.Tags;
 using Hosting.Common;
@@ -91,7 +93,7 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
     public async Task SeededDefaultAutomationActions_ShouldBeDisabledAndTagged()
     {
         var response = await Client.GetAsync(
-            $"/api/v1/automation/actions?tags={Uri.EscapeDataString("Automation Examples")}",
+            $"/api/v1/automation/actions?tags={Uri.EscapeDataString("System")}",
             TestContext.Current.CancellationToken);
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
@@ -99,18 +101,18 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
 
         using var document = JsonDocument.Parse(body);
         var actions = document.RootElement.GetProperty("actions").EnumerateArray().ToArray();
-        var prune = Assert.Single(actions, action => action.GetProperty("name").GetString() == "Daily unused image prune");
-        var restart = Assert.Single(actions, action => action.GetProperty("name").GetString() == "Restart unhealthy Prod stacks");
+        var prune = Assert.Single(actions, action => action.GetProperty("name").GetString() == "Prune images");
+        var restart = Assert.Single(actions, action => action.GetProperty("name").GetString() == "Restart unhealthy stacks");
 
         Assert.False(prune.GetProperty("enabled").GetBoolean());
         Assert.True(prune.GetProperty("scheduleEnabled").GetBoolean());
         Assert.Equal("0 12 * * *", prune.GetProperty("scheduleCron").GetString());
-        AssertContainsTag(prune.GetProperty("tags"), "Automation Examples");
+        AssertContainsTag(prune.GetProperty("tags"), "System");
 
         Assert.False(restart.GetProperty("enabled").GetBoolean());
         Assert.True(restart.GetProperty("scheduleEnabled").GetBoolean());
         Assert.Equal("*/15 * * * *", restart.GetProperty("scheduleCron").GetString());
-        AssertContainsTag(restart.GetProperty("tags"), "Automation Examples");
+        AssertContainsTag(restart.GetProperty("tags"), "System");
         AssertContainsTag(restart.GetProperty("tags"), "Prod");
     }
 
@@ -534,6 +536,47 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
     }
 
     [Fact]
+    public async Task RunAutomationAction_WhenProcessExitsNonZeroAndAlertOnFailure_ShouldCreateAlertEvent()
+    {
+        processRunner.ExitCode = 7;
+        processRunner.StdErr = "deno failed";
+
+        var createResponse = await CreateActionAsync("action-fail-alert", "console.log('fail');");
+        var actionId = ReadId(await createResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        createResponse.EnsureSuccessStatusCode();
+        await ReloadAlertRuleCacheAsync();
+
+        var response = await Client.PostAsync(
+            $"/api/v1/automation/actions/{actionId}/run",
+            JsonContent("""{"argsJson":"{}","timeoutSeconds":30}"""),
+            TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.IsSuccessStatusCode, body);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var run = await uow.ActionRuns.GetLatestByActionAsync(actionId, TestContext.Current.CancellationToken);
+        var alertEvents = await uow.AlertEvents.GetPagedAsync(
+            actionId,
+            AlertType.AutomationActionRunFailed,
+            AlertResourceType.AutomationAction,
+            page: 1,
+            pageSize: 10,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(run);
+        var alertEvent = Assert.Single(alertEvents.Items);
+        Assert.Equal(actionId, alertEvent.ResourceId);
+        Assert.Equal("action-fail-alert", alertEvent.ResourceName);
+        var info = Assert.IsType<AutomationActionRunFailedAlertInfo>(alertEvent.Info);
+        Assert.Equal(run.Id, info.RunId);
+        Assert.Equal(ActionRunTrigger.Manual, info.Trigger);
+        Assert.Equal(ActionRunStatus.Failed, info.Status);
+        Assert.Equal("Deno exited with code 7.", info.Reason);
+    }
+
+    [Fact]
     public async Task AutomationActionRepository_ShouldFilterScheduledActionsAndMarkScheduledOnce()
     {
         await using var scope = Services.CreateAsyncScope();
@@ -667,6 +710,12 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
         Assert.Contains(
             tags.EnumerateArray(),
             tag => tag.GetProperty("name").GetString() == name);
+    }
+
+    private async Task ReloadAlertRuleCacheAsync()
+    {
+        var cache = Services.GetRequiredService<AlertRuleCache>();
+        await cache.ReloadAsync(TestContext.Current.CancellationToken);
     }
 
     private static async Task<IReadOnlyList<ActivityEvent>> GetActivitiesAsync(

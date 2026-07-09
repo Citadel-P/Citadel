@@ -229,6 +229,7 @@ public partial class EventInfoJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(WebhookDispatchFailedAlertInfo))]
 [JsonSerializable(typeof(WebhookGitRepoSyncFailedAlertInfo))]
 [JsonSerializable(typeof(WebhookStackGitDeployFailedAlertInfo))]
+[JsonSerializable(typeof(AutomationActionRunFailedAlertInfo))]
 public partial class AlertEventJsonContext : JsonSerializerContext
 {
 }

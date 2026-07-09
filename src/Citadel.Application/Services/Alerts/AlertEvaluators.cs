@@ -647,3 +647,36 @@ public sealed class WebhookStackGitDeployFailedEvaluator : IAlertEvaluator
     }
 }
 #endregion
+
+#region Automation
+
+[AlertEvaluator(AlertType.AutomationActionRunFailed)]
+public sealed class AutomationActionRunFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.AutomationActionRunFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.AutomationActionRunFailures is null)
+            yield break;
+
+        foreach (var failure in context.AutomationActionRunFailures)
+        {
+            yield return new AlertMatch(
+                failure.Id,
+                failure.Name,
+                AlertResourceType.AutomationAction,
+                new AutomationActionRunFailedAlertInfo(
+                    failure.Name,
+                    failure.RunId,
+                    failure.Trigger,
+                    failure.Status,
+                    failure.ExitCode,
+                    failure.DurationMs,
+                    failure.Reason),
+                DeduplicationComponent: failure.RunId.ToString("N"));
+        }
+    }
+}
+
+#endregion

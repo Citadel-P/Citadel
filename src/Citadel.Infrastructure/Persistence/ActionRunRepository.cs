@@ -214,4 +214,36 @@ internal sealed class ActionRunRepository(IDbConnection db, Func<IDbTransaction>
             },
             transaction: tx());
     }
+
+    public async Task<int> RemoveCompletedOlderThanAsync(DateTime completedBefore, CancellationToken cancellationToken)
+    {
+        const string countSql = """
+            SELECT COUNT(*)
+            FROM ActionRuns
+            WHERE COALESCE(FinishedAt, QueuedAt) < @CompletedBefore
+              AND Status <> @QueuedStatus
+              AND Status <> @RunningStatus
+            """;
+
+        const string deleteSql = """
+            DELETE FROM ActionRuns
+            WHERE COALESCE(FinishedAt, QueuedAt) < @CompletedBefore
+              AND Status <> @QueuedStatus
+              AND Status <> @RunningStatus
+            """;
+
+        var p = new RemoveCompletedOlderThanParams(
+            completedBefore,
+            EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Queued),
+            EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Running));
+
+        var totalCount = await db.QuerySingleAsync<int>(countSql, p, transaction: tx());
+        await db.ExecuteAsync(deleteSql, p, transaction: tx());
+        return totalCount;
+    }
+
+    private sealed record RemoveCompletedOlderThanParams(
+        DateTime CompletedBefore,
+        string QueuedStatus,
+        string RunningStatus);
 }

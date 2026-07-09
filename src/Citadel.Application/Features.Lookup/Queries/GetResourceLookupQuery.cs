@@ -88,6 +88,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Alert, LookupResourceType.Deployment) => await GetAlertDeploymentLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.Stack) => await GetAlertStackLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.GitRepository) => await GetAlertGitRepositoryLookupAsync(userId, cancellationToken),
+            (LookupResourceType.Alert, LookupResourceType.AutomationAction) => await GetAlertAutomationActionLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.AlertChannel) => await GetAlertChannelLookupAsync(userId, cancellationToken),
             (LookupResourceType.Image, LookupResourceType.Registry) => await GetImageRegistryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Platform) => await GetPlatformLookupAsync(userId, cancellationToken),
@@ -286,6 +287,10 @@ internal sealed class GetResourceLookupQueryHandler(
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetAlertGitRepositoryLookupAsync(Guid userId, CancellationToken cancellationToken)
        => Result.Success((await unitOfWork.GitRepositories.GetAuthorizedAsync(userId, ResourceType.GitRepository, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+               .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetAlertAutomationActionLookupAsync(Guid userId, CancellationToken cancellationToken)
+       => Result.Success((await unitOfWork.AutomationActions.GetAuthorizedAsync(userId, ResourceType.AutomationAction, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
                .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetAlertChannelLookupAsync(Guid userId, CancellationToken cancellationToken)

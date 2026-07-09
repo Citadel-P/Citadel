@@ -1,6 +1,7 @@
 using Application.Features.Automation.Commands;
 using Application.Features.Automation.Queries;
 using Application.Models;
+using Application.Permissions;
 using Domain.Contracts.Resources.Automation;
 using Hosting.Extensions;
 using Mediator;
@@ -17,33 +18,37 @@ public static class AutomationActions
 {
     public static async Task<Results<Ok<AutomationActionsView>, ProblemHttpResult>> List(
         IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
         [FromQuery] string[]? tags = null,
         CancellationToken cancellationToken = default)
     {
         var result = await mediator.Send(new GetAutomationActions(tags), cancellationToken);
-        return EndpointHandlers.HandleResult(result, AutomationActionsView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, AutomationActionsView.Map);
     }
 
     public static async Task<Results<Ok<AutomationActionView>, ProblemHttpResult>> Get(
         IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
         [FromRoute][Description("Automation action ID")] Guid id,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAutomationAction(id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, AutomationActionView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, AutomationActionView.Map);
     }
 
     public static async Task<Results<Ok<AutomationActionView>, ProblemHttpResult>> Create(
         IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
         [FromBody] AutomationActionInput input,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new CreateAutomationAction(input.ToModel()), cancellationToken);
-        return EndpointHandlers.HandleResult(result, AutomationActionView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, AutomationActionView.Map);
     }
 
     public static async Task<Results<Ok<AutomationActionView>, ProblemHttpResult>> Update(
         IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
         [FromRoute][Description("Automation action ID")] Guid id,
         UpdateAutomationActionInputPatchDocument patchInput,
         CancellationToken cancellationToken)
@@ -61,20 +66,22 @@ public static class AutomationActions
                 patchInput.ContainsProperty("webhook")),
             cancellationToken);
 
-        return EndpointHandlers.HandleResult(result, AutomationActionView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, AutomationActionView.Map);
     }
 
     public static async Task<Results<Ok<AutomationActionView>, ProblemHttpResult>> Rename(
         IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
         [FromBody] RenameResource renameResource,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new RenameAutomationAction(renameResource.Id, renameResource.Name), cancellationToken);
-        return EndpointHandlers.HandleResult(result, AutomationActionView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, AutomationActionView.Map);
     }
 
     public static async Task<Results<Ok<AutomationActionView>, ProblemHttpResult>> UpdateMetadata(
         IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
         [FromRoute][Description("Automation action ID")] Guid id,
         PatchResourceMetadataDocument patchInput,
         CancellationToken cancellationToken)
@@ -84,7 +91,7 @@ public static class AutomationActions
             ApplicationJsonContext.Default.PatchResourceMetadata);
 
         var result = await mediator.Send(new PatchAutomationActionMetadata(id, input.Description), cancellationToken);
-        return EndpointHandlers.HandleResult(result, AutomationActionView.Map);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, AutomationActionView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> Delete(

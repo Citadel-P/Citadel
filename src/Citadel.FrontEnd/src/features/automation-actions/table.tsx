@@ -1,4 +1,4 @@
-import { ActionRunStatus, AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
+import { AutomationActionView, ResourceControlState } from '@/api/generated/api.types';
 import { ContentCard } from '@/components/custom/content-card';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -80,7 +80,7 @@ const columns = (
     sortingFn: (rowA, rowB) =>
       String(rowA.original.latestRun?.queuedAt ?? '').localeCompare(String(rowB.original.latestRun?.queuedAt ?? '')),
   },
-   {
+  {
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
@@ -105,12 +105,9 @@ const ActionNameRow = ({ action }: { action: AutomationActionView }) => {
         isProcessing={action.controlState === ResourceControlState.Processing}
         enableLabel={typeof status === 'boolean'}
       />
-      <div className="min-w-0">
-        <Link to={`../automation/edit/${action.id}`} className="truncate text-sm font-medium hover:underline">
-          {action.name}
-        </Link>
-        {action.description && <div className="truncate text-xs text-muted-foreground">{action.description}</div>}
-      </div>
+      <Link to={`../automation/edit/${action.id}`} title={action.name} className="truncate text-sm hover:underline">
+        {action.name}
+      </Link>
     </div>
   );
 };
@@ -134,10 +131,6 @@ const LastRunCell = ({ action }: { action: AutomationActionView }) => {
 
   return (
     <span className="inline-flex items-center gap-2 text-sm">
-      <StateIndicator
-        value={run.status ?? ActionRunStatus.Queued}
-        isProcessing={run.status === ActionRunStatus.Running || run.status === ActionRunStatus.Queued}
-      />
       <PlayCircle className="size-3.5 text-muted-foreground" />
       <span>{fromNow(run.queuedAt)}</span>
     </span>

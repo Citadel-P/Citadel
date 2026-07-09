@@ -10,6 +10,7 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
 {
     private const int stats_purgeDays = 7;
     private const int activities_purgeDays = 90;
+    private const int action_runs_purgeDays = 90;
     private const int checkIntervalInHours = 12;
 
     protected override Task ExecuteAsync(CancellationToken cancellationToken)
@@ -39,6 +40,10 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
 
                 var countActivities = await uow.ActivityEventRepository.RemoveOlderThanAsync(thresholdEpochSeconds, cancellationToken);
 
+                // Remove completed automation run history
+                thresholdDate = DateTimeOffset.UtcNow.AddDays(-action_runs_purgeDays);
+                var countActionRuns = await uow.ActionRuns.RemoveCompletedOlderThanAsync(thresholdDate.UtcDateTime, cancellationToken);
+
                 await uow.CommitAsync(cancellationToken);
 
                 if (countStats > 0)
@@ -46,10 +51,13 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
 
                 if (countActivities > 0)
                     logger.LogInformation("Purged {Count} activities entries older than {PurgeDays} days.", countActivities, activities_purgeDays);
+
+                if (countActionRuns > 0)
+                    logger.LogInformation("Purged {Count} automation action runs older than {PurgeDays} days.", countActionRuns, action_runs_purgeDays);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error occurred while removing statistics.");
+                logger.LogError(ex, "Error occurred while running cleanup job.");
             }
             finally
             {
