@@ -193,7 +193,55 @@ public enum PlatformConnectorType
 {
     Unknown,
     Local,
-    Agent
+    Agent,
+    EdgeAgent
+}
+
+public enum EdgeAgentConnectionStatus
+{
+    Offline = 0,
+    Connected,
+    Revoked
+}
+
+public enum EdgeAgentCommandKind
+{
+    Unspecified = 0,
+    PlatformCheckHealth = 1,
+    PlatformGetInfo = 2,
+    PlatformStatsStream = 3,
+    PlatformDaemonEventsStream = 4,
+    ContainerList = 10,
+    ContainerLogsStream = 11,
+    ContainerInspect = 12,
+    ContainerCreate = 13,
+    ContainerStart = 14,
+    ContainerStop = 15,
+    ContainerPause = 16,
+    ContainerUnpause = 17,
+    ContainerRestart = 18,
+    ContainerDelete = 19,
+    ContainerStatsStream = 20,
+    ContainersStatsStream = 21,
+    ContainerExec = 22,
+    ImageGet = 30,
+    ImageList = 31,
+    ImageInspect = 32,
+    ImageDelete = 33,
+    ImageHistory = 34,
+    ImageExposedPorts = 35,
+    ImageDistributionInspect = 36,
+    ImagePullStream = 37,
+    VolumeList = 50,
+    VolumeInspect = 51,
+    VolumeCreate = 52,
+    VolumeDelete = 53,
+    NetworkList = 60,
+    NetworkInspect = 61,
+    NetworkCreate = 62,
+    NetworkDelete = 63,
+    StackApplyStream = 70,
+    DeploymentApply = 80
 }
 
 public enum ContainerRestartPolicy

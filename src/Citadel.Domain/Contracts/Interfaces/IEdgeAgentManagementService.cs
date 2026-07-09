@@ -1,0 +1,17 @@
+using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Platforms;
+using LightResults;
+
+namespace Domain.Contracts.Interfaces;
+
+public interface IEdgeAgentManagementService
+{
+    Task<Result<EdgeAgentEnrollmentResult>> CreateEnrollmentAsync(Guid platformId, string coreUrl, Guid actorId, TimeSpan ttl, CancellationToken cancellationToken);
+    Task<Result<EdgeAgentStatusResult>> GetStatusAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken);
+    Task<Result<EdgeAgentEnrollmentCompleteResult>> CompleteEnrollmentAsync(EdgeAgentEnrollmentRequest request, DateTime utcNow, CancellationToken cancellationToken);
+    Task<Result<EdgeAgentBinding>> GetReconnectBindingAsync(Guid platformId, Guid agentId, string agentFingerprint, CancellationToken cancellationToken);
+    Task MarkConnectedAsync(Guid platformId, string hostname, string agentVersion, string capabilitiesJson, DateTime utcNow, CancellationToken cancellationToken);
+    Task MarkHeartbeatAsync(Guid platformId, EdgeAgentHeartbeatSnapshot heartbeat, DateTime utcNow, CancellationToken cancellationToken);
+    Task MarkDisconnectedAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken);
+    Task<Result> RevokeAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken);
+}

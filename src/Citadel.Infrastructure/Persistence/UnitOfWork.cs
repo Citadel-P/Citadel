@@ -27,6 +27,7 @@ internal class UnitOfWork : IUnitOfWork
         Images = new Lazy<IImageRepository>(() => new ImageRepository(connection, GetTransaction));
         Stacks = new Lazy<IStackRepository>(() => new StackRepository(connection, GetTransaction));
         Platforms = new Lazy<IPlatformRepository>(() => new PlatformRepository(connection, GetTransaction));
+        EdgeAgents = new Lazy<IEdgeAgentRepository>(() => new EdgeAgentRepository(connection, GetTransaction));
         Registries = new Lazy<IRegistryRepository>(() => new RegistryRepository(connection, GetTransaction));
         Containers = new Lazy<IContainerRepository>(() => new ContainerRepository(connection, GetTransaction));
         AlertRules = new Lazy<IAlertRuleRepository>(() => new AlertRuleRepository(connection, GetTransaction));
@@ -58,6 +59,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IResourceAccessRepository> ResourceAccesses { get; }
     private Lazy<IStackRepository> Stacks { get; }
     private Lazy<IPlatformRepository> Platforms { get; }
+    private Lazy<IEdgeAgentRepository> EdgeAgents { get; }
     private Lazy<IRegistryRepository> Registries { get; }
     private Lazy<IContainerRepository> Containers { get; }
     private Lazy<IAlertRuleRepository> AlertRules { get; }
@@ -88,6 +90,7 @@ internal class UnitOfWork : IUnitOfWork
     IResourceAccessRepository IUnitOfWork.ResourceAccesses => ResourceAccesses.Value;
     IStackRepository IUnitOfWork.Stacks => Stacks.Value;
     IPlatformRepository IUnitOfWork.Platforms => Platforms.Value;
+    IEdgeAgentRepository IUnitOfWork.EdgeAgents => EdgeAgents.Value;
     IRegistryRepository IUnitOfWork.Registries => Registries.Value;
     IContainerRepository IUnitOfWork.Containers => Containers.Value;
     IAlertRuleRepository IUnitOfWork.AlertRules => AlertRules.Value;

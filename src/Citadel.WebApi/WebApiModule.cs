@@ -17,6 +17,7 @@ using Nerdbank.MessagePack.SignalR;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Infrastructure.EdgeAgents;
 using WebApi.Hubs;
 using WebApi.Middlewares;
 using WebApi.Routes;
@@ -114,6 +115,7 @@ internal static class WebApiModule
         app.UseAuthorization();
 
         app.MapPublicEndpoints();
+        app.MapEdgeAgentGrpcService();
 
         app.MapHub<ApplicationHub>("/hubs/global", HttpConnectionDispatcherOptions);
         return app;

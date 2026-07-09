@@ -12,6 +12,7 @@ import { RegistryComponents } from './registries';
 import { PlatformComponents } from './platforms';
 import { DeploymentComponents } from './deployments';
 import { RegistryFormComponents } from './registries/form';
+import { PlatformFormComponents } from './platforms/forms';
 import { DeploymentFormComponents } from './deployments/form';
 import { ActivityComponents } from './activities';
 import { AlertRuleComponents } from './alerters/alert-rules';
@@ -65,7 +66,7 @@ export const ResourceFormComponents: {
   Network: NetworkFormComponents,
   Container: undefined,
   Image: undefined,
-  Platform: undefined,
+  Platform: PlatformFormComponents,
 
   Registry: RegistryFormComponents,
   Deployment: DeploymentFormComponents,

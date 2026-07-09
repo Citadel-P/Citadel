@@ -5678,6 +5678,303 @@
         ]
       }
     },
+    "/api/v1/platforms/{id}/edge/enrollments": {
+      "post": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Create an Edge Agent enrollment token for a platform",
+        "operationId": "createEdgeAgentEnrollment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeAgentEnrollmentView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{id}/edge/status": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Get Edge Agent connection status for a platform",
+        "operationId": "getEdgeAgentStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeAgentStatusView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{id}/edge/revoke": {
+      "post": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Revoke an Edge Agent binding for a platform",
+        "operationId": "revokeEdgeAgent",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/registries": {
       "get": {
         "tags": [
@@ -28271,6 +28568,115 @@
           }
         }
       },
+      "EdgeAgentEnrollmentInstructionsView": {
+        "required": [
+          "coreUrl",
+          "environment"
+        ],
+        "type": "object",
+        "properties": {
+          "coreUrl": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EdgeAgentEnrollmentView": {
+        "required": [
+          "enrollmentId",
+          "platformId",
+          "token",
+          "expiresAtUtc",
+          "instructions"
+        ],
+        "type": "object",
+        "properties": {
+          "enrollmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "token": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "format": "date-time"
+          },
+          "instructions": {
+            "$ref": "#/components/schemas/EdgeAgentEnrollmentInstructionsView"
+          }
+        }
+      },
+      "EdgeAgentStatusView": {
+        "required": [
+          "connectionStatus",
+          "lastConnectedAtUtc",
+          "lastDisconnectedAtUtc",
+          "lastHeartbeatAtUtc",
+          "lastSeenVersion",
+          "lastSeenHostname",
+          "agentFingerprint",
+          "protocolVersion",
+          "revokedAtUtc",
+          "enrollmentExpiresAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "connectionStatus": {
+            "type": "string"
+          },
+          "lastConnectedAtUtc": {
+            "format": "date-time"
+          },
+          "lastDisconnectedAtUtc": {
+            "format": "date-time"
+          },
+          "lastHeartbeatAtUtc": {
+            "format": "date-time"
+          },
+          "lastSeenVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastSeenHostname": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "agentFingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "protocolVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "revokedAtUtc": {
+            "format": "date-time"
+          },
+          "enrollmentExpiresAtUtc": {
+            "format": "date-time"
+          }
+        }
+      },
       "EndpointIpamConfiguration": {
         "required": [
           "ipv4Address",
@@ -31839,7 +32245,8 @@
         "enum": [
           "Unknown",
           "Local",
-          "Agent"
+          "Agent",
+          "EdgeAgent"
         ]
       },
       "PlatformDescriptor": {

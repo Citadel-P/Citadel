@@ -230,6 +230,41 @@ CREATE TABLE deployments (
     CONSTRAINT fk_deployments_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE RESTRICT
 );
 
+CREATE TABLE edgeagentbindings (
+    id uuid NOT NULL,
+    agentfingerprint text NOT NULL,
+    agentid uuid NOT NULL,
+    agentpublickey text NOT NULL,
+    capabilitiesjson json,
+    connectionstatus text NOT NULL,
+    createdatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    lastconnectedatutc timestamp with time zone,
+    lastdisconnectedatutc timestamp with time zone,
+    lastheartbeatatutc timestamp with time zone,
+    lastseenhostname text,
+    lastseenversion text,
+    platformid uuid NOT NULL,
+    protocolversion integer NOT NULL DEFAULT 1,
+    revokedatutc timestamp with time zone,
+    updatedatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    CONSTRAINT pk_edgeagentbindings PRIMARY KEY (id),
+    CONSTRAINT fk_edgeagentbindings_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
+CREATE TABLE edgeagentenrollments (
+    id uuid NOT NULL,
+    createdatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    expiresatutc timestamp with time zone NOT NULL,
+    platformid uuid NOT NULL,
+    revokedatutc timestamp with time zone,
+    tokenhash text NOT NULL,
+    usedatutc timestamp with time zone,
+    CONSTRAINT pk_edgeagentenrollments PRIMARY KEY (id),
+    CONSTRAINT fk_edgeagentenrollments_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_edgeagentenrollments_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
+);
+
 CREATE TABLE platformstats (
     id uuid NOT NULL,
     cpuusage double precision NOT NULL,
@@ -856,6 +891,18 @@ CREATE UNIQUE INDEX ix_deployments_name_platformid ON deployments (name, platfor
 
 CREATE INDEX ix_deployments_platformid ON deployments (platformid);
 
+CREATE INDEX ix_edgeagentbindings_agentfingerprint ON edgeagentbindings (agentfingerprint);
+
+CREATE INDEX ix_edgeagentbindings_agentid ON edgeagentbindings (agentid);
+
+CREATE UNIQUE INDEX ix_edgeagentbindings_platformid ON edgeagentbindings (platformid);
+
+CREATE INDEX ix_edgeagentenrollments_createdbyactorid ON edgeagentenrollments (createdbyactorid);
+
+CREATE INDEX ix_edgeagentenrollments_platformid_expiresatutc ON edgeagentenrollments (platformid, expiresatutc);
+
+CREATE UNIQUE INDEX ix_edgeagentenrollments_tokenhash ON edgeagentenrollments (tokenhash);
+
 CREATE INDEX ix_gitaccounts_createdbyactorid ON gitaccounts (createdbyactorid);
 
 CREATE UNIQUE INDEX ix_gitaccounts_name ON gitaccounts (name);
@@ -965,7 +1012,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260709094528_migration0001', '10.0.9');
+VALUES ('20260709214427_migration0001', '10.0.9');
 
 COMMIT;
 

@@ -1004,6 +1004,34 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listContainers");
 
+        platforms.MapPost("{id}/edge/enrollments", Platforms.CreateEdgeEnrollment)
+            .WithSummary("Create an Edge Agent enrollment token for a platform")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("createEdgeAgentEnrollment");
+
+        platforms.MapGet("{id}/edge/status", Platforms.GetEdgeStatus)
+            .WithSummary("Get Edge Agent connection status for a platform")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getEdgeAgentStatus");
+
+        platforms.MapPost("{id}/edge/revoke", Platforms.RevokeEdge)
+            .WithSummary("Revoke an Edge Agent binding for a platform")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("revokeEdgeAgent");
+
         platforms.MapPatch("{id}", Platforms.Patch)
             .WithSummary("Patch a platform")
             .Accepts<PlatformInput>("application/merge-patch+json", "application/json")

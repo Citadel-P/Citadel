@@ -94,6 +94,7 @@ public static class ApplicationModule
             .AddSingleton<ISecretRedactor, SecretRedactor>()
             .AddSingleton<IOidcDiscoveryService, OidcDiscoveryService>()
             .AddSingleton<IOidcAuthenticationService, OidcAuthenticationService>()
+            .AddSingleton<IEdgeAgentManagementService, EdgeAgentManagementService>()
             .AddSingleton<IResourceBindingResolver, ResourceBindingResolver>()
             .AddScoped<IAutomationRunQueueService, AutomationRunQueueService>()
             .AddScoped<IAutomationExecutionService, AutomationExecutionService>()

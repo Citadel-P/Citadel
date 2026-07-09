@@ -70,11 +70,7 @@ export const DockerPlatform = ({
 
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground truncate">
                 <PlugZap className="h-3.5 w-3.5" />{' '}
-                {platform.connectorType === PlatformConnectorType.Agent ? (
-                  <span>agent v{platform.agentVersion} </span>
-                ) : (
-                  'Local'
-                )}
+                {getConnectorLabel(platform.connectorType, platform.agentVersion)}
               </span>
             </div>
 
@@ -206,3 +202,15 @@ const ContainerStat = ({
     <TooltipContent>{tooltip}</TooltipContent>
   </Tooltip>
 );
+
+const getConnectorLabel = (connectorType: PlatformConnectorType, agentVersion?: string | null) => {
+  if (connectorType === PlatformConnectorType.Agent) {
+    return <span>agent v{agentVersion ?? '-'}</span>;
+  }
+
+  if (connectorType === PlatformConnectorType.EdgeAgent) {
+    return <span>edge agent v{agentVersion ?? '-'}</span>;
+  }
+
+  return 'Local';
+};

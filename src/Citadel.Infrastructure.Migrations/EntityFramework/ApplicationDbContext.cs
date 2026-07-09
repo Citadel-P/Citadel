@@ -18,6 +18,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .ContainerConfiguration()
             .ContainerStatConfiguration()
             .PlatformConfiguration()
+            .EdgeAgentEnrollmentConfiguration()
+            .EdgeAgentBindingConfiguration()
             .PlatformStatConfiguration()
             .RegistryConfiguration()
             .GitAccountConfiguration()
@@ -592,6 +594,81 @@ internal static class Configuration
         platform.Property<string>("PlatformDescriptor").HasColumnType(Json).IsRequired();
 
         platform.HasIndex("Address").IsUnique().HasDatabaseName($"IX_{tableName}_Address");
+
+        return builder;
+    }
+
+    public static ModelBuilder EdgeAgentEnrollmentConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "EdgeAgentEnrollments";
+        var enrollment = builder.Entity("EdgeAgentEnrollment");
+
+        enrollment.ToTable(tableName);
+
+        enrollment.Property<Guid>("Id").IsRequired();
+        enrollment.HasKey("Id");
+
+        enrollment.Property<Guid>("PlatformId").IsRequired();
+        enrollment.Property<string>("TokenHash").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        enrollment.Property<DateTime>("ExpiresAtUtc").HasColumnType(Timestamp).IsRequired();
+        enrollment.Property<DateTime?>("UsedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        enrollment.Property<DateTime?>("RevokedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        enrollment.Property<Guid>("CreatedByActorId").IsRequired();
+        enrollment.Property<DateTime>("CreatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        enrollment
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        enrollment
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("CreatedByActorId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        enrollment.HasIndex("PlatformId", "ExpiresAtUtc").HasDatabaseName($"IX_{tableName}_PlatformId_ExpiresAtUtc");
+        enrollment.HasIndex("TokenHash").IsUnique().HasDatabaseName($"IX_{tableName}_TokenHash");
+
+        return builder;
+    }
+
+    public static ModelBuilder EdgeAgentBindingConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "EdgeAgentBindings";
+        var binding = builder.Entity("EdgeAgentBinding");
+
+        binding.ToTable(tableName);
+
+        binding.Property<Guid>("Id").IsRequired();
+        binding.HasKey("Id");
+
+        binding.Property<Guid>("PlatformId").IsRequired();
+        binding.Property<Guid>("AgentId").IsRequired();
+        binding.Property<string>("AgentPublicKey").HasColumnType(Text).IsRequired();
+        binding.Property<string>("AgentFingerprint").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        binding.Property<string>("ConnectionStatus").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        binding.Property<DateTime?>("LastConnectedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        binding.Property<DateTime?>("LastDisconnectedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        binding.Property<DateTime?>("LastHeartbeatAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        binding.Property<string>("LastSeenVersion").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        binding.Property<string>("LastSeenHostname").HasColumnType(Text).HasMaxLength(256).IsRequired(false);
+        binding.Property<string>("CapabilitiesJson").HasColumnType(Json).IsRequired(false);
+        binding.Property<int>("ProtocolVersion").HasColumnType(Integer).IsRequired().HasDefaultValue(1);
+        binding.Property<DateTime?>("RevokedAtUtc").HasColumnType(Timestamp).IsRequired(false);
+        binding.Property<DateTime>("CreatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        binding.Property<DateTime>("UpdatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        binding
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        binding.HasIndex("PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_PlatformId");
+        binding.HasIndex("AgentId").HasDatabaseName($"IX_{tableName}_AgentId");
+        binding.HasIndex("AgentFingerprint").HasDatabaseName($"IX_{tableName}_AgentFingerprint");
 
         return builder;
     }

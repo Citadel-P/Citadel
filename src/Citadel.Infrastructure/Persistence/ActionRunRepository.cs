@@ -232,18 +232,15 @@ internal sealed class ActionRunRepository(IDbConnection db, Func<IDbTransaction>
               AND Status <> @RunningStatus
             """;
 
-        var p = new RemoveCompletedOlderThanParams(
-            completedBefore,
-            EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Queued),
-            EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Running));
+        var p = new
+        {
+            CompletedBefore = completedBefore,
+            QueuedStatus = EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Queued),
+            RunningStatus = EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Running)
+        };
 
         var totalCount = await db.QuerySingleAsync<int>(countSql, p, transaction: tx());
         await db.ExecuteAsync(deleteSql, p, transaction: tx());
         return totalCount;
     }
-
-    private sealed record RemoveCompletedOlderThanParams(
-        DateTime CompletedBefore,
-        string QueuedStatus,
-        string RunningStatus);
 }

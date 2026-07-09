@@ -420,6 +420,68 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "edgeagentbindings",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    agentfingerprint = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    agentid = table.Column<Guid>(type: "uuid", nullable: false),
+                    agentpublickey = table.Column<string>(type: "text", nullable: false),
+                    capabilitiesjson = table.Column<string>(type: "json", nullable: true),
+                    connectionstatus = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    lastconnectedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastdisconnectedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastheartbeatatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastseenhostname = table.Column<string>(type: "text", maxLength: 256, nullable: true),
+                    lastseenversion = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    protocolversion = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
+                    revokedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    updatedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_edgeagentbindings", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_edgeagentbindings_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "edgeagentenrollments",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    expiresatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    revokedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    tokenhash = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    usedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_edgeagentenrollments", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_edgeagentenrollments_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_edgeagentenrollments_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "platformstats",
                 columns: table => new
                 {
@@ -1437,6 +1499,38 @@ namespace Infrastructure.Migrations.Migrations
                 column: "platformid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_edgeagentbindings_agentfingerprint",
+                table: "edgeagentbindings",
+                column: "agentfingerprint");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_edgeagentbindings_agentid",
+                table: "edgeagentbindings",
+                column: "agentid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_edgeagentbindings_platformid",
+                table: "edgeagentbindings",
+                column: "platformid",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_edgeagentenrollments_createdbyactorid",
+                table: "edgeagentenrollments",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_edgeagentenrollments_platformid_expiresatutc",
+                table: "edgeagentenrollments",
+                columns: new[] { "platformid", "expiresatutc" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_edgeagentenrollments_tokenhash",
+                table: "edgeagentenrollments",
+                column: "tokenhash",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_gitaccounts_createdbyactorid",
                 table: "gitaccounts",
                 column: "createdbyactorid");
@@ -1751,6 +1845,12 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "containerstats");
+
+            migrationBuilder.DropTable(
+                name: "edgeagentbindings");
+
+            migrationBuilder.DropTable(
+                name: "edgeagentenrollments");
 
             migrationBuilder.DropTable(
                 name: "gitrepositoryrefs");

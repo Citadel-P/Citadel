@@ -178,6 +178,8 @@ interface HeaderOptions {
   showTagFilter?: boolean;
   /** Override add button title */
   addButtonTitle?: string;
+  /** Override URL for the standard Add button. */
+  addButtonUrl?: string;
   /** Additional custom header items (buttons, dropdowns, etc.). */
   Extra?: React.FC;
   /** Optional add dialog opened by the standard Add button instead of navigating to an add route. */

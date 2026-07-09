@@ -8,7 +8,7 @@
 	<OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
 	<DockerfileFile>Dockerfile</DockerfileFile>
 	<DockerfileContext>..\..</DockerfileContext>
-	<DockerfileRunArguments>-p 8000:8000 --env-file "$(MSBuildProjectDirectory)\.env" -v "citadel_data:/app/data" -v "/var/run/docker.sock:/var/run/docker.sock"</DockerfileRunArguments>
+	<DockerfileRunArguments>-p 8000:8000 -p 8001:8001 --env-file "$(MSBuildProjectDirectory)\.env" -v "citadel_data:/app/data" -v "/var/run/docker.sock:/var/run/docker.sock"</DockerfileRunArguments>
 	<ContainerRepository>citadel-webapi</ContainerRepository>
 	<PreserveCompilationContext>true</PreserveCompilationContext>
 	<InterceptorsNamespaces>$(InterceptorsNamespaces);Microsoft.AspNetCore.OpenApi.Generated</InterceptorsNamespaces>
@@ -30,5 +30,4 @@
 	<ProjectReference Include="..\Citadel.Infrastructure\Citadel.Infrastructure.csproj" />
 	<ProjectReference Include="..\Citadel.Contracts\src\Citadel.SourceGen\Citadel.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
   </ItemGroup>
-
 </Project>

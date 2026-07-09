@@ -19,6 +19,7 @@ using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.Models;
+using LightResults;
 
 namespace Domain.Contracts.Interfaces;
 
@@ -31,6 +32,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IResourceAccessRepository ResourceAccesses { get; }
     IImageRepository Images { get; }
     IPlatformRepository Platforms { get; }
+    IEdgeAgentRepository EdgeAgents { get; }
     IRegistryRepository Registries { get; }
     IGitAccountRepository GitAccounts { get; }
     IGitReposRepository GitRepositories { get; }
@@ -500,6 +502,60 @@ public interface IPlatformRepository
     public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(Guid platformId, CancellationToken cancellationToken);
+}
+
+public interface IEdgeAgentRepository
+{
+    Task<int> AddEnrollmentAsync(EdgeAgentEnrollment enrollment, CancellationToken cancellationToken);
+    Task<EdgeAgentEnrollment?> GetActiveEnrollmentAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken);
+    Task<EdgeAgentEnrollment?> GetEnrollmentByTokenHashAsync(string tokenHash, CancellationToken cancellationToken);
+    Task<int> MarkEnrollmentUsedAsync(Guid enrollmentId, DateTime usedAtUtc, CancellationToken cancellationToken);
+    Task<EdgeAgentBinding?> GetBindingByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<EdgeAgentBinding?> GetBindingByAgentAsync(Guid platformId, Guid agentId, CancellationToken cancellationToken);
+    Task<int> AddBindingAsync(EdgeAgentBinding binding, CancellationToken cancellationToken);
+    Task<int> UpdateBindingConnectedAsync(Guid platformId, DateTime connectedAtUtc, string hostname, string agentVersion, string capabilitiesJson, CancellationToken cancellationToken);
+    Task<int> UpdateBindingHeartbeatAsync(Guid platformId, DateTime heartbeatAtUtc, string? hostname, string? agentVersion, string? capabilitiesJson, CancellationToken cancellationToken);
+    Task<int> UpdateBindingDisconnectedAsync(Guid platformId, DateTime disconnectedAtUtc, CancellationToken cancellationToken);
+    Task<int> RevokeBindingAsync(Guid platformId, DateTime revokedAtUtc, CancellationToken cancellationToken);
+}
+
+public interface IEdgeAgentCommandRouter
+{
+    Task<EdgeAgentCommandRouterResult> SendUnaryAsync(
+        Guid platformId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken);
+
+    IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
+        Guid platformId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken);
+
+    Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
+        Guid platformId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken);
+
+    Task<Result> SendStreamInputAsync(
+        Guid platformId,
+        string commandId,
+        byte[] payload,
+        CancellationToken cancellationToken);
+
+    Task<Result> CancelAsync(
+        Guid platformId,
+        string commandId,
+        string reason,
+        CancellationToken cancellationToken);
 }
 
 public interface IImageRepository

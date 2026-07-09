@@ -278,7 +278,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             new
             {
                 Ids = ids.ToArray(),
-                State = state,
+                State = EnumFormatter<ContainerStateStatus>.GetValue(state),
                 Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             },
             transaction: tx()

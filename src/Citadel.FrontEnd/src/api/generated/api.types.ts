@@ -188,6 +188,7 @@ export enum PlatformConnectorType {
   Unknown = "Unknown",
   Local = "Local",
   Agent = "Agent",
+  EdgeAgent = "EdgeAgent",
 }
 
 export enum PermissionLevel {
@@ -2756,6 +2757,44 @@ export interface DockerVolumeResultView {
 export interface DriverConfiguration {
   name: null | string;
   options: Record<string, string>;
+}
+
+export interface EdgeAgentEnrollmentInstructionsView {
+  coreUrl: string;
+  environment: Record<string, string>;
+}
+
+export interface EdgeAgentEnrollmentView {
+  /** @format uuid */
+  enrollmentId: string;
+  /** @format uuid */
+  platformId: string;
+  token: string;
+  /** @format date-time */
+  expiresAtUtc: any;
+  instructions: EdgeAgentEnrollmentInstructionsView;
+}
+
+export interface EdgeAgentStatusView {
+  connectionStatus: string;
+  /** @format date-time */
+  lastConnectedAtUtc: any;
+  /** @format date-time */
+  lastDisconnectedAtUtc: any;
+  /** @format date-time */
+  lastHeartbeatAtUtc: any;
+  lastSeenVersion: null | string;
+  lastSeenHostname: null | string;
+  agentFingerprint: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  protocolVersion: null | number | string;
+  /** @format date-time */
+  revokedAtUtc: any;
+  /** @format date-time */
+  enrollmentExpiresAtUtc: any;
 }
 
 export interface EndpointIpamConfiguration {
@@ -6852,6 +6891,81 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name CreateEdgeAgentEnrollment
+     * @summary Create an Edge Agent enrollment token for a platform
+     * @request POST:/api/v1/platforms/{id}/edge/enrollments
+     * @secure
+     * @response `200` `EdgeAgentEnrollmentView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createEdgeAgentEnrollment: (id: string, params: RequestParams = {}) =>
+      this.request<EdgeAgentEnrollmentView, ProblemDetails>({
+        path: `/api/v1/platforms/${id}/edge/enrollments`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetEdgeAgentStatus
+     * @summary Get Edge Agent connection status for a platform
+     * @request GET:/api/v1/platforms/{id}/edge/status
+     * @secure
+     * @response `200` `EdgeAgentStatusView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getEdgeAgentStatus: (id: string, params: RequestParams = {}) =>
+      this.request<EdgeAgentStatusView, ProblemDetails>({
+        path: `/api/v1/platforms/${id}/edge/status`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name RevokeEdgeAgent
+     * @summary Revoke an Edge Agent binding for a platform
+     * @request POST:/api/v1/platforms/{id}/edge/revoke
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    revokeEdgeAgent: (id: string, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${id}/edge/revoke`,
+        method: "POST",
+        secure: true,
         ...params,
       }),
 

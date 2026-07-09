@@ -31,7 +31,7 @@ public sealed record CreatePlatform(
         public Validator()
         {
             RuleFor(x => x.Name).ValidNameIdentifier();
-            When(x => x.ConnectorType != PlatformConnectorType.Local, () => RuleFor(x => x.Address!).ValidHostOrIP());
+            When(x => x.ConnectorType == PlatformConnectorType.Agent, () => RuleFor(x => x.Address!).ValidHostOrIP());
         }
     }
 }
@@ -52,19 +52,67 @@ internal sealed class CreatePlatformHandler(
             command = command with { Address = Constants.LocalDockerHostUrl };
         }
 
-        if (await unitOfWork.Platforms.NameOrAddressExistsAsync(command.Name, command.Address!, cancellationToken: cancellationToken))
-        {
-            return Result.Failure<Platform>(new ConflictError("A platform with the same name or address already exists."));
-        }
-
         if (command.Type == PlatformType.Docker)
         {
+            if (command.ConnectorType == PlatformConnectorType.EdgeAgent)
+            {
+                return await HandleEdgeDockerPlatform(command, cancellationToken);
+            }
+
+            if (await unitOfWork.Platforms.NameOrAddressExistsAsync(command.Name, command.Address!, cancellationToken: cancellationToken))
+            {
+                return Result.Failure<Platform>(new ConflictError("A platform with the same name or address already exists."));
+            }
+
             return await HandleDockerPlatform(command, cancellationToken);
         }
         else
         {
             return Result.Failure<Platform>(new BadRequestError("Currently, only the Docker platform type is supported."));
         }
+    }
+
+    private async Task<Result<Platform>> HandleEdgeDockerPlatform(CreatePlatform command, CancellationToken cancellationToken)
+    {
+        var platformId = Guid.CreateVersion7();
+        var address = $"edge://{platformId:D}";
+
+        if (await unitOfWork.Platforms.NameOrAddressExistsAsync(command.Name, address, cancellationToken: cancellationToken))
+        {
+            return Result.Failure<Platform>(new ConflictError("A platform with the same name or address already exists."));
+        }
+
+        var platform = Platform.FromPersistence(
+            id: platformId,
+            name: command.Name,
+            address: address,
+            networkCount: 0,
+            volumeCount: 0,
+            imageCount: 0,
+            cpuCount: 0,
+            memTotal: 0,
+            status: PlatformStatus.Offline,
+            connectorType: PlatformConnectorType.EdgeAgent,
+            platformDescriptor: new DockerPlatformDescriptor(
+                DaemonId: string.Empty,
+                ContainerCount: 0,
+                ContainersRunning: 0,
+                ContainersPaused: 0,
+                ContainersStopped: 0),
+            serverVersion: null,
+            agentVersion: null);
+
+        var actorId = userContext.Current.ActorId;
+        var result = await unitOfWork.Platforms.AddAsync(platform, cancellationToken, command.TagIds, actorId);
+        if (result == 0)
+            return Result.Failure<Platform>(new BadRequestError("One or more tags do not exist."));
+
+        await unitOfWork.CommitAsync(cancellationToken);
+
+        platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id, platform.ConnectorType);
+
+        logger.LogInformation("A new edge platform has been added, id = {PlatformId}", platform.Id);
+        return Result.Success(platform);
     }
 
     private async Task<Result<Platform>> HandleDockerPlatform(CreatePlatform command, CancellationToken cancellationToken)

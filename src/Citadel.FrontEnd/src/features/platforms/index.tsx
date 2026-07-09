@@ -11,6 +11,7 @@ export const PlatformComponents: RequiredComponents = {
     showSearch: true,
     showAdd: true,
     showTagFilter: true,
+    addButtonUrl: '/platforms/add',
   },
   Content: ({ items, actions, isLoading, isFiltered }) => {
     return <Platforms items={items} actions={actions} isLoading={isLoading} isFiltered={isFiltered} />;

@@ -37,7 +37,7 @@ export const Platforms = ({
               No platform is currently configured. Add a
               <button
                 className="font-semibold underline hover:no-underline ml-1"
-                onClick={() => navigate('/add-docker-platform')}>
+                onClick={() => navigate('/platforms/add')}>
                 new platform
               </button>&nbsp;
               to get started.

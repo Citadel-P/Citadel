@@ -49,7 +49,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
             addButtonTitle={headerCfg.addButtonTitle}
             Extra={headerCfg.Extra}
             onSearch={setSearch}
-            onAdd={() => (AddDialog ? setAddDialogOpen(true) : navigate('./add'))}
+            onAdd={() => (AddDialog ? setAddDialogOpen(true) : navigate(headerCfg.addButtonUrl ?? './add'))}
           />
           {AddDialog && <AddDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />}
 

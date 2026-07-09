@@ -8,8 +8,10 @@ using Hosting.Common;
 using Hosting.DockerClient;
 using Infrastructure.Connectors;
 using Infrastructure.Connectors.AgentConnectors;
+using Infrastructure.Connectors.EdgeAgentConnectors;
 using Infrastructure.Connectors.LocalConnectors;
 using Infrastructure.DockerHub;
+using Infrastructure.EdgeAgents;
 using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
 using Infrastructure.Persistence;
@@ -56,7 +58,11 @@ public static class InfrastructureModule
                 var interceptor = sp.GetRequiredService<HubSigningInterceptor>();
                 return new GrpcClientFactory(interceptor);
             })
-            .AddGrpc();
+            .AddGrpc(options =>
+            {
+                options.MaxReceiveMessageSize = EdgeAgentDefaults.MaxEnvelopePayloadBytes;
+                options.MaxSendMessageSize = EdgeAgentDefaults.MaxEnvelopePayloadBytes;
+            });
 
         return services;
     }
@@ -88,6 +94,9 @@ public static class InfrastructureModule
             .AddSingleton<IGitHubCrRepository, GitHubCrRepository>()
             .AddSingleton<IExternalSecretProviderClient, ExternalSecretProviderClient>()
             .AddSingleton<IShoutrrrCliRepository, ShoutrrrCliRepository>()
+            .AddSingleton<EdgeAgentSessionRegistry>()
+            .AddSingleton<IEdgeAgentSessionTerminator>(provider => provider.GetRequiredService<EdgeAgentSessionRegistry>())
+            .AddSingleton<IEdgeAgentCommandRouter, EdgeAgentCommandRouter>()
             .AddSingleton<IDockerHubRegistryRepository, DockerHubRegistryRepository>()
             .AddSingleton<IDbWorkQueue, DbWorkQueue>()
             .AddSingleton<INotificationQueue, NotificationQueue>()
@@ -95,26 +104,33 @@ public static class InfrastructureModule
             .AddHostedService<NotificationWorker>()
             .AddSingleton<AgentImageConnector>()
             .AddSingleton<LocalImageConnector>()
+            .AddSingleton<EdgeImageConnector>()
             .AddSingleton<AgentVolumeConnector>()
             .AddSingleton<LocalVolumeConnector>()
+            .AddSingleton<EdgeVolumeConnector>()
             .AddSingleton<AgentNetworkConnector>()
             .AddSingleton<LocalNetworkConnector>()
+            .AddSingleton<EdgeNetworkConnector>()
             .AddSingleton<AgentPlatformConnector>()
             .AddSingleton<LocalPlatformConnector>()
             .AddSingleton<AgentContainerConnector>()
+            .AddSingleton<EdgePlatformConnector>()
+            .AddSingleton<EdgeContainerConnector>()
             .AddSingleton<LocalContainerConnector>()
             .AddSingleton<LocalStackConnector>()
             .AddSingleton<AgentStackConnector>()
+            .AddSingleton<EdgeStackConnector>()
             .AddSingleton<AgentDeploymentConnector>()
             .AddSingleton<LocalDeploymentConnector>()
+            .AddSingleton<EdgeDeploymentConnector>()
             .AddSingleton(typeof(IConnectorFactory<>), typeof(ConnectorFactory<>))
-            .AddConnectorFactory<IImageConnector, AgentImageConnector, LocalImageConnector>()
-            .AddConnectorFactory<IVolumeConnector, AgentVolumeConnector, LocalVolumeConnector>()
-            .AddConnectorFactory<INetworkConnector, AgentNetworkConnector, LocalNetworkConnector>()
-            .AddConnectorFactory<IStackConnector, AgentStackConnector, LocalStackConnector>()
-            .AddConnectorFactory<IPlatformConnector, AgentPlatformConnector, LocalPlatformConnector>()
-            .AddConnectorFactory<IContainerConnector, AgentContainerConnector, LocalContainerConnector>()
-            .AddConnectorFactory<IDeploymentConnector, AgentDeploymentConnector, LocalDeploymentConnector>();
+            .AddConnectorFactory<IImageConnector, AgentImageConnector, LocalImageConnector>(sp => sp.GetRequiredService<EdgeImageConnector>())
+            .AddConnectorFactory<IVolumeConnector, AgentVolumeConnector, LocalVolumeConnector>(sp => sp.GetRequiredService<EdgeVolumeConnector>())
+            .AddConnectorFactory<INetworkConnector, AgentNetworkConnector, LocalNetworkConnector>(sp => sp.GetRequiredService<EdgeNetworkConnector>())
+            .AddConnectorFactory<IStackConnector, AgentStackConnector, LocalStackConnector>(sp => sp.GetRequiredService<EdgeStackConnector>())
+            .AddConnectorFactory<IPlatformConnector, AgentPlatformConnector, LocalPlatformConnector>(sp => sp.GetRequiredService<EdgePlatformConnector>())
+            .AddConnectorFactory<IContainerConnector, AgentContainerConnector, LocalContainerConnector>(sp => sp.GetRequiredService<EdgeContainerConnector>())
+            .AddConnectorFactory<IDeploymentConnector, AgentDeploymentConnector, LocalDeploymentConnector>(sp => sp.GetRequiredService<EdgeDeploymentConnector>());
 
     /// <summary>
     /// Adds HTTP clients to the service collection.

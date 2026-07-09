@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260709094528_migration0001")]
+    [Migration("20260709214427_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -1291,6 +1291,157 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_deployments_name_platformid");
 
                     b.ToTable("deployments", (string)null);
+                });
+
+            modelBuilder.Entity("EdgeAgentBinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AgentFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("agentfingerprint");
+
+                    b.Property<Guid>("AgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agentid");
+
+                    b.Property<string>("AgentPublicKey")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("agentpublickey");
+
+                    b.Property<string>("CapabilitiesJson")
+                        .HasColumnType("json")
+                        .HasColumnName("capabilitiesjson");
+
+                    b.Property<string>("ConnectionStatus")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("connectionstatus");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdatutc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("LastConnectedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastconnectedatutc");
+
+                    b.Property<DateTime?>("LastDisconnectedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastdisconnectedatutc");
+
+                    b.Property<DateTime?>("LastHeartbeatAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastheartbeatatutc");
+
+                    b.Property<string>("LastSeenHostname")
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("lastseenhostname");
+
+                    b.Property<string>("LastSeenVersion")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("lastseenversion");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<int>("ProtocolVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("protocolversion");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revokedatutc");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedatutc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id")
+                        .HasName("pk_edgeagentbindings");
+
+                    b.HasIndex("AgentFingerprint")
+                        .HasDatabaseName("ix_edgeagentbindings_agentfingerprint");
+
+                    b.HasIndex("AgentId")
+                        .HasDatabaseName("ix_edgeagentbindings_agentid");
+
+                    b.HasIndex("PlatformId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_edgeagentbindings_platformid");
+
+                    b.ToTable("edgeagentbindings", (string)null);
+                });
+
+            modelBuilder.Entity("EdgeAgentEnrollment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdatutc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiresatutc");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revokedatutc");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("tokenhash");
+
+                    b.Property<DateTime?>("UsedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("usedatutc");
+
+                    b.HasKey("Id")
+                        .HasName("pk_edgeagentenrollments");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_edgeagentenrollments_createdbyactorid");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_edgeagentenrollments_tokenhash");
+
+                    b.HasIndex("PlatformId", "ExpiresAtUtc")
+                        .HasDatabaseName("ix_edgeagentenrollments_platformid_expiresatutc");
+
+                    b.ToTable("edgeagentenrollments", (string)null);
                 });
 
             modelBuilder.Entity("GitAccount", b =>
@@ -3328,6 +3479,33 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_deployments_platforms_platformid");
+                });
+
+            modelBuilder.Entity("EdgeAgentBinding", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_edgeagentbindings_platforms_platformid");
+                });
+
+            modelBuilder.Entity("EdgeAgentEnrollment", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_edgeagentenrollments_actors_createdbyactorid");
+
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_edgeagentenrollments_platforms_platformid");
                 });
 
             modelBuilder.Entity("GitAccount", b =>
