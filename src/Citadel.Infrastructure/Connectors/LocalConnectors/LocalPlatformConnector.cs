@@ -25,6 +25,12 @@ internal class LocalPlatformConnector(IPlatformService platformService, IMonitor
         return ServiceResultHandlers.HandleResult(result, p => PlatformMappers.Map(p, command.PlatformName, command.PlatformAddress));
     }
 
+    public async Task<Result<PrunePlatformResult>> PruneAsync(PrunePlatformCommand command, CancellationToken cancellationToken)
+    {
+        var result = await platformService.PruneAsync(command.Resource.Map(), cancellationToken);
+        return ServiceResultHandlers.HandleResult(result, PlatformMappers.Map);
+    }
+
     public async IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand streamContainerLogsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await foreach (var eventInfo in monitorEventsService.StreamEvents(cancellationToken))

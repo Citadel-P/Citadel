@@ -1004,6 +1004,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listContainers");
 
+        platforms.MapPost("{id}/prune", Platforms.Prune)
+            .WithSummary("Delete unused Docker resources on a platform")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("prunePlatform");
+
         platforms.MapPost("{id}/edge/enrollments", Platforms.CreateEdgeEnrollment)
             .WithSummary("Create an Edge Agent enrollment token for a platform")
             .ProducesValidationProblem()

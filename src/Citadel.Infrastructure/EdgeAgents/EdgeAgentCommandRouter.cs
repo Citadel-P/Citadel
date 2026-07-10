@@ -411,6 +411,7 @@ internal sealed class EdgeAgentCommandRouter(
             EdgeAgentCommandKind.PlatformGetInfo => ProtoEdgeCommandKind.PlatformGetInfo,
             EdgeAgentCommandKind.PlatformStatsStream => ProtoEdgeCommandKind.PlatformStatsStream,
             EdgeAgentCommandKind.PlatformDaemonEventsStream => ProtoEdgeCommandKind.PlatformDaemonEventsStream,
+            EdgeAgentCommandKind.PlatformPrune => ProtoEdgeCommandKind.PlatformPrune,
             EdgeAgentCommandKind.ContainerList => ProtoEdgeCommandKind.ContainerList,
             EdgeAgentCommandKind.ContainerLogsStream => ProtoEdgeCommandKind.ContainerLogsStream,
             EdgeAgentCommandKind.ContainerInspect => ProtoEdgeCommandKind.ContainerInspect,

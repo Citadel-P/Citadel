@@ -35,10 +35,25 @@ type CitadelDropRequestParams<TArgs extends readonly unknown[]> = TArgs extends 
 
 type CitadelUnwrapHttpResponse<TResult> = TResult extends ApiTypes.HttpResponse<infer TData, unknown> ? TData : TResult;
 
+type CitadelAutomationJsonInput<T> = T extends string
+  ? \`\${T}\`
+  : T extends number | boolean | null | undefined
+    ? T
+    : T extends readonly (infer TItem)[]
+      ? CitadelAutomationJsonInput<TItem>[]
+      : T extends object
+        ? { [TKey in keyof T]: CitadelAutomationJsonInput<T[TKey]> }
+        : T;
+
+type CitadelActionArgs<TArgs extends readonly unknown[]> =
+  CitadelDropRequestParams<TArgs> extends infer TOperationArgs extends readonly unknown[]
+    ? { [TIndex in keyof TOperationArgs]: CitadelAutomationJsonInput<TOperationArgs[TIndex]> }
+    : never;
+
 type CitadelActionMethod<TName extends keyof CitadelGeneratedApi> = CitadelGeneratedApi[TName] extends (
   ...args: infer TArgs
 ) => Promise<infer TResult>
-  ? (...args: CitadelDropRequestParams<TArgs>) => Promise<CitadelUnwrapHttpResponse<TResult>>
+  ? (...args: CitadelActionArgs<TArgs>) => Promise<CitadelUnwrapHttpResponse<TResult>>
   : never;
 
 type CitadelGeneratedAutomationApi = {
@@ -82,13 +97,13 @@ type CitadelAutomationClient = Omit<CitadelGeneratedResourceGroups, "deployments
   request(
     method: "POST",
     path: "/api/v1/deployments/apply",
-    body: ApiTypes.ApplyDeploymentInput,
+    body: CitadelAutomationJsonInput<ApiTypes.ApplyDeploymentInput>,
   ): Promise<ApiTypes.DeploymentStreamItem[]>;
-  request(method: "POST", path: "/api/v1/stacks/apply", body: ApiTypes.ApplyStackInput): Promise<ApiTypes.StackStreamItem[]>;
+  request(method: "POST", path: "/api/v1/stacks/apply", body: CitadelAutomationJsonInput<ApiTypes.ApplyStackInput>): Promise<ApiTypes.StackStreamItem[]>;
   request(
     method: "POST",
     path: "/api/v1/stacks/rollback",
-    body: ApiTypes.RollbackStackInput,
+    body: CitadelAutomationJsonInput<ApiTypes.RollbackStackInput>,
   ): Promise<ApiTypes.StackStreamItem[]>;
   request<TResponse = unknown, TBody = unknown>(
     method: CitadelHttpMethod,
@@ -98,9 +113,9 @@ type CitadelAutomationClient = Omit<CitadelGeneratedResourceGroups, "deployments
   get(path: "/api/v1/deployments"): Promise<ApiTypes.DeploymentsView>;
   get(path: "/api/v1/stacks"): Promise<ApiTypes.StacksView>;
   get<TResponse = unknown>(path: string): Promise<TResponse>;
-  post(path: "/api/v1/deployments/apply", body: ApiTypes.ApplyDeploymentInput): Promise<ApiTypes.DeploymentStreamItem[]>;
-  post(path: "/api/v1/stacks/apply", body: ApiTypes.ApplyStackInput): Promise<ApiTypes.StackStreamItem[]>;
-  post(path: "/api/v1/stacks/rollback", body: ApiTypes.RollbackStackInput): Promise<ApiTypes.StackStreamItem[]>;
+  post(path: "/api/v1/deployments/apply", body: CitadelAutomationJsonInput<ApiTypes.ApplyDeploymentInput>): Promise<ApiTypes.DeploymentStreamItem[]>;
+  post(path: "/api/v1/stacks/apply", body: CitadelAutomationJsonInput<ApiTypes.ApplyStackInput>): Promise<ApiTypes.StackStreamItem[]>;
+  post(path: "/api/v1/stacks/rollback", body: CitadelAutomationJsonInput<ApiTypes.RollbackStackInput>): Promise<ApiTypes.StackStreamItem[]>;
   post<TResponse = unknown, TBody = unknown>(path: string, body?: TBody): Promise<TResponse>;
   patch<TResponse = unknown, TBody = unknown>(path: string, body?: TBody): Promise<TResponse>;
   put<TResponse = unknown, TBody = unknown>(path: string, body?: TBody): Promise<TResponse>;
@@ -120,9 +135,11 @@ declare global {
     export type Api = CitadelGeneratedApi;
     export type ResourceName = CitadelGeneratedResourceName;
     export type ResourceGroupName = CitadelGeneratedResourceGroupName;
-    export type ApplyDeploymentInput = ApiTypes.ApplyDeploymentInput;
-    export type ApplyStackInput = ApiTypes.ApplyStackInput;
-    export type RollbackStackInput = ApiTypes.RollbackStackInput;
+    export type ApplyDeploymentInput = CitadelAutomationJsonInput<ApiTypes.ApplyDeploymentInput>;
+    export type ApplyStackInput = CitadelAutomationJsonInput<ApiTypes.ApplyStackInput>;
+    export type RollbackStackInput = CitadelAutomationJsonInput<ApiTypes.RollbackStackInput>;
+    export type PruneResource = \`\${ApiTypes.PruneResource}\`;
+    export type PrunePlatformInput = CitadelAutomationJsonInput<ApiTypes.PrunePlatformInput>;
     export type DeploymentStreamItem = ApiTypes.DeploymentStreamItem;
     export type DeploymentsView = ApiTypes.DeploymentsView;
     export type StackStreamItem = ApiTypes.StackStreamItem;

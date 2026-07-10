@@ -1,10 +1,9 @@
 using Application.Services;
 using Microsoft.AspNetCore.Http.Metadata;
-using Microsoft.AspNetCore.Routing;
 using System.Text;
 using System.Text.Json;
 
-namespace WebApi;
+namespace WebApi.Routes;
 
 internal sealed class EndpointDataSourceAutomationApiEndpointCatalog(EndpointDataSource endpointDataSource) : IAutomationApiEndpointCatalog
 {

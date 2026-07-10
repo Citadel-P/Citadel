@@ -611,31 +611,25 @@ VALUES ('30000000-0000-0000-0000-000000000003', 'Viewer', 'System');
 INSERT INTO actions (id, alertonfailure, code, controlstate, createdat, createdbyactorid, currentrunid, defaultargsjson, description, enabled, lastscheduledrunat, name, runasactorid, schedulecron, scheduleenabled, scheduletimezone, timeoutseconds, updatedat, webhook)
 VALUES ('41000000-0000-0000-0000-000000000001', TRUE, 'const platformsResponse = await citadel.platforms.listPlatforms();
 const platforms = platformsResponse?.platforms ?? [];
-let deleted = 0;
+let pruned = 0;
+let reclaimedBytes = 0;
 
 for (const platform of platforms) {
-  const imagesResponse = await citadel.images.listImages(platform.id);
-  const unusedImageIds = (imagesResponse?.images ?? [])
-    .filter((image) => !image.isInUse)
-    .map((image) => image.dockerImageId);
+  const result = await citadel.platforms.prunePlatform(platform.id, { resource: "Image" });
+  const imagesDeleted = result?.imagesDeleted ?? [];
+  const reclaimed = Number(result?.spaceReclaimed ?? 0);
+  reclaimedBytes += reclaimed;
+  pruned += imagesDeleted.length;
 
-  if (unusedImageIds.length === 0) {
+  if (imagesDeleted.length === 0) {
     console.log(`No unused images on ${platform.name}.`);
     continue;
   }
 
-  await citadel.images.deleteImages({
-    platformId: platform.id,
-    ids: unusedImageIds,
-    force: false,
-    noPrune: false
-  });
-
-  console.log(`Requested deletion of ${unusedImageIds.length} unused image(s) on ${platform.name}.`);
-  deleted += unusedImageIds.length;
+  console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);
 }
 
-console.log(`Requested deletion of ${deleted} unused image(s).`);', 'Idle', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '{}', 'Deletes local Docker images that are not used by any container on every platform.', FALSE, NULL, 'Prune images', '00000000-0000-0000-0000-000000000002', '0 12 * * *', TRUE, 'UTC', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL);
+console.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);', 'Idle', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '{}', 'Prunes unused Docker images on every platform.', FALSE, NULL, 'Prune images', '00000000-0000-0000-0000-000000000002', '0 12 * * *', TRUE, 'UTC', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL);
 INSERT INTO actions (id, alertonfailure, code, controlstate, createdat, createdbyactorid, currentrunid, defaultargsjson, description, enabled, lastscheduledrunat, name, runasactorid, schedulecron, scheduleenabled, scheduletimezone, timeoutseconds, updatedat, webhook)
 VALUES ('41000000-0000-0000-0000-000000000002', TRUE, 'const stacksResponse = await citadel.stacks.listStacks({ tags: ["Prod"] });
 const stacks = stacksResponse?.stacks ?? [];
@@ -1012,7 +1006,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260709214427_migration0001', '10.0.9');
+VALUES ('20260710090916_migration0001', '10.0.9');
 
 COMMIT;
 

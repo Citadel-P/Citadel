@@ -5,7 +5,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Automation;
 using Domain.Entities.Activities;
 using Domain.Entities.Automation;
-using Domain.Entities.Identity;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;

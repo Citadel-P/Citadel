@@ -63,6 +63,30 @@ internal sealed class EdgePlatformConnector(IEdgeAgentCommandRouter commandRoute
         return PlatformInfoResponse.Parser.ParseFrom(response.Payload).Map(command.PlatformName, command.PlatformAddress);
     }
 
+    public async Task<Result<PrunePlatformResult>> PruneAsync(PrunePlatformCommand command, CancellationToken cancellationToken)
+    {
+        if (!EdgeConnectorHelpers.TryGetPlatformId(command.PlatformAddress, out var platformId, out var addressError))
+        {
+            return Result.Failure<PrunePlatformResult>(addressError!);
+        }
+
+        var request = new PruneRequest { Resource = command.Resource.MapToProto() };
+        var response = await commandRouter.SendUnaryAsync(
+            platformId,
+            EdgeAgentCommandKind.PlatformPrune,
+            request.ToByteArray(),
+            TimeSpan.FromMinutes(5),
+            correlationId: null,
+            cancellationToken);
+
+        if (!response.IsSuccess || response.Payload is null)
+        {
+            return Result.Failure<PrunePlatformResult>(EdgeConnectorHelpers.CommandFailure(EdgeAgentCommandKind.PlatformPrune, response));
+        }
+
+        return PruneResponse.Parser.ParseFrom(response.Payload).Map();
+    }
+
     public async IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(
         StreamPlatformStatsCommand command,
         [EnumeratorCancellation] CancellationToken cancellationToken)

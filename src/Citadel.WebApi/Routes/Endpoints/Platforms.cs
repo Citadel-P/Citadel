@@ -62,6 +62,16 @@ public static class Platforms
         return await EndpointHandlers.HandleResult(result, permissionService, (containers, perm) => ContainersView.Map(containers, id, perm));
     }
 
+    public static async Task<Results<Ok<PrunePlatformView>, ProblemHttpResult>> Prune(
+        IMediator mediator,
+        [Description("The platform id")] Guid id,
+        [FromBody] PrunePlatformInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(input.ToCommand(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, PrunePlatformView.Map);
+    }
+
     public static async Task<Results<Ok<EdgeAgentEnrollmentView>, ProblemHttpResult>> CreateEdgeEnrollment(
         IMediator mediator,
         HttpContext httpContext,

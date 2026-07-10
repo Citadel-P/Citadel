@@ -11,6 +11,7 @@ public interface IPlatformConnector
 {
     Task<PlatformHealthResult> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken);
     Task<Result<PlatformResult>> GetPlatformAsync(GetPlatformCommand command, CancellationToken cancellationToken);
+    Task<Result<PrunePlatformResult>> PruneAsync(PrunePlatformCommand command, CancellationToken cancellationToken);
 
     IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, CancellationToken cancellationToken);
     IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand streamContainerLogsCommand, CancellationToken cancellationToken);

@@ -173,6 +173,14 @@ export enum RegistryStatus {
   Deprecated = "Deprecated",
 }
 
+export enum PruneResource {
+  All = "All",
+  Volume = "Volume",
+  Network = "Network",
+  Image = "Image",
+  Build = "Build",
+}
+
 export enum PlatformType {
   Docker = "Docker",
   DockerSwarm = "DockerSwarm",
@@ -3900,6 +3908,23 @@ export interface ProblemDetails {
   instance?: null | string;
 }
 
+export interface PrunePlatformInput {
+  resource: PruneResource;
+}
+
+export interface PrunePlatformView {
+  resource: PruneResource;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  spaceReclaimed: number | string;
+  volumesDeleted: string[];
+  networksDeleted: string[];
+  imagesDeleted: string[];
+  buildCacheDeleted: string[];
+}
+
 export interface PullImageInput {
   /** @format uuid */
   platformId: string;
@@ -6890,6 +6915,37 @@ export class Api<
         path: `/api/v1/platforms/${id}/containers`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name PrunePlatform
+     * @summary Delete unused Docker resources on a platform
+     * @request POST:/api/v1/platforms/{id}/prune
+     * @secure
+     * @response `200` `PrunePlatformView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    prunePlatform: (
+      id: string,
+      data: PrunePlatformInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<PrunePlatformView, ProblemDetails>({
+        path: `/api/v1/platforms/${id}/prune`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),

@@ -5,6 +5,10 @@ using Domain.Entities.Platforms;
 using Hosting.DockerClient.Models.Platforms;
 using Domain.Contracts.Resources.Containers;
 using Domain;
+using DomainPruneResource = Domain.PruneResource;
+using DockerPruneResource = Hosting.DockerClient.Models.Platforms.DockerPruneResource;
+using DockerPruneResult = Hosting.DockerClient.Models.Platforms.PlatformPruneResult;
+using ProtoPruneResource = Citadel.Platforms.V1.PruneResource;
 
 namespace Infrastructure.Connectors.Mappers;
 
@@ -160,6 +164,93 @@ internal static class PlatformMappers
             NetworkCount: source.NetworkCount,
             AgentVersion: string.Empty,
             PlatformStat: platformStat);
+    }
+
+    internal static DockerPruneResource Map(this DomainPruneResource resource)
+        => resource switch
+        {
+            DomainPruneResource.All => DockerPruneResource.All,
+            DomainPruneResource.Volume => DockerPruneResource.Volume,
+            DomainPruneResource.Network => DockerPruneResource.Network,
+            DomainPruneResource.Image => DockerPruneResource.Image,
+            DomainPruneResource.Build => DockerPruneResource.Build,
+            _ => DockerPruneResource.All
+        };
+
+    internal static ProtoPruneResource MapToProto(this DomainPruneResource resource)
+        => resource switch
+        {
+            DomainPruneResource.All => ProtoPruneResource.All,
+            DomainPruneResource.Volume => ProtoPruneResource.Volume,
+            DomainPruneResource.Network => ProtoPruneResource.Network,
+            DomainPruneResource.Image => ProtoPruneResource.Image,
+            DomainPruneResource.Build => ProtoPruneResource.Build,
+            _ => ProtoPruneResource.Unspecified
+        };
+
+    internal static DomainPruneResource Map(this DockerPruneResource resource)
+        => resource switch
+        {
+            DockerPruneResource.All => DomainPruneResource.All,
+            DockerPruneResource.Volume => DomainPruneResource.Volume,
+            DockerPruneResource.Network => DomainPruneResource.Network,
+            DockerPruneResource.Image => DomainPruneResource.Image,
+            DockerPruneResource.Build => DomainPruneResource.Build,
+            _ => DomainPruneResource.All
+        };
+
+    internal static DomainPruneResource Map(this ProtoPruneResource resource)
+        => resource switch
+        {
+            ProtoPruneResource.All => DomainPruneResource.All,
+            ProtoPruneResource.Volume => DomainPruneResource.Volume,
+            ProtoPruneResource.Network => DomainPruneResource.Network,
+            ProtoPruneResource.Image => DomainPruneResource.Image,
+            ProtoPruneResource.Build => DomainPruneResource.Build,
+            _ => DomainPruneResource.All
+        };
+
+    internal static ProtoPruneResource MapToProto(this DockerPruneResource resource)
+        => resource switch
+        {
+            DockerPruneResource.All => ProtoPruneResource.All,
+            DockerPruneResource.Volume => ProtoPruneResource.Volume,
+            DockerPruneResource.Network => ProtoPruneResource.Network,
+            DockerPruneResource.Image => ProtoPruneResource.Image,
+            DockerPruneResource.Build => ProtoPruneResource.Build,
+            _ => ProtoPruneResource.Unspecified
+        };
+
+    internal static PrunePlatformResult Map(this DockerPruneResult source)
+        => new(
+            source.Resource.Map(),
+            source.SpaceReclaimed,
+            source.VolumesDeleted,
+            source.NetworksDeleted,
+            source.ImagesDeleted,
+            source.BuildCacheDeleted);
+
+    internal static PrunePlatformResult Map(this PruneResponse source)
+        => new(
+            source.Resource.Map(),
+            source.SpaceReclaimed,
+            source.VolumesDeleted.ToList(),
+            source.NetworksDeleted.ToList(),
+            source.ImagesDeleted.ToList(),
+            source.BuildCacheDeleted.ToList());
+
+    internal static PruneResponse MapToProto(this DockerPruneResult source)
+    {
+        var response = new PruneResponse
+        {
+            Resource = source.Resource.MapToProto(),
+            SpaceReclaimed = source.SpaceReclaimed
+        };
+        response.VolumesDeleted.AddRange(source.VolumesDeleted);
+        response.NetworksDeleted.AddRange(source.NetworksDeleted);
+        response.ImagesDeleted.AddRange(source.ImagesDeleted);
+        response.BuildCacheDeleted.AddRange(source.BuildCacheDeleted);
+        return response;
     }
 
     internal static DaemonEventInfo Map(this DaemonEventResult @event)

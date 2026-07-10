@@ -57,6 +57,11 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
             && endpoint.GetProperty("path").GetString() == "/api/v1/platforms"
             && endpoint.GetProperty("group").GetString() == "platforms");
         Assert.Contains(endpoints, endpoint =>
+            endpoint.GetProperty("key").GetString() == "prunePlatform"
+            && endpoint.GetProperty("method").GetString() == "POST"
+            && endpoint.GetProperty("path").GetString() == "/api/v1/platforms/{id}/prune"
+            && endpoint.GetProperty("group").GetString() == "platforms");
+        Assert.Contains(endpoints, endpoint =>
             endpoint.GetProperty("key").GetString() == "listGitRepositories"
             && endpoint.GetProperty("group").GetString() == "gitRepositories");
         Assert.Contains(endpoints, endpoint =>
@@ -105,8 +110,11 @@ public sealed class AutomationActionIntegrationTests(PostgresTestFixture fixture
         var restart = Assert.Single(actions, action => action.GetProperty("name").GetString() == "Restart unhealthy stacks");
 
         Assert.False(prune.GetProperty("enabled").GetBoolean());
+        Assert.Equal("Prunes unused Docker images on every platform.", prune.GetProperty("description").GetString());
         Assert.True(prune.GetProperty("scheduleEnabled").GetBoolean());
         Assert.Equal("0 12 * * *", prune.GetProperty("scheduleCron").GetString());
+        Assert.Contains("citadel.platforms.prunePlatform", prune.GetProperty("code").GetString());
+        Assert.DoesNotContain("citadel.images.deleteImages", prune.GetProperty("code").GetString());
         AssertContainsTag(prune.GetProperty("tags"), "System");
 
         Assert.False(restart.GetProperty("enabled").GetBoolean());

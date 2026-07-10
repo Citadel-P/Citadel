@@ -42,6 +42,22 @@ internal class AgentPlatformConnector(IGrpcClientFactory clientFactory) : IPlatf
         }
     }
 
+    public async Task<Result<PrunePlatformResult>> PruneAsync(PrunePlatformCommand command, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var platformClient = clientFactory.GetPlatformClient(command.PlatformAddress);
+            var response = await platformClient.PruneAsync(
+                new PruneRequest { Resource = command.Resource.MapToProto() },
+                cancellationToken: cancellationToken);
+            return response.Map();
+        }
+        catch (RpcException ex)
+        {
+            return Result.Failure<PrunePlatformResult>(new ClientRpcException($"An RPC exception occurred: {ex.Message}", ex.StatusCode));
+        }
+    }
+
     public async IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var client = clientFactory.GetPlatformClient(command.PlatformAddress);

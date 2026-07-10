@@ -10,6 +10,8 @@ using Domain.Contracts.Resources.Platforms;
 using Google.Protobuf;
 using Infrastructure.Connectors.EdgeAgentConnectors;
 using LightResults;
+using DomainPruneResource = Domain.PruneResource;
+using ProtoPruneResource = Citadel.Platforms.V1.PruneResource;
 
 namespace Tests.Unit.Infrastructure.Connectors;
 
@@ -82,6 +84,35 @@ public class EdgeAgentConnectorTests
         var result = Assert.Single(results);
         Assert.Equal(0.5, result.PlatformStat.CpuUsage);
         Assert.Equal("edge-test", result.AgentVersion);
+    }
+
+    [Fact]
+    public async Task PruneAsync_Should_Route_PlatformPrune_Command()
+    {
+        var platformId = Guid.CreateVersion7();
+        var router = new TestEdgeAgentCommandRouter
+        {
+            UnaryResult = EdgeAgentCommandRouterResult.Success(new PruneResponse
+            {
+                Resource = ProtoPruneResource.Image,
+                SpaceReclaimed = 1234,
+                ImagesDeleted = { "sha256:layer" }
+            }.ToByteArray())
+        };
+        var connector = new EdgePlatformConnector(router);
+
+        var result = await connector.PruneAsync(
+            new PrunePlatformCommand($"edge://{platformId}", DomainPruneResource.Image),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess(out var prune, out var error), error?.Message);
+        Assert.Equal(platformId, router.PlatformId);
+        Assert.Equal(EdgeAgentCommandKind.PlatformPrune, router.Kind);
+        Assert.NotNull(router.Payload);
+        Assert.Equal(ProtoPruneResource.Image, PruneRequest.Parser.ParseFrom(router.Payload).Resource);
+        Assert.Equal(DomainPruneResource.Image, prune.Resource);
+        Assert.Equal(1234, prune.SpaceReclaimed);
+        Assert.Equal("sha256:layer", Assert.Single(prune.ImagesDeleted));
     }
 
     [Fact]

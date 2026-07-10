@@ -197,6 +197,15 @@ public enum PlatformConnectorType
     EdgeAgent
 }
 
+public enum PruneResource
+{
+    All,
+    Volume,
+    Network,
+    Image,
+    Build
+}
+
 public enum EdgeAgentConnectionStatus
 {
     Offline = 0,
@@ -211,6 +220,7 @@ public enum EdgeAgentCommandKind
     PlatformGetInfo = 2,
     PlatformStatsStream = 3,
     PlatformDaemonEventsStream = 4,
+    PlatformPrune = 5,
     ContainerList = 10,
     ContainerLogsStream = 11,
     ContainerInspect = 12,

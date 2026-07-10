@@ -203,35 +203,29 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             {
                 Id = pruneImagesActionId,
                 Name = "Prune images",
-                Description = "Deletes local Docker images that are not used by any container on every platform.",
+                Description = "Prunes unused Docker images on every platform.",
                 Code = """
                     const platformsResponse = await citadel.platforms.listPlatforms();
                     const platforms = platformsResponse?.platforms ?? [];
-                    let deleted = 0;
+                    let pruned = 0;
+                    let reclaimedBytes = 0;
 
                     for (const platform of platforms) {
-                      const imagesResponse = await citadel.images.listImages(platform.id);
-                      const unusedImageIds = (imagesResponse?.images ?? [])
-                        .filter((image) => !image.isInUse)
-                        .map((image) => image.dockerImageId);
+                      const result = await citadel.platforms.prunePlatform(platform.id, { resource: "Image" });
+                      const imagesDeleted = result?.imagesDeleted ?? [];
+                      const reclaimed = Number(result?.spaceReclaimed ?? 0);
+                      reclaimedBytes += reclaimed;
+                      pruned += imagesDeleted.length;
 
-                      if (unusedImageIds.length === 0) {
+                      if (imagesDeleted.length === 0) {
                         console.log(`No unused images on ${platform.name}.`);
                         continue;
                       }
 
-                      await citadel.images.deleteImages({
-                        platformId: platform.id,
-                        ids: unusedImageIds,
-                        force: false,
-                        noPrune: false
-                      });
-
-                      console.log(`Requested deletion of ${unusedImageIds.length} unused image(s) on ${platform.name}.`);
-                      deleted += unusedImageIds.length;
+                      console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);
                     }
 
-                    console.log(`Requested deletion of ${deleted} unused image(s).`);
+                    console.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);
                     """.Replace("\r\n", "\n"),
                 DefaultArgsJson = "{}",
                 Enabled = false,
