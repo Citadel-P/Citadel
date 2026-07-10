@@ -224,15 +224,18 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
+    public async Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null)
     {
-        string sql = InfoSelect + " WHERE " + ResourceTagSql.FilterPredicate("s") + " ORDER BY s.CreatedAt DESC, s.Name ASC";
+        string sql = InfoSelect + " WHERE " + ResourceTagSql.FilterPredicate("s")
+            + " AND (@PlatformId IS NULL OR sr.PlatformId = @PlatformId)"
+            + " ORDER BY s.CreatedAt DESC, s.Name ASC";
         var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
         var result = await db.QueryAsync<StackDto>(sql, new
         {
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack),
             TagIds = tagIdArray,
-            TagIdsLength = tagIdArray.Length
+            TagIdsLength = tagIdArray.Length,
+            PlatformId = platformId
         }, transaction: tx());
         return result.ToDomain();
     }
@@ -251,11 +254,12 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         return result;
     }
 
-    public async Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
+    public async Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null)
     {
         string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + InfoSelect + " WHERE "
                         + AuthorizationSql.ResourcePredicatePrefix + "s.Id" + AuthorizationSql.ResourcePredicateSuffix
                         + " AND " + ResourceTagSql.FilterPredicate("s")
+                        + " AND (@PlatformId IS NULL OR sr.PlatformId = @PlatformId)"
                         + " ORDER BY s.CreatedAt DESC, s.Name ASC";
 
         var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
@@ -268,7 +272,8 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             SpecificPermission = (int)specificPermission,
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack),
             TagIds = tagIdArray,
-            TagIdsLength = tagIdArray.Length
+            TagIdsLength = tagIdArray.Length,
+            PlatformId = platformId
         }, transaction: tx());
 
         return result.ToDomain();

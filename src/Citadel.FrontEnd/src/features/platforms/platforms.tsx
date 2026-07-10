@@ -27,8 +27,8 @@ export const Platforms = ({
         !isLoading &&
         (isFiltered ? (
           <div className="flex items-center justify-center p-4">
-            <div className="rounded-full bg-primary/80 text-background text-sm p-2 px-3 text-center">
-              No platforms match your search.
+            <div className="rounded-md bg-muted/20 text-sm p-2 px-3 text-center">
+              No platforms match the current filters.
             </div>
           </div>
         ) : (

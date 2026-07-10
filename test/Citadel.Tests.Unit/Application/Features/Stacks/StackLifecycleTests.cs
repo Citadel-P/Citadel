@@ -123,6 +123,11 @@ public class StackLifecycleTests
                 status: PlatformStatus.Online,
                 connectorType: PlatformConnectorType.Local,
                 platformDescriptor: null!));
+        platforms
+            .Setup(x => x.GetPlatformsWithLatestStatByIdsAsync(
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { platformId })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
 
         var activityEvents = new Mock<IActivityEventRepository>();
         activityEvents
@@ -152,7 +157,8 @@ public class StackLifecycleTests
               }
             }
             """);
-        var handler = new PatchStackHandler(unitOfWork.Object, userContext.Object);
+        var platformHub = new Mock<IPlatformStreamManager>();
+        var handler = new PatchStackHandler(unitOfWork.Object, platformHub.Object, userContext.Object);
 
         var result = await handler.Handle(new PatchStack(stack.Id, patch), CancellationToken.None);
 
@@ -199,6 +205,13 @@ public class StackLifecycleTests
 
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(x => x.GetPlatformsWithLatestStatByIdsAsync(
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { platformId })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        unitOfWork.Setup(x => x.Platforms).Returns(platforms.Object);
         unitOfWork
             .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -272,6 +285,7 @@ public class StackLifecycleTests
             .Setup(x => x.GetConnector(PlatformConnectorType.Local))
             .Returns(connector.Object);
         var stackHub = new Mock<IStackStreamManager>();
+        var platformHub = new Mock<IPlatformStreamManager>();
         using var stackStorage = new TestStackStoragePathProvider();
         var gitStoragePath = Path.Combine(stackStorage.StacksRoot, stack.Id.ToString("D"));
         var currentNameStoragePath = Path.Combine(stackStorage.StacksRoot, "renamed-beszel");
@@ -289,6 +303,7 @@ public class StackLifecycleTests
             platformCache,
             connectorFactory.Object,
             stackHub.Object,
+            platformHub.Object,
             stackStorage);
 
         var result = await handler.Handle(new DeleteStacks([stack.Id]), CancellationToken.None);

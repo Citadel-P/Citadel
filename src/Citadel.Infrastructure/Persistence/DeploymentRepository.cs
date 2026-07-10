@@ -230,7 +230,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
+    public async Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null)
     {
         string sql = $$"""
             SELECT
@@ -264,6 +264,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             LEFT JOIN Images i 
                 ON c.ImageId = i.Id
             WHERE {{ResourceTagSql.FilterPredicate("d")}}
+              AND (@PlatformId IS NULL OR d.PlatformId = @PlatformId)
             ORDER BY 
                 d.CreatedAt DESC,
                 d.Name ASC
@@ -273,7 +274,8 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         {
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment),
             TagIds = tagIdArray,
-            TagIdsLength = tagIdArray.Length
+            TagIdsLength = tagIdArray.Length,
+            PlatformId = platformId
         }, transaction: tx());
         return result.ToDomain();
     }
@@ -302,11 +304,12 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return db.QuerySingleOrDefaultAsync<string>(sql, new { DeploymentId = deploymentId }, transaction: tx());
     }
 
-    public async Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
+    public async Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null)
     {
         string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + BaseSelect + " WHERE "
             + AuthorizationSql.ResourcePredicatePrefix + "d.Id" + AuthorizationSql.ResourcePredicateSuffix
             + " AND " + ResourceTagSql.FilterPredicate("d")
+            + " AND (@PlatformId IS NULL OR d.PlatformId = @PlatformId)"
             + " ORDER BY d.CreatedAt DESC, d.Name ASC";
 
         var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
@@ -319,7 +322,8 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             SpecificPermission = (int)specificPermission,
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment),
             TagIds = tagIdArray,
-            TagIdsLength = tagIdArray.Length
+            TagIdsLength = tagIdArray.Length,
+            PlatformId = platformId
         }, transaction: tx());
 
         return result.ToDomain();

@@ -176,6 +176,8 @@ interface HeaderOptions {
   showAdd?: boolean;
   /** Whether to show the tag filter control in the page header. */
   showTagFilter?: boolean;
+  /** Whether to show the platform filter control in the page header. */
+  showPlatformFilter?: boolean;
   /** Override add button title */
   addButtonTitle?: string;
   /** Override URL for the standard Add button. */

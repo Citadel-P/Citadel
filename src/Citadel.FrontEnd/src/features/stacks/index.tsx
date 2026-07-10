@@ -12,6 +12,7 @@ export const StackComponents: RequiredComponents = {
     showSearch: true,
     showAdd: true,
     showTagFilter: true,
+    showPlatformFilter: true,
   },
   Content: ({ items, actions, isLoading }) => {
     return <StacksTable items={items} actions={actions} isLoading={isLoading} />;

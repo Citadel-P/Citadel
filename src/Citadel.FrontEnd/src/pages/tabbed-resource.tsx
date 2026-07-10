@@ -83,6 +83,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
             showSearch={showTopSearch}
             showAdd={header.showAdd}
             showTagFilter={header.showTagFilter}
+            showPlatformFilter={header.showPlatformFilter}
             addDisabled={addDisabled}
             addButtonTitle={header.addButtonTitle}
             Extra={header.Extra}

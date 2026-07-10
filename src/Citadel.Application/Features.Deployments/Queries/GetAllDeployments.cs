@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.Deployments.Queries;
 
-public sealed record GetAllDeployments(IReadOnlyCollection<string>? Tags = null) : IQuery<Result<IEnumerable<Deployment>>>;
+public sealed record GetAllDeployments(IReadOnlyCollection<string>? Tags = null, Guid? PlatformId = null) : IQuery<Result<IEnumerable<Deployment>>>;
 
 internal sealed class GetAllDeploymentsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContextAccessor) : IQueryHandler<GetAllDeployments, Result<IEnumerable<Deployment>>>
 {
@@ -20,8 +20,8 @@ internal sealed class GetAllDeploymentsHandler(IUnitOfWork unitOfWork, IUserCont
 
         var user = userContextAccessor.Current;
         var deployments = user is not null && !user.IsAdmin
-            ? await unitOfWork.Deployments.GetAuthorizedInfoAsync(user.UserId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds)
-            : await unitOfWork.Deployments.GetInfoAsync(cancellationToken, tagFilter.TagIds);
+            ? await unitOfWork.Deployments.GetAuthorizedInfoAsync(user.UserId, ResourceType.Deployment, PermissionLevel.Read, SpecificPermission.None, cancellationToken, tagFilter.TagIds, query.PlatformId)
+            : await unitOfWork.Deployments.GetInfoAsync(cancellationToken, tagFilter.TagIds, query.PlatformId);
 
         return Result.Success(deployments);
     }

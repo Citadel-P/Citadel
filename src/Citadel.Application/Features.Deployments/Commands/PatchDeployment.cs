@@ -42,7 +42,7 @@ public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment>
     }
 }
 
-internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue, 
+internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeploymentStreamManager deploymentHub, IPlatformStreamManager platformHub, INotificationQueue notificationQueue,
     IActivityStreamManager activityHub, IUserContextAccessor userContext) : ICommandHandler<PatchDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(PatchDeployment command, CancellationToken cancellationToken)
@@ -53,6 +53,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         {
             return Result.Failure<Deployment>(new NotFoundError("The provided deployment does not exist"));
         }
+        var previousPlatformId = deployment.PlatformId;
 
         var patchedDeployment = command.Patch.ApplyTo(deployment, DeploymentJsonContext.Default.Deployment);
         
@@ -91,6 +92,10 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        Guid[] platformIds = previousPlatformId == deployment.PlatformId
+            ? [deployment.PlatformId]
+            : new[] { previousPlatformId, deployment.PlatformId };
+        var platforms = await unitOfWork.Platforms.GetPlatformsWithLatestStatByIdsAsync(platformIds, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
 
@@ -98,6 +103,11 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         
         // Notify
         await notificationQueue.EnqueueAsync(workItem, cancellationToken);
+        foreach (var platform in platforms)
+        {
+            await platformHub.PushPlatformUpdate(platform);
+        }
+
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return deployment;
     }

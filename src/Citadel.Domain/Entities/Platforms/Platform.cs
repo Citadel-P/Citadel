@@ -17,7 +17,9 @@ public class Platform(
     PlatformStatus status,
     PlatformConnectorType connectorType,
     PlatformDescriptor platformDescriptor,
-    string? description = null)
+    string? description = null,
+    long deploymentCount = 0,
+    long stackCount = 0)
 {
     private readonly List<PlatformStat> stats = [];
     public Guid Id { get; private set; } = Guid.CreateVersion7();
@@ -33,6 +35,8 @@ public class Platform(
     public string? AgentVersion { get; private set; } = agentVersion;
     public string? ServerVersion { get; private set; } = serverVersion;
     public string? Description { get; private set; } = description;
+    public long DeploymentCount { get; private set; } = deploymentCount;
+    public long StackCount { get; private set; } = stackCount;
     public PlatformDescriptor PlatformDescriptor { get; private set; } = platformDescriptor;
     public IReadOnlyCollection<PlatformStat>? Stats => stats;
     public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
@@ -52,7 +56,9 @@ public class Platform(
         string? serverVersion = null,
         string? agentVersion = null,
         IReadOnlyCollection<PlatformStat>? stats = null,
-        string? description = null
+        string? description = null,
+        long deploymentCount = 0,
+        long stackCount = 0
         )
     {
         var platform = new Platform(
@@ -68,7 +74,9 @@ public class Platform(
             status: status,
             connectorType: connectorType,
             platformDescriptor: platformDescriptor,
-            description: description)
+            description: description,
+            deploymentCount: deploymentCount,
+            stackCount: stackCount)
         {
             Id = id,
         };

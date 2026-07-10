@@ -21,6 +21,7 @@ internal sealed class DeleteStacksHandler(
     IPlatformContainerCache platformCache,
     IConnectorFactory<IContainerConnector> connectorFactory,
     IStackStreamManager stackHub,
+    IPlatformStreamManager platformHub,
     IStackStoragePathProvider stackStoragePathProvider) : ICommandHandler<DeleteStacks, Result>
 {
     public async ValueTask<Result> Handle(DeleteStacks command, CancellationToken cancellationToken)
@@ -41,7 +42,16 @@ internal sealed class DeleteStacksHandler(
 
         }
 
+        var platformIds = stacks
+            .Select(stack => stack.CurrentStackRelease?.PlatformId)
+            .Where(platformId => platformId.HasValue)
+            .Select(platformId => platformId!.Value)
+            .Distinct()
+            .ToArray();
+
         await unitOfWork.Stacks.RemoveRangeAsync(stacks.Select(stack => stack.Id), cancellationToken);
+        var platforms = await unitOfWork.Platforms.GetPlatformsWithLatestStatByIdsAsync(platformIds, cancellationToken);
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         foreach (var stack in stacks)
@@ -52,6 +62,11 @@ internal sealed class DeleteStacksHandler(
         foreach (var stack in stacks)
         {
             await stackHub.SendStackInfo(stack, "delete");
+        }
+
+        foreach (var platform in platforms)
+        {
+            await platformHub.PushPlatformUpdate(platform);
         }
 
         return Result.Success();

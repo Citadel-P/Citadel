@@ -6,7 +6,7 @@ import {
 } from '@/api/generated/api.types';
 import DockerIcon from '@/assets/docker.svg';
 import { Link } from 'react-router';
-import { Power, PowerOff, CirclePause, PlugZap, Cpu, MemoryStick } from 'lucide-react';
+import { Power, PowerOff, CirclePause, PlugZap, Cpu, MemoryStick, Rocket, Layers } from 'lucide-react';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -91,6 +91,27 @@ export const DockerPlatform = ({
             <TagChips tags={platform.tags} />
           </div>
 
+          {/* Deployments + stacks */}
+          <StatSection label="Deployments">
+            <LinkedStat
+              icon={Rocket}
+              value={platform.deploymentCount}
+              tooltip="Deployments on this platform"
+              to={`/deployments?platformId=${platform.id}`}
+              className="text-sky-500"
+            />
+          </StatSection>
+
+          <StatSection label="Stacks">
+            <LinkedStat
+              icon={Layers}
+              value={platform.stackCount}
+              tooltip="Stacks on this platform"
+              to={`/stacks?platformId=${platform.id}`}
+              className="text-violet-500"
+            />
+          </StatSection>
+
           {/* Containers breakdown */}
           <StatSection label="Containers">
             <div className="flex items-center gap-3">
@@ -117,14 +138,14 @@ export const DockerPlatform = ({
 
           {/* CPU + Memory */}
           <div className="flex w-full flex-col gap-3 border-t border-border/60 pt-4 lg:w-65 lg:shrink-0 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
-            <UsageBar
+            <UsageMetric
               icon={Cpu}
               label="CPU"
               value={cpuUsage}
               online={isOnline}
               detail={`${platform.cpuCount ?? '-'} cores`}
             />
-            <UsageBar
+            <UsageMetric
               icon={MemoryStick}
               label="RAM"
               value={memUsage}
@@ -147,7 +168,7 @@ const StatSection = ({ label, children }: { label: string; children: React.React
   </div>
 );
 
-const UsageBar = ({
+const UsageMetric = ({
   icon: Icon,
   label,
   value,
@@ -160,26 +181,40 @@ const UsageBar = ({
   online: boolean;
   detail?: string;
 }) => {
-  const barColor = value > 80 ? 'bg-rose-500' : value > 60 ? 'bg-amber-500' : 'bg-sky-500';
-
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Icon className="h-3 w-3" /> {label}
-          {detail ? <span className="text-muted-foreground/60">({detail})</span> : null}
-        </span>
-        <span className="tabular-nums text-foreground">{online ? `${value} %` : 'N/A'}</span>
-      </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-          style={{ width: `${online ? value : 0}%` }}
-        />
-      </div>
+    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+      <span className="flex min-w-0 items-center gap-1">
+        <Icon className="h-3 w-3 shrink-0" /> <span>{label}</span>
+        {detail ? <span className="truncate text-muted-foreground/60">({detail})</span> : null}
+      </span>
+      <span className="shrink-0 tabular-nums text-foreground">{online ? `${value} %` : 'N/A'}</span>
     </div>
   );
 };
+
+const LinkedStat = ({
+  icon: Icon,
+  value,
+  tooltip,
+  to,
+  className,
+}: {
+  icon: React.FC<{ height?: number; width?: number; className?: string }>;
+  value?: string | number | null;
+  tooltip: string;
+  to: string;
+  className?: string;
+}) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Link to={to} className="flex items-center gap-1 hover:underline">
+        <Icon height={12} width={12} className={className} />
+        <span className="tabular-nums text-[13px] text-muted-foreground">{value ?? 0}</span>
+      </Link>
+    </TooltipTrigger>
+    <TooltipContent>{tooltip}</TooltipContent>
+  </Tooltip>
+);
 
 const ContainerStat = ({
   icon: Icon,

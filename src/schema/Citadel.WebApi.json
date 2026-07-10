@@ -11279,6 +11279,14 @@
                 "type": "string"
               }
             }
+          },
+          {
+            "name": "platformId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -13164,6 +13172,14 @@
               "items": {
                 "type": "string"
               }
+            }
+          },
+          {
+            "name": "platformId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -33302,6 +33318,8 @@
           "type",
           "status",
           "connectorType",
+          "deploymentCount",
+          "stackCount",
           "stats",
           "platformDescriptor"
         ],
@@ -33383,6 +33401,22 @@
           },
           "connectorType": {
             "$ref": "#/components/schemas/PlatformConnectorType"
+          },
+          "deploymentCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "stackCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "stats": {
             "type": [

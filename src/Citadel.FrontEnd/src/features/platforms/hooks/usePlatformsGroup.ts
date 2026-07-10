@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { PlatformDescriptorDockerPlatformDescriptor, PlatformView } from '@/api/generated/api.types';
 import { HubConnection } from '@microsoft/signalr';
 import { PlatformStatsBatchView } from '@/api/types';
@@ -20,72 +20,86 @@ export const normalizePlatform = (s: PlatformView): PlatformView => {
   return s;
 };
 
+const normalizeTagName = (name: string) => name.trim().toLowerCase();
+
 export const usePlatformsGroup = () => {
   const { selectedTagNames } = useResourceTagFilter();
-  const { data, isLoading } = useRead(
-    'listPlatforms',
-    selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined,
-  );
-  const [realtimePlatforms, setRealtimePlatforms] = useState<PlatformView[] | null>(null);
+  const readArgs = useMemo(() => {
+    if (selectedTagNames.length === 0) return undefined;
+    return { query: { tags: selectedTagNames } };
+  }, [selectedTagNames]);
+  const { data, isLoading } = useRead('listPlatforms', readArgs);
+  const [platforms, setPlatforms] = useState<PlatformView[] | undefined>();
+  const lastFetchedRef = useRef<PlatformView[]>([]);
   const capabilities = data?.data.capabilities;
 
-  const platformsMessage = useMemo(() => {
-    if (realtimePlatforms) {
-      return realtimePlatforms;
+  useEffect(() => {
+    if (!data) return;
+    const newBase = data.data.platforms;
+    if (newBase !== lastFetchedRef.current) {
+      lastFetchedRef.current = newBase;
+      setPlatforms(newBase.map(normalizePlatform));
     }
+  }, [data]);
 
-    return data?.data.platforms.map(normalizePlatform) ?? [];
-  }, [realtimePlatforms, data]);
+  const matchesActiveFilters = useCallback(
+    (platform: PlatformView) => {
+      if (selectedTagNames.length === 0) return true;
 
-  const handlePlatformsUpdated = useCallback((platforms: PlatformView[]) => {
-    setRealtimePlatforms(platforms.map(normalizePlatform));
-  }, []);
+      const tagNames = new Set((platform.tags ?? []).map((tag) => normalizeTagName(tag.name)));
+      return selectedTagNames.every((tagName) => tagNames.has(normalizeTagName(tagName)));
+    },
+    [selectedTagNames],
+  );
+
+  const handlePlatformsUpdated = useCallback(
+    (platforms: PlatformView[]) => {
+      setPlatforms(platforms.map(normalizePlatform).filter(matchesActiveFilters));
+    },
+    [matchesActiveFilters],
+  );
 
   const handlePlatformUpdated = useCallback(
     (platform: PlatformView) => {
       const normalized = normalizePlatform(platform);
 
-      setRealtimePlatforms((current) => {
-        const source = current ?? data?.data.platforms.map(normalizePlatform) ?? [];
+      setPlatforms((current) => {
+        if (!current) return current;
 
-        const existingIndex = source.findIndex((p) => p.id === normalized.id);
+        const existingIndex = current.findIndex((p) => p.id === normalized.id);
 
-        if (existingIndex === -1) {
-          return [...source, normalized];
+        if (!matchesActiveFilters(normalized)) {
+          return existingIndex === -1 ? current : current.filter((p) => p.id !== normalized.id);
         }
 
-        const updated = [...source];
+        if (existingIndex === -1) {
+          return [...current, normalized];
+        }
+
+        const updated = [...current];
         updated[existingIndex] = normalized;
 
         return updated;
       });
     },
-    [data],
+    [matchesActiveFilters],
   );
 
-  const handlePlatformDeleted = useCallback(
-    (id: string) => {
-      setRealtimePlatforms((current) => {
-        const source = current ?? data?.data.platforms.map(normalizePlatform) ?? [];
-
-        return source.filter((p) => p.id !== id);
-      });
-    },
-    [data],
-  );
+  const handlePlatformDeleted = useCallback((id: string) => {
+    setPlatforms((current) => current?.filter((p) => p.id !== id));
+  }, []);
 
   const handlePlatformStatsUpdated = useCallback(
     (stats: PlatformStatsBatchView) => {
-      setRealtimePlatforms((current) => {
-        const source = current ?? data?.data.platforms.map(normalizePlatform) ?? [];
-
-        const existingIndex = source.findIndex((p) => p.id === stats.platformId);
+      setPlatforms((current) => {
+        if (!current) return current;
+        const existingIndex = current.findIndex((p) => p.id === stats.platformId);
 
         if (existingIndex === -1) {
-          return source;
+          return current;
         }
 
-        const updatedPlatforms = [...source];
+        const updatedPlatforms = [...current];
         const target = { ...updatedPlatforms[existingIndex] };
 
         target.stats = [stats.stat];
@@ -112,7 +126,12 @@ export const usePlatformsGroup = () => {
         return updatedPlatforms;
       });
     },
-    [data],
+    [],
+  );
+
+  const platformsMessage = useMemo(
+    () => (platforms ?? []).filter(matchesActiveFilters),
+    [platforms, matchesActiveFilters],
   );
 
   const setupEventListeners = useCallback(

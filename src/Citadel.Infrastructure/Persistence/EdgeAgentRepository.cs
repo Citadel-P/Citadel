@@ -115,6 +115,56 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
         return dto?.ToDomain();
     }
 
+    public async Task<EdgeAgentPlatformState?> GetPlatformStateByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                p.Id AS PlatformId,
+                p.Name AS PlatformName,
+                p.Address AS PlatformAddress,
+                p.NetworkCount AS PlatformNetworkCount,
+                p.VolumeCount AS PlatformVolumeCount,
+                p.ImageCount AS PlatformImageCount,
+                p.CpuCount AS PlatformCpuCount,
+                p.MemTotal AS PlatformMemTotal,
+                p.Status AS PlatformStatus,
+                p.ConnectorType AS PlatformConnectorType,
+                p.PlatformDescriptor AS PlatformDescriptor,
+                p.ServerVersion AS PlatformServerVersion,
+                p.AgentVersion AS PlatformAgentVersion,
+                p.Description AS PlatformDescription,
+                e.Id AS BindingId,
+                e.PlatformId AS BindingPlatformId,
+                e.AgentId AS BindingAgentId,
+                e.AgentPublicKey AS BindingAgentPublicKey,
+                e.AgentFingerprint AS BindingAgentFingerprint,
+                e.ConnectionStatus AS BindingConnectionStatus,
+                e.LastConnectedAtUtc AS BindingLastConnectedAtUtc,
+                e.LastDisconnectedAtUtc AS BindingLastDisconnectedAtUtc,
+                e.LastHeartbeatAtUtc AS BindingLastHeartbeatAtUtc,
+                e.LastSeenVersion AS BindingLastSeenVersion,
+                e.LastSeenHostname AS BindingLastSeenHostname,
+                e.CapabilitiesJson AS BindingCapabilitiesJson,
+                e.ProtocolVersion AS BindingProtocolVersion,
+                e.RevokedAtUtc AS BindingRevokedAtUtc,
+                e.CreatedAtUtc AS BindingCreatedAtUtc,
+                e.UpdatedAtUtc AS BindingUpdatedAtUtc
+            FROM Platforms p
+            LEFT JOIN EdgeAgentBindings e ON e.PlatformId = p.Id
+            WHERE p.Id = @PlatformId
+            LIMIT 1
+        """;
+
+        var dto = await db.QuerySingleOrDefaultAsync<EdgeAgentPlatformStateDto>(
+            sql,
+            new
+            {
+                PlatformId = platformId
+            },
+            transaction: tx());
+        return dto?.ToDomain();
+    }
+
     public async Task<EdgeAgentBinding?> GetBindingByAgentAsync(Guid platformId, Guid agentId, CancellationToken cancellationToken)
     {
         const string sql = """

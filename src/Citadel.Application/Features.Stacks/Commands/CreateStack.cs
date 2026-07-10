@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
+using Application.Services.SignalR;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -41,7 +42,7 @@ public sealed record CreateStack(
     }
 }
 
-internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<CreateStack, Result<Stack>>
+internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStreamManager platformHub, IUserContextAccessor userContext) : ICommandHandler<CreateStack, Result<Stack>>
 {
     public async ValueTask<Result<Stack>> Handle(CreateStack command, CancellationToken cancellationToken)
     {
@@ -100,8 +101,13 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IUserContextAcc
             info: new StackCreated(stack.ToSnapshot()));
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        var updatedPlatform = await unitOfWork.Platforms.GetPlatformWithLatestStatAsync(command.PlatformId, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
+        if (updatedPlatform is not null)
+        {
+            await platformHub.PushPlatformUpdate(updatedPlatform);
+        }
 
         return stack;
     }

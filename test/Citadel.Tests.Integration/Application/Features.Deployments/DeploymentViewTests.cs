@@ -1,4 +1,6 @@
 using Domain.Contracts.Interfaces;
+using Domain;
+using Domain.Entities.Platforms;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text;
@@ -10,13 +12,17 @@ namespace Tests.Integration.Application.Features.Deployments;
 public class DeploymentViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid? _platformId;
+    private Guid? _otherPlatformId;
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        var platform = Fakes.GetDummyPlatform();
+        var platform = CreatePlatform("deployment-view-platform-a", "https://deployment-view-a");
+        var otherPlatform = CreatePlatform("deployment-view-platform-b", "https://deployment-view-b");
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(otherPlatform, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
         _platformId = platform.Id;
+        _otherPlatformId = otherPlatform.Id;
     }
 
     [Fact]
@@ -129,12 +135,35 @@ public class DeploymentViewTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal("deployment-visible", deployments[0].GetProperty("name").GetString());
     }
 
+    [Fact]
+    public async Task List_Deployments_Should_Filter_By_Platform()
+    {
+        var targetDeploymentId = await CreateDeploymentAsync("deployment-platform-target", _platformId!.Value);
+        await CreateDeploymentAsync("deployment-platform-other", _otherPlatformId!.Value);
+
+        var response = await Client.GetAsync(
+            $"/api/v1/deployments?platformId={_platformId!.Value:D}",
+            TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var deployment = Assert.Single(document.RootElement.GetProperty("deployments").EnumerateArray());
+        Assert.Equal(targetDeploymentId, deployment.GetProperty("id").GetGuid());
+        Assert.Equal(_platformId, deployment.GetProperty("platformId").GetGuid());
+    }
+
     private async Task<Guid> CreateDeploymentAsync(string name)
+        => await CreateDeploymentAsync(name, _platformId!.Value);
+
+    private async Task<Guid> CreateDeploymentAsync(string name, Guid platformId)
     {
         var createJson = $$"""
             {
                 "name":"{{name}}",
-                "platformId":"{{_platformId}}",
+                "platformId":"{{platformId}}",
                 "spec":{
                     "updateBehavior":"Notify",
                     "image":{
@@ -162,4 +191,23 @@ public class DeploymentViewTests(PostgresTestFixture fixture) : IntegrationTestB
             .Single(x => x.Name == name)
             .Id;
     }
+
+    private static Platform CreatePlatform(string name, string address) => new(
+        name: name,
+        address: address,
+        networkCount: 1,
+        volumeCount: 1,
+        imageCount: 1,
+        cpuCount: 2,
+        memTotal: 512,
+        serverVersion: "1.0.0",
+        agentVersion: "1.0.0",
+        status: PlatformStatus.Online,
+        connectorType: PlatformConnectorType.Agent,
+        platformDescriptor: new DockerPlatformDescriptor(
+            DaemonId: name,
+            ContainerCount: 0,
+            ContainersRunning: 0,
+            ContainersPaused: 0,
+            ContainersStopped: 0));
 }

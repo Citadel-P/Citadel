@@ -26,7 +26,9 @@ internal static class PlatformMappers
             serverVersion: platform.ServerVersion,
             agentVersion: platform.AgentVersion,
             stats: platform.Stats?.Select(ToDomain).ToList(),
-            description: platform.Description);
+            description: platform.Description,
+            deploymentCount: platform.DeploymentCount,
+            stackCount: platform.StackCount);
 
         result.AssignTags(platform.TagsJson.ToTagSummaries());
         return result;
@@ -53,6 +55,8 @@ internal static class PlatformMappers
             serverVersion: platform.ServerVersion,
             agentVersion: platform.AgentVersion,
             description: platform.Description,
+            deploymentCount: platform.DeploymentCount,
+            stackCount: platform.StackCount,
             stats: [new PlatformStat(
                 Created: platform?.Stat_Created ?? 0,
                 MemoryUsage: platform?.Stat_MemoryUsage ?? 0,

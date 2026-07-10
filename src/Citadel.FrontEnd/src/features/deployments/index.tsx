@@ -12,6 +12,7 @@ export const DeploymentComponents: RequiredComponents = {
     showSearch: true,
     showAdd: true,
     showTagFilter: true,
+    showPlatformFilter: true,
   },
   Content: ({ items, actions, isLoading }) => {
     return <DeploymentsTable items={items} actions={actions} isLoading={isLoading} />;

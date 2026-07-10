@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
+using Application.Services.SignalR;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -34,7 +35,7 @@ public sealed record PatchStack(Guid Id, JsonMergePatchDocument<StackPatchModel>
     }
 }
 
-internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<PatchStack, Result<Stack>>
+internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IPlatformStreamManager platformHub, IUserContextAccessor userContext) : ICommandHandler<PatchStack, Result<Stack>>
 {
     public async ValueTask<Result<Stack>> Handle(PatchStack command, CancellationToken cancellationToken)
     {
@@ -44,6 +45,7 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
         {
             return Result.Failure<Stack>(new NotFoundError("The provided stack does not exist."));
         }
+        var previousPlatformId = stack.CurrentStackRelease.PlatformId;
 
         var current = new StackPatchModel(
             Name: stack.Name,
@@ -117,7 +119,17 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IUserContextAcce
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 
         await unitOfWork.Stacks.UpdateAsync(stack, cancellationToken);
+        Guid[] platformIds = previousPlatformId == stack.CurrentStackRelease.PlatformId
+            ? [stack.CurrentStackRelease.PlatformId]
+            : new[] { previousPlatformId, stack.CurrentStackRelease.PlatformId };
+        var platforms = await unitOfWork.Platforms.GetPlatformsWithLatestStatByIdsAsync(platformIds, cancellationToken);
+
         await unitOfWork.CommitAsync(cancellationToken);
+        foreach (var updatedPlatform in platforms)
+        {
+            await platformHub.PushPlatformUpdate(updatedPlatform);
+        }
+
         return stack;
     }
 

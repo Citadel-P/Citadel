@@ -2,7 +2,7 @@ import { ResourceType } from '@/api/types';
 import TaskSheet from '@/components/custom/task-sheet';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMemo, useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { RegularResourceComponents } from './types';
 import { ResourceHeader } from './resource-header';
 
@@ -14,6 +14,7 @@ type RegularResourceViewProps<T = any> = {
 export const RegularResourceView = <T,>({ Components, type }: RegularResourceViewProps<T>) => {
   const navigate = useNavigate();
   const platformId = useParams().platformId ?? '';
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
@@ -31,6 +32,10 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
     return () => setSelected([]);
   }, [type, setSelected]);
 
+  const hasActiveUrlFilters =
+    (headerCfg.showTagFilter && searchParams.getAll('tags').some((tag) => tag.trim().length > 0)) ||
+    (headerCfg.showPlatformFilter && Boolean(searchParams.get('platformId')?.trim()));
+
   const Content = Components.Content;
 
   return (
@@ -45,6 +50,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
             showSearch={headerCfg.showSearch}
             showAdd={headerCfg.showAdd}
             showTagFilter={headerCfg.showTagFilter}
+            showPlatformFilter={headerCfg.showPlatformFilter}
             addDisabled={!capabilities?.canWrite}
             addButtonTitle={headerCfg.addButtonTitle}
             Extra={headerCfg.Extra}
@@ -59,7 +65,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
             items={filtered ?? []}
             actions={Components.DropdownActions ?? {}}
             isLoading={isLoading}
-            isFiltered={Boolean(search.trim())}
+            isFiltered={Boolean(search.trim()) || hasActiveUrlFilters}
           />
         </div>
       </div>

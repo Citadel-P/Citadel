@@ -35,9 +35,10 @@ public static class Deployments
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
         [FromQuery] string[]? tags = null,
+        [FromQuery] Guid? platformId = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetAllDeployments(tags), cancellationToken);
+        var result = await mediator.Send(new GetAllDeployments(tags, platformId), cancellationToken);
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, DeploymentsView.Map);
     }
 

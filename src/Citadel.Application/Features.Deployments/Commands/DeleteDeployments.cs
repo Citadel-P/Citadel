@@ -22,6 +22,7 @@ internal sealed class DeleteDeploymentsHandler(
     IServiceScopeFactory scopeFactory,
     IDeploymentProcessingService deploymentProcessingService,
     IContainerProcessingService containerService,
+    IPlatformStreamManager platformHub,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
     IUserContextAccessor userContext)
@@ -50,26 +51,30 @@ internal sealed class DeleteDeploymentsHandler(
             await containerService.DeleteContainers(cmd, actorId, cancellationToken);
         }
         
-        var deleted = await DeleteAsync(command.Ids, actorId, cancellationToken);
-        if (deleted <= 0)
+        var deleteResult = await DeleteAsync(command.Ids, actorId, cancellationToken);
+        if (deleteResult.DeletedCount <= 0)
         {
             await deploymentProcessingService.RollbackProcessingAsync(deployments, cancellationToken);
             return Result.Failure(new NotFoundError("No deployments found matching the provided IDs for deletion."));
         }
 
         await deploymentProcessingService.NotifyProcessingAsync(deployments, "delete", cancellationToken);
+        foreach (var platform in deleteResult.Platforms)
+        {
+            await platformHub.PushPlatformUpdate(platform);
+        }
 
         return Result.Success();
     }
 
-    private async Task<int> DeleteAsync(IEnumerable<Guid> ids, Guid actorId, CancellationToken ct)
+    private async Task<DeleteDeploymentsResult> DeleteAsync(IEnumerable<Guid> ids, Guid actorId, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var deployments = await uow.Deployments.GetAllAsync(ids, ct);
         if (deployments is null || !deployments.Any())
-            return 0;
+            return new DeleteDeploymentsResult(0, []);
 
         foreach (var deployment in deployments)
         {
@@ -87,10 +92,14 @@ internal sealed class DeleteDeploymentsHandler(
             await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, ct)), ct);
         }
 
+        var platformIds = deployments.Select(deployment => deployment.PlatformId).Distinct().ToArray();
         var deleted = await uow.Deployments.RemoveRangeAsync(ids, ct);
+        var platforms = (await uow.Platforms.GetPlatformsWithLatestStatByIdsAsync(platformIds, ct)).ToArray();
+
         await uow.CommitAsync(ct);
 
-        return deleted;
+        return new DeleteDeploymentsResult(deleted, platforms);
     }
-}
 
+    private sealed record DeleteDeploymentsResult(int DeletedCount, IReadOnlyList<Domain.Entities.Platforms.Platform> Platforms);
+}

@@ -12,6 +12,8 @@
   type: Docker,
   status: Online,
   connectorType: Agent,
+  deploymentCount: 0,
+  stackCount: 0,
   platformDescriptor: {
     $type: Docker,
     daemonId: 123456,

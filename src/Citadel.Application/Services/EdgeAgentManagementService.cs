@@ -1,5 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
+using Application.Features.Deployments.Notifications;
+using Application.Features.Platforms;
+using Application.Services.SignalR;
+using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
@@ -11,7 +15,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services;
 
-internal sealed class EdgeAgentManagementService(IServiceScopeFactory scopeFactory) : IEdgeAgentManagementService
+internal sealed class EdgeAgentManagementService(
+    IServiceScopeFactory scopeFactory,
+    INotificationQueue notificationQueue,
+    IPlatformStreamManager platformStreamManager,
+    IActivityStreamManager activityStreamManager) : IEdgeAgentManagementService
 {
     public async Task<Result<EdgeAgentEnrollmentResult>> CreateEnrollmentAsync(Guid platformId, string coreUrl, Guid actorId, TimeSpan ttl, CancellationToken cancellationToken)
     {
@@ -200,8 +208,42 @@ internal sealed class EdgeAgentManagementService(IServiceScopeFactory scopeFacto
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var state = await unitOfWork.EdgeAgents.GetPlatformStateByPlatformIdAsync(platformId, cancellationToken);
+        var platform = state?.Platform;
+        var previousBinding = state?.Binding;
+        var previousStatus = platform?.Status;
+        var wasConnected = previousBinding?.ConnectionStatus == EdgeAgentConnectionStatus.Connected;
+
         await unitOfWork.EdgeAgents.UpdateBindingConnectedAsync(platformId, utcNow, hostname, agentVersion, capabilitiesJson, cancellationToken);
+
+        if (platform is not null)
+        {
+            platform.PartialUpdate(platformStatus: PlatformStatus.Online, agentVersion: agentVersion);
+            await unitOfWork.Platforms.UpdateAsync(platform, cancellationToken);
+        }
+
+        var activity = platform is null || (previousStatus == PlatformStatus.Online && wasConnected)
+            ? null
+            : PlatformActivity.Connected(platform, previousStatus!.Value, Constants.SystemId);
+
+        if (activity is not null)
+        {
+            await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
+
+        if (platform is not null)
+        {
+            await notificationQueue.EnqueueAsync(new PushPlatformUpdateNotificationWorkItem(platformStreamManager, platform), cancellationToken);
+        }
+
+        if (activity is not null)
+        {
+            await notificationQueue.EnqueueAsync(
+                new ActivityNotificationWorkItem(activityStreamManager, await activity.AssignActor(unitOfWork, cancellationToken)),
+                cancellationToken);
+        }
     }
 
     public async Task MarkHeartbeatAsync(Guid platformId, EdgeAgentHeartbeatSnapshot heartbeat, DateTime utcNow, CancellationToken cancellationToken)
@@ -216,8 +258,42 @@ internal sealed class EdgeAgentManagementService(IServiceScopeFactory scopeFacto
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var state = await unitOfWork.EdgeAgents.GetPlatformStateByPlatformIdAsync(platformId, cancellationToken);
+        var platform = state?.Platform;
+        var previousBinding = state?.Binding;
+        var previousStatus = platform?.Status;
+        var wasConnected = previousBinding?.ConnectionStatus == EdgeAgentConnectionStatus.Connected;
+
         await unitOfWork.EdgeAgents.UpdateBindingDisconnectedAsync(platformId, utcNow, cancellationToken);
+
+        if (platform is not null)
+        {
+            platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
+            await unitOfWork.Platforms.UpdateAsync(platform, cancellationToken);
+        }
+
+        var activity = platform is null || (previousStatus == PlatformStatus.Offline && !wasConnected)
+            ? null
+            : PlatformActivity.Disconnected(platform, previousStatus!.Value, Constants.SystemId);
+
+        if (activity is not null)
+        {
+            await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        }
+
         await unitOfWork.CommitAsync(cancellationToken);
+
+        if (platform is not null)
+        {
+            await notificationQueue.EnqueueAsync(new PushPlatformUpdateNotificationWorkItem(platformStreamManager, platform), cancellationToken);
+        }
+
+        if (activity is not null)
+        {
+            await notificationQueue.EnqueueAsync(
+                new ActivityNotificationWorkItem(activityStreamManager, await activity.AssignActor(unitOfWork, cancellationToken)),
+                cancellationToken);
+        }
     }
 
     public async Task<Result> RevokeAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken)

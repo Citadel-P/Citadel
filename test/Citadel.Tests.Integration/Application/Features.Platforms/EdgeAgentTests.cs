@@ -7,6 +7,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
 using Hosting.Common;
 using LightResults;
@@ -136,6 +137,68 @@ public class EdgeAgentTests(PostgresTestFixture fixture) : IntegrationTestBase(f
         Assert.Equal("Connected", connectedJson.RootElement.GetProperty("connectionStatus").GetString());
         Assert.Equal("edge-host-updated", connectedJson.RootElement.GetProperty("lastSeenHostname").GetString());
         Assert.Equal("edge-agent-test-updated", connectedJson.RootElement.GetProperty("lastSeenVersion").GetString());
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var platform = await uow.Platforms.GetByIdAsync(platformId, TestContext.Current.CancellationToken);
+            Assert.Equal(PlatformStatus.Online, platform?.Status);
+
+            var activities = await uow.ActivityEventRepository.GetPagedAsync(
+                platformId,
+                ActivityResourceType.Platform,
+                ActivityEventType.PlatformConnected,
+                1,
+                10,
+                TestContext.Current.CancellationToken);
+
+            var activitySummary = Assert.Single(activities.Items);
+            var activity = await uow.ActivityEventRepository.GetByIdAsync(activitySummary.Id, TestContext.Current.CancellationToken);
+            var connected = Assert.IsType<PlatformConnected>(activity?.Info);
+            Assert.Equal(PlatformStatus.Offline, connected.PreviousStatus);
+            Assert.Equal(PlatformStatus.Online, connected.Platform.Status);
+            Assert.Equal("edge-agent-test", connected.Platform.AgentVersion);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<IEdgeAgentManagementService>();
+            await service.MarkDisconnectedAsync(
+                platformId,
+                DateTime.UtcNow,
+                TestContext.Current.CancellationToken);
+        }
+
+        var disconnectedResponse = await Client.GetAsync(
+            $"/api/v1/platforms/{platformId:D}/edge/status",
+            TestContext.Current.CancellationToken);
+        disconnectedResponse.EnsureSuccessStatusCode();
+        using (var disconnectedJson = JsonDocument.Parse(
+                   await disconnectedResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
+        {
+            Assert.Equal("Offline", disconnectedJson.RootElement.GetProperty("connectionStatus").GetString());
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var platform = await uow.Platforms.GetByIdAsync(platformId, TestContext.Current.CancellationToken);
+            Assert.Equal(PlatformStatus.Offline, platform?.Status);
+
+            var activities = await uow.ActivityEventRepository.GetPagedAsync(
+                platformId,
+                ActivityResourceType.Platform,
+                ActivityEventType.PlatformDisconnected,
+                1,
+                10,
+                TestContext.Current.CancellationToken);
+
+            var activitySummary = Assert.Single(activities.Items);
+            var activity = await uow.ActivityEventRepository.GetByIdAsync(activitySummary.Id, TestContext.Current.CancellationToken);
+            var disconnected = Assert.IsType<PlatformDisconnected>(activity?.Info);
+            Assert.Equal(PlatformStatus.Online, disconnected.PreviousStatus);
+            Assert.Equal(PlatformStatus.Offline, disconnected.Platform.Status);
+        }
 
         var revokeResponse = await Client.PostAsync(
             $"/api/v1/platforms/{platformId:D}/edge/revoke",

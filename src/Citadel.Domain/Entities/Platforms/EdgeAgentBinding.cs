@@ -20,3 +20,5 @@ public sealed record EdgeAgentBinding(
 {
     public bool IsRevoked => RevokedAtUtc is not null || ConnectionStatus == EdgeAgentConnectionStatus.Revoked;
 }
+
+public sealed record EdgeAgentPlatformState(Platform Platform, EdgeAgentBinding? Binding);

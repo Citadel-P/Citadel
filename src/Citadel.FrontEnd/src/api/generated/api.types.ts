@@ -3980,6 +3980,16 @@ export interface PlatformView {
   type: PlatformType;
   status: PlatformStatus;
   connectorType: PlatformConnectorType;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  deploymentCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  stackCount: number | string;
   stats: null | PlatformStatView[];
   platformDescriptor: null | PlatformDescriptor;
   tags?: TagSummaryView[];
@@ -8652,6 +8662,8 @@ export class Api<
     listDeployments: (
       query?: {
         tags?: string[];
+        /** @format uuid */
+        platformId?: string;
       },
       params: RequestParams = {},
     ) =>
@@ -9216,6 +9228,8 @@ export class Api<
     listStacks: (
       query?: {
         tags?: string[];
+        /** @format uuid */
+        platformId?: string;
       },
       params: RequestParams = {},
     ) =>

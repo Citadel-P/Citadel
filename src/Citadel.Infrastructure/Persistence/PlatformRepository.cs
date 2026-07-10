@@ -273,6 +273,13 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     {
         string sql = $$"""
             SELECT p.*,
+                (SELECT COUNT(*) FROM Deployments d WHERE d.PlatformId = p.Id) AS DeploymentCount,
+                (
+                    SELECT COUNT(*)
+                    FROM Stacks st
+                    JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
+                    WHERE sr.PlatformId = p.Id
+                ) AS StackCount,
                 s.Id as Stat_Id,
                 s.Created as Stat_Created,
                 s.CpuUsage as Stat_CpuUsage,
@@ -299,10 +306,60 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return result?.ToDomain();
     }
 
+    public async Task<IEnumerable<Platform>> GetPlatformsWithLatestStatByIdsAsync(IReadOnlyCollection<Guid> platformIds, CancellationToken cancellationToken)
+    {
+        if (platformIds.Count == 0)
+        {
+            return [];
+        }
+
+        string sql = $$"""
+            SELECT p.*,
+                (SELECT COUNT(*) FROM Deployments d WHERE d.PlatformId = p.Id) AS DeploymentCount,
+                (
+                    SELECT COUNT(*)
+                    FROM Stacks st
+                    JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
+                    WHERE sr.PlatformId = p.Id
+                ) AS StackCount,
+                s.Id as Stat_Id,
+                s.Created as Stat_Created,
+                s.CpuUsage as Stat_CpuUsage,
+                s.MemoryUsage as Stat_MemoryUsage,
+                s.RxBytes as Stat_RxBytes,
+                s.TxBytes as Stat_TxBytes,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM Platforms p
+            LEFT JOIN PlatformStats s ON s.Id = (
+                SELECT Id FROM PlatformStats
+                WHERE PlatformId = p.Id
+                ORDER BY Created DESC
+                LIMIT 1
+            )
+            WHERE p.Id = ANY(@Ids)
+            ORDER BY p.Name;
+        """;
+
+        var idArray = platformIds as Guid[] ?? [.. platformIds];
+        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, new
+        {
+            Ids = idArray,
+            TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Platform)
+        }, tx());
+        return result.ToDomain();
+    }
+
     public async Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null)
     {
         string sql = $$"""
             SELECT p.*,
+                (SELECT COUNT(*) FROM Deployments d WHERE d.PlatformId = p.Id) AS DeploymentCount,
+                (
+                    SELECT COUNT(*)
+                    FROM Stacks st
+                    JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
+                    WHERE sr.PlatformId = p.Id
+                ) AS StackCount,
                 s.Id as Stat_Id,
                 s.Created as Stat_Created,
                 s.CpuUsage as Stat_CpuUsage,
@@ -337,6 +394,13 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
             
             SELECT p.*,
+                (SELECT COUNT(*) FROM Deployments d WHERE d.PlatformId = p.Id) AS DeploymentCount,
+                (
+                    SELECT COUNT(*)
+                    FROM Stacks st
+                    JOIN StackReleases sr ON sr.Id = st.CurrentStackReleaseId
+                    WHERE sr.PlatformId = p.Id
+                ) AS StackCount,
                 s.Id as Stat_Id,
                 s.Created as Stat_Created,
                 s.CpuUsage as Stat_CpuUsage,

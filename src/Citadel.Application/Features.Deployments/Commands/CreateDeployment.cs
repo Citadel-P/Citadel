@@ -39,6 +39,7 @@ public sealed record CreateDeployment(
 internal class CreateDeploymentHandler(
     IUnitOfWork unitOfWork,
     IDeploymentStreamManager deploymentHub,
+    IPlatformStreamManager platformHub,
     INotificationQueue notificationQueue,
     IActivityStreamManager activityHub,
     IUserContextAccessor userContext) : ICommandHandler<CreateDeployment, Result<Deployment>>
@@ -89,12 +90,18 @@ internal class CreateDeploymentHandler(
             info: new DeploymentCreated(deployment.ToSnapshot()));
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        var platform = await unitOfWork.Platforms.GetPlatformWithLatestStatAsync(command.PlatformId, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
 
         var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment, "create");
 
         await notificationQueue.EnqueueAsync(workItem, cancellationToken);
+        if (platform is not null)
+        {
+            await platformHub.PushPlatformUpdate(platform);
+        }
+
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return deployment;
     }
