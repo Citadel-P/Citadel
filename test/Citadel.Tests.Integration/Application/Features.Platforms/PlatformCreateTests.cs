@@ -5,6 +5,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
 using Hosting.Common;
 using LightResults;
@@ -82,8 +83,20 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         var platform = await uow.Platforms.GetByNameAsync("P-NEW", TestContext.Current.CancellationToken) ?? throw new Exception("platform can not be null");
         var containers = await uow.Containers.GetContainersInfoAsync(platform.Id, TestContext.Current.CancellationToken);
         var images = await uow.Images.GetByPlatformIdAsync(platform.Id, TestContext.Current.CancellationToken);
+        var activities = await uow.ActivityEventRepository.GetPagedAsync(
+            platform.Id,
+            ActivityResourceType.Platform,
+            ActivityEventType.PlatformCreated,
+            1,
+            10,
+            TestContext.Current.CancellationToken);
 
         Assert.NotNull(platform);
+        var activitySummary = Assert.Single(activities.Items);
+        var activity = await uow.ActivityEventRepository.GetByIdAsync(activitySummary.Id, TestContext.Current.CancellationToken);
+        var created = Assert.IsType<PlatformCreated>(activity?.Info);
+        Assert.Equal(platform.Id, created.Platform.Id);
+        Assert.Equal("P-NEW", created.Platform.Name);
         Assert.Equal(3, images.Count());
         Assert.Equal(3, containers?.Count());
         // Containers has foreign key on Images table

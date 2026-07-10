@@ -2,6 +2,7 @@ import {
   CreatePlatformInput,
   EdgeAgentEnrollmentView,
   PlatformConnectorType,
+  PlatformInput,
   PlatformType,
   PlatformView,
 } from '@/api/generated/api.types';
@@ -16,18 +17,31 @@ export type PlatformFormInput = CreatePlatformInput;
 export const createDefaultPlatformInput = (): PlatformFormInput => ({
   name: '',
   address: '',
+  description: null,
   type: PlatformType.Docker,
   connectorType: PlatformConnectorType.Agent,
   tagIds: [],
 });
 
-export const usePlatformForm = () => {
+export const platformToFormInput = (platform: PlatformView): PlatformFormInput => ({
+  name: platform.name,
+  address: platform.connectorType === PlatformConnectorType.EdgeAgent ? null : platform.address,
+  description: platform.description ?? null,
+  type: platform.type,
+  connectorType: platform.connectorType,
+  tagIds: platform.tags?.map((tag) => tag.id) ?? [],
+});
+
+export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: PlatformView) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const createPlatform = useMutate('createPlatform');
+  const updatePlatform = useMutate('updatePlatform');
   const createEnrollment = useMutate('createEdgeAgentEnrollment');
   const [createdPlatform, setCreatedPlatform] = useState<PlatformView>();
   const [enrollment, setEnrollment] = useState<EdgeAgentEnrollmentView>();
+  const platformId = platform?.id;
+  const enrollmentPlatformId = createdPlatform?.id ?? platformId;
 
   const generateEnrollment = useCallback(
     async (platformId: string) => {
@@ -42,11 +56,33 @@ export const usePlatformForm = () => {
     async (input: PlatformFormInput) => {
       const connectorType = input.connectorType ?? PlatformConnectorType.Agent;
       const isEdge = connectorType === PlatformConnectorType.EdgeAgent;
-      const payload: CreatePlatformInput = {
+      const platformInput: PlatformInput = {
         name: input.name.trim(),
         address: isEdge ? null : (input.address ?? '').trim(),
+        description: input.description ?? null,
         type: input.type ?? PlatformType.Docker,
         connectorType,
+      };
+
+      if (mode === 'edit') {
+        if (!platformId) return;
+
+        const response = await updatePlatform.mutateAsync({
+          id: platformId,
+          data: platformInput,
+        });
+
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['getPlatfom', { id: platformId }] }),
+          queryClient.invalidateQueries({ queryKey: ['listPlatforms'] }),
+        ]);
+
+        toast.success(`Platform "${response.data.name}" updated`);
+        return;
+      }
+
+      const payload: CreatePlatformInput = {
+        ...platformInput,
         tagIds: input.tagIds ?? [],
       };
 
@@ -70,26 +106,32 @@ export const usePlatformForm = () => {
         toast.error('Platform created, but enrollment token generation failed', { description: detail });
       }
     },
-    [createPlatform, generateEnrollment, navigate, queryClient],
+    [createPlatform, generateEnrollment, mode, navigate, platformId, queryClient, updatePlatform],
   );
 
   const regenerateEnrollment = useCallback(async () => {
-    if (!createdPlatform || createEnrollment.isPending) return;
+    if (!enrollmentPlatformId || createEnrollment.isPending) return;
 
     try {
-      await generateEnrollment(createdPlatform.id);
+      await generateEnrollment(enrollmentPlatformId);
       toast.success('Enrollment token generated');
     } catch (error) {
       const detail = (error as any)?.error?.detail ?? (error as Error)?.message;
       toast.error('Failed to generate enrollment token', { description: detail });
     }
-  }, [createEnrollment.isPending, createdPlatform, generateEnrollment]);
+  }, [createEnrollment.isPending, enrollmentPlatformId, generateEnrollment]);
 
   return {
     createdPlatform,
     enrollment,
-    isPending: createPlatform.isPending || createEnrollment.isPending,
-    validationErrors: createPlatform.validationErrors || createEnrollment.validationErrors,
+    isPending:
+      createPlatform.isPending ||
+      updatePlatform.isPending ||
+      createEnrollment.isPending,
+    validationErrors:
+      createPlatform.validationErrors ||
+      updatePlatform.validationErrors ||
+      createEnrollment.validationErrors,
     save,
     regenerateEnrollment,
   };

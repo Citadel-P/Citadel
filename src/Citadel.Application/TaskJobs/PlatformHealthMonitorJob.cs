@@ -79,7 +79,10 @@ internal sealed class PlatformHealthMonitorJob(
 
                         if (!isOnline)
                         {
-                            await RaisePlatformUnreachableAlert(state.Id, platformName, address, ct);
+                            if (await ShouldRaisePlatformUnreachableAlertAsync(state.Id, state.Type, ct))
+                            {
+                                await RaisePlatformUnreachableAlert(state.Id, platformName, address, ct);
+                            }
                         }
 
                         await broadcaster.PublishAsync(
@@ -137,6 +140,23 @@ internal sealed class PlatformHealthMonitorJob(
             AlertType.PlatformUnreachable,
             context,
             ct);
+    }
+
+    internal async Task<bool> ShouldRaisePlatformUnreachableAlertAsync(
+        Guid platformId,
+        PlatformConnectorType connectorType,
+        CancellationToken cancellationToken)
+    {
+        if (connectorType != PlatformConnectorType.EdgeAgent)
+        {
+            return true;
+        }
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var binding = await uow.EdgeAgents.GetBindingByPlatformIdAsync(platformId, cancellationToken);
+
+        return binding is { IsRevoked: false };
     }
 
     public bool TrackPlatform(string address, Guid id, PlatformConnectorType type)

@@ -39,7 +39,7 @@ type DisplayOptions = {
 const PlatformCell = ({ name, id }: { name: string; id: string }) => (
   <div className="flex flex-wrap gap-2 items-center">
     <Server width={12} height={12} className="text-primary" />
-    <Link to={`/platforms/${id}`} className="table-link" title={name}>
+    <Link to={`/platforms/edit/${id}`} className="table-link" title={name}>
       {truncate(name, 24)}
     </Link>
   </div>

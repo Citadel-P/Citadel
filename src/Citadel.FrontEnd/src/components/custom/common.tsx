@@ -1351,7 +1351,7 @@ export const PlatformStatusCell = ({
   return (
     <div className="flex flex-row items-center gap-2">
       <Server width={13} height={13} className={status === PlatformStatus.Online ? 'text-green-500' : 'text-red-500'} />
-      <Link to={`/platforms/${id}`} className="table-link" title={name}>
+      <Link to={`/platforms/edit/${id}`} className="table-link" title={name}>
         {name}
       </Link>
     </div>

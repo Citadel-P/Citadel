@@ -1,9 +1,9 @@
-import { DockerNetworkResultView } from '@/api/generated/api.types';
+import { PlatformView } from '@/api/generated/api.types';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 
-export const { dropdown: PlatformDropdownActions } = createActionsBuilder<DockerNetworkResultView>()
+export const { dropdown: PlatformDropdownActions, info: PlatformInfoActions } = createActionsBuilder<PlatformView>()
   .addAction({
     key: 'inspect',
     type: 'command',
@@ -16,7 +16,7 @@ export const { dropdown: PlatformDropdownActions } = createActionsBuilder<Docker
         isPending: false,
         run: () => {
           if (!selected) return;
-          navigate(`/platforms/${selected?.id}`);
+          navigate(`/platforms/edit/${selected?.id}`);
         },
       };
     },

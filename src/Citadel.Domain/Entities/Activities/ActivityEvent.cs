@@ -93,7 +93,9 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.StackWebhookReceived
                 => ActivityResourceType.Stack,
 
-            ActivityEventType.PlatformConnected
+            ActivityEventType.PlatformCreated
+            or ActivityEventType.PlatformDeleted
+            or ActivityEventType.PlatformConnected
             or ActivityEventType.PlatformDisconnected
             or ActivityEventType.PlatformRenamed
                 => ActivityResourceType.Platform,
@@ -222,6 +224,12 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.AlertRuleUpdated, AlertRuleUpdated) => true,
             (ActivityEventType.AlertRuleDeleted, AlertRuleDeleted) => true,
             (ActivityEventType.AlertRuleRenamed, AlertRuleRenamed) => true,
+
+            (ActivityEventType.PlatformCreated, PlatformCreated) => true,
+            (ActivityEventType.PlatformDeleted, PlatformDeleted) => true,
+            (ActivityEventType.PlatformConnected, PlatformConnected) => true,
+            (ActivityEventType.PlatformDisconnected, PlatformDisconnected) => true,
+            (ActivityEventType.PlatformRenamed, PlatformRenamed) => true,
 
             (ActivityEventType.RegistryRenamed, RegistryRenamed) => true,
             (ActivityEventType.RegistryDeleted, RegistryDeleted) => true,

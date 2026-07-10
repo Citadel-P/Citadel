@@ -1,5 +1,8 @@
 using Application.Features.Images.Queries;
+using Application.Features.Deployments.Notifications;
+using Application.Features.Platforms;
 using Application.Mappers;
+using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -22,6 +25,7 @@ namespace Application.Features.Platforms.Commands;
 public sealed record CreatePlatform(
     string Name,
     string? Address,
+    string? Description,
     PlatformType Type,
     PlatformConnectorType ConnectorType,
     IReadOnlyCollection<Guid>? TagIds = null) : ICommand<Result<Platform>>
@@ -31,6 +35,7 @@ public sealed record CreatePlatform(
         public Validator()
         {
             RuleFor(x => x.Name).ValidNameIdentifier();
+            When(x => x.Description is not null, () => RuleFor(x => x.Description).MaximumLength(600));
             When(x => x.ConnectorType == PlatformConnectorType.Agent, () => RuleFor(x => x.Address!).ValidHostOrIP());
         }
     }
@@ -43,6 +48,8 @@ internal sealed class CreatePlatformHandler(
     IConnectorFactory<IPlatformConnector> platformConnectorFactory,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IUserContextAccessor userContext,
+    IActivityStreamManager activityHub,
+    INotificationQueue notificationQueue,
     ILogger<PatchPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
@@ -100,16 +107,20 @@ internal sealed class CreatePlatformHandler(
                 ContainersPaused: 0,
                 ContainersStopped: 0),
             serverVersion: null,
-            agentVersion: null);
+            agentVersion: null,
+            description: command.Description);
 
         var actorId = userContext.Current.ActorId;
         var result = await unitOfWork.Platforms.AddAsync(platform, cancellationToken, command.TagIds, actorId);
         if (result == 0)
             return Result.Failure<Platform>(new BadRequestError("One or more tags do not exist."));
 
+        var activity = PlatformActivity.Created(platform, actorId);
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id, platform.ConnectorType);
+        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
 
         logger.LogInformation("A new edge platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
@@ -130,10 +141,14 @@ internal sealed class CreatePlatformHandler(
         }
 
         var platform = platformResult.Map(command.Address ?? "", command.Name, command.ConnectorType);
+        platform.PartialUpdate(description: command.Description);
         var actorId = userContext.Current.ActorId;
         var result = await unitOfWork.Platforms.AddAsync(platform, cancellationToken, command.TagIds, actorId);
         if (result == 0)
             return Result.Failure<Platform>(new BadRequestError("One or more tags do not exist."));
+
+        var activity = PlatformActivity.Created(platform, actorId);
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 
         var images = await GetImages(platform, cancellationToken);
         if (images != null && images.Any())
@@ -150,6 +165,7 @@ internal sealed class CreatePlatformHandler(
         await unitOfWork.CommitAsync(cancellationToken);
 
         platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id, platform.ConnectorType);
+        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);

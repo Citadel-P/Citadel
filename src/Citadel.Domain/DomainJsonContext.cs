@@ -1,6 +1,7 @@
 using Domain.Contracts.Resources.Role;
 using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
@@ -169,6 +170,12 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(AlertRuleCreated))]
 [JsonSerializable(typeof(AlertRuleUpdated))]
 [JsonSerializable(typeof(AlertRuleDeleted))]
+[JsonSerializable(typeof(PlatformSnapshot))]
+[JsonSerializable(typeof(PlatformCreated))]
+[JsonSerializable(typeof(PlatformDeleted))]
+[JsonSerializable(typeof(PlatformConnected))]
+[JsonSerializable(typeof(PlatformDisconnected))]
+[JsonSerializable(typeof(PlatformRenamed))]
 [JsonSerializable(typeof(RegistryRenamed))]
 [JsonSerializable(typeof(RegistryDeleted))]
 [JsonSerializable(typeof(RegistryUpdated))]

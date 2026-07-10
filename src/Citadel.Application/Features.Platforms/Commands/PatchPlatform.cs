@@ -35,6 +35,7 @@ public sealed record PatchPlatform(Guid Id, JsonMergePatchDocument<Platform> Pat
         {
             When(x => x.Name is not null, () => RuleFor(x => x.Name).ValidNameIdentifier());
             When(x => x.Address is not null, () => RuleFor(x => x.Address).ValidHostOrIP());
+            When(x => x.Description is not null, () => RuleFor(x => x.Description).MaximumLength(600));
             RuleFor(x => x.ConnectorType)
                 .Must(x => Enum.IsDefined(x))
                 .WithMessage("'{PropertyName}' must be a valid type");
@@ -95,6 +96,7 @@ internal class PatchPlatformHandler(
                     memTotal: platformInfo.MemTotal,
                     serverVersion: platformInfo.ServerVersion,
                     agentVersion: platformInfo.AgentVersion,
+                    description: patchedPlatform.Description,
                     descriptor: platformInfo.Descriptor);
 
                 await unitOfWork.Platforms.UpdateAsync(platform, cancellationToken);

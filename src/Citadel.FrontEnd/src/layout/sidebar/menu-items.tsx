@@ -125,7 +125,7 @@ const MenuItems: IMenuItem[] = [
 const DockerPlatformMenu = (platform: { id: string; name: string }): ISubMenuItem => ({
   icon: <DockerIcon />,
   label: platform.name,
-  route: `/platforms/${platform.id}`,
+  route: `/platforms/edit/${platform.id}`,
   isPlatform: true,
   children: [
     { label: 'Containers', route: `/platforms/${platform.id}/containers` },

@@ -10,10 +10,14 @@ namespace Infrastructure.Persistence;
 internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx) : IPlatformStatRepository 
 {
     public async Task<IEnumerable<PlatformStat>> GetStatsAggregatedLast24HoursAsync(Guid platformId, CancellationToken cancellationToken)
+        => await GetStatsAggregatedAsync(platformId, 24, cancellationToken);
+
+    public async Task<IEnumerable<PlatformStat>> GetStatsAggregatedAsync(Guid platformId, int hours, CancellationToken cancellationToken)
     {
         // We don't retrieve the full stats, but rather aggregate them to reduce the amount of data transferred and processed.
         const string sql = """
             SELECT 
+                @PlatformId AS PlatformId,
                 MIN(Created) AS Created, 
                 AVG(CpuUsage) AS CpuUsage, 
                 AVG(MemoryUsage) AS MemoryUsage,
@@ -21,13 +25,20 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
                 AVG(TxBytes) AS TxBytes
             FROM PlatformStats
             WHERE PlatformId = @PlatformId 
-              AND Created > @Last24h
-            GROUP BY (Created / 60)
-            ORDER BY (Created / 60)
+              AND Created > @Since
+            GROUP BY (Created / @BucketSeconds)
+            ORDER BY MIN(Created)
         """;
-        
-        var last24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeSeconds();
-        var result = await db.QueryAsync<PlatformStatDto>(sql, new { PlatformId = platformId, Last24h = last24h }, transaction: tx());
+
+        var normalizedHours = Math.Clamp(hours, 1, 72);
+        var bucketSeconds = normalizedHours > 24 ? 300 : 60;
+        var since = DateTimeOffset.UtcNow.AddHours(-normalizedHours).ToUnixTimeSeconds();
+        var result = await db.QueryAsync<PlatformStatDto>(sql, new
+        {
+            PlatformId = platformId,
+            Since = since,
+            BucketSeconds = bucketSeconds
+        }, transaction: tx());
         
         return result.ToDomain();
     }

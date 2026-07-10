@@ -5,6 +5,7 @@ import {
   ContainerStateStatus,
   DeploymentStatus,
   GitReposStatus,
+  PlatformStatus,
   RegistryStatus,
   StackReleaseStatus,
 } from '@/api/generated/api.types';
@@ -17,11 +18,12 @@ type StateValue =
   | RegistryStatus
   | DeploymentStatus
   | StackReleaseStatus
+  | PlatformStatus
   | AlertRuleStatus
   | GitReposStatus
   | ActionRunStatus;
 
-type StateIndicatorKind = 'automationActionRun' | 'container';
+type StateIndicatorKind = 'automationActionRun' | 'container' | 'platform';
 
 type StatusStyle = {
   colorClass: string;
@@ -70,6 +72,17 @@ const getContainerStatusStyle = (value: StateValue): StatusStyle | undefined => 
   }
 };
 
+const getPlatformStatusStyle = (value: StateValue): StatusStyle | undefined => {
+  switch (value) {
+    case PlatformStatus.Online:
+      return { colorClass: 'bg-green-500', tooltip: 'Online' };
+    case PlatformStatus.Offline:
+      return { colorClass: 'bg-red-500', tooltip: 'Offline' };
+    default:
+      return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
+  }
+};
+
 const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIndicatorKind) => {
   // Boolean-based statuses
   if (typeof value === 'boolean') {
@@ -85,6 +98,10 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
 
   if (kind === 'container') {
     return getContainerStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+  }
+
+  if (kind === 'platform') {
+    return getPlatformStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
   }
 
   // Enum-based statuses

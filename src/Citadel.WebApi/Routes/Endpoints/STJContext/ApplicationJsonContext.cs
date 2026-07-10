@@ -101,6 +101,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(IEnumerable<PlatformView>))]
 [JsonSerializable(typeof(List<SwarmPeerView>))]
 [JsonSerializable(typeof(List<PlatformStatView>))]
+[JsonSerializable(typeof(PlatformStatsView))]
 [JsonSerializable(typeof(DockerHubRegistry))]
 [JsonSerializable(typeof(List<ContainerView>))]
 [JsonSerializable(typeof(IDictionary<string, IReadOnlyList<HostPortBinding>>))]

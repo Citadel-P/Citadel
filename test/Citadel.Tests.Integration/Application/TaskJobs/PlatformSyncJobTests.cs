@@ -5,6 +5,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
 using Infrastructure.Repositories.DbQueue;
 using LightResults;
@@ -117,13 +118,70 @@ public class PlatformSyncJobTests(PostgresTestFixture fixture) : IntegrationTest
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var platform = await uow.Platforms.GetByNameAsync(platformName ?? "", TestContext.Current.CancellationToken);
+        var activities = await uow.ActivityEventRepository.GetPagedAsync(
+            platformId,
+            ActivityResourceType.Platform,
+            ActivityEventType.PlatformDisconnected,
+            1,
+            10,
+            TestContext.Current.CancellationToken);
 
         var options = new JsonSerializerOptions
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.Never // Always include all properties, even if default
         };
+        var activitySummary = Assert.Single(activities.Items);
+        var activity = await uow.ActivityEventRepository.GetByIdAsync(activitySummary.Id, TestContext.Current.CancellationToken);
+        var disconnected = Assert.IsType<PlatformDisconnected>(activity?.Info);
+        Assert.Equal(PlatformStatus.Online, disconnected.PreviousStatus);
+        Assert.Equal(PlatformStatus.Offline, disconnected.Platform.Status);
         hubManagerMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Once);
         await Verify(platform);
+    }
+
+    [Fact]
+    public async Task DockerPlatform_Comes_Back_Online_Should_Add_Connected_Activity()
+    {
+        // Arrange
+        connectorMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+                      .Returns(platformConnector.Object);
+
+        platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
+
+        await using (var setupScope = Services.CreateAsyncScope())
+        {
+            var setupUow = setupScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var setupPlatform = await setupUow.Platforms.GetByIdAsync(platformId, TestContext.Current.CancellationToken);
+            setupPlatform?.PartialUpdate(platformStatus: PlatformStatus.Offline);
+            await setupUow.Platforms.UpdateAsync(setupPlatform!, TestContext.Current.CancellationToken);
+            await setupUow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.GetByNameAsync(platformName ?? "", TestContext.Current.CancellationToken);
+        var activities = await uow.ActivityEventRepository.GetPagedAsync(
+            platformId,
+            ActivityResourceType.Platform,
+            ActivityEventType.PlatformConnected,
+            1,
+            10,
+            TestContext.Current.CancellationToken);
+
+        var activitySummary = Assert.Single(activities.Items);
+        var activity = await uow.ActivityEventRepository.GetByIdAsync(activitySummary.Id, TestContext.Current.CancellationToken);
+        var connected = Assert.IsType<PlatformConnected>(activity?.Info);
+        Assert.Equal(PlatformStatus.Offline, connected.PreviousStatus);
+        Assert.Equal(PlatformStatus.Online, connected.Platform.Status);
+        Assert.Equal(PlatformStatus.Online, platform?.Status);
     }
 
     [Fact]

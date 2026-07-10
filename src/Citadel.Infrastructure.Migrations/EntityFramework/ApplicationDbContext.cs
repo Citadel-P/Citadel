@@ -575,6 +575,7 @@ internal static class Configuration
         platform.HasKey("Id");
 
         platform.Property<string>("Name").HasColumnType(Text).IsRequired();
+        platform.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
         platform.Property<string>("Address").HasColumnType(Text).IsRequired();
         platform.Property<string>("Status").HasColumnType(Text).IsRequired();
         platform.Property<string>("ConnectorType").HasColumnType(Text).IsRequired();

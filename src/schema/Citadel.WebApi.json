@@ -5678,6 +5678,118 @@
         ]
       }
     },
+    "/api/v1/platforms/{id}/stats": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Get platform stats",
+        "operationId": "getPlatformStats",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "description": "Stats lookback window in hours. Supported values: 24, 48, 72.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 24
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformStatsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/platforms/{id}/prune": {
       "post": {
         "tags": [
@@ -6031,6 +6143,225 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/rename": {
+      "post": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Rename a platform",
+        "operationId": "renamePlatform",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Patch platform metadata",
+        "operationId": "updatePlatformMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Platform ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -21400,6 +21731,21 @@
             "$ref": "#/components/schemas/ActivityEventInfoAlertRuleRenamed"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoPlatformCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoPlatformDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoPlatformConnected"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoPlatformDisconnected"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoPlatformRenamed"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoRegistryRenamed"
           },
           {
@@ -21513,6 +21859,11 @@
             "AlertRuleUpdated": "#/components/schemas/ActivityEventInfoAlertRuleUpdated",
             "AlertRuleDeleted": "#/components/schemas/ActivityEventInfoAlertRuleDeleted",
             "AlertRuleRenamed": "#/components/schemas/ActivityEventInfoAlertRuleRenamed",
+            "PlatformCreated": "#/components/schemas/ActivityEventInfoPlatformCreated",
+            "PlatformDeleted": "#/components/schemas/ActivityEventInfoPlatformDeleted",
+            "PlatformConnected": "#/components/schemas/ActivityEventInfoPlatformConnected",
+            "PlatformDisconnected": "#/components/schemas/ActivityEventInfoPlatformDisconnected",
+            "PlatformRenamed": "#/components/schemas/ActivityEventInfoPlatformRenamed",
             "RegistryRenamed": "#/components/schemas/ActivityEventInfoRegistryRenamed",
             "RegistryCreated": "#/components/schemas/ActivityEventInfoRegistryCreated",
             "RegistryUpdated": "#/components/schemas/ActivityEventInfoRegistryUpdated",
@@ -22341,6 +22692,98 @@
           }
         }
       },
+      "ActivityEventInfoPlatformConnected": {
+        "required": [
+          "platform",
+          "previousStatus"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformConnected"
+            ],
+            "type": "string"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/PlatformSnapshot"
+          },
+          "previousStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          }
+        }
+      },
+      "ActivityEventInfoPlatformCreated": {
+        "required": [
+          "platform"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformCreated"
+            ],
+            "type": "string"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/PlatformSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoPlatformDeleted": {
+        "required": [
+          "platform"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformDeleted"
+            ],
+            "type": "string"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/PlatformSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoPlatformDisconnected": {
+        "required": [
+          "platform",
+          "previousStatus"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformDisconnected"
+            ],
+            "type": "string"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/PlatformSnapshot"
+          },
+          "previousStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          }
+        }
+      },
+      "ActivityEventInfoPlatformRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
       "ActivityEventInfoRegistryCreated": {
         "required": [
           "registry"
@@ -22868,6 +23311,8 @@
           "DeploymentPaused",
           "DeploymentApplied",
           "DeploymentDegraded",
+          "PlatformCreated",
+          "PlatformDeleted",
           "PlatformConnected",
           "PlatformDisconnected",
           "PlatformRenamed",
@@ -27124,6 +27569,12 @@
             "type": "string"
           },
           "address": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
             "type": [
               "null",
               "string"
@@ -32651,11 +33102,115 @@
               "string"
             ]
           },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "type": {
             "$ref": "#/components/schemas/PlatformType"
           },
           "connectorType": {
             "$ref": "#/components/schemas/PlatformConnectorType"
+          }
+        }
+      },
+      "PlatformSnapshot": {
+        "required": [
+          "id",
+          "name",
+          "address",
+          "description",
+          "status",
+          "connectorType",
+          "networkCount",
+          "volumeCount",
+          "imageCount",
+          "cpuCount",
+          "memTotal",
+          "serverVersion",
+          "agentVersion",
+          "platformDescriptor"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "connectorType": {
+            "$ref": "#/components/schemas/PlatformConnectorType"
+          },
+          "networkCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "volumeCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "imageCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "cpuCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "memTotal": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "serverVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "agentVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "platformDescriptor": {
+            "$ref": "#/components/schemas/PlatformDescriptor"
           }
         }
       },
@@ -32704,6 +33259,20 @@
           }
         }
       },
+      "PlatformStatsView": {
+        "required": [
+          "stats"
+        ],
+        "type": "object",
+        "properties": {
+          "stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformStatView"
+            }
+          }
+        }
+      },
       "PlatformStatus": {
         "enum": [
           "Offline",
@@ -32721,6 +33290,7 @@
         "required": [
           "id",
           "name",
+          "description",
           "address",
           "networkCount",
           "volumeCount",
@@ -32743,6 +33313,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "address": {
             "type": "string"

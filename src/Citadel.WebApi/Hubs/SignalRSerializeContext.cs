@@ -1,6 +1,7 @@
 ﻿using Domain;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Networks;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Activities;
@@ -88,6 +89,12 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<AlertRuleUpdated>]
 [GenerateShapeFor<AlertRuleDeleted>]
 [GenerateShapeFor<AlertRuleRenamed>]
+[GenerateShapeFor<PlatformSnapshot>]
+[GenerateShapeFor<PlatformCreated>]
+[GenerateShapeFor<PlatformDeleted>]
+[GenerateShapeFor<PlatformConnected>]
+[GenerateShapeFor<PlatformDisconnected>]
+[GenerateShapeFor<PlatformRenamed>]
 [GenerateShapeFor<RegistryRenamed>]
 [GenerateShapeFor<RegistryCreated>]
 [GenerateShapeFor<RegistryUpdated>]
@@ -167,6 +174,11 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.AlertRuleUpdated)] = typeof(AlertRuleUpdated),
         [nameof(ActivityEventType.AlertRuleDeleted)] = typeof(AlertRuleDeleted),
         [nameof(ActivityEventType.AlertRuleRenamed)] = typeof(AlertRuleRenamed),
+        [nameof(ActivityEventType.PlatformCreated)] = typeof(PlatformCreated),
+        [nameof(ActivityEventType.PlatformDeleted)] = typeof(PlatformDeleted),
+        [nameof(ActivityEventType.PlatformConnected)] = typeof(PlatformConnected),
+        [nameof(ActivityEventType.PlatformDisconnected)] = typeof(PlatformDisconnected),
+        [nameof(ActivityEventType.PlatformRenamed)] = typeof(PlatformRenamed),
         [nameof(ActivityEventType.RegistryRenamed)] = typeof(RegistryRenamed),
         [nameof(ActivityEventType.RegistryCreated)] = typeof(RegistryCreated),
         [nameof(ActivityEventType.RegistryUpdated)] = typeof(RegistryUpdated),

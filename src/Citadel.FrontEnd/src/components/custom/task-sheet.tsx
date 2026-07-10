@@ -434,6 +434,32 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     </span>
   ),
 
+  PlatformCreated: (info, activity) => (
+    <SpecViewer spec={info.platform} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+
+  PlatformDeleted: (info, activity) => (
+    <SpecViewer spec={info.platform} resourceId={activity.resourceId} title="Deleted configuration" />
+  ),
+
+  PlatformConnected: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Platform changed from <b>{info.previousStatus}</b> to <b>{info.platform.status}</b>.
+    </span>
+  ),
+
+  PlatformDisconnected: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Platform changed from <b>{info.previousStatus}</b> to <b>{info.platform.status}</b>.
+    </span>
+  ),
+
+  PlatformRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Platform renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
   RegistryCreated: (info, activity) => (
     <SpecViewer spec={info.registry} resourceId={activity.resourceId} title="Initial configuration" />
   ),

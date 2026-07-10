@@ -11,6 +11,7 @@
   MemTotal: 500,
   AgentVersion: 1.0.0,
   ServerVersion: 1.0.0,
+  Description: null,
   PlatformDescriptor: {
     DaemonId: 123456,
     ContainerCount: 5,

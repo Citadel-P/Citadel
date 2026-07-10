@@ -62,6 +62,16 @@ public static class Platforms
         return await EndpointHandlers.HandleResult(result, permissionService, (containers, perm) => ContainersView.Map(containers, id, perm));
     }
 
+    public static async Task<Results<Ok<PlatformStatsView>, ProblemHttpResult>> GetStats(
+        IMediator mediator,
+        [Description("The platform id")] Guid id,
+        [FromQuery][Description("Stats lookback window in hours. Supported values: 24, 48, 72.")] int hours = 24,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new GetPlatformStats(id, hours), cancellationToken);
+        return EndpointHandlers.HandleResult(result, PlatformStatsView.Map);
+    }
+
     public static async Task<Results<Ok<PrunePlatformView>, ProblemHttpResult>> Prune(
         IMediator mediator,
         [Description("The platform id")] Guid id,

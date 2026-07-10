@@ -16,7 +16,8 @@ public class Platform(
     string? agentVersion,
     PlatformStatus status,
     PlatformConnectorType connectorType,
-    PlatformDescriptor platformDescriptor)
+    PlatformDescriptor platformDescriptor,
+    string? description = null)
 {
     private readonly List<PlatformStat> stats = [];
     public Guid Id { get; private set; } = Guid.CreateVersion7();
@@ -31,6 +32,7 @@ public class Platform(
     public long MemTotal { get; private set; } = memTotal;
     public string? AgentVersion { get; private set; } = agentVersion;
     public string? ServerVersion { get; private set; } = serverVersion;
+    public string? Description { get; private set; } = description;
     public PlatformDescriptor PlatformDescriptor { get; private set; } = platformDescriptor;
     public IReadOnlyCollection<PlatformStat>? Stats => stats;
     public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
@@ -49,7 +51,8 @@ public class Platform(
         PlatformDescriptor platformDescriptor,
         string? serverVersion = null,
         string? agentVersion = null,
-        IReadOnlyCollection<PlatformStat>? stats = null
+        IReadOnlyCollection<PlatformStat>? stats = null,
+        string? description = null
         )
     {
         var platform = new Platform(
@@ -64,7 +67,8 @@ public class Platform(
             agentVersion: agentVersion,
             status: status,
             connectorType: connectorType,
-            platformDescriptor: platformDescriptor)
+            platformDescriptor: platformDescriptor,
+            description: description)
         {
             Id = id,
         };
@@ -87,6 +91,7 @@ public class Platform(
         long? memTotal = null,
         string? serverVersion = null,
         string? agentVersion = null,
+        string? description = null,
         PlatformDescriptor? descriptor = null,
         PlatformStatus? platformStatus = null)
     {
@@ -99,6 +104,7 @@ public class Platform(
         if (memTotal != null) MemTotal = memTotal.Value;
         if (serverVersion != null) ServerVersion = serverVersion;
         if (agentVersion != null) AgentVersion = agentVersion;
+        if (description != null) Description = description;
         if (platformStatus != null) Status = platformStatus.Value;
         if (descriptor != null) PlatformDescriptor = descriptor;
     }

@@ -60,7 +60,7 @@ export const DockerPlatform = ({
           <div className="min-w-0 flex-1 basis-5/12 space-y-1.5">
             <div className="flex items-baseline gap-2">
               <Link
-                to={`/platforms/${platform.id}`}
+                to={`/platforms/edit/${platform.id}`}
                 className="truncate text-sm font-medium text-foreground hover:underline">
                 {platform.name}
               </Link>

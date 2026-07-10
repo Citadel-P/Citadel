@@ -1,4 +1,4 @@
-import { PlatformConnectorType, PlatformType } from '@/api/generated/api.types';
+import { PlatformConnectorType, PlatformType, PlatformView } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { defineField, defineGroupField, defineSection, FieldInput, FormShell } from '@/components/custom/form-builder';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,12 @@ import { cn } from '@/lib/utils';
 import { PlugZap, ShieldCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { PlatformEnrollmentActions } from './actions';
-import { createDefaultPlatformInput, PlatformFormInput, usePlatformForm } from './hooks/usePlatformForm';
+import {
+  createDefaultPlatformInput,
+  platformToFormInput,
+  PlatformFormInput,
+  usePlatformForm,
+} from './hooks/usePlatformForm';
 
 const platformOptions = {
   [PlatformType.Docker]: {
@@ -46,14 +51,29 @@ const connectorOptions = {
   },
 } as const;
 
-export const PlatformForm = ({ mode }: { mode: 'add' }) => {
+export const PlatformForm = ({
+  mode,
+  resource,
+  disabled,
+}: {
+  mode: 'add' | 'edit';
+  resource?: PlatformView;
+  disabled?: boolean;
+}) => {
   const [update, setUpdate] = useState<Partial<PlatformFormInput>>({});
-  const original = useMemo(() => createDefaultPlatformInput(), []);
-  const { createdPlatform, enrollment, isPending, validationErrors, save, regenerateEnrollment } = usePlatformForm();
+  const original = useMemo(
+    () => (mode === 'edit' && resource ? platformToFormInput(resource) : createDefaultPlatformInput()),
+    [mode, resource],
+  );
+  const { createdPlatform, enrollment, isPending, validationErrors, save, regenerateEnrollment } = usePlatformForm(
+    mode,
+    resource,
+  );
 
   const connectorType = update.connectorType ?? original.connectorType ?? PlatformConnectorType.Agent;
   const isEdge = connectorType === PlatformConnectorType.EdgeAgent;
-  const formDisabled = Boolean(createdPlatform);
+  const isEdit = mode === 'edit';
+  const formDisabled = disabled || Boolean(createdPlatform);
 
   const schema = useMemo(
     () => ({
@@ -70,7 +90,11 @@ export const PlatformForm = ({ mode }: { mode: 'add' }) => {
                 required: true,
                 description: 'Choose the platform runtime to connect.',
                 render: (value, set) => (
-                  <PlatformTypeSelector value={value ?? PlatformType.Docker} onChange={(type) => set({ type })} />
+                  <PlatformTypeSelector
+                    value={value ?? PlatformType.Docker}
+                    onChange={(type) => set({ type })}
+                    disabled={formDisabled || isEdit}
+                  />
                 ),
               }),
               defineField({
@@ -81,6 +105,7 @@ export const PlatformForm = ({ mode }: { mode: 'add' }) => {
                 render: (value, set) => (
                   <ConnectorTypeSelector
                     value={value ?? PlatformConnectorType.Agent}
+                    disabled={formDisabled || isEdit}
                     onChange={(next) =>
                       set((prev) => ({
                         ...prev,
@@ -91,17 +116,26 @@ export const PlatformForm = ({ mode }: { mode: 'add' }) => {
                   />
                 ),
               }),
-              defineField({
-                key: 'name',
-                label: 'Name',
-                required: true,
-                description: 'Provide a unique name for this platform.',
-                validate: (value) =>
-                  !new RegExp(Constants.validNameIdentifier).test(value) ? 'Invalid name format' : null,
-                render: (value, set) => (
-                  <FieldInput value={value ?? ''} onChange={(name) => set({ name })} placeholder="docker-prod-01" />
-                ),
-              }),
+              ...(isEdit
+                ? []
+                : [
+                    defineField({
+                      key: 'name',
+                      label: 'Name',
+                      required: true,
+                      description: 'Provide a unique name for this platform.',
+                      validate: (value) =>
+                        !new RegExp(Constants.validNameIdentifier).test(value) ? 'Invalid name format' : null,
+                      render: (value, set) => (
+                        <FieldInput
+                          value={value ?? ''}
+                          onChange={(name) => set({ name })}
+                          placeholder="docker-prod-01"
+                          disabled={formDisabled}
+                        />
+                      ),
+                    }),
+                  ]),
               ...(!isEdge
                 ? [
                     defineField<PlatformFormInput, 'address'>({
@@ -115,26 +149,35 @@ export const PlatformForm = ({ mode }: { mode: 'add' }) => {
                           value={value ?? ''}
                           onChange={(address) => set({ address })}
                           placeholder="https://192.168.1.25:9000"
+                          disabled={formDisabled}
                         />
                       ),
                     }),
                   ]
                 : []),
-              defineField({
-                key: 'tagIds',
-                label: 'Tags',
-                required: false,
-                description: 'Optional tags for filtering and grouping this platform.',
-                render: (value, set) => (
-                  <ResourceTagSelector value={value ?? []} onChange={(tagIds) => set({ tagIds })} />
-                ),
-              }),
+              ...(isEdit
+                ? []
+                : [
+                    defineField({
+                      key: 'tagIds',
+                      label: 'Tags',
+                      required: false,
+                      description: 'Optional tags for filtering and grouping this platform.',
+                      render: (value, set) => (
+                        <ResourceTagSelector
+                          value={value ?? []}
+                          onChange={(tagIds) => set({ tagIds })}
+                          disabled={formDisabled}
+                        />
+                      ),
+                    }),
+                  ]),
             ],
           }),
         ],
       }),
     }),
-    [isEdge],
+    [formDisabled, isEdge, isEdit],
   );
 
   return (
@@ -150,13 +193,13 @@ export const PlatformForm = ({ mode }: { mode: 'add' }) => {
         onSave={save}
         pending={isPending}
         disabled={formDisabled}
-        draftKey="platform:new"
+        draftKey={isEdit ? `platform:${resource?.id}:config` : 'platform:new'}
         draftVersion={1}
       />
 
-      {createdPlatform && (
+      {(createdPlatform || (isEdit && resource?.connectorType === PlatformConnectorType.EdgeAgent)) && (
         <PlatformEnrollmentActions
-          platformName={createdPlatform.name}
+          platformName={(createdPlatform ?? resource)?.name}
           enrollment={enrollment}
           isPending={isPending}
           onRegenerate={regenerateEnrollment}
@@ -169,9 +212,11 @@ export const PlatformForm = ({ mode }: { mode: 'add' }) => {
 const PlatformTypeSelector = ({
   value,
   onChange,
+  disabled,
 }: {
   value: PlatformType;
   onChange: (value: PlatformType) => void;
+  disabled?: boolean;
 }) => (
   <RadioGroup
     value={value}
@@ -185,7 +230,7 @@ const PlatformTypeSelector = ({
           value={optionValue}
           label={option.label}
           description={option.description}
-          disabled={option.disabled}>
+          disabled={disabled || option.disabled}>
           <Icon className="size-4" />
         </SelectorOption>
       );
@@ -196,9 +241,11 @@ const PlatformTypeSelector = ({
 const ConnectorTypeSelector = ({
   value,
   onChange,
+  disabled,
 }: {
   value: PlatformConnectorType;
   onChange: (value: PlatformConnectorType) => void;
+  disabled?: boolean;
 }) => (
   <RadioGroup
     value={value}
@@ -207,7 +254,12 @@ const ConnectorTypeSelector = ({
     {Object.entries(connectorOptions).map(([optionValue, option]) => {
       const Icon = option.icon;
       return (
-        <SelectorOption key={optionValue} value={optionValue} label={option.label} description={option.description}>
+        <SelectorOption
+          key={optionValue}
+          value={optionValue}
+          label={option.label}
+          description={option.description}
+          disabled={disabled}>
           <Icon className="size-4" />
         </SelectorOption>
       );

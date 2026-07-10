@@ -1004,6 +1004,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listContainers");
 
+        platforms.MapGet("{id}/stats", Platforms.GetStats)
+            .WithSummary("Get platform stats")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getPlatformStats");
+
         platforms.MapPost("{id}/prune", Platforms.Prune)
             .WithSummary("Delete unused Docker resources on a platform")
             .ProducesValidationProblem()
@@ -1041,6 +1049,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("revokeEdgeAgent");
 
+        platforms.MapPost("rename", PlatformMetadata.Rename)
+            .WithSummary("Rename a platform")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("renamePlatform");
+
         platforms.MapPatch("{id}", Platforms.Patch)
             .WithSummary("Patch a platform")
             .Accepts<PlatformInput>("application/merge-patch+json", "application/json")
@@ -1050,6 +1067,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("updatePlatform");
+
+        platforms.MapPatch("{id}/_metadata", PlatformMetadata.PatchMetadata)
+            .WithSummary("Patch platform metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updatePlatformMetadata");
 
         platforms.MapPost("/", Platforms.Create)
             .WithSummary("Create a platform")

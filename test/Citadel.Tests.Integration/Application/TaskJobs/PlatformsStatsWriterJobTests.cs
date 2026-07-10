@@ -5,6 +5,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Platforms;
 using Infrastructure.Repositories.DbQueue;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -104,6 +105,56 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         var stats = await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(_platformId, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, stats.Count());
+    }
+
+    [Fact]
+    public async Task GetStatsAggregatedAsync_ShouldRespectRequestedWindow()
+    {
+        // Arrange
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        await using (var setupScope = Services.CreateAsyncScope())
+        {
+            var db = setupScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await db.PlatformStats.BulkInsertAsync(
+                [
+                    new PlatformStat(
+                        Created: now - (long)TimeSpan.FromHours(47).TotalSeconds,
+                        MemoryUsage: 10,
+                        CpuUsage: 20,
+                        RxBytes: 30,
+                        TxBytes: 40,
+                        PlatformId: _platformId),
+                    new PlatformStat(
+                        Created: now - (long)TimeSpan.FromHours(25).TotalSeconds,
+                        MemoryUsage: 50,
+                        CpuUsage: 60,
+                        RxBytes: 70,
+                        TxBytes: 80,
+                        PlatformId: _platformId),
+                    new PlatformStat(
+                        Created: now - (long)TimeSpan.FromHours(73).TotalSeconds,
+                        MemoryUsage: 90,
+                        CpuUsage: 100,
+                        RxBytes: 110,
+                        TxBytes: 120,
+                        PlatformId: _platformId)
+                ],
+                TestContext.Current.CancellationToken);
+            await db.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var last24 = await uow.PlatformStats.GetStatsAggregatedAsync(_platformId, 24, TestContext.Current.CancellationToken);
+        var last48 = await uow.PlatformStats.GetStatsAggregatedAsync(_platformId, 48, TestContext.Current.CancellationToken);
+        var last72 = await uow.PlatformStats.GetStatsAggregatedAsync(_platformId, 72, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Empty(last24);
+        Assert.Equal(2, last48.Count());
+        Assert.Equal(2, last72.Count());
+        Assert.All(last48, stat => Assert.Equal(_platformId, stat.PlatformId));
     }
 
     private static async IAsyncEnumerable<PlatformStatsResult> GetStatsAsync()

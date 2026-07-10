@@ -1,4 +1,6 @@
-﻿using Application.Services;
+using Application.Features.Deployments.Notifications;
+using Application.Features.Platforms;
+using Application.Services;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -20,6 +22,7 @@ internal class PlatformSyncJob(
     INotificationQueue notifQueue,
     IServiceScopeFactory scopeFactory,
     IPlatformStreamManager platformStreamManager,
+    IActivityStreamManager activityStreamManager,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
@@ -138,7 +141,12 @@ internal class PlatformSyncJob(
 
             if (!evt.IsOnLine)
             {
-                var offlineItem = new PlatformOfflineSyncWorkItem(platformStreamManager, notifQueue, evt.Id, logger);
+                var offlineItem = new PlatformOfflineSyncWorkItem(
+                    platformStreamManager,
+                    activityStreamManager,
+                    notifQueue,
+                    evt.Id,
+                    logger);
                 await dbWorkQueue.EnqueueAsync(offlineItem, cancellationToken);
                 return;
             }
@@ -164,7 +172,13 @@ internal class PlatformSyncJob(
             }
 
             // Enqueue DB work item to apply updates
-            var workItem = new PlatformOnlineSyncWorkItem(platformStreamManager, notifQueue, platformInfo, evt.Id, logger);
+            var workItem = new PlatformOnlineSyncWorkItem(
+                platformStreamManager,
+                activityStreamManager,
+                notifQueue,
+                platformInfo,
+                evt.Id,
+                logger);
             await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
         }
         catch (Exception ex)
@@ -176,8 +190,9 @@ internal class PlatformSyncJob(
 
 internal sealed class PlatformOnlineSyncWorkItem(
     IPlatformStreamManager platformStreamManager,
-    INotificationQueue notificationQueue, 
-    PlatformResult platformInfo, 
+    IActivityStreamManager activityStreamManager,
+    INotificationQueue notificationQueue,
+    PlatformResult platformInfo,
     Guid platformId,
     ILogger logger) : IDbWorkItem
 {
@@ -192,6 +207,8 @@ internal sealed class PlatformOnlineSyncWorkItem(
                 return;
             }
 
+            var previousStatus = platform.Status;
+
             // Apply updates from platformInfo
             platform.PartialUpdate(
                 platformStatus: PlatformStatus.Online,
@@ -205,12 +222,26 @@ internal sealed class PlatformOnlineSyncWorkItem(
                 descriptor: platformInfo.Descriptor
             );
 
+            var activity = previousStatus == PlatformStatus.Online
+                ? null
+                : PlatformActivity.Connected(platform, previousStatus, Constants.SystemId);
+            if (activity is not null)
+            {
+                await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
+            }
+
             await uow.Platforms.UpdateAsync(platform, cancellationToken);
             await uow.CommitAsync(cancellationToken);
 
             // Notify clients
             var notificationWorkItem = new PushPlatformUpdateNotificationWorkItem(platformStreamManager, platform);
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
+            if (activity is not null)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new ActivityNotificationWorkItem(activityStreamManager, await activity.AssignActor(uow, cancellationToken)),
+                    cancellationToken);
+            }
         }
         catch (Exception ex)
         {
@@ -220,9 +251,11 @@ internal sealed class PlatformOnlineSyncWorkItem(
 }
 
 internal sealed class PlatformOfflineSyncWorkItem(
-    IPlatformStreamManager platformStreamManager, 
-    INotificationQueue notificationQueue, 
-    Guid PlatformId, ILogger logger) : IDbWorkItem
+    IPlatformStreamManager platformStreamManager,
+    IActivityStreamManager activityStreamManager,
+    INotificationQueue notificationQueue,
+    Guid PlatformId,
+    ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
@@ -235,13 +268,28 @@ internal sealed class PlatformOfflineSyncWorkItem(
                 return;
             }
 
+            var previousStatus = platform.Status;
             platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
+
+            var activity = previousStatus == PlatformStatus.Offline
+                ? null
+                : PlatformActivity.Disconnected(platform, previousStatus, Constants.SystemId);
+            if (activity is not null)
+            {
+                await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
+            }
 
             await uow.Platforms.UpdateAsync(platform, cancellationToken);
             await uow.CommitAsync(cancellationToken);
 
             var notificationWorkItem = new PushPlatformUpdateNotificationWorkItem(platformStreamManager, platform);
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
+            if (activity is not null)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new ActivityNotificationWorkItem(activityStreamManager, await activity.AssignActor(uow, cancellationToken)),
+                    cancellationToken);
+            }
         }
         catch (Exception ex)
         {

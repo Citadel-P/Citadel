@@ -191,9 +191,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         string sql = ResourceTagSql.InputTagsCte + """
             inserted_platform AS (
                 INSERT INTO Platforms (
-                    Id, Name, Address, NetworkCount, VolumeCount,  ImageCount, CpuCount, MemTotal, ServerVersion, AgentVersion, Status, ConnectorType, PlatformDescriptor)
+                    Id, Name, Address, Description, NetworkCount, VolumeCount,  ImageCount, CpuCount, MemTotal, ServerVersion, AgentVersion, Status, ConnectorType, PlatformDescriptor)
                 SELECT
-                    @Id, @Name, @Address, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor::json
+                    @Id, @Name, @Address, @Description, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor::json
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
                 RETURNING Id
             ),
@@ -205,6 +205,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             Id = platform.Id,
             Name = platform.Name,
             Address = platform.Address,
+            Description = platform.Description,
             NetworkCount = platform.NetworkCount,
             VolumeCount = platform.VolumeCount,
             ImageCount = platform.ImageCount,
@@ -237,6 +238,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             UPDATE Platforms SET
                 Name = @Name,
                 Address = @Address,
+                Description = @Description,
                 NetworkCount = @NetworkCount,
                 VolumeCount = @VolumeCount,
                 ImageCount = @ImageCount,
@@ -253,6 +255,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         {
             platform.Name,
             platform.Address,
+            platform.Description,
             platform.NetworkCount,
             platform.VolumeCount,
             platform.ImageCount,

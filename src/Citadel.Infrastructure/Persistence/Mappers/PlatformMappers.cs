@@ -25,7 +25,8 @@ internal static class PlatformMappers
                 ?? throw new NotImplementedException($"PlatformDescriptor is missing for platform id {platform.Id}"),
             serverVersion: platform.ServerVersion,
             agentVersion: platform.AgentVersion,
-            stats: platform.Stats?.Select(ToDomain).ToList());
+            stats: platform.Stats?.Select(ToDomain).ToList(),
+            description: platform.Description);
 
         result.AssignTags(platform.TagsJson.ToTagSummaries());
         return result;
@@ -51,6 +52,7 @@ internal static class PlatformMappers
               ?? throw new NotImplementedException($"PlatformDescriptor is missing for platform id {platform.Id}"),
             serverVersion: platform.ServerVersion,
             agentVersion: platform.AgentVersion,
+            description: platform.Description,
             stats: [new PlatformStat(
                 Created: platform?.Stat_Created ?? 0,
                 MemoryUsage: platform?.Stat_MemoryUsage ?? 0,

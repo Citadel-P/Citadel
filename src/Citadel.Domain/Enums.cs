@@ -568,6 +568,8 @@ public enum ActivityEventType
     #endregion
 
     #region Platform Events
+    PlatformCreated,
+    PlatformDeleted,
     PlatformConnected,
     PlatformDisconnected,
     PlatformRenamed,

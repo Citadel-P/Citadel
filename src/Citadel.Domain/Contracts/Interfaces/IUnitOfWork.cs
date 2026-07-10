@@ -428,6 +428,7 @@ public interface IRefreshTokenRepository
 
 public interface IPlatformStatRepository
 {
+    Task<IEnumerable<PlatformStat>> GetStatsAggregatedAsync(Guid platformId, int hours, CancellationToken cancellationToken);
     Task<IEnumerable<PlatformStat>> GetStatsAggregatedLast24HoursAsync(Guid platformId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<PlatformStat> stats, CancellationToken cancellationToken);
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);

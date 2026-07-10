@@ -13,6 +13,7 @@ namespace WebApi.Routes.Endpoints.Resources.Platforms;
 public sealed record PlatformView(
     Guid Id,
     string Name,
+    string? Description,
     string Address,
     int NetworkCount,
     int VolumeCount,
@@ -99,6 +100,7 @@ internal static class PlatformMapperExtension
     internal static PlatformView Map(this Platform platform) => new(
         Id: platform.Id,
         Name: platform.Name,
+        Description: platform.Description,
         Address: platform.Address,
         Status: platform.Status,
         Type: GetPlatformType(platform.PlatformDescriptor),

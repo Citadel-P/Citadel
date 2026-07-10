@@ -6,7 +6,7 @@ import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
 
-const normalizePlatform = (s: PlatformView): PlatformView => {
+export const normalizePlatform = (s: PlatformView): PlatformView => {
   if (Array.isArray(s.platformDescriptor)) {
     const desc = (s.platformDescriptor as any)[1];
     desc.$type = (s.platformDescriptor as any)[0];

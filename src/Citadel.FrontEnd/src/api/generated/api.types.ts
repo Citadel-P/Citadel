@@ -423,6 +423,8 @@ export enum ActivityEventType {
   DeploymentPaused = "DeploymentPaused",
   DeploymentApplied = "DeploymentApplied",
   DeploymentDegraded = "DeploymentDegraded",
+  PlatformCreated = "PlatformCreated",
+  PlatformDeleted = "PlatformDeleted",
   PlatformConnected = "PlatformConnected",
   PlatformDisconnected = "PlatformDisconnected",
   PlatformRenamed = "PlatformRenamed",
@@ -843,6 +845,26 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoAlertRuleRenamed
       >
     | BaseActivityEventInfoTypeMapping<
+        "PlatformCreated",
+        ActivityEventInfoPlatformCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformDeleted",
+        ActivityEventInfoPlatformDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformConnected",
+        ActivityEventInfoPlatformConnected
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformDisconnected",
+        ActivityEventInfoPlatformDisconnected
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformRenamed",
+        ActivityEventInfoPlatformRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
         "RegistryRenamed",
         ActivityEventInfoRegistryRenamed
       >
@@ -1200,6 +1222,34 @@ export interface ActivityEventInfoOidcProviderUpdated {
   $type?: "OidcProviderUpdated";
   oldProvider: OidcProviderActivitySnapshot;
   newProvider: OidcProviderActivitySnapshot;
+}
+
+export interface ActivityEventInfoPlatformConnected {
+  $type?: "PlatformConnected";
+  platform: PlatformSnapshot;
+  previousStatus: PlatformStatus;
+}
+
+export interface ActivityEventInfoPlatformCreated {
+  $type?: "PlatformCreated";
+  platform: PlatformSnapshot;
+}
+
+export interface ActivityEventInfoPlatformDeleted {
+  $type?: "PlatformDeleted";
+  platform: PlatformSnapshot;
+}
+
+export interface ActivityEventInfoPlatformDisconnected {
+  $type?: "PlatformDisconnected";
+  platform: PlatformSnapshot;
+  previousStatus: PlatformStatus;
+}
+
+export interface ActivityEventInfoPlatformRenamed {
+  $type?: "PlatformRenamed";
+  oldName: string;
+  newName: string;
 }
 
 export interface ActivityEventInfoRegistryCreated {
@@ -2400,6 +2450,7 @@ export interface CreateNetworkView {
 export interface CreatePlatformInput {
   name: string;
   address: null | string;
+  description?: null | string;
   type?: PlatformType;
   connectorType?: PlatformConnectorType;
   tagIds?: null | string[];
@@ -3818,8 +3869,47 @@ export interface PlatformDescriptorKubernetesPlatformDescriptor {
 export interface PlatformInput {
   name: string;
   address: null | string;
+  description?: null | string;
   type?: PlatformType;
   connectorType?: PlatformConnectorType;
+}
+
+export interface PlatformSnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  address: string;
+  description: null | string;
+  status: PlatformStatus;
+  connectorType: PlatformConnectorType;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  networkCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  volumeCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  imageCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cpuCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  memTotal: number | string;
+  serverVersion: null | string;
+  agentVersion: null | string;
+  platformDescriptor: PlatformDescriptor;
 }
 
 export interface PlatformStatView {
@@ -3850,10 +3940,15 @@ export interface PlatformStatView {
   memoryUsage?: number | string;
 }
 
+export interface PlatformStatsView {
+  stats: PlatformStatView[];
+}
+
 export interface PlatformView {
   /** @format uuid */
   id: string;
   name: string;
+  description: null | string;
   address: string;
   /**
    * @format int32
@@ -6923,6 +7018,47 @@ export class Api<
      * No description
      *
      * @tags Platforms
+     * @name GetPlatformStats
+     * @summary Get platform stats
+     * @request GET:/api/v1/platforms/{id}/stats
+     * @secure
+     * @response `200` `PlatformStatsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getPlatformStats: (
+      id: string,
+      query?: {
+        /**
+         * Stats lookback window in hours. Supported values: 24, 48, 72.
+         * @format int32
+         * @default 24
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        hours?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        PlatformStatsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/platforms/${id}/stats`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
      * @name PrunePlatform
      * @summary Delete unused Docker resources on a platform
      * @request POST:/api/v1/platforms/{id}/prune
@@ -7024,6 +7160,69 @@ export class Api<
         secure: true,
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name RenamePlatform
+     * @summary Rename a platform
+     * @request POST:/api/v1/platforms/rename
+     * @secure
+     * @response `200` `PlatformView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renamePlatform: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms/rename`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name UpdatePlatformMetadata
+     * @summary Patch platform metadata
+     * @request PATCH:/api/v1/platforms/{id}/_metadata
+     * @secure
+     * @response `200` `PlatformView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updatePlatformMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms/${id}/_metadata`,
+          method: "PATCH",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description

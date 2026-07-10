@@ -25,7 +25,7 @@ export const SidebarMenu = () => {
     (platform: { id: string; name: string }) => {
       if (!platform?.id || addedPlatformIdsRef.current.has(platform.id)) return;
 
-      const platformRoute = `/platforms/${platform.id}`;
+      const platformRoute = `/platforms/edit/${platform.id}`;
       const platformMenu = DockerPlatformMenu(platform);
 
       platformMenu.children?.forEach((item) => {
@@ -55,7 +55,7 @@ export const SidebarMenu = () => {
 
     const ids = new Set<string>();
     baseMenu.items.forEach((item) => {
-      const match = item.route?.match(/\/platforms\/(.+)/);
+      const match = item.route?.match(/\/platforms\/(?:edit\/)?([^/]+)/);
       if (match?.[1]) ids.add(match[1]);
     });
     addedPlatformIdsRef.current = ids;

@@ -3,6 +3,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -117,6 +118,76 @@ public class PlatformPatchTests(PostgresTestFixture fixture) : IntegrationTestBa
         Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Patch_Platform_Metadata_Should_Update_Description_Without_Connector_Call()
+    {
+        // Arrange
+        var patchJson = """
+        {
+          "description": "Updated platform description"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        // Act
+        var response = await Client.PatchAsync($"/api/v1/platforms/{platformId}/_metadata", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        // Assert
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.GetByIdAsync(platformId, TestContext.Current.CancellationToken);
+        var activities = await uow.ActivityEventRepository.GetPagedAsync(
+            platformId,
+            ActivityResourceType.Platform,
+            ActivityEventType.PlatformRenamed,
+            1,
+            10,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("Updated platform description", platform?.Description);
+        Assert.Empty(activities.Items);
+        platformConnector.Verify(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        healthMonitorMock.Verify(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Rename_Platform_Should_Update_Name_And_Add_Activity()
+    {
+        // Arrange
+        var patchJson = $$"""
+        {
+          "id": "{{platformId}}",
+          "name": "P-Renamed"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/json");
+
+        // Act
+        var response = await Client.PostAsync("/api/v1/platforms/rename", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        // Assert
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.GetByIdAsync(platformId, TestContext.Current.CancellationToken);
+        var activities = await uow.ActivityEventRepository.GetPagedAsync(
+            platformId,
+            ActivityResourceType.Platform,
+            ActivityEventType.PlatformRenamed,
+            1,
+            10,
+            TestContext.Current.CancellationToken);
+
+        var activitySummary = Assert.Single(activities.Items);
+        var activity = await uow.ActivityEventRepository.GetByIdAsync(activitySummary.Id, TestContext.Current.CancellationToken);
+        var renamed = Assert.IsType<PlatformRenamed>(activity?.Info);
+
+        Assert.Equal("P-Renamed", platform?.Name);
+        Assert.Equal("P-01", renamed.OldName);
+        Assert.Equal("P-Renamed", renamed.NewName);
     }
 
     [Fact]

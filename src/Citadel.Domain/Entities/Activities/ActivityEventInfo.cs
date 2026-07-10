@@ -1,6 +1,7 @@
 ﻿using Domain.Contracts.Resources.Alerts;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Contracts.Resources.Git;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Automation;
@@ -41,6 +42,11 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(AlertRuleUpdated), nameof(ActivityEventType.AlertRuleUpdated))]
 [JsonDerivedType(typeof(AlertRuleDeleted), nameof(ActivityEventType.AlertRuleDeleted))]
 [JsonDerivedType(typeof(AlertRuleRenamed), nameof(ActivityEventType.AlertRuleRenamed))]
+[JsonDerivedType(typeof(PlatformCreated), nameof(ActivityEventType.PlatformCreated))]
+[JsonDerivedType(typeof(PlatformDeleted), nameof(ActivityEventType.PlatformDeleted))]
+[JsonDerivedType(typeof(PlatformConnected), nameof(ActivityEventType.PlatformConnected))]
+[JsonDerivedType(typeof(PlatformDisconnected), nameof(ActivityEventType.PlatformDisconnected))]
+[JsonDerivedType(typeof(PlatformRenamed), nameof(ActivityEventType.PlatformRenamed))]
 [JsonDerivedType(typeof(RegistryRenamed), nameof(ActivityEventType.RegistryRenamed))]
 [JsonDerivedType(typeof(RegistryCreated), nameof(ActivityEventType.RegistryCreated))]
 [JsonDerivedType(typeof(RegistryUpdated), nameof(ActivityEventType.RegistryUpdated))]
@@ -132,6 +138,12 @@ public sealed record AlertRuleCreated(AlertRuleSnapshot AlertRule) : ActivityEve
 public sealed record AlertRuleUpdated(AlertRuleSnapshot OldRule, AlertRuleSnapshot NewRule) : ActivityEventInfo;
 public sealed record AlertRuleDeleted(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
 public sealed record AlertRuleRenamed(string OldName, string NewName) : ActivityEventInfo;
+
+public sealed record PlatformCreated(PlatformSnapshot Platform) : ActivityEventInfo;
+public sealed record PlatformDeleted(PlatformSnapshot Platform) : ActivityEventInfo;
+public sealed record PlatformConnected(PlatformSnapshot Platform, PlatformStatus PreviousStatus) : ActivityEventInfo;
+public sealed record PlatformDisconnected(PlatformSnapshot Platform, PlatformStatus PreviousStatus) : ActivityEventInfo;
+public sealed record PlatformRenamed(string OldName, string NewName) : ActivityEventInfo;
 
 public sealed record RegistryRenamed(string OldName, string NewName) : ActivityEventInfo;
 public sealed record RegistryDeleted(RegistrySnapshot Registry) : ActivityEventInfo;

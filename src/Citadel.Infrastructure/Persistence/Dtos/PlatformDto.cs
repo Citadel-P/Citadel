@@ -14,10 +14,11 @@ internal record PlatformDto(
     string PlatformDescriptor, //PlatformDescriptor
     string? ServerVersion,
     string? AgentVersion,
+    string? Description,
     string? TagsJson = null)
 {
     public ICollection<PlatformStatDto> Stats { get; init; } = [];
-    public PlatformDto() : this(Guid.Empty, string.Empty, string.Empty, 0, 0, 0, 0, 0, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty)
+    public PlatformDto() : this(Guid.Empty, string.Empty, string.Empty, 0, 0, 0, 0, 0, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, null)
     {
 
     }
