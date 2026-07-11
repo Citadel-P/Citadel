@@ -34,7 +34,6 @@ type DisplayOptions = {
   DisplayPlatformName?: boolean;
   DisplayDeploymentName?: boolean;
   DisplayStatus?: boolean;
-  CompactPorts?: boolean;
 };
 
 const PlatformCell = ({ name, id }: { name: string; id: string }) => (
@@ -120,13 +119,7 @@ const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>
     {
       accessorKey: 'ports',
       header: () => <span>Ports</span>,
-      cell: ({ row }) => (
-        <PortsDisplay
-          ports={row.original.ports}
-          compact={displayOptions.CompactPorts}
-          maxVisible={displayOptions.CompactPorts ? 1 : undefined}
-        />
-      ),
+      cell: ({ row }) => <PortsDisplay ports={row.original.ports ?? {}} compact maxVisible={1} />,
     },
     {
       accessorKey: 'cpu',
