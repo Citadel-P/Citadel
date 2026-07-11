@@ -1,6 +1,7 @@
 using Application.Features.Stacks.Commands;
 using Domain;
 using Domain.Entities.Stacks;
+using WebApi.Routes.Endpoints.Resources;
 
 namespace WebApi.Routes.Endpoints.Resources.Stacks;
 
@@ -11,7 +12,8 @@ public sealed record CreateStackInput(
     StackSource StackSource,
     StackSpec Spec,
     StackDriftPolicy? DriftPolicy = null,
-    IReadOnlyCollection<Guid>? TagIds = null)
+    IReadOnlyCollection<Guid>? TagIds = null,
+    DuplicateSourceInput? DuplicateSource = null)
 {
-    internal CreateStack ToCommand() => new(Name, PlatformId, Description, StackSource, Spec, DriftPolicy, TagIds);
+    internal CreateStack ToCommand() => new(Name, PlatformId, Description, StackSource, Spec, DriftPolicy, TagIds, DuplicateSource?.ToActivitySourceResource());
 }

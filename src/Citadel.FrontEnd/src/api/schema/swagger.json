@@ -12217,6 +12217,104 @@
         ]
       }
     },
+    "/api/v1/deployments/{deploymentId}/duplicate-draft": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Get deployment duplicate draft",
+        "operationId": "getDeploymentDuplicateDraft",
+        "parameters": [
+          {
+            "name": "deploymentId",
+            "in": "path",
+            "description": "Deployment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentDuplicateDraftView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/deployments/{id}/info": {
       "get": {
         "tags": [
@@ -13947,6 +14045,104 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StackConfigView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/{stackId}/duplicate-draft": {
+      "get": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Get stack duplicate draft",
+        "operationId": "getStackDuplicateDraft",
+        "parameters": [
+          {
+            "name": "stackId",
+            "in": "path",
+            "description": "The stack id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackDuplicateDraftView"
                 }
               }
             }
@@ -21815,6 +22011,9 @@
             "$ref": "#/components/schemas/ActivityEventInfoDeploymentCreated"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentDuplicated"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoDeploymentUpdated"
           },
           {
@@ -21840,6 +22039,9 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoStackCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoStackDuplicated"
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoStackUpdated"
@@ -21999,6 +22201,7 @@
           "propertyName": "$type",
           "mapping": {
             "DeploymentCreated": "#/components/schemas/ActivityEventInfoDeploymentCreated",
+            "DeploymentDuplicated": "#/components/schemas/ActivityEventInfoDeploymentDuplicated",
             "DeploymentUpdated": "#/components/schemas/ActivityEventInfoDeploymentUpdated",
             "DeploymentRenamed": "#/components/schemas/ActivityEventInfoDeploymentRenamed",
             "DeploymentDeleted": "#/components/schemas/ActivityEventInfoDeploymentDeleted",
@@ -22008,6 +22211,7 @@
             "DeploymentApplied": "#/components/schemas/ActivityEventInfoDeploymentApplied",
             "DeploymentDegraded": "#/components/schemas/ActivityEventInfoDeploymentDegraded",
             "StackCreated": "#/components/schemas/ActivityEventInfoStackCreated",
+            "StackDuplicated": "#/components/schemas/ActivityEventInfoStackDuplicated",
             "StackUpdated": "#/components/schemas/ActivityEventInfoStackUpdated",
             "StackRenamed": "#/components/schemas/ActivityEventInfoStackRenamed",
             "StackDeleted": "#/components/schemas/ActivityEventInfoStackDeleted",
@@ -22493,6 +22697,26 @@
           },
           "deployment": {
             "$ref": "#/components/schemas/DeploymentSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentDuplicated": {
+        "required": [
+          "deployment",
+          "source"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentDuplicated"
+            ],
+            "type": "string"
+          },
+          "deployment": {
+            "$ref": "#/components/schemas/DeploymentSnapshot"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ActivitySourceResource"
           }
         }
       },
@@ -23135,6 +23359,26 @@
           }
         }
       },
+      "ActivityEventInfoStackDuplicated": {
+        "required": [
+          "stack",
+          "source"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackDuplicated"
+            ],
+            "type": "string"
+          },
+          "stack": {
+            "$ref": "#/components/schemas/StackSnapshot"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ActivitySourceResource"
+          }
+        }
+      },
       "ActivityEventInfoStackGitAutoDeployFailed": {
         "required": [
           "gitRepositoryName",
@@ -23471,6 +23715,7 @@
       "ActivityEventType": {
         "enum": [
           "DeploymentCreated",
+          "DeploymentDuplicated",
           "DeploymentUpdated",
           "DeploymentRenamed",
           "DeploymentDeleted",
@@ -23515,6 +23760,7 @@
           "ActionRunCancelled",
           "ActionRunRejected",
           "StackCreated",
+          "StackDuplicated",
           "StackUpdated",
           "StackRenamed",
           "StackDeleted",
@@ -23544,6 +23790,26 @@
           "OidcProvider",
           "AutomationAction"
         ]
+      },
+      "ActivitySourceResource": {
+        "required": [
+          "resourceType",
+          "resourceId",
+          "resourceName"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/ActivityResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceName": {
+            "type": "string"
+          }
+        }
       },
       "ActivityStatus": {
         "enum": [
@@ -27516,6 +27782,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "duplicateSource": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DuplicateSourceInput"
+              }
+            ]
           }
         }
       },
@@ -27901,6 +28177,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "duplicateSource": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DuplicateSourceInput"
+              }
+            ]
           }
         }
       },
@@ -28449,6 +28735,24 @@
           },
           "spec": {
             "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        }
+      },
+      "DeploymentDuplicateDraftView": {
+        "required": [
+          "draft",
+          "warnings"
+        ],
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/CreateDeploymentInput"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DuplicateDraftWarningView"
+            }
           }
         }
       },
@@ -29340,6 +29644,47 @@
             "additionalProperties": {
               "type": "string"
             }
+          }
+        }
+      },
+      "DuplicateDraftWarningView": {
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "fieldPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DuplicateSourceInput": {
+        "required": [
+          "resourceType",
+          "resourceId",
+          "resourceName"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/ActivityResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceName": {
+            "type": "string"
           }
         }
       },
@@ -35548,6 +35893,24 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/StackDrift"
+            }
+          }
+        }
+      },
+      "StackDuplicateDraftView": {
+        "required": [
+          "draft",
+          "warnings"
+        ],
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/CreateStackInput"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DuplicateDraftWarningView"
             }
           }
         }

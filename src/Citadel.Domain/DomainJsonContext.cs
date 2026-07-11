@@ -137,7 +137,9 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<SecretProviderType>),
     })]
 [JsonSerializable(typeof(ActivityEventInfo))]
+[JsonSerializable(typeof(ActivitySourceResource))]
 [JsonSerializable(typeof(DeploymentCreated))]
+[JsonSerializable(typeof(DeploymentDuplicated))]
 [JsonSerializable(typeof(DeploymentUpdated))]
 [JsonSerializable(typeof(DeploymentDeleted))]
 [JsonSerializable(typeof(DeploymentRenamed))]
@@ -147,6 +149,7 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(DeploymentDegraded))]
 [JsonSerializable(typeof(DeploymentApplied))]
 [JsonSerializable(typeof(StackCreated))]
+[JsonSerializable(typeof(StackDuplicated))]
 [JsonSerializable(typeof(StackUpdated))]
 [JsonSerializable(typeof(StackDeleted))]
 [JsonSerializable(typeof(StackRenamed))]

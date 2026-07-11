@@ -23,7 +23,8 @@ public sealed record CreateDeployment(
     Guid PlatformId,
     string? Description,
     DeploymentSpec Spec,
-    IReadOnlyCollection<Guid>? TagIds = null)
+    IReadOnlyCollection<Guid>? TagIds = null,
+    ActivitySourceResource? DuplicateSource = null)
     : ICommand<Result<Deployment>>
 {
     internal sealed class Validator : AbstractValidator<CreateDeployment>
@@ -69,6 +70,12 @@ internal class CreateDeploymentHandler(
             }
         }
 
+        var duplicateSourceResult = await GetValidDuplicateSourceAsync(command.DuplicateSource, cancellationToken);
+        if (!duplicateSourceResult.IsSuccess(out var duplicateSource))
+        {
+            return Result.Failure<Deployment>(duplicateSourceResult.Errors);
+        }
+
         var deployment = new Deployment(
             name: command.Name,
             description: command.Description,
@@ -80,14 +87,21 @@ internal class CreateDeploymentHandler(
         if (result == 0)
             return Result.Failure<Deployment>(new BadRequestError("One or more tags do not exist."));
 
+        var eventType = duplicateSource is null
+            ? ActivityEventType.DeploymentCreated
+            : ActivityEventType.DeploymentDuplicated;
+        ActivityEventInfo info = duplicateSource is null
+            ? new DeploymentCreated(deployment.ToSnapshot())
+            : new DeploymentDuplicated(deployment.ToSnapshot(), duplicateSource);
+
         var activity = new ActivityEvent(
             actorId: actorId,
             resourceId: deployment.Id,
             platformId: command.PlatformId,
             resourceName: deployment.Name,
-            eventType: ActivityEventType.DeploymentCreated,
+            eventType: eventType,
             status: ActivityStatus.Information,
-            info: new DeploymentCreated(deployment.ToSnapshot()));
+            info: info);
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         var platform = await unitOfWork.Platforms.GetPlatformWithLatestStatAsync(command.PlatformId, cancellationToken);
@@ -104,5 +118,29 @@ internal class CreateDeploymentHandler(
 
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return deployment;
+    }
+
+    private async Task<Result<ActivitySourceResource?>> GetValidDuplicateSourceAsync(
+        ActivitySourceResource? source,
+        CancellationToken cancellationToken)
+    {
+        if (source is null)
+            return Result.Success<ActivitySourceResource?>(null);
+
+        if (source.ResourceType != ActivityResourceType.Deployment)
+            return Result.Failure<ActivitySourceResource?>(new BadRequestError("Duplicate source must be a deployment."));
+
+        var sourceDeployment = await unitOfWork.Deployments.GetAsync(source.ResourceId, cancellationToken);
+        if (sourceDeployment is null)
+            return Result.Failure<ActivitySourceResource?>(new NotFoundError("Duplicate source deployment does not exist."));
+
+        var user = userContext.Current;
+        if (!user.IsAdmin && !await unitOfWork.Deployments.CanAccessAsync(user.UserId, source.ResourceId, cancellationToken))
+            return Result.Failure<ActivitySourceResource?>(new ForbiddenError("Missing permission [Read] on duplicate source deployment."));
+
+        return Result.Success<ActivitySourceResource?>(new ActivitySourceResource(
+            ActivityResourceType.Deployment,
+            sourceDeployment.Id,
+            sourceDeployment.Name));
     }
 }

@@ -30,6 +30,12 @@ public static class Stacks
         return EndpointHandlers.HandleResult(result, StackConfigView.Map);
     }
 
+    public static async Task<Results<Ok<StackDuplicateDraftView>, ProblemHttpResult>> GetDuplicateDraft(IMediator mediator, [Description("The stack id")] Guid stackId, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetStackDuplicateDraft(stackId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, draft => StackDuplicateDraftView.Map(draft, stackId));
+    }
+
     public static async Task<Results<Ok<StacksView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,

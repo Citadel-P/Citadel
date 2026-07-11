@@ -36,10 +36,17 @@ When the action is selected:
 Default duplicate name:
 
 ```text
-Copy of <source name>
+<source-name>-copy
 ```
 
-If that name conflicts, the existing create validation may reject it. The MVP does not need automatic numeric suffixes.
+If that name conflicts, the draft endpoint returns the first available numeric suffix:
+
+```text
+<source-name>-copy-2
+<source-name>-copy-3
+```
+
+Generated names must stay within Citadel's normal resource-name rules, including the 64-character limit.
 
 ## API Contract
 
@@ -72,7 +79,7 @@ Example JSON:
 ```json
 {
   "draft": {
-    "name": "Copy of api",
+    "name": "api-copy",
     "platformId": "019f0000-0000-7000-8000-000000000001",
     "description": "Production API",
     "spec": {},
@@ -177,7 +184,7 @@ Deployment draft:
 
 ```csharp
 new CreateDeploymentInput(
-    Name: $"Copy of {source.Name}",
+    Name: await GetAvailableDuplicateNameAsync(source.Name, source.PlatformId, cancellationToken),
     PlatformId: source.PlatformId,
     Description: source.Description,
     Spec: sanitizedSpec,
@@ -188,7 +195,7 @@ Stack draft:
 
 ```csharp
 new CreateStackInput(
-    Name: $"Copy of {source.Name}",
+    Name: await GetAvailableDuplicateNameAsync(source.Name, cancellationToken),
     PlatformId: source.CurrentStackRelease.PlatformId,
     Description: source.Description,
     StackSource: source.StackSource,
@@ -402,7 +409,7 @@ Application/query tests:
 - Deployment duplicate draft copies editable configuration.
 - Stack duplicate draft copies editable configuration from the current release.
 - Tag IDs are copied.
-- Default name is `Copy of <source name>`.
+- Default name is `<source-name>-copy`, with numeric suffixes when needed.
 - Runtime state is excluded.
 - Activity history is excluded.
 - Stack release history is excluded.

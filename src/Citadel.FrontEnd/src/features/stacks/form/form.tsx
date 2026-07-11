@@ -22,10 +22,10 @@ import {
   FieldSwitch,
   FieldSelect,
 } from '@/components/custom/form-builder';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { ResourceSelectorField } from '@/components/custom/common';
 import { MonacoEditor, MonacoToArrayEditor, type MonacoDiagnostic } from '@/lib/monaco';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
@@ -36,6 +36,7 @@ import { GitBranch, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import * as monaco from 'monaco-editor';
 import { ResourceTagSelector } from '@/features/tags/components';
+import { AlertMessage } from '@/components/custom/alert-message';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -503,12 +504,20 @@ export const StackForm = ({
   disabled?: boolean;
 }) => {
   const id = useParams().id;
+  const [searchParams] = useSearchParams();
+  const duplicateFrom = mode === 'add' ? searchParams.get('duplicateFrom') : null;
+  const duplicateDraftLoadedRef = useRef<string | null>(null);
   const [update, setUpdate] = useState<Partial<StackInput>>({});
   const queryClient = useQueryClient();
 
   const { mutateAsync: createStack } = useMutate('createStack');
   const { mutateAsync: updateStack } = useMutate('updateStack');
   const { data: stackCfg } = useRead('getStackConfig', { stackId: id });
+  const { data: duplicateDraftData, isFetching: isDuplicateDraftLoading } = useRead(
+    'getStackDuplicateDraft',
+    { stackId: duplicateFrom ?? '' },
+    { enabled: mode === 'add' && !!duplicateFrom },
+  );
   const { data: stackViewData } = useRead('getStack', { stackId: id }, { enabled: mode === 'edit' && !!id });
   const { data: resourceBindingLookupData } = useRead('lookup', {
     query: {
@@ -519,6 +528,9 @@ export const StackForm = ({
   });
 
   const resource: StackConfigView | undefined = stackCfg?.data;
+  const duplicateDraft = duplicateDraftData?.data;
+  const duplicateWarnings = duplicateDraft?.warnings ?? [];
+  const formDraftKey = duplicateFrom ? `stack:duplicate:${duplicateFrom}` : `stack:${id ?? 'new'}`;
   const stackView = stackViewData?.data;
   const original = resource ?? EMPTY_STACK_CONFIG;
   const formOriginal = useMemo(() => normalizeDisabledWebhook(original), [original]);
@@ -565,12 +577,19 @@ export const StackForm = ({
     [effectiveResourceBindings],
   );
 
+  useEffect(() => {
+    if (!duplicateFrom || !duplicateDraft?.draft || duplicateDraftLoadedRef.current === duplicateFrom) return;
+
+    duplicateDraftLoadedRef.current = duplicateFrom;
+    setUpdate(duplicateDraft.draft as Partial<StackInput>);
+  }, [duplicateFrom, duplicateDraft?.draft]);
+
   const refreshData = useCallback(() => {
-    localStorage.removeItem(`stack:${id ?? 'new'}`);
+    localStorage.removeItem(formDraftKey);
     queryClient.invalidateQueries({ queryKey: ['getStackConfig', { stackId: id }] });
     queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: id }] });
     queryClient.invalidateQueries({ queryKey: ['getStackDrift', { stackId: id }] });
-  }, [id, queryClient]);
+  }, [formDraftKey, id, queryClient]);
 
   useEffect(() => {
     if (!metadataChanged) return;
@@ -635,11 +654,7 @@ export const StackForm = ({
                       required: false,
                       description: 'Optional tags for filtering and grouping this stack.',
                       render: (val, set) => (
-                        <ResourceTagSelector
-                          value={val}
-                          disabled={disabled}
-                          onChange={(tagIds) => set({ tagIds })}
-                        />
+                        <ResourceTagSelector value={val} disabled={disabled} onChange={(tagIds) => set({ tagIds })} />
                       ),
                     }),
                   ],
@@ -1393,18 +1408,30 @@ export const StackForm = ({
   );
 
   return (
-    <FormShell
-      mode={mode}
-      schema={schema}
-      original={formOriginal}
-      update={formUpdate}
-      setUpdate={setUpdate}
-      onSave={handleSave}
-      pending={isPending}
-      disabled={disabled}
-      draftKey={`stack:${id ?? 'new'}`}
-      draftVersion={1}
-    />
+    <div className="flex flex-col gap-3">
+      {duplicateFrom && (
+        <AlertMessage type="info" title={isDuplicateDraftLoading ? 'Loading duplicate draft' : 'Duplicate draft'}>
+          No stack has been created yet. Review the copied configuration, then save it to create the stack.
+        </AlertMessage>
+      )}
+      {duplicateWarnings.map((warning) => (
+        <AlertMessage key={`${warning.code}:${warning.fieldPath ?? ''}`} type="warning" title={warning.code}>
+          {warning.message}
+        </AlertMessage>
+      ))}
+      <FormShell
+        mode={mode}
+        schema={schema}
+        original={formOriginal}
+        update={formUpdate}
+        setUpdate={setUpdate}
+        onSave={handleSave}
+        pending={isPending}
+        disabled={disabled}
+        draftKey={formDraftKey}
+        draftVersion={1}
+      />
+    </div>
   );
 };
 

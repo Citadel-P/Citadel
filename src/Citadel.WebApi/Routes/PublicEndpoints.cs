@@ -1400,6 +1400,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getDeploymentConfig");
 
+        deployment.MapGet("/{deploymentId}/duplicate-draft", Deployments.GetDuplicateDraft)
+            .WithSummary("Get deployment duplicate draft")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getDeploymentDuplicateDraft");
+
         deployment.MapGet("{id}/info", Deployments.GetInfo)
             .WithSummary("Get basic container details")
             .ProducesValidationProblem()
@@ -1550,6 +1558,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getStackConfig");
+
+        stacks.MapGet("/{stackId}/duplicate-draft", Stacks.GetDuplicateDraft)
+            .WithSummary("Get stack duplicate draft")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getStackDuplicateDraft");
 
         stacks.MapGet("/{stackId}/releases", Stacks.ListReleases)
             .WithSummary("List stack releases")

@@ -27,7 +27,7 @@ import {
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
 import { AlertMessage } from '@/components/custom/alert-message';
@@ -181,12 +181,20 @@ export const DeploymentForm = ({
   disabled?: boolean;
 }) => {
   const id = useParams().id;
+  const [searchParams] = useSearchParams();
+  const duplicateFrom = mode === 'add' ? searchParams.get('duplicateFrom') : null;
+  const duplicateDraftLoadedRef = useRef<string | null>(null);
   const [update, setUpdate] = useState<Partial<DeploymentInput>>({});
   const queryClient = useQueryClient();
 
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
   const { data: deploymentCfg } = useRead('getDeploymentConfig', { deploymentId: id });
+  const { data: duplicateDraftData, isFetching: isDuplicateDraftLoading } = useRead(
+    'getDeploymentDuplicateDraft',
+    { deploymentId: duplicateFrom ?? '' },
+    { enabled: mode === 'add' && !!duplicateFrom },
+  );
   const { data: resourceBindingLookupData } = useRead('lookup', {
     query: {
       TargetResourceType: LookupResourceType.ResourceBinding,
@@ -196,6 +204,9 @@ export const DeploymentForm = ({
   });
 
   const resource: DeploymentConfigView | undefined = deploymentCfg?.data;
+  const duplicateDraft = duplicateDraftData?.data;
+  const duplicateWarnings = duplicateDraft?.warnings ?? [];
+  const formDraftKey = duplicateFrom ? `deployment:duplicate:${duplicateFrom}` : `deployment:${id ?? 'new'}`;
 
   const original = resource ?? ({} as DeploymentConfigView);
 
@@ -247,10 +258,17 @@ export const DeploymentForm = ({
     );
   }, [imageInfoIsSuccess, data?.data?.ports, currentImage?.$type, update.spec?.ports, original.spec?.ports]);
 
+  useEffect(() => {
+    if (!duplicateFrom || !duplicateDraft?.draft || duplicateDraftLoadedRef.current === duplicateFrom) return;
+
+    duplicateDraftLoadedRef.current = duplicateFrom;
+    setUpdate(duplicateDraft.draft as Partial<DeploymentInput>);
+  }, [duplicateFrom, duplicateDraft?.draft]);
+
   const refreshData = useCallback(() => {
-    localStorage.removeItem(`deployment:${id ?? 'new'}`);
+    localStorage.removeItem(formDraftKey);
     queryClient.invalidateQueries({ queryKey: ['getDeploymentConfig', { deploymentId: id }] });
-  }, [id, queryClient]);
+  }, [formDraftKey, id, queryClient]);
 
   useEffect(() => {
     if (!metadataChanged) return;
@@ -304,11 +322,7 @@ export const DeploymentForm = ({
                       required: false,
                       description: 'Optional tags for filtering and grouping this deployment.',
                       render: (val, set) => (
-                        <ResourceTagSelector
-                          value={val}
-                          disabled={disabled}
-                          onChange={(tagIds) => set({ tagIds })}
-                        />
+                        <ResourceTagSelector value={val} disabled={disabled} onChange={(tagIds) => set({ tagIds })} />
                       ),
                     }),
                   ],
@@ -778,17 +792,29 @@ export const DeploymentForm = ({
   );
 
   return (
-    <FormShell
-      mode={mode}
-      schema={schema}
-      original={original}
-      update={update}
-      setUpdate={setUpdate}
-      onSave={handleSave}
-      pending={isPending}
-      disabled={disabled}
-      draftKey={`deployment:${id ?? 'new'}`}
-      draftVersion={1}
-    />
+    <div className="flex flex-col gap-3">
+      {duplicateFrom && (
+        <AlertMessage type="info" title={isDuplicateDraftLoading ? 'Loading duplicate draft' : 'Duplicate draft'}>
+          No deployment has been created yet. Review the copied configuration, then save it to create the deployment.
+        </AlertMessage>
+      )}
+      {duplicateWarnings.map((warning) => (
+        <AlertMessage key={`${warning.code}:${warning.fieldPath ?? ''}`} type="warning" title={warning.code}>
+          {warning.message}
+        </AlertMessage>
+      ))}
+      <FormShell
+        mode={mode}
+        schema={schema}
+        original={original}
+        update={update}
+        setUpdate={setUpdate}
+        onSave={handleSave}
+        pending={isPending}
+        disabled={disabled}
+        draftKey={formDraftKey}
+        draftVersion={1}
+      />
+    </div>
   );
 };

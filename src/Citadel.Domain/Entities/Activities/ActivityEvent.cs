@@ -64,6 +64,7 @@ public sealed class ActivityEvent : IAuditedEntity
         return eventType switch
         {
             ActivityEventType.DeploymentCreated
+            or ActivityEventType.DeploymentDuplicated
             or ActivityEventType.DeploymentUpdated
             or ActivityEventType.DeploymentRenamed
             or ActivityEventType.DeploymentDeleted
@@ -75,6 +76,7 @@ public sealed class ActivityEvent : IAuditedEntity
                 => ActivityResourceType.Deployment,
 
             ActivityEventType.StackCreated
+            or ActivityEventType.StackDuplicated
             or ActivityEventType.StackUpdated
             or ActivityEventType.StackRenamed
             or ActivityEventType.StackDeleted
@@ -193,6 +195,7 @@ public sealed class ActivityEvent : IAuditedEntity
         return (type, info) switch
         {
             (ActivityEventType.DeploymentCreated, DeploymentCreated) => true,
+            (ActivityEventType.DeploymentDuplicated, DeploymentDuplicated) => true,
             (ActivityEventType.DeploymentUpdated, DeploymentUpdated) => true,
             (ActivityEventType.DeploymentDeleted, DeploymentDeleted) => true,
             (ActivityEventType.DeploymentRenamed, DeploymentRenamed) => true,
@@ -203,6 +206,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.DeploymentDegraded, DeploymentDegraded) => true,
 
             (ActivityEventType.StackCreated, StackCreated) => true,
+            (ActivityEventType.StackDuplicated, StackDuplicated) => true,
             (ActivityEventType.StackUpdated, StackUpdated) => true,
             (ActivityEventType.StackDeleted, StackDeleted) => true,
             (ActivityEventType.StackRenamed, StackRenamed) => true,

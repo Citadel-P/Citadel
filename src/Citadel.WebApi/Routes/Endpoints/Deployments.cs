@@ -31,6 +31,12 @@ public static class Deployments
         return EndpointHandlers.HandleResult(result, DeploymentConfigView.Map);
     }
 
+    public static async Task<Results<Ok<DeploymentDuplicateDraftView>, ProblemHttpResult>> GetDuplicateDraft(IMediator mediator, [Description("Deployment id")] Guid deploymentId, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetDeploymentDuplicateDraft(deploymentId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, draft => DeploymentDuplicateDraftView.Map(draft, deploymentId));
+    }
+
     public static async Task<Results<Ok<DeploymentsView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,

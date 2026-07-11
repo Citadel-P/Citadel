@@ -1,4 +1,4 @@
-import { Eye, Trash } from 'lucide-react';
+import { Copy, Eye, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { Ban, Pause, Play, RefreshCw, Rocket, StepForward } from 'lucide-react';
@@ -97,31 +97,36 @@ export const syncAction: ActionConfig<StackView, any> = {
     const queryClient = useQueryClient();
     const selected = Array.isArray(resources) ? resources[0] : resources;
     const multiSelect = Array.isArray(resources) && resources.length > 1;
-    const queryEnabled =
+    const canCheck =
       !!selected && !multiSelect && canCheckDrift(selected) && selected.driftPolicy?.mode !== StackDriftMode.Disabled;
-    const { data, isLoading, isFetching, refetch } = useRead(
-      'getStackDrift',
-      { stackId: selected?.id ?? '' },
-      { enabled: queryEnabled },
-    );
+    const { isFetching, refetch } = useRead('getStackDrift', { stackId: selected?.id ?? '' }, { enabled: false });
     const { mutateAsync, isPending } = useMutate('reconcileStack');
-    const report = data?.data;
-    const hasActionableDrift = hasActionableStackDrift(selected, report);
 
-    const canExecute = !!selected && queryEnabled && !isProcessing(selected) && !isLoading && hasActionableDrift;
+    const canExecute = !!selected && canCheck && !isProcessing(selected) && !isFetching;
 
     return {
       canExecute,
       isPending: isPending || isFetching,
       run: async () => {
-        if (!selected || multiSelect || !queryEnabled || isProcessing(selected) || isLoading || !hasActionableDrift)
+        if (!selected || multiSelect || !canCheck || isProcessing(selected) || isFetching) return;
+
+        const driftResult = await refetch();
+        if (driftResult.error) {
+          toast.error('Failed to check stack drift', { description: driftResult.error.message });
           return;
+        }
+
+        if (!hasActionableStackDrift(selected, driftResult.data?.data)) {
+          toast.info('No actionable drift found');
+          return;
+        }
+
         const result = await mutateAsync({ stackId: selected.id });
         const message = getStackReconciliationToast(result.data);
         toast[message.kind](message.title, { description: message.description });
         queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: selected.id }] });
         queryClient.invalidateQueries({ queryKey: ['getStackConfig', { stackId: selected.id }] });
-        refetch();
+        queryClient.invalidateQueries({ queryKey: ['getStackDrift', { stackId: selected.id }] });
       },
     };
   },
@@ -161,12 +166,35 @@ export const pauseAction: ActionConfig<StackView, 'pauseStacks' | 'resumeStacks'
   },
 };
 
+export const duplicateAction: ActionConfig<StackView, any> = {
+  key: 'duplicate',
+  type: 'command',
+  icon: Copy,
+  requiredCapabilities: ['canRead', 'canWrite'],
+  useHandler: ({ resources }) => {
+    const navigate = useNavigate();
+    const selected = Array.isArray(resources) ? resources[0] : resources;
+    const multiSelect = Array.isArray(resources) && resources.length > 1;
+    const canExecute = !!selected && !multiSelect;
+
+    return {
+      canExecute,
+      isPending: false,
+      run: () => {
+        if (!canExecute || !selected) return;
+        navigate(`/stacks/add?duplicateFrom=${selected.id}`);
+      },
+    };
+  },
+};
+
 export const { dropdown: StackDropdownActions, group: StackGroupActions } = createActionsBuilder<StackView>()
   .addAction(deployAction)
   .addAction(syncAction)
   .addAction(startAction)
   .addAction(stopAction)
   .addAction(pauseAction)
+  .addAction(duplicateAction)
   .addAction({
     key: 'details',
     type: 'command',

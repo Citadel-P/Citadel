@@ -30,6 +30,9 @@ import { hasCapability } from '@/lib/resource-capabilities';
 import { UpdateAvailableNotice } from '@/components/custom/common';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
+import { Button } from '@/components/ui/button';
+import { Copy } from 'lucide-react';
+import { useNavigate } from 'react-router';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -51,12 +54,15 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         return <GenericActionBarButtons resource={resource} actions={Object.values(DeploymentActions)} />;
       },
       Tags: ({ resource }: { resource: DeploymentView }) => (
-        <ResourceHeaderTagsEditor
-          resourceType="Deployment"
-          resourceId={resource.id}
-          tags={resource.tags}
-          disabled={!hasCapability(resource, 'canWrite')}
-        />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <ResourceHeaderTagsEditor
+            resourceType="Deployment"
+            resourceId={resource.id}
+            tags={resource.tags}
+            disabled={!hasCapability(resource, 'canWrite')}
+          />
+          <DuplicateDeploymentConfigButton deployment={resource} />
+        </div>
       ),
     },
     SubHeader: ({ resource }: { resource: DeploymentView }) => {
@@ -108,6 +114,24 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       return { item: deployment, isLoading };
     },
   },
+};
+
+const DuplicateDeploymentConfigButton = ({ deployment }: { deployment: DeploymentView }) => {
+  const navigate = useNavigate();
+  const disabled = !hasCapability(deployment, 'canRead') || !hasCapability(deployment, 'canWrite');
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-8 rounded-sm text-xs"
+      disabled={disabled}
+      onClick={() => navigate(`/deployments/add?duplicateFrom=${deployment.id}`)}>
+      <Copy className="size-3.5" />
+      Duplicate Config
+    </Button>
+  );
 };
 
 const DeploymentSubHeader = ({

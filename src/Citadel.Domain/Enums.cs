@@ -557,6 +557,7 @@ public enum ActivityEventType
 {
     #region Deployment Events
     DeploymentCreated,
+    DeploymentDuplicated,
     DeploymentUpdated,
     DeploymentRenamed,
     DeploymentDeleted,
@@ -622,6 +623,7 @@ public enum ActivityEventType
 
     #region Stack Events
     StackCreated,
+    StackDuplicated,
     StackUpdated,
     StackRenamed,
     StackDeleted,

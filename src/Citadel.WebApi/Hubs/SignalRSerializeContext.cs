@@ -59,7 +59,9 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<UnresolvedAlertsCountView>]
 [GenerateShapeFor<GitRepositoryView>]
 [GenerateShapeFor<LatestActivityView>]
+[GenerateShapeFor<ActivitySourceResource>]
 [GenerateShapeFor<DeploymentCreated>]
+[GenerateShapeFor<DeploymentDuplicated>]
 [GenerateShapeFor<DeploymentUpdated>]
 [GenerateShapeFor<DeploymentRenamed>]
 [GenerateShapeFor<DeploymentDeleted>]
@@ -69,6 +71,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<DeploymentApplied>]
 [GenerateShapeFor<DeploymentDegraded>]
 [GenerateShapeFor<StackCreated>]
+[GenerateShapeFor<StackDuplicated>]
 [GenerateShapeFor<StackUpdated>]
 [GenerateShapeFor<StackRenamed>]
 [GenerateShapeFor<StackDeleted>]
@@ -145,6 +148,7 @@ internal static class DerivedTypesMapping
     internal static DerivedTypeMapping<ActivityEventInfo> ActivityEventInfoMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
     {
         [nameof(ActivityEventType.StackCreated)] = typeof(StackCreated),
+        [nameof(ActivityEventType.StackDuplicated)] = typeof(StackDuplicated),
         [nameof(ActivityEventType.StackUpdated)] = typeof(StackUpdated),
         [nameof(ActivityEventType.StackRenamed)] = typeof(StackRenamed),
         [nameof(ActivityEventType.StackDeleted)] = typeof(StackDeleted),
@@ -162,6 +166,7 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.StackGitAutoDeployFailed)] = typeof(StackGitAutoDeployFailed),
         [nameof(ActivityEventType.StackWebhookReceived)] = typeof(StackWebhookReceived),
         [nameof(ActivityEventType.DeploymentCreated)] = typeof(DeploymentCreated),
+        [nameof(ActivityEventType.DeploymentDuplicated)] = typeof(DeploymentDuplicated),
         [nameof(ActivityEventType.DeploymentUpdated)] = typeof(DeploymentUpdated),
         [nameof(ActivityEventType.DeploymentRenamed)] = typeof(DeploymentRenamed),
         [nameof(ActivityEventType.DeploymentDeleted)] = typeof(DeploymentDeleted),

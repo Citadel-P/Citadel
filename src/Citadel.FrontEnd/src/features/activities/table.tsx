@@ -73,7 +73,7 @@ const columns = (displayTarget: boolean): ColumnDef<ActivityView>[] => {
       accessorKey: 'createdAt',
       header: ({ column }) => <SortableCell cellName="Created" column={column} />,
       cell: ({ row }) => {
-        return <span className='text-[13px]'>{fromNow(row.original.createdAt)}</span>;
+        return <span className="text-[13px]">{fromNow(row.original.createdAt)}</span>;
       },
       sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
     },
@@ -115,7 +115,11 @@ function getActivitySummary(info: ActivityEventInfo | null | undefined): string 
         info.status,
         formatWebhookReason(info.reason),
         info.dispatchedBranch ? `queued ${info.dispatchedBranch}` : info.branch ? `branch ${info.branch}` : null,
-        info.dispatchedCommitSha ? shortCommit(info.dispatchedCommitSha) : info.commitSha ? shortCommit(info.commitSha) : null,
+        info.dispatchedCommitSha
+          ? shortCommit(info.dispatchedCommitSha)
+          : info.commitSha
+            ? shortCommit(info.commitSha)
+            : null,
       ]
         .filter(Boolean)
         .join(' - ');
@@ -127,7 +131,12 @@ function getActivitySummary(info: ActivityEventInfo | null | undefined): string 
       return `${info.gitRepositoryName}:${info.branch} ${shortCommit(info.currentCommitSha)} -> ${shortCommit(info.remoteCommitSha)} - ${info.reason}`;
     case 'GitRepoPulled':
     case 'GitRepoCloned':
-      return [info.result?.commitSha ? shortCommit(info.result.commitSha) : null, info.result?.message].filter(Boolean).join(' - ');
+      return [info.result?.commitSha ? shortCommit(info.result.commitSha) : null, info.result?.message]
+        .filter(Boolean)
+        .join(' - ');
+    case 'DeploymentDuplicated':
+    case 'StackDuplicated':
+      return `from ${info.source.resourceName}`;
     default:
       return null;
   }

@@ -70,10 +70,7 @@ type StackRollbackParams = { name: string; version?: string } & RollbackStackInp
 type AutomationActionRunParams = {
   id: string;
   name: string;
-} & (
-  | ({ mode: 'run' } & RunAutomationActionInput)
-  | ({ mode: 'test' } & TestAutomationActionInput)
-);
+} & (({ mode: 'run' } & RunAutomationActionInput) | ({ mode: 'test' } & TestAutomationActionInput));
 
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
@@ -269,6 +266,13 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Initial configuration" />
   ),
 
+  DeploymentDuplicated: (info, activity) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <DuplicateSource source={info.source} />
+      <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Duplicated configuration" />
+    </div>
+  ),
+
   DeploymentDeleted: (info, activity) => (
     <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
@@ -301,6 +305,17 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
       resourceId={activity.resourceId}
       title="Initial configuration"
     />
+  ),
+
+  StackDuplicated: (info, activity) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <DuplicateSource source={info.source} />
+      <SpecViewer
+        spec={stripStackReleaseSource(info.stack)}
+        resourceId={activity.resourceId}
+        title="Duplicated configuration"
+      />
+    </div>
   ),
 
   StackUpdated: (info) => (
@@ -561,6 +576,19 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
 
   ActionRunRejected: (info) => <AutomationRunDetails info={info} status="Rejected" />,
 };
+
+function DuplicateSource({ source }: { source: Extract<ActivityEventInfo, { source: unknown }>['source'] }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span>Duplicated from</span>
+      <TargetCell
+        resourceType={source.resourceType}
+        resourceId={source.resourceId}
+        resourceName={source.resourceName}
+      />
+    </div>
+  );
+}
 
 export function ActivityAlertZone({
   info,

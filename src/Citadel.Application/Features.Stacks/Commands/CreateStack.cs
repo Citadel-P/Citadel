@@ -22,7 +22,8 @@ public sealed record CreateStack(
     StackSource StackSource,
     StackSpec Spec,
     StackDriftPolicy? DriftPolicy = null,
-    IReadOnlyCollection<Guid>? TagIds = null) : ICommand<Result<Stack>>
+    IReadOnlyCollection<Guid>? TagIds = null,
+    ActivitySourceResource? DuplicateSource = null) : ICommand<Result<Stack>>
 {
     internal sealed class Validator : AbstractValidator<CreateStack>
     {
@@ -78,6 +79,12 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStream
             }
         }
 
+        var duplicateSourceResult = await GetValidDuplicateSourceAsync(command.DuplicateSource, cancellationToken);
+        if (!duplicateSourceResult.IsSuccess(out var duplicateSource))
+        {
+            return Result.Failure<Stack>(duplicateSourceResult.Errors);
+        }
+
         var stack = Stack.Create(
             name: command.Name,
             createdByActorId: actorId,
@@ -91,14 +98,21 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStream
         if (result == 0)
             return Result.Failure<Stack>(new BadRequestError("One or more tags do not exist."));
 
+        var eventType = duplicateSource is null
+            ? ActivityEventType.StackCreated
+            : ActivityEventType.StackDuplicated;
+        ActivityEventInfo info = duplicateSource is null
+            ? new StackCreated(stack.ToSnapshot())
+            : new StackDuplicated(stack.ToSnapshot(), duplicateSource);
+
         var activity = new ActivityEvent(
             actorId: actorId,
             resourceId: stack.Id,
             platformId: command.PlatformId,
             resourceName: stack.Name,
-            eventType: ActivityEventType.StackCreated,
+            eventType: eventType,
             status: ActivityStatus.Information,
-            info: new StackCreated(stack.ToSnapshot()));
+            info: info);
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         var updatedPlatform = await unitOfWork.Platforms.GetPlatformWithLatestStatAsync(command.PlatformId, cancellationToken);
@@ -110,6 +124,30 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStream
         }
 
         return stack;
+    }
+
+    private async Task<Result<ActivitySourceResource?>> GetValidDuplicateSourceAsync(
+        ActivitySourceResource? source,
+        CancellationToken cancellationToken)
+    {
+        if (source is null)
+            return Result.Success<ActivitySourceResource?>(null);
+
+        if (source.ResourceType != ActivityResourceType.Stack)
+            return Result.Failure<ActivitySourceResource?>(new BadRequestError("Duplicate source must be a stack."));
+
+        var sourceStack = await unitOfWork.Stacks.GetAsync(source.ResourceId, cancellationToken);
+        if (sourceStack is null)
+            return Result.Failure<ActivitySourceResource?>(new NotFoundError("Duplicate source stack does not exist."));
+
+        var user = userContext.Current;
+        if (!user.IsAdmin && !await unitOfWork.Stacks.CanAccessAsync(user.UserId, source.ResourceId, cancellationToken))
+            return Result.Failure<ActivitySourceResource?>(new ForbiddenError("Missing permission [Read] on duplicate source stack."));
+
+        return Result.Success<ActivitySourceResource?>(new ActivitySourceResource(
+            ActivityResourceType.Stack,
+            sourceStack.Id,
+            sourceStack.Name));
     }
 
     private static bool IsCompatible(StackSource stackSource, StackSpec spec)

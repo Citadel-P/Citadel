@@ -49,6 +49,7 @@ import { Button } from '@/components/ui/button';
 import {
   Calendar,
   Check,
+  Copy,
   Eye,
   FileText,
   Folder,
@@ -71,6 +72,7 @@ import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { hasActionableStackDrift } from '../actions';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
+import { useNavigate } from 'react-router';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -92,12 +94,15 @@ export const StackFormComponents: RequiredFormComponents = {
         return <GenericActionBarButtons resource={resource} actions={Object.values(StackActions)} />;
       },
       Tags: ({ resource }: { resource: StackView }) => (
-        <ResourceHeaderTagsEditor
-          resourceType="Stack"
-          resourceId={resource.id}
-          tags={resource.tags}
-          disabled={!hasCapability(resource, 'canWrite')}
-        />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <ResourceHeaderTagsEditor
+            resourceType="Stack"
+            resourceId={resource.id}
+            tags={resource.tags}
+            disabled={!hasCapability(resource, 'canWrite')}
+          />
+          <DuplicateStackConfigButton stack={resource} />
+        </div>
       ),
     },
     SubHeader: ({ resource }: { resource: StackView }) => {
@@ -151,6 +156,24 @@ export const StackFormComponents: RequiredFormComponents = {
       return { item: stack, isLoading };
     },
   },
+};
+
+const DuplicateStackConfigButton = ({ stack }: { stack: StackView }) => {
+  const navigate = useNavigate();
+  const disabled = !hasCapability(stack, 'canRead') || !hasCapability(stack, 'canWrite');
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-8 rounded-sm text-xs"
+      disabled={disabled}
+      onClick={() => navigate(`/stacks/add?duplicateFrom=${stack.id}`)}>
+      <Copy className="size-3.5" />
+      Duplicate Config
+    </Button>
+  );
 };
 
 const StackSubHeader = ({ latestActivity, stack }: { stack: StackView; latestActivity: LatestActivityView | null }) => {

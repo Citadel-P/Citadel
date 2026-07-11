@@ -1,4 +1,4 @@
-import { Eye, Trash } from 'lucide-react';
+import { Copy, Eye, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { DeploymentStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
@@ -102,12 +102,35 @@ export const pauseAction: ActionConfig<DeploymentView, 'pauseDeployments' | 'res
   },
 };
 
+export const duplicateAction: ActionConfig<DeploymentView, any> = {
+  key: 'duplicate',
+  type: 'command',
+  icon: Copy,
+  requiredCapabilities: ['canRead', 'canWrite'],
+  useHandler: ({ resources }) => {
+    const navigate = useNavigate();
+    const selected = Array.isArray(resources) ? resources[0] : resources;
+    const multiSelect = Array.isArray(resources) && resources.length > 1;
+    const canExecute = !!selected && !multiSelect;
+
+    return {
+      canExecute,
+      isPending: false,
+      run: () => {
+        if (!canExecute || !selected) return;
+        navigate(`/deployments/add?duplicateFrom=${selected.id}`);
+      },
+    };
+  },
+};
+
 export const { dropdown: DeploymentDropdownActions, group: DeploymentGroupActions } =
   createActionsBuilder<DeploymentView>()
     .addAction(deployAction)
     .addAction(startAction)
     .addAction(stopAction)
     .addAction(pauseAction)
+    .addAction(duplicateAction)
     .addAction({
       key: 'details',
       type: 'command',

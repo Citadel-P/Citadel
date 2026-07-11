@@ -14,6 +14,7 @@ namespace Domain.Entities.Activities;
 [JsonPolymorphic]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 [JsonDerivedType(typeof(DeploymentCreated), nameof(ActivityEventType.DeploymentCreated))]
+[JsonDerivedType(typeof(DeploymentDuplicated), nameof(ActivityEventType.DeploymentDuplicated))]
 [JsonDerivedType(typeof(DeploymentUpdated), nameof(ActivityEventType.DeploymentUpdated))]
 [JsonDerivedType(typeof(DeploymentRenamed), nameof(ActivityEventType.DeploymentRenamed))]
 [JsonDerivedType(typeof(DeploymentDeleted), nameof(ActivityEventType.DeploymentDeleted))]
@@ -23,6 +24,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(DeploymentApplied), nameof(ActivityEventType.DeploymentApplied))]
 [JsonDerivedType(typeof(DeploymentDegraded), nameof(ActivityEventType.DeploymentDegraded))]
 [JsonDerivedType(typeof(StackCreated), nameof(ActivityEventType.StackCreated))]
+[JsonDerivedType(typeof(StackDuplicated), nameof(ActivityEventType.StackDuplicated))]
 [JsonDerivedType(typeof(StackUpdated), nameof(ActivityEventType.StackUpdated))]
 [JsonDerivedType(typeof(StackRenamed), nameof(ActivityEventType.StackRenamed))]
 [JsonDerivedType(typeof(StackDeleted), nameof(ActivityEventType.StackDeleted))]
@@ -77,7 +79,13 @@ namespace Domain.Entities.Activities;
 
 public abstract record ActivityEventInfo;
 
+public sealed record ActivitySourceResource(
+    ActivityResourceType ResourceType,
+    Guid ResourceId,
+    string ResourceName);
+
 public sealed record DeploymentCreated(DeploymentSnapshot Deployment) : ActivityEventInfo;
+public sealed record DeploymentDuplicated(DeploymentSnapshot Deployment, ActivitySourceResource Source) : ActivityEventInfo;
 public sealed record DeploymentUpdated(DeploymentSnapshot OldDeployment, DeploymentSnapshot NewDeployment) : ActivityEventInfo;
 public sealed record DeploymentRenamed(string OldName, string NewName) : ActivityEventInfo;
 public sealed record DeploymentDeleted(DeploymentSnapshot Deployment) : ActivityEventInfo;
@@ -88,6 +96,7 @@ public sealed record DeploymentDegraded(string Reason) : ActivityEventInfo;
 public sealed record DeploymentApplied(DeploymentSnapshot? Deployment, DeploymentResultSnapshot Result) : ActivityEventInfo;
 
 public sealed record StackCreated(StackSnapshot Stack) : ActivityEventInfo;
+public sealed record StackDuplicated(StackSnapshot Stack, ActivitySourceResource Source) : ActivityEventInfo;
 public sealed record StackUpdated(StackSnapshot OldStack, StackSnapshot NewStack) : ActivityEventInfo;
 public sealed record StackRenamed(string OldName, string NewName) : ActivityEventInfo;
 public sealed record StackDeleted(StackSnapshot Stack) : ActivityEventInfo;
