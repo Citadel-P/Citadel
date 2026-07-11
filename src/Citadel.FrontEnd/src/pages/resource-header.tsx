@@ -38,19 +38,19 @@ export const ResourceHeader = ({
 }: ResourceHeaderProps) => {
   const Icon = icon;
   return (
-    <div className="flex flex-col sm:flex-row gap-2 sm:justify-between">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
         <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           {Icon && <Icon className="h-4 w-4" />}
           <span className="sr-only">{PluralResourceMap[type]}</span>
         </div>
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <div className="text-md font-bold text-foreground">{title ?? PluralResourceMap[type]}</div>
           <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {showSearch && <SearchField onSearch={onSearch} />}
+      <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 md:w-auto md:flex-1">
+        {showSearch && <SearchField className="w-full sm:w-64" onSearch={onSearch} />}
         {showTagFilter && <ResourceTagFilter />}
         {showPlatformFilter && <ResourcePlatformFilter />}
         {showAdd && (

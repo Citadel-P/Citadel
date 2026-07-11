@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { getTagTextColor } from './tag-colors';
 import { toast } from 'sonner';
+import { OverflowCountBadge } from '@/components/custom/common';
 
 const TAG_QUERY_KEY = 'tags';
 const normalizeTagName = (name: string) => name.trim().toLowerCase();
@@ -199,7 +200,11 @@ export const TagChips = ({ tags, max = 3 }: { tags?: TagSummaryView[] | TagView[
           <span className="truncate">{tag.name}</span>
         </span>
       ))}
-      {hiddenCount > 0 && <span className="text-muted-foreground text-xs">+{hiddenCount}</span>}
+      <OverflowCountBadge
+        count={hiddenCount}
+        className="bg-transparent px-0 py-0 text-xs"
+        title={`${hiddenCount} more tags`}
+      />
     </div>
   );
 };

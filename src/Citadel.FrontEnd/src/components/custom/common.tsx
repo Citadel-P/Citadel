@@ -99,6 +99,26 @@ export const STATS_WINDOWS = [
   { value: 72, label: 'Last 72 hours' },
 ] as const satisfies readonly { value: StatsWindowHours; label: string }[];
 
+export const OverflowCountBadge = ({
+  count,
+  className,
+  title,
+}: {
+  count: number;
+  className?: string;
+  title?: string;
+}) => {
+  if (count <= 0) return null;
+
+  return (
+    <span
+      className={cn('rounded-sm bg-accent/60 px-1.5 py-0.5 text-[11px] text-muted-foreground', className)}
+      title={title}>
+      +{count}
+    </span>
+  );
+};
+
 export const StatsWindowSelect = ({
   value,
   onChange,

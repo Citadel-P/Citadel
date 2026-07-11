@@ -2,6 +2,7 @@ import { HostPortBinding } from '@/api/generated/api.types';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 import { EthernetPort, Link } from 'lucide-react';
+import { OverflowCountBadge } from './common';
 
 interface Props {
   ports?: Record<string, HostPortBinding[]> | null;
@@ -48,9 +49,7 @@ export function PortsDisplay({
               <span className="truncate">{port.hostPort}</span>
             </button>
           ))}
-          {hiddenCount > 0 && (
-            <span className="rounded-sm bg-accent/60 px-1.5 py-0.5 text-[11px] text-muted-foreground">+{hiddenCount}</span>
-          )}
+          <OverflowCountBadge count={hiddenCount} title={`${hiddenCount} more ports`} />
         </div>
       </HoverCardTrigger>
       <HoverCardContent className="flex w-fit max-w-100 flex-col gap-3 bg-background p-3 text-xs">

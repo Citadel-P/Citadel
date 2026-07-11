@@ -10,7 +10,16 @@ import { Label } from '../ui/label';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { Slider } from '../ui/slider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 type Primitive = string | number | boolean | bigint | symbol | null | undefined | Date;
 
@@ -595,6 +604,116 @@ function computeValidationState<T>(
   return { errors, dirty };
 }
 
+type FormNavigationItem = {
+  id: string;
+  label: string;
+  dirty: boolean;
+  error: boolean;
+};
+
+type FormNavigationSection = {
+  key: string;
+  title?: string;
+  items: FormNavigationItem[];
+};
+
+function buildNavigationSections<T>(
+  schema: FormSchema<T>,
+  dirty: Record<string, boolean>,
+  errors: Record<string, string | null>,
+  touched: Record<string, boolean>,
+  mode: 'add' | 'edit',
+): FormNavigationSection[] {
+  const fieldState = (key: string) => ({
+    dirty: mode === 'edit' && !!dirty[key],
+    error: !!touched[key] && !!errors[key],
+  });
+
+  const rowState = (fields: FieldConfig<T>[]) =>
+    fields.reduce(
+      (state, field) => {
+        const next = fieldState(field.key as string);
+        return {
+          dirty: state.dirty || next.dirty,
+          error: state.error || next.error,
+        };
+      },
+      { dirty: false, error: false },
+    );
+
+  const groupState = (group: GroupFieldConfig<T>) =>
+    group.items.reduce(
+      (state, item) => {
+        const next = item.kind === 'field' ? fieldState(item.field.key as string) : rowState(item.fields);
+        return {
+          dirty: state.dirty || next.dirty,
+          error: state.error || next.error,
+        };
+      },
+      { dirty: false, error: false },
+    );
+
+  return Object.entries(schema).map(([sectionKey, section]) => ({
+    key: sectionKey,
+    title: section.title,
+    items: section.items.map((item): FormNavigationItem => {
+      if (item.kind === 'field') {
+        const key = item.field.key as string;
+        return {
+          id: key,
+          label: item.field.label,
+          ...fieldState(key),
+        };
+      }
+
+      if (item.kind === 'row') {
+        return {
+          id: item.id,
+          label: item.id,
+          ...rowState(item.fields),
+        };
+      }
+
+      return {
+        id: item.id,
+        label: item.label,
+        ...groupState(item),
+      };
+    }),
+  }));
+}
+
+const FormNavigationLink = ({ item, variant }: { item: FormNavigationItem; variant: 'sidebar' | 'compact' }) => (
+  <Button
+    asChild
+    variant={variant === 'sidebar' ? 'secondary' : 'outline'}
+    size="sm"
+    className={cn(
+      'text-xs',
+      variant === 'sidebar' ? 'w-full justify-end bg-accent/60' : 'h-8 shrink-0 rounded-sm px-2.5',
+      item.error && 'border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/15',
+    )}>
+    <a href={`#${item.id}`} title={item.label}>
+      {item.dirty && <span className="mr-1 text-[10px] text-destructive">*</span>}
+      <span className="truncate">{item.label}</span>
+    </a>
+  </Button>
+);
+
+const FormNavigationSelectItem = ({ item }: { item: FormNavigationItem }) => (
+  <SelectItem value={item.id} className={cn(item.error && 'text-destructive focus:text-destructive')}>
+    <span
+      className={cn(
+        'size-1.5 shrink-0 rounded-full bg-transparent',
+        item.dirty && 'bg-primary',
+        item.error && 'bg-destructive',
+      )}
+    />
+    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+    {item.dirty && <span className="text-[10px] text-muted-foreground">Edited</span>}
+  </SelectItem>
+);
+
 /* ------------------------------ Draft helpers ----------------------------- */
 
 function loadDraft<T>(key: string, expectedVersion?: string | number): StoredDraft<T> | null {
@@ -691,6 +810,19 @@ export function FormShell<T>({
     () => computeValidationState(effectiveOriginal, merged, fieldMap),
     [effectiveOriginal, merged, fieldMap],
   );
+  const navigationSections = useMemo(
+    () => buildNavigationSections(schema, dirty, errors, touched, mode),
+    [schema, dirty, errors, touched, mode],
+  );
+  const [selectedNavigationId, setSelectedNavigationId] = useState<string | undefined>();
+  const selectedNavigationValue = useMemo(
+    () =>
+      selectedNavigationId &&
+      navigationSections.some((section) => section.items.some((item) => item.id === selectedNavigationId))
+        ? selectedNavigationId
+        : undefined,
+    [navigationSections, selectedNavigationId],
+  );
 
   const hasChanges = useMemo(() => !areValuesEqual(effectiveOriginal, merged), [effectiveOriginal, merged]);
   const isValid = useMemo(() => Object.values(errors).every((v) => !v), [errors]);
@@ -786,6 +918,15 @@ export function FormShell<T>({
     }
   }, [onReset, setUpdate, draftKey]);
 
+  const handleNavigationSelect = useCallback((id: string) => {
+    setSelectedNavigationId(id);
+
+    if (typeof window === 'undefined') return;
+
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${id}`);
+    document.getElementById(id)?.scrollIntoView({ block: 'start' });
+  }, []);
+
   const validateAll = useCallback(
     (value: T) => {
       const { errors: allErrors } = computeValidationState(effectiveOriginal, value, fieldMap);
@@ -864,85 +1005,51 @@ export function FormShell<T>({
         </div>
       )}
 
+      <div className="sticky top-0 z-20 -mx-1 border-b bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 xl:hidden">
+        <div className="flex items-center justify-end">
+          <Select value={selectedNavigationValue} onValueChange={handleNavigationSelect}>
+            <SelectTrigger className="h-8 w-full mb-3 rounded-sm bg-background text-xs shadow-xs">
+              <SelectValue placeholder="Jump to section" />
+            </SelectTrigger>
+            <SelectContent className="max-h-80 bg-background">
+              {navigationSections.map((section, sectionIndex) => (
+                <React.Fragment key={section.key}>
+                  {sectionIndex > 0 && <SelectSeparator />}
+                  <SelectGroup>
+                    {section.title ? (
+                      <SelectLabel className="text-[10px] uppercase text-muted-foreground">{section.title}</SelectLabel>
+                    ) : (
+                      sectionIndex === 0 &&
+                      title && (
+                        <SelectLabel className="text-[10px] uppercase text-muted-foreground">{title}</SelectLabel>
+                      )
+                    )}
+                    {section.items.map((item) => (
+                      <FormNavigationSelectItem key={`${section.key}:${item.id}`} item={item} />
+                    ))}
+                  </SelectGroup>
+                </React.Fragment>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <div className="flex gap-6">
         {/* Sidebar (xl and up) */}
         <aside className="hidden xl:block relative pr-6 border-r">
           <div className="sticky top-26 hidden xl:flex flex-col gap-8 w-35 h-fit pb-24">
             {title && <p className="text-sm font-semibold text-muted-foreground mb-2">{title}</p>}
 
-            {sections.map((sectionKey) => {
-              const section = schema[sectionKey];
-
+            {navigationSections.map((section) => {
               return (
-                <div key={sectionKey} className="flex flex-col gap-2">
+                <div key={section.key} className="flex flex-col gap-2">
                   {section.title && (
                     <p className="uppercase text-xs mb-1 text-muted-foreground text-right">{section.title}</p>
                   )}
 
                   {section.items.map((item) => {
-                    if (item.kind === 'field') {
-                      const f = item.field;
-                      const key = f.key as string;
-                      const isDirtyField = !!dirty[key];
-                      const hasError = touched[key] && errors[key];
-
-                      return (
-                        <a href={`#${key}`} key={key}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className={`justify-end w-full text-xs ${hasError ? '' : 'bg-accent/60'}`}>
-                            {mode === 'edit' && isDirtyField && (
-                              <span className="mr-1 text-[10px] text-destructive">*</span>
-                            )}{' '}
-                            {f.label}
-                          </Button>
-                        </a>
-                      );
-                    }
-
-                    if (item.kind === 'row') {
-                      return (
-                        <a href={`#${item.id}`} key={item.id}>
-                          <Button variant="secondary" size="sm" className="justify-end w-full text-xs bg-accent/60">
-                            {item.id}
-                          </Button>
-                        </a>
-                      );
-                    }
-
-                    const group = item;
-                    // compute if any child field is dirty
-                    let groupDirty = false;
-                    for (const sub of group.items) {
-                      if (sub.kind === 'field') {
-                        const k = sub.field.key as string;
-                        if (dirty[k]) {
-                          groupDirty = true;
-                          break;
-                        }
-                      } else if (sub.kind === 'row') {
-                        for (const f of sub.fields) {
-                          const k = f.key as string;
-                          if (dirty[k]) {
-                            groupDirty = true;
-                            break;
-                          }
-                        }
-                        if (groupDirty) break;
-                      }
-                    }
-
-                    return (
-                      <a href={`#${group.id}`} key={group.id}>
-                        <Button variant="secondary" size="sm" className="justify-end w-full text-xs bg-accent/60">
-                          {mode === 'edit' && groupDirty && (
-                            <span className="mr-1 text-[10px] text-destructive">*</span>
-                          )}
-                          {group.label}
-                        </Button>
-                      </a>
-                    );
+                    return <FormNavigationLink key={`${section.key}:${item.id}`} item={item} variant="sidebar" />;
                   })}
                 </div>
               );
@@ -1132,7 +1239,9 @@ export function FormShell<T>({
                                   const value = getValue(merged, key);
                                   const error = errors[key];
                                   const edited = mode === 'edit' && dirty[key];
-                                  const fieldDisabled = f.ignoreFormDisabled ? !!f.disabled : !!disabled || !!f.disabled;
+                                  const fieldDisabled = f.ignoreFormDisabled
+                                    ? !!f.disabled
+                                    : !!disabled || !!f.disabled;
                                   return (
                                     <fieldset
                                       key={key}
