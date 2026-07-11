@@ -12,7 +12,9 @@ public sealed record DockerContainer(
     string? Stack = null,
     DockerContainerStat? ContainerStat = null,
     ResourceControlState? ControlState = null,
-    IDictionary<string, IReadOnlyList<HostPortBinding>>? Ports = null
+    IDictionary<string, IReadOnlyList<HostPortBinding>>? Ports = null,
+    Guid? DeploymentId = null,
+    Guid? StackId = null
     );
 
 public record struct DockerContainerStat(

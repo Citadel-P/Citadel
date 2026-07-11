@@ -129,7 +129,6 @@ internal sealed class PersistPlatformStatsWorkItem(
             };
 
             existing.PartialUpdate(
-                platformStatus: PlatformStatus.Online,
                 networkCount: last.NetworkCount,
                 volumeCount: last.VolumeCount,
                 imageCount: last.ImageCount,

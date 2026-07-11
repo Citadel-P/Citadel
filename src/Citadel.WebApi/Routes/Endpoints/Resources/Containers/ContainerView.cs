@@ -24,6 +24,7 @@ public sealed record ContainerView(
     ContainerStatView? LastStats,
     IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
     Guid? DeploymentId,
+    Guid? StackId,
     PlatformView? Platform = null,
     ImageView? ImageView = null,
     DeploymentView? DeploymentView = null,
@@ -48,6 +49,7 @@ public sealed record ContainerView(
             Id: container.Id,
             PlatformId: container.PlatformId,
             DeploymentId: container.DeploymentId,
+            StackId: container.StackId,
             ContainerId: container.DockerContainerId,
             Name: container.Name,
             DockerImageId: GetImageId(),
@@ -131,6 +133,8 @@ public sealed record ContainerDataView(
     string? Stack = null,
     ContainerStatView? ContainerStat = null,
     IDictionary<string, IReadOnlyList<HostPortBinding>>? Ports = null,
+    Guid? DeploymentId = null,
+    Guid? StackId = null,
     PlatformCapabilities? Capabilities = null
     )
 {
@@ -144,7 +148,9 @@ public sealed record ContainerDataView(
         Stack: container.Stack,
         ControlState: container.ControlState ?? ResourceControlState.Idle,
         ContainerStat: null,
-        Ports: container.Ports
+        Ports: container.Ports,
+        DeploymentId: container.DeploymentId,
+        StackId: container.StackId
         );
 
     internal static async Task<ContainerDataView> Map((DockerContainer container, Guid platformId) tuple, IPermissionEvaluator permissionEvaluator)

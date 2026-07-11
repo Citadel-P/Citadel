@@ -4,6 +4,51 @@ import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useContainersGroup } from './hooks/useContainersGroup';
 import { ContainerDropdownActions, ContainerGroupActions } from './actions';
 import { ActionBar } from '@/components/custom/action-bar';
+import { useSearchParams } from 'react-router';
+import { useMemo } from 'react';
+import { isUnmanagedContainer } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+
+const EMPTY_CONTAINERS: never[] = [];
+
+const UnmanagedContainersFilter = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const checked = searchParams.get('unmanaged') === 'true';
+
+  const handleCheckedChange = (next: boolean) => {
+    setSearchParams(
+      (current) => {
+        const updated = new URLSearchParams(current);
+
+        if (next) {
+          updated.set('unmanaged', 'true');
+        } else {
+          updated.delete('unmanaged');
+        }
+
+        return updated;
+      },
+      { replace: true },
+    );
+  };
+
+  return (
+    <div className="inline-flex h-9 items-center gap-2 rounded-sm border bg-background px-2.5 text-xs text-muted-foreground">
+      <Switch
+        id="unmanaged-containers-only"
+        checked={checked}
+        onCheckedChange={handleCheckedChange}
+        aria-label="Show unmanaged containers only"
+      />
+      <Label
+        htmlFor="unmanaged-containers-only"
+        className={`whitespace-nowrap text-xs font-normal ${checked ? 'text-foreground' : ''}`}>
+        Unmanaged only
+      </Label>
+    </div>
+  );
+};
 
 export const ContainerComponents: RequiredComponents = {
   Icon: Box,
@@ -12,12 +57,25 @@ export const ContainerComponents: RequiredComponents = {
   },
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
+    const [searchParams] = useSearchParams();
     const { containersInfo, capabilities, isLoading } = useContainersGroup(platformId);
-    return { items: containersInfo?.containers ?? [], isLoading, capabilities };
+    const unmanagedOnly = searchParams.get('unmanaged') === 'true';
+    const containers = containersInfo?.containers ?? EMPTY_CONTAINERS;
+    const items = useMemo(
+      () => (unmanagedOnly ? containers.filter(isUnmanagedContainer) : containers),
+      [containers, unmanagedOnly],
+    );
+
+    return {
+      items,
+      isLoading,
+      capabilities,
+    };
   },
   header: {
     showAdd: false,
     showSearch: true,
+    Extra: UnmanagedContainersFilter,
   },
   DropdownActions: ContainerDropdownActions,
   GroupActions: ({ items }) => (

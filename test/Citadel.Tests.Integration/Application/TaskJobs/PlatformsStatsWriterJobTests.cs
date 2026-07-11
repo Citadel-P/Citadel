@@ -157,6 +157,57 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         Assert.All(last48, stat => Assert.Equal(_platformId, stat.PlatformId));
     }
 
+    [Fact]
+    public async Task PersistingStats_Should_Not_Mark_Offline_Platform_Online()
+    {
+        // Arrange
+        _configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 1 });
+
+        await using (var setupScope = Services.CreateAsyncScope())
+        {
+            var db = setupScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var platform = await db.Platforms.GetByIdAsync(_platformId, TestContext.Current.CancellationToken);
+            platform?.PartialUpdate(platformStatus: PlatformStatus.Offline);
+            await db.Platforms.UpdateAsync(platform!, TestContext.Current.CancellationToken);
+            await db.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var stat = new PlatformStatsResult
+        (
+            MemTotal: 123456,
+            ImageCount: 7,
+            VolumeCount: 2,
+            NetworkCount: 1,
+            AgentVersion: "1.0",
+            PlatformStat: new DockerPlatformStat
+            (
+                created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                memoryUsage: 500,
+                cpuUsage: 2,
+                rxBytes: 100,
+                txBytes: 200,
+                containerCount: 3,
+                containersPaused: 0,
+                containersStopped: 1,
+                containersRunning: 2
+            )
+        );
+
+        // Act
+        await _channel.Writer.WriteAsync((_platformId, stat), TestContext.Current.CancellationToken);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platformAfterStats = await uow.Platforms.GetByIdAsync(_platformId, TestContext.Current.CancellationToken);
+        var stats = await uow.PlatformStats.GetStatsAggregatedLast24HoursAsync(_platformId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(PlatformStatus.Offline, platformAfterStats?.Status);
+        Assert.Equal(7, platformAfterStats?.ImageCount);
+        Assert.Single(stats);
+    }
+
     private static async IAsyncEnumerable<PlatformStatsResult> GetStatsAsync()
     {
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();

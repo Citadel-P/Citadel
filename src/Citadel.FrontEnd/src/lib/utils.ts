@@ -93,3 +93,6 @@ export const serializeData = (data: unknown, format: 'json' | 'yaml' = 'yaml') =
     return format === 'yaml' ? '# Error serializing YAML' : '// Error serializing JSON';
   }
 };
+
+export const isUnmanagedContainer = (container: { deploymentId?: string | null; stackId?: string | null }) =>
+  !container.deploymentId && !container.stackId;

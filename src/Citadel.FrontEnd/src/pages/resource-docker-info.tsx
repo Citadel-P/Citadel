@@ -52,7 +52,10 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
                     <div className="flex items-center sm:gap-2">
                       <Header.Indicator resource={resource} />
                       <div className="flex flex-col text-md font-bold text-foreground min-w-0">
-                        <span>{resource.name}</span>
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <span className="truncate">{resource.name}</span>
+                          {Header.NameSuffix && <Header.NameSuffix resource={resource} />}
+                        </span>
 
                         <span className="text-sm text-foreground/40 min-w-0 max-w-50 xl:max-w-full">
                           <CopyToClipboard textToCopy={resource.id ?? '-'} />

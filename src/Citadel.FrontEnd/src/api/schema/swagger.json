@@ -23755,6 +23755,32 @@
           }
         }
       },
+      "AgentSetupView": {
+        "required": [
+          "hubPublicKey",
+          "environment",
+          "agentImage",
+          "dockerRunCommand"
+        ],
+        "type": "object",
+        "properties": {
+          "hubPublicKey": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "agentImage": {
+            "type": "string"
+          },
+          "dockerRunCommand": {
+            "type": "string"
+          }
+        }
+      },
       "AlertChannelInput": {
         "required": [
           "name",
@@ -26559,6 +26585,20 @@
               }
             }
           },
+          "deploymentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "stackId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
           "capabilities": {
             "oneOf": [
               {
@@ -27152,7 +27192,8 @@
           "stack",
           "lastStats",
           "ports",
-          "deploymentId"
+          "deploymentId",
+          "stackId"
         ],
         "type": "object",
         "properties": {
@@ -27221,6 +27262,13 @@
             }
           },
           "deploymentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "stackId": {
             "type": [
               "null",
               "string"
@@ -29292,32 +29340,6 @@
             "additionalProperties": {
               "type": "string"
             }
-          }
-        }
-      },
-      "AgentSetupView": {
-        "required": [
-          "hubPublicKey",
-          "environment",
-          "agentImage",
-          "dockerRunCommand"
-        ],
-        "type": "object",
-        "properties": {
-          "hubPublicKey": {
-            "type": "string"
-          },
-          "environment": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "agentImage": {
-            "type": "string"
-          },
-          "dockerRunCommand": {
-            "type": "string"
           }
         }
       },

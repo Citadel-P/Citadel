@@ -89,6 +89,7 @@ export interface RequiredDockerInfoComponents<T = any> {
   /** Configuration for header  */
   Header: {
     Indicator: React.FC<{ resource: T }>;
+    NameSuffix?: React.FC<{ resource: T }>;
     ActionButtons: React.FC<{ resource: T }>;
   };
   /** Optional subheader */

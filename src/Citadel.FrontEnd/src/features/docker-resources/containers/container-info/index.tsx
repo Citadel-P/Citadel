@@ -12,6 +12,8 @@ import { hasCapability } from '@/lib/resource-capabilities';
 import { Link } from 'react-router';
 import { truncate } from '@/lib/truncate';
 import { ContainerExec } from './container-exec';
+import { Unlink } from 'lucide-react';
+import { isUnmanagedContainer } from '@/lib/utils';
 
 export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDataView> = {
   Header: {
@@ -24,6 +26,15 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerData
         />
       );
     },
+    NameSuffix: ({ resource }) =>
+      isUnmanagedContainer(resource) ? (
+        <span
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500"
+          title="Unmanaged container">
+          <Unlink className="h-3.5 w-3.5" />
+          <span className="sr-only">Unmanaged container</span>
+        </span>
+      ) : null,
     ActionButtons: ({ resource }) => {
       return <GenericActionBarButtons resource={resource} actions={Object.values(ContainerInfoActions)} />;
     },

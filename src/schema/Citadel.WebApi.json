@@ -26585,6 +26585,20 @@
               }
             }
           },
+          "deploymentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "stackId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
           "capabilities": {
             "oneOf": [
               {
@@ -27178,7 +27192,8 @@
           "stack",
           "lastStats",
           "ports",
-          "deploymentId"
+          "deploymentId",
+          "stackId"
         ],
         "type": "object",
         "properties": {
@@ -27247,6 +27262,13 @@
             }
           },
           "deploymentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "stackId": {
             "type": [
               "null",
               "string"

@@ -8,7 +8,7 @@ import {
   ResourceControlState,
 } from '@/api/generated/api.types';
 import { truncate } from '@/lib/truncate';
-import { formatId } from '@/lib/utils';
+import { formatId, isUnmanagedContainer } from '@/lib/utils';
 import SortableCell from '@/components/custom/sortable-cell';
 import { Link } from 'react-router';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
@@ -21,6 +21,7 @@ import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
 import { CPUCell, MemoryUsageCell } from '@/components/custom/common';
+import { Unlink } from 'lucide-react';
 
 export const ContainersTable = ({
   items,
@@ -81,6 +82,14 @@ const columns = (
         <Link to={`./${formatId(row.original.containerId)}`} className="table-link truncate" title={row.original.name}>
           {row.original.name ? truncate(row.original.name?.slice(1), 24) : ''}
         </Link>
+        {isUnmanagedContainer(row.original) && (
+          <span
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-amber-500"
+            title="Unmanaged container">
+            <Unlink className="h-3 w-3" />
+            <span className="sr-only">Unmanaged container</span>
+          </span>
+        )}
       </div>
     ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
