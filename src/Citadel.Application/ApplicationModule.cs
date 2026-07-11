@@ -95,6 +95,7 @@ public static class ApplicationModule
             .AddSingleton<IOidcDiscoveryService, OidcDiscoveryService>()
             .AddSingleton<IOidcAuthenticationService, OidcAuthenticationService>()
             .AddSingleton<IEdgeAgentManagementService, EdgeAgentManagementService>()
+            .AddSingleton<IAgentHubPublicKeyProvider, AgentHubPublicKeyProvider>()
             .AddSingleton<IResourceBindingResolver, ResourceBindingResolver>()
             .AddScoped<IAutomationRunQueueService, AutomationRunQueueService>()
             .AddScoped<IAutomationExecutionService, AutomationExecutionService>()

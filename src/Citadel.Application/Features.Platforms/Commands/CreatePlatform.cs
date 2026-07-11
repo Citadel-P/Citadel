@@ -147,20 +147,26 @@ internal sealed class CreatePlatformHandler(
         if (result == 0)
             return Result.Failure<Platform>(new BadRequestError("One or more tags do not exist."));
 
-        var activity = PlatformActivity.Created(platform, actorId);
-        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
-
-        var images = await GetImages(platform, cancellationToken);
-        if (images != null && images.Any())
+        var images = (await GetImages(platform, cancellationToken)).ToArray();
+        if (images.Length > 0)
         {
             await unitOfWork.Images.BulkUpsertAsync(images, cancellationToken);
         }
 
-        var containers = await GetContainers(images ?? [], platform, cancellationToken);
-        if (containers != null && containers.Any())
+        var containers = await GetContainers(images, platform, cancellationToken);
+        if (containers is not null)
         {
-            await unitOfWork.Containers.BulkUpsertAsync(containers, cancellationToken);
+            ApplyDockerContainerCounts(platform, containers);
+            await unitOfWork.Platforms.UpdateAsync(platform, cancellationToken);
+
+            if (containers.Count > 0)
+            {
+                await unitOfWork.Containers.BulkUpsertAsync(containers, cancellationToken);
+            }
         }
+
+        var activity = PlatformActivity.Created(platform, actorId);
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
 
@@ -185,7 +191,7 @@ internal sealed class CreatePlatformHandler(
         return [.. images.Map(platform.Id)];
     }
 
-    private async Task<IEnumerable<Container>> GetContainers(IEnumerable<Image> images, Platform platform, CancellationToken cancellationToken)
+    private async Task<IReadOnlyCollection<Container>?> GetContainers(IEnumerable<Image> images, Platform platform, CancellationToken cancellationToken)
     {
         var command = new ContainerFilterCommand
             (
@@ -200,9 +206,27 @@ internal sealed class CreatePlatformHandler(
         {
             containersResult.IsFailure(out var error);
             logger.LogError("Failed to list containers for platform {Address}: {Error}", platform.Address, error?.Message);
-            return [];
+            return null;
         }
 
         return [.. containers.Values.Map(images, platform.Id)];
+    }
+
+    private static void ApplyDockerContainerCounts(Platform platform, IReadOnlyCollection<Container> containers)
+    {
+        if (platform.PlatformDescriptor is not DockerPlatformDescriptor descriptor)
+        {
+            return;
+        }
+
+        var running = containers.LongCount(c => c.State is ContainerStateStatus.Running or ContainerStateStatus.Restarting);
+        var paused = containers.LongCount(c => c.State == ContainerStateStatus.Paused);
+        var stopped = containers.LongCount() - running - paused;
+
+        platform.PartialUpdate(descriptor: descriptor.Create(
+            containerCount: containers.Count,
+            containersRunning: running,
+            containersPaused: paused,
+            containersStopped: stopped));
     }
 }

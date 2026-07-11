@@ -7,6 +7,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
+import { NETWORK_CHART_COLORS } from '@/components/custom/chart-series-colors';
 import { StatsPanelHeader, StatsSummaryItem } from '@/components/custom/common';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -65,11 +66,11 @@ const NetworkUsage = ({
       ({
         rxBytes: {
           label: <span className="text-foreground">Data received</span>,
-          color: 'var(--chart-1)',
+          theme: NETWORK_CHART_COLORS.rxBytes,
         },
         txBytes: {
           label: <span className="text-foreground">Data sent</span>,
-          color: 'var(--chart-2)',
+          theme: NETWORK_CHART_COLORS.txBytes,
         },
       }) satisfies ChartConfig,
     [],

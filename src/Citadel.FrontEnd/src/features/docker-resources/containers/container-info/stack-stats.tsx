@@ -1,4 +1,5 @@
 import { ContainerDataView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
+import { NETWORK_CHART_COLORS, type ThemedChartColor } from '@/components/custom/chart-series-colors';
 import { StatsPanelHeader, StatsSummaryItem, StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
 import { getContainerSeriesColor } from '@/components/custom/container-series-colors';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,7 +33,8 @@ type ContainerSeries = {
 type MetricField = {
   key: StatField;
   label: string;
-  color: string;
+  color?: string;
+  theme?: ThemedChartColor;
   aggregate?: 'sum' | 'max';
   formatter: (value: number) => string;
 };
@@ -123,13 +125,13 @@ const STACK_STAT_METRICS: MetricConfig[] = [
       {
         key: 'rxBytes',
         label: 'Received',
-        color: 'var(--chart-1)',
+        theme: NETWORK_CHART_COLORS.rxBytes,
         formatter: (value) => byteTransform(value, 2),
       },
       {
         key: 'txBytes',
         label: 'Sent',
-        color: 'var(--chart-2)',
+        theme: NETWORK_CHART_COLORS.txBytes,
         formatter: (value) => byteTransform(value, 2),
       },
     ],
@@ -137,13 +139,13 @@ const STACK_STAT_METRICS: MetricConfig[] = [
       {
         key: 'rxBytes',
         label: 'Received',
-        color: 'var(--chart-1)',
+        theme: NETWORK_CHART_COLORS.rxBytes,
         formatter: (value) => byteTransform(value, 2),
       },
       {
         key: 'txBytes',
         label: 'Sent',
-        color: 'var(--chart-2)',
+        theme: NETWORK_CHART_COLORS.txBytes,
         formatter: (value) => byteTransform(value, 2),
       },
     ],
@@ -498,7 +500,7 @@ const buildChartConfig = (metric: MetricConfig): ChartConfig =>
       field.key,
       {
         label: <span className="text-foreground">{field.label}</span>,
-        color: field.color,
+        ...(field.theme ? { theme: field.theme } : { color: field.color }),
       },
     ]),
   ) satisfies ChartConfig;

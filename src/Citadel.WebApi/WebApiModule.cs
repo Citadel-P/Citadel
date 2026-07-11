@@ -257,6 +257,11 @@ internal static class WebApiModule
 
         builder.Services.AddOptions<JobConfiguration>().BindConfiguration("JobConfiguration").ValidateOnStart();
         builder.Services
+            .AddOptions<EdgeAgentOptions>()
+            .BindConfiguration(EdgeAgentOptions.SectionName)
+            .Validate(options => !string.IsNullOrWhiteSpace(options.AgentImageRepository), "EdgeAgent:AgentImageRepository is required.")
+            .ValidateOnStart();
+        builder.Services
             .AddOptions<AutomationOptions>()
             .BindConfiguration(AutomationOptions.SectionName)
             .Validate(options => options.MaxParallelRuns > 0, "Automations:MaxParallelRuns must be greater than zero.")

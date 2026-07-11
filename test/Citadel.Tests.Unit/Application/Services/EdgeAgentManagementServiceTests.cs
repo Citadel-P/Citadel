@@ -1,3 +1,5 @@
+using System.Reflection;
+using Application.Configs;
 using Application.Services;
 using Application.Services.SignalR;
 using Domain;
@@ -8,12 +10,117 @@ using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Tests.Unit.Application.Services;
 
 public sealed class EdgeAgentManagementServiceTests
 {
+    [Fact]
+    public void EdgeAgentOptions_ShouldUseCorePackageVersion_WhenTagIsNotConfigured()
+    {
+        var options = new EdgeAgentOptions();
+        var version = typeof(EdgeAgentOptions).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+        Assert.Equal($"ghcr.io/citadel-p/citadel.agent:{NormalizeDockerTag(version!)}", options.GetAgentImage());
+    }
+
+    [Fact]
+    public async Task CreateEnrollmentAsync_ShouldReturnServerGeneratedDockerCommand()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var platform = Platform.FromPersistence(
+            id: platformId,
+            name: "edge-platform",
+            address: $"edge://{platformId:D}",
+            networkCount: 0,
+            volumeCount: 0,
+            imageCount: 0,
+            cpuCount: 0,
+            memTotal: 0,
+            status: PlatformStatus.Offline,
+            connectorType: PlatformConnectorType.EdgeAgent,
+            platformDescriptor: new DockerPlatformDescriptor("edge", 0, 0, 0, 0));
+        EdgeAgentEnrollment? capturedEnrollment = null;
+
+        var platforms = new Mock<IPlatformRepository>(MockBehavior.Strict);
+        platforms
+            .Setup(x => x.GetByIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(platform);
+
+        var edgeAgents = new Mock<IEdgeAgentRepository>(MockBehavior.Strict);
+        edgeAgents
+            .Setup(x => x.GetBindingByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((EdgeAgentBinding?)null);
+        edgeAgents
+            .Setup(x => x.AddEnrollmentAsync(It.IsAny<EdgeAgentEnrollment>(), It.IsAny<CancellationToken>()))
+            .Callback<EdgeAgentEnrollment, CancellationToken>((enrollment, _) => capturedEnrollment = enrollment)
+            .ReturnsAsync(1);
+
+        var unitOfWork = new Mock<IUnitOfWork>(MockBehavior.Strict);
+        unitOfWork.SetupGet(x => x.Platforms).Returns(platforms.Object);
+        unitOfWork.SetupGet(x => x.EdgeAgents).Returns(edgeAgents.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        unitOfWork
+            .Setup(x => x.DisposeAsync())
+            .Returns(ValueTask.CompletedTask);
+
+        await using var provider = new ServiceCollection()
+            .AddScoped(_ => unitOfWork.Object)
+            .BuildServiceProvider();
+
+        var service = new EdgeAgentManagementService(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<INotificationQueue>(),
+            Mock.Of<IPlatformStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            Options.Create(new EdgeAgentOptions
+            {
+                AgentImageRepository = "registry.example.com/citadel-agent",
+                AgentImageTag = "v1.2.3+build.9"
+            }));
+
+        var result = await service.CreateEnrollmentAsync(
+            platformId,
+            "https://citadel.example.com",
+            actorId,
+            TimeSpan.FromHours(1),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var enrollment, out var error), error?.Message);
+        Assert.NotNull(capturedEnrollment);
+        Assert.Equal(capturedEnrollment.Id, enrollment.EnrollmentId);
+        Assert.Equal(platformId, enrollment.PlatformId);
+        Assert.Equal(actorId, capturedEnrollment.CreatedByActorId);
+        Assert.Equal(EdgeAgentManagementService.HashToken(enrollment.Token), capturedEnrollment.TokenHash);
+        Assert.Equal("registry.example.com/citadel-agent:1.2.3", enrollment.Instructions.AgentImage);
+        Assert.Contains("registry.example.com/citadel-agent:1.2.3", enrollment.Instructions.DockerRunCommand);
+        Assert.Contains("CITADEL_CORE_URL=\"https://citadel.example.com\"", enrollment.Instructions.DockerRunCommand);
+        Assert.Contains("CITADEL_EDGE_ENROLLMENT_TOKEN=", enrollment.Instructions.DockerRunCommand);
+
+        platforms.VerifyAll();
+        edgeAgents.VerifyAll();
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static string NormalizeDockerTag(string tag)
+    {
+        var normalized = tag.Split('+')[0];
+        if (normalized.Length > 1 &&
+            normalized[0] is 'v' or 'V' &&
+            normalized[1] >= '0' &&
+            normalized[1] <= '9')
+        {
+            normalized = normalized[1..];
+        }
+
+        return normalized;
+    }
+
     [Fact]
     public async Task MarkHeartbeatAsync_ShouldUpdateBindingAndCommit()
     {
@@ -54,7 +161,8 @@ public sealed class EdgeAgentManagementServiceTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             Mock.Of<INotificationQueue>(),
             Mock.Of<IPlatformStreamManager>(),
-            Mock.Of<IActivityStreamManager>());
+            Mock.Of<IActivityStreamManager>(),
+            Options.Create(new EdgeAgentOptions()));
 
         await service.MarkHeartbeatAsync(platformId, heartbeat, utcNow, TestContext.Current.CancellationToken);
 
@@ -137,7 +245,8 @@ public sealed class EdgeAgentManagementServiceTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             notificationQueue.Object,
             Mock.Of<IPlatformStreamManager>(),
-            Mock.Of<IActivityStreamManager>());
+            Mock.Of<IActivityStreamManager>(),
+            Options.Create(new EdgeAgentOptions()));
 
         await service.MarkConnectedAsync(
             platformId,
@@ -254,7 +363,8 @@ public sealed class EdgeAgentManagementServiceTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             notificationQueue.Object,
             Mock.Of<IPlatformStreamManager>(),
-            Mock.Of<IActivityStreamManager>());
+            Mock.Of<IActivityStreamManager>(),
+            Options.Create(new EdgeAgentOptions()));
 
         await service.MarkConnectedAsync(
             platformId,

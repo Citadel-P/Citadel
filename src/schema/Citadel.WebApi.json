@@ -5157,6 +5157,158 @@
         ]
       }
     },
+    "/api/v1/platforms/agent/setup": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Get regular Agent setup instructions",
+        "operationId": "getAgentSetup",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSetupView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/agent/setup/rotate-key": {
+      "post": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Rotate regular Agent hub key pair",
+        "operationId": "rotateAgentHubKey",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSetupView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/platforms/{id}": {
       "get": {
         "tags": [
@@ -23603,6 +23755,32 @@
           }
         }
       },
+      "AgentSetupView": {
+        "required": [
+          "hubPublicKey",
+          "environment",
+          "agentImage",
+          "dockerRunCommand"
+        ],
+        "type": "object",
+        "properties": {
+          "hubPublicKey": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "agentImage": {
+            "type": "string"
+          },
+          "dockerRunCommand": {
+            "type": "string"
+          }
+        }
+      },
       "AlertChannelInput": {
         "required": [
           "name",
@@ -29146,7 +29324,9 @@
       "EdgeAgentEnrollmentInstructionsView": {
         "required": [
           "coreUrl",
-          "environment"
+          "environment",
+          "agentImage",
+          "dockerRunCommand"
         ],
         "type": "object",
         "properties": {
@@ -29158,6 +29338,12 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "agentImage": {
+            "type": "string"
+          },
+          "dockerRunCommand": {
+            "type": "string"
           }
         }
       },

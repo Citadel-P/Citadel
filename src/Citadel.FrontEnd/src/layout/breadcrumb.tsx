@@ -63,7 +63,7 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
       if (segment === platformId) {
         result.push({
           title: currentPlatform?.name ?? 'Platform',
-          link: pathAcc,
+          link: `/platforms/edit/${platformId}`,
         });
         continue;
       }

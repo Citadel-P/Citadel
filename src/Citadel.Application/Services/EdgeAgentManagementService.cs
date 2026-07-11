@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Application.Configs;
 using Application.Features.Deployments.Notifications;
 using Application.Features.Platforms;
 using Application.Services.SignalR;
@@ -12,6 +13,7 @@ using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Application.Services;
 
@@ -19,7 +21,8 @@ internal sealed class EdgeAgentManagementService(
     IServiceScopeFactory scopeFactory,
     INotificationQueue notificationQueue,
     IPlatformStreamManager platformStreamManager,
-    IActivityStreamManager activityStreamManager) : IEdgeAgentManagementService
+    IActivityStreamManager activityStreamManager,
+    IOptions<EdgeAgentOptions> edgeAgentOptions) : IEdgeAgentManagementService
 {
     public async Task<Result<EdgeAgentEnrollmentResult>> CreateEnrollmentAsync(Guid platformId, string coreUrl, Guid actorId, TimeSpan ttl, CancellationToken cancellationToken)
     {
@@ -66,13 +69,15 @@ internal sealed class EdgeAgentManagementService(
             ["CITADEL_EDGE_AGENT_KEY_PATH"] = "/app/data/edge-agent.key",
             ["CITADEL_EDGE_IDENTITY_PATH"] = "/app/data/edge-agent.identity.json"
         };
+        var agentImage = edgeAgentOptions.Value.GetAgentImage();
+        var dockerRunCommand = AgentDockerCommandBuilder.BuildEdgeAgentCommand(agentImage, environment);
 
         return Result.Success(new EdgeAgentEnrollmentResult(
             enrollment.Id,
             platformId,
             token,
             expiresAt,
-            new EdgeAgentEnrollmentInstructions(coreUrl, environment)));
+            new EdgeAgentEnrollmentInstructions(coreUrl, environment, agentImage, dockerRunCommand)));
     }
 
     public async Task<Result<EdgeAgentStatusResult>> GetStatusAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken)

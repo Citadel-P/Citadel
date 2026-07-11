@@ -97,6 +97,8 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         var created = Assert.IsType<PlatformCreated>(activity?.Info);
         Assert.Equal(platform.Id, created.Platform.Id);
         Assert.Equal("P-NEW", created.Platform.Name);
+        AssertDockerCounts(platform.PlatformDescriptor, containerCount: 3, running: 3, paused: 0, stopped: 0);
+        AssertDockerCounts(created.Platform.PlatformDescriptor, containerCount: 3, running: 3, paused: 0, stopped: 0);
         Assert.Equal(3, images.Count());
         Assert.Equal(3, containers?.Count());
         // Containers has foreign key on Images table
@@ -153,6 +155,7 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         var images = await uow.Images.GetByPlatformIdAsync(platform.Id, TestContext.Current.CancellationToken);
 
         Assert.NotNull(platform);
+        AssertDockerCounts(platform.PlatformDescriptor, containerCount: 3, running: 3, paused: 0, stopped: 0);
         Assert.Equal(3, images.Count());
         Assert.Equal(3, containers?.Count());
         // Containers has foreign key on Images table
@@ -298,4 +301,17 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         await VerifyJson(responseBody);
     }
 
+    private static void AssertDockerCounts(
+        PlatformDescriptor descriptor,
+        long containerCount,
+        long running,
+        long paused,
+        long stopped)
+    {
+        var docker = Assert.IsType<DockerPlatformDescriptor>(descriptor);
+        Assert.Equal(containerCount, docker.ContainerCount);
+        Assert.Equal(running, docker.ContainersRunning);
+        Assert.Equal(paused, docker.ContainersPaused);
+        Assert.Equal(stopped, docker.ContainersStopped);
+    }
 }

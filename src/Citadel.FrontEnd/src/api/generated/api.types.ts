@@ -2818,9 +2818,18 @@ export interface DriverConfiguration {
   options: Record<string, string>;
 }
 
+export interface AgentSetupView {
+  hubPublicKey: string;
+  environment: Record<string, string>;
+  agentImage: string;
+  dockerRunCommand: string;
+}
+
 export interface EdgeAgentEnrollmentInstructionsView {
   coreUrl: string;
   environment: Record<string, string>;
+  agentImage: string;
+  dockerRunCommand: string;
 }
 
 export interface EdgeAgentEnrollmentView {
@@ -6784,6 +6793,54 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name GetAgentSetup
+     * @summary Get regular Agent setup instructions
+     * @request GET:/api/v1/platforms/agent/setup
+     * @secure
+     * @response `200` `AgentSetupView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAgentSetup: (params: RequestParams = {}) =>
+      this.request<AgentSetupView, ProblemDetails>({
+        path: `/api/v1/platforms/agent/setup`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name RotateAgentHubKey
+     * @summary Rotate regular Agent hub key pair
+     * @request POST:/api/v1/platforms/agent/setup/rotate-key
+     * @secure
+     * @response `200` `AgentSetupView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    rotateAgentHubKey: (params: RequestParams = {}) =>
+      this.request<AgentSetupView, ProblemDetails>({
+        path: `/api/v1/platforms/agent/setup/rotate-key`,
+        method: "POST",
+        secure: true,
+        format: "json",
         ...params,
       }),
 

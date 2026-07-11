@@ -24,13 +24,6 @@ public sealed class HubSigningInterceptor : Interceptor
     private readonly SignatureAlgorithm algorithm =
         SignatureAlgorithm.Ed25519;
 
-    private readonly Key privateKey;
-
-    public HubSigningInterceptor()
-    {
-        privateKey = Helpers.GetOrCreatePrivateKey();
-    }
-
     public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(
         TRequest request,
         ClientInterceptorContext<TRequest, TResponse> context,
@@ -77,6 +70,7 @@ public sealed class HubSigningInterceptor : Interceptor
                 context.Method.FullName,
                 bodyHash);
 
+        using var privateKey = Helpers.GetOrCreatePrivateKey();
         byte[] signature =
             algorithm.Sign(privateKey, signedPayload);
 

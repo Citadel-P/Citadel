@@ -22,8 +22,13 @@ export const normalizePlatform = (s: PlatformView): PlatformView => {
 
 const normalizeTagName = (name: string) => name.trim().toLowerCase();
 
-export const usePlatformsGroup = () => {
-  const { selectedTagNames } = useResourceTagFilter();
+type UsePlatformsGroupOptions = {
+  useTagFilter?: boolean;
+};
+
+export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOptions = {}) => {
+  const { selectedTagNames: activeTagNames } = useResourceTagFilter();
+  const selectedTagNames = useMemo(() => (useTagFilter ? activeTagNames : []), [activeTagNames, useTagFilter]);
   const readArgs = useMemo(() => {
     if (selectedTagNames.length === 0) return undefined;
     return { query: { tags: selectedTagNames } };
@@ -129,10 +134,7 @@ export const usePlatformsGroup = () => {
     [],
   );
 
-  const platformsMessage = useMemo(
-    () => (platforms ?? []).filter(matchesActiveFilters),
-    [platforms, matchesActiveFilters],
-  );
+  const platformsMessage = useMemo(() => platforms?.filter(matchesActiveFilters), [platforms, matchesActiveFilters]);
 
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {

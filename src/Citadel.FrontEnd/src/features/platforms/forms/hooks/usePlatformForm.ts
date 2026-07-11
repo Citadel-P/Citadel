@@ -12,20 +12,27 @@ import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
-export type PlatformFormInput = CreatePlatformInput;
+export type PlatformFormInput = CreatePlatformInput & {
+  agentDockerCommand?: string;
+  agentHubPublicKey?: string;
+  edgeEnrollmentAction?: string;
+  edgeDockerCommand?: string;
+};
 
-export const createDefaultPlatformInput = (): PlatformFormInput => ({
+export const createDefaultPlatformInput = (
+  connectorType: PlatformConnectorType = PlatformConnectorType.Local,
+): PlatformFormInput => ({
   name: '',
-  address: '',
+  address: connectorType === PlatformConnectorType.Agent ? '' : null,
   description: null,
   type: PlatformType.Docker,
-  connectorType: PlatformConnectorType.Agent,
+  connectorType,
   tagIds: [],
 });
 
 export const platformToFormInput = (platform: PlatformView): PlatformFormInput => ({
   name: platform.name,
-  address: platform.connectorType === PlatformConnectorType.EdgeAgent ? null : platform.address,
+  address: platform.address,
   description: platform.description ?? null,
   type: platform.type,
   connectorType: platform.connectorType,
@@ -54,11 +61,17 @@ export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: Platfor
 
   const save = useCallback(
     async (input: PlatformFormInput) => {
-      const connectorType = input.connectorType ?? PlatformConnectorType.Agent;
+      const connectorType = input.connectorType ?? PlatformConnectorType.Local;
+      const isAgent = connectorType === PlatformConnectorType.Agent;
       const isEdge = connectorType === PlatformConnectorType.EdgeAgent;
+      const address = isAgent
+        ? (input.address ?? '').trim()
+        : mode === 'edit'
+          ? (input.address ?? platform?.address ?? '').trim()
+          : null;
       const platformInput: PlatformInput = {
         name: input.name.trim(),
-        address: isEdge ? null : (input.address ?? '').trim(),
+        address,
         description: input.description ?? null,
         type: input.type ?? PlatformType.Docker,
         connectorType,
@@ -124,14 +137,9 @@ export const usePlatformForm = (mode: 'add' | 'edit' = 'add', platform?: Platfor
   return {
     createdPlatform,
     enrollment,
-    isPending:
-      createPlatform.isPending ||
-      updatePlatform.isPending ||
-      createEnrollment.isPending,
+    isPending: createPlatform.isPending || updatePlatform.isPending || createEnrollment.isPending,
     validationErrors:
-      createPlatform.validationErrors ||
-      updatePlatform.validationErrors ||
-      createEnrollment.validationErrors,
+      createPlatform.validationErrors || updatePlatform.validationErrors || createEnrollment.validationErrors,
     save,
     regenerateEnrollment,
   };

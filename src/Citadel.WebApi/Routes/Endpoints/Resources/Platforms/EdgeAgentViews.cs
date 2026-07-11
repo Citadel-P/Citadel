@@ -20,10 +20,16 @@ public sealed record EdgeAgentEnrollmentView(
 
 public sealed record EdgeAgentEnrollmentInstructionsView(
     string CoreUrl,
-    IReadOnlyDictionary<string, string> Environment)
+    IReadOnlyDictionary<string, string> Environment,
+    string AgentImage,
+    string DockerRunCommand)
 {
     internal static EdgeAgentEnrollmentInstructionsView Map(EdgeAgentEnrollmentInstructions instructions)
-        => new(instructions.CoreUrl, instructions.Environment);
+        => new(
+            instructions.CoreUrl,
+            instructions.Environment,
+            instructions.AgentImage,
+            instructions.DockerRunCommand);
 }
 
 public sealed record EdgeAgentStatusView(

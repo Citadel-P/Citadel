@@ -11,7 +11,9 @@ public sealed record EdgeAgentEnrollmentResult(
 
 public sealed record EdgeAgentEnrollmentInstructions(
     string CoreUrl,
-    IReadOnlyDictionary<string, string> Environment);
+    IReadOnlyDictionary<string, string> Environment,
+    string AgentImage,
+    string DockerRunCommand);
 
 public sealed record EdgeAgentStatusResult(
     string ConnectionStatus,

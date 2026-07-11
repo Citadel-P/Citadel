@@ -8,7 +8,7 @@ import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { PlatformInfoActions } from '../actions';
 import { PlatformForm } from './form';
 import { usePlatformGroup } from './hooks/usePlatformGroup';
-import { PlatformStatsTab } from './platform-stats';
+import { PlatformResourceSummary, PlatformStatsTab } from './platform-stats';
 
 type PlatformFormResource = PlatformView & RequiredFormFields;
 
@@ -37,6 +37,7 @@ export const PlatformFormComponents: RequiredFormComponents<PlatformFormResource
         />
       ),
     },
+    SubHeader: ({ resource }) => <PlatformResourceSummary platform={resource} />,
     Tabs: [
       {
         label: 'Config',

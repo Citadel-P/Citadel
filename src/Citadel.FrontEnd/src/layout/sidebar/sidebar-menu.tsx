@@ -10,7 +10,7 @@ import clsx from 'clsx';
 export const SidebarMenu = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentPlatform, unresolvedAlertCount } = useAppContext();
+  const { currentPlatform, platforms, unresolvedAlertCount } = useAppContext();
   const { toggleSidebar, sidebarMinimized } = useLayoutContext();
 
   const [menuItems, setMenuItems] = useState<IMenuItem[]>(MenuItems);
@@ -87,6 +87,38 @@ export const SidebarMenu = () => {
       addPlatformToMenu({ id: currentPlatform.id, name: currentPlatform.name ?? '' });
     }
   }, [currentPlatform, addPlatformToMenu]);
+
+  useEffect(() => {
+    if (!platforms) return;
+
+    const livePlatformIds = new Set(platforms.map((platform) => platform.id).filter(Boolean));
+
+    setMenuItems((prev) => {
+      let changed = false;
+
+      const next = prev.map((menu) => {
+        if (menu.group !== 'Infrastructure') return menu;
+
+        const items = menu.items.filter((item) => {
+          if (!item.isPlatform) return true;
+
+          const platformId = getMenuPlatformId(item);
+          const keep = !!platformId && livePlatformIds.has(platformId);
+
+          if (!keep) {
+            changed = true;
+            if (platformId) addedPlatformIdsRef.current.delete(platformId);
+          }
+
+          return keep;
+        });
+
+        return changed ? { ...menu, items } : menu;
+      });
+
+      return changed ? next : prev;
+    });
+  }, [platforms]);
 
   const toggleMenu = (menu: ISubMenuItem) => {
     const targetLabel = menu.label;
@@ -229,6 +261,8 @@ function SidebarRow({
     </div>
   );
 }
+
+const getMenuPlatformId = (item: ISubMenuItem) => item.route?.match(/^\/platforms\/edit\/([^/]+)/)?.[1];
 
 function ExpandableHead({ label, expanded }: { label: string; expanded: boolean }) {
   return (

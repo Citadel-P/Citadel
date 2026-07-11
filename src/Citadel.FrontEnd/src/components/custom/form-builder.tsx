@@ -28,6 +28,7 @@ export interface FieldConfig<T> {
   placeholder?: string;
   description?: React.ReactElement | string;
   disabled?: boolean;
+  ignoreFormDisabled?: boolean;
   validate?: (value: any) => string | null;
   hideValidationMessage?: boolean;
   render: (value: any, set: FieldChange<T>) => React.ReactNode;
@@ -995,7 +996,7 @@ export function FormShell<T>({
                     const value = getValue(merged, key);
                     const error = errors[key];
                     const edited = mode === 'edit' && dirty[key];
-                    const fieldDisabled = !!disabled || !!f.disabled;
+                    const fieldDisabled = f.ignoreFormDisabled ? !!f.disabled : !!disabled || !!f.disabled;
 
                     return (
                       <fieldset
@@ -1035,7 +1036,7 @@ export function FormShell<T>({
                             const value = getValue(merged, key);
                             const error = errors[key];
                             const edited = mode === 'edit' && dirty[key];
-                            const fieldDisabled = !!disabled || !!f.disabled;
+                            const fieldDisabled = f.ignoreFormDisabled ? !!f.disabled : !!disabled || !!f.disabled;
 
                             return (
                               <fieldset
@@ -1092,7 +1093,7 @@ export function FormShell<T>({
                             const value = getValue(merged, key);
                             const error = errors[key];
                             const edited = mode === 'edit' && dirty[key];
-                            const fieldDisabled = !!disabled || !!f.disabled;
+                            const fieldDisabled = f.ignoreFormDisabled ? !!f.disabled : !!disabled || !!f.disabled;
 
                             return (
                               <fieldset
@@ -1131,7 +1132,7 @@ export function FormShell<T>({
                                   const value = getValue(merged, key);
                                   const error = errors[key];
                                   const edited = mode === 'edit' && dirty[key];
-                                  const fieldDisabled = !!disabled || !!f.disabled;
+                                  const fieldDisabled = f.ignoreFormDisabled ? !!f.disabled : !!disabled || !!f.disabled;
                                   return (
                                     <fieldset
                                       key={key}

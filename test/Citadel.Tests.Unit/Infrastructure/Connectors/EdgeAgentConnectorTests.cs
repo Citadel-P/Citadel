@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using Citadel.Containers.V1;
-using Citadel.Images.V1;
 using Citadel.Platforms.V1;
 using Citadel.SharedModels.V1;
 using Domain;

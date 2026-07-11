@@ -26,6 +26,7 @@ export const { dropdown: PlatformDropdownActions, info: PlatformInfoActions } = 
     type: 'command',
     icon: Trash,
     mutateKey: 'deletePlatforms',
+    invalidate: 'listPlatforms',
     canExecute: () => true,
     separatorBefore: true,
     confirm: true,

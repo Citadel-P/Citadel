@@ -9,23 +9,26 @@ import { useAlertEventsGroup } from '@/features/alerters/alert-events/hooks/useA
 const AppProviderContent: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { platformId } = useParams();
   const { data: platformData, isLoading: platformIsLoading } = useRead('getPlatfom', { id: platformId });
-  const { platformsMessage, isLoading: platformsIsLoading } = usePlatformsGroup();
+  const { platformsMessage, isLoading: platformsIsLoading } = usePlatformsGroup({ useTagFilter: false });
   const alertEventsGroup = useAlertEventsGroup();
 
   const currentPlatform = useMemo(() => {
     if (!platformId) return platformData?.data;
 
     const livePlatform = platformsMessage?.find((platform) => platform.id === platformId);
-    return livePlatform ?? platformData?.data;
+    if (livePlatform) return livePlatform;
+
+    return platformsMessage ? undefined : platformData?.data;
   }, [platformId, platformsMessage, platformData]);
 
   const contextValue = useMemo(
     () => ({
       isLoading: platformIsLoading || platformsIsLoading,
       currentPlatform,
+      platforms: platformsMessage,
       ...alertEventsGroup,
     }),
-    [platformIsLoading, platformsIsLoading, currentPlatform, alertEventsGroup],
+    [platformIsLoading, platformsIsLoading, currentPlatform, platformsMessage, alertEventsGroup],
   );
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
 };

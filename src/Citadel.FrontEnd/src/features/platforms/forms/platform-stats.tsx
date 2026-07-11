@@ -4,6 +4,7 @@ import {
   PlatformStatus,
   PlatformView,
 } from '@/api/generated/api.types';
+import { NETWORK_CHART_COLORS } from '@/components/custom/chart-series-colors';
 import { StatsPanelHeader, StatsSummaryItem, StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
 import {
   ChartConfig,
@@ -19,7 +20,9 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { useRead } from '@/lib/hooks';
 import { toFixedNumber } from '@/lib/utils';
 import dayjs from 'dayjs';
+import { Boxes, Cpu, HardDrive, ImageIcon, Layers, MemoryStick, Network, PlugZap, Rocket, Server } from 'lucide-react';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
 
 type PlatformStatsDatum = {
@@ -48,7 +51,6 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <PlatformResourceSummary platform={platform} />
       <CpuUsageChart
         platform={platform}
         stats={cpuStats}
@@ -74,19 +76,60 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
   );
 };
 
-const PlatformResourceSummary = ({ platform }: { platform: PlatformView }) => {
+export const PlatformResourceSummary = ({ platform }: { platform: PlatformView }) => {
   const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor | null;
+  const resourceMetrics = [
+    {
+      icon: Boxes,
+      label: 'Containers',
+      value: descriptor?.containerCount ?? '-',
+      to: `/platforms/${platform.id}/containers`,
+    },
+    {
+      icon: Rocket,
+      label: 'Deployments',
+      value: platform.deploymentCount ?? 0,
+      to: `/deployments?platformId=${platform.id}`,
+    },
+    {
+      icon: Layers,
+      label: 'Stacks',
+      value: platform.stackCount ?? 0,
+      to: `/stacks?platformId=${platform.id}`,
+    },
+    {
+      icon: ImageIcon,
+      label: 'Images',
+      value: platform.imageCount ?? '-',
+      to: `/platforms/${platform.id}/images`,
+    },
+    {
+      icon: HardDrive,
+      label: 'Volumes',
+      value: platform.volumeCount ?? '-',
+      to: `/platforms/${platform.id}/volumes`,
+    },
+    {
+      icon: Network,
+      label: 'Networks',
+      value: platform.networkCount ?? '-',
+      to: `/platforms/${platform.id}/networks`,
+    },
+  ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Metric label="CPU" value={platform.cpuCount ?? '-'} detail="cores" />
-      <Metric label="Memory" value={byteTransform(platform.memTotal, 2)} detail="total" />
-      <Metric label="Containers" value={descriptor?.containerCount ?? '-'} detail="known" />
-      <Metric label="Images" value={platform.imageCount ?? '-'} detail="known" />
-      <Metric label="Volumes" value={platform.volumeCount ?? '-'} detail="known" />
-      <Metric label="Networks" value={platform.networkCount ?? '-'} detail="known" />
-      <Metric label="Agent" value={platform.agentVersion ?? '-'} detail="version" />
-      <Metric label="Docker" value={platform.serverVersion ?? '-'} detail="version" />
+    <div className="space-y-3 py-3">
+      <div className="grid gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {resourceMetrics.map((metric) => (
+          <Metric key={metric.label} {...metric} />
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-0.5 text-xs text-muted-foreground">
+        <SystemMetric icon={Cpu} label="CPU" value={`${platform.cpuCount ?? '-'} cores`} />
+        <SystemMetric icon={MemoryStick} label="Memory" value={byteTransform(platform.memTotal, 2)} />
+        <SystemMetric icon={PlugZap} label="Agent" value={platform.agentVersion ?? '-'} />
+        <SystemMetric icon={Server} label="Docker" value={platform.serverVersion ?? '-'} />
+      </div>
     </div>
   );
 };
@@ -209,11 +252,11 @@ const NetworkUsageChart = ({
       ({
         rxBytes: {
           label: <span className="text-foreground">Data received</span>,
-          color: 'var(--chart-3)',
+          theme: NETWORK_CHART_COLORS.rxBytes,
         },
         txBytes: {
           label: <span className="text-foreground">Data sent</span>,
-          color: 'var(--chart-4)',
+          theme: NETWORK_CHART_COLORS.txBytes,
         },
       }) satisfies ChartConfig,
     [],
@@ -359,13 +402,51 @@ const StatsChartCard = ({
   );
 };
 
-const Metric = ({ label, value, detail }: { label: string; value: React.ReactNode; detail?: string }) => (
-  <div className="rounded-sm border bg-background px-4 py-3 shadow-xs">
-    <div className="text-xs text-muted-foreground">{label}</div>
-    <div className="mt-1 flex items-baseline gap-2">
-      <span className="truncate text-sm font-medium">{value}</span>
-      {detail && <span className="text-xs text-muted-foreground">{detail}</span>}
+const Metric = ({
+  icon: Icon,
+  label,
+  value,
+  to,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: React.ReactNode;
+  to: string;
+}) => {
+  const content = (
+    <div className="flex min-w-0 items-center gap-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/60 text-muted-foreground">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <div className="truncate text-[11px] font-medium uppercase text-muted-foreground">{label}</div>
+        <div className="mt-0.5 truncate text-sm font-semibold tabular-nums text-foreground">{value}</div>
+      </div>
     </div>
+  );
+
+  return (
+    <Link
+      to={to}
+      className="min-w-0 bg-background p-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      {content}
+    </Link>
+  );
+};
+
+const SystemMetric = ({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: React.ReactNode;
+}) => (
+  <div className="inline-flex min-w-0 items-center gap-1.5">
+    <Icon className="h-3.5 w-3.5 shrink-0" />
+    <span>{label}</span>
+    <span className="max-w-48 truncate font-medium tabular-nums text-foreground">{value}</span>
   </div>
 );
 

@@ -135,6 +135,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(PruneResource))]
 [JsonSerializable(typeof(PruneResource?))]
 [JsonSerializable(typeof(PlatformsView))]
+[JsonSerializable(typeof(AgentSetupView))]
 [JsonSerializable(typeof(EdgeAgentEnrollmentView))]
 [JsonSerializable(typeof(EdgeAgentEnrollmentInstructionsView))]
 [JsonSerializable(typeof(EdgeAgentStatusView))]

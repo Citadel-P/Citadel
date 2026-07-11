@@ -17,9 +17,9 @@
   platformDescriptor: {
     $type: Docker,
     daemonId: 123456,
-    containerCount: 5,
-    containersRunning: 2,
-    containersPaused: 3,
+    containerCount: 3,
+    containersRunning: 3,
+    containersPaused: 0,
     containersStopped: 0,
     driver: overlay2,
     operatingSystem: Linux,

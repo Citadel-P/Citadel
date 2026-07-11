@@ -82,6 +82,22 @@ public static class Platforms
         return EndpointHandlers.HandleResult(result, PrunePlatformView.Map);
     }
 
+    public static async Task<Results<Ok<AgentSetupView>, ProblemHttpResult>> GetAgentSetup(
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new Application.Features.Platforms.Queries.GetAgentSetup(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, AgentSetupView.Map);
+    }
+
+    public static async Task<Results<Ok<AgentSetupView>, ProblemHttpResult>> RotateAgentHubKey(
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new RotateAgentHubKey(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, AgentSetupView.Map);
+    }
+
     public static async Task<Results<Ok<EdgeAgentEnrollmentView>, ProblemHttpResult>> CreateEdgeEnrollment(
         IMediator mediator,
         HttpContext httpContext,

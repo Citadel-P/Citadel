@@ -5,6 +5,7 @@ import { AlertEventView, PlatformView } from '../../api/generated/api.types';
 interface IContext {
   isLoading: boolean;
   currentPlatform: PlatformView | undefined;
+  platforms: PlatformView[] | undefined;
   unresolvedAlertCount: number;
   liveAlertEvents: Record<string, AlertEventView>;
   receivedAlertEventIds: string[];

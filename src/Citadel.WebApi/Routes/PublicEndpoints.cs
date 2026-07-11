@@ -971,6 +971,20 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listPlatforms");
 
+        platforms.MapGet("agent/setup", Platforms.GetAgentSetup)
+            .WithSummary("Get regular Agent setup instructions")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getAgentSetup");
+
+        platforms.MapPost("agent/setup/rotate-key", Platforms.RotateAgentHubKey)
+            .WithSummary("Rotate regular Agent hub key pair")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("rotateAgentHubKey");
+
         platforms.MapGet("{id}", Platforms.Get)
             .WithSummary("Get platform by Id")
             .ProducesValidationProblem()
