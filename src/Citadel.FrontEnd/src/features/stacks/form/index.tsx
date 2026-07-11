@@ -899,7 +899,7 @@ const getStackContainerColumns = (platformId?: string): ColumnDef<ContainerDataV
   {
     accessorKey: 'ports',
     header: () => <span>Ports</span>,
-    cell: ({ row }) => <PortsDisplay ports={row.original.ports ?? {}} />,
+    cell: ({ row }) => <PortsDisplay ports={row.original.ports ?? {}} compact maxVisible={1} />,
   },
   {
     accessorKey: 'cpu',

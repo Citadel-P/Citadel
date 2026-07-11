@@ -3,10 +3,12 @@
 // - Expose getRowId & onSelectionChange
 import {
   ColumnDef,
+  ExpandedState,
   RowSelectionState,
   SortingState,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
@@ -20,6 +22,7 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   isLoading: boolean;
   getRowId?: (row: TData) => string;
+  getSubRows?: (row: TData) => TData[] | undefined;
   onSelectionChange?: (selectedRows: TData[]) => void;
 }
 interface Identifiable {
@@ -30,22 +33,28 @@ export function DataTable<TData extends Identifiable, TValue>({
   data,
   isLoading,
   getRowId,
+  getSubRows,
   onSelectionChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [expanded, setExpanded] = useState<ExpandedState>({});
 
   const table = useReactTable({
     data,
     columns,
     getRowId: (row) => (getRowId ? getRowId(row) : row.id!),
+    getSubRows,
     getCoreRowModel: getCoreRowModel(),
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
+    onExpandedChange: setExpanded,
     getSortedRowModel: getSortedRowModel(),
+    getExpandedRowModel: getSubRows ? getExpandedRowModel() : undefined,
     state: {
       sorting,
       rowSelection,
+      expanded,
     },
   });
 

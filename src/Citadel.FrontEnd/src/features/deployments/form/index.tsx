@@ -222,6 +222,7 @@ const RuntimeView = ({
         displayOptions={{
           DisplayContainerName: true,
           DisplayStatus: false,
+          CompactPorts: true,
         }}
       />
       <RuntimeTabs

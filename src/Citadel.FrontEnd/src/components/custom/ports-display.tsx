@@ -1,44 +1,94 @@
 import { HostPortBinding } from '@/api/generated/api.types';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { cn } from '@/lib/utils';
 import { EthernetPort, Link } from 'lucide-react';
 
 interface Props {
-  ports: Record<string, HostPortBinding[]>;
+  ports?: Record<string, HostPortBinding[]> | null;
+  compact?: boolean;
+  maxVisible?: number;
+  className?: string;
 }
 
-export function PortsDisplay({ ports }: Props) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {ports &&
-        Object.entries(ports).map(([containerPort, bindings]) => {
-          // pick the first valid hostPort for main display
-          const hostPort = bindings.find((b) => b.hostPort)?.hostPort;
-          if (!hostPort) return null;
-          const url = hostPort.endsWith('443') ? `https://localhost:${hostPort}` : `http://localhost:${hostPort}`;
+type PublishedPortView = {
+  containerPort: string;
+  bindings: HostPortBinding[];
+  hostPort: string;
+  url: string;
+};
 
-          return (
-            <HoverCard key={containerPort} openDelay={150} closeDelay={150}>
-              <HoverCardTrigger>
-                <div className="flex flex-row items-center justify-center cursor-pointer gap-2 hover:underline">
-                  <EthernetPort width={14} height={14} className="text-primary" />{' '}
-                  <span onClick={() => window.open(url, '_blank')}>{hostPort}</span>
-                </div>
-              </HoverCardTrigger>
-              <HoverCardContent className="flex flex-col gap-3 p-3 text-xs bg-background w-fit">
-                <div
-                  className="flex items-center justify-center gap-1 hover:underline cursor-pointer"
-                  onClick={() => window.open(url, '_blank')}>
-                  <Link width={12} height={10} /> {url}
-                </div>
-                {bindings.map((b) => (
-                  <span className="text-foreground/75">
-                    - {b.hostIP ?? ':'}:{b.hostPort}:{containerPort.toLowerCase()}
-                  </span>
-                ))}
-              </HoverCardContent>
-            </HoverCard>
-          );
-        })}
-    </div>
+export function PortsDisplay({
+  ports,
+  compact = false,
+  maxVisible = compact ? 1 : Number.POSITIVE_INFINITY,
+  className,
+}: Props) {
+  const visibleBindings = getPublishedPorts(ports);
+  const displayBindings = visibleBindings.slice(0, maxVisible);
+  const hiddenCount = Math.max(visibleBindings.length - displayBindings.length, 0);
+
+  if (visibleBindings.length === 0) return null;
+
+  return (
+    <HoverCard openDelay={150} closeDelay={150}>
+      <HoverCardTrigger asChild>
+        <div
+          className={cn(
+            'inline-flex max-w-full cursor-pointer items-center gap-2',
+            compact ? 'whitespace-nowrap' : 'flex-wrap',
+            className,
+          )}>
+          {displayBindings.map((port) => (
+            <button
+              key={`${port.containerPort}:${port.hostPort}`}
+              type="button"
+              className="inline-flex min-w-0 items-center gap-1.5 hover:underline"
+              onClick={() => window.open(port.url, '_blank')}>
+              <EthernetPort width={14} height={14} className="shrink-0 text-primary" />
+              <span className="truncate">{port.hostPort}</span>
+            </button>
+          ))}
+          {hiddenCount > 0 && (
+            <span className="rounded-sm bg-accent/60 px-1.5 py-0.5 text-[11px] text-muted-foreground">+{hiddenCount}</span>
+          )}
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent className="flex w-fit max-w-100 flex-col gap-3 bg-background p-3 text-xs">
+        {visibleBindings.map((port) => (
+          <div key={`${port.containerPort}:${port.hostPort}`} className="flex flex-col gap-1">
+            <button
+              type="button"
+              className="flex items-center gap-1 text-left hover:underline"
+              onClick={() => window.open(port.url, '_blank')}>
+              <Link width={12} height={10} className="shrink-0" /> {port.url}
+            </button>
+            {port.bindings.map((binding) => (
+              <span
+                key={`${port.containerPort}:${binding.hostPort ?? ''}:${binding.hostIP ?? ''}`}
+                className="text-foreground/75">
+                - {binding.hostIP ?? ':'}:{binding.hostPort}:{port.containerPort.toLowerCase()}
+              </span>
+            ))}
+          </div>
+        ))}
+      </HoverCardContent>
+    </HoverCard>
   );
 }
+
+const getPublishedPorts = (ports?: Record<string, HostPortBinding[]> | null): PublishedPortView[] => {
+  if (!ports) return [];
+
+  return Object.entries(ports).flatMap(([containerPort, bindings]) => {
+    const publishedBindings = bindings.filter((binding) => binding.hostPort);
+    const hostPort = publishedBindings[0]?.hostPort;
+    if (!hostPort) return [];
+
+    return {
+      containerPort,
+      bindings: publishedBindings,
+      hostPort,
+      url: hostPort.endsWith('443') ? `https://localhost:${hostPort}` : `http://localhost:${hostPort}`,
+    };
+  });
+};
