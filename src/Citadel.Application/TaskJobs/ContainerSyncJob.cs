@@ -28,6 +28,7 @@ internal sealed class ContainerSyncJob(
     IPlatformContainerCache platformContainerCache,
     IContainerStreamManager containerStreamManager,
     IDeploymentStreamManager deploymentStreamManager,
+    IStackStreamManager stackStreamManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainerSyncJob> logger) : BackgroundService
@@ -175,6 +176,7 @@ internal sealed class ContainerSyncJob(
                 containerStreamManager,
                 dbWorkQueue,
                 deploymentStreamManager,
+                stackStreamManager,
                 logger);
 
             await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
@@ -192,6 +194,7 @@ internal sealed class ContainerSyncJob(
                 containerStreamManager,
                 dbWorkQueue,
                 deploymentStreamManager,
+                stackStreamManager,
                 logger);
 
             await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
@@ -207,6 +210,7 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
     IContainerStreamManager containerStreamManager,
     IDbWorkQueue dbWorkQueue,
     IDeploymentStreamManager deploymentStreamManager,
+    IStackStreamManager stackStreamManager,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
@@ -290,6 +294,7 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 
             await ScheduleDeploymentSync(platformEvent.Id, true, cancellationToken);
+            await ScheduleStackSync(platformEvent.Id, true, cancellationToken);
 
             logger.LogInformation(
                 "Synchronized {Count} containers for platform {PlatformId}.",
@@ -312,6 +317,15 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                     platformId,
                     isOnline),
                 ct);
+
+    internal ValueTask ScheduleStackSync(Guid platformId, bool isOnline, CancellationToken ct)
+        => dbWorkQueue.EnqueueAsync(
+                new StackSyncWorkItem(
+                    stackStreamManager,
+                    notificationQueue,
+                    platformId,
+                    isOnline),
+                ct);
 }
 
 internal sealed class SyncOfflinePlatformContainersWorkItem(
@@ -321,6 +335,7 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
     IContainerStreamManager containerStreamManager,
     IDbWorkQueue dbWorkQueue,
     IDeploymentStreamManager deploymentStreamManager,
+    IStackStreamManager stackStreamManager,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
@@ -352,6 +367,7 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 
             await ScheduleDeploymentSync(platformId, false, cancellationToken);
+            await ScheduleStackSync(platformId, false, cancellationToken);
 
             logger.LogInformation(
                 "Marked {Count} containers as offline for platform {PlatformId}.",
@@ -370,6 +386,15 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
         => dbWorkQueue.EnqueueAsync(
                 new DeploymentSyncWorkItem(
                     deploymentStreamManager,
+                    notificationQueue,
+                    platformId,
+                    isOnline),
+                ct);
+
+    internal ValueTask ScheduleStackSync(Guid platformId, bool isOnline, CancellationToken ct)
+        => dbWorkQueue.EnqueueAsync(
+                new StackSyncWorkItem(
+                    stackStreamManager,
                     notificationQueue,
                     platformId,
                     isOnline),

@@ -160,6 +160,7 @@ public static class ApplicationModule
             .AddHostedService<ContainerStatsWriterJob>()
             .AddHostedService<ContainerSyncJob>()
             .AddHostedService<DeploymentSyncJob>()
+            .AddHostedService<StackSyncJob>()
             .AddHostedService<ImageSyncJob>()
             .AddHostedService<AlertRuleCacheWarmup>()
             .AddHostedService<ReconcilableResourceJob>()

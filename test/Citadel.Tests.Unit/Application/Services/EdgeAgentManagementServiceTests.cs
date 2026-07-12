@@ -1,4 +1,3 @@
-using System.Reflection;
 using Application.Configs;
 using Application.Services;
 using Application.Services.SignalR;
@@ -21,9 +20,8 @@ public sealed class EdgeAgentManagementServiceTests
     public void EdgeAgentOptions_ShouldUseCorePackageVersion_WhenTagIsNotConfigured()
     {
         var options = new EdgeAgentOptions();
-        var version = typeof(EdgeAgentOptions).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
-        Assert.Equal($"ghcr.io/citadel-p/citadel.agent:{NormalizeDockerTag(version!)}", options.GetAgentImage());
+        Assert.Equal($"ghcr.io/citadel-p/citadel.agent:{Constants.CompatibilityVersion}", options.GetAgentImage());
     }
 
     [Fact]
@@ -105,20 +103,6 @@ public sealed class EdgeAgentManagementServiceTests
         platforms.VerifyAll();
         edgeAgents.VerifyAll();
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    private static string NormalizeDockerTag(string tag)
-    {
-        var normalized = tag.Split('+')[0];
-        if (normalized.Length > 1 &&
-            normalized[0] is 'v' or 'V' &&
-            normalized[1] >= '0' &&
-            normalized[1] <= '9')
-        {
-            normalized = normalized[1..];
-        }
-
-        return normalized;
     }
 
     [Fact]

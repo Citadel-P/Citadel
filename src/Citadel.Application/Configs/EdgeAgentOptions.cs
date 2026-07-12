@@ -1,5 +1,7 @@
 namespace Application.Configs;
 
+using Hosting.Common;
+
 public sealed class EdgeAgentOptions
 {
     private const string DefaultAgentImageRepository = "ghcr.io/citadel-p/citadel.agent";
@@ -16,7 +18,7 @@ public sealed class EdgeAgentOptions
             ? DefaultAgentImageRepository
             : AgentImageRepository.Trim();
         var tag = string.IsNullOrWhiteSpace(AgentImageTag)
-            ? global::ThisAssembly.AssemblyInformationalVersion
+            ? Constants.CompatibilityVersion
             : AgentImageTag.Trim();
 
         return $"{repository}:{NormalizeDockerTag(tag)}";

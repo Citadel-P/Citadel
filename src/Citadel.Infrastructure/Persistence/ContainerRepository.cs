@@ -38,11 +38,55 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
 
     public async Task<IEnumerable<Container>> GetByIdsAsync(string[] dockerContainerIds, CancellationToken cancellationToken)
     {
-        var sql = $"""
-            SELECT * FROM Containers c
-            WHERE DockerContainerId = ANY(@Ids)
+        if (dockerContainerIds.Length == 0)
+            return [];
+
+        const string sql = """
+            SELECT DISTINCT ON (c.Id) c.*
+            FROM unnest(@Ids::text[]) AS requested(DockerContainerIdPrefix)
+            JOIN LATERAL (
+                SELECT *
+                FROM Containers c
+                WHERE c.DockerContainerId LIKE requested.DockerContainerIdPrefix || '%'
+                ORDER BY c.DockerContainerId
+                LIMIT 1
+            ) c ON TRUE
             """;
+
         var result = await db.QueryAsync<ContainerDto>(sql, new { Ids = dockerContainerIds }, transaction: tx());
+        return result?.ToDomain() ?? [];
+    }
+
+    public async Task<IEnumerable<Container>> GetStaleByDockerIdsAsync(
+        string[] dockerContainerIds,
+        Guid[] resolvedContainerIds,
+        CancellationToken cancellationToken)
+    {
+        if (dockerContainerIds.Length == 0)
+            return [];
+
+        const string sql = """
+            SELECT DISTINCT ON (c.Id) c.*
+            FROM unnest(@Ids::text[]) AS requested(DockerContainerIdPrefix)
+            JOIN LATERAL (
+                SELECT *
+                FROM Containers c
+                WHERE c.DockerContainerId LIKE requested.DockerContainerIdPrefix || '%'
+                  AND c.Id <> ALL(@ResolvedIds)
+                ORDER BY c.DockerContainerId
+                LIMIT 1
+            ) c ON TRUE
+            """;
+
+        var result = await db.QueryAsync<ContainerDto>(
+            sql,
+            new
+            {
+                Ids = dockerContainerIds,
+                ResolvedIds = resolvedContainerIds
+            },
+            transaction: tx());
+
         return result?.ToDomain() ?? [];
     }
 
