@@ -5,7 +5,6 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
 import { useMemo } from 'react';
-import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useNavigate, useParams } from 'react-router';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
@@ -16,6 +15,9 @@ import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
+import { TimestampCell } from '@/components/custom/timestamp-cell';
+import type { DateTimeFormatter } from '@/lib/date-time';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 
 export const ImagesTable = ({
   items,
@@ -30,11 +32,12 @@ export const ImagesTable = ({
   >;
 }) => {
   const [_, setSelectedResources] = useSelectedResources<ImageView>('Image');
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const formatDateTime = useProfileDateTimeFormatter();
+  const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
   return (
     <ContentCard>
-      <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
     </ContentCard>
   );
 };
@@ -44,6 +47,7 @@ const columns = (
     string,
     React.FC<{ resource: ImageView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
+  formatDateTime: DateTimeFormatter,
 ): ColumnDef<ImageView>[] => [
   {
     id: 'select',
@@ -107,7 +111,7 @@ const columns = (
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <span className="">{fromNow(new Date(row.original.createdAt).getTime())}</span>,
+    cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
     sortingFn: (rowA, rowB) => (rowA.original.createdAt < rowB.original.createdAt ? 1 : -1),
   },
   {

@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Text;
 using Application.Configs;
 using Hosting.Common;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Application.Services.Identity;
 using Microsoft.IdentityModel.Tokens;
@@ -13,11 +12,13 @@ namespace Application.Services;
 public interface IJwtService
 {
     string CreateAccessToken(IEnumerable<Claim> claims);
-    (Guid, string) CreateRefreshToken();
+    (Guid Id, string Token, DateTime ExpiresAt) CreateRefreshToken();
     bool TryValidate(string refreshToken, out Guid tokenId);
 }
 
-internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfiguration> jwtConfig, IRoleCache roleCache) : IJwtService
+internal sealed class JwtService(
+    IOptions<JwtConfiguration> jwtConfig,
+    IRoleCache roleCache) : IJwtService
 {
     private readonly JwtConfiguration jwtConfig = jwtConfig.Value;
 
@@ -55,9 +56,10 @@ internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfi
         return written;
     }
 
-    public (Guid, string) CreateRefreshToken()
+    public (Guid Id, string Token, DateTime ExpiresAt) CreateRefreshToken()
     {
         var tokenId = Guid.CreateVersion7();
+        var expiresAt = DateTime.UtcNow.AddDays(jwtConfig.RefreshToken.ValidForDays);
 
         string issuer = jwtConfig.Issuer ?? throw new ArgumentNullException(nameof(jwtConfig.Issuer));
         string audience = jwtConfig.Audience ?? throw new ArgumentNullException(nameof(jwtConfig.Audience));
@@ -67,24 +69,14 @@ internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfi
             Subject = new ClaimsIdentity([new Claim(JwtRegisteredClaimNames.Jti, tokenId.ToString())]),
             Issuer = issuer,
             Audience = audience,
-            Expires = DateTime.UtcNow.AddDays(jwtConfig.RefreshToken.ValidForDays),
+            Expires = expiresAt,
             SigningCredentials = GetSigningCredentials(),
         };
 
         var tokenHandler = new JwtSecurityTokenHandler();
         var refreshToken = tokenHandler.WriteToken(tokenHandler.CreateToken(tokenDescriptor));
 
-        context.HttpContext?.Response.Cookies.Append(Constants.RefreshToken, refreshToken, new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = true,
-            IsEssential = true,
-            SameSite = SameSiteMode.Strict,
-            Expires = DateTime.Now.AddDays(jwtConfig.RefreshToken.ValidForDays),
-            MaxAge = new TimeSpan(jwtConfig.RefreshToken.ValidForDays, 0, 0, 0)
-        });
-
-        return (tokenId, refreshToken);
+        return (tokenId, refreshToken, expiresAt);
     }
 
     public bool TryValidate(string refreshToken, out Guid tokenId)

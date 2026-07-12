@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { parseCitadelDate } from '@/lib/date-time';
 
 // Extend dayjs with the relativeTime plugin to support `fromNow` functionality.
 dayjs.extend(relativeTime);
@@ -10,4 +11,7 @@ dayjs.extend(relativeTime);
  * @param {Date | number} value The date or timestamp to format.
  * @returns {string} The formatted relative time string.
  */
-export const fromNow = (value: Date | number): string => dayjs(value).fromNow();
+export const fromNow = (value: unknown): string => {
+  const date = parseCitadelDate(value);
+  return date ? dayjs(date).fromNow() : '-';
+};

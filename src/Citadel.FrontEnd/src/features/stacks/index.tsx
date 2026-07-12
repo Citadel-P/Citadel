@@ -5,6 +5,8 @@ import { StacksTable } from './table';
 import { useStacksGroup } from './hooks/useStacksGroup';
 import { CitadelIcons } from '@/lib/icons';
 
+const EMPTY_STACKS: never[] = [];
+
 export const StackComponents: RequiredComponents = {
   Icon: CitadelIcons.Stack,
   header: {
@@ -24,7 +26,7 @@ export const StackComponents: RequiredComponents = {
 
   useData: function (): ResourceDataHookResult<any> {
     const { stacks, capabilities, isLoading } = useStacksGroup();
-    return { items: stacks ?? [], isLoading, capabilities };
+    return { items: stacks ?? EMPTY_STACKS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

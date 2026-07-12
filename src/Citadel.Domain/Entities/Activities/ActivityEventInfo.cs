@@ -76,6 +76,11 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(AutomationActionRunCancelled), nameof(ActivityEventType.ActionRunCancelled))]
 [JsonDerivedType(typeof(AutomationActionRunRejected), nameof(ActivityEventType.ActionRunRejected))]
 [JsonDerivedType(typeof(StackWebhookReceived), nameof(ActivityEventType.StackWebhookReceived))]
+[JsonDerivedType(typeof(UserProfileUpdated), nameof(ActivityEventType.UserProfileUpdated))]
+[JsonDerivedType(typeof(UserPreferencesUpdated), nameof(ActivityEventType.UserPreferencesUpdated))]
+[JsonDerivedType(typeof(UserPasswordChanged), nameof(ActivityEventType.UserPasswordChanged))]
+[JsonDerivedType(typeof(UserSessionRevoked), nameof(ActivityEventType.UserSessionRevoked))]
+[JsonDerivedType(typeof(UserOtherSessionsRevoked), nameof(ActivityEventType.UserOtherSessionsRevoked))]
 
 public abstract record ActivityEventInfo;
 
@@ -83,6 +88,8 @@ public sealed record ActivitySourceResource(
     ActivityResourceType ResourceType,
     Guid ResourceId,
     string ResourceName);
+
+public sealed record ActivityChangedField(string Name, string? OldValue, string? NewValue);
 
 public sealed record DeploymentCreated(DeploymentSnapshot Deployment) : ActivityEventInfo;
 public sealed record DeploymentDuplicated(DeploymentSnapshot Deployment, ActivitySourceResource Source) : ActivityEventInfo;
@@ -241,3 +248,9 @@ public sealed record AutomationActionRunTimedOut(
     string? ErrorMessage) : ActivityEventInfo;
 public sealed record AutomationActionRunCancelled(Guid RunId, ActionRunTrigger Trigger) : ActivityEventInfo;
 public sealed record AutomationActionRunRejected(Guid RunId, ActionRunTrigger Trigger, string Reason) : ActivityEventInfo;
+
+public sealed record UserProfileUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;
+public sealed record UserPreferencesUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;
+public sealed record UserPasswordChanged() : ActivityEventInfo;
+public sealed record UserSessionRevoked(Guid SessionId) : ActivityEventInfo;
+public sealed record UserOtherSessionsRevoked(int Count) : ActivityEventInfo;

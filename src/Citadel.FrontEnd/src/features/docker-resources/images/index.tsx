@@ -6,12 +6,14 @@ import { ActionBar } from '@/components/custom/action-bar';
 import { ImageDropdownActions, ImageGroupActions } from './actions';
 import PullImageForm, { PullButton } from './pull-image';
 
+const EMPTY_IMAGES: never[] = [];
+
 export const ImageComponents: RequiredComponents = {
   Icon: HardDrive,
   Content: ImagesTable,
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { imagesInfo, capabilities, isLoading } = useImagesGroup(platformId);
-    return { items: imagesInfo?.images ?? [], isLoading, capabilities };
+    return { items: imagesInfo?.images ?? EMPTY_IMAGES, isLoading, capabilities };
   },
   header: {
     showAdd: false,

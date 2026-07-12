@@ -44,6 +44,8 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
                 thresholdDate = DateTimeOffset.UtcNow.AddDays(-action_runs_purgeDays);
                 var countActionRuns = await uow.ActionRuns.RemoveCompletedOlderThanAsync(thresholdDate.UtcDateTime, cancellationToken);
 
+                var countRefreshTokens = await uow.RefreshTokens.DeleteExpiredAsync(DateTime.UtcNow, cancellationToken);
+
                 await uow.CommitAsync(cancellationToken);
 
                 if (countStats > 0)
@@ -54,6 +56,9 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
 
                 if (countActionRuns > 0)
                     logger.LogInformation("Purged {Count} automation action runs older than {PurgeDays} days.", countActionRuns, action_runs_purgeDays);
+
+                if (countRefreshTokens > 0)
+                    logger.LogInformation("Purged {Count} expired refresh tokens.", countRefreshTokens);
             }
             catch (Exception ex)
             {

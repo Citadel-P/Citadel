@@ -142,6 +142,13 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.ActionRunRejected
                 => ActivityResourceType.AutomationAction,
 
+            ActivityEventType.UserProfileUpdated
+            or ActivityEventType.UserPreferencesUpdated
+            or ActivityEventType.UserPasswordChanged
+            or ActivityEventType.UserSessionRevoked
+            or ActivityEventType.UserOtherSessionsRevoked
+                => ActivityResourceType.User,
+
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
         };
@@ -264,6 +271,12 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.ActionRunTimedOut, AutomationActionRunTimedOut) => true,
             (ActivityEventType.ActionRunCancelled, AutomationActionRunCancelled) => true,
             (ActivityEventType.ActionRunRejected, AutomationActionRunRejected) => true,
+
+            (ActivityEventType.UserProfileUpdated, UserProfileUpdated) => true,
+            (ActivityEventType.UserPreferencesUpdated, UserPreferencesUpdated) => true,
+            (ActivityEventType.UserPasswordChanged, UserPasswordChanged) => true,
+            (ActivityEventType.UserSessionRevoked, UserSessionRevoked) => true,
+            (ActivityEventType.UserOtherSessionsRevoked, UserOtherSessionsRevoked) => true,
 
             _ => false
         };

@@ -18,6 +18,7 @@ CREATE TABLE platforms (
     agentversion text,
     connectortype text NOT NULL,
     cpucount integer NOT NULL,
+    description text,
     imagecount integer NOT NULL,
     memtotal bigint NOT NULL,
     name text NOT NULL,
@@ -478,9 +479,23 @@ CREATE TABLE resourcetags (
 CREATE TABLE refreshtokens (
     id uuid NOT NULL,
     createdat timestamp with time zone NOT NULL,
+    expiresat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    ipaddress text,
+    lastseenat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    useragent text,
     userid uuid NOT NULL,
     CONSTRAINT pk_refreshtokens PRIMARY KEY (id),
     CONSTRAINT fk_refreshtokens_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE userpreferences (
+    userid uuid NOT NULL,
+    datetimeformat text NOT NULL,
+    theme text NOT NULL,
+    timezone text NOT NULL,
+    updatedat timestamp with time zone NOT NULL,
+    CONSTRAINT pk_userpreferences PRIMARY KEY (userid),
+    CONSTRAINT fk_userpreferences_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
 );
 
 CREATE TABLE usersteams (
@@ -945,6 +960,8 @@ CREATE UNIQUE INDEX ix_platforms_address ON platforms (address);
 
 CREATE UNIQUE INDEX ix_platformstats_platformid_created ON platformstats (platformid, created);
 
+CREATE INDEX ix_refreshtokens_expiresat ON refreshtokens (expiresat);
+
 CREATE INDEX ix_refreshtokens_userid ON refreshtokens (userid);
 
 CREATE INDEX ix_registries_createdbyactorid ON registries (createdbyactorid);
@@ -1006,7 +1023,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260710090916_migration0001', '10.0.9');
+VALUES ('20260712081718_migration0001', '10.0.9');
 
 COMMIT;
 

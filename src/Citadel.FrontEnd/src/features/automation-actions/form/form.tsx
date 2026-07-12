@@ -17,9 +17,9 @@ import {
   FormShell,
 } from '@/components/custom/form-builder';
 import { ResourceSelectorField } from '@/components/custom/common';
+import { TimezoneSelectField } from '@/components/custom/timezone-select';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Button } from '@/components/ui/button';
-import { TimezoneSelectField } from '@/features/alerters/alert-rules/form/form';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { configureAutomationActionEditor, MonacoEditor } from '@/lib/monaco';
 import { useMutate, useSaveResource } from '@/lib/hooks';
@@ -283,7 +283,7 @@ export function AutomationActionForm({
                 description: 'Permissions are evaluated at run time for this user.',
                 render: (value, set) => (
                   <ResourceSelectorField
-                    targetType={LookupResourceType.User}
+                    targetType={LookupResourceType.UserActor}
                     selected={value ?? undefined}
                     placeholder="Current user"
                     disabled={disabled}

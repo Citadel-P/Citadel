@@ -30,6 +30,7 @@ const EMPTY_CHANNEL: AlertChannelInput = {
   url: '',
   isActive: true,
 };
+const EMPTY_ALERT_RULES: never[] = [];
 
 const urlFormatHelper: Record<string, string> = {
   Generic: 'generic://example.com?template=json',
@@ -361,7 +362,7 @@ export const AlertRuleComponents: RequiredComponents = {
   useData(): ResourceDataHookResult<AlertRuleView> {
     const { data, isLoading } = useRead('listAlertRules');
     const capabilities = data?.data.capabilities;
-    const items = data?.data.alertRules ?? [];
+    const items = data?.data.alertRules ?? EMPTY_ALERT_RULES;
     return { items, isLoading, capabilities };
   },
   filterItems: (items, search) => {

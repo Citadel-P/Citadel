@@ -37,6 +37,7 @@ using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Identity;
 using WebApi.Routes.Endpoints.Resources.Identity.Actors;
 using WebApi.Routes.Endpoints.Resources.Identity.Auth;
+using WebApi.Routes.Endpoints.Resources.Identity.Profile;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
@@ -71,7 +72,10 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<SecretProviderType>),
         typeof(JsonStringEnumConverter<WebhookProvider>),
         typeof(JsonStringEnumConverter<WebhookAuthScheme>),
-        typeof(JsonStringEnumConverter<WebhookExecution>)
+        typeof(JsonStringEnumConverter<WebhookExecution>),
+        typeof(JsonStringEnumConverter<UserDateTimeFormat>),
+        typeof(JsonStringEnumConverter<UserTheme>),
+        typeof(JsonStringEnumConverter<CurrentProfileAuthenticationType>)
     })]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Guid[]))]
@@ -79,6 +83,11 @@ namespace Application.Models;
 [JsonSerializable(typeof(LookupResourceType?))]
 [JsonSerializable(typeof(ResourceType))]
 [JsonSerializable(typeof(ResourceType?))]
+[JsonSerializable(typeof(UserDateTimeFormat))]
+[JsonSerializable(typeof(UserDateTimeFormat?))]
+[JsonSerializable(typeof(UserTheme))]
+[JsonSerializable(typeof(UserTheme?))]
+[JsonSerializable(typeof(CurrentProfileAuthenticationType))]
 [JsonSerializable(typeof(ResourceBindingKind))]
 [JsonSerializable(typeof(ResourceBindingKind?))]
 [JsonSerializable(typeof(ResourceBindingScope))]
@@ -109,6 +118,18 @@ namespace Application.Models;
 [JsonSerializable(typeof(LoginRequest))]
 [JsonSerializable(typeof(LoginResponse))]
 [JsonSerializable(typeof(RefreshTokenResponse))]
+[JsonSerializable(typeof(ApplicationInfoView))]
+[JsonSerializable(typeof(CurrentProfileView))]
+[JsonSerializable(typeof(CurrentProfileAuthenticationView))]
+[JsonSerializable(typeof(ProfileResourceInfoView))]
+[JsonSerializable(typeof(UpdateCurrentProfileInput))]
+[JsonSerializable(typeof(PatchUserPreferencesInput))]
+[JsonSerializable(typeof(PatchUserPreferencesInputPatchDocument))]
+[JsonSerializable(typeof(UserPreferencesView))]
+[JsonSerializable(typeof(ChangeCurrentPasswordInput))]
+[JsonSerializable(typeof(UserSessionSummaryView))]
+[JsonSerializable(typeof(UserSessionsView))]
+[JsonSerializable(typeof(RevokeOtherProfileSessionsView))]
 [JsonSerializable(typeof(OidcProviderInput))]
 [JsonSerializable(typeof(UpdateOidcProviderInput))]
 [JsonSerializable(typeof(UpdateOidcProviderPatchDocument))]

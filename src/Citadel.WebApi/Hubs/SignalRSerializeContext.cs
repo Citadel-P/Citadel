@@ -60,6 +60,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<GitRepositoryView>]
 [GenerateShapeFor<LatestActivityView>]
 [GenerateShapeFor<ActivitySourceResource>]
+[GenerateShapeFor<ActivityChangedField>]
 [GenerateShapeFor<DeploymentCreated>]
 [GenerateShapeFor<DeploymentDuplicated>]
 [GenerateShapeFor<DeploymentUpdated>]
@@ -126,6 +127,11 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<AutomationActionRunTimedOut>]
 [GenerateShapeFor<AutomationActionRunCancelled>]
 [GenerateShapeFor<AutomationActionRunRejected>]
+[GenerateShapeFor<UserProfileUpdated>]
+[GenerateShapeFor<UserPreferencesUpdated>]
+[GenerateShapeFor<UserPasswordChanged>]
+[GenerateShapeFor<UserSessionRevoked>]
+[GenerateShapeFor<UserOtherSessionsRevoked>]
 [GenerateShapeFor<WebhookAuthenticationFailedAlertInfo>]
 [GenerateShapeFor<WebhookDispatchFailedAlertInfo>]
 [GenerateShapeFor<WebhookGitRepoSyncFailedAlertInfo>]
@@ -210,5 +216,10 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.ActionRunTimedOut)] = typeof(AutomationActionRunTimedOut),
         [nameof(ActivityEventType.ActionRunCancelled)] = typeof(AutomationActionRunCancelled),
         [nameof(ActivityEventType.ActionRunRejected)] = typeof(AutomationActionRunRejected),
+        [nameof(ActivityEventType.UserProfileUpdated)] = typeof(UserProfileUpdated),
+        [nameof(ActivityEventType.UserPreferencesUpdated)] = typeof(UserPreferencesUpdated),
+        [nameof(ActivityEventType.UserPasswordChanged)] = typeof(UserPasswordChanged),
+        [nameof(ActivityEventType.UserSessionRevoked)] = typeof(UserSessionRevoked),
+        [nameof(ActivityEventType.UserOtherSessionsRevoked)] = typeof(UserOtherSessionsRevoked),
     };
 }

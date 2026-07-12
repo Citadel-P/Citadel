@@ -94,6 +94,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (null, LookupResourceType.Platform) => await GetPlatformLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Alert) => await GetAlertLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.User) => await GetUserLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.UserActor) => await GetUserActorLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Team) => await GetTeamLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Role) => await GetRoleLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Registry) => await GetRegistryLookupAsync(userId, cancellationToken),
@@ -306,6 +307,11 @@ internal sealed class GetResourceLookupQueryHandler(
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetUserLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.Users.GetAuthorizedPagedAsync(userId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, 1, 50, null, cancellationToken))
+            .Items
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetUserActorLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.Users.GetAuthorizedPagedAsync(userId, ResourceType.User, PermissionLevel.Read, SpecificPermission.None, 1, 50, null, cancellationToken))
             .Items
             .Select(static item => new ResourceInfo(item.ActorId, item.Name)));

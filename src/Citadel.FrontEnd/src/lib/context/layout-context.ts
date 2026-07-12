@@ -8,11 +8,13 @@ interface IContext {
   toggleSidebar: () => void;
   toggleMobileMenu: () => void;
   toggleThemeColor: (color: string) => void;
-  setThemeMode: (mode: 'light' | 'dark') => void;
+  setThemeMode: (mode: ThemeMode) => void;
 }
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+
 export interface ITheme {
-  mode: 'light' | 'dark';
+  mode: ThemeMode;
   color?: string;
 }
 

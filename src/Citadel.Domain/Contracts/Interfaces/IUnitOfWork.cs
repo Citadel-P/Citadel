@@ -52,6 +52,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IAutomationActionRepository AutomationActions { get; }
     IActionRunRepository ActionRuns { get; }
     IRefreshTokenRepository RefreshTokens { get; }
+    IUserPreferencesRepository UserPreferences { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
     IActivityEventRepository ActivityEventRepository { get; }
@@ -275,6 +276,7 @@ public interface IUserRepository
     Task<UserAuthInfo?> GetUserAuthInfoByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByActorIdAsync(Guid actorId, CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<CurrentProfileDetails?> GetCurrentProfileAsync(Guid userId, CancellationToken cancellationToken);
     Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<UserDetails?> GetDetailsAsync(Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken);
@@ -295,6 +297,12 @@ public interface IUserRepository
     Task<IEnumerable<ResourceInfo>> GetTeamsLookupAsync(Guid sourceUserId, Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<Guid>> GetTeamIdsAsync(Guid userId, CancellationToken cancellationToken);
     Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken);
+}
+
+public interface IUserPreferencesRepository
+{
+    Task<UserPreferences?> GetAsync(Guid userId, CancellationToken cancellationToken);
+    Task<int> UpsertAsync(UserPreferences preferences, CancellationToken cancellationToken);
 }
 
 public interface IRegistryRepository
@@ -421,9 +429,16 @@ public interface IRefreshTokenRepository
     Task<int> CountAsync(Guid userId, CancellationToken cancellationToken);
     Task<int> AddAsync(RefreshToken refreshToken, CancellationToken cancellationToken);
     Task<UserAuthInfo?> GetUserAuthInfoByRefreshTokenIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<Guid?> GetActiveTokenIdAsync(Guid id, Guid userId, DateTime now, CancellationToken cancellationToken);
+    Task<IReadOnlyList<UserSessionRecord>> GetActiveSessionsAsync(Guid userId, DateTime now, CancellationToken cancellationToken);
+    Task<int> TouchAsync(Guid id, DateTime lastSeenAt, string? userAgent, string? ipAddress, CancellationToken cancellationToken);
+    Task<int> DeleteOwnedSessionAsync(Guid sessionId, Guid userId, Guid? currentSessionId, CancellationToken cancellationToken);
+    Task<int> DeleteOtherTokensAsync(Guid userId, Guid keepTokenId, CancellationToken cancellationToken);
+    Task<int> DeleteAllTokensAsync(Guid userId, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
     Task<int> DeleteOldestTokensAsync(Guid userId, int tokensToRemoveCount, CancellationToken cancellationToken);
+    Task<int> DeleteExpiredAsync(DateTime now, CancellationToken cancellationToken);
 }
 
 public interface IPlatformStatRepository

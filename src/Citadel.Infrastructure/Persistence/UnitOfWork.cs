@@ -34,6 +34,7 @@ internal class UnitOfWork : IUnitOfWork
         AlertEvents = new Lazy<IAlertEventRepository>(() => new AlertEventRepository(connection, GetTransaction));
         Deployments = new Lazy<IDeploymentRepository>(() => new DeploymentRepository(connection, GetTransaction));
         RefreshTokens = new Lazy<IRefreshTokenRepository>(() => new RefreshTokenRepository(connection, GetTransaction));
+        UserPreferences = new Lazy<IUserPreferencesRepository>(() => new UserPreferencesRepository(connection, GetTransaction));
         PlatformStats = new Lazy<IPlatformStatRepository>(() => new PlatformStatRepository(connection, GetTransaction));
         ContainerStats = new Lazy<IContainerStatRepository>(() => new ContainerStatRepository(connection, GetTransaction));
         ActivityEvents = new Lazy<IActivityEventRepository>(() => new ActivityEventRepository(connection, GetTransaction));
@@ -78,6 +79,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IAutomationActionRepository> AutomationActions { get; }
     private Lazy<IActionRunRepository> ActionRuns { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
+    private Lazy<IUserPreferencesRepository> UserPreferences { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
     private Lazy<IActivityEventRepository> ActivityEvents { get; }
     private Lazy<IContainerStatRepository> ContainerStats { get; }
@@ -98,6 +100,7 @@ internal class UnitOfWork : IUnitOfWork
     IDeploymentRepository IUnitOfWork.Deployments => Deployments.Value;
     IPlatformStatRepository IUnitOfWork.PlatformStats => PlatformStats.Value;
     IRefreshTokenRepository IUnitOfWork.RefreshTokens => RefreshTokens.Value;
+    IUserPreferencesRepository IUnitOfWork.UserPreferences => UserPreferences.Value;
     IGitAccountRepository IUnitOfWork.GitAccounts => GitAccounts.Value;
     IGitReposRepository IUnitOfWork.GitRepositories => GitRepositories.Value;
     IContainerStatRepository IUnitOfWork.ContainerStats => ContainerStats.Value;

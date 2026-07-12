@@ -33,6 +33,7 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     private Guid _visibleImageId;
     private Guid _hiddenImageId;
     private Guid _userLookupSourceId;
+    private Guid _userLookupSourceActorId;
     private Guid _visibleTeamId;
     private Guid _hiddenTeamId;
     private Guid _extraTeamId;
@@ -199,6 +200,7 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         await uow.Actors.AddAsync(userActor, TestContext.Current.CancellationToken);
         await uow.Users.AddAsync(lookupUser, TestContext.Current.CancellationToken);
         _userLookupSourceId = lookupUser.Id;
+        _userLookupSourceActorId = lookupUser.ActorId;
 
         var visibleTeamActor = Actor.Create(ActorType.Team, new ActorMetadata("team-visible"));
         var hiddenTeamActor = Actor.Create(ActorType.Team, new ActorMetadata("team-hidden"));
@@ -979,6 +981,44 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         Assert.Equal(2, items.GetArrayLength());
         Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _visibleRoleId);
         Assert.Contains(items.EnumerateArray(), item => item.GetProperty("id").GetGuid() == _hiddenRoleId);
+    }
+
+    [Fact]
+    public async Task Lookup_User_Add_Mode_Should_Return_UserId_And_UserActor_Should_Return_ActorId()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.User, _userLookupSourceId, PermissionLevel.Read)
+            ]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var userResponse = await Client.GetAsync("/api/v1/lookup?targetResourceType=User", TestContext.Current.CancellationToken);
+        var userBody = await userResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(userResponse.IsSuccessStatusCode, userBody);
+
+        using (var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(userBody)),
+            cancellationToken: TestContext.Current.CancellationToken))
+        {
+            var item = Assert.Single(document.RootElement.EnumerateArray());
+            Assert.Equal(_userLookupSourceId, item.GetProperty("id").GetGuid());
+        }
+
+        var actorResponse = await Client.GetAsync("/api/v1/lookup?targetResourceType=UserActor", TestContext.Current.CancellationToken);
+        var actorBody = await actorResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(actorResponse.IsSuccessStatusCode, actorBody);
+
+        using (var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(actorBody)),
+            cancellationToken: TestContext.Current.CancellationToken))
+        {
+            var item = Assert.Single(document.RootElement.EnumerateArray());
+            Assert.Equal(_userLookupSourceActorId, item.GetProperty("id").GetGuid());
+        }
     }
 
     [Fact]

@@ -40,7 +40,7 @@ public class LoginCommandCacheTests
         var jwtService = new Mock<IJwtService>();
         jwtService.Setup(x => x.CreateAccessToken(It.IsAny<IEnumerable<System.Security.Claims.Claim>>()))
             .Returns("token");
-        jwtService.Setup(x => x.CreateRefreshToken()).Returns((Guid.NewGuid(), "refresh"));
+        jwtService.Setup(x => x.CreateRefreshToken()).Returns((Guid.NewGuid(), "refresh", DateTime.UtcNow.AddDays(30)));
 
         var refreshTokens = new Mock<IRefreshTokenRepository>();
         uow.SetupGet(x => x.RefreshTokens).Returns(refreshTokens.Object);
@@ -48,7 +48,11 @@ public class LoginCommandCacheTests
             .ReturnsAsync(1);
         refreshTokens.Setup(x => x.CountAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
 
-        var handler = new LoginCommandHandler(uow.Object, jwtService.Object, roleCache);
+        var requestMetadata = new Mock<IRequestSessionMetadataAccessor>();
+        requestMetadata.Setup(x => x.GetCurrent()).Returns(new RequestSessionMetadata("test-agent", "127.0.0.1"));
+        var refreshTokenCookieService = new Mock<IRefreshTokenCookieService>();
+
+        var handler = new LoginCommandHandler(uow.Object, jwtService.Object, roleCache, requestMetadata.Object, refreshTokenCookieService.Object);
 
         var result = await handler.Handle(new LoginCommand(testUser.Email, "password"), CancellationToken.None);
 
@@ -57,6 +61,7 @@ public class LoginCommandCacheTests
         var roles = roleCache.GetRoles(testUser.Id);
         Assert.NotNull(roles);
         Assert.Contains("admin", roles, StringComparer.OrdinalIgnoreCase);
+        refreshTokenCookieService.Verify(x => x.Set("refresh", It.IsAny<DateTime>()), Times.Once);
     }
 
     [Fact]
@@ -74,8 +79,10 @@ public class LoginCommandCacheTests
         uow.SetupGet(x => x.Users).Returns(users.Object);
 
         var jwtService = new Mock<IJwtService>();
+        var requestMetadata = new Mock<IRequestSessionMetadataAccessor>();
+        var refreshTokenCookieService = new Mock<IRefreshTokenCookieService>();
 
-        var handler = new LoginCommandHandler(uow.Object, jwtService.Object, roleCache);
+        var handler = new LoginCommandHandler(uow.Object, jwtService.Object, roleCache, requestMetadata.Object, refreshTokenCookieService.Object);
 
         var result = await handler.Handle(new LoginCommand("missing", "password"), CancellationToken.None);
 

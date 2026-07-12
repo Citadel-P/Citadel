@@ -6,6 +6,8 @@ import { ActionBar } from '@/components/custom/action-bar';
 import NetworkForm from './form';
 import { useNetworksGroup } from './hooks/useNetworksGroup';
 
+const EMPTY_NETWORKS: never[] = [];
+
 export const NetworkComponents: RequiredComponents = {
   Icon: Network,
   Content: ({ items, actions, isLoading }) => {
@@ -17,7 +19,7 @@ export const NetworkComponents: RequiredComponents = {
   },
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { networks, isLoading, capabilities } = useNetworksGroup(platformId);
-    return { items: networks?.networks ?? [], isLoading, capabilities };
+    return { items: networks?.networks ?? EMPTY_NETWORKS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

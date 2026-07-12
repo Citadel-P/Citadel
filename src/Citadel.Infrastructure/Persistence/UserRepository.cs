@@ -149,6 +149,45 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return result?.ToDetails();
     }
 
+    public async Task<CurrentProfileDetails?> GetCurrentProfileAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        const string selectSql = $$"""
+            WITH {{UserAggregateCtes}},
+            OidcLinks AS (
+                SELECT DISTINCT ON (externalLogins.UserId)
+                    externalLogins.UserId,
+                    providers.Id AS ProviderId,
+                    providers.DisplayName AS ProviderName
+                FROM OidcExternalLogins externalLogins
+                JOIN OidcProviders providers ON providers.Id = externalLogins.ProviderId
+                ORDER BY externalLogins.UserId, externalLogins.UpdatedAt DESC
+            )
+            SELECT
+                u.Id,
+                u.Name AS DisplayName,
+                u.Email,
+                u.ActorId,
+                u.CreatedAt,
+                COALESCE(teams.Teams, '[]') AS Teams,
+                COALESCE(roles.Roles, '[]') AS Roles,
+                oidc.ProviderId AS OidcProviderId,
+                oidc.ProviderName AS OidcProviderName
+            FROM Users u
+            JOIN Actors a ON a.Id = u.ActorId
+            {{UserAggregateJoins}}
+            LEFT JOIN OidcLinks oidc ON oidc.UserId = u.Id
+            WHERE u.Id = @UserId
+              AND a.IsEnabled
+         """;
+
+        var result = await db.QuerySingleOrDefaultAsync<CurrentProfileDto>(
+            selectSql,
+            new { UserId = userId },
+            transaction: tx());
+
+        return result?.ToDetails();
+    }
+
     public async Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Users ORDER BY Name ASC";

@@ -5,12 +5,22 @@ import { AppProvider } from '@/lib/context/app-provider';
 import { useEffect, useRef, useState } from 'react';
 import { Sidebar } from './sidebar/sidebar';
 import Breadcrumb from './breadcrumb';
+import { useRead } from '@/lib/hooks';
+import { toThemeMode } from '@/lib/theme-preferences';
 
 const LayoutPage = () => {
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isSticky, setIsSticky] = useState(false);
-  const { sidebarMinimized } = useLayoutContext();
+  const { sidebarMinimized, setThemeMode } = useLayoutContext();
+  const preferencesQuery = useRead('getProfilePreferences');
+  const preferredTheme = preferencesQuery.data?.data.theme;
+
+  useEffect(() => {
+    if (preferredTheme) {
+      setThemeMode(toThemeMode(preferredTheme));
+    }
+  }, [preferredTheme, setThemeMode]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

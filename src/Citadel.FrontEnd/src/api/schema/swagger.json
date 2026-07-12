@@ -457,6 +457,586 @@
         }
       }
     },
+    "/api/v1/application/info": {
+      "get": {
+        "tags": [
+          "Application"
+        ],
+        "summary": "Get application information",
+        "operationId": "getApplicationInfo",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationInfoView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Get current profile",
+        "operationId": "getCurrentProfile",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentProfileView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Update current profile",
+        "operationId": "updateCurrentProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCurrentProfileInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentProfileView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/preferences": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Get current profile preferences",
+        "operationId": "getProfilePreferences",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Patch current profile preferences",
+        "operationId": "patchProfilePreferences",
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserPreferencesInput"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserPreferencesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/change-password": {
+      "post": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Change current password",
+        "operationId": "changeCurrentPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeCurrentPasswordInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/sessions": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "List current profile sessions",
+        "operationId": "listProfileSessions",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSessionsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Revoke other profile sessions",
+        "operationId": "revokeOtherProfileSessions",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeOtherProfileSessionsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/sessions/{sessionId}": {
+      "delete": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Revoke profile session",
+        "operationId": "revokeProfileSession",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/actors/{id}": {
       "get": {
         "tags": [
@@ -22001,6 +22581,31 @@
           }
         }
       },
+      "ActivityChangedField": {
+        "required": [
+          "name",
+          "oldValue",
+          "newValue"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "oldValue": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "newValue": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ActivityEventInfo": {
         "required": [
           "$type"
@@ -22195,6 +22800,21 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoStackWebhookReceived"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserProfileUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserPreferencesUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserPasswordChanged"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserSessionRevoked"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserOtherSessionsRevoked"
           }
         ],
         "discriminator": {
@@ -22262,7 +22882,12 @@
             "ActionRunTimedOut": "#/components/schemas/ActivityEventInfoAutomationActionRunTimedOut",
             "ActionRunCancelled": "#/components/schemas/ActivityEventInfoAutomationActionRunCancelled",
             "ActionRunRejected": "#/components/schemas/ActivityEventInfoAutomationActionRunRejected",
-            "StackWebhookReceived": "#/components/schemas/ActivityEventInfoStackWebhookReceived"
+            "StackWebhookReceived": "#/components/schemas/ActivityEventInfoStackWebhookReceived",
+            "UserProfileUpdated": "#/components/schemas/ActivityEventInfoUserProfileUpdated",
+            "UserPreferencesUpdated": "#/components/schemas/ActivityEventInfoUserPreferencesUpdated",
+            "UserPasswordChanged": "#/components/schemas/ActivityEventInfoUserPasswordChanged",
+            "UserSessionRevoked": "#/components/schemas/ActivityEventInfoUserSessionRevoked",
+            "UserOtherSessionsRevoked": "#/components/schemas/ActivityEventInfoUserOtherSessionsRevoked"
           }
         }
       },
@@ -23712,6 +24337,92 @@
           }
         }
       },
+      "ActivityEventInfoUserOtherSessionsRevoked": {
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserOtherSessionsRevoked"
+            ],
+            "type": "string"
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ActivityEventInfoUserPasswordChanged": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserPasswordChanged"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoUserPreferencesUpdated": {
+        "required": [
+          "changes"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserPreferencesUpdated"
+            ],
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityChangedField"
+            }
+          }
+        }
+      },
+      "ActivityEventInfoUserProfileUpdated": {
+        "required": [
+          "changes"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserProfileUpdated"
+            ],
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityChangedField"
+            }
+          }
+        }
+      },
+      "ActivityEventInfoUserSessionRevoked": {
+        "required": [
+          "sessionId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserSessionRevoked"
+            ],
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "ActivityEventType": {
         "enum": [
           "DeploymentCreated",
@@ -23776,7 +24487,12 @@
           "StackGitUpdateAvailable",
           "StackGitAutoUpdated",
           "StackGitAutoDeployFailed",
-          "StackWebhookReceived"
+          "StackWebhookReceived",
+          "UserProfileUpdated",
+          "UserPreferencesUpdated",
+          "UserPasswordChanged",
+          "UserSessionRevoked",
+          "UserOtherSessionsRevoked"
         ]
       },
       "ActivityResourceType": {
@@ -23788,7 +24504,8 @@
           "AlertRule",
           "GitRepository",
           "OidcProvider",
-          "AutomationAction"
+          "AutomationAction",
+          "User"
         ]
       },
       "ActivitySourceResource": {
@@ -25830,6 +26547,25 @@
           "AutomationActionRunFailed"
         ]
       },
+      "ApplicationInfoView": {
+        "required": [
+          "name",
+          "version",
+          "informationalVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "informationalVersion": {
+            "type": "string"
+          }
+        }
+      },
       "ApplyDeploymentInput": {
         "required": [
           "id"
@@ -26524,6 +27260,21 @@
               "null",
               "boolean"
             ]
+          }
+        }
+      },
+      "ChangeCurrentPasswordInput": {
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string"
           }
         }
       },
@@ -28354,6 +29105,81 @@
             ],
             "additionalProperties": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "CurrentProfileAuthenticationType": { },
+      "CurrentProfileAuthenticationView": {
+        "required": [
+          "type",
+          "label",
+          "canChangePassword"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/CurrentProfileAuthenticationType"
+          },
+          "label": {
+            "type": "string"
+          },
+          "canChangePassword": {
+            "type": "boolean"
+          },
+          "oidcProviderId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "oidcProviderName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CurrentProfileView": {
+        "required": [
+          "id",
+          "displayName",
+          "email",
+          "authentication",
+          "createdAt",
+          "directRoles",
+          "teams"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "authentication": {
+            "$ref": "#/components/schemas/CurrentProfileAuthenticationView"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "directRoles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileResourceInfoView"
+            }
+          },
+          "teams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileResourceInfoView"
             }
           }
         }
@@ -32066,6 +32892,7 @@
           "Alert",
           "AlertChannel",
           "User",
+          "UserActor",
           "Team",
           "Role",
           "ResourceBinding"
@@ -33250,6 +34077,42 @@
           }
         }
       },
+      "PatchUserPreferencesInput": {
+        "required": [
+          "timeZone",
+          "dateTimeFormat",
+          "theme"
+        ],
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dateTimeFormat": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserDateTimeFormat"
+              }
+            ]
+          },
+          "theme": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserTheme"
+              }
+            ]
+          }
+        }
+      },
       "PermissionInput": {
         "required": [
           "resourceType",
@@ -34061,6 +34924,22 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ProfileResourceInfoView": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -35173,6 +36052,22 @@
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "RevokeOtherProfileSessionsView": {
+        "required": [
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
               "integer",
               "string"
             ],
@@ -37409,6 +38304,17 @@
           "AutoDeploy"
         ]
       },
+      "UpdateCurrentProfileInput": {
+        "required": [
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          }
+        }
+      },
       "UpdateExternalSecretInput": {
         "required": [
           "name",
@@ -37628,6 +38534,39 @@
           }
         }
       },
+      "UserDateTimeFormat": {
+        "enum": [
+          "System",
+          "TwentyFourHour",
+          "TwelveHour"
+        ]
+      },
+      "UserPreferencesView": {
+        "required": [
+          "timeZone",
+          "dateTimeFormat",
+          "theme",
+          "isPersisted"
+        ],
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dateTimeFormat": {
+            "$ref": "#/components/schemas/UserDateTimeFormat"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/UserTheme"
+          },
+          "isPersisted": {
+            "type": "boolean"
+          }
+        }
+      },
       "UserResourceAccessInput": {
         "required": [
           "resourceType",
@@ -37677,6 +38616,77 @@
             "type": "string"
           }
         }
+      },
+      "UserSessionSummaryView": {
+        "required": [
+          "id",
+          "displayName",
+          "userAgent",
+          "ipAddress",
+          "createdAt",
+          "lastSeenAt",
+          "expiresAt",
+          "isCurrent"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ipAddress": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "lastSeenAt": {
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "format": "date-time"
+          },
+          "isCurrent": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UserSessionsView": {
+        "required": [
+          "sessions",
+          "canRevokeOtherSessions"
+        ],
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSessionSummaryView"
+            }
+          },
+          "canRevokeOtherSessions": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UserTheme": {
+        "enum": [
+          "System",
+          "Light",
+          "Dark"
+        ]
       },
       "UserView": {
         "required": [
@@ -38056,6 +39066,12 @@
   "tags": [
     {
       "name": "Authentication"
+    },
+    {
+      "name": "Application"
+    },
+    {
+      "name": "Profile"
     },
     {
       "name": "Actors"

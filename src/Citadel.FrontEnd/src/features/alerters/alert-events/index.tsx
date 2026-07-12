@@ -12,6 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { CitadelIcons } from '@/lib/icons';
 
+const EMPTY_ALERT_EVENTS: never[] = [];
+
 export const AlertEventComponents: RequiredComponents = {
   Icon: CitadelIcons.Alert,
   header: {
@@ -29,7 +31,7 @@ export const AlertEventComponents: RequiredComponents = {
 
   useData: function (): ResourceDataHookResult<any> {
     const { pagedAlertEvents, isLoading } = useAlertEventsList();
-    return { items: pagedAlertEvents?.items ?? [], isLoading, capabilities: undefined };
+    return { items: pagedAlertEvents?.items ?? EMPTY_ALERT_EVENTS, isLoading, capabilities: undefined };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

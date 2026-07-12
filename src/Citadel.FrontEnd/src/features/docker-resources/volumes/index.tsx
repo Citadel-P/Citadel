@@ -6,6 +6,8 @@ import { VolumeDropdownActions, VolumeGroupActions } from './actions';
 import { useVolumesGroup } from './hooks/useVolumesGroup';
 import VolumeForm from './form';
 
+const EMPTY_VOLUMES: never[] = [];
+
 export const VolumeComponents: RequiredComponents = {
   Icon: HardDrive,
   Content: ({ items, actions, isLoading }) => {
@@ -18,7 +20,7 @@ export const VolumeComponents: RequiredComponents = {
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { volumes, capabilities, isLoading } = useVolumesGroup(platformId);
-    return { items: volumes?.volumes ?? [], isLoading, capabilities };
+    return { items: volumes?.volumes ?? EMPTY_VOLUMES, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

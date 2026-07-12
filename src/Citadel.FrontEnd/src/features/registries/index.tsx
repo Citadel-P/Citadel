@@ -6,6 +6,8 @@ import { RegistriesTable } from './table';
 import { CitadelIcons } from '@/lib/icons';
 import { useResourceTagFilter } from '@/features/tags/components';
 
+const EMPTY_REGISTRIES: never[] = [];
+
 export const RegistryComponents: RequiredComponents = {
   Icon: CitadelIcons.Registry,
   Content: ({ items, actions, isLoading }) => {
@@ -27,7 +29,7 @@ export const RegistryComponents: RequiredComponents = {
     const { data, isLoading } = useRead(`listRegistries`, {
       query: { includeDisabled: true, ...(selectedTagNames.length > 0 ? { tags: selectedTagNames } : {}) },
     });
-    return { items: data?.data?.registries ?? [], isLoading, capabilities: data?.data?.capabilities };
+    return { items: data?.data?.registries ?? EMPTY_REGISTRIES, isLoading, capabilities: data?.data?.capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

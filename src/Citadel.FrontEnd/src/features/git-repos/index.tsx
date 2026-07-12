@@ -443,6 +443,8 @@ function GitAccountsSection() {
   );
 }
 
+const EMPTY_GIT_REPOS: never[] = [];
+
 export const GitRepoComponents: RequiredComponents = {
   Icon: CitadelIcons.GitRepository,
   Content: ({ items, actions, isLoading }) => (
@@ -466,7 +468,7 @@ export const GitRepoComponents: RequiredComponents = {
   },
   useData(): ResourceDataHookResult<GitRepositoryView> {
     const { gitRepos, capabilities, isLoading } = useGitReposGroup();
-    return { items: gitRepos ?? [], isLoading, capabilities };
+    return { items: gitRepos ?? EMPTY_GIT_REPOS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

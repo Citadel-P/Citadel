@@ -1,25 +1,23 @@
 ﻿using Application.Services;
 using Domain.Contracts.Interfaces;
-using Hosting.Common;
 using LightResults;
 using Mediator;
-using Microsoft.AspNetCore.Http;
 
 namespace Application.Features.Identity.Auth.Commands;
 
 public sealed record LogoutCommand(): ICommand<Result>;
 
-internal sealed class LogoutCommandHandler(IUnitOfWork unitOfWork, IJwtService jwtService,IHttpContextAccessor context) 
+internal sealed class LogoutCommandHandler(IUnitOfWork unitOfWork, IJwtService jwtService, IRefreshTokenCookieService refreshTokenCookieService)
     : ICommandHandler<LogoutCommand, Result>
 {
     public async ValueTask<Result> Handle(LogoutCommand query, CancellationToken cancellationToken)
     {
-        var refreshToken = context.HttpContext?.Request.Cookies[Constants.RefreshToken];
+        var refreshToken = refreshTokenCookieService.GetCurrent();
 
         if (string.IsNullOrWhiteSpace(refreshToken))
             return Result.Success();
 
-        context.HttpContext?.Response.Cookies.Delete(Constants.RefreshToken);
+        refreshTokenCookieService.Delete();
 
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Success();

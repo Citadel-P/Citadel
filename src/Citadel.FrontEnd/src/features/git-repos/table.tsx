@@ -10,14 +10,17 @@ import { useMemo } from 'react';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { fromNow } from '@/lib/dayjs.helper';
 import { TagChips } from '@/features/tags/components';
+import { TimestampCell } from '@/components/custom/timestamp-cell';
+import type { DateTimeFormatter } from '@/lib/date-time';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 
 const columns = (
   actions: Record<
     string,
     React.FC<{ resource: GitRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
+  formatDateTime: DateTimeFormatter,
 ): ColumnDef<GitRepositoryView>[] => [
   {
     id: 'select',
@@ -60,7 +63,7 @@ const columns = (
   {
     accessorKey: 'createdAt',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{fromNow(row.original.createdAt)}</span>,
+    cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
     sortingFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
   },
   {
@@ -91,11 +94,12 @@ export const GitReposTable = ({
   >;
 }) => {
   const [_, setSelectedResources] = useSelectedResources<GitRepositoryView>('GitRepository');
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const formatDateTime = useProfileDateTimeFormatter();
+  const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
   return (
     <ContentCard>
-      <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
     </ContentCard>
   );
 };

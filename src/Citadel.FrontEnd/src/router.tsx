@@ -9,6 +9,7 @@ import { ResourceForm } from './pages/resource-form';
 const Login = lazy(() => import('@/features/auth/login'));
 const Resources = lazy(() => import('@/pages/resource'));
 const ResourceInfo = lazy(() => import('@/pages/resource-docker-info'));
+const Profile = lazy(() => import('@/features/profile'));
 
 export const REDIRECT_TO_KEY = 'redirectTo';
 
@@ -24,6 +25,7 @@ export const Router = () => {
           <Route element={<RequireAuth />}>
             <Route path="/" element={<Layout />}>
               <Route index element={<Resources />} />
+              <Route path="profile" element={<Profile />} />
               <Route path=":type/edit/:id" element={<ResourceForm mode="edit" />} />
               <Route path=":type/:tab/edit/:id" element={<ResourceForm mode="edit" />} />
 

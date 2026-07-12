@@ -8,6 +8,7 @@ import { TagCreateDialog } from './dialogs';
 import { TagsTable } from './table';
 
 const EMPTY_CAPABILITIES: ResourceCapabilities = { canRead: true, canWrite: true, canExecute: false };
+const EMPTY_TAGS: never[] = [];
 
 export const TagComponents: RequiredComponents<TagView> = {
   Icon: CitadelIcons.Tag,
@@ -24,7 +25,7 @@ export const TagComponents: RequiredComponents<TagView> = {
   },
   useData(): ResourceDataHookResult<TagView> {
     const { data, isLoading } = useRead('listTags');
-    return { items: data?.data.tags ?? [], isLoading, capabilities: EMPTY_CAPABILITIES };
+    return { items: data?.data.tags ?? EMPTY_TAGS, isLoading, capabilities: EMPTY_CAPABILITIES };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

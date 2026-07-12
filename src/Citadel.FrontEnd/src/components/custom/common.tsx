@@ -1405,6 +1405,7 @@ export const TargetCell = ({
     [ActivityResourceType.Stack]: { Icon: Layers, path: `/stacks/edit/${resourceId}` },
     [ActivityResourceType.GitRepository]: { Icon: GitBranch, path: `/git-repos/edit/${resourceId}` },
     [ActivityResourceType.AutomationAction]: { Icon: Workflow, path: `/automation/edit/${resourceId}` },
+    [ActivityResourceType.User]: { Icon: User, path: `/access/users/edit/${resourceId}` },
   };
 
   const config = resourceConfig[resourceType];

@@ -13,12 +13,33 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
 {
     public Task<int> AddAsync(RefreshToken refreshToken, CancellationToken cancellationToken)
     {
-        const string sql = "INSERT INTO RefreshTokens (Id, UserId, CreatedAt) VALUES (@Id, @UserId, @CreatedAt)";
+        const string sql = """
+            INSERT INTO RefreshTokens (
+                Id,
+                UserId,
+                CreatedAt,
+                LastSeenAt,
+                ExpiresAt,
+                UserAgent,
+                IpAddress)
+            VALUES (
+                @Id,
+                @UserId,
+                @CreatedAt,
+                @LastSeenAt,
+                @ExpiresAt,
+                @UserAgent,
+                @IpAddress)
+            """;
         var parameters = new
         {
             Id = refreshToken.Id,
             UserId = refreshToken.UserId,
             CreatedAt = refreshToken.CreatedAt,
+            LastSeenAt = refreshToken.LastSeenAt,
+            ExpiresAt = refreshToken.ExpiresAt,
+            UserAgent = refreshToken.UserAgent,
+            IpAddress = refreshToken.IpAddress,
         };
         return db.ExecuteAsync(sql, parameters, tx());
     }
@@ -34,7 +55,7 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
         const string sql =
             """
             WITH Token AS (
-                SELECT UserId FROM RefreshTokens WHERE Id = @Id LIMIT 1
+                SELECT UserId FROM RefreshTokens WHERE Id = @Id AND ExpiresAt > @Now LIMIT 1
             ),
             TargetUser AS (
                 SELECT Users.Id, Users.Name, Users.Email, Users.ActorId
@@ -74,7 +95,7 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
             """;
 
         var result = await db.QueryAsync<UserAuthInfoDto>(sql,
-            new { Id = id },
+            new { Id = id, Now = DateTime.UtcNow },
             transaction: tx());
 
         return result
@@ -89,6 +110,95 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
                     .Select(r => r.RoleName!)
                     .Distinct()]
             )).FirstOrDefault();
+    }
+
+    public async Task<Guid?> GetActiveTokenIdAsync(Guid id, Guid userId, DateTime now, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT Id
+            FROM RefreshTokens
+            WHERE Id = @Id
+              AND UserId = @UserId
+              AND ExpiresAt > @Now
+            LIMIT 1
+            """;
+
+        return await db.QuerySingleOrDefaultAsync<Guid?>(
+            sql,
+            new { Id = id, UserId = userId, Now = now },
+            transaction: tx());
+    }
+
+    public async Task<IReadOnlyList<UserSessionRecord>> GetActiveSessionsAsync(Guid userId, DateTime now, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT Id, UserAgent, IpAddress, CreatedAt, LastSeenAt, ExpiresAt
+            FROM RefreshTokens
+            WHERE UserId = @UserId
+              AND ExpiresAt > @Now
+            ORDER BY LastSeenAt DESC, CreatedAt DESC
+            """;
+
+        var rows = await db.QueryAsync<UserSessionRecord>(
+            sql,
+            new { UserId = userId, Now = now },
+            transaction: tx());
+        return rows.AsList();
+    }
+
+    public Task<int> TouchAsync(Guid id, DateTime lastSeenAt, string? userAgent, string? ipAddress, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE RefreshTokens
+            SET LastSeenAt = @LastSeenAt,
+                UserAgent = @UserAgent,
+                IpAddress = @IpAddress
+            WHERE Id = @Id
+              AND ExpiresAt > @LastSeenAt
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                LastSeenAt = lastSeenAt,
+                UserAgent = userAgent,
+                IpAddress = ipAddress,
+            },
+            transaction: tx());
+    }
+
+    public Task<int> DeleteOwnedSessionAsync(Guid sessionId, Guid userId, Guid? currentSessionId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            DELETE FROM RefreshTokens
+            WHERE Id = @SessionId
+              AND UserId = @UserId
+              AND (@CurrentSessionId IS NULL OR Id <> @CurrentSessionId)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new { SessionId = sessionId, UserId = userId, CurrentSessionId = currentSessionId },
+            transaction: tx());
+    }
+
+    public Task<int> DeleteOtherTokensAsync(Guid userId, Guid keepTokenId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            DELETE FROM RefreshTokens
+            WHERE UserId = @UserId
+              AND Id <> @KeepTokenId
+            """;
+
+        return db.ExecuteAsync(sql, new { UserId = userId, KeepTokenId = keepTokenId }, transaction: tx());
+    }
+
+    public Task<int> DeleteAllTokensAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM RefreshTokens WHERE UserId = @UserId";
+        return db.ExecuteAsync(sql, new { UserId = userId }, transaction: tx());
     }
 
     public Task<int> DeleteOldestTokensAsync(Guid userId, int tokensToRemoveCount, CancellationToken cancellationToken)
@@ -112,5 +222,11 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
     {
         const string sql = "DELETE FROM RefreshTokens WHERE Id = @Id";
         return db.ExecuteAsync(sql, new { Id = id }, tx());
+    }
+
+    public Task<int> DeleteExpiredAsync(DateTime now, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM RefreshTokens WHERE ExpiresAt <= @Now";
+        return db.ExecuteAsync(sql, new { Now = now }, tx());
     }
 }

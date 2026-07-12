@@ -30,7 +30,7 @@ export const NetworksTable = ({
 
   return (
     <ContentCard>
-      <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
     </ContentCard>
   );
 };

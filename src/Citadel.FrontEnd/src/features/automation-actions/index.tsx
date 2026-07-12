@@ -6,6 +6,8 @@ import { AutomationActionDropdownActions, AutomationActionGroupActions } from '.
 import { AutomationActionsTable } from './table';
 import { useAutomationActionsGroup } from './hooks/useAutomationActionsGroup';
 
+const EMPTY_AUTOMATION_ACTIONS: never[] = [];
+
 export const AutomationActionComponents: RequiredComponents<AutomationActionView> = {
   Icon: CitadelIcons.AutomationAction,
   Content: ({ items, actions, isLoading }) => (
@@ -25,7 +27,7 @@ export const AutomationActionComponents: RequiredComponents<AutomationActionView
   ),
   useData(): ResourceDataHookResult<AutomationActionView> {
     const { actions, isLoading, capabilities } = useAutomationActionsGroup();
-    return { items: actions ?? [], isLoading, capabilities };
+    return { items: actions ?? EMPTY_AUTOMATION_ACTIONS, isLoading, capabilities };
   },
   filterItems: filterAutomationActions,
 };

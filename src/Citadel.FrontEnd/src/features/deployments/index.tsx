@@ -5,6 +5,8 @@ import { DeploymentsTable } from './table';
 import { useDeploymentsGroup } from './hooks/useDeploymentsGroup';
 import { CitadelIcons } from '@/lib/icons';
 
+const EMPTY_DEPLOYMENTS: never[] = [];
+
 export const DeploymentComponents: RequiredComponents = {
   Icon: CitadelIcons.Deployment,
   header: {
@@ -24,7 +26,7 @@ export const DeploymentComponents: RequiredComponents = {
 
   useData: function (): ResourceDataHookResult<any> {
     const { deployments, capabilities, isLoading } = useDeploymentsGroup();
-    return { items: deployments ?? [], isLoading, capabilities };
+    return { items: deployments ?? EMPTY_DEPLOYMENTS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

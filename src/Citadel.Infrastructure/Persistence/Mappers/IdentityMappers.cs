@@ -24,6 +24,18 @@ internal static class IdentityMappers
     internal static IEnumerable<UserDetails> ToDetails(this IEnumerable<UserWithActorDto> dtos)
         => dtos.Select(ToDetails);
 
+    internal static CurrentProfileDetails ToDetails(this CurrentProfileDto dto)
+        => new(
+            dto.Id,
+            dto.DisplayName,
+            dto.Email,
+            dto.ActorId,
+            dto.CreatedAt,
+            [.. ParseResources(dto.Roles)],
+            [.. ParseResources(dto.Teams)],
+            dto.OidcProviderId,
+            dto.OidcProviderName);
+
     internal static ResourceAccessDetails ToDetails(this ResourceAccessDetailsDto dto)
         => new(
             dto.Id,

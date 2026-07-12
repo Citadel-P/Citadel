@@ -84,6 +84,7 @@ public static class ApplicationModule
             .AddScoped<IActorResourceAccessService, ActorResourceAccessService>()
             .AddSingleton<INetworkService, NetworkService>()
             .AddScoped<IUserContextAccessor, UserContextAccessor>()
+            .AddScoped<ICurrentRefreshSessionResolver, CurrentRefreshSessionResolver>()
             .AddSingleton<IStackDesiredStateProvider, StackDesiredStateProvider>()
             .AddSingleton<IStackRuntimeStateProvider, DockerStackRuntimeStateProvider>()
             .AddSingleton<IStackDriftChecker, StackDriftChecker>()

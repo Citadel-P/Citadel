@@ -1,10 +1,12 @@
-import { ActivityEventInfo, ActivityView, PagedResultViewOfActivityView } from '@/api/generated/api.types';
+import type { ActivityEventInfo, ActivityView, PagedResultViewOfActivityView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { useActivityQuery, useTaskSheet } from '@/lib/atoms';
 import { ActorCell, ActivityStatusCell, PagedDataTable, TargetCell } from '@/components/custom/common';
-import { fromNow } from '@/lib/dayjs.helper';
+import { TimestampCell } from '@/components/custom/timestamp-cell';
+import type { DateTimeFormatter } from '@/lib/date-time';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { formatActivityEvent } from '@/lib/utils';
 
 const EMPTY_ROWS: ActivityView[] = [];
@@ -21,8 +23,9 @@ export const ActivitiesTable = ({
   displayPagging?: boolean;
 }) => {
   const [query, setQuery] = useActivityQuery();
+  const formatDateTime = useProfileDateTimeFormatter();
 
-  const cols = useMemo(() => columns(displayTarget), [displayTarget]);
+  const cols = useMemo(() => columns(displayTarget, formatDateTime), [displayTarget, formatDateTime]);
 
   return (
     <PagedDataTable
@@ -37,7 +40,7 @@ export const ActivitiesTable = ({
   );
 };
 
-const columns = (displayTarget: boolean): ColumnDef<ActivityView>[] => {
+const columns = (displayTarget: boolean, formatDateTime: DateTimeFormatter): ColumnDef<ActivityView>[] => {
   const cols: ColumnDef<ActivityView>[] = [
     {
       accessorKey: 'eventType',
@@ -73,7 +76,7 @@ const columns = (displayTarget: boolean): ColumnDef<ActivityView>[] => {
       accessorKey: 'createdAt',
       header: ({ column }) => <SortableCell cellName="Created" column={column} />,
       cell: ({ row }) => {
-        return <span className="text-[13px]">{fromNow(row.original.createdAt)}</span>;
+        return <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />;
       },
       sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
     },

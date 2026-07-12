@@ -11,6 +11,8 @@ type RegularResourceViewProps<T = any> = {
   type: ResourceType;
 };
 
+const EMPTY_ITEMS: never[] = [];
+
 export const RegularResourceView = <T,>({ Components, type }: RegularResourceViewProps<T>) => {
   const navigate = useNavigate();
   const platformId = useParams().platformId ?? '';
@@ -23,7 +25,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
   const AddDialog = headerCfg.AddDialog;
 
   const filtered = useMemo(
-    () => (Components.filterItems ? Components.filterItems(items ?? [], search) : items),
+    () => (Components.filterItems ? Components.filterItems(items ?? EMPTY_ITEMS, search) : (items ?? EMPTY_ITEMS)),
     [items, search, Components],
   );
 
@@ -62,7 +64,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
           {Components.SubHeader && <Components.SubHeader />}
 
           <Content
-            items={filtered ?? []}
+            items={filtered}
             actions={Components.DropdownActions ?? {}}
             isLoading={isLoading}
             isFiltered={Boolean(search.trim()) || hasActiveUrlFilters}
@@ -70,7 +72,7 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
         </div>
       </div>
 
-      {Components.GroupActions && <Components.GroupActions items={items ?? []} />}
+      {Components.GroupActions && <Components.GroupActions items={items ?? EMPTY_ITEMS} />}
       <TaskSheet type={type} />
     </div>
   );

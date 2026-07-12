@@ -38,7 +38,9 @@ internal sealed class CompleteOidcLoginHandler(
     IOidcAuthenticationService authenticationService,
     IJwtService jwtService,
     IRoleCache roleCache,
-    IActorScopeEvictor actorScopeEvictor)
+    IActorScopeEvictor actorScopeEvictor,
+    IRequestSessionMetadataAccessor requestSessionMetadataAccessor,
+    IRefreshTokenCookieService refreshTokenCookieService)
     : ICommandHandler<CompleteOidcLogin, Result<OidcLoginCompleteResult>>
 {
     public async ValueTask<Result<OidcLoginCompleteResult>> Handle(CompleteOidcLogin command, CancellationToken cancellationToken)
@@ -83,15 +85,24 @@ internal sealed class CompleteOidcLoginHandler(
             return Result.Failure<OidcLoginCompleteResult>(userAuthInfo.Errors);
 
         var accessToken = jwtService.CreateAccessToken(User.GetJwtClaims(authInfo));
-        var (refreshTokenId, _) = jwtService.CreateRefreshToken();
+        var (refreshTokenId, refreshToken, refreshTokenExpiresAt) = jwtService.CreateRefreshToken();
+        var metadata = requestSessionMetadataAccessor.GetCurrent();
 
-        await unitOfWork.RefreshTokens.AddAsync(RefreshToken.Create(refreshTokenId, authInfo.Id), cancellationToken);
+        await unitOfWork.RefreshTokens.AddAsync(
+            RefreshToken.Create(
+                refreshTokenId,
+                authInfo.Id,
+                refreshTokenExpiresAt,
+                metadata.UserAgent,
+                metadata.IpAddress),
+            cancellationToken);
         var tokensCount = await unitOfWork.RefreshTokens.CountAsync(authInfo.Id, cancellationToken);
         const int maxTokensPerUser = 10;
         if (tokensCount > maxTokensPerUser)
             await unitOfWork.RefreshTokens.DeleteOldestTokensAsync(authInfo.Id, tokensCount - maxTokensPerUser, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
+        refreshTokenCookieService.Set(refreshToken, refreshTokenExpiresAt);
         roleCache.SetRoles(authInfo.Id, authInfo.Roles);
 
         return Result.Success(new OidcLoginCompleteResult(new LoginResponse(accessToken), state.ReturnUrl));

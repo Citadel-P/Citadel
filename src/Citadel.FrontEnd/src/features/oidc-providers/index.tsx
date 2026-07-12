@@ -7,6 +7,7 @@ import { OidcProviderDropdownActions, OidcProviderGroupActions } from './actions
 import { OidcProvidersTable } from './table';
 
 const EMPTY_CAPABILITIES: ResourceCapabilities = { canRead: true, canWrite: true, canExecute: false };
+const EMPTY_OIDC_PROVIDERS: never[] = [];
 
 export const OidcProviderComponents: RequiredComponents<OidcProviderView> = {
   Icon: CitadelIcons.OidcProvider,
@@ -25,7 +26,7 @@ export const OidcProviderComponents: RequiredComponents<OidcProviderView> = {
   ),
   useData(): ResourceDataHookResult<OidcProviderView> {
     const { data, isLoading } = useRead('listOidcProviders');
-    return { items: data?.data.providers ?? [], isLoading, capabilities: EMPTY_CAPABILITIES };
+    return { items: data?.data.providers ?? EMPTY_OIDC_PROVIDERS, isLoading, capabilities: EMPTY_CAPABILITIES };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

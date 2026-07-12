@@ -35,6 +35,7 @@ namespace Infrastructure.Migrations.Migrations
                     agentversion = table.Column<string>(type: "text", nullable: true),
                     connectortype = table.Column<string>(type: "text", nullable: false),
                     cpucount = table.Column<int>(type: "integer", nullable: false),
+                    description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
                     imagecount = table.Column<int>(type: "integer", nullable: false),
                     memtotal = table.Column<long>(type: "bigint", nullable: false),
                     name = table.Column<string>(type: "text", nullable: false),
@@ -905,6 +906,10 @@ namespace Infrastructure.Migrations.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    expiresat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    ipaddress = table.Column<string>(type: "text", nullable: true),
+                    lastseenat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    useragent = table.Column<string>(type: "text", nullable: true),
                     userid = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
@@ -912,6 +917,27 @@ namespace Infrastructure.Migrations.Migrations
                     table.PrimaryKey("pk_refreshtokens", x => x.id);
                     table.ForeignKey(
                         name: "fk_refreshtokens_users_userid",
+                        column: x => x.userid,
+                        principalTable: "users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "userpreferences",
+                columns: table => new
+                {
+                    userid = table.Column<Guid>(type: "uuid", nullable: false),
+                    datetimeformat = table.Column<string>(type: "text", nullable: false),
+                    theme = table.Column<string>(type: "text", nullable: false),
+                    timezone = table.Column<string>(type: "text", nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_userpreferences", x => x.userid);
+                    table.ForeignKey(
+                        name: "fk_userpreferences_users_userid",
                         column: x => x.userid,
                         principalTable: "users",
                         principalColumn: "id",
@@ -1661,6 +1687,11 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_refreshtokens_expiresat",
+                table: "refreshtokens",
+                column: "expiresat");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_refreshtokens_userid",
                 table: "refreshtokens",
                 column: "userid");
@@ -1884,6 +1915,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "stackreleases");
+
+            migrationBuilder.DropTable(
+                name: "userpreferences");
 
             migrationBuilder.DropTable(
                 name: "usersteams");

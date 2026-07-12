@@ -3,11 +3,13 @@ import { ColumnDef } from '@tanstack/react-table';
 import SortableCell from '@/components/custom/sortable-cell';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { AlertEventStatusCell, PagedDataTable, SeverityStatusCell, TargetCell } from '@/components/custom/common';
-import { AlertEventView, PagedResultViewOfAlertEventView } from '@/api/generated/api.types';
+import type { AlertEventView, PagedResultViewOfAlertEventView } from '@/api/generated/api.types';
 import { useAlertEventQuery, useSelectedResources, useTaskSheet } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
-import { fromNow } from '@/lib/dayjs.helper';
 import { Checkbox } from '@/components/ui/checkbox';
+import { TimestampCell } from '@/components/custom/timestamp-cell';
+import type { DateTimeFormatter } from '@/lib/date-time';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 
 const EMPTY_ROWS: AlertEventView[] = [];
 
@@ -25,7 +27,8 @@ export const AlertEventsTable = ({
 }) => {
   const [query, setQuery] = useAlertEventQuery();
   const [_, setSelectedResources] = useSelectedResources<AlertEventView>('Alert');
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const formatDateTime = useProfileDateTimeFormatter();
+  const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
   return (
     <PagedDataTable
@@ -45,6 +48,7 @@ const columns = (
     string,
     React.FC<{ resource: AlertEventView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
+  formatDateTime: DateTimeFormatter,
 ): ColumnDef<AlertEventView>[] => [
   {
     id: 'select',
@@ -98,7 +102,7 @@ const columns = (
   {
     accessorKey: 'createdAt',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{fromNow(row.original.createdAt)}</span>,
+    cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
     sortingFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
   },
   {

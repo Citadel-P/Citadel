@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260710090916_migration0001")]
+    [Migration("20260712081718_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -2430,6 +2430,11 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("cpucount");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
                     b.Property<int>("ImageCount")
                         .HasColumnType("integer")
                         .HasColumnName("imagecount");
@@ -2527,12 +2532,35 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("createdat");
 
+                    b.Property<DateTime>("ExpiresAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiresat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text")
+                        .HasColumnName("ipaddress");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastseenat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text")
+                        .HasColumnName("useragent");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("userid");
 
                     b.HasKey("Id")
                         .HasName("pk_refreshtokens");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_refreshtokens_expiresat");
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_refreshtokens_userid");
@@ -3255,6 +3283,37 @@ namespace Infrastructure.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("UserPreferences", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("userid");
+
+                    b.Property<string>("DateTimeFormat")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("datetimeformat");
+
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("theme");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("timezone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_userpreferences");
+
+                    b.ToTable("userpreferences", (string)null);
+                });
+
             modelBuilder.Entity("UserTeam", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -3775,6 +3834,16 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_users_actors_createdbyactorid");
+                });
+
+            modelBuilder.Entity("UserPreferences", b =>
+                {
+                    b.HasOne("User", null)
+                        .WithOne()
+                        .HasForeignKey("UserPreferences", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_userpreferences_users_userid");
                 });
 
             modelBuilder.Entity("UserTeam", b =>

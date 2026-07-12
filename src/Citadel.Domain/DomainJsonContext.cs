@@ -138,6 +138,7 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
     })]
 [JsonSerializable(typeof(ActivityEventInfo))]
 [JsonSerializable(typeof(ActivitySourceResource))]
+[JsonSerializable(typeof(ActivityChangedField))]
 [JsonSerializable(typeof(DeploymentCreated))]
 [JsonSerializable(typeof(DeploymentDuplicated))]
 [JsonSerializable(typeof(DeploymentUpdated))]
@@ -207,8 +208,26 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(AutomationActionRunTimedOut))]
 [JsonSerializable(typeof(AutomationActionRunCancelled))]
 [JsonSerializable(typeof(AutomationActionRunRejected))]
+[JsonSerializable(typeof(UserProfileUpdated))]
+[JsonSerializable(typeof(UserPreferencesUpdated))]
+[JsonSerializable(typeof(UserPasswordChanged))]
+[JsonSerializable(typeof(UserSessionRevoked))]
+[JsonSerializable(typeof(UserOtherSessionsRevoked))]
 
 public partial class EventInfoJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<UserDateTimeFormat>),
+        typeof(JsonStringEnumConverter<UserTheme>)
+    })]
+[JsonSerializable(typeof(PatchUserPreferencesModel))]
+public partial class ProfileJsonContext : JsonSerializerContext
 {
 }
 

@@ -12,655 +12,1015 @@
 
 /** @default "GitHub" */
 export enum WebhookProvider {
-  GitHub = 'GitHub',
-  GitLab = 'GitLab',
+  GitHub = "GitHub",
+  GitLab = "GitLab",
 }
 
 /** @default "GitHubHmacSha256" */
 export enum WebhookAuthScheme {
-  GitHubHmacSha256 = 'GitHubHmacSha256',
-  GitLabSignedToken = 'GitLabSignedToken',
-  GitLabLegacyToken = 'GitLabLegacyToken',
+  GitHubHmacSha256 = "GitHubHmacSha256",
+  GitLabSignedToken = "GitLabSignedToken",
+  GitLabLegacyToken = "GitLabLegacyToken",
 }
 
 export enum VolumeSharing {
-  None = 'None',
-  ReadOnly = 'ReadOnly',
-  OneWriter = 'OneWriter',
-  All = 'All',
+  None = "None",
+  ReadOnly = "ReadOnly",
+  OneWriter = "OneWriter",
+  All = "All",
 }
 
 export enum VolumeScope {
-  Single = 'Single',
-  Multi = 'Multi',
+  Single = "Single",
+  Multi = "Multi",
+}
+
+export enum UserTheme {
+  System = "System",
+  Light = "Light",
+  Dark = "Dark",
+}
+
+export enum UserDateTimeFormat {
+  System = "System",
+  TwentyFourHour = "TwentyFourHour",
+  TwelveHour = "TwelveHour",
 }
 
 export enum UpdateBehavior {
-  Disabled = 'Disabled',
-  Notify = 'Notify',
-  AutoDeploy = 'AutoDeploy',
+  Disabled = "Disabled",
+  Notify = "Notify",
+  AutoDeploy = "AutoDeploy",
 }
 
 export enum StopSignal {
-  SIGTERM = 'SIGTERM',
-  SIGKILL = 'SIGKILL',
-  SIGINT = 'SIGINT',
+  SIGTERM = "SIGTERM",
+  SIGKILL = "SIGKILL",
+  SIGINT = "SIGINT",
 }
 
 export enum StackUpdateBehavior {
-  Disabled = 'Disabled',
-  Notify = 'Notify',
-  ServiceAutoDeploy = 'ServiceAutoDeploy',
-  StackAutoDeploy = 'StackAutoDeploy',
+  Disabled = "Disabled",
+  Notify = "Notify",
+  ServiceAutoDeploy = "ServiceAutoDeploy",
+  StackAutoDeploy = "StackAutoDeploy",
 }
 
 export enum StackSource {
-  WebEditor = 'WebEditor',
-  Git = 'Git',
+  WebEditor = "WebEditor",
+  Git = "Git",
 }
 
 export enum StackReleaseStatus {
-  Unknown = 'Unknown',
-  Created = 'Created',
-  Applying = 'Applying',
-  Healthy = 'Healthy',
-  Pending = 'Pending',
-  Paused = 'Paused',
-  Degraded = 'Degraded',
-  Failed = 'Failed',
-  Stopped = 'Stopped',
+  Unknown = "Unknown",
+  Created = "Created",
+  Applying = "Applying",
+  Healthy = "Healthy",
+  Pending = "Pending",
+  Paused = "Paused",
+  Degraded = "Degraded",
+  Failed = "Failed",
+  Stopped = "Stopped",
 }
 
 export enum StackReconciliationStatus {
-  NoDrift = 'NoDrift',
-  Reconciled = 'Reconciled',
-  Partial = 'Partial',
-  RequiresReapply = 'RequiresReapply',
-  Disabled = 'Disabled',
-  Failed = 'Failed',
+  NoDrift = "NoDrift",
+  Reconciled = "Reconciled",
+  Partial = "Partial",
+  RequiresReapply = "RequiresReapply",
+  Disabled = "Disabled",
+  Failed = "Failed",
 }
 
 export enum StackReconciliationActionType {
-  StartContainer = 'StartContainer',
-  ResumeContainer = 'ResumeContainer',
-  RemoveContainer = 'RemoveContainer',
+  StartContainer = "StartContainer",
+  ResumeContainer = "ResumeContainer",
+  RemoveContainer = "RemoveContainer",
 }
 
 export enum StackDriftMode {
-  Disabled = 'Disabled',
-  DetectOnly = 'DetectOnly',
-  AutoFix = 'AutoFix',
+  Disabled = "Disabled",
+  DetectOnly = "DetectOnly",
+  AutoFix = "AutoFix",
 }
 
 export enum StackApplyEventType {
-  StdOut = 'StdOut',
-  StdErr = 'StdErr',
-  SystemMessage = 'SystemMessage',
-  CommandCompleted = 'CommandCompleted',
+  StdOut = "StdOut",
+  StdErr = "StdErr",
+  SystemMessage = "SystemMessage",
+  CommandCompleted = "CommandCompleted",
 }
 
 export enum SpecificPermission {
-  None = 'None',
-  Logs = 'Logs',
-  Inspect = 'Inspect',
-  Apply = 'Apply',
-  Pull = 'Pull',
-  Terminal = 'Terminal',
-  ResourceBindings = 'ResourceBindings',
-  Releases = 'Releases',
+  None = "None",
+  Logs = "Logs",
+  Inspect = "Inspect",
+  Apply = "Apply",
+  Pull = "Pull",
+  Terminal = "Terminal",
+  ResourceBindings = "ResourceBindings",
+  Releases = "Releases",
 }
 
 export enum SecretProviderType {
-  InternalEncrypted = 'InternalEncrypted',
-  VaultCompatibleKvV2 = 'VaultCompatibleKvV2',
+  InternalEncrypted = "InternalEncrypted",
+  VaultCompatibleKvV2 = "VaultCompatibleKvV2",
 }
 
 export enum ScheduleType {
-  Daily = 'Daily',
-  Weekly = 'Weekly',
+  Daily = "Daily",
+  Weekly = "Weekly",
 }
 
 export enum RoleType {
-  System = 'System',
-  Custom = 'Custom',
+  System = "System",
+  Custom = "Custom",
 }
 
 export enum ResourceType {
-  Platform = 'Platform',
-  Deployment = 'Deployment',
-  Stack = 'Stack',
-  Registry = 'Registry',
-  GitRepository = 'GitRepository',
-  GitAccount = 'GitAccount',
-  Alert = 'Alert',
-  AlertChannel = 'AlertChannel',
-  User = 'User',
-  Team = 'Team',
-  Role = 'Role',
-  Binding = 'Binding',
-  Tag = 'Tag',
-  AutomationAction = 'AutomationAction',
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  Registry = "Registry",
+  GitRepository = "GitRepository",
+  GitAccount = "GitAccount",
+  Alert = "Alert",
+  AlertChannel = "AlertChannel",
+  User = "User",
+  Team = "Team",
+  Role = "Role",
+  Binding = "Binding",
+  Tag = "Tag",
+  AutomationAction = "AutomationAction",
 }
 
 export enum ResourceControlState {
-  Idle = 'Idle',
-  Processing = 'Processing',
+  Idle = "Idle",
+  Processing = "Processing",
 }
 
 export enum ResourceBindingScope {
-  Global = 'Global',
-  Stack = 'Stack',
-  Deployment = 'Deployment',
+  Global = "Global",
+  Stack = "Stack",
+  Deployment = "Deployment",
 }
 
 export enum ResourceBindingKind {
-  Variable = 'Variable',
-  Secret = 'Secret',
+  Variable = "Variable",
+  Secret = "Secret",
 }
 
 export enum RegistryType {
-  Custom = 'Custom',
-  DockerHub = 'DockerHub',
-  Azure = 'Azure',
-  AWS = 'AWS',
-  Gitlab = 'Gitlab',
-  GitHub = 'GitHub',
+  Custom = "Custom",
+  DockerHub = "DockerHub",
+  Azure = "Azure",
+  AWS = "AWS",
+  Gitlab = "Gitlab",
+  GitHub = "GitHub",
 }
 
 export enum RegistryStatus {
-  Active = 'Active',
-  Disabled = 'Disabled',
-  Deprecated = 'Deprecated',
+  Active = "Active",
+  Disabled = "Disabled",
+  Deprecated = "Deprecated",
 }
 
 export enum PruneResource {
-  All = 'All',
-  Volume = 'Volume',
-  Network = 'Network',
-  Image = 'Image',
-  Build = 'Build',
+  All = "All",
+  Volume = "Volume",
+  Network = "Network",
+  Image = "Image",
+  Build = "Build",
 }
 
 export enum PlatformType {
-  Docker = 'Docker',
-  DockerSwarm = 'DockerSwarm',
-  Kubernetes = 'Kubernetes',
+  Docker = "Docker",
+  DockerSwarm = "DockerSwarm",
+  Kubernetes = "Kubernetes",
 }
 
 export enum PlatformStatus {
-  Offline = 'Offline',
-  Online = 'Online',
+  Offline = "Offline",
+  Online = "Online",
 }
 
 export enum PlatformConnectorType {
-  Unknown = 'Unknown',
-  Local = 'Local',
-  Agent = 'Agent',
-  EdgeAgent = 'EdgeAgent',
+  Unknown = "Unknown",
+  Local = "Local",
+  Agent = "Agent",
+  EdgeAgent = "EdgeAgent",
 }
 
 export enum PermissionLevel {
-  None = 'None',
-  Read = 'Read',
-  Write = 'Write',
-  Execute = 'Execute',
+  None = "None",
+  Read = "Read",
+  Write = "Write",
+  Execute = "Execute",
 }
 
 export enum LookupResourceType {
-  Platform = 'Platform',
-  Deployment = 'Deployment',
-  Stack = 'Stack',
-  Image = 'Image',
-  Network = 'Network',
-  Volume = 'Volume',
-  Registry = 'Registry',
-  GitRepository = 'GitRepository',
-  GitAccount = 'GitAccount',
-  OidcProvider = 'OidcProvider',
-  AutomationAction = 'AutomationAction',
-  Alert = 'Alert',
-  AlertChannel = 'AlertChannel',
-  User = 'User',
-  Team = 'Team',
-  Role = 'Role',
-  ResourceBinding = 'ResourceBinding',
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  Image = "Image",
+  Network = "Network",
+  Volume = "Volume",
+  Registry = "Registry",
+  GitRepository = "GitRepository",
+  GitAccount = "GitAccount",
+  OidcProvider = "OidcProvider",
+  AutomationAction = "AutomationAction",
+  Alert = "Alert",
+  AlertChannel = "AlertChannel",
+  User = "User",
+  UserActor = "UserActor",
+  Team = "Team",
+  Role = "Role",
+  ResourceBinding = "ResourceBinding",
 }
 
 export enum GitTransport {
-  Http = 'Http',
-  Https = 'Https',
-  Ssh = 'Ssh',
+  Http = "Http",
+  Https = "Https",
+  Ssh = "Ssh",
 }
 
 export enum GitRepositorySyncMode {
-  Manual = 'Manual',
-  PullInterval = 'PullInterval',
+  Manual = "Manual",
+  PullInterval = "PullInterval",
 }
 
 export enum GitReposStatus {
-  Unknown = 'Unknown',
-  Pending = 'Pending',
-  Created = 'Created',
-  Healthy = 'Healthy',
-  Degraded = 'Degraded',
+  Unknown = "Unknown",
+  Pending = "Pending",
+  Created = "Created",
+  Healthy = "Healthy",
+  Degraded = "Degraded",
 }
 
 export enum GitAuthType {
-  Basic = 'Basic',
-  Token = 'Token',
-  SshKey = 'SshKey',
+  Basic = "Basic",
+  Token = "Token",
+  SshKey = "SshKey",
 }
 
 export enum DockerHubTagStatus {
-  Active = 'Active',
-  Inactive = 'Inactive',
+  Active = "Active",
+  Inactive = "Inactive",
 }
 
 export enum DockerHubImageStatus {
-  Active = 'Active',
-  Inactive = 'Inactive',
+  Active = "Active",
+  Inactive = "Inactive",
 }
 
 export enum DeploymentStatus {
-  Unknown = 'Unknown',
-  Created = 'Created',
-  Pending = 'Pending',
-  Applying = 'Applying',
-  Healthy = 'Healthy',
-  Degraded = 'Degraded',
-  Failed = 'Failed',
-  Stopped = 'Stopped',
+  Unknown = "Unknown",
+  Created = "Created",
+  Pending = "Pending",
+  Applying = "Applying",
+  Healthy = "Healthy",
+  Degraded = "Degraded",
+  Failed = "Failed",
+  Stopped = "Stopped",
 }
 
 export enum DayOfWeek {
-  Sunday = 'Sunday',
-  Monday = 'Monday',
-  Tuesday = 'Tuesday',
-  Wednesday = 'Wednesday',
-  Thursday = 'Thursday',
-  Friday = 'Friday',
-  Saturday = 'Saturday',
+  Sunday = "Sunday",
+  Monday = "Monday",
+  Tuesday = "Tuesday",
+  Wednesday = "Wednesday",
+  Thursday = "Thursday",
+  Friday = "Friday",
+  Saturday = "Saturday",
 }
 
 export enum ContainerStateStatus {
-  Unknown = 'Unknown',
-  Created = 'Created',
-  Running = 'Running',
-  Paused = 'Paused',
-  Restarting = 'Restarting',
-  Exited = 'Exited',
-  Removing = 'Removing',
-  Dead = 'Dead',
-  Offline = 'Offline',
+  Unknown = "Unknown",
+  Created = "Created",
+  Running = "Running",
+  Paused = "Paused",
+  Restarting = "Restarting",
+  Exited = "Exited",
+  Removing = "Removing",
+  Dead = "Dead",
+  Offline = "Offline",
 }
 
 export enum ContainerRestartPolicy {
-  No = 'No',
-  Always = 'Always',
-  OnFailure = 'OnFailure',
-  UnlessStopped = 'UnlessStopped',
+  No = "No",
+  Always = "Always",
+  OnFailure = "OnFailure",
+  UnlessStopped = "UnlessStopped",
 }
 
 export enum AutoUpdateStatus {
-  Unknown = 'Unknown',
-  UpToDate = 'UpToDate',
-  UpdateAvailable = 'UpdateAvailable',
-  Updating = 'Updating',
-  Failed = 'Failed',
+  Unknown = "Unknown",
+  UpToDate = "UpToDate",
+  UpdateAvailable = "UpdateAvailable",
+  Updating = "Updating",
+  Failed = "Failed",
 }
 
 export enum AlertType {
-  PlatformCpuHigh = 'PlatformCpuHigh',
-  PlatformRamHigh = 'PlatformRamHigh',
-  PlatformUnreachable = 'PlatformUnreachable',
-  PlatformVersionMismatch = 'PlatformVersionMismatch',
-  UnmanagedContainerCreated = 'UnmanagedContainerCreated',
-  DeploymentImageUpdateAvailable = 'DeploymentImageUpdateAvailable',
-  DeploymentAutoDeployFailed = 'DeploymentAutoDeployFailed',
-  DeploymentAutoUpdated = 'DeploymentAutoUpdated',
-  StackImageUpdateAvailable = 'StackImageUpdateAvailable',
-  StackAutoDeployFailed = 'StackAutoDeployFailed',
-  StackAutoUpdated = 'StackAutoUpdated',
-  StackServiceAutoDeployFailed = 'StackServiceAutoDeployFailed',
-  StackServiceAutoUpdated = 'StackServiceAutoUpdated',
-  StackDriftDetected = 'StackDriftDetected',
-  StackDriftAutoReconciled = 'StackDriftAutoReconciled',
-  StackGitUpdateAvailable = 'StackGitUpdateAvailable',
-  StackGitAutoUpdated = 'StackGitAutoUpdated',
-  StackGitAutoDeployFailed = 'StackGitAutoDeployFailed',
-  StackConfigurationResolutionFailed = 'StackConfigurationResolutionFailed',
-  DeploymentConfigurationResolutionFailed = 'DeploymentConfigurationResolutionFailed',
-  WebhookAuthenticationFailed = 'WebhookAuthenticationFailed',
-  WebhookDispatchFailed = 'WebhookDispatchFailed',
-  WebhookGitRepoSyncFailed = 'WebhookGitRepoSyncFailed',
-  WebhookStackGitDeployFailed = 'WebhookStackGitDeployFailed',
-  AutomationActionRunFailed = 'AutomationActionRunFailed',
+  PlatformCpuHigh = "PlatformCpuHigh",
+  PlatformRamHigh = "PlatformRamHigh",
+  PlatformUnreachable = "PlatformUnreachable",
+  PlatformVersionMismatch = "PlatformVersionMismatch",
+  UnmanagedContainerCreated = "UnmanagedContainerCreated",
+  DeploymentImageUpdateAvailable = "DeploymentImageUpdateAvailable",
+  DeploymentAutoDeployFailed = "DeploymentAutoDeployFailed",
+  DeploymentAutoUpdated = "DeploymentAutoUpdated",
+  StackImageUpdateAvailable = "StackImageUpdateAvailable",
+  StackAutoDeployFailed = "StackAutoDeployFailed",
+  StackAutoUpdated = "StackAutoUpdated",
+  StackServiceAutoDeployFailed = "StackServiceAutoDeployFailed",
+  StackServiceAutoUpdated = "StackServiceAutoUpdated",
+  StackDriftDetected = "StackDriftDetected",
+  StackDriftAutoReconciled = "StackDriftAutoReconciled",
+  StackGitUpdateAvailable = "StackGitUpdateAvailable",
+  StackGitAutoUpdated = "StackGitAutoUpdated",
+  StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
+  StackConfigurationResolutionFailed = "StackConfigurationResolutionFailed",
+  DeploymentConfigurationResolutionFailed = "DeploymentConfigurationResolutionFailed",
+  WebhookAuthenticationFailed = "WebhookAuthenticationFailed",
+  WebhookDispatchFailed = "WebhookDispatchFailed",
+  WebhookGitRepoSyncFailed = "WebhookGitRepoSyncFailed",
+  WebhookStackGitDeployFailed = "WebhookStackGitDeployFailed",
+  AutomationActionRunFailed = "AutomationActionRunFailed",
 }
 
 export enum AlertSeverity {
-  Info = 'Info',
-  Warning = 'Warning',
-  Critical = 'Critical',
+  Info = "Info",
+  Warning = "Warning",
+  Critical = "Critical",
 }
 
 export enum AlertRuleStatus {
-  Enabled = 'Enabled',
-  Disabled = 'Disabled',
+  Enabled = "Enabled",
+  Disabled = "Disabled",
 }
 
 export enum AlertResourceType {
-  Platform = 'Platform',
-  Deployment = 'Deployment',
-  Stack = 'Stack',
-  GitRepository = 'GitRepository',
-  Webhook = 'Webhook',
-  AutomationAction = 'AutomationAction',
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  GitRepository = "GitRepository",
+  Webhook = "Webhook",
+  AutomationAction = "AutomationAction",
 }
 
 export enum AlertEventStatus {
-  Active = 'Active',
-  Acknowledged = 'Acknowledged',
-  Resolved = 'Resolved',
+  Active = "Active",
+  Acknowledged = "Acknowledged",
+  Resolved = "Resolved",
 }
 
 export enum AlertDestination {
-  Generic = 'Generic',
-  Bark = 'Bark',
-  Discord = 'Discord',
-  Gotify = 'Gotify',
-  GoogleChat = 'Google_Chat',
-  IFTTT = 'IFTTT',
-  Join = 'Join',
-  Lark = 'Lark',
-  Mattermost = 'Mattermost',
-  Matrix = 'Matrix',
-  Ntfy = 'Ntfy',
-  OpsGenie = 'OpsGenie',
-  Pushbullet = 'Pushbullet',
-  Pushover = 'Pushover',
-  Rocketchat = 'Rocketchat',
-  Signal = 'Signal',
-  Slack = 'Slack',
-  Teams = 'Teams',
-  Telegram = 'Telegram',
-  WeCom = 'WeCom',
-  ZulipChat = 'Zulip_Chat',
+  Generic = "Generic",
+  Bark = "Bark",
+  Discord = "Discord",
+  Gotify = "Gotify",
+  GoogleChat = "Google_Chat",
+  IFTTT = "IFTTT",
+  Join = "Join",
+  Lark = "Lark",
+  Mattermost = "Mattermost",
+  Matrix = "Matrix",
+  Ntfy = "Ntfy",
+  OpsGenie = "OpsGenie",
+  Pushbullet = "Pushbullet",
+  Pushover = "Pushover",
+  Rocketchat = "Rocketchat",
+  Signal = "Signal",
+  Slack = "Slack",
+  Teams = "Teams",
+  Telegram = "Telegram",
+  WeCom = "WeCom",
+  ZulipChat = "Zulip_Chat",
 }
 
 export enum ActorType {
-  User = 'User',
-  System = 'System',
-  Agent = 'Agent',
-  Service = 'Service',
-  Team = 'Team',
+  User = "User",
+  System = "System",
+  Agent = "Agent",
+  Service = "Service",
+  Team = "Team",
 }
 
 export enum ActivityStatus {
-  Success = 'Success',
-  Failure = 'Failure',
-  Warning = 'Warning',
-  Information = 'Information',
+  Success = "Success",
+  Failure = "Failure",
+  Warning = "Warning",
+  Information = "Information",
 }
 
 export enum ActivityResourceType {
-  Platform = 'Platform',
-  Registry = 'Registry',
-  Deployment = 'Deployment',
-  Stack = 'Stack',
-  AlertRule = 'AlertRule',
-  GitRepository = 'GitRepository',
-  OidcProvider = 'OidcProvider',
-  AutomationAction = 'AutomationAction',
+  Platform = "Platform",
+  Registry = "Registry",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  AlertRule = "AlertRule",
+  GitRepository = "GitRepository",
+  OidcProvider = "OidcProvider",
+  AutomationAction = "AutomationAction",
+  User = "User",
 }
 
 export enum ActivityEventType {
-  DeploymentCreated = 'DeploymentCreated',
-  DeploymentDuplicated = 'DeploymentDuplicated',
-  DeploymentUpdated = 'DeploymentUpdated',
-  DeploymentRenamed = 'DeploymentRenamed',
-  DeploymentDeleted = 'DeploymentDeleted',
-  DeploymentStarted = 'DeploymentStarted',
-  DeploymentStopped = 'DeploymentStopped',
-  DeploymentPaused = 'DeploymentPaused',
-  DeploymentApplied = 'DeploymentApplied',
-  DeploymentDegraded = 'DeploymentDegraded',
-  PlatformCreated = 'PlatformCreated',
-  PlatformDeleted = 'PlatformDeleted',
-  PlatformConnected = 'PlatformConnected',
-  PlatformDisconnected = 'PlatformDisconnected',
-  PlatformRenamed = 'PlatformRenamed',
-  RegistryCreated = 'RegistryCreated',
-  RegistryRenamed = 'RegistryRenamed',
-  RegistryUpdated = 'RegistryUpdated',
-  RegistryDeleted = 'RegistryDeleted',
-  AlertRuleCreated = 'AlertRuleCreated',
-  AlertRuleUpdated = 'AlertRuleUpdated',
-  AlertRuleDeleted = 'AlertRuleDeleted',
-  AlertRuleRenamed = 'AlertRuleRenamed',
-  GitRepoCreated = 'GitRepoCreated',
-  GitRepoUpdated = 'GitRepoUpdated',
-  GitRepoDeleted = 'GitRepoDeleted',
-  GitRepoRenamed = 'GitRepoRenamed',
-  GitRepoPulled = 'GitRepoPulled',
-  GitRepoCloned = 'GitRepoCloned',
-  GitRepoWebhookReceived = 'GitRepoWebhookReceived',
-  OidcProviderCreated = 'OidcProviderCreated',
-  OidcProviderUpdated = 'OidcProviderUpdated',
-  OidcProviderRenamed = 'OidcProviderRenamed',
-  OidcProviderDeleted = 'OidcProviderDeleted',
-  ActionCreated = 'ActionCreated',
-  ActionUpdated = 'ActionUpdated',
-  ActionRenamed = 'ActionRenamed',
-  ActionDeleted = 'ActionDeleted',
-  ActionRunQueued = 'ActionRunQueued',
-  ActionRunStarted = 'ActionRunStarted',
-  ActionRunSucceeded = 'ActionRunSucceeded',
-  ActionRunFailed = 'ActionRunFailed',
-  ActionRunTimedOut = 'ActionRunTimedOut',
-  ActionRunCancelled = 'ActionRunCancelled',
-  ActionRunRejected = 'ActionRunRejected',
-  StackCreated = 'StackCreated',
-  StackDuplicated = 'StackDuplicated',
-  StackUpdated = 'StackUpdated',
-  StackRenamed = 'StackRenamed',
-  StackDeleted = 'StackDeleted',
-  StackStarted = 'StackStarted',
-  StackStopped = 'StackStopped',
-  StackPaused = 'StackPaused',
-  StackApplied = 'StackApplied',
-  StackRollback = 'StackRollback',
-  StackDegraded = 'StackDegraded',
-  StackDriftDetected = 'StackDriftDetected',
-  StackDriftResolved = 'StackDriftResolved',
-  StackReconciliationAttempted = 'StackReconciliationAttempted',
-  StackGitUpdateAvailable = 'StackGitUpdateAvailable',
-  StackGitAutoUpdated = 'StackGitAutoUpdated',
-  StackGitAutoDeployFailed = 'StackGitAutoDeployFailed',
-  StackWebhookReceived = 'StackWebhookReceived',
+  DeploymentCreated = "DeploymentCreated",
+  DeploymentDuplicated = "DeploymentDuplicated",
+  DeploymentUpdated = "DeploymentUpdated",
+  DeploymentRenamed = "DeploymentRenamed",
+  DeploymentDeleted = "DeploymentDeleted",
+  DeploymentStarted = "DeploymentStarted",
+  DeploymentStopped = "DeploymentStopped",
+  DeploymentPaused = "DeploymentPaused",
+  DeploymentApplied = "DeploymentApplied",
+  DeploymentDegraded = "DeploymentDegraded",
+  PlatformCreated = "PlatformCreated",
+  PlatformDeleted = "PlatformDeleted",
+  PlatformConnected = "PlatformConnected",
+  PlatformDisconnected = "PlatformDisconnected",
+  PlatformRenamed = "PlatformRenamed",
+  RegistryCreated = "RegistryCreated",
+  RegistryRenamed = "RegistryRenamed",
+  RegistryUpdated = "RegistryUpdated",
+  RegistryDeleted = "RegistryDeleted",
+  AlertRuleCreated = "AlertRuleCreated",
+  AlertRuleUpdated = "AlertRuleUpdated",
+  AlertRuleDeleted = "AlertRuleDeleted",
+  AlertRuleRenamed = "AlertRuleRenamed",
+  GitRepoCreated = "GitRepoCreated",
+  GitRepoUpdated = "GitRepoUpdated",
+  GitRepoDeleted = "GitRepoDeleted",
+  GitRepoRenamed = "GitRepoRenamed",
+  GitRepoPulled = "GitRepoPulled",
+  GitRepoCloned = "GitRepoCloned",
+  GitRepoWebhookReceived = "GitRepoWebhookReceived",
+  OidcProviderCreated = "OidcProviderCreated",
+  OidcProviderUpdated = "OidcProviderUpdated",
+  OidcProviderRenamed = "OidcProviderRenamed",
+  OidcProviderDeleted = "OidcProviderDeleted",
+  ActionCreated = "ActionCreated",
+  ActionUpdated = "ActionUpdated",
+  ActionRenamed = "ActionRenamed",
+  ActionDeleted = "ActionDeleted",
+  ActionRunQueued = "ActionRunQueued",
+  ActionRunStarted = "ActionRunStarted",
+  ActionRunSucceeded = "ActionRunSucceeded",
+  ActionRunFailed = "ActionRunFailed",
+  ActionRunTimedOut = "ActionRunTimedOut",
+  ActionRunCancelled = "ActionRunCancelled",
+  ActionRunRejected = "ActionRunRejected",
+  StackCreated = "StackCreated",
+  StackDuplicated = "StackDuplicated",
+  StackUpdated = "StackUpdated",
+  StackRenamed = "StackRenamed",
+  StackDeleted = "StackDeleted",
+  StackStarted = "StackStarted",
+  StackStopped = "StackStopped",
+  StackPaused = "StackPaused",
+  StackApplied = "StackApplied",
+  StackRollback = "StackRollback",
+  StackDegraded = "StackDegraded",
+  StackDriftDetected = "StackDriftDetected",
+  StackDriftResolved = "StackDriftResolved",
+  StackReconciliationAttempted = "StackReconciliationAttempted",
+  StackGitUpdateAvailable = "StackGitUpdateAvailable",
+  StackGitAutoUpdated = "StackGitAutoUpdated",
+  StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
+  StackWebhookReceived = "StackWebhookReceived",
+  UserProfileUpdated = "UserProfileUpdated",
+  UserPreferencesUpdated = "UserPreferencesUpdated",
+  UserPasswordChanged = "UserPasswordChanged",
+  UserSessionRevoked = "UserSessionRevoked",
+  UserOtherSessionsRevoked = "UserOtherSessionsRevoked",
 }
 
 export enum ActionRunTrigger {
-  Manual = 'Manual',
-  Test = 'Test',
-  Schedule = 'Schedule',
-  Webhook = 'Webhook',
+  Manual = "Manual",
+  Test = "Test",
+  Schedule = "Schedule",
+  Webhook = "Webhook",
 }
 
 export enum ActionRunStatus {
-  Queued = 'Queued',
-  Running = 'Running',
-  Succeeded = 'Succeeded',
-  Failed = 'Failed',
-  TimedOut = 'TimedOut',
-  Cancelled = 'Cancelled',
-  Rejected = 'Rejected',
+  Queued = "Queued",
+  Running = "Running",
+  Succeeded = "Succeeded",
+  Failed = "Failed",
+  TimedOut = "TimedOut",
+  Cancelled = "Cancelled",
+  Rejected = "Rejected",
 }
 
 export type StackUpdateState = BaseStackUpdateState &
   (
-    | BaseStackUpdateStateTypeMapping<'Git', StackUpdateStateGitStackUpdateState>
-    | BaseStackUpdateStateTypeMapping<'WebEditor', StackUpdateStateManualStackUpdateState>
+    | BaseStackUpdateStateTypeMapping<
+        "Git",
+        StackUpdateStateGitStackUpdateState
+      >
+    | BaseStackUpdateStateTypeMapping<
+        "WebEditor",
+        StackUpdateStateManualStackUpdateState
+      >
   );
 
 export type StackSpec = BaseStackSpec &
-  (BaseStackSpecTypeMapping<'WebEditor', StackSpecManualStack> | BaseStackSpecTypeMapping<'Git', StackSpecGitStack>);
+  (
+    | BaseStackSpecTypeMapping<"WebEditor", StackSpecManualStack>
+    | BaseStackSpecTypeMapping<"Git", StackSpecGitStack>
+  );
 
 export type StackDrift = BaseStackDrift &
   (
-    | BaseStackDriftTypeMapping<'MissingContainer', StackDriftMissingContainer>
-    | BaseStackDriftTypeMapping<'ExtraContainer', StackDriftExtraContainer>
-    | BaseStackDriftTypeMapping<'ContainerStopped', StackDriftContainerStopped>
-    | BaseStackDriftTypeMapping<'ContainerPaused', StackDriftContainerPaused>
-    | BaseStackDriftTypeMapping<'ContainerUnhealthy', StackDriftContainerUnhealthy>
-    | BaseStackDriftTypeMapping<'ImageMismatch', StackDriftImageMismatch>
-    | BaseStackDriftTypeMapping<'ConfigHashMismatch', StackDriftConfigHashMismatch>
+    | BaseStackDriftTypeMapping<"MissingContainer", StackDriftMissingContainer>
+    | BaseStackDriftTypeMapping<"ExtraContainer", StackDriftExtraContainer>
+    | BaseStackDriftTypeMapping<"ContainerStopped", StackDriftContainerStopped>
+    | BaseStackDriftTypeMapping<"ContainerPaused", StackDriftContainerPaused>
+    | BaseStackDriftTypeMapping<
+        "ContainerUnhealthy",
+        StackDriftContainerUnhealthy
+      >
+    | BaseStackDriftTypeMapping<"ImageMismatch", StackDriftImageMismatch>
+    | BaseStackDriftTypeMapping<
+        "ConfigHashMismatch",
+        StackDriftConfigHashMismatch
+      >
   );
 
 export type RegistryConfiguration = BaseRegistryConfiguration &
   (
-    | BaseRegistryConfigurationTypeMapping<'AWS', RegistryConfigurationAWSRegistry>
-    | BaseRegistryConfigurationTypeMapping<'Azure', RegistryConfigurationAzureRegistry>
-    | BaseRegistryConfigurationTypeMapping<'Gitlab', RegistryConfigurationGitlabRegistry>
-    | BaseRegistryConfigurationTypeMapping<'DockerHub', RegistryConfigurationDockerHubRegistry>
-    | BaseRegistryConfigurationTypeMapping<'GitHub', RegistryConfigurationGitHubRegistry>
-    | BaseRegistryConfigurationTypeMapping<'Custom', RegistryConfigurationCustomRegistry>
+    | BaseRegistryConfigurationTypeMapping<
+        "AWS",
+        RegistryConfigurationAWSRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "Azure",
+        RegistryConfigurationAzureRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "Gitlab",
+        RegistryConfigurationGitlabRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "DockerHub",
+        RegistryConfigurationDockerHubRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "GitHub",
+        RegistryConfigurationGitHubRegistry
+      >
+    | BaseRegistryConfigurationTypeMapping<
+        "Custom",
+        RegistryConfigurationCustomRegistry
+      >
   );
 
 export type PlatformDescriptor = BasePlatformDescriptor &
   (
-    | BasePlatformDescriptorTypeMapping<'Docker', PlatformDescriptorDockerPlatformDescriptor>
-    | BasePlatformDescriptorTypeMapping<'DockerSwarm', PlatformDescriptorDockerSwarmPlatformDescriptor>
-    | BasePlatformDescriptorTypeMapping<'Kubernetes', PlatformDescriptorKubernetesPlatformDescriptor>
+    | BasePlatformDescriptorTypeMapping<
+        "Docker",
+        PlatformDescriptorDockerPlatformDescriptor
+      >
+    | BasePlatformDescriptorTypeMapping<
+        "DockerSwarm",
+        PlatformDescriptorDockerSwarmPlatformDescriptor
+      >
+    | BasePlatformDescriptorTypeMapping<
+        "Kubernetes",
+        PlatformDescriptorKubernetesPlatformDescriptor
+      >
   );
 
 export type IImageRepository = BaseIImageRepository &
   (
-    | BaseIImageRepositoryTypeMapping<'GitHub', IImageRepositoryGitHubPackageResponse>
-    | BaseIImageRepositoryTypeMapping<'DockerHub', IImageRepositoryDockerHubRepositoryResponse>
+    | BaseIImageRepositoryTypeMapping<
+        "GitHub",
+        IImageRepositoryGitHubPackageResponse
+      >
+    | BaseIImageRepositoryTypeMapping<
+        "DockerHub",
+        IImageRepositoryDockerHubRepositoryResponse
+      >
   );
 
 export type GitAuthConfiguration = BaseGitAuthConfiguration &
   (
-    | BaseGitAuthConfigurationTypeMapping<'Basic', GitAuthConfigurationBasicAuth>
-    | BaseGitAuthConfigurationTypeMapping<'Token', GitAuthConfigurationTokenAuth>
-    | BaseGitAuthConfigurationTypeMapping<'SshKey', GitAuthConfigurationSshKeyAuth>
+    | BaseGitAuthConfigurationTypeMapping<
+        "Basic",
+        GitAuthConfigurationBasicAuth
+      >
+    | BaseGitAuthConfigurationTypeMapping<
+        "Token",
+        GitAuthConfigurationTokenAuth
+      >
+    | BaseGitAuthConfigurationTypeMapping<
+        "SshKey",
+        GitAuthConfigurationSshKeyAuth
+      >
   );
 
 export type DeploymentImageInfo = BaseDeploymentImageInfo &
   (
-    | BaseDeploymentImageInfoTypeMapping<'Local', DeploymentImageInfoLocalImage>
-    | BaseDeploymentImageInfoTypeMapping<'External', DeploymentImageInfoExternalImage>
+    | BaseDeploymentImageInfoTypeMapping<"Local", DeploymentImageInfoLocalImage>
+    | BaseDeploymentImageInfoTypeMapping<
+        "External",
+        DeploymentImageInfoExternalImage
+      >
   );
 
 export type AlertRuleQuietHour = BaseAlertRuleQuietHour &
   (
-    | BaseAlertRuleQuietHourTypeMapping<'Daily', AlertRuleQuietHourDailyQuietHour>
-    | BaseAlertRuleQuietHourTypeMapping<'Weekly', AlertRuleQuietHourWeeklyQuietHour>
+    | BaseAlertRuleQuietHourTypeMapping<
+        "Daily",
+        AlertRuleQuietHourDailyQuietHour
+      >
+    | BaseAlertRuleQuietHourTypeMapping<
+        "Weekly",
+        AlertRuleQuietHourWeeklyQuietHour
+      >
   );
 
 export type AlertEventInfo = BaseAlertEventInfo &
   (
-    | BaseAlertEventInfoTypeMapping<'PlatformCpuHigh', AlertEventInfoPlatformCpuHighAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'PlatformRamHigh', AlertEventInfoPlatformRamHighAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'PlatformUnreachable', AlertEventInfoPlatformUnreachableAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'UnmanagedContainerCreated', AlertEventInfoUnmanagedContainerCreatedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'PlatformVersionMismatch', AlertEventInfoPlatformVersionMismatchAlertInfo>
     | BaseAlertEventInfoTypeMapping<
-        'DeploymentImageUpdateAvailable',
+        "PlatformCpuHigh",
+        AlertEventInfoPlatformCpuHighAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformRamHigh",
+        AlertEventInfoPlatformRamHighAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformUnreachable",
+        AlertEventInfoPlatformUnreachableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "UnmanagedContainerCreated",
+        AlertEventInfoUnmanagedContainerCreatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformVersionMismatch",
+        AlertEventInfoPlatformVersionMismatchAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "DeploymentImageUpdateAvailable",
         AlertEventInfoDeploymentImageUpdateAvailableAlertInfo
       >
-    | BaseAlertEventInfoTypeMapping<'DeploymentAutoUpdated', AlertEventInfoDeploymentAutoUpdatedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'DeploymentAutoDeployFailed', AlertEventInfoDeploymentAutoDeployFailedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackImageUpdateAvailable', AlertEventInfoStackImageUpdateAvailableAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackAutoUpdated', AlertEventInfoStackAutoUpdatedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackAutoDeployFailed', AlertEventInfoStackDeployFailedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackServiceAutoUpdated', AlertEventInfoStackServiceAutoUpdatedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackServiceAutoDeployFailed', AlertEventInfoStackServiceAutoDeployFailedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackDriftDetected', AlertEventInfoStackDriftDetectedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackDriftAutoReconciled', AlertEventInfoStackDriftAutoReconciledAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackGitUpdateAvailable', AlertEventInfoStackGitUpdateAvailableAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackGitAutoUpdated', AlertEventInfoStackGitAutoUpdatedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'StackGitAutoDeployFailed', AlertEventInfoStackGitAutoDeployFailedAlertInfo>
     | BaseAlertEventInfoTypeMapping<
-        'StackConfigurationResolutionFailed',
+        "DeploymentAutoUpdated",
+        AlertEventInfoDeploymentAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "DeploymentAutoDeployFailed",
+        AlertEventInfoDeploymentAutoDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackImageUpdateAvailable",
+        AlertEventInfoStackImageUpdateAvailableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackAutoUpdated",
+        AlertEventInfoStackAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackAutoDeployFailed",
+        AlertEventInfoStackDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackServiceAutoUpdated",
+        AlertEventInfoStackServiceAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackServiceAutoDeployFailed",
+        AlertEventInfoStackServiceAutoDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackDriftDetected",
+        AlertEventInfoStackDriftDetectedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackDriftAutoReconciled",
+        AlertEventInfoStackDriftAutoReconciledAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackGitUpdateAvailable",
+        AlertEventInfoStackGitUpdateAvailableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackGitAutoUpdated",
+        AlertEventInfoStackGitAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackGitAutoDeployFailed",
+        AlertEventInfoStackGitAutoDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackConfigurationResolutionFailed",
         AlertEventInfoStackConfigurationResolutionFailedAlertInfo
       >
     | BaseAlertEventInfoTypeMapping<
-        'DeploymentConfigurationResolutionFailed',
+        "DeploymentConfigurationResolutionFailed",
         AlertEventInfoDeploymentConfigurationResolutionFailedAlertInfo
       >
-    | BaseAlertEventInfoTypeMapping<'WebhookAuthenticationFailed', AlertEventInfoWebhookAuthenticationFailedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'WebhookDispatchFailed', AlertEventInfoWebhookDispatchFailedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'WebhookGitRepoSyncFailed', AlertEventInfoWebhookGitRepoSyncFailedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'WebhookStackGitDeployFailed', AlertEventInfoWebhookStackGitDeployFailedAlertInfo>
-    | BaseAlertEventInfoTypeMapping<'AutomationActionRunFailed', AlertEventInfoAutomationActionRunFailedAlertInfo>
+    | BaseAlertEventInfoTypeMapping<
+        "WebhookAuthenticationFailed",
+        AlertEventInfoWebhookAuthenticationFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "WebhookDispatchFailed",
+        AlertEventInfoWebhookDispatchFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "WebhookGitRepoSyncFailed",
+        AlertEventInfoWebhookGitRepoSyncFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "WebhookStackGitDeployFailed",
+        AlertEventInfoWebhookStackGitDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "AutomationActionRunFailed",
+        AlertEventInfoAutomationActionRunFailedAlertInfo
+      >
   );
 
 export type ActivityEventInfo = BaseActivityEventInfo &
   (
-    | BaseActivityEventInfoTypeMapping<'DeploymentCreated', ActivityEventInfoDeploymentCreated>
-    | BaseActivityEventInfoTypeMapping<'DeploymentDuplicated', ActivityEventInfoDeploymentDuplicated>
-    | BaseActivityEventInfoTypeMapping<'DeploymentUpdated', ActivityEventInfoDeploymentUpdated>
-    | BaseActivityEventInfoTypeMapping<'DeploymentRenamed', ActivityEventInfoDeploymentRenamed>
-    | BaseActivityEventInfoTypeMapping<'DeploymentDeleted', ActivityEventInfoDeploymentDeleted>
-    | BaseActivityEventInfoTypeMapping<'DeploymentStarted', ActivityEventInfoDeploymentStarted>
-    | BaseActivityEventInfoTypeMapping<'DeploymentStopped', ActivityEventInfoDeploymentStopped>
-    | BaseActivityEventInfoTypeMapping<'DeploymentPaused', ActivityEventInfoDeploymentPaused>
-    | BaseActivityEventInfoTypeMapping<'DeploymentApplied', ActivityEventInfoDeploymentApplied>
-    | BaseActivityEventInfoTypeMapping<'DeploymentDegraded', ActivityEventInfoDeploymentDegraded>
-    | BaseActivityEventInfoTypeMapping<'StackCreated', ActivityEventInfoStackCreated>
-    | BaseActivityEventInfoTypeMapping<'StackDuplicated', ActivityEventInfoStackDuplicated>
-    | BaseActivityEventInfoTypeMapping<'StackUpdated', ActivityEventInfoStackUpdated>
-    | BaseActivityEventInfoTypeMapping<'StackRenamed', ActivityEventInfoStackRenamed>
-    | BaseActivityEventInfoTypeMapping<'StackDeleted', ActivityEventInfoStackDeleted>
-    | BaseActivityEventInfoTypeMapping<'StackStarted', ActivityEventInfoStackStarted>
-    | BaseActivityEventInfoTypeMapping<'StackStopped', ActivityEventInfoStackStopped>
-    | BaseActivityEventInfoTypeMapping<'StackPaused', ActivityEventInfoStackPaused>
-    | BaseActivityEventInfoTypeMapping<'StackApplied', ActivityEventInfoStackApplied>
-    | BaseActivityEventInfoTypeMapping<'StackRollback', ActivityEventInfoStackRollback>
-    | BaseActivityEventInfoTypeMapping<'StackDegraded', ActivityEventInfoStackDegraded>
-    | BaseActivityEventInfoTypeMapping<'StackDriftDetected', ActivityEventInfoStackDriftDetected>
-    | BaseActivityEventInfoTypeMapping<'StackDriftResolved', ActivityEventInfoStackDriftResolved>
-    | BaseActivityEventInfoTypeMapping<'StackReconciliationAttempted', ActivityEventInfoStackReconciliationAttempted>
-    | BaseActivityEventInfoTypeMapping<'StackGitUpdateAvailable', ActivityEventInfoStackGitUpdateAvailable>
-    | BaseActivityEventInfoTypeMapping<'StackGitAutoUpdated', ActivityEventInfoStackGitAutoUpdated>
-    | BaseActivityEventInfoTypeMapping<'StackGitAutoDeployFailed', ActivityEventInfoStackGitAutoDeployFailed>
-    | BaseActivityEventInfoTypeMapping<'AlertRuleCreated', ActivityEventInfoAlertRuleCreated>
-    | BaseActivityEventInfoTypeMapping<'AlertRuleUpdated', ActivityEventInfoAlertRuleUpdated>
-    | BaseActivityEventInfoTypeMapping<'AlertRuleDeleted', ActivityEventInfoAlertRuleDeleted>
-    | BaseActivityEventInfoTypeMapping<'AlertRuleRenamed', ActivityEventInfoAlertRuleRenamed>
-    | BaseActivityEventInfoTypeMapping<'PlatformCreated', ActivityEventInfoPlatformCreated>
-    | BaseActivityEventInfoTypeMapping<'PlatformDeleted', ActivityEventInfoPlatformDeleted>
-    | BaseActivityEventInfoTypeMapping<'PlatformConnected', ActivityEventInfoPlatformConnected>
-    | BaseActivityEventInfoTypeMapping<'PlatformDisconnected', ActivityEventInfoPlatformDisconnected>
-    | BaseActivityEventInfoTypeMapping<'PlatformRenamed', ActivityEventInfoPlatformRenamed>
-    | BaseActivityEventInfoTypeMapping<'RegistryRenamed', ActivityEventInfoRegistryRenamed>
-    | BaseActivityEventInfoTypeMapping<'RegistryCreated', ActivityEventInfoRegistryCreated>
-    | BaseActivityEventInfoTypeMapping<'RegistryUpdated', ActivityEventInfoRegistryUpdated>
-    | BaseActivityEventInfoTypeMapping<'RegistryDeleted', ActivityEventInfoRegistryDeleted>
-    | BaseActivityEventInfoTypeMapping<'GitRepoCreated', ActivityEventInfoGitRepoCreated>
-    | BaseActivityEventInfoTypeMapping<'GitRepoUpdated', ActivityEventInfoGitRepoUpdated>
-    | BaseActivityEventInfoTypeMapping<'GitRepoRenamed', ActivityEventInfoGitRepoRenamed>
-    | BaseActivityEventInfoTypeMapping<'GitRepoDeleted', ActivityEventInfoGitRepoDeleted>
-    | BaseActivityEventInfoTypeMapping<'GitRepoCloned', ActivityEventInfoGitRepoCloned>
-    | BaseActivityEventInfoTypeMapping<'GitRepoPulled', ActivityEventInfoGitRepoPulled>
-    | BaseActivityEventInfoTypeMapping<'GitRepoWebhookReceived', ActivityEventInfoGitRepoWebhookReceived>
-    | BaseActivityEventInfoTypeMapping<'OidcProviderCreated', ActivityEventInfoOidcProviderCreated>
-    | BaseActivityEventInfoTypeMapping<'OidcProviderUpdated', ActivityEventInfoOidcProviderUpdated>
-    | BaseActivityEventInfoTypeMapping<'OidcProviderRenamed', ActivityEventInfoOidcProviderRenamed>
-    | BaseActivityEventInfoTypeMapping<'OidcProviderDeleted', ActivityEventInfoOidcProviderDeleted>
-    | BaseActivityEventInfoTypeMapping<'ActionCreated', ActivityEventInfoAutomationActionCreated>
-    | BaseActivityEventInfoTypeMapping<'ActionUpdated', ActivityEventInfoAutomationActionUpdated>
-    | BaseActivityEventInfoTypeMapping<'ActionRenamed', ActivityEventInfoAutomationActionRenamed>
-    | BaseActivityEventInfoTypeMapping<'ActionDeleted', ActivityEventInfoAutomationActionDeleted>
-    | BaseActivityEventInfoTypeMapping<'ActionRunQueued', ActivityEventInfoAutomationActionRunQueued>
-    | BaseActivityEventInfoTypeMapping<'ActionRunStarted', ActivityEventInfoAutomationActionRunStarted>
-    | BaseActivityEventInfoTypeMapping<'ActionRunSucceeded', ActivityEventInfoAutomationActionRunSucceeded>
-    | BaseActivityEventInfoTypeMapping<'ActionRunFailed', ActivityEventInfoAutomationActionRunFailed>
-    | BaseActivityEventInfoTypeMapping<'ActionRunTimedOut', ActivityEventInfoAutomationActionRunTimedOut>
-    | BaseActivityEventInfoTypeMapping<'ActionRunCancelled', ActivityEventInfoAutomationActionRunCancelled>
-    | BaseActivityEventInfoTypeMapping<'ActionRunRejected', ActivityEventInfoAutomationActionRunRejected>
-    | BaseActivityEventInfoTypeMapping<'StackWebhookReceived', ActivityEventInfoStackWebhookReceived>
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentCreated",
+        ActivityEventInfoDeploymentCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentDuplicated",
+        ActivityEventInfoDeploymentDuplicated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentUpdated",
+        ActivityEventInfoDeploymentUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentRenamed",
+        ActivityEventInfoDeploymentRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentDeleted",
+        ActivityEventInfoDeploymentDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentStarted",
+        ActivityEventInfoDeploymentStarted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentStopped",
+        ActivityEventInfoDeploymentStopped
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentPaused",
+        ActivityEventInfoDeploymentPaused
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentApplied",
+        ActivityEventInfoDeploymentApplied
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentDegraded",
+        ActivityEventInfoDeploymentDegraded
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackCreated",
+        ActivityEventInfoStackCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackDuplicated",
+        ActivityEventInfoStackDuplicated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackUpdated",
+        ActivityEventInfoStackUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackRenamed",
+        ActivityEventInfoStackRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackDeleted",
+        ActivityEventInfoStackDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackStarted",
+        ActivityEventInfoStackStarted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackStopped",
+        ActivityEventInfoStackStopped
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackPaused",
+        ActivityEventInfoStackPaused
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackApplied",
+        ActivityEventInfoStackApplied
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackRollback",
+        ActivityEventInfoStackRollback
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackDegraded",
+        ActivityEventInfoStackDegraded
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackDriftDetected",
+        ActivityEventInfoStackDriftDetected
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackDriftResolved",
+        ActivityEventInfoStackDriftResolved
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackReconciliationAttempted",
+        ActivityEventInfoStackReconciliationAttempted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackGitUpdateAvailable",
+        ActivityEventInfoStackGitUpdateAvailable
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackGitAutoUpdated",
+        ActivityEventInfoStackGitAutoUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackGitAutoDeployFailed",
+        ActivityEventInfoStackGitAutoDeployFailed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "AlertRuleCreated",
+        ActivityEventInfoAlertRuleCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "AlertRuleUpdated",
+        ActivityEventInfoAlertRuleUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "AlertRuleDeleted",
+        ActivityEventInfoAlertRuleDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "AlertRuleRenamed",
+        ActivityEventInfoAlertRuleRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformCreated",
+        ActivityEventInfoPlatformCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformDeleted",
+        ActivityEventInfoPlatformDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformConnected",
+        ActivityEventInfoPlatformConnected
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformDisconnected",
+        ActivityEventInfoPlatformDisconnected
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "PlatformRenamed",
+        ActivityEventInfoPlatformRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RegistryRenamed",
+        ActivityEventInfoRegistryRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RegistryCreated",
+        ActivityEventInfoRegistryCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RegistryUpdated",
+        ActivityEventInfoRegistryUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RegistryDeleted",
+        ActivityEventInfoRegistryDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoCreated",
+        ActivityEventInfoGitRepoCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoUpdated",
+        ActivityEventInfoGitRepoUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoRenamed",
+        ActivityEventInfoGitRepoRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoDeleted",
+        ActivityEventInfoGitRepoDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoCloned",
+        ActivityEventInfoGitRepoCloned
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoPulled",
+        ActivityEventInfoGitRepoPulled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoWebhookReceived",
+        ActivityEventInfoGitRepoWebhookReceived
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "OidcProviderCreated",
+        ActivityEventInfoOidcProviderCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "OidcProviderUpdated",
+        ActivityEventInfoOidcProviderUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "OidcProviderRenamed",
+        ActivityEventInfoOidcProviderRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "OidcProviderDeleted",
+        ActivityEventInfoOidcProviderDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionCreated",
+        ActivityEventInfoAutomationActionCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionUpdated",
+        ActivityEventInfoAutomationActionUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRenamed",
+        ActivityEventInfoAutomationActionRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionDeleted",
+        ActivityEventInfoAutomationActionDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunQueued",
+        ActivityEventInfoAutomationActionRunQueued
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunStarted",
+        ActivityEventInfoAutomationActionRunStarted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunSucceeded",
+        ActivityEventInfoAutomationActionRunSucceeded
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunFailed",
+        ActivityEventInfoAutomationActionRunFailed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunTimedOut",
+        ActivityEventInfoAutomationActionRunTimedOut
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunCancelled",
+        ActivityEventInfoAutomationActionRunCancelled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "ActionRunRejected",
+        ActivityEventInfoAutomationActionRunRejected
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "StackWebhookReceived",
+        ActivityEventInfoStackWebhookReceived
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserProfileUpdated",
+        ActivityEventInfoUserProfileUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserPreferencesUpdated",
+        ActivityEventInfoUserPreferencesUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserPasswordChanged",
+        ActivityEventInfoUserPasswordChanged
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserSessionRevoked",
+        ActivityEventInfoUserSessionRevoked
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserOtherSessionsRevoked",
+        ActivityEventInfoUserOtherSessionsRevoked
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -671,53 +1031,59 @@ export interface ActivitiesView {
   pagedResult: PagedResultViewOfActivityView;
 }
 
+export interface ActivityChangedField {
+  name: string;
+  oldValue: null | string;
+  newValue: null | string;
+}
+
 export interface ActivityEventInfoAlertRuleCreated {
-  $type?: 'AlertRuleCreated';
+  $type?: "AlertRuleCreated";
   alertRule: AlertRuleSnapshot;
 }
 
 export interface ActivityEventInfoAlertRuleDeleted {
-  $type?: 'AlertRuleDeleted';
+  $type?: "AlertRuleDeleted";
   alertRule: AlertRuleSnapshot;
 }
 
 export interface ActivityEventInfoAlertRuleRenamed {
-  $type?: 'AlertRuleRenamed';
+  $type?: "AlertRuleRenamed";
   oldName: string;
   newName: string;
 }
 
 export interface ActivityEventInfoAlertRuleUpdated {
-  $type?: 'AlertRuleUpdated';
+  $type?: "AlertRuleUpdated";
   oldRule: AlertRuleSnapshot;
   newRule: AlertRuleSnapshot;
 }
 
 export interface ActivityEventInfoAutomationActionCreated {
-  $type?: 'ActionCreated';
+  $type?: "ActionCreated";
   action: AutomationActionSnapshot;
 }
 
 export interface ActivityEventInfoAutomationActionDeleted {
-  $type?: 'ActionDeleted';
+  $type?: "ActionDeleted";
   action: AutomationActionSnapshot;
 }
 
 export interface ActivityEventInfoAutomationActionRenamed {
-  $type?: 'ActionRenamed';
+  $type?: "ActionRenamed";
   oldName: string;
   newName: string;
 }
 
 export interface ActivityEventInfoAutomationActionRunCancelled {
-  $type?: 'ActionRunCancelled';
+  $type?: "ActionRunCancelled";
   /** @format uuid */
   runId: string;
   trigger: ActionRunTrigger;
 }
 
 export interface ActivityEventInfoAutomationActionRunFailed {
-  $type?: 'ActionRunFailed';
+  $type?: "ActionRunFailed";
   /** @format uuid */
   runId: string;
   trigger: ActionRunTrigger;
@@ -735,14 +1101,14 @@ export interface ActivityEventInfoAutomationActionRunFailed {
 }
 
 export interface ActivityEventInfoAutomationActionRunQueued {
-  $type?: 'ActionRunQueued';
+  $type?: "ActionRunQueued";
   /** @format uuid */
   runId: string;
   trigger: ActionRunTrigger;
 }
 
 export interface ActivityEventInfoAutomationActionRunRejected {
-  $type?: 'ActionRunRejected';
+  $type?: "ActionRunRejected";
   /** @format uuid */
   runId: string;
   trigger: ActionRunTrigger;
@@ -750,14 +1116,14 @@ export interface ActivityEventInfoAutomationActionRunRejected {
 }
 
 export interface ActivityEventInfoAutomationActionRunStarted {
-  $type?: 'ActionRunStarted';
+  $type?: "ActionRunStarted";
   /** @format uuid */
   runId: string;
   trigger: ActionRunTrigger;
 }
 
 export interface ActivityEventInfoAutomationActionRunSucceeded {
-  $type?: 'ActionRunSucceeded';
+  $type?: "ActionRunSucceeded";
   /** @format uuid */
   runId: string;
   trigger: ActionRunTrigger;
@@ -774,7 +1140,7 @@ export interface ActivityEventInfoAutomationActionRunSucceeded {
 }
 
 export interface ActivityEventInfoAutomationActionRunTimedOut {
-  $type?: 'ActionRunTimedOut';
+  $type?: "ActionRunTimedOut";
   /** @format uuid */
   runId: string;
   trigger: ActionRunTrigger;
@@ -787,101 +1153,101 @@ export interface ActivityEventInfoAutomationActionRunTimedOut {
 }
 
 export interface ActivityEventInfoAutomationActionUpdated {
-  $type?: 'ActionUpdated';
+  $type?: "ActionUpdated";
   oldAction: AutomationActionSnapshot;
   newAction: AutomationActionSnapshot;
 }
 
 export interface ActivityEventInfoDeploymentApplied {
-  $type?: 'DeploymentApplied';
+  $type?: "DeploymentApplied";
   deployment: null | DeploymentSnapshot;
   result: DeploymentResultSnapshot;
 }
 
 export interface ActivityEventInfoDeploymentCreated {
-  $type?: 'DeploymentCreated';
+  $type?: "DeploymentCreated";
   deployment: DeploymentSnapshot;
 }
 
 export interface ActivityEventInfoDeploymentDegraded {
-  $type?: 'DeploymentDegraded';
+  $type?: "DeploymentDegraded";
   reason: string;
 }
 
 export interface ActivityEventInfoDeploymentDeleted {
-  $type?: 'DeploymentDeleted';
+  $type?: "DeploymentDeleted";
   deployment: DeploymentSnapshot;
 }
 
 export interface ActivityEventInfoDeploymentDuplicated {
-  $type?: 'DeploymentDuplicated';
+  $type?: "DeploymentDuplicated";
   deployment: DeploymentSnapshot;
   source: ActivitySourceResource;
 }
 
 export interface ActivityEventInfoDeploymentPaused {
-  $type?: 'DeploymentPaused';
+  $type?: "DeploymentPaused";
   containerIds: string[];
 }
 
 export interface ActivityEventInfoDeploymentRenamed {
-  $type?: 'DeploymentRenamed';
+  $type?: "DeploymentRenamed";
   oldName: string;
   newName: string;
 }
 
 export interface ActivityEventInfoDeploymentStarted {
-  $type?: 'DeploymentStarted';
+  $type?: "DeploymentStarted";
   containerIds: string[];
 }
 
 export interface ActivityEventInfoDeploymentStopped {
-  $type?: 'DeploymentStopped';
+  $type?: "DeploymentStopped";
   containerIds: string[];
 }
 
 export interface ActivityEventInfoDeploymentUpdated {
-  $type?: 'DeploymentUpdated';
+  $type?: "DeploymentUpdated";
   oldDeployment: DeploymentSnapshot;
   newDeployment: DeploymentSnapshot;
 }
 
 export interface ActivityEventInfoGitRepoCloned {
-  $type?: 'GitRepoCloned';
+  $type?: "GitRepoCloned";
   gitRepo: GitRepositorySnapshot;
   result: RepoSyncResultSnapshot;
 }
 
 export interface ActivityEventInfoGitRepoCreated {
-  $type?: 'GitRepoCreated';
+  $type?: "GitRepoCreated";
   gitRepo: GitRepositorySnapshot;
 }
 
 export interface ActivityEventInfoGitRepoDeleted {
-  $type?: 'GitRepoDeleted';
+  $type?: "GitRepoDeleted";
   gitRepo: GitRepositorySnapshot;
 }
 
 export interface ActivityEventInfoGitRepoPulled {
-  $type?: 'GitRepoPulled';
+  $type?: "GitRepoPulled";
   gitRepo: GitRepositorySnapshot;
   result: RepoSyncResultSnapshot;
 }
 
 export interface ActivityEventInfoGitRepoRenamed {
-  $type?: 'GitRepoRenamed';
+  $type?: "GitRepoRenamed";
   oldName: string;
   newName: string;
 }
 
 export interface ActivityEventInfoGitRepoUpdated {
-  $type?: 'GitRepoUpdated';
+  $type?: "GitRepoUpdated";
   oldGitRepo: GitRepositorySnapshot;
   newGitRepo: GitRepositorySnapshot;
 }
 
 export interface ActivityEventInfoGitRepoWebhookReceived {
-  $type?: 'GitRepoWebhookReceived';
+  $type?: "GitRepoWebhookReceived";
   /** @format uuid */
   requestId: string;
   authType: string;
@@ -898,117 +1264,117 @@ export interface ActivityEventInfoGitRepoWebhookReceived {
 }
 
 export interface ActivityEventInfoOidcProviderCreated {
-  $type?: 'OidcProviderCreated';
+  $type?: "OidcProviderCreated";
   provider: OidcProviderActivitySnapshot;
 }
 
 export interface ActivityEventInfoOidcProviderDeleted {
-  $type?: 'OidcProviderDeleted';
+  $type?: "OidcProviderDeleted";
   provider: OidcProviderActivitySnapshot;
 }
 
 export interface ActivityEventInfoOidcProviderRenamed {
-  $type?: 'OidcProviderRenamed';
+  $type?: "OidcProviderRenamed";
   oldName: string;
   newName: string;
 }
 
 export interface ActivityEventInfoOidcProviderUpdated {
-  $type?: 'OidcProviderUpdated';
+  $type?: "OidcProviderUpdated";
   oldProvider: OidcProviderActivitySnapshot;
   newProvider: OidcProviderActivitySnapshot;
 }
 
 export interface ActivityEventInfoPlatformConnected {
-  $type?: 'PlatformConnected';
+  $type?: "PlatformConnected";
   platform: PlatformSnapshot;
   previousStatus: PlatformStatus;
 }
 
 export interface ActivityEventInfoPlatformCreated {
-  $type?: 'PlatformCreated';
+  $type?: "PlatformCreated";
   platform: PlatformSnapshot;
 }
 
 export interface ActivityEventInfoPlatformDeleted {
-  $type?: 'PlatformDeleted';
+  $type?: "PlatformDeleted";
   platform: PlatformSnapshot;
 }
 
 export interface ActivityEventInfoPlatformDisconnected {
-  $type?: 'PlatformDisconnected';
+  $type?: "PlatformDisconnected";
   platform: PlatformSnapshot;
   previousStatus: PlatformStatus;
 }
 
 export interface ActivityEventInfoPlatformRenamed {
-  $type?: 'PlatformRenamed';
+  $type?: "PlatformRenamed";
   oldName: string;
   newName: string;
 }
 
 export interface ActivityEventInfoRegistryCreated {
-  $type?: 'RegistryCreated';
+  $type?: "RegistryCreated";
   registry: RegistrySnapshot;
 }
 
 export interface ActivityEventInfoRegistryDeleted {
-  $type?: 'RegistryDeleted';
+  $type?: "RegistryDeleted";
   registry: RegistrySnapshot;
 }
 
 export interface ActivityEventInfoRegistryRenamed {
-  $type?: 'RegistryRenamed';
+  $type?: "RegistryRenamed";
   oldName: string;
   newName: string;
 }
 
 export interface ActivityEventInfoRegistryUpdated {
-  $type?: 'RegistryUpdated';
+  $type?: "RegistryUpdated";
   oldRegistry: RegistrySnapshot;
   newRegistry: RegistrySnapshot;
 }
 
 export interface ActivityEventInfoStackApplied {
-  $type?: 'StackApplied';
+  $type?: "StackApplied";
   stack: null | StackSnapshot;
   result: StackResultSnapshot;
 }
 
 export interface ActivityEventInfoStackCreated {
-  $type?: 'StackCreated';
+  $type?: "StackCreated";
   stack: StackSnapshot;
 }
 
 export interface ActivityEventInfoStackDegraded {
-  $type?: 'StackDegraded';
+  $type?: "StackDegraded";
   reason: string;
 }
 
 export interface ActivityEventInfoStackDeleted {
-  $type?: 'StackDeleted';
+  $type?: "StackDeleted";
   stack: StackSnapshot;
 }
 
 export interface ActivityEventInfoStackDriftDetected {
-  $type?: 'StackDriftDetected';
+  $type?: "StackDriftDetected";
   reason: string;
   fingerprint: string;
 }
 
 export interface ActivityEventInfoStackDriftResolved {
-  $type?: 'StackDriftResolved';
+  $type?: "StackDriftResolved";
   previousFingerprint: string;
 }
 
 export interface ActivityEventInfoStackDuplicated {
-  $type?: 'StackDuplicated';
+  $type?: "StackDuplicated";
   stack: StackSnapshot;
   source: ActivitySourceResource;
 }
 
 export interface ActivityEventInfoStackGitAutoDeployFailed {
-  $type?: 'StackGitAutoDeployFailed';
+  $type?: "StackGitAutoDeployFailed";
   gitRepositoryName: string;
   branch: string;
   currentCommitSha: string;
@@ -1017,7 +1383,7 @@ export interface ActivityEventInfoStackGitAutoDeployFailed {
 }
 
 export interface ActivityEventInfoStackGitAutoUpdated {
-  $type?: 'StackGitAutoUpdated';
+  $type?: "StackGitAutoUpdated";
   gitRepositoryName: string;
   branch: string;
   previousCommitSha: string;
@@ -1025,7 +1391,7 @@ export interface ActivityEventInfoStackGitAutoUpdated {
 }
 
 export interface ActivityEventInfoStackGitUpdateAvailable {
-  $type?: 'StackGitUpdateAvailable';
+  $type?: "StackGitUpdateAvailable";
   gitRepositoryName: string;
   branch: string;
   currentCommitSha: string;
@@ -1033,48 +1399,48 @@ export interface ActivityEventInfoStackGitUpdateAvailable {
 }
 
 export interface ActivityEventInfoStackPaused {
-  $type?: 'StackPaused';
+  $type?: "StackPaused";
   containerIds: string[];
 }
 
 export interface ActivityEventInfoStackReconciliationAttempted {
-  $type?: 'StackReconciliationAttempted';
+  $type?: "StackReconciliationAttempted";
   status: StackReconciliationStatus;
   actions: StackReconciliationAction[];
   driftFingerprint: string;
 }
 
 export interface ActivityEventInfoStackRenamed {
-  $type?: 'StackRenamed';
+  $type?: "StackRenamed";
   oldName: string;
   newName: string;
 }
 
 export interface ActivityEventInfoStackRollback {
-  $type?: 'StackRollback';
+  $type?: "StackRollback";
   oldStack: null | StackSnapshot;
   newStack: null | StackSnapshot;
   result: StackResultSnapshot;
 }
 
 export interface ActivityEventInfoStackStarted {
-  $type?: 'StackStarted';
+  $type?: "StackStarted";
   containerIds: string[];
 }
 
 export interface ActivityEventInfoStackStopped {
-  $type?: 'StackStopped';
+  $type?: "StackStopped";
   containerIds: string[];
 }
 
 export interface ActivityEventInfoStackUpdated {
-  $type?: 'StackUpdated';
+  $type?: "StackUpdated";
   oldStack: StackSnapshot;
   newStack: StackSnapshot;
 }
 
 export interface ActivityEventInfoStackWebhookReceived {
-  $type?: 'StackWebhookReceived';
+  $type?: "StackWebhookReceived";
   /** @format uuid */
   requestId: string;
   authType: string;
@@ -1088,6 +1454,35 @@ export interface ActivityEventInfoStackWebhookReceived {
   repositoryFullName: null | string;
   dispatchedBranch?: null | string;
   dispatchedCommitSha?: null | string;
+}
+
+export interface ActivityEventInfoUserOtherSessionsRevoked {
+  $type?: "UserOtherSessionsRevoked";
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  count: number | string;
+}
+
+export interface ActivityEventInfoUserPasswordChanged {
+  $type?: "UserPasswordChanged";
+}
+
+export interface ActivityEventInfoUserPreferencesUpdated {
+  $type?: "UserPreferencesUpdated";
+  changes: ActivityChangedField[];
+}
+
+export interface ActivityEventInfoUserProfileUpdated {
+  $type?: "UserProfileUpdated";
+  changes: ActivityChangedField[];
+}
+
+export interface ActivityEventInfoUserSessionRevoked {
+  $type?: "UserSessionRevoked";
+  /** @format uuid */
+  sessionId: string;
 }
 
 export interface ActivitySourceResource {
@@ -1191,7 +1586,7 @@ export interface AlertChannelsView {
 }
 
 export interface AlertEventInfoAutomationActionRunFailedAlertInfo {
-  $type?: 'AutomationActionRunFailed';
+  $type?: "AutomationActionRunFailed";
   actionName: string;
   /** @format uuid */
   runId: string;
@@ -1212,14 +1607,14 @@ export interface AlertEventInfoAutomationActionRunFailedAlertInfo {
 }
 
 export interface AlertEventInfoDeploymentAutoDeployFailedAlertInfo {
-  $type?: 'DeploymentAutoDeployFailed';
+  $type?: "DeploymentAutoDeployFailed";
   deploymentName: string;
   reason: string;
   humanMessage?: null | string;
 }
 
 export interface AlertEventInfoDeploymentAutoUpdatedAlertInfo {
-  $type?: 'DeploymentAutoUpdated';
+  $type?: "DeploymentAutoUpdated";
   deploymentName: string;
   previousImage: string;
   updatedImage: string;
@@ -1227,14 +1622,14 @@ export interface AlertEventInfoDeploymentAutoUpdatedAlertInfo {
 }
 
 export interface AlertEventInfoDeploymentConfigurationResolutionFailedAlertInfo {
-  $type?: 'DeploymentConfigurationResolutionFailed';
+  $type?: "DeploymentConfigurationResolutionFailed";
   deploymentName: string;
   reason: string;
   humanMessage?: null | string;
 }
 
 export interface AlertEventInfoDeploymentImageUpdateAvailableAlertInfo {
-  $type?: 'DeploymentImageUpdateAvailable';
+  $type?: "DeploymentImageUpdateAvailable";
   deploymentName: string;
   currentImage: string;
   latestImage: string;
@@ -1242,7 +1637,7 @@ export interface AlertEventInfoDeploymentImageUpdateAvailableAlertInfo {
 }
 
 export interface AlertEventInfoPlatformCpuHighAlertInfo {
-  $type?: 'PlatformCpuHigh';
+  $type?: "PlatformCpuHigh";
   platformName: string;
   /**
    * @format double
@@ -1253,7 +1648,7 @@ export interface AlertEventInfoPlatformCpuHighAlertInfo {
 }
 
 export interface AlertEventInfoPlatformRamHighAlertInfo {
-  $type?: 'PlatformRamHigh';
+  $type?: "PlatformRamHigh";
   platformName: string;
   /**
    * @format double
@@ -1264,7 +1659,7 @@ export interface AlertEventInfoPlatformRamHighAlertInfo {
 }
 
 export interface AlertEventInfoPlatformUnreachableAlertInfo {
-  $type?: 'PlatformUnreachable';
+  $type?: "PlatformUnreachable";
   platformName: string;
   /** @format uuid */
   id: string;
@@ -1273,7 +1668,7 @@ export interface AlertEventInfoPlatformUnreachableAlertInfo {
 }
 
 export interface AlertEventInfoPlatformVersionMismatchAlertInfo {
-  $type?: 'PlatformVersionMismatch';
+  $type?: "PlatformVersionMismatch";
   platformName: string;
   currentAgentVersion: string;
   expectedAgentVersion: string;
@@ -1281,28 +1676,28 @@ export interface AlertEventInfoPlatformVersionMismatchAlertInfo {
 }
 
 export interface AlertEventInfoStackAutoUpdatedAlertInfo {
-  $type?: 'StackAutoUpdated';
+  $type?: "StackAutoUpdated";
   stackName: string;
   updates: StackImageUpdateItem[];
   humanMessage?: null | string;
 }
 
 export interface AlertEventInfoStackConfigurationResolutionFailedAlertInfo {
-  $type?: 'StackConfigurationResolutionFailed';
+  $type?: "StackConfigurationResolutionFailed";
   stackName: string;
   reason: string;
   humanMessage?: null | string;
 }
 
 export interface AlertEventInfoStackDeployFailedAlertInfo {
-  $type?: 'StackAutoDeployFailed';
+  $type?: "StackAutoDeployFailed";
   stackName: string;
   reason: string;
   humanMessage?: null | string;
 }
 
 export interface AlertEventInfoStackDriftAutoReconciledAlertInfo {
-  $type?: 'StackDriftAutoReconciled';
+  $type?: "StackDriftAutoReconciled";
   /** @format uuid */
   stackId: string;
   stackName: string;
@@ -1320,7 +1715,7 @@ export interface AlertEventInfoStackDriftAutoReconciledAlertInfo {
 }
 
 export interface AlertEventInfoStackDriftDetectedAlertInfo {
-  $type?: 'StackDriftDetected';
+  $type?: "StackDriftDetected";
   /** @format uuid */
   stackId: string;
   stackName: string;
@@ -1339,7 +1734,7 @@ export interface AlertEventInfoStackDriftDetectedAlertInfo {
 }
 
 export interface AlertEventInfoStackGitAutoDeployFailedAlertInfo {
-  $type?: 'StackGitAutoDeployFailed';
+  $type?: "StackGitAutoDeployFailed";
   stackName: string;
   gitRepositoryName: string;
   branch: string;
@@ -1350,7 +1745,7 @@ export interface AlertEventInfoStackGitAutoDeployFailedAlertInfo {
 }
 
 export interface AlertEventInfoStackGitAutoUpdatedAlertInfo {
-  $type?: 'StackGitAutoUpdated';
+  $type?: "StackGitAutoUpdated";
   stackName: string;
   gitRepositoryName: string;
   branch: string;
@@ -1360,7 +1755,7 @@ export interface AlertEventInfoStackGitAutoUpdatedAlertInfo {
 }
 
 export interface AlertEventInfoStackGitUpdateAvailableAlertInfo {
-  $type?: 'StackGitUpdateAvailable';
+  $type?: "StackGitUpdateAvailable";
   stackName: string;
   gitRepositoryName: string;
   branch: string;
@@ -1370,14 +1765,14 @@ export interface AlertEventInfoStackGitUpdateAvailableAlertInfo {
 }
 
 export interface AlertEventInfoStackImageUpdateAvailableAlertInfo {
-  $type?: 'StackImageUpdateAvailable';
+  $type?: "StackImageUpdateAvailable";
   stackName: string;
   updates: StackImageUpdateItem[];
   humanMessage?: null | string;
 }
 
 export interface AlertEventInfoStackServiceAutoDeployFailedAlertInfo {
-  $type?: 'StackServiceAutoDeployFailed';
+  $type?: "StackServiceAutoDeployFailed";
   stackName: string;
   serviceNames: string[];
   reason: string;
@@ -1385,14 +1780,14 @@ export interface AlertEventInfoStackServiceAutoDeployFailedAlertInfo {
 }
 
 export interface AlertEventInfoStackServiceAutoUpdatedAlertInfo {
-  $type?: 'StackServiceAutoUpdated';
+  $type?: "StackServiceAutoUpdated";
   stackName: string;
   updates: StackImageUpdateItem[];
   humanMessage?: null | string;
 }
 
 export interface AlertEventInfoUnmanagedContainerCreatedAlertInfo {
-  $type?: 'UnmanagedContainerCreated';
+  $type?: "UnmanagedContainerCreated";
   platformName: string;
   platformAddress: string;
   containerName: string;
@@ -1401,7 +1796,7 @@ export interface AlertEventInfoUnmanagedContainerCreatedAlertInfo {
 }
 
 export interface AlertEventInfoWebhookAuthenticationFailedAlertInfo {
-  $type?: 'WebhookAuthenticationFailed';
+  $type?: "WebhookAuthenticationFailed";
   humanMessage?: null | string;
   resourceName: string;
   resourceType: string;
@@ -1418,7 +1813,7 @@ export interface AlertEventInfoWebhookAuthenticationFailedAlertInfo {
 }
 
 export interface AlertEventInfoWebhookDispatchFailedAlertInfo {
-  $type?: 'WebhookDispatchFailed';
+  $type?: "WebhookDispatchFailed";
   humanMessage?: null | string;
   resourceName: string;
   resourceType: string;
@@ -1435,7 +1830,7 @@ export interface AlertEventInfoWebhookDispatchFailedAlertInfo {
 }
 
 export interface AlertEventInfoWebhookGitRepoSyncFailedAlertInfo {
-  $type?: 'WebhookGitRepoSyncFailed';
+  $type?: "WebhookGitRepoSyncFailed";
   gitRepositoryName: string;
   branch: string;
   reason: string;
@@ -1443,7 +1838,7 @@ export interface AlertEventInfoWebhookGitRepoSyncFailedAlertInfo {
 }
 
 export interface AlertEventInfoWebhookStackGitDeployFailedAlertInfo {
-  $type?: 'WebhookStackGitDeployFailed';
+  $type?: "WebhookStackGitDeployFailed";
   stackName: string;
   gitRepositoryName: string;
   branch: string;
@@ -1524,7 +1919,7 @@ export interface AlertRuleLimitedTo {
 }
 
 export interface AlertRuleQuietHourDailyQuietHour {
-  $type?: 'Daily';
+  $type?: "Daily";
   name: string;
   scheduleType?: ScheduleType;
   /** @format time */
@@ -1537,7 +1932,7 @@ export interface AlertRuleQuietHourDailyQuietHour {
 }
 
 export interface AlertRuleQuietHourWeeklyQuietHour {
-  $type?: 'Weekly';
+  $type?: "Weekly";
   dayOfWeek: DayOfWeek;
   name: string;
   scheduleType?: ScheduleType;
@@ -1610,6 +2005,12 @@ export interface AlertRuleView {
 export interface AlertRulesView {
   alertRules: AlertRuleView[];
   capabilities: ResourceCapabilities;
+}
+
+export interface ApplicationInfoView {
+  name: string;
+  version: string;
+  informationalVersion: string;
 }
 
 export interface ApplyDeploymentInput {
@@ -1808,6 +2209,11 @@ export interface BindOptions {
   createMountpoint: null | boolean;
   readOnlyNonRecursive: null | boolean;
   readOnlyForceRecursive: null | boolean;
+}
+
+export interface ChangeCurrentPasswordInput {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface ClusterVolume {
@@ -2238,6 +2644,29 @@ export interface CreateVolumeInput {
   options?: null | Record<string, string>;
 }
 
+export type CurrentProfileAuthenticationType = any;
+
+export interface CurrentProfileAuthenticationView {
+  type: CurrentProfileAuthenticationType;
+  label: string;
+  canChangePassword: boolean;
+  /** @format uuid */
+  oidcProviderId?: null | string;
+  oidcProviderName?: null | string;
+}
+
+export interface CurrentProfileView {
+  /** @format uuid */
+  id: string;
+  displayName: string;
+  email: string;
+  authentication: CurrentProfileAuthenticationView;
+  /** @format date-time */
+  createdAt: any;
+  directRoles: ProfileResourceInfoView[];
+  teams: ProfileResourceInfoView[];
+}
+
 export interface DeleteAlertChannelsInput {
   ids: string[];
 }
@@ -2352,7 +2781,7 @@ export interface DeploymentDuplicateDraftView {
 }
 
 export interface DeploymentImageInfoExternalImage {
-  $type?: 'External';
+  $type?: "External";
   /** @format uuid */
   registryId: string;
   imageTag: string;
@@ -2360,7 +2789,7 @@ export interface DeploymentImageInfoExternalImage {
 }
 
 export interface DeploymentImageInfoLocalImage {
-  $type?: 'Local';
+  $type?: "Local";
   imageId: string;
 }
 
@@ -2677,20 +3106,20 @@ export interface GitAccountsView {
 }
 
 export interface GitAuthConfigurationBasicAuth {
-  $type?: 'Basic';
+  $type?: "Basic";
   username: string;
   password: string;
 }
 
 export interface GitAuthConfigurationSshKeyAuth {
-  $type?: 'SshKey';
+  $type?: "SshKey";
   username: string;
   privateKey: string;
   passphrase: null | string;
 }
 
 export interface GitAuthConfigurationTokenAuth {
-  $type?: 'Token';
+  $type?: "Token";
   token: string;
 }
 
@@ -2980,7 +3409,7 @@ export interface HttpValidationProblemDetails {
 }
 
 export interface IImageRepositoryDockerHubRepositoryResponse {
-  $type?: 'DockerHub';
+  $type?: "DockerHub";
   name?: string;
   namespace?: null | string;
   /** @format date-time */
@@ -2994,7 +3423,7 @@ export interface IImageRepositoryDockerHubRepositoryResponse {
 }
 
 export interface IImageRepositoryGitHubPackageResponse {
-  $type?: 'GitHub';
+  $type?: "GitHub";
   id?: string;
   name?: string;
   createdAt?: null | string;
@@ -3496,6 +3925,12 @@ export interface PatchUserInput {
   resourceAccesses: null | UserResourceAccessInput[];
 }
 
+export interface PatchUserPreferencesInput {
+  timeZone: null | string;
+  dateTimeFormat: null | UserDateTimeFormat;
+  theme: null | UserTheme;
+}
+
 export interface PermissionInput {
   resourceType: ResourceType;
   permissionLevel: PermissionLevel;
@@ -3526,7 +3961,7 @@ export interface PlatformCapabilities {
 }
 
 export interface PlatformDescriptorDockerPlatformDescriptor {
-  $type?: 'Docker';
+  $type?: "Docker";
   daemonId: string;
   /**
    * @format int64
@@ -3556,7 +3991,7 @@ export interface PlatformDescriptorDockerPlatformDescriptor {
 }
 
 export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
-  $type?: 'DockerSwarm';
+  $type?: "DockerSwarm";
   nodeID: string;
   nodeAddr: string;
   localNodeState: string;
@@ -3602,7 +4037,7 @@ export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
 }
 
 export interface PlatformDescriptorKubernetesPlatformDescriptor {
-  $type?: 'Kubernetes';
+  $type?: "Kubernetes";
   clusterName: null | string;
   clusterVersion: null | string;
   apiServerUrl: null | string;
@@ -3756,6 +4191,12 @@ export interface ProblemDetails {
   instance?: null | string;
 }
 
+export interface ProfileResourceInfoView {
+  /** @format uuid */
+  id: string;
+  name: string;
+}
+
 export interface PrunePlatformInput {
   resource: PruneResource;
 }
@@ -3826,7 +4267,7 @@ export interface RegistryConfigView {
 }
 
 export interface RegistryConfigurationAWSRegistry {
-  $type?: 'AWS';
+  $type?: "AWS";
   accessKey: string;
   authenticationRequired: boolean;
   secretAccessKey: string;
@@ -3834,13 +4275,13 @@ export interface RegistryConfigurationAWSRegistry {
 }
 
 export interface RegistryConfigurationAzureRegistry {
-  $type?: 'Azure';
+  $type?: "Azure";
   userName: string;
   password: string;
 }
 
 export interface RegistryConfigurationCustomRegistry {
-  $type?: 'Custom';
+  $type?: "Custom";
   /** @default false */
   authEnabled?: null | boolean;
   userName?: null | string;
@@ -3848,13 +4289,13 @@ export interface RegistryConfigurationCustomRegistry {
 }
 
 export interface RegistryConfigurationDockerHubRegistry {
-  $type?: 'DockerHub';
+  $type?: "DockerHub";
   userName?: null | string;
   pat?: null | string;
 }
 
 export interface RegistryConfigurationGitHubRegistry {
-  $type?: 'GitHub';
+  $type?: "GitHub";
   nameSpace: string;
   /** @default false */
   ghcrAuthEnabled?: null | boolean;
@@ -3862,7 +4303,7 @@ export interface RegistryConfigurationGitHubRegistry {
 }
 
 export interface RegistryConfigurationGitlabRegistry {
-  $type?: 'Gitlab';
+  $type?: "Gitlab";
   userName: string;
   pat: string;
   instanceUrl: string;
@@ -4036,6 +4477,14 @@ export interface RestartPolicy {
   maximumRetryCount: null | number | string;
 }
 
+export interface RevokeOtherProfileSessionsView {
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  count: number | string;
+}
+
 export interface RoleInput {
   name: string;
   permissions: PermissionInput[];
@@ -4154,46 +4603,46 @@ export interface StackContainerStatsView {
 }
 
 export interface StackDriftConfigHashMismatch {
-  $type?: 'ConfigHashMismatch';
+  $type?: "ConfigHashMismatch";
   serviceName: string;
   expectedHash: null | string;
   actualHash: null | string;
 }
 
 export interface StackDriftContainerPaused {
-  $type?: 'ContainerPaused';
+  $type?: "ContainerPaused";
   containerId: string;
   serviceName: string;
 }
 
 export interface StackDriftContainerStopped {
-  $type?: 'ContainerStopped';
+  $type?: "ContainerStopped";
   containerId: string;
   serviceName: string;
 }
 
 export interface StackDriftContainerUnhealthy {
-  $type?: 'ContainerUnhealthy';
+  $type?: "ContainerUnhealthy";
   containerId: string;
   serviceName: string;
   healthStatus: null | string;
 }
 
 export interface StackDriftExtraContainer {
-  $type?: 'ExtraContainer';
+  $type?: "ExtraContainer";
   containerId: string;
   serviceName: string;
 }
 
 export interface StackDriftImageMismatch {
-  $type?: 'ImageMismatch';
+  $type?: "ImageMismatch";
   serviceName: string;
   expectedImage: string;
   actualImage: string;
 }
 
 export interface StackDriftMissingContainer {
-  $type?: 'MissingContainer';
+  $type?: "MissingContainer";
   serviceName: string;
 }
 
@@ -4326,7 +4775,7 @@ export interface StackSnapshot {
 }
 
 export interface StackSpecGitStack {
-  $type?: 'Git';
+  $type?: "Git";
   /** @format uuid */
   gitRepoId: string;
   branch: string;
@@ -4349,7 +4798,7 @@ export interface StackSpecGitStack {
 }
 
 export interface StackSpecManualStack {
-  $type?: 'WebEditor';
+  $type?: "WebEditor";
   composeFile: string;
   updateBehavior: StackUpdateBehavior;
   projectName?: null | string;
@@ -4380,13 +4829,13 @@ export interface StackStreamItem {
 }
 
 export interface StackUpdateStateGitStackUpdateState {
-  $type?: 'Git';
+  $type?: "Git";
   recreateStackOnNewImageState: RecreateStackOnNewImageState;
   recreateStackOnNewCommitState: RecreateStackOnNewCommitState;
 }
 
 export interface StackUpdateStateManualStackUpdateState {
-  $type?: 'WebEditor';
+  $type?: "WebEditor";
   recreateStackOnNewImageState: RecreateStackOnNewImageState;
 }
 
@@ -4602,6 +5051,10 @@ export interface UpdateAutomationActionInput {
   runAsActorId?: null | string;
 }
 
+export interface UpdateCurrentProfileInput {
+  displayName: string;
+}
+
 export interface UpdateExternalSecretInput {
   name: null | string;
   /** @format uuid */
@@ -4653,6 +5106,13 @@ export interface UpdateVaultKvV2SecretProviderInput {
   token: null | string;
 }
 
+export interface UserPreferencesView {
+  timeZone: null | string;
+  dateTimeFormat: UserDateTimeFormat;
+  theme: UserTheme;
+  isPersisted: boolean;
+}
+
 export interface UserResourceAccessInput {
   resourceType: ResourceType;
   /** @format uuid */
@@ -4666,6 +5126,26 @@ export interface UserSearchItemView {
   id: string;
   name: string;
   email: string;
+}
+
+export interface UserSessionSummaryView {
+  /** @format uuid */
+  id: string;
+  displayName: string;
+  userAgent: null | string;
+  ipAddress: null | string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  lastSeenAt: any;
+  /** @format date-time */
+  expiresAt: any;
+  isCurrent: boolean;
+}
+
+export interface UserSessionsView {
+  sessions: UserSessionSummaryView[];
+  canRevokeOtherSessions: boolean;
 }
 
 export interface UserView {
@@ -4836,9 +5316,9 @@ type BaseActivityEventInfoTypeMapping<Key, Type> = {
 } & Type;
 
 export type QueryParamsType = Record<string | number, any>;
-export type ResponseFormat = keyof Omit<Body, 'body' | 'bodyUsed'>;
+export type ResponseFormat = keyof Omit<Body, "body" | "bodyUsed">;
 
-export interface FullRequestParams extends Omit<RequestInit, 'body'> {
+export interface FullRequestParams extends Omit<RequestInit, "body"> {
   /** set parameter to `true` for call `securityWorker` for this request */
   secure?: boolean;
   /** request path */
@@ -4857,16 +5337,22 @@ export interface FullRequestParams extends Omit<RequestInit, 'body'> {
   cancelToken?: CancelToken;
 }
 
-export type RequestParams = Omit<FullRequestParams, 'body' | 'method' | 'query' | 'path'>;
+export type RequestParams = Omit<
+  FullRequestParams,
+  "body" | "method" | "query" | "path"
+>;
 
 export interface ApiConfig<SecurityDataType = unknown> {
   baseUrl?: string;
-  baseApiParams?: Omit<RequestParams, 'baseUrl' | 'cancelToken' | 'signal'>;
-  securityWorker?: (securityData: SecurityDataType | null) => Promise<RequestParams | void> | RequestParams | void;
+  baseApiParams?: Omit<RequestParams, "baseUrl" | "cancelToken" | "signal">;
+  securityWorker?: (
+    securityData: SecurityDataType | null,
+  ) => Promise<RequestParams | void> | RequestParams | void;
   customFetch?: typeof fetch;
 }
 
-export interface HttpResponse<D extends unknown, E extends unknown = unknown> extends Response {
+export interface HttpResponse<D extends unknown, E extends unknown = unknown>
+  extends Response {
   data: D;
   error: E;
 }
@@ -4874,25 +5360,26 @@ export interface HttpResponse<D extends unknown, E extends unknown = unknown> ex
 type CancelToken = Symbol | string | number;
 
 export enum ContentType {
-  Json = 'application/json',
-  JsonApi = 'application/vnd.api+json',
-  FormData = 'multipart/form-data',
-  UrlEncoded = 'application/x-www-form-urlencoded',
-  Text = 'text/plain',
+  Json = "application/json",
+  JsonApi = "application/vnd.api+json",
+  FormData = "multipart/form-data",
+  UrlEncoded = "application/x-www-form-urlencoded",
+  Text = "text/plain",
 }
 
 export class HttpClient<SecurityDataType = unknown> {
-  public baseUrl: string = '';
+  public baseUrl: string = "";
   private securityData: SecurityDataType | null = null;
-  private securityWorker?: ApiConfig<SecurityDataType>['securityWorker'];
+  private securityWorker?: ApiConfig<SecurityDataType>["securityWorker"];
   private abortControllers = new Map<CancelToken, AbortController>();
-  private customFetch = (...fetchParams: Parameters<typeof fetch>) => fetch(...fetchParams);
+  private customFetch = (...fetchParams: Parameters<typeof fetch>) =>
+    fetch(...fetchParams);
 
   private baseApiParams: RequestParams = {
-    credentials: 'same-origin',
+    credentials: "same-origin",
     headers: {},
-    redirect: 'follow',
-    referrerPolicy: 'no-referrer',
+    redirect: "follow",
+    referrerPolicy: "no-referrer",
   };
 
   constructor(apiConfig: ApiConfig<SecurityDataType> = {}) {
@@ -4905,7 +5392,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
   protected encodeQueryParam(key: string, value: any) {
     const encodedKey = encodeURIComponent(key);
-    return `${encodedKey}=${encodeURIComponent(typeof value === 'number' ? value : `${value}`)}`;
+    return `${encodedKey}=${encodeURIComponent(typeof value === "number" ? value : `${value}`)}`;
   }
 
   protected addQueryParam(query: QueryParamsType, key: string) {
@@ -4914,28 +5401,41 @@ export class HttpClient<SecurityDataType = unknown> {
 
   protected addArrayQueryParam(query: QueryParamsType, key: string) {
     const value = query[key];
-    return value.map((v: any) => this.encodeQueryParam(key, v)).join('&');
+    return value.map((v: any) => this.encodeQueryParam(key, v)).join("&");
   }
 
   protected toQueryString(rawQuery?: QueryParamsType): string {
     const query = rawQuery || {};
-    const keys = Object.keys(query).filter((key) => 'undefined' !== typeof query[key]);
+    const keys = Object.keys(query).filter(
+      (key) => "undefined" !== typeof query[key],
+    );
     return keys
-      .map((key) => (Array.isArray(query[key]) ? this.addArrayQueryParam(query, key) : this.addQueryParam(query, key)))
-      .join('&');
+      .map((key) =>
+        Array.isArray(query[key])
+          ? this.addArrayQueryParam(query, key)
+          : this.addQueryParam(query, key),
+      )
+      .join("&");
   }
 
   protected addQueryParams(rawQuery?: QueryParamsType): string {
     const queryString = this.toQueryString(rawQuery);
-    return queryString ? `?${queryString}` : '';
+    return queryString ? `?${queryString}` : "";
   }
 
   private contentFormatters: Record<ContentType, (input: any) => any> = {
     [ContentType.Json]: (input: any) =>
-      input !== null && (typeof input === 'object' || typeof input === 'string') ? JSON.stringify(input) : input,
+      input !== null && (typeof input === "object" || typeof input === "string")
+        ? JSON.stringify(input)
+        : input,
     [ContentType.JsonApi]: (input: any) =>
-      input !== null && (typeof input === 'object' || typeof input === 'string') ? JSON.stringify(input) : input,
-    [ContentType.Text]: (input: any) => (input !== null && typeof input !== 'string' ? JSON.stringify(input) : input),
+      input !== null && (typeof input === "object" || typeof input === "string")
+        ? JSON.stringify(input)
+        : input,
+    [ContentType.Text]: (input: any) =>
+      input !== null && typeof input !== "string"
+        ? JSON.stringify(input)
+        : input,
     [ContentType.FormData]: (input: any) => {
       if (input instanceof FormData) {
         return input;
@@ -4947,7 +5447,7 @@ export class HttpClient<SecurityDataType = unknown> {
           key,
           property instanceof Blob
             ? property
-            : typeof property === 'object' && property !== null
+            : typeof property === "object" && property !== null
               ? JSON.stringify(property)
               : `${property}`,
         );
@@ -4957,7 +5457,10 @@ export class HttpClient<SecurityDataType = unknown> {
     [ContentType.UrlEncoded]: (input: any) => this.toQueryString(input),
   };
 
-  protected mergeRequestParams(params1: RequestParams, params2?: RequestParams): RequestParams {
+  protected mergeRequestParams(
+    params1: RequestParams,
+    params2?: RequestParams,
+  ): RequestParams {
     return {
       ...this.baseApiParams,
       ...params1,
@@ -4970,7 +5473,9 @@ export class HttpClient<SecurityDataType = unknown> {
     };
   }
 
-  protected createAbortSignal = (cancelToken: CancelToken): AbortSignal | undefined => {
+  protected createAbortSignal = (
+    cancelToken: CancelToken,
+  ): AbortSignal | undefined => {
     if (this.abortControllers.has(cancelToken)) {
       const abortController = this.abortControllers.get(cancelToken);
       if (abortController) {
@@ -5005,7 +5510,7 @@ export class HttpClient<SecurityDataType = unknown> {
     ...params
   }: FullRequestParams): Promise<HttpResponse<T, E>> => {
     const secureParams =
-      ((typeof secure === 'boolean' ? secure : this.baseApiParams.secure) &&
+      ((typeof secure === "boolean" ? secure : this.baseApiParams.secure) &&
         this.securityWorker &&
         (await this.securityWorker(this.securityData))) ||
       {};
@@ -5014,15 +5519,26 @@ export class HttpClient<SecurityDataType = unknown> {
     const payloadFormatter = this.contentFormatters[type || ContentType.Json];
     const responseFormat = format || requestParams.format;
 
-    return this.customFetch(`${baseUrl || this.baseUrl || ''}${path}${queryString ? `?${queryString}` : ''}`, {
-      ...requestParams,
-      headers: {
-        ...(requestParams.headers || {}),
-        ...(type && type !== ContentType.FormData ? { 'Content-Type': type } : {}),
+    return this.customFetch(
+      `${baseUrl || this.baseUrl || ""}${path}${queryString ? `?${queryString}` : ""}`,
+      {
+        ...requestParams,
+        headers: {
+          ...(requestParams.headers || {}),
+          ...(type && type !== ContentType.FormData
+            ? { "Content-Type": type }
+            : {}),
+        },
+        signal:
+          (cancelToken
+            ? this.createAbortSignal(cancelToken)
+            : requestParams.signal) || null,
+        body:
+          typeof body === "undefined" || body === null
+            ? null
+            : payloadFormatter(body),
       },
-      signal: (cancelToken ? this.createAbortSignal(cancelToken) : requestParams.signal) || null,
-      body: typeof body === 'undefined' || body === null ? null : payloadFormatter(body),
-    }).then(async (response) => {
+    ).then(async (response) => {
       const r = response as HttpResponse<T, E>;
       r.data = null as unknown as T;
       r.error = null as unknown as E;
@@ -5058,7 +5574,9 @@ export class HttpClient<SecurityDataType = unknown> {
  * @title Citadel.WebApi | v1
  * @version 1.0.0
  */
-export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDataType> {
+export class Api<
+  SecurityDataType extends unknown,
+> extends HttpClient<SecurityDataType> {
   api = {
     /**
      * No description
@@ -5074,10 +5592,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     refreshToken: (params: RequestParams = {}) =>
-      this.request<RefreshTokenResponse, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        RefreshTokenResponse,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/authentication/refresh`,
-        method: 'GET',
-        format: 'json',
+        method: "GET",
+        format: "json",
         ...params,
       }),
 
@@ -5095,12 +5616,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     login: (data: LoginRequest, params: RequestParams = {}) =>
-      this.request<LoginResponse, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        LoginResponse,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/authentication/login`,
-        method: 'POST',
+        method: "POST",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5123,7 +5647,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     logout: (params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/authentication/logout`,
-        method: 'POST',
+        method: "POST",
         secure: true,
         ...params,
       }),
@@ -5142,8 +5666,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     listOidcLoginProviders: (params: RequestParams = {}) =>
       this.request<OidcLoginProvidersView, ProblemDetails>({
         path: `/api/v1/authentication/oidc/providers`,
-        method: 'GET',
-        format: 'json',
+        method: "GET",
+        format: "json",
         ...params,
       }),
 
@@ -5169,7 +5693,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<any, void | ProblemDetails>({
         path: `/api/v1/authentication/oidc/${id}/login`,
-        method: 'GET',
+        method: "GET",
         query: query,
         ...params,
       }),
@@ -5200,8 +5724,233 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<void, void | ProblemDetails>({
         path: `/api/v1/authentication/oidc/${id}/callback`,
-        method: 'GET',
+        method: "GET",
         query: query,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Application
+     * @name GetApplicationInfo
+     * @summary Get application information
+     * @request GET:/api/v1/application/info
+     * @secure
+     * @response `200` `ApplicationInfoView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getApplicationInfo: (params: RequestParams = {}) =>
+      this.request<ApplicationInfoView, ProblemDetails>({
+        path: `/api/v1/application/info`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name GetCurrentProfile
+     * @summary Get current profile
+     * @request GET:/api/v1/profile
+     * @secure
+     * @response `200` `CurrentProfileView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getCurrentProfile: (params: RequestParams = {}) =>
+      this.request<CurrentProfileView, ProblemDetails>({
+        path: `/api/v1/profile`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name UpdateCurrentProfile
+     * @summary Update current profile
+     * @request PATCH:/api/v1/profile
+     * @secure
+     * @response `200` `CurrentProfileView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateCurrentProfile: (
+      data: UpdateCurrentProfileInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        CurrentProfileView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/profile`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name GetProfilePreferences
+     * @summary Get current profile preferences
+     * @request GET:/api/v1/profile/preferences
+     * @secure
+     * @response `200` `UserPreferencesView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getProfilePreferences: (params: RequestParams = {}) =>
+      this.request<UserPreferencesView, ProblemDetails>({
+        path: `/api/v1/profile/preferences`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name PatchProfilePreferences
+     * @summary Patch current profile preferences
+     * @request PATCH:/api/v1/profile/preferences
+     * @secure
+     * @response `200` `UserPreferencesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    patchProfilePreferences: (
+      data: PatchUserPreferencesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        UserPreferencesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/profile/preferences`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name ChangeCurrentPassword
+     * @summary Change current password
+     * @request POST:/api/v1/profile/change-password
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    changeCurrentPassword: (
+      data: ChangeCurrentPasswordInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/profile/change-password`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name ListProfileSessions
+     * @summary List current profile sessions
+     * @request GET:/api/v1/profile/sessions
+     * @secure
+     * @response `200` `UserSessionsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listProfileSessions: (params: RequestParams = {}) =>
+      this.request<UserSessionsView, ProblemDetails>({
+        path: `/api/v1/profile/sessions`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name RevokeOtherProfileSessions
+     * @summary Revoke other profile sessions
+     * @request DELETE:/api/v1/profile/sessions
+     * @secure
+     * @response `200` `RevokeOtherProfileSessionsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    revokeOtherProfileSessions: (params: RequestParams = {}) =>
+      this.request<
+        RevokeOtherProfileSessionsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/profile/sessions`,
+        method: "DELETE",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name RevokeProfileSession
+     * @summary Revoke profile session
+     * @request DELETE:/api/v1/profile/sessions/{sessionId}
+     * @secure
+     * @response `204` `void` No Content
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    revokeProfileSession: (sessionId: string, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/profile/sessions/${sessionId}`,
+        method: "DELETE",
+        secure: true,
         ...params,
       }),
 
@@ -5224,9 +5973,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     getActor: (id: string, params: RequestParams = {}) =>
       this.request<ActorView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/actors/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5246,14 +5995,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    patchActorEnabled: (id: string, data: PatchActorEnabledInput, params: RequestParams = {}) =>
+    patchActorEnabled: (
+      id: string,
+      data: PatchActorEnabledInput,
+      params: RequestParams = {},
+    ) =>
       this.request<ActorView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/actors/${id}/enabled`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5292,10 +6045,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<UsersView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5318,11 +6071,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     createUser: (data: CreateUserInput, params: RequestParams = {}) =>
       this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5345,7 +6098,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteUsers: (data: DeleteUsersInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -5379,12 +6132,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<UserSearchItemView[], HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        UserSearchItemView[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/users/search`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5407,9 +6163,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     getUser: (id: string, params: RequestParams = {}) =>
       this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5430,14 +6186,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateUser: (id: string, data: PatchUserInput, params: RequestParams = {}) =>
+    updateUser: (
+      id: string,
+      data: PatchUserInput,
+      params: RequestParams = {},
+    ) =>
       this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5458,14 +6218,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    addUserRole: (id: string, data: AddUserRoleInput, params: RequestParams = {}) =>
+    addUserRole: (
+      id: string,
+      data: AddUserRoleInput,
+      params: RequestParams = {},
+    ) =>
       this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users/${id}/roles`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5488,9 +6252,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     removeUserRole: (id: string, roleId: string, params: RequestParams = {}) =>
       this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users/${id}/roles/${roleId}`,
-        method: 'DELETE',
+        method: "DELETE",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5511,14 +6275,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    addUserResourceAccess: (id: string, data: AddUserResourceAccessInput, params: RequestParams = {}) =>
+    addUserResourceAccess: (
+      id: string,
+      data: AddUserResourceAccessInput,
+      params: RequestParams = {},
+    ) =>
       this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users/${id}/resource-accesses`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5538,14 +6306,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    removeUserResourceAccess: (id: string, data: RemoveUserResourceAccessInput, params: RequestParams = {}) =>
+    removeUserResourceAccess: (
+      id: string,
+      data: RemoveUserResourceAccessInput,
+      params: RequestParams = {},
+    ) =>
       this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users/${id}/resource-accesses`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5569,11 +6341,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     renameUser: (data: RenameResource, params: RequestParams = {}) =>
       this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/users/rename`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5612,10 +6384,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<TeamsView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5638,11 +6410,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     createTeam: (data: CreateTeamInput, params: RequestParams = {}) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5665,7 +6437,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteTeams: (data: DeleteTeamsInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -5699,12 +6471,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<TeamSearchItemView[], HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        TeamSearchItemView[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/teams/search`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5727,9 +6502,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     getTeam: (id: string, params: RequestParams = {}) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5749,14 +6524,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateTeam: (id: string, data: PatchTeamInput, params: RequestParams = {}) =>
+    updateTeam: (
+      id: string,
+      data: PatchTeamInput,
+      params: RequestParams = {},
+    ) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5777,14 +6556,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    addTeamRole: (id: string, data: AddTeamRoleInput, params: RequestParams = {}) =>
+    addTeamRole: (
+      id: string,
+      data: AddTeamRoleInput,
+      params: RequestParams = {},
+    ) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams/${id}/roles`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5807,9 +6590,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     removeTeamRole: (id: string, roleId: string, params: RequestParams = {}) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams/${id}/roles/${roleId}`,
-        method: 'DELETE',
+        method: "DELETE",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5830,14 +6613,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    addTeamMember: (id: string, data: AddTeamMemberInput, params: RequestParams = {}) =>
+    addTeamMember: (
+      id: string,
+      data: AddTeamMemberInput,
+      params: RequestParams = {},
+    ) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams/${id}/members`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5857,12 +6644,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    removeTeamMember: (id: string, userId: string, params: RequestParams = {}) =>
+    removeTeamMember: (
+      id: string,
+      userId: string,
+      params: RequestParams = {},
+    ) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams/${id}/members/${userId}`,
-        method: 'DELETE',
+        method: "DELETE",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5883,14 +6674,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    addTeamResourceAccess: (id: string, data: AddTeamResourceAccessInput, params: RequestParams = {}) =>
+    addTeamResourceAccess: (
+      id: string,
+      data: AddTeamResourceAccessInput,
+      params: RequestParams = {},
+    ) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams/${id}/resource-accesses`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5910,14 +6705,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    removeTeamResourceAccess: (id: string, data: RemoveTeamResourceAccessInput, params: RequestParams = {}) =>
+    removeTeamResourceAccess: (
+      id: string,
+      data: RemoveTeamResourceAccessInput,
+      params: RequestParams = {},
+    ) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams/${id}/resource-accesses`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5941,11 +6740,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     renameTeam: (data: RenameResource, params: RequestParams = {}) =>
       this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/teams/rename`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5967,9 +6766,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     listRoles: (params: RequestParams = {}) =>
       this.request<RolesView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/roles`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -5992,11 +6791,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     createRole: (data: RoleInput, params: RequestParams = {}) =>
       this.request<RoleView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/roles`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6019,7 +6818,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteRoles: (data: DeleteRolesInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/roles`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -6045,9 +6844,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     getRole: (id: string, params: RequestParams = {}) =>
       this.request<RoleView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/roles/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6067,14 +6866,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateRolePermissions: (id: string, data: PatchRolePermissionsInput, params: RequestParams = {}) =>
+    updateRolePermissions: (
+      id: string,
+      data: PatchRolePermissionsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<RoleView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/roles/${id}/permissions`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6098,11 +6901,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     renameRole: (data: RenameResource, params: RequestParams = {}) =>
       this.request<RoleView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/roles/rename`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6120,8 +6923,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     getPermissionMatrix: (params: RequestParams = {}) =>
       this.request<Record<string, PermissionMatrixViewItem>, ProblemDetails>({
         path: `/api/v1/roles/permissions/matrix`,
-        method: 'GET',
-        format: 'json',
+        method: "GET",
+        format: "json",
         ...params,
       }),
 
@@ -6142,11 +6945,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getContainer: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/containers/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6167,11 +6973,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getContainerInfo: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInfoView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerInfoView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/containers/${id}/info`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6192,11 +7001,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getContainerData: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerDataView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerDataView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/containers/${id}/data`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6229,12 +7041,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<ContainerStatsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerStatsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/containers/${id}/stats`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6255,11 +7070,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     inspectContainer: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInspectView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerInspectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/containers/${id}/inspect`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6282,7 +7100,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     startContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/start`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -6308,7 +7126,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     stopContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/stop`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -6334,7 +7152,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     pauseContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/pause`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -6360,7 +7178,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     restartContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/restart`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -6386,7 +7204,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     unpauseContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/unpause`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -6409,10 +7227,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteContainers: (data: DeleteContainersRequest, params: RequestParams = {}) =>
+    deleteContainers: (
+      data: DeleteContainersRequest,
+      params: RequestParams = {},
+    ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -6441,12 +7262,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<PlatformsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        PlatformsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6467,15 +7291,17 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createPlatform: (data: CreatePlatformInput, params: RequestParams = {}) =>
-      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/platforms`,
-        method: 'POST',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -6496,7 +7322,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deletePlatforms: (data: DeletePlatformsInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -6519,11 +7345,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAgentSetup: (params: RequestParams = {}) =>
-      this.request<AgentSetupView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AgentSetupView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms/agent/setup`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6543,11 +7372,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     rotateAgentHubKey: (params: RequestParams = {}) =>
-      this.request<AgentSetupView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AgentSetupView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms/agent/setup/rotate-key`,
-        method: 'POST',
+        method: "POST",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6568,13 +7400,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getPlatfom: (id: string, params: RequestParams = {}) =>
-      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/platforms/${id}`,
-        method: 'GET',
-        secure: true,
-        format: 'json',
-        ...params,
-      }),
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms/${id}`,
+          method: "GET",
+          secure: true,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -6593,16 +7427,22 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updatePlatform: (id: string, data: PlatformInput, params: RequestParams = {}) =>
-      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/platforms/${id}`,
-        method: 'PATCH',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
+    updatePlatform: (
+      id: string,
+      data: PlatformInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms/${id}`,
+          method: "PATCH",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -6621,11 +7461,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getPlatformTags: (id: string, params: RequestParams = {}) =>
-      this.request<ResourceTagsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/tags`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6645,14 +7488,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replacePlatformTags: (id: string, data: ReplaceResourceTagsInput, params: RequestParams = {}) =>
+    replacePlatformTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<ResourceTagsView, ProblemDetails>({
         path: `/api/v1/platforms/${id}/tags`,
-        method: 'PUT',
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6673,11 +7520,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listContainers: (id: string, params: RequestParams = {}) =>
-      this.request<ContainersView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainersView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/containers`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6710,12 +7560,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<PlatformStatsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        PlatformStatsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/stats`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6735,14 +7588,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    prunePlatform: (id: string, data: PrunePlatformInput, params: RequestParams = {}) =>
+    prunePlatform: (
+      id: string,
+      data: PrunePlatformInput,
+      params: RequestParams = {},
+    ) =>
       this.request<PrunePlatformView, ProblemDetails>({
         path: `/api/v1/platforms/${id}/prune`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6766,9 +7623,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     createEdgeAgentEnrollment: (id: string, params: RequestParams = {}) =>
       this.request<EdgeAgentEnrollmentView, ProblemDetails>({
         path: `/api/v1/platforms/${id}/edge/enrollments`,
-        method: 'POST',
+        method: "POST",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6791,9 +7648,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     getEdgeAgentStatus: (id: string, params: RequestParams = {}) =>
       this.request<EdgeAgentStatusView, ProblemDetails>({
         path: `/api/v1/platforms/${id}/edge/status`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6816,7 +7673,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     revokeEdgeAgent: (id: string, params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/platforms/${id}/edge/revoke`,
-        method: 'POST',
+        method: "POST",
         secure: true,
         ...params,
       }),
@@ -6839,15 +7696,17 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renamePlatform: (data: RenameResource, params: RequestParams = {}) =>
-      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/platforms/rename`,
-        method: 'POST',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms/rename`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -6865,16 +7724,22 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updatePlatformMetadata: (id: string, data: PatchResourceMetadata, params: RequestParams = {}) =>
-      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/platforms/${id}/_metadata`,
-        method: 'PATCH',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
+    updatePlatformMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms/${id}/_metadata`,
+          method: "PATCH",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -6898,12 +7763,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<RegistriesView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        RegistriesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/registries`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -6924,15 +7792,17 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createRegistry: (data: CreateRegistryInput, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries`,
-        method: 'POST',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -6950,10 +7820,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteRegistries: (data: DeleteRegistriesInput, params: RequestParams = {}) =>
+    deleteRegistries: (
+      data: DeleteRegistriesInput,
+      params: RequestParams = {},
+    ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/registries`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -6977,13 +7850,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getRegistry: (id: string, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries/${id}`,
-        method: 'GET',
-        secure: true,
-        format: 'json',
-        ...params,
-      }),
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries/${id}`,
+          method: "GET",
+          secure: true,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * @description A discriminator should be provided in the request, this discriminator is based on RegistryType enum
@@ -7002,16 +7877,22 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateRegistry: (id: string, data: PatchRegistryInput, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries/${id}`,
-        method: 'PATCH',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
+    updateRegistry: (
+      id: string,
+      data: PatchRegistryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries/${id}`,
+          method: "PATCH",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -7030,11 +7911,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getRegistryConfig: (id: string, params: RequestParams = {}) =>
-      this.request<RegistryConfigView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        RegistryConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/registries/${id}/_cfg`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7055,16 +7939,22 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateRegistryMetadata: (id: string, data: PatchResourceMetadata, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries/${id}/_metadata`,
-        method: 'PATCH',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
+    updateRegistryMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries/${id}/_metadata`,
+          method: "PATCH",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -7084,15 +7974,17 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameRegistry: (data: RenameResource, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries/rename`,
-        method: 'POST',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries/rename`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -7111,11 +8003,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getRegistryTags: (id: string, params: RequestParams = {}) =>
-      this.request<ResourceTagsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/registries/${id}/tags`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7135,14 +8030,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replaceRegistryTags: (id: string, data: ReplaceResourceTagsInput, params: RequestParams = {}) =>
-      this.request<ResourceTagsView, HttpValidationProblemDetails | ProblemDetails>({
+    replaceRegistryTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/registries/${id}/tags`,
-        method: 'PUT',
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7162,11 +8064,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listGitAccounts: (params: RequestParams = {}) =>
-      this.request<GitAccountsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitAccountsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitAccounts`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7187,13 +8092,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createGitAccount: (data: GitAccountInput, params: RequestParams = {}) =>
-      this.request<GitAccountView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitAccountView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitAccounts`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7213,10 +8121,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteGitAccounts: (data: DeleteGitAccountsInput, params: RequestParams = {}) =>
+    deleteGitAccounts: (
+      data: DeleteGitAccountsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/gitAccounts`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -7240,11 +8151,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitAccount: (id: string, params: RequestParams = {}) =>
-      this.request<GitAccountView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitAccountView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitAccounts/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7265,14 +8179,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateGitAccount: (id: string, data: GitAccountInput, params: RequestParams = {}) =>
-      this.request<GitAccountView, HttpValidationProblemDetails | ProblemDetails>({
+    updateGitAccount: (
+      id: string,
+      data: GitAccountInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitAccountView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitAccounts/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7293,11 +8214,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitAccountConfig: (id: string, params: RequestParams = {}) =>
-      this.request<GitAccountConfigView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitAccountConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitAccounts/${id}/_cfg`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7322,12 +8246,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitRepositoriesView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitRepositoriesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7348,14 +8275,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createGitRepository: (data: CreateGitRepositoryInput, params: RequestParams = {}) =>
-      this.request<GitRepositoryView, HttpValidationProblemDetails | ProblemDetails>({
+    createGitRepository: (
+      data: CreateGitRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7375,10 +8308,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteGitRepositories: (data: DeleteGitRepositoriesInput, params: RequestParams = {}) =>
+    deleteGitRepositories: (
+      data: DeleteGitRepositoriesInput,
+      params: RequestParams = {},
+    ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/gitRepositories`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -7402,11 +8338,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitRepository: (id: string, params: RequestParams = {}) =>
-      this.request<GitRepositoryView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7427,14 +8366,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateGitRepository: (id: string, data: PatchGitRepositoryInput, params: RequestParams = {}) =>
-      this.request<GitRepositoryView, HttpValidationProblemDetails | ProblemDetails>({
+    updateGitRepository: (
+      id: string,
+      data: PatchGitRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7455,11 +8401,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitRepositoryTags: (id: string, params: RequestParams = {}) =>
-      this.request<ResourceTagsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/tags`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7479,14 +8428,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replaceGitRepositoryTags: (id: string, data: ReplaceResourceTagsInput, params: RequestParams = {}) =>
+    replaceGitRepositoryTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<ResourceTagsView, ProblemDetails>({
         path: `/api/v1/gitRepositories/${id}/tags`,
-        method: 'PUT',
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7507,11 +8460,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitRepositoryConfig: (id: string, params: RequestParams = {}) =>
-      this.request<GitRepositoryConfigView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitRepositoryConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/_cfg`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7532,11 +8488,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getGitRepositoryRefs: (id: string, params: RequestParams = {}) =>
-      this.request<GitRepositoryRefsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitRepositoryRefsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/refs`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7563,12 +8522,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitRepositoryComposeDiscovery, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitRepositoryComposeDiscovery,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/compose-projects`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7588,14 +8550,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateGitRepositoryMetadata: (id: string, data: PatchResourceMetadata, params: RequestParams = {}) =>
-      this.request<GitRepositoryView, HttpValidationProblemDetails | ProblemDetails>({
+    updateGitRepositoryMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/_metadata`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7622,12 +8591,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<GitRepositoryView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/${id}/sync`,
-        method: 'POST',
+        method: "POST",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7649,13 +8621,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameGitRepository: (data: RenameResource, params: RequestParams = {}) =>
-      this.request<GitRepositoryView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/gitRepositories/rename`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7677,9 +8652,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     listImages: (platformId: string, params: RequestParams = {}) =>
       this.request<ImagesView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/images/${platformId}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7698,12 +8673,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getExternalRepositories: (registryName: string, params: RequestParams = {}) =>
-      this.request<IImageRepository[], HttpValidationProblemDetails | ProblemDetails>({
+    getExternalRepositories: (
+      registryName: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        IImageRepository[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/${registryName}/repositories`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7722,12 +8703,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getGhcrPackageVersions: (registryName: string, packageName: string, params: RequestParams = {}) =>
-      this.request<GitHubCrPackageVersion[], HttpValidationProblemDetails | ProblemDetails>({
+    getGhcrPackageVersions: (
+      registryName: string,
+      packageName: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitHubCrPackageVersion[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/ghcr/${registryName}/${packageName}/versions`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7746,12 +8734,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getDockerHubRepositories: (registryName: string, params: RequestParams = {}) =>
-      this.request<DockerHubRepositoryInfo[], HttpValidationProblemDetails | ProblemDetails>({
+    getDockerHubRepositories: (
+      registryName: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DockerHubRepositoryInfo[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/dockerhub/${registryName}/repositories`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7770,12 +8764,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getDockerHubRepositoryTags: (registryName: string, repositoryName: string, params: RequestParams = {}) =>
-      this.request<DockerHubTagView[], HttpValidationProblemDetails | ProblemDetails>({
+    getDockerHubRepositoryTags: (
+      registryName: string,
+      repositoryName: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DockerHubTagView[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/dockerhub/${registryName}/${repositoryName}/tags`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7795,12 +8796,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    inspectImage: (platformId: string, imageId: string, params: RequestParams = {}) =>
-      this.request<InspectImageView, HttpValidationProblemDetails | ProblemDetails>({
+    inspectImage: (
+      platformId: string,
+      imageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        InspectImageView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/${platformId}/${imageId}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7820,12 +8828,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getExposedPorts: (platformId: string, imageId: string, params: RequestParams = {}) =>
-      this.request<ExposedPortsResult, HttpValidationProblemDetails | ProblemDetails>({
+    getExposedPorts: (
+      platformId: string,
+      imageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ExposedPortsResult,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/${platformId}/${imageId}/_ports`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7845,13 +8860,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     pullImage: (data: PullImageInput, params: RequestParams = {}) =>
-      this.request<PullImageStreamItem[], HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        PullImageStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/pull`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7872,13 +8890,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     deleteImages: (data: DeleteImagesRequest, params: RequestParams = {}) =>
-      this.request<DeleteImageResult, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        DeleteImageResult,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7908,14 +8929,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<NetworksView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/networks/${platformId}`,
-        method: 'GET',
-        query: query,
-        secure: true,
-        format: 'json',
-        ...params,
-      }),
+      this.request<NetworksView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/networks/${platformId}`,
+          method: "GET",
+          query: query,
+          secure: true,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -7933,12 +8956,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    inspectNetwork: (platformId: string, networkId: string, params: RequestParams = {}) =>
-      this.request<DockerNetworkDetailsView, HttpValidationProblemDetails | ProblemDetails>({
+    inspectNetwork: (
+      platformId: string,
+      networkId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DockerNetworkDetailsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/networks/${platformId}/${networkId}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7959,13 +8989,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createNetwork: (data: CreateNetworkInput, params: RequestParams = {}) =>
-      this.request<CreateNetworkView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        CreateNetworkView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/networks`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -7988,7 +9021,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteNetworks: (data: DeleteNetworksInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/networks`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -8022,10 +9055,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<VolumesView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/volumes/${platformId}`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8045,12 +9078,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    inspectVolume: (platformId: string, name: string, params: RequestParams = {}) =>
-      this.request<DockerVolumeResultView, HttpValidationProblemDetails | ProblemDetails>({
+    inspectVolume: (
+      platformId: string,
+      name: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DockerVolumeResultView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/volumes/${platformId}/${name}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8071,13 +9111,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createVolume: (data: CreateVolumeInput, params: RequestParams = {}) =>
-      this.request<DockerVolumeResultView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        DockerVolumeResultView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/volumes`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8100,7 +9143,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteVolumes: (data: DeleteVolumesInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/volumes`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -8131,12 +9174,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<DeploymentsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        DeploymentsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8156,14 +9202,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createDeployment: (data: CreateDeploymentInput, params: RequestParams = {}) =>
-      this.request<DeploymentView, HttpValidationProblemDetails | ProblemDetails>({
+    createDeployment: (
+      data: CreateDeploymentInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8186,7 +9238,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/deployments`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -8210,11 +9262,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getDeployment: (deploymentId: string, params: RequestParams = {}) =>
-      this.request<DeploymentView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/${deploymentId}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8235,11 +9290,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getDeploymentTags: (deploymentId: string, params: RequestParams = {}) =>
-      this.request<ResourceTagsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/${deploymentId}/tags`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8259,14 +9317,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replaceDeploymentTags: (deploymentId: string, data: ReplaceResourceTagsInput, params: RequestParams = {}) =>
+    replaceDeploymentTags: (
+      deploymentId: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<ResourceTagsView, ProblemDetails>({
         path: `/api/v1/deployments/${deploymentId}/tags`,
-        method: 'PUT',
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8299,12 +9361,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<ContainerStatsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerStatsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/${id}/stats`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8325,11 +9390,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getDeploymentConfig: (deploymentId: string, params: RequestParams = {}) =>
-      this.request<DeploymentConfigView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        DeploymentConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/${deploymentId}/_cfg`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8349,12 +9417,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getDeploymentDuplicateDraft: (deploymentId: string, params: RequestParams = {}) =>
-      this.request<DeploymentDuplicateDraftView, HttpValidationProblemDetails | ProblemDetails>({
+    getDeploymentDuplicateDraft: (
+      deploymentId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DeploymentDuplicateDraftView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/${deploymentId}/duplicate-draft`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8375,11 +9449,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getDeploymentContainerInfo: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInfoView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerInfoView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/${id}/info`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8400,13 +9477,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameDeployment: (data: RenameResource, params: RequestParams = {}) =>
-      this.request<DeploymentView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/rename`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8427,14 +9507,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateDeployment: (id: string, data: PatchDeploymentInput, params: RequestParams = {}) =>
-      this.request<DeploymentView, HttpValidationProblemDetails | ProblemDetails>({
+    updateDeployment: (
+      id: string,
+      data: PatchDeploymentInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8455,14 +9542,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateDeploymentMetadata: (id: string, data: PatchResourceMetadata, params: RequestParams = {}) =>
-      this.request<DeploymentView, HttpValidationProblemDetails | ProblemDetails>({
+    updateDeploymentMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/${id}/_metadata`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8482,13 +9576,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     applyDeployment: (data: ApplyDeploymentInput, params: RequestParams = {}) =>
-      this.request<DeploymentStreamItem[], HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        DeploymentStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/apply`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8511,7 +9608,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     resumeDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/deployments/resume`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -8537,7 +9634,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     pauseDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/deployments/pause`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -8563,7 +9660,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     restartDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/deployments/restart`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -8589,7 +9686,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     stopDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/deployments/stop`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -8615,7 +9712,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     startDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/deployments/start`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -8639,11 +9736,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     inspectDeployment: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInspectView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerInspectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/deployments/${id}/inspect`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8673,10 +9773,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<StacksView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8700,11 +9800,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     createStack: (data: CreateStackInput, params: RequestParams = {}) =>
       this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8727,7 +9827,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -8753,9 +9853,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     getStack: (stackId: string, params: RequestParams = {}) =>
       this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/${stackId}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8776,11 +9876,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getStackTags: (stackId: string, params: RequestParams = {}) =>
-      this.request<ResourceTagsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/tags`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8800,14 +9903,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replaceStackTags: (stackId: string, data: ReplaceResourceTagsInput, params: RequestParams = {}) =>
+    replaceStackTags: (
+      stackId: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<ResourceTagsView, ProblemDetails>({
         path: `/api/v1/stacks/${stackId}/tags`,
-        method: 'PUT',
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8828,11 +9935,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getStackConfig: (stackId: string, params: RequestParams = {}) =>
-      this.request<StackConfigView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        StackConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/_cfg`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8853,11 +9963,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getStackDuplicateDraft: (stackId: string, params: RequestParams = {}) =>
-      this.request<StackDuplicateDraftView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        StackDuplicateDraftView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/duplicate-draft`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8878,11 +9991,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listStackReleases: (stackId: string, params: RequestParams = {}) =>
-      this.request<StackReleasesView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        StackReleasesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/releases`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8906,11 +10022,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     renameStack: (data: RenameResource, params: RequestParams = {}) =>
       this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/rename`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8931,14 +10047,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateStack: (id: string, data: PatchStackInput, params: RequestParams = {}) =>
+    updateStack: (
+      id: string,
+      data: PatchStackInput,
+      params: RequestParams = {},
+    ) =>
       this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8959,14 +10079,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateStackMetadata: (id: string, data: PatchResourceMetadata, params: RequestParams = {}) =>
+    updateStackMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
       this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/${id}/_metadata`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -8986,13 +10110,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     applyStack: (data: ApplyStackInput, params: RequestParams = {}) =>
-      this.request<StackStreamItem[], HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        StackStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/apply`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9012,13 +10139,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     rollbackStack: (data: RollbackStackInput, params: RequestParams = {}) =>
-      this.request<StackStreamItem[], HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        StackStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/rollback`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9041,7 +10171,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     stopStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/stop`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -9067,7 +10197,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     startStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/start`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -9093,7 +10223,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     pauseStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/pause`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -9119,7 +10249,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     resumeStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/resume`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -9145,7 +10275,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     restartStacks: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/restart`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -9169,11 +10299,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getContainersData: (stackId: string, params: RequestParams = {}) =>
-      this.request<ContainersDataView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainersDataView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/data`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9206,12 +10339,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<StackStatsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        StackStatsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/stats`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9232,11 +10368,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getStackDrift: (stackId: string, params: RequestParams = {}) =>
-      this.request<StackDriftReport, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        StackDriftReport,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/drift`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9256,14 +10395,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateStackDriftPolicy: (stackId: string, data: StackDriftPolicyInput, params: RequestParams = {}) =>
+    updateStackDriftPolicy: (
+      stackId: string,
+      data: StackDriftPolicyInput,
+      params: RequestParams = {},
+    ) =>
       this.request<StackView, ProblemDetails>({
         path: `/api/v1/stacks/${stackId}/drift-policy`,
-        method: 'PUT',
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9286,9 +10429,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     reconcileStack: (stackId: string, params: RequestParams = {}) =>
       this.request<StackReconciliationResult, ProblemDetails>({
         path: `/api/v1/stacks/${stackId}/reconcile`,
-        method: 'POST',
+        method: "POST",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9308,12 +10451,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    inspectStackContainer: (stackId: string, containerId: string, params: RequestParams = {}) =>
-      this.request<ContainerInspectView, HttpValidationProblemDetails | ProblemDetails>({
+    inspectStackContainer: (
+      stackId: string,
+      containerId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ContainerInspectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/stacks/${stackId}/containers/${containerId}/inspect`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9331,8 +10481,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     getGlobalResourceBindings: (params: RequestParams = {}) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/global`,
-        method: 'GET',
-        format: 'json',
+        method: "GET",
+        format: "json",
         ...params,
       }),
 
@@ -9347,13 +10497,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createGlobalResourceBinding: (data: ResourceBindingInput, params: RequestParams = {}) =>
+    createGlobalResourceBinding: (
+      data: ResourceBindingInput,
+      params: RequestParams = {},
+    ) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/global`,
-        method: 'POST',
+        method: "POST",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9368,13 +10521,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateGlobalResourceBinding: (data: UpdateResourceBindingInput, params: RequestParams = {}) =>
+    updateGlobalResourceBinding: (
+      data: UpdateResourceBindingInput,
+      params: RequestParams = {},
+    ) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/global`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9392,8 +10548,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteGlobalResourceBinding: (id: string, params: RequestParams = {}) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/global/${id}`,
-        method: 'DELETE',
-        format: 'json',
+        method: "DELETE",
+        format: "json",
         ...params,
       }),
 
@@ -9408,11 +10564,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getResourceBindings: (scope: ResourceBindingScope, resourceId: string, params: RequestParams = {}) =>
+    getResourceBindings: (
+      scope: ResourceBindingScope,
+      resourceId: string,
+      params: RequestParams = {},
+    ) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/${scope}/${resourceId}`,
-        method: 'GET',
-        format: 'json',
+        method: "GET",
+        format: "json",
         ...params,
       }),
 
@@ -9435,10 +10595,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/${scope}/${resourceId}`,
-        method: 'POST',
+        method: "POST",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9461,10 +10621,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/${scope}/${resourceId}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9479,11 +10639,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteResourceBinding: (scope: ResourceBindingScope, resourceId: string, id: string, params: RequestParams = {}) =>
+    deleteResourceBinding: (
+      scope: ResourceBindingScope,
+      resourceId: string,
+      id: string,
+      params: RequestParams = {},
+    ) =>
       this.request<ResourceBindingsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/${scope}/${resourceId}/${id}`,
-        method: 'DELETE',
-        format: 'json',
+        method: "DELETE",
+        format: "json",
         ...params,
       }),
 
@@ -9512,9 +10677,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<SecretDefinitionsView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secrets`,
-        method: 'GET',
+        method: "GET",
         query: query,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9529,13 +10694,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createInternalSecret: (data: CreateInternalSecretInput, params: RequestParams = {}) =>
+    createInternalSecret: (
+      data: CreateInternalSecretInput,
+      params: RequestParams = {},
+    ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secrets`,
-        method: 'POST',
+        method: "POST",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9550,13 +10718,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createExternalSecret: (data: CreateExternalSecretInput, params: RequestParams = {}) =>
+    createExternalSecret: (
+      data: CreateExternalSecretInput,
+      params: RequestParams = {},
+    ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secrets/external`,
-        method: 'POST',
+        method: "POST",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9571,13 +10742,17 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateExternalSecret: (id: string, data: UpdateExternalSecretInput, params: RequestParams = {}) =>
+    updateExternalSecret: (
+      id: string,
+      data: UpdateExternalSecretInput,
+      params: RequestParams = {},
+    ) =>
       this.request<SecretDefinitionView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secrets/external/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9595,7 +10770,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteSecretDefinition: (id: string, params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/resourceBindings/secrets/${id}`,
-        method: 'DELETE',
+        method: "DELETE",
         ...params,
       }),
 
@@ -9610,13 +10785,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    testExternalSecret: (data: TestExternalSecretInput, params: RequestParams = {}) =>
+    testExternalSecret: (
+      data: TestExternalSecretInput,
+      params: RequestParams = {},
+    ) =>
       this.request<ExternalSecretTestResultView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secrets/external/test`,
-        method: 'POST',
+        method: "POST",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9637,10 +10815,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<SecretProviderConnectionTestResultView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secret-providers/vault-kv2/test`,
-        method: 'POST',
+        method: "POST",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9658,8 +10836,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     listSecretProviders: (params: RequestParams = {}) =>
       this.request<SecretProvidersView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secret-providers`,
-        method: 'GET',
-        format: 'json',
+        method: "GET",
+        format: "json",
         ...params,
       }),
 
@@ -9674,13 +10852,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createVaultKvV2SecretProvider: (data: CreateVaultKvV2SecretProviderInput, params: RequestParams = {}) =>
+    createVaultKvV2SecretProvider: (
+      data: CreateVaultKvV2SecretProviderInput,
+      params: RequestParams = {},
+    ) =>
       this.request<SecretProviderView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secret-providers/vault-kv2`,
-        method: 'POST',
+        method: "POST",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9695,13 +10876,17 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateVaultKvV2SecretProvider: (id: string, data: UpdateVaultKvV2SecretProviderInput, params: RequestParams = {}) =>
+    updateVaultKvV2SecretProvider: (
+      id: string,
+      data: UpdateVaultKvV2SecretProviderInput,
+      params: RequestParams = {},
+    ) =>
       this.request<SecretProviderView, ProblemDetails>({
         path: `/api/v1/resourceBindings/secret-providers/vault-kv2/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9719,7 +10904,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteSecretProvider: (id: string, params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/resourceBindings/secret-providers/${id}`,
-        method: 'DELETE',
+        method: "DELETE",
         ...params,
       }),
 
@@ -9739,11 +10924,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listOidcProviders: (params: RequestParams = {}) =>
-      this.request<OidcProvidersView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        OidcProvidersView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/oidcProviders`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9764,13 +10952,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createOidcProvider: (data: OidcProviderInput, params: RequestParams = {}) =>
-      this.request<OidcProviderView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/oidcProviders`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9791,11 +10982,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getOidcProvider: (id: string, params: RequestParams = {}) =>
-      this.request<OidcProviderView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/oidcProviders/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9816,14 +11010,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateOidcProvider: (id: string, data: UpdateOidcProviderInput, params: RequestParams = {}) =>
-      this.request<OidcProviderView, HttpValidationProblemDetails | ProblemDetails>({
+    updateOidcProvider: (
+      id: string,
+      data: UpdateOidcProviderInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/oidcProviders/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9846,7 +11047,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteOidcProvider: (id: string, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/oidcProviders/${id}`,
-        method: 'DELETE',
+        method: "DELETE",
         secure: true,
         ...params,
       }),
@@ -9869,13 +11070,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameOidcProvider: (data: RenameResource, params: RequestParams = {}) =>
-      this.request<OidcProviderView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/oidcProviders/rename`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9896,14 +11100,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateOidcProviderMetadata: (id: string, data: PatchResourceMetadata, params: RequestParams = {}) =>
-      this.request<OidcProviderView, HttpValidationProblemDetails | ProblemDetails>({
+    updateOidcProviderMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OidcProviderView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/oidcProviders/${id}/_metadata`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9924,11 +11135,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     testOidcProviderDiscovery: (id: string, params: RequestParams = {}) =>
-      this.request<OidcDiscoveryResultView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        OidcDiscoveryResultView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/oidcProviders/${id}/testDiscovery`,
-        method: 'POST',
+        method: "POST",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9947,14 +11161,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    testOidcDiscovery: (data: TestOidcProviderDiscoveryInput, params: RequestParams = {}) =>
-      this.request<OidcDiscoveryResultView, HttpValidationProblemDetails | ProblemDetails>({
+    testOidcDiscovery: (
+      data: TestOidcProviderDiscoveryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OidcDiscoveryResultView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/oidcProviders/testDiscovery`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -9979,12 +11199,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<AutomationActionsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AutomationActionsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10004,14 +11227,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createAutomationAction: (data: AutomationActionInput, params: RequestParams = {}) =>
-      this.request<AutomationActionView, HttpValidationProblemDetails | ProblemDetails>({
+    createAutomationAction: (
+      data: AutomationActionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10032,11 +11261,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAutomationAction: (id: string, params: RequestParams = {}) =>
-      this.request<AutomationActionView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10057,14 +11289,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateAutomationAction: (id: string, data: UpdateAutomationActionInput, params: RequestParams = {}) =>
-      this.request<AutomationActionView, HttpValidationProblemDetails | ProblemDetails>({
+    updateAutomationAction: (
+      id: string,
+      data: UpdateAutomationActionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10087,7 +11326,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteAutomationAction: (id: string, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/automation/actions/${id}`,
-        method: 'DELETE',
+        method: "DELETE",
         secure: true,
         ...params,
       }),
@@ -10109,11 +11348,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAutomationActionTags: (id: string, params: RequestParams = {}) =>
-      this.request<ResourceTagsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}/tags`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10133,14 +11375,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    replaceAutomationActionTags: (id: string, data: ReplaceResourceTagsInput, params: RequestParams = {}) =>
+    replaceAutomationActionTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<ResourceTagsView, ProblemDetails>({
         path: `/api/v1/automation/actions/${id}/tags`,
-        method: 'PUT',
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10161,14 +11407,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    renameAutomationAction: (data: RenameResource, params: RequestParams = {}) =>
-      this.request<AutomationActionView, HttpValidationProblemDetails | ProblemDetails>({
+    renameAutomationAction: (
+      data: RenameResource,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/rename`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10188,14 +11440,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateAutomationActionMetadata: (id: string, data: PatchResourceMetadata, params: RequestParams = {}) =>
-      this.request<AutomationActionView, HttpValidationProblemDetails | ProblemDetails>({
+    updateAutomationActionMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}/_metadata`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10216,14 +11475,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    runAutomationAction: (id: string, data: RunAutomationActionInput, params: RequestParams = {}) =>
-      this.request<AutomationActionRunStreamItem[], HttpValidationProblemDetails | ProblemDetails>({
+    runAutomationAction: (
+      id: string,
+      data: RunAutomationActionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionRunStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}/run`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10244,14 +11510,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    testAutomationAction: (id: string, data: TestAutomationActionInput, params: RequestParams = {}) =>
-      this.request<AutomationActionRunStreamItem[], HttpValidationProblemDetails | ProblemDetails>({
+    testAutomationAction: (
+      id: string,
+      data: TestAutomationActionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionRunStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}/test`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10272,10 +11545,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    cancelAutomationActionRun: (id: string, runId: string, params: RequestParams = {}) =>
+    cancelAutomationActionRun: (
+      id: string,
+      runId: string,
+      params: RequestParams = {},
+    ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/automation/actions/${id}/runs/${runId}/cancel`,
-        method: 'POST',
+        method: "POST",
         secure: true,
         ...params,
       }),
@@ -10307,12 +11584,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<AutomationActionRunsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AutomationActionRunsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}/runs`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10332,12 +11612,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getAutomationActionRun: (id: string, runId: string, params: RequestParams = {}) =>
-      this.request<AutomationActionRunView, HttpValidationProblemDetails | ProblemDetails>({
+    getAutomationActionRun: (
+      id: string,
+      runId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionRunView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}/runs/${runId}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10357,12 +11644,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getAutomationActionRunLogs: (id: string, runId: string, params: RequestParams = {}) =>
-      this.request<AutomationActionRunLogsView, HttpValidationProblemDetails | ProblemDetails>({
+    getAutomationActionRunLogs: (
+      id: string,
+      runId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AutomationActionRunLogsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/automation/actions/${id}/runs/${runId}/logs`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10380,8 +11674,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     listTags: (params: RequestParams = {}) =>
       this.request<TagsView, ProblemDetails>({
         path: `/api/v1/tags`,
-        method: 'GET',
-        format: 'json',
+        method: "GET",
+        format: "json",
         ...params,
       }),
 
@@ -10404,11 +11698,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     createTag: (data: CreateTagInput, params: RequestParams = {}) =>
       this.request<TagView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/tags`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10432,11 +11726,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     patchTag: (id: string, data: PatchTagInput, params: RequestParams = {}) =>
       this.request<TagView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/tags/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10458,7 +11752,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     deleteTag: (id: string, params: RequestParams = {}) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/tags/${id}`,
-        method: 'DELETE',
+        method: "DELETE",
         secure: true,
         ...params,
       }),
@@ -10479,13 +11773,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getActivity: (id: string, params: RequestParams = {}) =>
-      this.request<ActivityView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/activities/${id}`,
-        method: 'GET',
-        secure: true,
-        format: 'json',
-        ...params,
-      }),
+      this.request<ActivityView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/activities/${id}`,
+          method: "GET",
+          secure: true,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -10523,12 +11819,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<ActivitiesView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ActivitiesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/activities`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10549,11 +11848,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAlertEvent: (id: string, params: RequestParams = {}) =>
-      this.request<AlertEventView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AlertEventView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertEvents/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10594,12 +11896,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<AlertEventsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AlertEventsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertEvents`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10620,9 +11925,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     getUnresolvedAlertEventsCount: (params: RequestParams = {}) =>
       this.request<UnresolvedAlertsCountView, ProblemDetails>({
         path: `/api/v1/alertEvents/unresolved-count`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10642,10 +11947,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    acknowledgeAlertEvents: (data: AcknowledgeAlertEventsInput, params: RequestParams = {}) =>
+    acknowledgeAlertEvents: (
+      data: AcknowledgeAlertEventsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/alertEvents/acknowledge`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -10668,10 +11976,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    resolveAlertEvents: (data: ResolveAlertEventsInput, params: RequestParams = {}) =>
+    resolveAlertEvents: (
+      data: ResolveAlertEventsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/alertEvents/resolve`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -10695,11 +12006,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAlertRule: (id: string, params: RequestParams = {}) =>
-      this.request<AlertRuleView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10719,14 +12033,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateAlertRule: (id: string, data: PatchAlertRuleInput, params: RequestParams = {}) =>
-      this.request<AlertRuleView, HttpValidationProblemDetails | ProblemDetails>({
+    updateAlertRule: (
+      id: string,
+      data: PatchAlertRuleInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10747,11 +12068,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAlertRuleConfig: (id: string, params: RequestParams = {}) =>
-      this.request<AlertRuleConfigView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AlertRuleConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules/${id}/_cfg`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10771,11 +12095,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listAlertRules: (params: RequestParams = {}) =>
-      this.request<AlertRulesView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AlertRulesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10796,13 +12123,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createAlertRule: (data: CreateAlertRuleInput, params: RequestParams = {}) =>
-      this.request<AlertRuleView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10822,10 +12152,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteAlertRules: (data: DeleteAlertRulesInput, params: RequestParams = {}) =>
+    deleteAlertRules: (
+      data: DeleteAlertRulesInput,
+      params: RequestParams = {},
+    ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/alertRules`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -10849,13 +12182,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     renameAlertRule: (data: RenameResource, params: RequestParams = {}) =>
-      this.request<AlertRuleView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules/rename`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10875,14 +12211,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateAlertRuleMetadata: (id: string, data: PatchResourceMetadata, params: RequestParams = {}) =>
-      this.request<AlertRuleView, HttpValidationProblemDetails | ProblemDetails>({
+    updateAlertRuleMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules/${id}/_metadata`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10903,11 +12246,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     getAlertChannel: (id: string, params: RequestParams = {}) =>
-      this.request<AlertChannelView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AlertChannelView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules/channels/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10927,14 +12273,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateAlertChannel: (id: string, data: AlertChannelInput, params: RequestParams = {}) =>
-      this.request<AlertChannelView, HttpValidationProblemDetails | ProblemDetails>({
+    updateAlertChannel: (
+      id: string,
+      data: AlertChannelInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AlertChannelView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules/channels/${id}`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10955,9 +12308,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     listAlertChannels: (params: RequestParams = {}) =>
       this.request<AlertChannelsView, ProblemDetails>({
         path: `/api/v1/alertRules/channels`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -10978,13 +12331,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createAlertChannel: (data: AlertChannelInput, params: RequestParams = {}) =>
-      this.request<AlertChannelView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        AlertChannelView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/alertRules/channels`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -11004,10 +12360,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteAlertChannels: (data: DeleteAlertChannelsInput, params: RequestParams = {}) =>
+    deleteAlertChannels: (
+      data: DeleteAlertChannelsInput,
+      params: RequestParams = {},
+    ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/alertRules/channels`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -11029,10 +12388,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `429` `ProblemDetails` Too Many Requests
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    verifyAlertChannel: (data: VerifyAlertChannelInput, params: RequestParams = {}) =>
+    verifyAlertChannel: (
+      data: VerifyAlertChannelInput,
+      params: RequestParams = {},
+    ) =>
       this.request<void, ProblemDetails>({
         path: `/api/v1/alertRules/channels/verify`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -11068,10 +12430,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<ResourceInfo[], ProblemDetails>({
         path: `/api/v1/lookup`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
   };
@@ -11095,7 +12457,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<void, ProblemDetails>({
         path: `/listener/${authType}/${resourceType}/${id}/${execution}`,
-        method: 'POST',
+        method: "POST",
         ...params,
       }),
   };

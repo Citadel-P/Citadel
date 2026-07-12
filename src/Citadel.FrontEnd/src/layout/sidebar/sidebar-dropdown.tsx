@@ -1,7 +1,15 @@
-import { User, Settings, LogOut, Sun, Moon } from 'lucide-react';
+import { User, LogOut, Sun, Moon } from 'lucide-react';
 import { useLayoutContext } from '@/lib/context/layout-context';
 import { JSX } from 'react/jsx-runtime';
 import { useAuthContext } from '@/features/auth/auth-context';
+import { useMutate, useRead } from '@/lib/hooks';
+import { useNavigate } from 'react-router';
+import { getInitials } from '@/features/profile/utils';
+import { jwtDecode } from 'jwt-decode';
+import { useMemo } from 'react';
+import type { ThemeMode } from '@/lib/context/layout-context';
+import { toUserTheme } from '@/lib/theme-preferences';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface ProfileMenu {
   title: string;
@@ -14,11 +22,6 @@ const profileMenu: ProfileMenu[] = [
     title: 'Your Profile',
     link: '/profile',
     icon: <User width={20} />,
-  },
-  {
-    title: 'Settings',
-    link: '/settings',
-    icon: <Settings width={20} />,
   },
   {
     title: 'Log out',
@@ -71,23 +74,47 @@ const themeModes = [
 ];
 
 export const SidebarDropDown = () => {
-  const { logout } = useAuthContext();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { logout, accessToken } = useAuthContext();
   const { toggleThemeColor, setThemeMode, theme } = useLayoutContext();
+  const { data: cachedProfileData } = useRead('getCurrentProfile', undefined, { enabled: false });
+  const patchPreferences = useMutate('patchProfilePreferences');
+  const tokenProfile = useMemo(() => getTokenProfile(accessToken), [accessToken]);
+  const profile = cachedProfileData?.data ?? tokenProfile;
 
   const handleMenuClick = (item: ProfileMenu) => {
     if (item.key == 'logout') {
       logout();
+      return;
     }
+    navigate(item.link);
   };
+
+  const handleThemeModeClick = (mode: ThemeMode) => {
+    setThemeMode(mode);
+
+    if (mode === theme.mode) return;
+
+    patchPreferences.mutate(
+      { data: { theme: toUserTheme(mode) } as any },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['getProfilePreferences'] });
+        },
+      },
+    );
+  };
+
   return (
     <div className="absolute bottom-0 z-10 mt-2 w-60 origin-bottom-left transform rounded-md bg-background py-4 drop-shadow-md shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-hidden">
       <div className="flext-row flex items-center px-4 pb-4">
-        <div className="w-10 shrink-0">
-          <img className="rounded-md" src="https://avatars.githubusercontent.com/u/993610?v=4" alt="" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-sm font-semibold text-primary">
+          {getInitials(profile?.displayName)}
         </div>
         <div className="overflow-hidden px-2 text-sm font-semibold text-foreground">
-          7amou3
-          <p className="truncate text-ellipsis text-xs font-semibold text-muted-foreground">me&#64;7amou3</p>
+          {profile?.displayName ?? 'Profile'}
+          <p className="truncate text-ellipsis text-xs font-semibold text-muted-foreground">{profile?.email ?? ''}</p>
         </div>
       </div>
 
@@ -130,7 +157,7 @@ export const SidebarDropDown = () => {
           {themeModes.map((item, index) => (
             <button
               key={index}
-              onClick={() => setThemeMode!(item.name as any)}
+              onClick={() => handleThemeModeClick(item.name as ThemeMode)}
               className={`${item.name === theme!.mode ? 'border-muted-foreground bg-card' : ''} focus-visible:ring-ring inline-flex h-8 items-center justify-start whitespace-nowrap rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 hover:bg-card hover:text-foreground`}>
               <span className="h-6 w-7 text-muted-foreground/50">{item.icon}</span>
               <p className="capitalize">{item.name}</p>
@@ -141,3 +168,13 @@ export const SidebarDropDown = () => {
     </div>
   );
 };
+
+function getTokenProfile(accessToken: string | undefined) {
+  if (!accessToken) return undefined;
+
+  try {
+    return jwtDecode<{ name?: string; email?: string }>(accessToken);
+  } catch {
+    return undefined;
+  }
+}

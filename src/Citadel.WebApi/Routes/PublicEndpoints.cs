@@ -14,6 +14,7 @@ using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
+using WebApi.Routes.Endpoints.Resources.Identity.Profile;
 using WebApi.Routes.Endpoints.Resources.Oidc;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
@@ -46,6 +47,8 @@ public static class PublicEndpoints
     const string AutomationActionsName = "AutomationActions";
     const string TagsName = nameof(Tags);
     const string AuthenticationName = nameof(Authentication);
+    const string ProfileName = "Profile";
+    const string ApplicationName = "Application";
     const string LookupName = nameof(Lookup);
 
     public static void MapPublicEndpoints(this WebApplication app)
@@ -55,6 +58,14 @@ public static class PublicEndpoints
             var auth = group.MapGroup("/authentication").WithTags(AuthenticationName);
             {
                 MapAuthEndpoints(auth);
+            }
+            var application = group.MapGroup("/application").WithTags(ApplicationName).RequireAuthorization();
+            {
+                MapApplicationEndpoints(application);
+            }
+            var profile = group.MapGroup("/profile").WithTags(ProfileName).RequireAuthorization();
+            {
+                MapProfileEndpoints(profile);
             }
             var actors = group.MapGroup("/actors").WithTags(ActorsName).RequireAuthorization();
             {
@@ -155,6 +166,63 @@ public static class PublicEndpoints
             .AllowAnonymous()
             .RequireRateLimiting("webhook-listener")
             .WithName("receiveWebhook");
+    }
+
+    private static void MapApplicationEndpoints(RouteGroupBuilder application)
+    {
+        application.MapGet("info", ApplicationInfo.Get)
+            .WithSummary("Get application information")
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getApplicationInfo");
+    }
+
+    private static void MapProfileEndpoints(RouteGroupBuilder profile)
+    {
+        profile.MapGet("/", WebApi.Routes.Endpoints.Profile.Get)
+            .WithSummary("Get current profile")
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getCurrentProfile");
+
+        profile.MapPatch("/", WebApi.Routes.Endpoints.Profile.Update)
+            .WithSummary("Update current profile")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateCurrentProfile");
+
+        profile.MapGet("preferences", WebApi.Routes.Endpoints.Profile.GetPreferences)
+            .WithSummary("Get current profile preferences")
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getProfilePreferences");
+
+        profile.MapPatch("preferences", WebApi.Routes.Endpoints.Profile.PatchPreferences)
+            .WithSummary("Patch current profile preferences")
+            .Accepts<PatchUserPreferencesInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("patchProfilePreferences");
+
+        profile.MapPost("change-password", WebApi.Routes.Endpoints.Profile.ChangePassword)
+            .WithSummary("Change current password")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("changeCurrentPassword");
+
+        profile.MapGet("sessions", WebApi.Routes.Endpoints.Profile.ListSessions)
+            .WithSummary("List current profile sessions")
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listProfileSessions");
+
+        profile.MapDelete("sessions/{sessionId:guid}", WebApi.Routes.Endpoints.Profile.RevokeSession)
+            .WithSummary("Revoke profile session")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("revokeProfileSession");
+
+        profile.MapDelete("sessions", WebApi.Routes.Endpoints.Profile.RevokeOtherSessions)
+            .WithSummary("Revoke other profile sessions")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("revokeOtherProfileSessions");
     }
 
     private static void MapActorEndpoints(RouteGroupBuilder actors)

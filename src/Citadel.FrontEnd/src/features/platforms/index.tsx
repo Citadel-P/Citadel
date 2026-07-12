@@ -4,6 +4,8 @@ import { Platforms } from './platforms';
 import { PlatformDropdownActions } from './actions';
 import { CitadelIcons } from '@/lib/icons';
 
+const EMPTY_PLATFORMS: never[] = [];
+
 export const PlatformComponents: RequiredComponents = {
   Icon: CitadelIcons.Platform,
   header: {
@@ -19,7 +21,7 @@ export const PlatformComponents: RequiredComponents = {
   DropdownActions: PlatformDropdownActions,
   useData: function (): ResourceDataHookResult<any> {
     const { platformsMessage, capabilities, isLoading } = usePlatformsGroup();
-    return { items: platformsMessage ?? [], isLoading, capabilities };
+    return { items: platformsMessage ?? EMPTY_PLATFORMS, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

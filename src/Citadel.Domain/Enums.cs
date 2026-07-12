@@ -550,7 +550,8 @@ public enum ActivityResourceType
     AlertRule,
     GitRepository,
     OidcProvider,
-    AutomationAction
+    AutomationAction,
+    User
 }
 
 public enum ActivityEventType
@@ -641,6 +642,28 @@ public enum ActivityEventType
     StackGitAutoDeployFailed,
     StackWebhookReceived,
     #endregion
+
+    #region User Events
+    UserProfileUpdated,
+    UserPreferencesUpdated,
+    UserPasswordChanged,
+    UserSessionRevoked,
+    UserOtherSessionsRevoked,
+    #endregion
+}
+
+public enum UserDateTimeFormat
+{
+    System,
+    TwentyFourHour,
+    TwelveHour
+}
+
+public enum UserTheme
+{
+    System,
+    Light,
+    Dark
 }
 
 public enum AlertType
@@ -809,6 +832,7 @@ public enum LookupResourceType
     Alert,
     AlertChannel,
     User,
+    UserActor,
     Team,
     Role,
     ResourceBinding,

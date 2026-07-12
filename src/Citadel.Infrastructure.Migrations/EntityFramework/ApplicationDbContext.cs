@@ -26,6 +26,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .GitRepositoryConfiguration()
             .GitRepositoryRefConfiguration()
             .RefreshTokenConfiguration()
+            .UserPreferencesConfiguration()
             .ActorConfiguration()
             .UserConfiguration()
             .TeamConfiguration()
@@ -763,6 +764,10 @@ internal static class Configuration
 
         refreshToken.Property<Guid>("UserId").IsRequired();
         refreshToken.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+        refreshToken.Property<DateTime>("LastSeenAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        refreshToken.Property<DateTime>("ExpiresAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        refreshToken.Property<string>("UserAgent").HasColumnType(Text).IsRequired(false);
+        refreshToken.Property<string>("IpAddress").HasColumnType(Text).IsRequired(false);
 
         refreshToken
             .HasOne("User")
@@ -771,6 +776,31 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.Cascade);
 
         refreshToken.HasIndex("UserId").HasDatabaseName($"IX_{tableName}_UserId");
+        refreshToken.HasIndex("ExpiresAt").HasDatabaseName($"IX_{tableName}_ExpiresAt");
+
+        return builder;
+    }
+
+    public static ModelBuilder UserPreferencesConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "UserPreferences";
+        var preferences = builder.Entity("UserPreferences");
+
+        preferences.ToTable(tableName);
+
+        preferences.Property<Guid>("UserId").IsRequired();
+        preferences.HasKey("UserId");
+
+        preferences.Property<string>("TimeZone").HasColumnType(Text).IsRequired();
+        preferences.Property<string>("DateTimeFormat").HasColumnType(Text).IsRequired();
+        preferences.Property<string>("Theme").HasColumnType(Text).IsRequired();
+        preferences.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired();
+
+        preferences
+            .HasOne("User")
+            .WithOne()
+            .HasForeignKey("UserPreferences", "UserId")
+            .OnDelete(DeleteBehavior.Cascade);
 
         return builder;
     }

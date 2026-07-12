@@ -5,10 +5,13 @@ import { SidebarMenu } from './sidebar-menu';
 import { useNavigate } from 'react-router';
 import useAnimatedDropdown from '@/hooks/useAnimation';
 import { SidebarDropDown } from './sidebar-dropdown';
+import { useRead } from '@/lib/hooks';
 
 export const Sidebar = () => {
   const navigate = useNavigate();
   const { toggleSidebar, sidebarMinimized } = useLayoutContext();
+  const { data: applicationInfo } = useRead('getApplicationInfo');
+  const version = applicationInfo?.data?.version ?? '-';
 
   const { ref, open, setOpen } = useAnimatedDropdown('dropDown');
   return (
@@ -58,12 +61,12 @@ export const Sidebar = () => {
           {sidebarMinimized ? (
             <div className="fixed w-full">
               <span className="z-1 absolute left-12 -top-4 w-auto min-w-max origin-left scale-0 rounded-md bg-foreground p-2 text-xs font-bold text-background shadow-md transition-all duration-200 group-hover:scale-100">
-                v 1.0.0
+                v {version}
               </span>
             </div>
           ) : (
             <div className="ml-3 truncate text-[10px] font-semibold tracking-wide focus:outline-hidden">
-              <span className="rounded-lg bg-primary/10 px-2 font-semibold text-primary">v 1.0.0 </span>
+              <span className="rounded-lg bg-primary/10 px-2 font-semibold text-primary">v {version}</span>
             </div>
           )}
         </a>

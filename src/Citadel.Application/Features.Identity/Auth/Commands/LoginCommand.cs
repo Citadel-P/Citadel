@@ -23,7 +23,12 @@ public sealed record LoginCommand(string EmailOrName, string Password) : IComman
     }
 }
 
-internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jwtService, IRoleCache roleCache) : ICommandHandler<LoginCommand, Result<LoginResponse>>
+internal sealed class LoginCommandHandler(
+    IUnitOfWork unitOfWork,
+    IJwtService jwtService,
+    IRoleCache roleCache,
+    IRequestSessionMetadataAccessor requestSessionMetadataAccessor,
+    IRefreshTokenCookieService refreshTokenCookieService) : ICommandHandler<LoginCommand, Result<LoginResponse>>
 {
     public async ValueTask<Result<LoginResponse>> Handle(LoginCommand query, CancellationToken cancellationToken)
     {
@@ -46,9 +51,17 @@ internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jw
     private async Task<(string accessToken, string refreshToken)> CreateTokens(UserAuthInfo userAuthInfo, CancellationToken cancellationToken)
     {
         var accessToken = jwtService.CreateAccessToken(User.GetJwtClaims(userAuthInfo));
-        var (refreshTokenId, refreshToken) = jwtService.CreateRefreshToken();
+        var (refreshTokenId, refreshToken, refreshTokenExpiresAt) = jwtService.CreateRefreshToken();
+        var metadata = requestSessionMetadataAccessor.GetCurrent();
 
-        await unitOfWork.RefreshTokens.AddAsync(RefreshToken.Create(refreshTokenId, userAuthInfo.Id), cancellationToken);
+        await unitOfWork.RefreshTokens.AddAsync(
+            RefreshToken.Create(
+                refreshTokenId,
+                userAuthInfo.Id,
+                refreshTokenExpiresAt,
+                metadata.UserAgent,
+                metadata.IpAddress),
+            cancellationToken);
 
         // Limit the number of refresh tokens per userAuthInfo
         var tokensCount = await unitOfWork.RefreshTokens.CountAsync(userAuthInfo.Id, cancellationToken);
@@ -60,6 +73,7 @@ internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jw
 
         await unitOfWork.CommitAsync(cancellationToken);
 
+        refreshTokenCookieService.Set(refreshToken, refreshTokenExpiresAt);
         roleCache.SetRoles(userAuthInfo.Id, userAuthInfo.Roles);
 
         return (accessToken, refreshToken);
