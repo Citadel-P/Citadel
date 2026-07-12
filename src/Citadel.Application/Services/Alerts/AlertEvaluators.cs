@@ -680,3 +680,67 @@ public sealed class AutomationActionRunFailedEvaluator : IAlertEvaluator
 }
 
 #endregion
+
+#region License
+
+[AlertEvaluator(AlertType.LicenseEnteredGracePeriod)]
+public sealed class LicenseEnteredGracePeriodEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.LicenseEnteredGracePeriod;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.Licenses is null)
+            yield break;
+
+        foreach (var license in context.Licenses)
+        {
+            if (license.Status != LicenseStatus.GracePeriod || license.ExpiresAt is null)
+                continue;
+
+            yield return new AlertMatch(
+                license.InstanceId,
+                "License",
+                AlertResourceType.License,
+                new LicenseEnteredGracePeriodAlertInfo(
+                    license.LicenseId,
+                    license.CustomerName,
+                    license.Fingerprint,
+                    license.ExpiresAt.Value,
+                    license.GraceUntil),
+                license.Fingerprint);
+        }
+    }
+}
+
+[AlertEvaluator(AlertType.LicenseExpired)]
+public sealed class LicenseExpiredEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.LicenseExpired;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.Licenses is null)
+            yield break;
+
+        foreach (var license in context.Licenses)
+        {
+            if (license.Status != LicenseStatus.Expired)
+                continue;
+
+            yield return new AlertMatch(
+                license.InstanceId,
+                "License",
+                AlertResourceType.License,
+                new LicenseExpiredAlertInfo(
+                    license.LicenseId,
+                    license.CustomerName,
+                    license.Fingerprint,
+                    license.ExpiresAt,
+                    license.GraceUntil),
+                license.Fingerprint);
+        }
+    }
+}
+
+#endregion

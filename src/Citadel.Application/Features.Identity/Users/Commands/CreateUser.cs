@@ -1,4 +1,5 @@
 using Application.Services.Identity;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
@@ -41,7 +42,11 @@ public sealed record CreateUser(
     }
 }
 
-internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext, IActorScopeEvictor evictor) : ICommandHandler<CreateUser, Result<UserDetails>>
+internal sealed class CreateUserHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContext,
+    IActorScopeEvictor evictor,
+    ILicenseQuotaService licenseQuotaService) : ICommandHandler<CreateUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(CreateUser command, CancellationToken cancellationToken)
     {
@@ -52,6 +57,19 @@ internal sealed class CreateUserHandler(IUnitOfWork unitOfWork, IUserContextAcce
 
         if (conflicts.EmailExists)
             return Result.Failure<UserDetails>(new ConflictError("Email already exists"));
+
+        if (command.IsEnabled)
+        {
+            var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
+                new Dictionary<LicenseLimit, int>
+                {
+                    [LicenseLimit.ActiveUsers] = 1
+                },
+                unitOfWork,
+                cancellationToken);
+            if (quotaResult.IsFailure())
+                return Result.Failure<UserDetails>(quotaResult.Errors);
+        }
 
         var userActor = Actor.Create(ActorType.User, new ActorMetadata(command.Name), command.IsEnabled);
         var user = new User(command.Name, command.Email, command.Password, userActor.Id, actorId);

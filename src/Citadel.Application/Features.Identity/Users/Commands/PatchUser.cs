@@ -10,6 +10,7 @@ using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
 using Application.Services.Identity;
+using Application.Services.Licensing;
 
 namespace Application.Features.Identity.Users.Commands;
 
@@ -44,7 +45,10 @@ public sealed record PatchUser(Guid Id, JsonMergePatchDocument<PatchUserModel> P
     }
 }
 
-internal sealed class PatchUserHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<PatchUser, Result<UserDetails>>
+internal sealed class PatchUserHandler(
+    IUnitOfWork unitOfWork,
+    IActorScopeEvictor evictor,
+    ILicenseQuotaService licenseQuotaService) : ICommandHandler<PatchUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(PatchUser command, CancellationToken cancellationToken)
     {
@@ -117,6 +121,19 @@ internal sealed class PatchUserHandler(IUnitOfWork unitOfWork, IActorScopeEvicto
 
         if (patched.IsEnabled.HasValue && patched.IsEnabled.Value != actor.IsEnabled)
         {
+            if (patched.IsEnabled.Value)
+            {
+                var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
+                    new Dictionary<LicenseLimit, int>
+                    {
+                        [LicenseLimit.ActiveUsers] = 1
+                    },
+                    unitOfWork,
+                    cancellationToken);
+                if (quotaResult.IsFailure())
+                    return Result.Failure<UserDetails>(quotaResult.Errors);
+            }
+
             var setEnabledResult = actor.SetEnabled(patched.IsEnabled.Value);
             if (setEnabledResult.IsFailure(out var error))
                 return Result.Failure<UserDetails>(error);

@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -24,6 +25,21 @@ namespace Infrastructure.Migrations.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_actors", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "citadelinstanceidentity",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    createdat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    instanceid = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_citadelinstanceidentity", x => x.id);
+                    table.CheckConstraint("CK_CitadelInstanceIdentity_Singleton", "\"id\" = 1");
                 });
 
             migrationBuilder.CreateTable(
@@ -211,6 +227,32 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "actors",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "installedlicenses",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    fingerprint = table.Column<string>(type: "text", nullable: false),
+                    installedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    installedbyactorid = table.Column<Guid>(type: "uuid", nullable: true),
+                    lastvalidatedat = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    lastvalidationerrorcode = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    lastvalidationstatus = table.Column<string>(type: "text", maxLength: 64, nullable: true),
+                    rawlicense = table.Column<string>(type: "text", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_installedlicenses", x => x.id);
+                    table.CheckConstraint("CK_InstalledLicenses_Singleton", "\"id\" = 1");
+                    table.ForeignKey(
+                        name: "fk_installedlicenses_actors_installedbyactorid",
+                        column: x => x.installedbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -1244,7 +1286,12 @@ namespace Infrastructure.Migrations.Migrations
             migrationBuilder.InsertData(
                 table: "alertrules",
                 columns: new[] { "id", "cooldownseconds", "createdat", "createdbyactorid", "description", "limitedto", "name", "quiethours", "requiredmatches", "severity", "status", "threshold", "type" },
-                values: new object[] { new Guid("019d0000-0001-7000-8001-000000000018"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Automation Action Run Failed", "[]", null, "Critical", "Enabled", null, "AutomationActionRunFailed" });
+                values: new object[,]
+                {
+                    { new Guid("019d0000-0001-7000-8001-000000000018"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "Automation Action Run Failed", "[]", null, "Critical", "Enabled", null, "AutomationActionRunFailed" },
+                    { new Guid("019d0000-0001-7000-8001-000000000019"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "License Entered Grace Period", "[]", null, "Warning", "Enabled", null, "LicenseEnteredGracePeriod" },
+                    { new Guid("019d0000-0001-7000-8001-00000000001a"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "[]", "License Expired", "[]", null, "Critical", "Enabled", null, "LicenseExpired" }
+                });
 
             migrationBuilder.InsertData(
                 table: "alertrules",
@@ -1274,6 +1321,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("7125b1ec-d593-d356-f559-c4655a392c31"), 2, 1, new Guid("30000000-0000-0000-0000-000000000002"), 55 },
                     { new Guid("80aa1c34-79dd-6587-52db-52605326fe77"), 2, 7, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("86dadd60-fced-3dcd-cdbe-8d262bec7d22"), 2, 5, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("8b91dc54-cf72-44f6-0505-3c426552df35"), 4, 14, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("909763b4-50a0-e1c7-6df1-61add076910c"), 1, 2, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("936632a5-4e74-0a17-fb8e-497c960c3005"), 1, 0, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("94717f37-cc1a-de60-9bca-dc6379444bfb"), 1, 5, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
@@ -1462,6 +1510,12 @@ namespace Infrastructure.Migrations.Migrations
                 column: "createdbyactorid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_citadelinstanceidentity_instanceid",
+                table: "citadelinstanceidentity",
+                column: "instanceid",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix__containers_dockercontainerid_platformid",
                 table: "containers",
                 columns: new[] { "dockercontainerid", "platformid" },
@@ -1614,6 +1668,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_images_registryid",
                 table: "images",
                 column: "registryid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_installedlicenses_installedbyactorid",
+                table: "installedlicenses",
+                column: "installedbyactorid");
 
             migrationBuilder.CreateIndex(
                 name: "ix_oidcexternallogins_providerid_subject",
@@ -1875,6 +1934,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "alertrulestates");
 
             migrationBuilder.DropTable(
+                name: "citadelinstanceidentity");
+
+            migrationBuilder.DropTable(
                 name: "containerstats");
 
             migrationBuilder.DropTable(
@@ -1885,6 +1947,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "gitrepositoryrefs");
+
+            migrationBuilder.DropTable(
+                name: "installedlicenses");
 
             migrationBuilder.DropTable(
                 name: "internalsecretvalues");

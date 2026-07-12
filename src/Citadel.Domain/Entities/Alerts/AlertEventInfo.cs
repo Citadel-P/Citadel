@@ -32,6 +32,8 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(WebhookGitRepoSyncFailedAlertInfo), nameof(AlertType.WebhookGitRepoSyncFailed))]
 [JsonDerivedType(typeof(WebhookStackGitDeployFailedAlertInfo), nameof(AlertType.WebhookStackGitDeployFailed))]
 [JsonDerivedType(typeof(AutomationActionRunFailedAlertInfo), nameof(AlertType.AutomationActionRunFailed))]
+[JsonDerivedType(typeof(LicenseEnteredGracePeriodAlertInfo), nameof(AlertType.LicenseEnteredGracePeriod))]
+[JsonDerivedType(typeof(LicenseExpiredAlertInfo), nameof(AlertType.LicenseExpired))]
 public abstract record AlertEventInfo
 {
     /// <summary>
@@ -298,6 +300,30 @@ public sealed record AutomationActionRunFailedAlertInfo(
 {
     public override string HumanMessage =>
         $"Automation action '{ActionName}' {Status.ToString().ToLowerInvariant()} during {Trigger.ToString().ToLowerInvariant()} run: {Reason}";
+}
+
+public sealed record LicenseEnteredGracePeriodAlertInfo(
+    string? LicenseId,
+    string? CustomerName,
+    string? Fingerprint,
+    DateTimeOffset ExpiresAt,
+    DateTimeOffset? GraceUntil) : AlertEventInfo
+{
+    public override string HumanMessage
+        => GraceUntil is null
+            ? $"Citadel license '{LicenseId ?? Fingerprint ?? "unknown"}' has expired and entered grace period."
+            : $"Citadel license '{LicenseId ?? Fingerprint ?? "unknown"}' has expired and entered grace period until {GraceUntil:yyyy-MM-dd HH:mm:ss} UTC.";
+}
+
+public sealed record LicenseExpiredAlertInfo(
+    string? LicenseId,
+    string? CustomerName,
+    string? Fingerprint,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? GraceUntil) : AlertEventInfo
+{
+    public override string HumanMessage
+        => $"Citadel license '{LicenseId ?? Fingerprint ?? "unknown"}' is expired.";
 }
 
 file static class StackAlertMessageFormatter

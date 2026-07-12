@@ -12,6 +12,7 @@ using Domain.Entities.Tags;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
+using Domain.Entities.Licensing;
 using Domain.Entities.Oidc;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
@@ -53,6 +54,9 @@ public interface IUnitOfWork : IAsyncDisposable
     IActionRunRepository ActionRuns { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IUserPreferencesRepository UserPreferences { get; }
+    IInstanceIdentityRepository InstanceIdentity { get; }
+    IInstalledLicenseRepository InstalledLicense { get; }
+    ILicenseUsageRepository LicenseUsage { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
     IActivityEventRepository ActivityEventRepository { get; }
@@ -103,6 +107,38 @@ public interface IAutomationProcessRunner
 }
 
 public sealed record AutomationProcessOutput(string? StdOut, string? StdErr, int? ExitCode = null);
+
+public interface IInstanceIdentityRepository
+{
+    Task<CitadelInstanceIdentity> GetOrCreateAsync(
+        Guid candidateInstanceId,
+        DateTimeOffset createdAt,
+        CancellationToken cancellationToken);
+
+    Task<CitadelInstanceIdentity> GetOrCreateLockedAsync(
+        Guid candidateInstanceId,
+        DateTimeOffset createdAt,
+        CancellationToken cancellationToken);
+
+    Task<CitadelInstanceIdentity?> GetAsync(CancellationToken cancellationToken);
+}
+
+public interface IInstalledLicenseRepository
+{
+    Task<InstalledLicense?> GetAsync(CancellationToken cancellationToken);
+    Task<int> UpsertAsync(InstalledLicense license, CancellationToken cancellationToken);
+    Task<int> DeleteAsync(CancellationToken cancellationToken);
+    Task<int> UpdateValidationStatusAsync(
+        LicenseStatus status,
+        DateTimeOffset validatedAt,
+        string? validationErrorCode,
+        CancellationToken cancellationToken);
+}
+
+public interface ILicenseUsageRepository
+{
+    Task<LicenseReadModel> GetLicenseReadModelAsync(CancellationToken cancellationToken);
+}
 
 public interface IOidcProviderRepository
 {

@@ -152,6 +152,7 @@ export enum ResourceType {
   Binding = "Binding",
   Tag = "Tag",
   AutomationAction = "AutomationAction",
+  License = "License",
 }
 
 export enum ResourceControlState {
@@ -237,6 +238,28 @@ export enum LookupResourceType {
   Team = "Team",
   Role = "Role",
   ResourceBinding = "ResourceBinding",
+  License = "License",
+}
+
+export enum LicenseStatus {
+  Community = "Community",
+  Valid = "Valid",
+  GracePeriod = "GracePeriod",
+  NotYetValid = "NotYetValid",
+  Expired = "Expired",
+  Invalid = "Invalid",
+  InstanceMismatch = "InstanceMismatch",
+  UnsupportedSchema = "UnsupportedSchema",
+  UnknownSigningKey = "UnknownSigningKey",
+}
+
+export enum LicenseLimit {
+  OidcProviders = "OidcProviders",
+  EdgeAgentPlatforms = "EdgeAgentPlatforms",
+  SecretProviders = "SecretProviders",
+  CustomRoles = "CustomRoles",
+  ActiveUsers = "ActiveUsers",
+  Platforms = "Platforms",
 }
 
 export enum GitTransport {
@@ -348,6 +371,8 @@ export enum AlertType {
   WebhookGitRepoSyncFailed = "WebhookGitRepoSyncFailed",
   WebhookStackGitDeployFailed = "WebhookStackGitDeployFailed",
   AutomationActionRunFailed = "AutomationActionRunFailed",
+  LicenseEnteredGracePeriod = "LicenseEnteredGracePeriod",
+  LicenseExpired = "LicenseExpired",
 }
 
 export enum AlertSeverity {
@@ -368,6 +393,7 @@ export enum AlertResourceType {
   GitRepository = "GitRepository",
   Webhook = "Webhook",
   AutomationAction = "AutomationAction",
+  License = "License",
 }
 
 export enum AlertEventStatus {
@@ -425,6 +451,7 @@ export enum ActivityResourceType {
   OidcProvider = "OidcProvider",
   AutomationAction = "AutomationAction",
   User = "User",
+  License = "License",
 }
 
 export enum ActivityEventType {
@@ -496,6 +523,12 @@ export enum ActivityEventType {
   UserPasswordChanged = "UserPasswordChanged",
   UserSessionRevoked = "UserSessionRevoked",
   UserOtherSessionsRevoked = "UserOtherSessionsRevoked",
+  LicenseInstalled = "LicenseInstalled",
+  LicenseReplaced = "LicenseReplaced",
+  LicenseRemoved = "LicenseRemoved",
+  LicenseEnteredGracePeriod = "LicenseEnteredGracePeriod",
+  LicenseExpired = "LicenseExpired",
+  LicenseValidationFailed = "LicenseValidationFailed",
 }
 
 export enum ActionRunTrigger {
@@ -744,6 +777,14 @@ export type AlertEventInfo = BaseAlertEventInfo &
     | BaseAlertEventInfoTypeMapping<
         "AutomationActionRunFailed",
         AlertEventInfoAutomationActionRunFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "LicenseEnteredGracePeriod",
+        AlertEventInfoLicenseEnteredGracePeriodAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "LicenseExpired",
+        AlertEventInfoLicenseExpiredAlertInfo
       >
   );
 
@@ -1021,6 +1062,30 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "UserOtherSessionsRevoked",
         ActivityEventInfoUserOtherSessionsRevoked
       >
+    | BaseActivityEventInfoTypeMapping<
+        "LicenseInstalled",
+        ActivityEventInfoLicenseInstalled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "LicenseReplaced",
+        ActivityEventInfoLicenseReplaced
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "LicenseRemoved",
+        ActivityEventInfoLicenseRemoved
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "LicenseEnteredGracePeriod",
+        ActivityEventInfoLicenseEnteredGracePeriod
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "LicenseExpired",
+        ActivityEventInfoLicenseExpired
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "LicenseValidationFailed",
+        ActivityEventInfoLicenseValidationFailed
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -1261,6 +1326,39 @@ export interface ActivityEventInfoGitRepoWebhookReceived {
   repositoryFullName: null | string;
   dispatchedBranch?: null | string;
   dispatchedCommitSha?: null | string;
+}
+
+export interface ActivityEventInfoLicenseEnteredGracePeriod {
+  $type?: "LicenseEnteredGracePeriod";
+  license: LicenseActivitySnapshot;
+}
+
+export interface ActivityEventInfoLicenseExpired {
+  $type?: "LicenseExpired";
+  license: LicenseActivitySnapshot;
+}
+
+export interface ActivityEventInfoLicenseInstalled {
+  $type?: "LicenseInstalled";
+  license: LicenseActivitySnapshot;
+}
+
+export interface ActivityEventInfoLicenseRemoved {
+  $type?: "LicenseRemoved";
+  license: LicenseActivitySnapshot;
+}
+
+export interface ActivityEventInfoLicenseReplaced {
+  $type?: "LicenseReplaced";
+  oldLicense: LicenseActivitySnapshot;
+  newLicense: LicenseActivitySnapshot;
+}
+
+export interface ActivityEventInfoLicenseValidationFailed {
+  $type?: "LicenseValidationFailed";
+  fingerprint: null | string;
+  status: LicenseStatus;
+  errorCode: null | string;
 }
 
 export interface ActivityEventInfoOidcProviderCreated {
@@ -1633,6 +1731,30 @@ export interface AlertEventInfoDeploymentImageUpdateAvailableAlertInfo {
   deploymentName: string;
   currentImage: string;
   latestImage: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoLicenseEnteredGracePeriodAlertInfo {
+  $type?: "LicenseEnteredGracePeriod";
+  licenseId: null | string;
+  customerName: null | string;
+  fingerprint: null | string;
+  /** @format date-time */
+  expiresAt: any;
+  /** @format date-time */
+  graceUntil: any;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoLicenseExpiredAlertInfo {
+  $type?: "LicenseExpired";
+  licenseId: null | string;
+  customerName: null | string;
+  fingerprint: null | string;
+  /** @format date-time */
+  expiresAt: any;
+  /** @format date-time */
+  graceUntil: any;
   humanMessage?: null | string;
 }
 
@@ -3543,6 +3665,10 @@ export interface InspectImageView {
   capabilities?: null | ImageCapabilities;
 }
 
+export interface InstallLicenseInput {
+  license: string;
+}
+
 export interface IpAddressInfo {
   addr: null | string;
   /**
@@ -3573,6 +3699,66 @@ export interface LatestActivityView {
   info: ActivityEventInfo;
   /** @format date-time */
   createdAt: any;
+}
+
+export interface LicenseActivitySnapshot {
+  licenseId: null | string;
+  replacedLicenseId: null | string;
+  edition: string;
+  customerId: null | string;
+  customerName: null | string;
+  fingerprint: null | string;
+  status: LicenseStatus;
+  /** @format date-time */
+  expiresAt: any;
+  /** @format date-time */
+  graceUntil: any;
+}
+
+export interface LicenseLimitView {
+  limit: LicenseLimit;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  current: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maximum: number | string;
+  overQuota: boolean;
+}
+
+export interface LicenseRequestView {
+  product: string;
+  /** @format uuid */
+  instanceId: string;
+  coreVersion: string;
+  /** @format date-time */
+  generatedAt: any;
+}
+
+export interface LicenseView {
+  status: LicenseStatus;
+  edition: string;
+  /** @format uuid */
+  instanceId: string;
+  licenseId: null | string;
+  replacedLicenseId: null | string;
+  customerId: null | string;
+  customerName: null | string;
+  fingerprint: null | string;
+  /** @format date-time */
+  issuedAt: any;
+  /** @format date-time */
+  notBefore: any;
+  /** @format date-time */
+  expiresAt: any;
+  /** @format date-time */
+  graceUntil: any;
+  limits: LicenseLimitView[];
+  warnings: string[];
 }
 
 export interface LifeCycleSpec {
@@ -5951,6 +6137,101 @@ export class Api<
         path: `/api/v1/profile/sessions/${sessionId}`,
         method: "DELETE",
         secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags License
+     * @name GetLicense
+     * @summary Get license status
+     * @request GET:/api/v1/license
+     * @secure
+     * @response `200` `LicenseView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getLicense: (params: RequestParams = {}) =>
+      this.request<LicenseView, ProblemDetails>({
+        path: `/api/v1/license`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags License
+     * @name InstallLicense
+     * @summary Install or replace license
+     * @request POST:/api/v1/license
+     * @secure
+     * @response `200` `LicenseView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    installLicense: (data: InstallLicenseInput, params: RequestParams = {}) =>
+      this.request<LicenseView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/license`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags License
+     * @name RemoveLicense
+     * @summary Remove installed license
+     * @request DELETE:/api/v1/license
+     * @secure
+     * @response `200` `LicenseView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    removeLicense: (params: RequestParams = {}) =>
+      this.request<LicenseView, ProblemDetails>({
+        path: `/api/v1/license`,
+        method: "DELETE",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags License
+     * @name GetLicenseRequest
+     * @summary Get license request details
+     * @request GET:/api/v1/license/request
+     * @secure
+     * @response `200` `LicenseRequestView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getLicenseRequest: (params: RequestParams = {}) =>
+      this.request<LicenseRequestView, ProblemDetails>({
+        path: `/api/v1/license/request`,
+        method: "GET",
+        secure: true,
+        format: "json",
         ...params,
       }),
 

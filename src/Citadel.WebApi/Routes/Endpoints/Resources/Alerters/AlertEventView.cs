@@ -63,6 +63,7 @@ public sealed record AlertEventView(
             AlertResourceType.Deployment => $"/deployments/{resourceId}",
             AlertResourceType.Stack => $"/stacks/{resourceId}",
             AlertResourceType.GitRepository => $"/git-repos/{resourceId}",
+            AlertResourceType.License => "/license",
             _ => null
         };
     }

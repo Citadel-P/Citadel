@@ -17,7 +17,8 @@ public sealed record AlertEvaluationContext(
     IReadOnlyCollection<StackGitWebhookDeployFailureAlertSnapshot>? StackGitWebhookDeployFailures = null,
     IReadOnlyCollection<StackConfigurationResolutionFailureAlertSnapshot>? StackConfigurationFailures = null,
     IReadOnlyCollection<DeploymentConfigurationResolutionFailureAlertSnapshot>? DeploymentConfigurationFailures = null,
-    IReadOnlyCollection<AutomationActionRunFailureAlertSnapshot>? AutomationActionRunFailures = null);
+    IReadOnlyCollection<AutomationActionRunFailureAlertSnapshot>? AutomationActionRunFailures = null,
+    IReadOnlyCollection<LicenseAlertSnapshot>? Licenses = null);
 
 public sealed record AlertMatch(
     Guid ResourceId,
@@ -110,3 +111,12 @@ public sealed record AutomationActionRunFailureAlertSnapshot(
     int? ExitCode,
     long? DurationMs,
     string Reason);
+
+public sealed record LicenseAlertSnapshot(
+    Guid InstanceId,
+    string? LicenseId,
+    string? CustomerName,
+    string? Fingerprint,
+    LicenseStatus Status,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? GraceUntil);

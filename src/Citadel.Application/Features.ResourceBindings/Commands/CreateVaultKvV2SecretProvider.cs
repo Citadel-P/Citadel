@@ -1,4 +1,5 @@
 using Application.Services;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.ResourceBindings;
@@ -32,13 +33,24 @@ public sealed record CreateVaultKvV2SecretProvider(
 
 internal sealed class CreateVaultKvV2SecretProviderHandler(
     IUnitOfWork unitOfWork,
-    ISecretValueProtector secretValueProtector)
+    ISecretValueProtector secretValueProtector,
+    ILicenseQuotaService licenseQuotaService)
     : ICommandHandler<CreateVaultKvV2SecretProvider, Result<SecretProvider>>
 {
     public async ValueTask<Result<SecretProvider>> Handle(CreateVaultKvV2SecretProvider command, CancellationToken cancellationToken)
     {
         if (await unitOfWork.SecretProviders.ExistsByNameAsync(command.Name, cancellationToken))
             return Result.Failure<SecretProvider>(new ConflictError("Name already exists"));
+
+        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
+            new Dictionary<LicenseLimit, int>
+            {
+                [LicenseLimit.SecretProviders] = 1
+            },
+            unitOfWork,
+            cancellationToken);
+        if (quotaResult.IsFailure())
+            return Result.Failure<SecretProvider>(quotaResult.Errors);
 
         var provider = new SecretProvider(
             command.Name,

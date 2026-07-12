@@ -15,6 +15,7 @@ using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Identity.Profile;
+using WebApi.Routes.Endpoints.Resources.Licensing;
 using WebApi.Routes.Endpoints.Resources.Oidc;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
@@ -49,6 +50,7 @@ public static class PublicEndpoints
     const string AuthenticationName = nameof(Authentication);
     const string ProfileName = "Profile";
     const string ApplicationName = "Application";
+    const string LicenseName = "License";
     const string LookupName = nameof(Lookup);
 
     public static void MapPublicEndpoints(this WebApplication app)
@@ -66,6 +68,10 @@ public static class PublicEndpoints
             var profile = group.MapGroup("/profile").WithTags(ProfileName).RequireAuthorization();
             {
                 MapProfileEndpoints(profile);
+            }
+            var license = group.MapGroup("/license").WithTags(LicenseName).RequireAuthorization();
+            {
+                MapLicenseEndpoints(license);
             }
             var actors = group.MapGroup("/actors").WithTags(ActorsName).RequireAuthorization();
             {
@@ -223,6 +229,38 @@ public static class PublicEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("revokeOtherProfileSessions");
+    }
+
+    private static void MapLicenseEndpoints(RouteGroupBuilder license)
+    {
+        license.MapGet("/", WebApi.Routes.Endpoints.License.Get)
+            .WithSummary("Get license status")
+            .Produces<LicenseView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("getLicense");
+
+        license.MapPost("/", WebApi.Routes.Endpoints.License.Install)
+            .WithSummary("Install or replace license")
+            .Produces<LicenseView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("installLicense");
+
+        license.MapDelete("/", WebApi.Routes.Endpoints.License.Remove)
+            .WithSummary("Remove installed license")
+            .Produces<LicenseView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("removeLicense");
+
+        license.MapGet("request", WebApi.Routes.Endpoints.License.GetRequest)
+            .WithSummary("Get license request details")
+            .Produces<LicenseRequestView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("getLicenseRequest");
     }
 
     private static void MapActorEndpoints(RouteGroupBuilder actors)

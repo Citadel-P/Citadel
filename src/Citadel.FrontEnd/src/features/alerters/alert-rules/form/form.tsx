@@ -103,6 +103,8 @@ export const AlertRuleForm = ({
     AlertType.DeploymentAutoUpdated,
     AlertType.DeploymentAutoDeployFailed,
     AlertType.AutomationActionRunFailed,
+    AlertType.LicenseEnteredGracePeriod,
+    AlertType.LicenseExpired,
   ];
   const showCooldown = !!merged.type && !noCooldownTypes.includes(merged.type);
 
@@ -110,11 +112,12 @@ export const AlertRuleForm = ({
     if (!merged.type) return 'Platform';
     if (merged.type.startsWith('AutomationAction')) return 'AutomationAction';
     if (merged.type.startsWith('Webhook')) return 'Webhook';
+    if (merged.type.startsWith('License')) return 'License';
     if (merged.type.startsWith('Deployment')) return 'Deployment';
     if (merged.type.includes('Stack')) return 'Stack';
     return 'Platform';
   }, [merged.type]);
-  const showScope = resourceFromAlertType() !== 'Webhook';
+  const showScope = !['Webhook', 'License'].includes(resourceFromAlertType());
 
   const schema = useMemo(
     () => ({

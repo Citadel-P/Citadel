@@ -14,6 +14,8 @@ export interface ConfirmDeleteDialogProps {
   type: ResourceType;
   open: boolean;
   title?: string;
+  description?: React.ReactNode;
+  confirmLabel?: string;
   count: number;
   isPending: boolean;
   onOpenChange: (open: boolean) => void;
@@ -24,6 +26,8 @@ export interface ConfirmDeleteDialogProps {
 export const ConfirmDeleteDialog = ({
   open,
   title = 'Confirm Deletion',
+  description,
+  confirmLabel = 'Delete',
   count,
   type: resourceName,
   isPending,
@@ -36,7 +40,9 @@ export const ConfirmDeleteDialog = ({
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>
-          {count === 1 ? (
+          {description ? (
+            description
+          ) : count === 1 ? (
             <>Are you sure you want to delete this {resourceName.toLowerCase()}? This action cannot be undone.</>
           ) : (
             <>
@@ -62,7 +68,7 @@ export const ConfirmDeleteDialog = ({
             disabled={isPending}
             onClick={onConfirm}
             className="ml-2 bg-danger hover:bg-danger/85 text-background font-medium rounded-sm text-sm inline-flex items-center px-2 py-2">
-            Delete
+            {confirmLabel}
             {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
           </button>
         </div>

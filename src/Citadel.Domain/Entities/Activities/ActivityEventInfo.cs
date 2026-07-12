@@ -5,6 +5,7 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Automation;
+using Domain.Entities.Licensing;
 using Domain.Entities.Stacks;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
@@ -81,6 +82,12 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(UserPasswordChanged), nameof(ActivityEventType.UserPasswordChanged))]
 [JsonDerivedType(typeof(UserSessionRevoked), nameof(ActivityEventType.UserSessionRevoked))]
 [JsonDerivedType(typeof(UserOtherSessionsRevoked), nameof(ActivityEventType.UserOtherSessionsRevoked))]
+[JsonDerivedType(typeof(LicenseInstalled), nameof(ActivityEventType.LicenseInstalled))]
+[JsonDerivedType(typeof(LicenseReplaced), nameof(ActivityEventType.LicenseReplaced))]
+[JsonDerivedType(typeof(LicenseRemoved), nameof(ActivityEventType.LicenseRemoved))]
+[JsonDerivedType(typeof(LicenseEnteredGracePeriod), nameof(ActivityEventType.LicenseEnteredGracePeriod))]
+[JsonDerivedType(typeof(LicenseExpired), nameof(ActivityEventType.LicenseExpired))]
+[JsonDerivedType(typeof(LicenseValidationFailed), nameof(ActivityEventType.LicenseValidationFailed))]
 
 public abstract record ActivityEventInfo;
 
@@ -254,3 +261,21 @@ public sealed record UserPreferencesUpdated(IReadOnlyCollection<ActivityChangedF
 public sealed record UserPasswordChanged() : ActivityEventInfo;
 public sealed record UserSessionRevoked(Guid SessionId) : ActivityEventInfo;
 public sealed record UserOtherSessionsRevoked(int Count) : ActivityEventInfo;
+
+public sealed record LicenseActivitySnapshot(
+    string? LicenseId,
+    string? ReplacedLicenseId,
+    string Edition,
+    string? CustomerId,
+    string? CustomerName,
+    string? Fingerprint,
+    LicenseStatus Status,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? GraceUntil);
+
+public sealed record LicenseInstalled(LicenseActivitySnapshot License) : ActivityEventInfo;
+public sealed record LicenseReplaced(LicenseActivitySnapshot OldLicense, LicenseActivitySnapshot NewLicense) : ActivityEventInfo;
+public sealed record LicenseRemoved(LicenseActivitySnapshot License) : ActivityEventInfo;
+public sealed record LicenseEnteredGracePeriod(LicenseActivitySnapshot License) : ActivityEventInfo;
+public sealed record LicenseExpired(LicenseActivitySnapshot License) : ActivityEventInfo;
+public sealed record LicenseValidationFailed(string? Fingerprint, LicenseStatus Status, string? ErrorCode) : ActivityEventInfo;

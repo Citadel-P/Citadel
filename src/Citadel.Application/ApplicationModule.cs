@@ -2,6 +2,7 @@ using Application.Permissions;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.Identity;
+using Application.Services.Licensing;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Citadel.SourceGen;
@@ -53,6 +54,7 @@ public static class ApplicationModule
     {
         services
             .AddMemoryCache()
+            .AddSingleton(TimeProvider.System)
             .AddSingleton<IRoleCache, RoleCache>()
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<ISyncBarrier, SyncBarrier>()
@@ -95,6 +97,10 @@ public static class ApplicationModule
             .AddSingleton<ISecretRedactor, SecretRedactor>()
             .AddSingleton<IOidcDiscoveryService, OidcDiscoveryService>()
             .AddSingleton<IOidcAuthenticationService, OidcAuthenticationService>()
+            .AddSingleton<ILicensePublicKeyRegistry, EmbeddedLicensePublicKeyRegistry>()
+            .AddSingleton<ILicenseVerifier, LicenseVerifier>()
+            .AddSingleton<ILicenseStateProvider, LicenseStateProvider>()
+            .AddSingleton<ILicenseQuotaService, LicenseQuotaService>()
             .AddSingleton<IEdgeAgentManagementService, EdgeAgentManagementService>()
             .AddSingleton<IAgentHubPublicKeyProvider, AgentHubPublicKeyProvider>()
             .AddSingleton<IResourceBindingResolver, ResourceBindingResolver>()
@@ -169,6 +175,7 @@ public static class ApplicationModule
             .AddHostedService<GitRepoSyncJob>()
             .AddHostedService<AutomationActionSchedulerJob>()
             .AddHostedService<AutomationActionRunWorkerJob>()
+            .AddHostedService<LicenseTransitionMonitorJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()

@@ -21,6 +21,7 @@ const activityResourceIcons = {
   [ActivityResourceType.OidcProvider]: CitadelIcons.OidcProvider,
   [ActivityResourceType.AutomationAction]: CitadelIcons.AutomationAction,
   [ActivityResourceType.User]: CitadelIcons.User,
+  [ActivityResourceType.License]: CitadelIcons.License,
 } satisfies Record<ActivityResourceType, any>;
 
 const activityEventPrefixes = {
@@ -33,6 +34,7 @@ const activityEventPrefixes = {
   [ActivityResourceType.OidcProvider]: 'OidcProvider',
   [ActivityResourceType.AutomationAction]: 'Action',
   [ActivityResourceType.User]: 'User',
+  [ActivityResourceType.License]: 'License',
 } satisfies Record<ActivityResourceType, string>;
 
 const activityLookupTargets = {
@@ -45,6 +47,7 @@ const activityLookupTargets = {
   [ActivityResourceType.OidcProvider]: LookupResourceType.OidcProvider,
   [ActivityResourceType.AutomationAction]: LookupResourceType.AutomationAction,
   [ActivityResourceType.User]: LookupResourceType.User,
+  [ActivityResourceType.License]: LookupResourceType.License,
 } satisfies Record<ActivityResourceType, LookupResourceType>;
 
 export const ActivityComponents: RequiredComponents = {

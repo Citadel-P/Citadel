@@ -2,6 +2,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Role;
 using Domain.Entities.Identity;
+using Application.Services.Licensing;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -38,13 +39,23 @@ public sealed record CreateRole(string Name, IEnumerable<PatchPermissionModel> P
     }
 }
 
-internal sealed class CreateRoleHandler(IUnitOfWork unitOfWork) : ICommandHandler<CreateRole, Result<RoleDetails>>
+internal sealed class CreateRoleHandler(IUnitOfWork unitOfWork, ILicenseQuotaService licenseQuotaService) : ICommandHandler<CreateRole, Result<RoleDetails>>
 {
     public async ValueTask<Result<RoleDetails>> Handle(CreateRole command, CancellationToken cancellationToken)
     {
         var exists = await unitOfWork.Roles.ExistsByNameAsync(command.Name, null, cancellationToken);
         if (exists)
             return Result.Failure<RoleDetails>(new ConflictError("Name already exists"));
+
+        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
+            new Dictionary<LicenseLimit, int>
+            {
+                [LicenseLimit.CustomRoles] = 1
+            },
+            unitOfWork,
+            cancellationToken);
+        if (quotaResult.IsFailure())
+            return Result.Failure<RoleDetails>(quotaResult.Errors);
 
         var permissions = command.Permissions.Select(x => x.ToDomain(Guid.Empty)).ToArray();
         var role = Role.Create(command.Name, RoleType.Custom, permissions);

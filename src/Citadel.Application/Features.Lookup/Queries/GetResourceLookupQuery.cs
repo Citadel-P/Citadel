@@ -21,6 +21,7 @@ public sealed record GetResourceLookupQuery(
 internal sealed class GetResourceLookupQueryHandler(
     INetworkService networkService,
     IUserContextAccessor userContextAccessor,
+    TimeProvider timeProvider,
     IUnitOfWork unitOfWork) : IQueryHandler<GetResourceLookupQuery, Result<IEnumerable<ResourceInfo>>>
 {
     public async ValueTask<Result<IEnumerable<ResourceInfo>>> Handle(GetResourceLookupQuery query, CancellationToken cancellationToken)
@@ -105,6 +106,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (null, LookupResourceType.Stack) => await GetStackLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Image) => await GetImageLookupAsync(userId, context, cancellationToken),
             (null, LookupResourceType.ResourceBinding) => await GetGlobalResourceBindingLookupAsync(cancellationToken),
+            (null, LookupResourceType.License) => await GetLicenseLookupAsync(cancellationToken),
             _ => Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError(GetUnsupportedLookupMessage(sourceType, targetType)))
         };
     }
@@ -367,6 +369,13 @@ internal sealed class GetResourceLookupQueryHandler(
 
         var items = await unitOfWork.Images.GetByPlatformIdAsync(context.PlatformId.Value, cancellationToken);
         return Result.Success(items.Select(static item => new ResourceInfo(item.Id, item.Name)));
+    }
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetLicenseLookupAsync(CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var identity = await unitOfWork.InstanceIdentity.GetOrCreateAsync(Guid.CreateVersion7(), now, cancellationToken);
+        return Result.Success<IEnumerable<ResourceInfo>>([new ResourceInfo(identity.InstanceId, "License")]);
     }
 
     private static string GetUnsupportedLookupMessage(LookupResourceType? sourceType, LookupResourceType targetType)

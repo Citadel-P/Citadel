@@ -286,6 +286,7 @@ export function useHTTPErrorHandler() {
 
     const queryUnsubscribe = client.getQueryCache().subscribe((event) => {
       if (event.type === 'updated' && event.action.type === 'error') {
+        if ((event.query.meta as { suppressErrorToast?: boolean } | undefined)?.suppressErrorToast) return;
         handleError(event.action.error.error);
       }
     });

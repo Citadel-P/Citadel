@@ -1,4 +1,4 @@
-import { Settings } from 'lucide-react';
+import { KeyRound, Settings } from 'lucide-react';
 import { JSX } from 'react';
 import DockerIcon from '@/assets/docker.min.svg';
 import { CitadelIcons } from '@/lib/icons';
@@ -115,6 +115,11 @@ const MenuItems: IMenuItem[] = [
             icon: renderIcon(CitadelIcons.Access),
             label: 'Access',
             route: '/access',
+          },
+          {
+            icon: <KeyRound className="w-3.5 h-3.5" />,
+            label: 'License',
+            route: '/license',
           },
         ],
       },

@@ -804,6 +804,30 @@ namespace Infrastructure.Migrations.Migrations
                             Severity = "Critical",
                             Status = "Enabled",
                             Type = "AutomationActionRunFailed"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-000000000019"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "License Entered Grace Period",
+                            QuietHours = "[]",
+                            Severity = "Warning",
+                            Status = "Enabled",
+                            Type = "LicenseEnteredGracePeriod"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-00000000001a"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "License Expired",
+                            QuietHours = "[]",
+                            Severity = "Critical",
+                            Status = "Enabled",
+                            Type = "LicenseExpired"
                         });
                 });
 
@@ -1026,6 +1050,36 @@ namespace Infrastructure.Migrations.Migrations
                             ScheduleTimeZone = "UTC",
                             TimeoutSeconds = 300,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
+                });
+
+            modelBuilder.Entity("CitadelInstanceIdentity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("instanceid");
+
+                    b.HasKey("Id")
+                        .HasName("pk_citadelinstanceidentity");
+
+                    b.HasIndex("InstanceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_citadelinstanceidentity_instanceid");
+
+                    b.ToTable("citadelinstanceidentity", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CitadelInstanceIdentity_Singleton", "\"id\" = 1");
                         });
                 });
 
@@ -1740,6 +1794,59 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("images", (string)null);
                 });
 
+            modelBuilder.Entity("InstalledLicense", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("fingerprint");
+
+                    b.Property<DateTimeOffset>("InstalledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("installedat");
+
+                    b.Property<Guid?>("InstalledByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installedbyactorid");
+
+                    b.Property<DateTimeOffset?>("LastValidatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastvalidatedat");
+
+                    b.Property<string>("LastValidationErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("lastvalidationerrorcode");
+
+                    b.Property<string>("LastValidationStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("lastvalidationstatus");
+
+                    b.Property<string>("RawLicense")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rawlicense");
+
+                    b.HasKey("Id")
+                        .HasName("pk_installedlicenses");
+
+                    b.HasIndex("InstalledByActorId")
+                        .HasDatabaseName("ix_installedlicenses_installedbyactorid");
+
+                    b.ToTable("installedlicenses", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InstalledLicenses_Singleton", "\"id\" = 1");
+                        });
+                });
+
             modelBuilder.Entity("InternalSecretValue", b =>
                 {
                     b.Property<Guid>("SecretId")
@@ -2326,6 +2433,14 @@ namespace Infrastructure.Migrations.Migrations
                             PermissionLevel = 2,
                             ResourceType = 13,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("8b91dc54-cf72-44f6-0505-3c426552df35"),
+                            PermissionLevel = 4,
+                            ResourceType = 14,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
                             SpecificPermissions = 0
                         },
                         new
@@ -3626,6 +3741,15 @@ namespace Infrastructure.Migrations.Migrations
                         .HasForeignKey("RegistryId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_images_registries_registryid");
+                });
+
+            modelBuilder.Entity("InstalledLicense", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("InstalledByActorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_installedlicenses_actors_installedbyactorid");
                 });
 
             modelBuilder.Entity("InternalSecretValue", b =>

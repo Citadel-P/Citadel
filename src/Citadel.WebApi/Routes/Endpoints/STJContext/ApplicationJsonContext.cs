@@ -15,9 +15,11 @@ using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
+using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
+using Domain.Entities.Licensing;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
@@ -42,6 +44,7 @@ using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Images;
+using WebApi.Routes.Endpoints.Resources.Licensing;
 using WebApi.Routes.Endpoints.Resources.Lookup;
 using WebApi.Routes.Endpoints.Resources.Networks;
 using WebApi.Routes.Endpoints.Resources.Oidc;
@@ -75,7 +78,9 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<WebhookExecution>),
         typeof(JsonStringEnumConverter<UserDateTimeFormat>),
         typeof(JsonStringEnumConverter<UserTheme>),
-        typeof(JsonStringEnumConverter<CurrentProfileAuthenticationType>)
+        typeof(JsonStringEnumConverter<CurrentProfileAuthenticationType>),
+        typeof(JsonStringEnumConverter<LicenseLimit>),
+        typeof(JsonStringEnumConverter<LicenseStatus>)
     })]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Guid[]))]
@@ -88,6 +93,12 @@ namespace Application.Models;
 [JsonSerializable(typeof(UserTheme))]
 [JsonSerializable(typeof(UserTheme?))]
 [JsonSerializable(typeof(CurrentProfileAuthenticationType))]
+[JsonSerializable(typeof(LicenseLimit))]
+[JsonSerializable(typeof(LicenseLimit?))]
+[JsonSerializable(typeof(LicenseStatus))]
+[JsonSerializable(typeof(LicenseStatus?))]
+[JsonSerializable(typeof(LicenseQuotaViolation))]
+[JsonSerializable(typeof(LicenseQuotaViolation[]))]
 [JsonSerializable(typeof(ResourceBindingKind))]
 [JsonSerializable(typeof(ResourceBindingKind?))]
 [JsonSerializable(typeof(ResourceBindingScope))]
@@ -130,6 +141,11 @@ namespace Application.Models;
 [JsonSerializable(typeof(UserSessionSummaryView))]
 [JsonSerializable(typeof(UserSessionsView))]
 [JsonSerializable(typeof(RevokeOtherProfileSessionsView))]
+[JsonSerializable(typeof(InstallLicenseInput))]
+[JsonSerializable(typeof(LicenseView))]
+[JsonSerializable(typeof(LicenseLimitView))]
+[JsonSerializable(typeof(IReadOnlyList<LicenseLimitView>))]
+[JsonSerializable(typeof(LicenseRequestView))]
 [JsonSerializable(typeof(OidcProviderInput))]
 [JsonSerializable(typeof(UpdateOidcProviderInput))]
 [JsonSerializable(typeof(UpdateOidcProviderPatchDocument))]
@@ -334,6 +350,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(PagedResultView<AlertEventView>))]
 [JsonSerializable(typeof(AlertEventView))]
 [JsonSerializable(typeof(AlertEventsView))]
+[JsonSerializable(typeof(LicenseEnteredGracePeriodAlertInfo))]
+[JsonSerializable(typeof(LicenseExpiredAlertInfo))]
 [JsonSerializable(typeof(AlertEventFilter))]
 [JsonSerializable(typeof(ResolveAlertEventsInput))]
 [JsonSerializable(typeof(UnresolvedAlertsCountView))]

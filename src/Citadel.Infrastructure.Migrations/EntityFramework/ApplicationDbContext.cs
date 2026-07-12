@@ -27,6 +27,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .GitRepositoryRefConfiguration()
             .RefreshTokenConfiguration()
             .UserPreferencesConfiguration()
+            .CitadelInstanceIdentityConfiguration()
+            .InstalledLicenseConfiguration()
             .ActorConfiguration()
             .UserConfiguration()
             .TeamConfiguration()
@@ -145,6 +147,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                 SpecificPermissions = Domain.Entities.Identity.Permission.ToSpecificPermissionsMask(specificPermissions),
                 RoleType = RoleType.System.ToString()
             });
+
+            if (resource == ResourceType.License)
+                continue;
 
             permissions.Add(new
             {
@@ -346,7 +351,11 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000013"), Name = "Webhook Deploy Failed - Git Stack", Type = "WebhookStackGitDeployFailed", Severity = "Critical", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
 
             // Automation event alerts
-            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000018"), Name = "Automation Action Run Failed", Type = "AutomationActionRunFailed", Severity = "Critical", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate }
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000018"), Name = "Automation Action Run Failed", Type = "AutomationActionRunFailed", Severity = "Critical", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+
+            // License event alerts
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000019"), Name = "License Entered Grace Period", Type = "LicenseEnteredGracePeriod", Severity = "Warning", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-00000000001a"), Name = "License Expired", Type = "LicenseExpired", Severity = "Critical", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate }
         );
 
         // --- Registries ---
@@ -413,6 +422,53 @@ internal static class Configuration
     private const string BigInt = "bigint";
     private const string Double = "double precision";
     private const string Timestamp = "timestamp with time zone";
+
+    public static ModelBuilder CitadelInstanceIdentityConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "CitadelInstanceIdentity";
+        var identity = builder.Entity("CitadelInstanceIdentity");
+
+        identity.ToTable(tableName);
+
+        identity.Property<int>("Id").HasColumnType(Integer).IsRequired();
+        identity.HasKey("Id");
+        identity.HasCheckConstraint($"CK_{tableName}_Singleton", "\"id\" = 1");
+
+        identity.Property<Guid>("InstanceId").IsRequired();
+        identity.Property<DateTimeOffset>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+
+        identity.HasIndex("InstanceId").IsUnique().HasDatabaseName($"IX_{tableName}_InstanceId");
+
+        return builder;
+    }
+
+    public static ModelBuilder InstalledLicenseConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "InstalledLicenses";
+        var license = builder.Entity("InstalledLicense");
+
+        license.ToTable(tableName);
+
+        license.Property<int>("Id").HasColumnType(Integer).IsRequired();
+        license.HasKey("Id");
+        license.HasCheckConstraint($"CK_{tableName}_Singleton", "\"id\" = 1");
+
+        license.Property<string>("RawLicense").HasColumnType(Text).IsRequired();
+        license.Property<string>("Fingerprint").HasColumnType(Text).IsRequired();
+        license.Property<DateTimeOffset>("InstalledAt").HasColumnType(Timestamp).IsRequired();
+        license.Property<Guid?>("InstalledByActorId").IsRequired(false);
+        license.Property<DateTimeOffset?>("LastValidatedAt").HasColumnType(Timestamp).IsRequired(false);
+        license.Property<string>("LastValidationStatus").HasColumnType(Text).HasMaxLength(64).IsRequired(false);
+        license.Property<string>("LastValidationErrorCode").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+
+        license
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("InstalledByActorId")
+            .OnDelete(DeleteBehavior.SetNull);
+
+        return builder;
+    }
 
     public static ModelBuilder ContainerConfiguration(this ModelBuilder builder)
     {

@@ -1037,6 +1037,286 @@
         ]
       }
     },
+    "/api/v1/license": {
+      "get": {
+        "tags": [
+          "License"
+        ],
+        "summary": "Get license status",
+        "operationId": "getLicense",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "License"
+        ],
+        "summary": "Install or replace license",
+        "operationId": "installLicense",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallLicenseInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "License"
+        ],
+        "summary": "Remove installed license",
+        "operationId": "removeLicense",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/license/request": {
+      "get": {
+        "tags": [
+          "License"
+        ],
+        "summary": "Get license request details",
+        "operationId": "getLicenseRequest",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseRequestView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/actors/{id}": {
       "get": {
         "tags": [
@@ -22815,6 +23095,24 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoUserOtherSessionsRevoked"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoLicenseInstalled"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoLicenseReplaced"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoLicenseRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoLicenseEnteredGracePeriod"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoLicenseExpired"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoLicenseValidationFailed"
           }
         ],
         "discriminator": {
@@ -22887,7 +23185,13 @@
             "UserPreferencesUpdated": "#/components/schemas/ActivityEventInfoUserPreferencesUpdated",
             "UserPasswordChanged": "#/components/schemas/ActivityEventInfoUserPasswordChanged",
             "UserSessionRevoked": "#/components/schemas/ActivityEventInfoUserSessionRevoked",
-            "UserOtherSessionsRevoked": "#/components/schemas/ActivityEventInfoUserOtherSessionsRevoked"
+            "UserOtherSessionsRevoked": "#/components/schemas/ActivityEventInfoUserOtherSessionsRevoked",
+            "LicenseInstalled": "#/components/schemas/ActivityEventInfoLicenseInstalled",
+            "LicenseReplaced": "#/components/schemas/ActivityEventInfoLicenseReplaced",
+            "LicenseRemoved": "#/components/schemas/ActivityEventInfoLicenseRemoved",
+            "LicenseEnteredGracePeriod": "#/components/schemas/ActivityEventInfoLicenseEnteredGracePeriod",
+            "LicenseExpired": "#/components/schemas/ActivityEventInfoLicenseExpired",
+            "LicenseValidationFailed": "#/components/schemas/ActivityEventInfoLicenseValidationFailed"
           }
         }
       },
@@ -23630,6 +23934,120 @@
             ]
           },
           "dispatchedCommitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivityEventInfoLicenseEnteredGracePeriod": {
+        "required": [
+          "license"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "LicenseEnteredGracePeriod"
+            ],
+            "type": "string"
+          },
+          "license": {
+            "$ref": "#/components/schemas/LicenseActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoLicenseExpired": {
+        "required": [
+          "license"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "LicenseExpired"
+            ],
+            "type": "string"
+          },
+          "license": {
+            "$ref": "#/components/schemas/LicenseActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoLicenseInstalled": {
+        "required": [
+          "license"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "LicenseInstalled"
+            ],
+            "type": "string"
+          },
+          "license": {
+            "$ref": "#/components/schemas/LicenseActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoLicenseRemoved": {
+        "required": [
+          "license"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "LicenseRemoved"
+            ],
+            "type": "string"
+          },
+          "license": {
+            "$ref": "#/components/schemas/LicenseActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoLicenseReplaced": {
+        "required": [
+          "oldLicense",
+          "newLicense"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "LicenseReplaced"
+            ],
+            "type": "string"
+          },
+          "oldLicense": {
+            "$ref": "#/components/schemas/LicenseActivitySnapshot"
+          },
+          "newLicense": {
+            "$ref": "#/components/schemas/LicenseActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoLicenseValidationFailed": {
+        "required": [
+          "fingerprint",
+          "status",
+          "errorCode"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "LicenseValidationFailed"
+            ],
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/LicenseStatus"
+          },
+          "errorCode": {
             "type": [
               "null",
               "string"
@@ -24492,7 +24910,13 @@
           "UserPreferencesUpdated",
           "UserPasswordChanged",
           "UserSessionRevoked",
-          "UserOtherSessionsRevoked"
+          "UserOtherSessionsRevoked",
+          "LicenseInstalled",
+          "LicenseReplaced",
+          "LicenseRemoved",
+          "LicenseEnteredGracePeriod",
+          "LicenseExpired",
+          "LicenseValidationFailed"
         ]
       },
       "ActivityResourceType": {
@@ -24505,7 +24929,8 @@
           "GitRepository",
           "OidcProvider",
           "AutomationAction",
-          "User"
+          "User",
+          "License"
         ]
       },
       "ActivitySourceResource": {
@@ -24947,6 +25372,12 @@
           },
           {
             "$ref": "#/components/schemas/AlertEventInfoAutomationActionRunFailedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoLicenseEnteredGracePeriodAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoLicenseExpiredAlertInfo"
           }
         ],
         "discriminator": {
@@ -24976,7 +25407,9 @@
             "WebhookDispatchFailed": "#/components/schemas/AlertEventInfoWebhookDispatchFailedAlertInfo",
             "WebhookGitRepoSyncFailed": "#/components/schemas/AlertEventInfoWebhookGitRepoSyncFailedAlertInfo",
             "WebhookStackGitDeployFailed": "#/components/schemas/AlertEventInfoWebhookStackGitDeployFailedAlertInfo",
-            "AutomationActionRunFailed": "#/components/schemas/AlertEventInfoAutomationActionRunFailedAlertInfo"
+            "AutomationActionRunFailed": "#/components/schemas/AlertEventInfoAutomationActionRunFailedAlertInfo",
+            "LicenseEnteredGracePeriod": "#/components/schemas/AlertEventInfoLicenseEnteredGracePeriodAlertInfo",
+            "LicenseExpired": "#/components/schemas/AlertEventInfoLicenseExpiredAlertInfo"
           }
         }
       },
@@ -25142,6 +25575,100 @@
           },
           "latestImage": {
             "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoLicenseEnteredGracePeriodAlertInfo": {
+        "required": [
+          "licenseId",
+          "customerName",
+          "fingerprint",
+          "expiresAt",
+          "graceUntil"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "LicenseEnteredGracePeriod"
+            ],
+            "type": "string"
+          },
+          "licenseId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "customerName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expiresAt": {
+            "format": "date-time"
+          },
+          "graceUntil": {
+            "format": "date-time"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoLicenseExpiredAlertInfo": {
+        "required": [
+          "licenseId",
+          "customerName",
+          "fingerprint",
+          "expiresAt",
+          "graceUntil"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "LicenseExpired"
+            ],
+            "type": "string"
+          },
+          "licenseId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "customerName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expiresAt": {
+            "format": "date-time"
+          },
+          "graceUntil": {
+            "format": "date-time"
           },
           "humanMessage": {
             "type": [
@@ -26087,7 +26614,8 @@
           "Stack",
           "GitRepository",
           "Webhook",
-          "AutomationAction"
+          "AutomationAction",
+          "License"
         ]
       },
       "AlertRuleConfigView": {
@@ -26544,7 +27072,9 @@
           "WebhookDispatchFailed",
           "WebhookGitRepoSyncFailed",
           "WebhookStackGitDeployFailed",
-          "AutomationActionRunFailed"
+          "AutomationActionRunFailed",
+          "LicenseEnteredGracePeriod",
+          "LicenseExpired"
         ]
       },
       "ApplicationInfoView": {
@@ -32685,6 +33215,17 @@
           }
         }
       },
+      "InstallLicenseInput": {
+        "required": [
+          "license"
+        ],
+        "type": "object",
+        "properties": {
+          "license": {
+            "type": "string"
+          }
+        }
+      },
       "IpAddressInfo": {
         "required": [
           "addr",
@@ -32797,6 +33338,229 @@
           }
         }
       },
+      "LicenseActivitySnapshot": {
+        "required": [
+          "licenseId",
+          "replacedLicenseId",
+          "edition",
+          "customerId",
+          "customerName",
+          "fingerprint",
+          "status",
+          "expiresAt",
+          "graceUntil"
+        ],
+        "type": "object",
+        "properties": {
+          "licenseId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "replacedLicenseId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "edition": {
+            "type": "string"
+          },
+          "customerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "customerName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/LicenseStatus"
+          },
+          "expiresAt": {
+            "format": "date-time"
+          },
+          "graceUntil": {
+            "format": "date-time"
+          }
+        }
+      },
+      "LicenseLimit": {
+        "enum": [
+          "OidcProviders",
+          "EdgeAgentPlatforms",
+          "SecretProviders",
+          "CustomRoles",
+          "ActiveUsers",
+          "Platforms"
+        ]
+      },
+      "LicenseLimitView": {
+        "required": [
+          "limit",
+          "current",
+          "maximum",
+          "overQuota"
+        ],
+        "type": "object",
+        "properties": {
+          "limit": {
+            "$ref": "#/components/schemas/LicenseLimit"
+          },
+          "current": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maximum": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "overQuota": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LicenseRequestView": {
+        "required": [
+          "product",
+          "instanceId",
+          "coreVersion",
+          "generatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "product": {
+            "type": "string"
+          },
+          "instanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "coreVersion": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "LicenseStatus": {
+        "enum": [
+          "Community",
+          "Valid",
+          "GracePeriod",
+          "NotYetValid",
+          "Expired",
+          "Invalid",
+          "InstanceMismatch",
+          "UnsupportedSchema",
+          "UnknownSigningKey"
+        ]
+      },
+      "LicenseView": {
+        "required": [
+          "status",
+          "edition",
+          "instanceId",
+          "licenseId",
+          "replacedLicenseId",
+          "customerId",
+          "customerName",
+          "fingerprint",
+          "issuedAt",
+          "notBefore",
+          "expiresAt",
+          "graceUntil",
+          "limits",
+          "warnings"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/LicenseStatus"
+          },
+          "edition": {
+            "type": "string"
+          },
+          "instanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "licenseId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "replacedLicenseId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "customerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "customerName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "issuedAt": {
+            "format": "date-time"
+          },
+          "notBefore": {
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "format": "date-time"
+          },
+          "graceUntil": {
+            "format": "date-time"
+          },
+          "limits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LicenseLimitView"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "LifeCycleSpec": {
         "required": [
           "stopTimeout",
@@ -32895,7 +33659,8 @@
           "UserActor",
           "Team",
           "Role",
-          "ResourceBinding"
+          "ResourceBinding",
+          "License"
         ]
       },
       "MountPointInfo": {
@@ -36032,7 +36797,8 @@
           "Role",
           "Binding",
           "Tag",
-          "AutomationAction"
+          "AutomationAction",
+          "License"
         ]
       },
       "RestartPolicy": {
@@ -39072,6 +39838,9 @@
     },
     {
       "name": "Profile"
+    },
+    {
+      "name": "License"
     },
     {
       "name": "Actors"

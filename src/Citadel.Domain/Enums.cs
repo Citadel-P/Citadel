@@ -197,6 +197,29 @@ public enum PlatformConnectorType
     EdgeAgent
 }
 
+public enum LicenseLimit
+{
+    OidcProviders,
+    EdgeAgentPlatforms,
+    SecretProviders,
+    CustomRoles,
+    ActiveUsers,
+    Platforms
+}
+
+public enum LicenseStatus
+{
+    Community,
+    Valid,
+    GracePeriod,
+    NotYetValid,
+    Expired,
+    Invalid,
+    InstanceMismatch,
+    UnsupportedSchema,
+    UnknownSigningKey
+}
+
 public enum PruneResource
 {
     All,
@@ -551,7 +574,8 @@ public enum ActivityResourceType
     GitRepository,
     OidcProvider,
     AutomationAction,
-    User
+    User,
+    License
 }
 
 public enum ActivityEventType
@@ -650,6 +674,15 @@ public enum ActivityEventType
     UserSessionRevoked,
     UserOtherSessionsRevoked,
     #endregion
+
+    #region License Events
+    LicenseInstalled,
+    LicenseReplaced,
+    LicenseRemoved,
+    LicenseEnteredGracePeriod,
+    LicenseExpired,
+    LicenseValidationFailed,
+    #endregion
 }
 
 public enum UserDateTimeFormat
@@ -704,6 +737,11 @@ public enum AlertType
     #region Automation Alerts
     AutomationActionRunFailed,
     #endregion
+
+    #region License Alerts
+    LicenseEnteredGracePeriod,
+    LicenseExpired,
+    #endregion
 }
 
 public enum AlertSeverity
@@ -732,7 +770,8 @@ public enum AlertResourceType
     Stack,
     GitRepository,
     Webhook,
-    AutomationAction
+    AutomationAction,
+    License
 }
 
 public enum AlertEventStatus
@@ -836,6 +875,7 @@ public enum LookupResourceType
     Team,
     Role,
     ResourceBinding,
+    License,
 }
 
 public enum StackApplyEventType

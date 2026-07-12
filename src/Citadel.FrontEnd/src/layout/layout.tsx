@@ -7,6 +7,7 @@ import { Sidebar } from './sidebar/sidebar';
 import Breadcrumb from './breadcrumb';
 import { useRead } from '@/lib/hooks';
 import { toThemeMode } from '@/lib/theme-preferences';
+import { LicenseReminder } from './license-reminder';
 
 const LayoutPage = () => {
   const breadcrumbRef = useRef<HTMLDivElement>(null);
@@ -53,6 +54,7 @@ const LayoutPage = () => {
           <span ref={breadcrumbRef}>
             <Breadcrumb isSticky={isSticky} />
           </span>
+          <LicenseReminder />
           <Outlet />
         </div>
       </main>

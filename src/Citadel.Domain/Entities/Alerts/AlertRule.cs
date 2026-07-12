@@ -374,6 +374,8 @@ public static class AlertTypeMetadata
         { AlertType.WebhookGitRepoSyncFailed, AlertResourceType.Webhook },
         { AlertType.WebhookStackGitDeployFailed, AlertResourceType.Webhook },
         { AlertType.AutomationActionRunFailed, AlertResourceType.AutomationAction },
+        { AlertType.LicenseEnteredGracePeriod, AlertResourceType.License },
+        { AlertType.LicenseExpired, AlertResourceType.License },
     };
 
     private static readonly HashSet<AlertType> ThresholdTypes =
@@ -416,6 +418,8 @@ public static class AlertTypeMetadata
             (AlertType.WebhookGitRepoSyncFailed, WebhookGitRepoSyncFailedAlertInfo) => true,
             (AlertType.WebhookStackGitDeployFailed, WebhookStackGitDeployFailedAlertInfo) => true,
             (AlertType.AutomationActionRunFailed, AutomationActionRunFailedAlertInfo) => true,
+            (AlertType.LicenseEnteredGracePeriod, LicenseEnteredGracePeriodAlertInfo) => true,
+            (AlertType.LicenseExpired, LicenseExpiredAlertInfo) => true,
             _ => false
         };
 }

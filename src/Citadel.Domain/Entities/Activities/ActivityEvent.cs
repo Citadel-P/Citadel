@@ -149,6 +149,14 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.UserOtherSessionsRevoked
                 => ActivityResourceType.User,
 
+            ActivityEventType.LicenseInstalled
+            or ActivityEventType.LicenseReplaced
+            or ActivityEventType.LicenseRemoved
+            or ActivityEventType.LicenseEnteredGracePeriod
+            or ActivityEventType.LicenseExpired
+            or ActivityEventType.LicenseValidationFailed
+                => ActivityResourceType.License,
+
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
         };
@@ -277,6 +285,13 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.UserPasswordChanged, UserPasswordChanged) => true,
             (ActivityEventType.UserSessionRevoked, UserSessionRevoked) => true,
             (ActivityEventType.UserOtherSessionsRevoked, UserOtherSessionsRevoked) => true,
+
+            (ActivityEventType.LicenseInstalled, LicenseInstalled) => true,
+            (ActivityEventType.LicenseReplaced, LicenseReplaced) => true,
+            (ActivityEventType.LicenseRemoved, LicenseRemoved) => true,
+            (ActivityEventType.LicenseEnteredGracePeriod, LicenseEnteredGracePeriod) => true,
+            (ActivityEventType.LicenseExpired, LicenseExpired) => true,
+            (ActivityEventType.LicenseValidationFailed, LicenseValidationFailed) => true,
 
             _ => false
         };

@@ -10,6 +10,7 @@ using Domain.Entities.ResourceBindings;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
+using Domain.Entities.Licensing;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
@@ -213,6 +214,13 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(UserPasswordChanged))]
 [JsonSerializable(typeof(UserSessionRevoked))]
 [JsonSerializable(typeof(UserOtherSessionsRevoked))]
+[JsonSerializable(typeof(LicenseActivitySnapshot))]
+[JsonSerializable(typeof(LicenseInstalled))]
+[JsonSerializable(typeof(LicenseReplaced))]
+[JsonSerializable(typeof(LicenseRemoved))]
+[JsonSerializable(typeof(LicenseEnteredGracePeriod))]
+[JsonSerializable(typeof(LicenseExpired))]
+[JsonSerializable(typeof(LicenseValidationFailed))]
 
 public partial class EventInfoJsonContext : JsonSerializerContext
 {
@@ -228,6 +236,22 @@ public partial class EventInfoJsonContext : JsonSerializerContext
     })]
 [JsonSerializable(typeof(PatchUserPreferencesModel))]
 public partial class ProfileJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<LicenseLimit>),
+        typeof(JsonStringEnumConverter<LicenseStatus>)
+    })]
+[JsonSerializable(typeof(LicensePayload))]
+[JsonSerializable(typeof(LicenseProtectedHeader))]
+[JsonSerializable(typeof(LicenseCustomer))]
+[JsonSerializable(typeof(IReadOnlyDictionary<string, int>))]
+public partial class LicenseJsonContext : JsonSerializerContext
 {
 }
 
@@ -259,6 +283,8 @@ public partial class ProfileJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(WebhookGitRepoSyncFailedAlertInfo))]
 [JsonSerializable(typeof(WebhookStackGitDeployFailedAlertInfo))]
 [JsonSerializable(typeof(AutomationActionRunFailedAlertInfo))]
+[JsonSerializable(typeof(LicenseEnteredGracePeriodAlertInfo))]
+[JsonSerializable(typeof(LicenseExpiredAlertInfo))]
 public partial class AlertEventJsonContext : JsonSerializerContext
 {
 }

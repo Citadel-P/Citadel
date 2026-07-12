@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Application.Features.Identity.Auth.Models;
 using Application.Services;
 using Application.Services.Identity;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
@@ -39,6 +40,7 @@ internal sealed class CompleteOidcLoginHandler(
     IJwtService jwtService,
     IRoleCache roleCache,
     IActorScopeEvictor actorScopeEvictor,
+    ILicenseQuotaService licenseQuotaService,
     IRequestSessionMetadataAccessor requestSessionMetadataAccessor,
     IRefreshTokenCookieService refreshTokenCookieService)
     : ICommandHandler<CompleteOidcLogin, Result<OidcLoginCompleteResult>>
@@ -136,7 +138,9 @@ internal sealed class CompleteOidcLoginHandler(
             if (string.IsNullOrWhiteSpace(identity.Email))
                 return Result.Failure<UserAuthInfo>(new BadRequestError("OIDC user provisioning requires an email claim."));
 
-            userAuthInfo = await ProvisionUserAsync(provider, identity, cancellationToken);
+            var provisionResult = await ProvisionUserAsync(provider, identity, cancellationToken);
+            if (!provisionResult.IsSuccess(out userAuthInfo))
+                return Result.Failure<UserAuthInfo>(provisionResult.Errors);
         }
 
         await unitOfWork.OidcExternalLogins.AddAsync(
@@ -153,11 +157,18 @@ internal sealed class CompleteOidcLoginHandler(
         return Result.Success(userAuthInfo);
     }
 
-    private async Task<UserAuthInfo> ProvisionUserAsync(
+    private async Task<Result<UserAuthInfo>> ProvisionUserAsync(
         Domain.Entities.Oidc.OidcProvider provider,
         OidcTokenIdentity identity,
         CancellationToken cancellationToken)
     {
+        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
+            new Dictionary<LicenseLimit, int> { [LicenseLimit.ActiveUsers] = 1 },
+            unitOfWork,
+            cancellationToken);
+        if (!quotaResult.IsSuccess())
+            return Result.Failure<UserAuthInfo>(quotaResult.Errors);
+
         var name = await CreateUniqueUserNameAsync(identity, cancellationToken);
         var actor = Actor.Create(ActorType.User, new ActorMetadata(name));
         var password = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
@@ -172,8 +183,9 @@ internal sealed class CompleteOidcLoginHandler(
             await actorScopeEvictor.EvictPermissionsForActorAsync(actor.Id, cancellationToken);
         }
 
-        return await unitOfWork.Users.GetUserAuthInfoByIdAsync(user.Id, cancellationToken)
-            ?? new UserAuthInfo(user.Id, user.ActorId, user.Name, user.Email, null, []);
+        return Result.Success(
+            await unitOfWork.Users.GetUserAuthInfoByIdAsync(user.Id, cancellationToken)
+            ?? new UserAuthInfo(user.Id, user.ActorId, user.Name, user.Email, null, []));
     }
 
     private async Task<string> CreateUniqueUserNameAsync(OidcTokenIdentity identity, CancellationToken cancellationToken)

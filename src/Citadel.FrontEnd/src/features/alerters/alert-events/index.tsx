@@ -65,6 +65,7 @@ function SearchSection() {
       [AlertResourceType.Stack]: CitadelIcons.Stack,
       [AlertResourceType.Webhook]: CitadelIcons.Webhook,
       [AlertResourceType.AutomationAction]: CitadelIcons.AutomationAction,
+      [AlertResourceType.License]: CitadelIcons.License,
     };
 
     return Object.values(AlertResourceType).map((value) => ({
@@ -127,16 +128,18 @@ function SearchSection() {
         allIcon={SquareStack}
         className={filterFieldClassName}
       />
-      {query.resourceType !== 'All' && query.resourceType !== AlertResourceType.Webhook && (
-        <ResourceSelectorField
-          sourceType={LookupResourceType.Alert}
-          targetType={LookupResourceType[query.resourceType]}
-          onSelect={handleResourceChange as any}
-          selected={query.resourceId}
-          placeholder={`Select ${query.resourceType}`}
-          className={filterFieldClassName}
-        />
-      )}
+      {query.resourceType !== 'All' &&
+        query.resourceType !== AlertResourceType.Webhook &&
+        query.resourceType !== AlertResourceType.License && (
+          <ResourceSelectorField
+            sourceType={LookupResourceType.Alert}
+            targetType={LookupResourceType[query.resourceType]}
+            onSelect={handleResourceChange as any}
+            selected={query.resourceId}
+            placeholder={`Select ${query.resourceType}`}
+            className={filterFieldClassName}
+          />
+        )}
       <SelectField
         value={query.alertType}
         options={alertTypeOptions}
@@ -152,6 +155,7 @@ function SearchSection() {
 function getAlertTypeResourceType(type: AlertType): AlertResourceType {
   if (type.startsWith('AutomationAction')) return AlertResourceType.AutomationAction;
   if (type.startsWith('Webhook')) return AlertResourceType.Webhook;
+  if (type.startsWith('License')) return AlertResourceType.License;
   if (type.startsWith('Deployment')) return AlertResourceType.Deployment;
   if (type.startsWith('Stack')) return AlertResourceType.Stack;
   return AlertResourceType.Platform;
