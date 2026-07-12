@@ -37,3 +37,23 @@ internal sealed record InternalSecretValueDto(
     string EncryptedValue,
     DateTime CreatedAt,
     DateTime UpdatedAt);
+
+internal sealed record SecretResolutionMaterialDto(
+    Guid Id,
+    string Name,
+    string ProviderType,
+    Guid? ProviderId,
+    string? ExternalPath,
+    string? ExternalKey,
+    int? ExternalVersion,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    string? InternalEncryptedValue,
+    DateTime? InternalValueCreatedAt,
+    DateTime? InternalValueUpdatedAt,
+    Guid? ExternalProviderId,
+    string? ExternalProviderName,
+    string? ExternalProviderType,
+    string? ExternalProviderConfiguration,
+    DateTime? ExternalProviderCreatedAt,
+    DateTime? ExternalProviderUpdatedAt);

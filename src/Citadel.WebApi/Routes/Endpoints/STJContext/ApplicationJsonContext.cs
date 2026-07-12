@@ -17,6 +17,7 @@ using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
+using Domain.Entities.Backups;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Licensing;
@@ -28,6 +29,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Automation;
+using WebApi.Routes.Endpoints.Resources.Backups;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;
@@ -80,7 +82,18 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<UserTheme>),
         typeof(JsonStringEnumConverter<CurrentProfileAuthenticationType>),
         typeof(JsonStringEnumConverter<LicenseLimit>),
-        typeof(JsonStringEnumConverter<LicenseStatus>)
+        typeof(JsonStringEnumConverter<LicenseStatus>),
+        typeof(JsonStringEnumConverter<BackupSourceType>),
+        typeof(JsonStringEnumConverter<VolumeBackupConsistency>),
+        typeof(JsonStringEnumConverter<BackupRepositoryType>),
+        typeof(JsonStringEnumConverter<BackupExecutionLocation>),
+        typeof(JsonStringEnumConverter<S3BucketLookup>),
+        typeof(JsonStringEnumConverter<BackupRepositoryStatus>),
+        typeof(JsonStringEnumConverter<BackupRepositoryValidationStatus>),
+        typeof(JsonStringEnumConverter<BackupRunTrigger>),
+        typeof(JsonStringEnumConverter<BackupRunStatus>),
+        typeof(JsonStringEnumConverter<BackupSnapshotAvailability>),
+        typeof(JsonStringEnumConverter<BackupRestoreStatus>)
     })]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Guid[]))]
@@ -165,6 +178,37 @@ namespace Application.Models;
 [JsonSerializable(typeof(AutomationActionRunView))]
 [JsonSerializable(typeof(AutomationActionRunsView))]
 [JsonSerializable(typeof(AutomationActionRunLogsView))]
+[JsonSerializable(typeof(BackupSourceSpec))]
+[JsonSerializable(typeof(DockerVolumeBackupSource))]
+[JsonSerializable(typeof(CitadelSystemBackupSource))]
+[JsonSerializable(typeof(BackupRepositorySpec))]
+[JsonSerializable(typeof(FileSystemBackupRepositorySpec))]
+[JsonSerializable(typeof(S3CompatibleBackupRepositorySpec))]
+[JsonSerializable(typeof(BackupExecutionContext))]
+[JsonSerializable(typeof(BackupRunWarning))]
+[JsonSerializable(typeof(IReadOnlyList<BackupRunWarning>))]
+[JsonSerializable(typeof(BackupAffectedContainer))]
+[JsonSerializable(typeof(IReadOnlyList<BackupAffectedContainer>))]
+[JsonSerializable(typeof(BackupRepositoryInput))]
+[JsonSerializable(typeof(UpdateBackupRepositoryInput))]
+[JsonSerializable(typeof(UpdateBackupRepositoryInputPatchDocument))]
+[JsonSerializable(typeof(ValidateBackupRepositoryInput))]
+[JsonSerializable(typeof(BackupRepositoryView))]
+[JsonSerializable(typeof(BackupRepositoriesView))]
+[JsonSerializable(typeof(BackupRepositoryValidationView))]
+[JsonSerializable(typeof(BackupPolicyInput))]
+[JsonSerializable(typeof(UpdateBackupPolicyInput))]
+[JsonSerializable(typeof(UpdateBackupPolicyInputPatchDocument))]
+[JsonSerializable(typeof(QueueBackupRunInput))]
+[JsonSerializable(typeof(RestoreVolumeInput))]
+[JsonSerializable(typeof(BackupPolicyView))]
+[JsonSerializable(typeof(BackupPoliciesView))]
+[JsonSerializable(typeof(BackupRunView))]
+[JsonSerializable(typeof(BackupRunsView))]
+[JsonSerializable(typeof(BackupRestoreRunView))]
+[JsonSerializable(typeof(BackupRestoreRunsView))]
+[JsonSerializable(typeof(BackupLogsView))]
+[JsonSerializable(typeof(BackupEventsView))]
 [JsonSerializable(typeof(PlatformInput))]
 [JsonSerializable(typeof(CreatePlatformInput))]
 [JsonSerializable(typeof(PrunePlatformInput))]

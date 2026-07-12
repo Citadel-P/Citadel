@@ -35,6 +35,12 @@ export enum VolumeScope {
   Multi = "Multi",
 }
 
+/** @default "Live" */
+export enum VolumeBackupConsistency {
+  Live = "Live",
+  StopAttachedContainers = "StopAttachedContainers",
+}
+
 export enum UserTheme {
   System = "System",
   Light = "Light",
@@ -120,6 +126,7 @@ export enum SpecificPermission {
   Terminal = "Terminal",
   ResourceBindings = "ResourceBindings",
   Releases = "Releases",
+  Restore = "Restore",
 }
 
 export enum SecretProviderType {
@@ -130,6 +137,12 @@ export enum SecretProviderType {
 export enum ScheduleType {
   Daily = "Daily",
   Weekly = "Weekly",
+}
+
+export enum S3BucketLookup {
+  Auto = "Auto",
+  Path = "Path",
+  Dns = "Dns",
 }
 
 export enum RoleType {
@@ -153,6 +166,8 @@ export enum ResourceType {
   Tag = "Tag",
   AutomationAction = "AutomationAction",
   License = "License",
+  BackupRepository = "BackupRepository",
+  BackupPolicy = "BackupPolicy",
 }
 
 export enum ResourceControlState {
@@ -239,6 +254,8 @@ export enum LookupResourceType {
   Role = "Role",
   ResourceBinding = "ResourceBinding",
   License = "License",
+  BackupRepository = "BackupRepository",
+  BackupPolicy = "BackupPolicy",
 }
 
 export enum LicenseStatus {
@@ -335,6 +352,77 @@ export enum ContainerRestartPolicy {
   Always = "Always",
   OnFailure = "OnFailure",
   UnlessStopped = "UnlessStopped",
+}
+
+export enum BackupSourceType {
+  DockerVolume = "DockerVolume",
+  CitadelSystem = "CitadelSystem",
+}
+
+export enum BackupSnapshotAvailability {
+  Pending = "Pending",
+  Available = "Available",
+  Expired = "Expired",
+  Missing = "Missing",
+  NotCreated = "NotCreated",
+}
+
+export enum BackupRunTrigger {
+  Manual = "Manual",
+  Schedule = "Schedule",
+  Automation = "Automation",
+}
+
+export enum BackupRunStatus {
+  Queued = "Queued",
+  Preparing = "Preparing",
+  Running = "Running",
+  ApplyingRetention = "ApplyingRetention",
+  Succeeded = "Succeeded",
+  SucceededWithWarnings = "SucceededWithWarnings",
+  Failed = "Failed",
+  TimedOut = "TimedOut",
+  Cancelled = "Cancelled",
+  Rejected = "Rejected",
+  Interrupted = "Interrupted",
+}
+
+export enum BackupRestoreStatus {
+  Queued = "Queued",
+  Preparing = "Preparing",
+  Running = "Running",
+  Succeeded = "Succeeded",
+  SucceededWithWarnings = "SucceededWithWarnings",
+  Failed = "Failed",
+  TimedOut = "TimedOut",
+  Cancelled = "Cancelled",
+  Rejected = "Rejected",
+  Interrupted = "Interrupted",
+}
+
+export enum BackupRepositoryValidationStatus {
+  Unknown = "Unknown",
+  Ready = "Ready",
+  Uninitialized = "Uninitialized",
+  Unavailable = "Unavailable",
+  InvalidPassword = "InvalidPassword",
+  InvalidConfiguration = "InvalidConfiguration",
+}
+
+export enum BackupRepositoryType {
+  FileSystem = "FileSystem",
+  S3Compatible = "S3Compatible",
+}
+
+export enum BackupRepositoryStatus {
+  Unknown = "Unknown",
+  Uninitialized = "Uninitialized",
+  Ready = "Ready",
+}
+
+export enum BackupExecutionLocation {
+  Core = "Core",
+  Platform = "Platform",
 }
 
 export enum AutoUpdateStatus {
@@ -661,6 +749,30 @@ export type DeploymentImageInfo = BaseDeploymentImageInfo &
     | BaseDeploymentImageInfoTypeMapping<
         "External",
         DeploymentImageInfoExternalImage
+      >
+  );
+
+export type BackupSourceSpec = BaseBackupSourceSpec &
+  (
+    | BaseBackupSourceSpecTypeMapping<
+        "DockerVolume",
+        BackupSourceSpecDockerVolumeBackupSource
+      >
+    | BaseBackupSourceSpecTypeMapping<
+        "CitadelSystem",
+        BackupSourceSpecCitadelSystemBackupSource
+      >
+  );
+
+export type BackupRepositorySpec = BaseBackupRepositorySpec &
+  (
+    | BaseBackupRepositorySpecTypeMapping<
+        "FileSystem",
+        BackupRepositorySpecFileSystemBackupRepositorySpec
+      >
+    | BaseBackupRepositorySpecTypeMapping<
+        "S3Compatible",
+        BackupRepositorySpecS3CompatibleBackupRepositorySpec
       >
   );
 
@@ -2323,6 +2435,306 @@ export interface AutomationWebhookConfig {
   authScheme?: WebhookAuthScheme;
   secret?: null | string;
   branchFilter?: null | string;
+}
+
+export interface BackupAffectedContainer {
+  dockerContainerId: string;
+  name: string;
+  originalState: ContainerStateStatus;
+  stopAttempted: boolean;
+  restartAttempted: boolean;
+  restartSucceeded: boolean;
+}
+
+export interface BackupEventsView {
+  /** @format uuid */
+  runId: string;
+  events: string[];
+}
+
+export interface BackupLogsView {
+  /** @format uuid */
+  runId: string;
+  logs: string;
+}
+
+export interface BackupPoliciesView {
+  policies: BackupPolicyView[];
+  capabilities: ResourceCapabilities;
+}
+
+export interface BackupPolicyInput {
+  name: string;
+  description: null | string;
+  source: BackupSourceSpec;
+  /** @format uuid */
+  backupRepositoryId: string;
+  /** @default true */
+  enabled?: boolean;
+  cron?: null | string;
+  timeZone?: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  keepLastSuccessful?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds?: null | number | string;
+  /** @default true */
+  alertOnFailure?: boolean;
+  /** @format uuid */
+  runAsActorId?: null | string;
+  tagIds?: null | string[];
+}
+
+export interface BackupPolicyView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  normalizedName: string;
+  description: null | string;
+  source: BackupSourceSpec;
+  /** @format uuid */
+  backupRepositoryId: string;
+  enabled: boolean;
+  cron: null | string;
+  timeZone: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  keepLastSuccessful: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: number | string;
+  alertOnFailure: boolean;
+  /** @format uuid */
+  runAsActorId: string;
+  controlState: ResourceControlState;
+  /** @format uuid */
+  currentRunId: null | string;
+  /** @format date-time */
+  lastScheduledRunAt: any;
+  /** @format date-time */
+  firstSuccessfulRunAt: any;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+  /** @format date-time */
+  archivedAt: any;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  rowVersion: number | string;
+  tags: TagSummaryView[];
+  capabilities?: null | ResourceCapabilities;
+}
+
+export interface BackupRepositoriesView {
+  repositories: BackupRepositoryView[];
+  capabilities: ResourceCapabilities;
+}
+
+export interface BackupRepositoryInput {
+  name: string;
+  description: null | string;
+  spec: BackupRepositorySpec;
+  /** @format uuid */
+  passwordSecretId: string;
+}
+
+export interface BackupRepositorySpecFileSystemBackupRepositorySpec {
+  $type?: "FileSystem";
+  location: BackupExecutionLocation;
+  /** @format uuid */
+  platformId: null | string;
+  path: string;
+  type?: BackupRepositoryType;
+}
+
+export interface BackupRepositorySpecS3CompatibleBackupRepositorySpec {
+  $type?: "S3Compatible";
+  /** @format uri */
+  endpoint: string;
+  bucket: string;
+  prefix: null | string;
+  region: null | string;
+  bucketLookup: S3BucketLookup;
+  /** @format uuid */
+  accessKeySecretId: string;
+  /** @format uuid */
+  secretKeySecretId: string;
+  /** @format uuid */
+  sessionTokenSecretId: null | string;
+  /** @default false */
+  allowInsecureHttp?: boolean;
+  type?: BackupRepositoryType;
+}
+
+export interface BackupRepositoryValidationView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  backupRepositoryId: string;
+  location: BackupExecutionLocation;
+  /** @format uuid */
+  platformId: null | string;
+  status: BackupRepositoryValidationStatus;
+  /** @format date-time */
+  lastValidatedAt: any;
+  lastErrorCode: null | string;
+  lastErrorMessage: null | string;
+}
+
+export interface BackupRepositoryView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  normalizedName: string;
+  description: null | string;
+  type: BackupRepositoryType;
+  spec: BackupRepositorySpec;
+  /** @format uuid */
+  passwordSecretId: string;
+  status: BackupRepositoryStatus;
+  /** @format date-time */
+  lastPrunedAt: any;
+  /** @format date-time */
+  lastCheckedAt: any;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+  /** @format date-time */
+  archivedAt: any;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  rowVersion: number | string;
+  capabilities?: null | ResourceCapabilities;
+}
+
+export interface BackupRestoreRunView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  backupRunId: string;
+  /** @format uuid */
+  backupRepositoryId: string;
+  status: BackupRestoreStatus;
+  /** @format uuid */
+  targetPlatformId: string;
+  targetVolumeName: string;
+  overwriteExisting: boolean;
+  targetVolumeCreatedByCitadel: boolean;
+  affectedContainers: BackupAffectedContainer[];
+  warnings: BackupRunWarning[];
+  /** @format date-time */
+  queuedAt: any;
+  /** @format date-time */
+  startedAt: any;
+  /** @format date-time */
+  completedAt: any;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  errorCode: null | string;
+  errorMessage: null | string;
+  /** @format uuid */
+  triggeredByActorId: string;
+}
+
+export interface BackupRestoreRunsView {
+  runs: BackupRestoreRunView[];
+}
+
+export interface BackupRunView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  backupPolicyId: string;
+  /** @format uuid */
+  backupRepositoryId: string;
+  policyNameSnapshot: string;
+  sourceSnapshot: BackupSourceSpec;
+  repositoryTypeSnapshot: BackupRepositoryType;
+  trigger: BackupRunTrigger;
+  /** @format uuid */
+  triggerSourceId: null | string;
+  status: BackupRunStatus;
+  resticSnapshotId: null | string;
+  parentSnapshotId: null | string;
+  snapshotAvailability: BackupSnapshotAvailability;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  filesProcessed: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  bytesProcessed: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  bytesAdded: null | number | string;
+  warnings: BackupRunWarning[];
+  /** @format date-time */
+  queuedAt: any;
+  /** @format date-time */
+  startedAt: any;
+  /** @format date-time */
+  completedAt: any;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  errorCode: null | string;
+  errorMessage: null | string;
+  /** @format uuid */
+  triggeredByActorId: string;
+}
+
+export interface BackupRunWarning {
+  code: string;
+  message: string;
+}
+
+export interface BackupRunsView {
+  runs: BackupRunView[];
+}
+
+export interface BackupSourceSpecCitadelSystemBackupSource {
+  $type?: "CitadelSystem";
+  type?: BackupSourceType;
+  stableKey?: null | string;
+}
+
+export interface BackupSourceSpecDockerVolumeBackupSource {
+  $type?: "DockerVolume";
+  /** @format uuid */
+  platformId: string;
+  volumeName: string;
+  consistency?: VolumeBackupConsistency;
+  type?: BackupSourceType;
+  stableKey?: null | string;
 }
 
 export interface BindOptions {
@@ -4421,6 +4833,12 @@ export interface PullImageStreamItem {
   error?: null | ImagePullError;
 }
 
+export interface QueueBackupRunInput {
+  trigger?: BackupRunTrigger;
+  /** @format uuid */
+  triggerSourceId?: null | string;
+}
+
 export interface RecreateStackOnNewCommitState {
   currentCommitSha: string;
   remoteCommitSha: null | string;
@@ -4661,6 +5079,13 @@ export interface RestartPolicy {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   maximumRetryCount: null | number | string;
+}
+
+export interface RestoreVolumeInput {
+  /** @format uuid */
+  targetPlatformId: string;
+  targetVolumeName: string;
+  overwriteExisting: boolean;
 }
 
 export interface RevokeOtherProfileSessionsView {
@@ -5237,6 +5662,34 @@ export interface UpdateAutomationActionInput {
   runAsActorId?: null | string;
 }
 
+export interface UpdateBackupPolicyInput {
+  description?: null | string;
+  source?: null | BackupSourceSpec;
+  /** @format uuid */
+  backupRepositoryId?: null | string;
+  enabled?: null | boolean;
+  cron?: null | string;
+  timeZone?: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  keepLastSuccessful?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds?: null | number | string;
+  alertOnFailure?: null | boolean;
+  /** @format uuid */
+  runAsActorId?: null | string;
+}
+
+export interface UpdateBackupRepositoryInput {
+  description?: null | string;
+  spec?: null | BackupRepositorySpec;
+}
+
 export interface UpdateCurrentProfileInput {
   displayName: string;
 }
@@ -5350,6 +5803,12 @@ export interface UserView {
 export interface UsersView {
   pagedResult: PagedResultViewOfUserView;
   capabilities: ResourceCapabilities;
+}
+
+export interface ValidateBackupRepositoryInput {
+  location: BackupExecutionLocation;
+  /** @format uuid */
+  platformId: null | string;
 }
 
 export interface VerifyAlertChannelInput {
@@ -5480,6 +5939,18 @@ type BaseGitAuthConfigurationTypeMapping<Key, Type> = {
 type BaseDeploymentImageInfo = object;
 
 type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseBackupSourceSpec = object;
+
+type BaseBackupSourceSpecTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseBackupRepositorySpec = object;
+
+type BaseBackupRepositorySpecTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -11938,6 +12409,744 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRepositories
+     * @name ListBackupRepositories
+     * @summary List backup repositories
+     * @request GET:/api/v1/backupRepositories
+     * @secure
+     * @response `200` `BackupRepositoriesView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listBackupRepositories: (params: RequestParams = {}) =>
+      this.request<BackupRepositoriesView, ProblemDetails>({
+        path: `/api/v1/backupRepositories`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRepositories
+     * @name CreateBackupRepository
+     * @summary Create backup repository
+     * @request POST:/api/v1/backupRepositories
+     * @secure
+     * @response `200` `BackupRepositoryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createBackupRepository: (
+      data: BackupRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BackupRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupRepositories`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRepositories
+     * @name GetBackupRepository
+     * @summary Get backup repository
+     * @request GET:/api/v1/backupRepositories/{id}
+     * @secure
+     * @response `200` `BackupRepositoryView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBackupRepository: (id: string, params: RequestParams = {}) =>
+      this.request<BackupRepositoryView, ProblemDetails>({
+        path: `/api/v1/backupRepositories/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRepositories
+     * @name UpdateBackupRepository
+     * @summary Update backup repository
+     * @request PATCH:/api/v1/backupRepositories/{id}
+     * @secure
+     * @response `200` `BackupRepositoryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateBackupRepository: (
+      id: string,
+      data: UpdateBackupRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BackupRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupRepositories/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRepositories
+     * @name ArchiveBackupRepository
+     * @summary Archive backup repository
+     * @request DELETE:/api/v1/backupRepositories/{id}
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    archiveBackupRepository: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/backupRepositories/${id}`,
+        method: "DELETE",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRepositories
+     * @name ValidateBackupRepository
+     * @summary Validate backup repository
+     * @request POST:/api/v1/backupRepositories/{id}/validate
+     * @secure
+     * @response `200` `BackupRepositoryValidationView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    validateBackupRepository: (
+      id: string,
+      data: ValidateBackupRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BackupRepositoryValidationView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupRepositories/${id}/validate`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRepositories
+     * @name InitializeBackupRepository
+     * @summary Initialize backup repository
+     * @request POST:/api/v1/backupRepositories/{id}/initialize
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    initializeBackupRepository: (
+      id: string,
+      data: ValidateBackupRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/backupRepositories/${id}/initialize`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRepositories
+     * @name CheckBackupRepository
+     * @summary Check backup repository
+     * @request POST:/api/v1/backupRepositories/{id}/check
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    checkBackupRepository: (
+      id: string,
+      data: ValidateBackupRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/backupRepositories/${id}/check`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRepositories
+     * @name PruneBackupRepository
+     * @summary Prune backup repository
+     * @request POST:/api/v1/backupRepositories/{id}/prune
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    pruneBackupRepository: (
+      id: string,
+      data: ValidateBackupRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/backupRepositories/${id}/prune`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name ListBackupPolicies
+     * @summary List backup policies
+     * @request GET:/api/v1/backupPolicies
+     * @secure
+     * @response `200` `BackupPoliciesView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listBackupPolicies: (
+      query?: {
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<BackupPoliciesView, ProblemDetails>({
+        path: `/api/v1/backupPolicies`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name CreateBackupPolicy
+     * @summary Create backup policy
+     * @request POST:/api/v1/backupPolicies
+     * @secure
+     * @response `200` `BackupPolicyView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createBackupPolicy: (data: BackupPolicyInput, params: RequestParams = {}) =>
+      this.request<
+        BackupPolicyView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupPolicies`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name GetBackupPolicy
+     * @summary Get backup policy
+     * @request GET:/api/v1/backupPolicies/{id}
+     * @secure
+     * @response `200` `BackupPolicyView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBackupPolicy: (id: string, params: RequestParams = {}) =>
+      this.request<BackupPolicyView, ProblemDetails>({
+        path: `/api/v1/backupPolicies/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name UpdateBackupPolicy
+     * @summary Update backup policy
+     * @request PATCH:/api/v1/backupPolicies/{id}
+     * @secure
+     * @response `200` `BackupPolicyView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateBackupPolicy: (
+      id: string,
+      data: UpdateBackupPolicyInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BackupPolicyView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupPolicies/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name ArchiveBackupPolicy
+     * @summary Archive backup policy
+     * @request DELETE:/api/v1/backupPolicies/{id}
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    archiveBackupPolicy: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/backupPolicies/${id}`,
+        method: "DELETE",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name QueueBackupRun
+     * @summary Queue backup policy run
+     * @request POST:/api/v1/backupPolicies/{id}/runs
+     * @secure
+     * @response `200` `BackupRunView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    queueBackupRun: (
+      id: string,
+      data: QueueBackupRunInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BackupRunView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupPolicies/${id}/runs`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRuns
+     * @name ListBackupRuns
+     * @summary List backup runs
+     * @request GET:/api/v1/backupRuns
+     * @secure
+     * @response `200` `BackupRunsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listBackupRuns: (
+      query?: {
+        /** @format uuid */
+        policyId?: string;
+        /**
+         * @format int32
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        limit?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<BackupRunsView, ProblemDetails>({
+        path: `/api/v1/backupRuns`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRuns
+     * @name GetBackupRun
+     * @summary Get backup run
+     * @request GET:/api/v1/backupRuns/{id}
+     * @secure
+     * @response `200` `BackupRunView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBackupRun: (id: string, params: RequestParams = {}) =>
+      this.request<BackupRunView, ProblemDetails>({
+        path: `/api/v1/backupRuns/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRuns
+     * @name GetBackupRunLogs
+     * @summary Get backup run logs
+     * @request GET:/api/v1/backupRuns/{id}/logs
+     * @secure
+     * @response `200` `BackupLogsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBackupRunLogs: (id: string, params: RequestParams = {}) =>
+      this.request<BackupLogsView, ProblemDetails>({
+        path: `/api/v1/backupRuns/${id}/logs`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRuns
+     * @name GetBackupRunEvents
+     * @summary Get backup run events
+     * @request GET:/api/v1/backupRuns/{id}/events
+     * @secure
+     * @response `200` `BackupEventsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBackupRunEvents: (id: string, params: RequestParams = {}) =>
+      this.request<BackupEventsView, ProblemDetails>({
+        path: `/api/v1/backupRuns/${id}/events`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRuns
+     * @name CancelBackupRun
+     * @summary Cancel backup run
+     * @request POST:/api/v1/backupRuns/{id}/cancel
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    cancelBackupRun: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/backupRuns/${id}/cancel`,
+        method: "POST",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRuns
+     * @name RestoreBackupVolume
+     * @summary Queue backup volume restore
+     * @request POST:/api/v1/backupRuns/{id}/restoreVolume
+     * @secure
+     * @response `200` `BackupRestoreRunView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    restoreBackupVolume: (
+      id: string,
+      data: RestoreVolumeInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BackupRestoreRunView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupRuns/${id}/restoreVolume`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRestoreRuns
+     * @name ListBackupRestoreRuns
+     * @summary List backup restore runs
+     * @request GET:/api/v1/backupRestoreRuns
+     * @secure
+     * @response `200` `BackupRestoreRunsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listBackupRestoreRuns: (
+      query?: {
+        /** @format uuid */
+        backupRunId?: string;
+        /**
+         * @format int32
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        limit?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<BackupRestoreRunsView, ProblemDetails>({
+        path: `/api/v1/backupRestoreRuns`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRestoreRuns
+     * @name GetBackupRestoreRun
+     * @summary Get backup restore run
+     * @request GET:/api/v1/backupRestoreRuns/{id}
+     * @secure
+     * @response `200` `BackupRestoreRunView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBackupRestoreRun: (id: string, params: RequestParams = {}) =>
+      this.request<BackupRestoreRunView, ProblemDetails>({
+        path: `/api/v1/backupRestoreRuns/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRestoreRuns
+     * @name GetBackupRestoreRunLogs
+     * @summary Get backup restore run logs
+     * @request GET:/api/v1/backupRestoreRuns/{id}/logs
+     * @secure
+     * @response `200` `BackupLogsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBackupRestoreRunLogs: (id: string, params: RequestParams = {}) =>
+      this.request<BackupLogsView, ProblemDetails>({
+        path: `/api/v1/backupRestoreRuns/${id}/logs`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRestoreRuns
+     * @name GetBackupRestoreRunEvents
+     * @summary Get backup restore run events
+     * @request GET:/api/v1/backupRestoreRuns/{id}/events
+     * @secure
+     * @response `200` `BackupEventsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBackupRestoreRunEvents: (id: string, params: RequestParams = {}) =>
+      this.request<BackupEventsView, ProblemDetails>({
+        path: `/api/v1/backupRestoreRuns/${id}/events`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRestoreRuns
+     * @name CancelBackupRestoreRun
+     * @summary Cancel backup restore run
+     * @request POST:/api/v1/backupRestoreRuns/{id}/cancel
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    cancelBackupRestoreRun: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/backupRestoreRuns/${id}/cancel`,
+        method: "POST",
+        secure: true,
         ...params,
       }),
 

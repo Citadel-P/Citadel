@@ -53,6 +53,14 @@ internal class UnitOfWork : IUnitOfWork
         OidcExternalLogins = new Lazy<IOidcExternalLoginRepository>(() => new OidcExternalLoginRepository(connection, GetTransaction));
         AutomationActions = new Lazy<IAutomationActionRepository>(() => new AutomationActionRepository(connection, GetTransaction));
         ActionRuns = new Lazy<IActionRunRepository>(() => new ActionRunRepository(connection, GetTransaction));
+        BackupRepositories = new Lazy<IBackupRepositoryRepository>(() => new BackupRepositoryRepository(connection, GetTransaction));
+        BackupRepositoryValidations = new Lazy<IBackupRepositoryValidationRepository>(() => new BackupRepositoryValidationRepository(connection, GetTransaction));
+        BackupPolicies = new Lazy<IBackupPolicyRepository>(() => new BackupPolicyRepository(connection, GetTransaction));
+        BackupRuns = new Lazy<IBackupRunRepository>(() => new BackupRunRepository(connection, GetTransaction));
+        BackupRunLogs = new Lazy<IBackupRunLogRepository>(() => new BackupRunLogRepository(connection, GetTransaction));
+        BackupRestoreRuns = new Lazy<IBackupRestoreRunRepository>(() => new BackupRestoreRunRepository(connection, GetTransaction));
+        BackupRepositoryLeases = new Lazy<IBackupRepositoryLeaseRepository>(() => new BackupRepositoryLeaseRepository(connection, GetTransaction));
+        BackupSourceLeases = new Lazy<IBackupSourceLeaseRepository>(() => new BackupSourceLeaseRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -81,6 +89,14 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IOidcExternalLoginRepository> OidcExternalLogins { get; }
     private Lazy<IAutomationActionRepository> AutomationActions { get; }
     private Lazy<IActionRunRepository> ActionRuns { get; }
+    private Lazy<IBackupRepositoryRepository> BackupRepositories { get; }
+    private Lazy<IBackupRepositoryValidationRepository> BackupRepositoryValidations { get; }
+    private Lazy<IBackupPolicyRepository> BackupPolicies { get; }
+    private Lazy<IBackupRunRepository> BackupRuns { get; }
+    private Lazy<IBackupRunLogRepository> BackupRunLogs { get; }
+    private Lazy<IBackupRestoreRunRepository> BackupRestoreRuns { get; }
+    private Lazy<IBackupRepositoryLeaseRepository> BackupRepositoryLeases { get; }
+    private Lazy<IBackupSourceLeaseRepository> BackupSourceLeases { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IUserPreferencesRepository> UserPreferences { get; }
     private Lazy<IInstanceIdentityRepository> InstanceIdentity { get; }
@@ -124,6 +140,14 @@ internal class UnitOfWork : IUnitOfWork
     IOidcExternalLoginRepository IUnitOfWork.OidcExternalLogins => OidcExternalLogins.Value;
     IAutomationActionRepository IUnitOfWork.AutomationActions => AutomationActions.Value;
     IActionRunRepository IUnitOfWork.ActionRuns => ActionRuns.Value;
+    IBackupRepositoryRepository IUnitOfWork.BackupRepositories => BackupRepositories.Value;
+    IBackupRepositoryValidationRepository IUnitOfWork.BackupRepositoryValidations => BackupRepositoryValidations.Value;
+    IBackupPolicyRepository IUnitOfWork.BackupPolicies => BackupPolicies.Value;
+    IBackupRunRepository IUnitOfWork.BackupRuns => BackupRuns.Value;
+    IBackupRunLogRepository IUnitOfWork.BackupRunLogs => BackupRunLogs.Value;
+    IBackupRestoreRunRepository IUnitOfWork.BackupRestoreRuns => BackupRestoreRuns.Value;
+    IBackupRepositoryLeaseRepository IUnitOfWork.BackupRepositoryLeases => BackupRepositoryLeases.Value;
+    IBackupSourceLeaseRepository IUnitOfWork.BackupSourceLeases => BackupSourceLeases.Value;
 
     // Lazily creates a transaction
     private IDbTransaction GetTransaction()

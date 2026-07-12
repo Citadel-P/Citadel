@@ -50,6 +50,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .ImageConfiguration()
             .AutomationActionConfiguration()
             .ActionRunConfiguration()
+            .BackupConfiguration()
             .ActivityEventConfiguration()
             .AlertRuleConfiguration()
             .AlertEventConfiguration()
@@ -1551,6 +1552,286 @@ internal static class Configuration
         run.HasIndex("Status", "QueuedAt").HasDatabaseName($"IX_{tableName}_Status_QueuedAt");
         run.HasIndex("RunAsActorId").HasDatabaseName($"IX_{tableName}_RunAsActorId");
         run.HasIndex("TriggeredByActorId").HasDatabaseName($"IX_{tableName}_TriggeredByActorId");
+
+        return builder;
+    }
+
+    public static ModelBuilder BackupConfiguration(this ModelBuilder builder)
+    {
+        var repositoryTable = "BackupRepositories";
+        var repository = builder.Entity("BackupRepository");
+        repository.ToTable(repositoryTable);
+
+        repository.Property<Guid>("Id").IsRequired();
+        repository.HasKey("Id");
+        repository.Property<string>("Name").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        repository.Property<string>("NormalizedName").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        repository.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        repository.Property<string>("Type").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        repository.Property<string>("Spec").HasColumnType("jsonb").IsRequired();
+        repository.Property<Guid>("PasswordSecretId").IsRequired();
+        repository.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        repository.Property<DateTime?>("LastPrunedAt").HasColumnType(Timestamp).IsRequired(false);
+        repository.Property<DateTime?>("LastCheckedAt").HasColumnType(Timestamp).IsRequired(false);
+        repository.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        repository.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
+        repository.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
+        repository.AddAuditedMemebers();
+
+        repository
+            .HasOne("SecretDefinition")
+            .WithMany()
+            .HasForeignKey("PasswordSecretId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        repository.HasIndex("NormalizedName").IsUnique().HasDatabaseName($"IX_{repositoryTable}_NormalizedName");
+        repository.HasIndex("Status").HasDatabaseName($"IX_{repositoryTable}_Status");
+        repository.HasIndex("ArchivedAt").HasDatabaseName($"IX_{repositoryTable}_ArchivedAt");
+        repository.HasIndex("PasswordSecretId").HasDatabaseName($"IX_{repositoryTable}_PasswordSecretId");
+
+        var validationTable = "BackupRepositoryValidations";
+        var validation = builder.Entity("BackupRepositoryValidation");
+        validation.ToTable(validationTable);
+
+        validation.Property<Guid>("Id").IsRequired();
+        validation.HasKey("Id");
+        validation.Property<Guid>("BackupRepositoryId").IsRequired();
+        validation.Property<string>("Location").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        validation.Property<Guid?>("PlatformId").IsRequired(false);
+        validation.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        validation.Property<DateTime>("LastValidatedAt").HasColumnType(Timestamp).IsRequired();
+        validation.Property<string>("LastErrorCode").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        validation.Property<string>("LastErrorMessage").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+
+        validation
+            .HasOne("BackupRepository")
+            .WithMany()
+            .HasForeignKey("BackupRepositoryId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        validation
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.SetNull);
+
+        validation.HasIndex("BackupRepositoryId", "Location", "PlatformId").HasDatabaseName($"IX_{validationTable}_Repository_Location_Platform");
+        validation.HasIndex("PlatformId").HasDatabaseName($"IX_{validationTable}_PlatformId");
+
+        var policyTable = "BackupPolicies";
+        var policy = builder.Entity("BackupPolicy");
+        policy.ToTable(policyTable);
+
+        policy.Property<Guid>("Id").IsRequired();
+        policy.HasKey("Id");
+        policy.Property<string>("Name").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        policy.Property<string>("NormalizedName").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        policy.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        policy.Property<string>("Source").HasColumnType("jsonb").IsRequired();
+        policy.Property<Guid>("BackupRepositoryId").IsRequired();
+        policy.Property<bool>("Enabled").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
+        policy.Property<string>("Cron").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        policy.Property<string>("TimeZone").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        policy.Property<int>("KeepLastSuccessful").HasColumnType(Integer).IsRequired().HasDefaultValue(14);
+        policy.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(14400);
+        policy.Property<bool>("AlertOnFailure").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
+        policy.Property<Guid>("RunAsActorId").IsRequired();
+        policy.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
+        policy.Property<Guid?>("CurrentRunId").IsRequired(false);
+        policy.Property<DateTime?>("LastScheduledRunAt").HasColumnType(Timestamp).IsRequired(false);
+        policy.Property<DateTime?>("FirstSuccessfulRunAt").HasColumnType(Timestamp).IsRequired(false);
+        policy.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        policy.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
+        policy.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
+        policy.AddAuditedMemebers();
+
+        policy
+            .HasOne("BackupRepository")
+            .WithMany()
+            .HasForeignKey("BackupRepositoryId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        policy
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("RunAsActorId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        policy.HasIndex("NormalizedName").IsUnique().HasDatabaseName($"IX_{policyTable}_NormalizedName");
+        policy.HasIndex("BackupRepositoryId").HasDatabaseName($"IX_{policyTable}_BackupRepositoryId");
+        policy.HasIndex("Enabled", "Cron").HasDatabaseName($"IX_{policyTable}_Schedule");
+        policy.HasIndex("ArchivedAt").HasDatabaseName($"IX_{policyTable}_ArchivedAt");
+        policy.HasIndex("RunAsActorId").HasDatabaseName($"IX_{policyTable}_RunAsActorId");
+
+        var runTable = "BackupRuns";
+        var run = builder.Entity("BackupRun");
+        run.ToTable(runTable);
+
+        run.Property<Guid>("Id").IsRequired();
+        run.HasKey("Id");
+        run.Property<Guid>("BackupPolicyId").IsRequired();
+        run.Property<Guid>("BackupRepositoryId").IsRequired();
+        run.Property<string>("PolicyNameSnapshot").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        run.Property<string>("SourceSnapshot").HasColumnType("jsonb").IsRequired();
+        run.Property<string>("RepositoryTypeSnapshot").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        run.Property<string>("Trigger").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        run.Property<Guid?>("TriggerSourceId").IsRequired(false);
+        run.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        run.Property<string>("ResticSnapshotId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        run.Property<string>("ParentSnapshotId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        run.Property<string>("SnapshotAvailability").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        run.Property<long?>("FilesProcessed").HasColumnType(BigInt).IsRequired(false);
+        run.Property<long?>("BytesProcessed").HasColumnType(BigInt).IsRequired(false);
+        run.Property<long?>("BytesAdded").HasColumnType(BigInt).IsRequired(false);
+        run.Property<string>("Warnings").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
+        run.Property<DateTime>("QueuedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        run.Property<DateTime?>("StartedAt").HasColumnType(Timestamp).IsRequired(false);
+        run.Property<DateTime?>("CompletedAt").HasColumnType(Timestamp).IsRequired(false);
+        run.Property<int?>("ExitCode").HasColumnType(Integer).IsRequired(false);
+        run.Property<string>("ErrorCode").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        run.Property<string>("ErrorMessage").HasColumnType(Text).HasMaxLength(1200).IsRequired(false);
+        run.Property<Guid>("TriggeredByActorId").IsRequired();
+
+        run
+            .HasOne("BackupPolicy")
+            .WithMany()
+            .HasForeignKey("BackupPolicyId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        run
+            .HasOne("BackupRepository")
+            .WithMany()
+            .HasForeignKey("BackupRepositoryId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        run
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("TriggeredByActorId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        run.HasIndex("BackupPolicyId", "QueuedAt").HasDatabaseName($"IX_{runTable}_Policy_QueuedAt");
+        run.HasIndex("BackupRepositoryId", "Status").HasDatabaseName($"IX_{runTable}_Repository_Status");
+        run.HasIndex("BackupPolicyId")
+            .IsUnique()
+            .HasFilter("status IN ('Queued', 'Preparing', 'Running', 'ApplyingRetention')")
+            .HasDatabaseName($"IX_{runTable}_Active_Policy");
+        run.HasIndex("QueuedAt").HasDatabaseName($"IX_{runTable}_QueuedAt");
+        run.HasIndex("Status", "QueuedAt").HasDatabaseName($"IX_{runTable}_Status_QueuedAt");
+        run.HasIndex("SnapshotAvailability").HasDatabaseName($"IX_{runTable}_SnapshotAvailability");
+        run.HasIndex("TriggeredByActorId").HasDatabaseName($"IX_{runTable}_TriggeredByActorId");
+
+        var runLogTable = "BackupRunLogs";
+        var runLog = builder.Entity("BackupRunLog");
+        runLog.ToTable(runLogTable);
+        runLog.Property<Guid>("Id").IsRequired();
+        runLog.HasKey("Id");
+        runLog.Property<Guid>("BackupRunId").IsRequired();
+        runLog.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+        runLog.Property<string>("Stream").HasColumnType(Text).HasMaxLength(32).IsRequired();
+        runLog.Property<string>("Message").HasColumnType(Text).IsRequired();
+        runLog
+            .HasOne("BackupRun")
+            .WithMany()
+            .HasForeignKey("BackupRunId")
+            .OnDelete(DeleteBehavior.Cascade);
+        runLog.HasIndex("BackupRunId", "CreatedAt").HasDatabaseName($"IX_{runLogTable}_Run_CreatedAt");
+
+        var restoreTable = "BackupRestoreRuns";
+        var restore = builder.Entity("BackupRestoreRun");
+        restore.ToTable(restoreTable);
+
+        restore.Property<Guid>("Id").IsRequired();
+        restore.HasKey("Id");
+        restore.Property<Guid>("BackupRunId").IsRequired();
+        restore.Property<Guid>("BackupRepositoryId").IsRequired();
+        restore.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        restore.Property<Guid>("TargetPlatformId").IsRequired();
+        restore.Property<string>("TargetVolumeName").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        restore.Property<bool>("OverwriteExisting").HasColumnType("boolean").IsRequired();
+        restore.Property<bool>("TargetVolumeCreatedByCitadel").HasColumnType("boolean").IsRequired();
+        restore.Property<string>("AffectedContainers").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
+        restore.Property<string>("Warnings").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
+        restore.Property<DateTime>("QueuedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        restore.Property<DateTime?>("StartedAt").HasColumnType(Timestamp).IsRequired(false);
+        restore.Property<DateTime?>("CompletedAt").HasColumnType(Timestamp).IsRequired(false);
+        restore.Property<int?>("ExitCode").HasColumnType(Integer).IsRequired(false);
+        restore.Property<string>("ErrorCode").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        restore.Property<string>("ErrorMessage").HasColumnType(Text).HasMaxLength(1200).IsRequired(false);
+        restore.Property<Guid>("TriggeredByActorId").IsRequired();
+
+        restore
+            .HasOne("BackupRun")
+            .WithMany()
+            .HasForeignKey("BackupRunId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        restore
+            .HasOne("BackupRepository")
+            .WithMany()
+            .HasForeignKey("BackupRepositoryId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        restore
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("TargetPlatformId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        restore
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("TriggeredByActorId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        restore.HasIndex("BackupRunId", "QueuedAt").HasDatabaseName($"IX_{restoreTable}_BackupRun_QueuedAt");
+        restore.HasIndex("BackupRepositoryId", "Status").HasDatabaseName($"IX_{restoreTable}_Repository_Status");
+        restore.HasIndex("TargetPlatformId", "TargetVolumeName").HasDatabaseName($"IX_{restoreTable}_TargetVolume");
+        restore.HasIndex("QueuedAt").HasDatabaseName($"IX_{restoreTable}_QueuedAt");
+        restore.HasIndex("Status", "QueuedAt").HasDatabaseName($"IX_{restoreTable}_Status_QueuedAt");
+
+        var restoreLogTable = "BackupRestoreRunLogs";
+        var restoreLog = builder.Entity("BackupRestoreRunLog");
+        restoreLog.ToTable(restoreLogTable);
+        restoreLog.Property<Guid>("Id").IsRequired();
+        restoreLog.HasKey("Id");
+        restoreLog.Property<Guid>("BackupRestoreRunId").IsRequired();
+        restoreLog.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+        restoreLog.Property<string>("Stream").HasColumnType(Text).HasMaxLength(32).IsRequired();
+        restoreLog.Property<string>("Message").HasColumnType(Text).IsRequired();
+        restoreLog
+            .HasOne("BackupRestoreRun")
+            .WithMany()
+            .HasForeignKey("BackupRestoreRunId")
+            .OnDelete(DeleteBehavior.Cascade);
+        restoreLog.HasIndex("BackupRestoreRunId", "CreatedAt").HasDatabaseName($"IX_{restoreLogTable}_RestoreRun_CreatedAt");
+
+        var repositoryLeaseTable = "BackupRepositoryLeases";
+        var repositoryLease = builder.Entity("BackupRepositoryLease");
+        repositoryLease.ToTable(repositoryLeaseTable);
+        repositoryLease.Property<Guid>("BackupRepositoryId").IsRequired();
+        repositoryLease.HasKey("BackupRepositoryId");
+        repositoryLease.Property<string>("OperationType").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        repositoryLease.Property<Guid>("OwnerRunId").IsRequired();
+        repositoryLease.Property<DateTime>("ExpiresAt").HasColumnType(Timestamp).IsRequired();
+        repositoryLease.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+        repositoryLease
+            .HasOne("BackupRepository")
+            .WithMany()
+            .HasForeignKey("BackupRepositoryId")
+            .OnDelete(DeleteBehavior.Cascade);
+        repositoryLease.HasIndex("ExpiresAt").HasDatabaseName($"IX_{repositoryLeaseTable}_ExpiresAt");
+
+        var sourceLeaseTable = "BackupSourceLeases";
+        var sourceLease = builder.Entity("BackupSourceLease");
+        sourceLease.ToTable(sourceLeaseTable);
+        sourceLease.Property<string>("SourceKey").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        sourceLease.HasKey("SourceKey");
+        sourceLease.Property<string>("OperationType").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        sourceLease.Property<Guid>("OwnerRunId").IsRequired();
+        sourceLease.Property<DateTime>("ExpiresAt").HasColumnType(Timestamp).IsRequired();
+        sourceLease.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+        sourceLease.HasIndex("ExpiresAt").HasDatabaseName($"IX_{sourceLeaseTable}_ExpiresAt");
 
         return builder;
     }

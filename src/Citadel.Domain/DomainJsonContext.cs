@@ -6,6 +6,7 @@ using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
+using Domain.Entities.Backups;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
@@ -407,6 +408,40 @@ public partial class StackJsonContext : JsonSerializerContext
     })]
 [JsonSerializable(typeof(AutomationWebhookConfig))]
 public partial class AutomationJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<BackupSourceType>),
+        typeof(JsonStringEnumConverter<VolumeBackupConsistency>),
+        typeof(JsonStringEnumConverter<BackupRepositoryType>),
+        typeof(JsonStringEnumConverter<BackupExecutionLocation>),
+        typeof(JsonStringEnumConverter<S3BucketLookup>),
+        typeof(JsonStringEnumConverter<BackupRepositoryStatus>),
+        typeof(JsonStringEnumConverter<BackupRepositoryValidationStatus>),
+        typeof(JsonStringEnumConverter<BackupRunTrigger>),
+        typeof(JsonStringEnumConverter<BackupRunStatus>),
+        typeof(JsonStringEnumConverter<BackupSnapshotAvailability>),
+        typeof(JsonStringEnumConverter<BackupRestoreStatus>),
+        typeof(JsonStringEnumConverter<ContainerStateStatus>),
+        typeof(JsonStringEnumConverter<ResourceControlState>)
+    })]
+[JsonSerializable(typeof(BackupSourceSpec))]
+[JsonSerializable(typeof(DockerVolumeBackupSource))]
+[JsonSerializable(typeof(CitadelSystemBackupSource))]
+[JsonSerializable(typeof(BackupRepositorySpec))]
+[JsonSerializable(typeof(FileSystemBackupRepositorySpec))]
+[JsonSerializable(typeof(S3CompatibleBackupRepositorySpec))]
+[JsonSerializable(typeof(BackupExecutionContext))]
+[JsonSerializable(typeof(BackupRunWarning))]
+[JsonSerializable(typeof(IReadOnlyList<BackupRunWarning>))]
+[JsonSerializable(typeof(BackupAffectedContainer))]
+[JsonSerializable(typeof(IReadOnlyList<BackupAffectedContainer>))]
+public partial class BackupJsonContext : JsonSerializerContext
 {
 }
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-apk add --no-cache curl ca-certificates tar gzip deno
+apk add --no-cache curl ca-certificates tar gzip deno restic
 
 ARCH=$(uname -m)
 case "$ARCH" in
@@ -21,6 +21,7 @@ curl -L "$URL" | tar -xz -C /usr/local/bin
 chmod +x /usr/local/bin/shoutrrr
 
 deno --version
+restic version
 
 apk del curl tar gzip
 rm -rf /var/cache/apk/* /tmp/*

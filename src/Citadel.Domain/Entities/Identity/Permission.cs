@@ -12,7 +12,8 @@ public class Permission
         (int)SpecificPermission.Pull |
         (int)SpecificPermission.Inspect |
         (int)SpecificPermission.ResourceBindings |
-        (int)SpecificPermission.Releases;
+        (int)SpecificPermission.Releases |
+        (int)SpecificPermission.Restore;
 
     public Guid Id { get; private set; }
     public Guid RoleId { get; private set; }
@@ -105,6 +106,9 @@ public class Permission
 
         if ((mask & (int)SpecificPermission.Releases) != 0)
             permissions.Add(SpecificPermission.Releases);
+
+        if ((mask & (int)SpecificPermission.Restore) != 0)
+            permissions.Add(SpecificPermission.Restore);
 
         return [.. permissions];
     }

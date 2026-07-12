@@ -1,0 +1,212 @@
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Entities.Backups;
+using Domain.Entities.ResourceBindings;
+using Domain.Entities.Tags;
+using Hosting.Common;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Tests.Integration.Infrastructure.Persistence;
+
+public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
+{
+    [Fact]
+    public async Task BackupRepositories_ShouldPersistValidationPoliciesTagsAndRuns()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var actorId = Constants.SystemId;
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var passwordSecret = new SecretDefinition("RESTIC_PASSWORD_TEST", SecretProviderType.InternalEncrypted);
+        await uow.SecretDefinitions.AddAsync(
+            passwordSecret,
+            new InternalSecretValue(passwordSecret.Id, "encrypted-value"),
+            cancellationToken);
+
+        var repository = new BackupRepository(
+            "repo-integration",
+            "Repository integration test",
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "/backup"),
+            passwordSecret.Id,
+            actorId);
+        await uow.BackupRepositories.AddAsync(repository, cancellationToken);
+
+        var validation = new BackupRepositoryValidation(
+            repository.Id,
+            BackupExecutionLocation.Core,
+            platformId: null,
+            BackupRepositoryValidationStatus.Unknown,
+            DateTimeOffset.UtcNow,
+            "backup.not_implemented",
+            "Not implemented in foundation.");
+        await uow.BackupRepositoryValidations.UpsertAsync(validation, cancellationToken);
+
+        var tag = Tag.Create("backup-policy-test", "#3366FF", actorId);
+        await uow.Tags.AddAsync(tag, cancellationToken);
+
+        var policy = new BackupPolicy(
+            "policy-integration",
+            "Policy integration test",
+            new CitadelSystemBackupSource(),
+            repository.Id,
+            enabled: true,
+            cron: null,
+            timeZone: null,
+            keepLastSuccessful: BackupPolicy.DefaultKeepLastSuccessful,
+            timeoutSeconds: BackupPolicy.DefaultTimeoutSeconds,
+            alertOnFailure: true,
+            runAsActorId: actorId,
+            createdByActorId: actorId);
+        var policyRows = await uow.BackupPolicies.AddAsync(policy, cancellationToken, [tag.Id], actorId);
+
+        var run = new BackupRun(
+            policy.Id,
+            repository.Id,
+            policy.Name,
+            policy.Source,
+            repository.Type,
+            BackupRunTrigger.Manual,
+            triggerSourceId: null,
+            triggeredByActorId: actorId);
+        await uow.BackupRuns.AddAsync(run, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var storedRepository = await uow.BackupRepositories.GetAsync(repository.Id, cancellationToken);
+        var storedValidation = await uow.BackupRepositoryValidations.GetAsync(repository.Id, BackupExecutionLocation.Core, null, cancellationToken);
+        var taggedPolicies = (await uow.BackupPolicies.GetAllAsync(cancellationToken, [tag.Id])).ToArray();
+        var runs = (await uow.BackupRuns.GetByPolicyAsync(policy.Id, 50, cancellationToken)).ToArray();
+
+        var cancelledRows = await uow.BackupRuns.CancelQueuedOrRunningAsync(
+            run.Id,
+            DateTimeOffset.UtcNow,
+            "Cancelled by test.",
+            cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var cancelledRun = await uow.BackupRuns.GetAsync(run.Id, cancellationToken);
+
+        Assert.True(policyRows > 0);
+        Assert.NotNull(storedRepository);
+        Assert.Equal("REPO-INTEGRATION", storedRepository.NormalizedName);
+        Assert.NotNull(storedValidation);
+        Assert.Equal(BackupRepositoryValidationStatus.Unknown, storedValidation.Status);
+        var taggedPolicy = Assert.Single(taggedPolicies);
+        Assert.Equal(policy.Id, taggedPolicy.Id);
+        Assert.Contains(taggedPolicy.Tags, x => x.Id == tag.Id);
+        Assert.Single(runs);
+        Assert.Equal(1, cancelledRows);
+        Assert.Equal(BackupRunStatus.Cancelled, cancelledRun?.Status);
+        Assert.Equal(BackupSnapshotAvailability.NotCreated, cancelledRun?.SnapshotAvailability);
+    }
+
+    [Fact]
+    public async Task BackupRepositoryOptimizedPaths_ShouldPersistValidationArchiveAndQueueAtomically()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var actorId = Constants.SystemId;
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var passwordSecret = new SecretDefinition("RESTIC_PASSWORD_OPTIMIZED", SecretProviderType.InternalEncrypted);
+        await uow.SecretDefinitions.AddAsync(
+            passwordSecret,
+            new InternalSecretValue(passwordSecret.Id, "encrypted-value"),
+            cancellationToken);
+
+        var repository = new BackupRepository(
+            "repo-optimized",
+            null,
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "/backup"),
+            passwordSecret.Id,
+            actorId);
+        await uow.BackupRepositories.AddAsync(repository, cancellationToken);
+
+        var validation = new BackupRepositoryValidation(
+            repository.Id,
+            BackupExecutionLocation.Core,
+            platformId: null,
+            BackupRepositoryValidationStatus.Ready,
+            DateTimeOffset.UtcNow,
+            null,
+            null);
+        var validationRows = await uow.BackupRepositories.ApplyValidationResultAsync(
+            validation,
+            markChecked: true,
+            markPruned: false,
+            cancellationToken);
+
+        var policy = new BackupPolicy(
+            "policy-optimized",
+            null,
+            new CitadelSystemBackupSource(),
+            repository.Id,
+            enabled: true,
+            cron: null,
+            timeZone: null,
+            keepLastSuccessful: BackupPolicy.DefaultKeepLastSuccessful,
+            timeoutSeconds: BackupPolicy.DefaultTimeoutSeconds,
+            alertOnFailure: true,
+            runAsActorId: actorId,
+            createdByActorId: actorId);
+        await uow.BackupPolicies.AddAsync(policy, cancellationToken);
+
+        var firstQueue = await uow.BackupRuns.QueueAsync(
+            policy.Id,
+            Guid.CreateVersion7(),
+            BackupRunTrigger.Manual,
+            triggerSourceId: null,
+            actorId,
+            usePolicyActor: false,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
+        var secondQueue = await uow.BackupRuns.QueueAsync(
+            policy.Id,
+            Guid.CreateVersion7(),
+            BackupRunTrigger.Manual,
+            triggerSourceId: null,
+            actorId,
+            usePolicyActor: false,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
+
+        var archiveUsedRepository = await uow.BackupRepositories.ArchiveIfUnusedAsync(
+            repository.Id,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
+
+        var unusedRepository = new BackupRepository(
+            "repo-optimized-unused",
+            null,
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "/backup-unused"),
+            passwordSecret.Id,
+            actorId);
+        await uow.BackupRepositories.AddAsync(unusedRepository, cancellationToken);
+        var archiveUnusedRepository = await uow.BackupRepositories.ArchiveIfUnusedAsync(
+            unusedRepository.Id,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
+
+        await uow.CommitAsync(cancellationToken);
+
+        var storedRepository = await uow.BackupRepositories.GetAsync(repository.Id, cancellationToken);
+        var storedValidation = await uow.BackupRepositoryValidations.GetAsync(repository.Id, BackupExecutionLocation.Core, null, cancellationToken);
+        var storedRuns = (await uow.BackupRuns.GetByPolicyAsync(policy.Id, 50, cancellationToken)).ToArray();
+        var archivedRepository = await uow.BackupRepositories.GetAsync(unusedRepository.Id, cancellationToken, includeArchived: true);
+
+        Assert.True(validationRows > 0);
+        Assert.Equal(BackupRepositoryStatus.Ready, storedRepository?.Status);
+        Assert.NotNull(storedRepository?.LastCheckedAt);
+        Assert.NotNull(storedValidation);
+        Assert.Equal(BackupRepositoryValidationStatus.Ready, storedValidation.Status);
+        Assert.Equal(BackupRunQueueResultStatus.Queued, firstQueue.Status);
+        Assert.NotNull(firstQueue.Run);
+        Assert.Equal(BackupRunQueueResultStatus.ActiveRunExists, secondQueue.Status);
+        Assert.Single(storedRuns);
+        Assert.Equal(BackupRepositoryArchiveResult.ActiveOperation, archiveUsedRepository);
+        Assert.Equal(BackupRepositoryArchiveResult.Archived, archiveUnusedRepository);
+        Assert.NotNull(archivedRepository?.ArchivedAt);
+    }
+}

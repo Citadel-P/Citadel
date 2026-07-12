@@ -45,6 +45,8 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
                 var countActionRuns = await uow.ActionRuns.RemoveCompletedOlderThanAsync(thresholdDate.UtcDateTime, cancellationToken);
 
                 var countRefreshTokens = await uow.RefreshTokens.DeleteExpiredAsync(DateTime.UtcNow, cancellationToken);
+                var countBackupLeases = await uow.BackupRepositoryLeases.DeleteExpiredAsync(DateTimeOffset.UtcNow, cancellationToken);
+                countBackupLeases += await uow.BackupSourceLeases.DeleteExpiredAsync(DateTimeOffset.UtcNow, cancellationToken);
 
                 await uow.CommitAsync(cancellationToken);
 
@@ -59,6 +61,9 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
 
                 if (countRefreshTokens > 0)
                     logger.LogInformation("Purged {Count} expired refresh tokens.", countRefreshTokens);
+
+                if (countBackupLeases > 0)
+                    logger.LogInformation("Purged {Count} expired backup leases.", countBackupLeases);
             }
             catch (Exception ex)
             {

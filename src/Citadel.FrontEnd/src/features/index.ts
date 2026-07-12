@@ -31,6 +31,8 @@ import { OidcProviderComponents } from './oidc-providers';
 import { OidcProviderFormComponents } from './oidc-providers/form';
 import { AutomationActionComponents } from './automation-actions';
 import { AutomationActionFormComponents } from './automation-actions/form';
+import { BackupRepositoryComponents } from './backup-repositories';
+import { BackupRepositoryFormComponents } from './backup-repositories/form';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -57,6 +59,7 @@ export const ResourceComponents: {
   OidcProvider: OidcProviderComponents,
   Automation: AutomationActionComponents,
   AutomationAction: AutomationActionComponents,
+  BackupRepository: BackupRepositoryComponents,
 };
 
 export const ResourceFormComponents: {
@@ -86,6 +89,7 @@ export const ResourceFormComponents: {
   OidcProvider: OidcProviderFormComponents,
   Automation: undefined,
   AutomationAction: AutomationActionFormComponents,
+  BackupRepository: BackupRepositoryFormComponents,
 };
 
 export const DockerResourceInfoComponents: {

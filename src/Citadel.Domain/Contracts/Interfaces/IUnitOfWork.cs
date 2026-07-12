@@ -7,6 +7,7 @@ using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
+using Domain.Entities.Backups;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Tags;
 using Domain.Entities.Deployments;
@@ -52,6 +53,14 @@ public interface IUnitOfWork : IAsyncDisposable
     IOidcExternalLoginRepository OidcExternalLogins { get; }
     IAutomationActionRepository AutomationActions { get; }
     IActionRunRepository ActionRuns { get; }
+    IBackupRepositoryRepository BackupRepositories { get; }
+    IBackupRepositoryValidationRepository BackupRepositoryValidations { get; }
+    IBackupPolicyRepository BackupPolicies { get; }
+    IBackupRunRepository BackupRuns { get; }
+    IBackupRunLogRepository BackupRunLogs { get; }
+    IBackupRestoreRunRepository BackupRestoreRuns { get; }
+    IBackupRepositoryLeaseRepository BackupRepositoryLeases { get; }
+    IBackupSourceLeaseRepository BackupSourceLeases { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IUserPreferencesRepository UserPreferences { get; }
     IInstanceIdentityRepository InstanceIdentity { get; }
@@ -107,6 +116,191 @@ public interface IAutomationProcessRunner
 }
 
 public sealed record AutomationProcessOutput(string? StdOut, string? StdErr, int? ExitCode = null);
+
+public interface IBackupRepositoryRepository
+{
+    Task<int> AddAsync(BackupRepository repository, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(BackupRepository repository, CancellationToken cancellationToken);
+    Task<int> ArchiveAsync(Guid id, DateTimeOffset archivedAt, CancellationToken cancellationToken);
+    Task<BackupRepositoryArchiveResult> ArchiveIfUnusedAsync(Guid id, DateTimeOffset archivedAt, CancellationToken cancellationToken);
+    Task<int> ApplyValidationResultAsync(BackupRepositoryValidation validation, bool markChecked, bool markPruned, CancellationToken cancellationToken);
+    Task<BackupRepository?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false);
+    Task<IEnumerable<BackupRepository>> GetAllAsync(CancellationToken cancellationToken, bool includeArchived = false);
+    Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
+    Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
+    Task<bool> HasActiveOperationAsync(Guid id, CancellationToken cancellationToken);
+    Task<bool> HasNonArchivedPolicyAsync(Guid id, CancellationToken cancellationToken);
+}
+
+public interface IBackupRepositoryValidationRepository
+{
+    Task<int> UpsertAsync(BackupRepositoryValidation validation, CancellationToken cancellationToken);
+    Task<BackupRepositoryValidation?> GetAsync(Guid repositoryId, BackupExecutionLocation location, Guid? platformId, CancellationToken cancellationToken);
+    Task<IEnumerable<BackupRepositoryValidation>> GetByRepositoryAsync(Guid repositoryId, CancellationToken cancellationToken);
+}
+
+public interface IBackupPolicyRepository
+{
+    Task<int> AddAsync(BackupPolicy policy, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
+    Task<int> UpdateAsync(BackupPolicy policy, CancellationToken cancellationToken);
+    Task<int> ArchiveAsync(Guid id, DateTimeOffset archivedAt, CancellationToken cancellationToken);
+    Task<BackupPolicy?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false);
+    Task<IEnumerable<BackupPolicy>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, bool includeArchived = false);
+    Task<IEnumerable<BackupPolicy>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
+    Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
+    Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(Guid userId, Guid id, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+    Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+    Task<int> MarkIdleAfterRunAsync(Guid id, Guid runId, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken);
+}
+
+public interface IBackupRunRepository
+{
+    Task<int> AddAsync(BackupRun run, CancellationToken cancellationToken);
+    Task<BackupRunQueueResult> QueueAsync(
+        Guid policyId,
+        Guid runId,
+        BackupRunTrigger trigger,
+        Guid? triggerSourceId,
+        Guid triggeredByActorId,
+        bool usePolicyActor,
+        DateTimeOffset queuedAt,
+        CancellationToken cancellationToken);
+    Task<int> UpdateAsync(BackupRun run, CancellationToken cancellationToken);
+    Task<BackupRun?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<BackupRun>> GetByPolicyAsync(Guid policyId, int limit, CancellationToken cancellationToken);
+    Task<IEnumerable<BackupRun>> GetPagedAsync(int limit, CancellationToken cancellationToken);
+    Task<IEnumerable<BackupRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken);
+    Task<BackupRunExecutionPlan?> GetExecutionPlanAsync(Guid id, CancellationToken cancellationToken);
+    Task<BackupRunExecutionPlan?> TryClaimExecutionPlanAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
+    Task<BackupRunFinishResult> FinishRunAndMarkPolicyIdleAsync(BackupRun run, Guid policyId, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken);
+    Task<bool> HasActiveRunAsync(Guid policyId, CancellationToken cancellationToken);
+    Task<bool> TryMarkPreparingAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
+    Task<int> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
+}
+
+public interface IBackupRunLogRepository
+{
+    Task<int> AddAsync(BackupRunLogEntry entry, CancellationToken cancellationToken);
+    Task<int> AddRangeAsync(IReadOnlyCollection<BackupRunLogEntry> entries, CancellationToken cancellationToken);
+    Task<IReadOnlyList<BackupRunLogEntry>> GetByRunAsync(Guid backupRunId, CancellationToken cancellationToken);
+}
+
+public interface IBackupRestoreRunRepository
+{
+    Task<int> AddAsync(BackupRestoreRun run, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(BackupRestoreRun run, CancellationToken cancellationToken);
+    Task<BackupRestoreRun?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<BackupRestoreRun>> GetPagedAsync(int limit, CancellationToken cancellationToken);
+    Task<IEnumerable<BackupRestoreRun>> GetByBackupRunAsync(Guid backupRunId, int limit, CancellationToken cancellationToken);
+    Task<int> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
+}
+
+public interface IBackupRepositoryLeaseRepository
+{
+    Task<bool> TryAcquireAsync(
+        Guid backupRepositoryId,
+        string operationType,
+        Guid ownerRunId,
+        DateTimeOffset expiresAt,
+        DateTimeOffset createdAt,
+        CancellationToken cancellationToken);
+
+    Task<int> ReleaseAsync(Guid backupRepositoryId, Guid ownerRunId, CancellationToken cancellationToken);
+    Task<int> DeleteExpiredAsync(DateTimeOffset utcNow, CancellationToken cancellationToken);
+    Task<BackupRepositoryLeaseAcquireResult> TryAcquireForExistingRepositoryAsync(
+        Guid backupRepositoryId,
+        string operationType,
+        Guid ownerRunId,
+        DateTimeOffset expiresAt,
+        DateTimeOffset createdAt,
+        CancellationToken cancellationToken);
+}
+
+public interface IBackupSourceLeaseRepository
+{
+    Task<bool> TryAcquireAsync(
+        string sourceKey,
+        string operationType,
+        Guid ownerRunId,
+        DateTimeOffset expiresAt,
+        DateTimeOffset createdAt,
+        CancellationToken cancellationToken);
+
+    Task<int> ReleaseAsync(string sourceKey, Guid ownerRunId, CancellationToken cancellationToken);
+    Task<int> DeleteExpiredAsync(DateTimeOffset utcNow, CancellationToken cancellationToken);
+}
+
+public enum BackupRepositoryArchiveResult
+{
+    Archived,
+    NotFound,
+    ActiveOperation,
+    HasPolicies
+}
+
+public enum BackupRepositoryLeaseAcquireResult
+{
+    Acquired,
+    NotFound,
+    Busy
+}
+
+public enum BackupRunQueueResultStatus
+{
+    Queued,
+    PolicyNotFound,
+    PolicyArchived,
+    ActiveRunExists
+}
+
+public sealed record BackupRunQueueResult(BackupRunQueueResultStatus Status, BackupRun? Run);
+
+public enum BackupRunFinishResult
+{
+    Completed,
+    AlreadyCancelled
+}
+
+public sealed record BackupRunExecutionPlan(
+    BackupRun Run,
+    BackupPolicy Policy,
+    BackupRepository Repository);
+
+public sealed record BackupRunLogEntry(
+    Guid Id,
+    Guid BackupRunId,
+    DateTimeOffset CreatedAt,
+    string Stream,
+    string Message);
+
+public interface IResticProcessRunner
+{
+    IAsyncEnumerable<ResticProcessEvent> RunAsync(ResticProcessCommand command, CancellationToken cancellationToken);
+}
+
+public sealed record ResticProcessCommand(
+    string FileName,
+    IReadOnlyList<string> Arguments,
+    IReadOnlyDictionary<string, string> Environment,
+    string WorkingDirectory,
+    TimeSpan Timeout,
+    IReadOnlyCollection<string> RedactionValues,
+    int MaxLineBytes);
+
+public sealed record ResticProcessEvent(
+    ResticProcessStream Stream,
+    string? Message = null,
+    int? ExitCode = null);
+
+public enum ResticProcessStream
+{
+    StdOut,
+    StdErr,
+    Exit
+}
 
 public interface IInstanceIdentityRepository
 {
@@ -189,11 +383,17 @@ public interface ISecretDefinitionRepository
     Task<IEnumerable<SecretDefinition>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<SecretDefinition>> GetBoundAsync(ResourceBindingScope scope, Guid? resourceId, CancellationToken cancellationToken);
     Task<InternalSecretValue?> GetInternalValueAsync(Guid secretId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SecretResolutionMaterial>> GetResolutionMaterialsAsync(IReadOnlyCollection<Guid> secretIds, CancellationToken cancellationToken);
     Task<int> DeleteExternalByProviderIdAsync(Guid providerId, CancellationToken cancellationToken);
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsByNameExceptAsync(string name, Guid id, CancellationToken cancellationToken);
     Task<bool> IsUsedByResourceBindingAsync(Guid id, CancellationToken cancellationToken);
 }
+
+public sealed record SecretResolutionMaterial(
+    SecretDefinition Definition,
+    InternalSecretValue? InternalValue,
+    SecretProvider? Provider);
 
 public interface ISecretProviderRepository
 {

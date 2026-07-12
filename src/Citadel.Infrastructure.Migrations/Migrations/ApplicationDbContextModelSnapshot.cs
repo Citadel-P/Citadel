@@ -1053,6 +1053,692 @@ namespace Infrastructure.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BackupPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AlertOnFailure")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("alertonfailure");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archivedat");
+
+                    b.Property<Guid>("BackupRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuprepositoryid");
+
+                    b.Property<string>("ControlState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Idle")
+                        .HasColumnName("controlstate");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<string>("Cron")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("cron");
+
+                    b.Property<Guid?>("CurrentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("currentrunid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("Enabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("enabled");
+
+                    b.Property<DateTime?>("FirstSuccessfulRunAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("firstsuccessfulrunat");
+
+                    b.Property<int>("KeepLastSuccessful")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(14)
+                        .HasColumnName("keeplastsuccessful");
+
+                    b.Property<DateTime?>("LastScheduledRunAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastscheduledrunat");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("normalizedname");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("rowversion");
+
+                    b.Property<Guid>("RunAsActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("runasactorid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("source");
+
+                    b.Property<string>("TimeZone")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("timezone");
+
+                    b.Property<int>("TimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(14400)
+                        .HasColumnName("timeoutseconds");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backuppolicies");
+
+                    b.HasIndex("ArchivedAt")
+                        .HasDatabaseName("ix_backuppolicies_archivedat");
+
+                    b.HasIndex("BackupRepositoryId")
+                        .HasDatabaseName("ix_backuppolicies_backuprepositoryid");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_backuppolicies_createdbyactorid");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_backuppolicies_normalizedname");
+
+                    b.HasIndex("RunAsActorId")
+                        .HasDatabaseName("ix_backuppolicies_runasactorid");
+
+                    b.HasIndex("Enabled", "Cron")
+                        .HasDatabaseName("ix_backuppolicies_schedule");
+
+                    b.ToTable("backuppolicies", (string)null);
+                });
+
+            modelBuilder.Entity("BackupRepository", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archivedat");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<DateTime?>("LastCheckedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastcheckedat");
+
+                    b.Property<DateTime?>("LastPrunedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastprunedat");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("normalizedname");
+
+                    b.Property<Guid>("PasswordSecretId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("passwordsecretid");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("rowversion");
+
+                    b.Property<string>("Spec")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("spec");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backuprepositories");
+
+                    b.HasIndex("ArchivedAt")
+                        .HasDatabaseName("ix_backuprepositories_archivedat");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_backuprepositories_createdbyactorid");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_backuprepositories_normalizedname");
+
+                    b.HasIndex("PasswordSecretId")
+                        .HasDatabaseName("ix_backuprepositories_passwordsecretid");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_backuprepositories_status");
+
+                    b.ToTable("backuprepositories", (string)null);
+                });
+
+            modelBuilder.Entity("BackupRepositoryLease", b =>
+                {
+                    b.Property<Guid>("BackupRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuprepositoryid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiresat");
+
+                    b.Property<string>("OperationType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("operationtype");
+
+                    b.Property<Guid>("OwnerRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ownerrunid");
+
+                    b.HasKey("BackupRepositoryId")
+                        .HasName("pk_backuprepositoryleases");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_backuprepositoryleases_expiresat");
+
+                    b.ToTable("backuprepositoryleases", (string)null);
+                });
+
+            modelBuilder.Entity("BackupRepositoryValidation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BackupRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuprepositoryid");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("lasterrorcode");
+
+                    b.Property<string>("LastErrorMessage")
+                        .HasMaxLength(600)
+                        .HasColumnType("text")
+                        .HasColumnName("lasterrormessage");
+
+                    b.Property<DateTime>("LastValidatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastvalidatedat");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("location");
+
+                    b.Property<Guid?>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backuprepositoryvalidations");
+
+                    b.HasIndex("PlatformId")
+                        .HasDatabaseName("ix_backuprepositoryvalidations_platformid");
+
+                    b.HasIndex("BackupRepositoryId", "Location", "PlatformId")
+                        .HasDatabaseName("ix_backuprepositoryvalidations_repository_location_platform");
+
+                    b.ToTable("backuprepositoryvalidations", (string)null);
+                });
+
+            modelBuilder.Entity("BackupRestoreRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AffectedContainers")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("affectedcontainers")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<Guid>("BackupRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuprepositoryid");
+
+                    b.Property<Guid>("BackupRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuprunid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completedat");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("errorcode");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1200)
+                        .HasColumnType("text")
+                        .HasColumnName("errormessage");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("exitcode");
+
+                    b.Property<bool>("OverwriteExisting")
+                        .HasColumnType("boolean")
+                        .HasColumnName("overwriteexisting");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("queuedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("startedat");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TargetPlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("targetplatformid");
+
+                    b.Property<bool>("TargetVolumeCreatedByCitadel")
+                        .HasColumnType("boolean")
+                        .HasColumnName("targetvolumecreatedbycitadel");
+
+                    b.Property<string>("TargetVolumeName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("targetvolumename");
+
+                    b.Property<Guid>("TriggeredByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("triggeredbyactorid");
+
+                    b.Property<string>("Warnings")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("warnings")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backuprestoreruns");
+
+                    b.HasIndex("QueuedAt")
+                        .HasDatabaseName("ix_backuprestoreruns_queuedat");
+
+                    b.HasIndex("TriggeredByActorId")
+                        .HasDatabaseName("ix_backuprestoreruns_triggeredbyactorid");
+
+                    b.HasIndex("BackupRepositoryId", "Status")
+                        .HasDatabaseName("ix_backuprestoreruns_repository_status");
+
+                    b.HasIndex("BackupRunId", "QueuedAt")
+                        .HasDatabaseName("ix_backuprestoreruns_backuprun_queuedat");
+
+                    b.HasIndex("Status", "QueuedAt")
+                        .HasDatabaseName("ix_backuprestoreruns_status_queuedat");
+
+                    b.HasIndex("TargetPlatformId", "TargetVolumeName")
+                        .HasDatabaseName("ix_backuprestoreruns_targetvolume");
+
+                    b.ToTable("backuprestoreruns", (string)null);
+                });
+
+            modelBuilder.Entity("BackupRestoreRunLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BackupRestoreRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuprestorerunid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Stream")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasColumnName("stream");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backuprestorerunlogs");
+
+                    b.HasIndex("BackupRestoreRunId", "CreatedAt")
+                        .HasDatabaseName("ix_backuprestorerunlogs_restorerun_createdat");
+
+                    b.ToTable("backuprestorerunlogs", (string)null);
+                });
+
+            modelBuilder.Entity("BackupRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BackupPolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuppolicyid");
+
+                    b.Property<Guid>("BackupRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuprepositoryid");
+
+                    b.Property<long?>("BytesAdded")
+                        .HasColumnType("bigint")
+                        .HasColumnName("bytesadded");
+
+                    b.Property<long?>("BytesProcessed")
+                        .HasColumnType("bigint")
+                        .HasColumnName("bytesprocessed");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completedat");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("errorcode");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1200)
+                        .HasColumnType("text")
+                        .HasColumnName("errormessage");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("exitcode");
+
+                    b.Property<long?>("FilesProcessed")
+                        .HasColumnType("bigint")
+                        .HasColumnName("filesprocessed");
+
+                    b.Property<string>("ParentSnapshotId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("parentsnapshotid");
+
+                    b.Property<string>("PolicyNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("policynamesnapshot");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("queuedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("RepositoryTypeSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("repositorytypesnapshot");
+
+                    b.Property<string>("ResticSnapshotId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("resticsnapshotid");
+
+                    b.Property<string>("SnapshotAvailability")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("snapshotavailability");
+
+                    b.Property<string>("SourceSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("sourcesnapshot");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("startedat");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("trigger");
+
+                    b.Property<Guid?>("TriggerSourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("triggersourceid");
+
+                    b.Property<Guid>("TriggeredByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("triggeredbyactorid");
+
+                    b.Property<string>("Warnings")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("warnings")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backupruns");
+
+                    b.HasIndex("BackupPolicyId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_backupruns_active_policy")
+                        .HasFilter("status IN ('Queued', 'Preparing', 'Running', 'ApplyingRetention')");
+
+                    b.HasIndex("QueuedAt")
+                        .HasDatabaseName("ix_backupruns_queuedat");
+
+                    b.HasIndex("SnapshotAvailability")
+                        .HasDatabaseName("ix_backupruns_snapshotavailability");
+
+                    b.HasIndex("TriggeredByActorId")
+                        .HasDatabaseName("ix_backupruns_triggeredbyactorid");
+
+                    b.HasIndex("BackupPolicyId", "QueuedAt")
+                        .HasDatabaseName("ix_backupruns_policy_queuedat");
+
+                    b.HasIndex("BackupRepositoryId", "Status")
+                        .HasDatabaseName("ix_backupruns_repository_status");
+
+                    b.HasIndex("Status", "QueuedAt")
+                        .HasDatabaseName("ix_backupruns_status_queuedat");
+
+                    b.ToTable("backupruns", (string)null);
+                });
+
+            modelBuilder.Entity("BackupRunLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BackupRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuprunid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Stream")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasColumnName("stream");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backuprunlogs");
+
+                    b.HasIndex("BackupRunId", "CreatedAt")
+                        .HasDatabaseName("ix_backuprunlogs_run_createdat");
+
+                    b.ToTable("backuprunlogs", (string)null);
+                });
+
+            modelBuilder.Entity("BackupSourceLease", b =>
+                {
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("sourcekey");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiresat");
+
+                    b.Property<string>("OperationType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("operationtype");
+
+                    b.Property<Guid>("OwnerRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ownerrunid");
+
+                    b.HasKey("SourceKey")
+                        .HasName("pk_backupsourceleases");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_backupsourceleases_expiresat");
+
+                    b.ToTable("backupsourceleases", (string)null);
+                });
+
             modelBuilder.Entity("CitadelInstanceIdentity", b =>
                 {
                     b.Property<int>("Id")
@@ -2445,6 +3131,54 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("e9b46175-cc60-8d02-1dbd-ddf7f907eb16"),
+                            PermissionLevel = 4,
+                            ResourceType = 15,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("378efbb8-bac7-1928-e93a-7d152a50b3b6"),
+                            PermissionLevel = 1,
+                            ResourceType = 15,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("7cb0a723-f754-2be2-38fa-8d151c2e1c7f"),
+                            PermissionLevel = 2,
+                            ResourceType = 15,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("ba1393e4-1090-990e-aee3-a3e36ede0fee"),
+                            PermissionLevel = 4,
+                            ResourceType = 16,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
+                            SpecificPermissions = 128
+                        },
+                        new
+                        {
+                            Id = new Guid("6128787e-901d-f15b-c094-054be267a6c8"),
+                            PermissionLevel = 1,
+                            ResourceType = 16,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("102eae03-0582-a53c-2287-ce55c2f222a8"),
+                            PermissionLevel = 2,
+                            ResourceType = 16,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
+                            SpecificPermissions = 128
+                        },
+                        new
+                        {
                             Id = new Guid("2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9"),
                             PermissionLevel = 4,
                             ResourceType = 3,
@@ -3583,6 +4317,148 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_actions_actors_runasactorid");
+                });
+
+            modelBuilder.Entity("BackupPolicy", b =>
+                {
+                    b.HasOne("BackupRepository", null)
+                        .WithMany()
+                        .HasForeignKey("BackupRepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuppolicies_backuprepositories_backuprepositoryid");
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuppolicies_actors_createdbyactorid");
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("RunAsActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuppolicies_actors_runasactorid");
+                });
+
+            modelBuilder.Entity("BackupRepository", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprepositories_actors_createdbyactorid");
+
+                    b.HasOne("SecretDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("PasswordSecretId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprepositories_secretdefinitions_passwordsecretid");
+                });
+
+            modelBuilder.Entity("BackupRepositoryLease", b =>
+                {
+                    b.HasOne("BackupRepository", null)
+                        .WithMany()
+                        .HasForeignKey("BackupRepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprepositoryleases_backuprepositories_backuprepositoryid");
+                });
+
+            modelBuilder.Entity("BackupRepositoryValidation", b =>
+                {
+                    b.HasOne("BackupRepository", null)
+                        .WithMany()
+                        .HasForeignKey("BackupRepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprepositoryvalidations_backuprepositories_backupreposi~");
+
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_backuprepositoryvalidations_platforms_platformid");
+                });
+
+            modelBuilder.Entity("BackupRestoreRun", b =>
+                {
+                    b.HasOne("BackupRepository", null)
+                        .WithMany()
+                        .HasForeignKey("BackupRepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprestoreruns_backuprepositories_backuprepositoryid");
+
+                    b.HasOne("BackupRun", null)
+                        .WithMany()
+                        .HasForeignKey("BackupRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprestoreruns_backupruns_backuprunid");
+
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("TargetPlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprestoreruns_platforms_targetplatformid");
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("TriggeredByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprestoreruns_actors_triggeredbyactorid");
+                });
+
+            modelBuilder.Entity("BackupRestoreRunLog", b =>
+                {
+                    b.HasOne("BackupRestoreRun", null)
+                        .WithMany()
+                        .HasForeignKey("BackupRestoreRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprestorerunlogs_backuprestoreruns_backuprestorerunid");
+                });
+
+            modelBuilder.Entity("BackupRun", b =>
+                {
+                    b.HasOne("BackupPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("BackupPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backupruns_backuppolicies_backuppolicyid");
+
+                    b.HasOne("BackupRepository", null)
+                        .WithMany()
+                        .HasForeignKey("BackupRepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backupruns_backuprepositories_backuprepositoryid");
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("TriggeredByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_backupruns_actors_triggeredbyactorid");
+                });
+
+            modelBuilder.Entity("BackupRunLog", b =>
+                {
+                    b.HasOne("BackupRun", null)
+                        .WithMany()
+                        .HasForeignKey("BackupRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprunlogs_backupruns_backuprunid");
                 });
 
             modelBuilder.Entity("Container", b =>

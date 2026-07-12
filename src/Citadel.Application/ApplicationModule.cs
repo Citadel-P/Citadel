@@ -1,6 +1,7 @@
 using Application.Permissions;
 using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Backups;
 using Application.Services.Identity;
 using Application.Services.Licensing;
 using Application.Services.SignalR;
@@ -107,6 +108,10 @@ public static class ApplicationModule
             .AddScoped<IAutomationRunQueueService, AutomationRunQueueService>()
             .AddScoped<IAutomationExecutionService, AutomationExecutionService>()
             .AddSingleton<IAutomationRunCoordinator, AutomationRunCoordinator>()
+            .AddSingleton<IResticEnvironmentBuilder, ResticEnvironmentBuilder>()
+            .AddSingleton<IBackupRepositoryDestinationService, BackupRepositoryDestinationService>()
+            .AddSingleton<IBackupRunCoordinator, BackupRunCoordinator>()
+            .AddSingleton<IBackupRunExecutionService, BackupRunExecutionService>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 
         services.TryAddSingleton<IAutomationApiEndpointCatalog, EmptyAutomationApiEndpointCatalog>();
@@ -175,6 +180,7 @@ public static class ApplicationModule
             .AddHostedService<GitRepoSyncJob>()
             .AddHostedService<AutomationActionSchedulerJob>()
             .AddHostedService<AutomationActionRunWorkerJob>()
+            .AddHostedService<BackupRunWorkerJob>()
             .AddHostedService<LicenseTransitionMonitorJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services

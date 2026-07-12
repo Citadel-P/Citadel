@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Automation;
+using WebApi.Routes.Endpoints.Resources.Backups;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
@@ -46,6 +47,10 @@ public static class PublicEndpoints
     const string ResourceBindingsName = nameof(ResourceBindings);
     const string OidcProvidersName = "OidcProviders";
     const string AutomationActionsName = "AutomationActions";
+    const string BackupRepositoriesName = "BackupRepositories";
+    const string BackupPoliciesName = "BackupPolicies";
+    const string BackupRunsName = "BackupRuns";
+    const string BackupRestoreRunsName = "BackupRestoreRuns";
     const string TagsName = nameof(Tags);
     const string AuthenticationName = nameof(Authentication);
     const string ProfileName = "Profile";
@@ -141,6 +146,22 @@ public static class PublicEndpoints
             var automationActions = group.MapGroup("/automation/actions").WithTags(AutomationActionsName).RequireAuthorization();
             {
                 MapAutomationActionEndpoints(automationActions);
+            }
+            var backupRepositories = group.MapGroup("/backupRepositories").WithTags(BackupRepositoriesName).RequireAuthorization();
+            {
+                MapBackupRepositoryEndpoints(backupRepositories);
+            }
+            var backupPolicies = group.MapGroup("/backupPolicies").WithTags(BackupPoliciesName).RequireAuthorization();
+            {
+                MapBackupPolicyEndpoints(backupPolicies);
+            }
+            var backupRuns = group.MapGroup("/backupRuns").WithTags(BackupRunsName).RequireAuthorization();
+            {
+                MapBackupRunEndpoints(backupRuns);
+            }
+            var backupRestoreRuns = group.MapGroup("/backupRestoreRuns").WithTags(BackupRestoreRunsName).RequireAuthorization();
+            {
+                MapBackupRestoreRunEndpoints(backupRestoreRuns);
             }
             var tags = group.MapGroup("/tags").WithTags(TagsName).RequireAuthorization();
             {
@@ -974,6 +995,236 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getAutomationActionRunLogs");
 
+    }
+
+    private static void MapBackupRepositoryEndpoints(RouteGroupBuilder backupRepositories)
+    {
+        backupRepositories.MapGet("/", BackupRepositories.List)
+            .WithSummary("List backup repositories")
+            .Produces<BackupRepositoriesView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("listBackupRepositories");
+
+        backupRepositories.MapGet("{id:guid}", BackupRepositories.Get)
+            .WithSummary("Get backup repository")
+            .Produces<BackupRepositoryView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBackupRepository");
+
+        backupRepositories.MapPost("/", BackupRepositories.Create)
+            .WithSummary("Create backup repository")
+            .Produces<BackupRepositoryView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createBackupRepository");
+
+        backupRepositories.MapPatch("{id:guid}", BackupRepositories.Update)
+            .WithSummary("Update backup repository")
+            .Accepts<UpdateBackupRepositoryInput>("application/merge-patch+json", "application/json")
+            .Produces<BackupRepositoryView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateBackupRepository");
+
+        backupRepositories.MapDelete("{id:guid}", BackupRepositories.Archive)
+            .WithSummary("Archive backup repository")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("archiveBackupRepository");
+
+        backupRepositories.MapPost("{id:guid}/validate", BackupRepositories.Validate)
+            .WithSummary("Validate backup repository")
+            .Produces<BackupRepositoryValidationView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("validateBackupRepository");
+
+        backupRepositories.MapPost("{id:guid}/initialize", BackupRepositories.Initialize)
+            .WithSummary("Initialize backup repository")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("initializeBackupRepository");
+
+        backupRepositories.MapPost("{id:guid}/check", BackupRepositories.Check)
+            .WithSummary("Check backup repository")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("checkBackupRepository");
+
+        backupRepositories.MapPost("{id:guid}/prune", BackupRepositories.Prune)
+            .WithSummary("Prune backup repository")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("pruneBackupRepository");
+    }
+
+    private static void MapBackupPolicyEndpoints(RouteGroupBuilder backupPolicies)
+    {
+        backupPolicies.MapGet("/", BackupPolicies.List)
+            .WithSummary("List backup policies")
+            .Produces<BackupPoliciesView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("listBackupPolicies");
+
+        backupPolicies.MapGet("{id:guid}", BackupPolicies.Get)
+            .WithSummary("Get backup policy")
+            .Produces<BackupPolicyView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBackupPolicy");
+
+        backupPolicies.MapPost("/", BackupPolicies.Create)
+            .WithSummary("Create backup policy")
+            .Produces<BackupPolicyView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createBackupPolicy");
+
+        backupPolicies.MapPatch("{id:guid}", BackupPolicies.Update)
+            .WithSummary("Update backup policy")
+            .Accepts<UpdateBackupPolicyInput>("application/merge-patch+json", "application/json")
+            .Produces<BackupPolicyView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateBackupPolicy");
+
+        backupPolicies.MapDelete("{id:guid}", BackupPolicies.Archive)
+            .WithSummary("Archive backup policy")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("archiveBackupPolicy");
+
+        backupPolicies.MapPost("{id:guid}/runs", BackupPolicies.QueueRun)
+            .WithSummary("Queue backup policy run")
+            .Produces<BackupRunView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("queueBackupRun");
+    }
+
+    private static void MapBackupRunEndpoints(RouteGroupBuilder backupRuns)
+    {
+        backupRuns.MapGet("/", BackupRuns.List)
+            .WithSummary("List backup runs")
+            .Produces<BackupRunsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("listBackupRuns");
+
+        backupRuns.MapGet("{id:guid}", BackupRuns.Get)
+            .WithSummary("Get backup run")
+            .Produces<BackupRunView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBackupRun");
+
+        backupRuns.MapGet("{id:guid}/logs", BackupRuns.GetLogs)
+            .WithSummary("Get backup run logs")
+            .Produces<BackupLogsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBackupRunLogs");
+
+        backupRuns.MapGet("{id:guid}/events", BackupRuns.GetEvents)
+            .WithSummary("Get backup run events")
+            .Produces<BackupEventsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBackupRunEvents");
+
+        backupRuns.MapPost("{id:guid}/cancel", BackupRuns.Cancel)
+            .WithSummary("Cancel backup run")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("cancelBackupRun");
+
+        backupRuns.MapPost("{id:guid}/restoreVolume", BackupRuns.RestoreVolume)
+            .WithSummary("Queue backup volume restore")
+            .Produces<BackupRestoreRunView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("restoreBackupVolume");
+    }
+
+    private static void MapBackupRestoreRunEndpoints(RouteGroupBuilder backupRestoreRuns)
+    {
+        backupRestoreRuns.MapGet("/", BackupRestoreRuns.List)
+            .WithSummary("List backup restore runs")
+            .Produces<BackupRestoreRunsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("listBackupRestoreRuns");
+
+        backupRestoreRuns.MapGet("{id:guid}", BackupRestoreRuns.Get)
+            .WithSummary("Get backup restore run")
+            .Produces<BackupRestoreRunView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBackupRestoreRun");
+
+        backupRestoreRuns.MapGet("{id:guid}/logs", BackupRestoreRuns.GetLogs)
+            .WithSummary("Get backup restore run logs")
+            .Produces<BackupLogsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBackupRestoreRunLogs");
+
+        backupRestoreRuns.MapGet("{id:guid}/events", BackupRestoreRuns.GetEvents)
+            .WithSummary("Get backup restore run events")
+            .Produces<BackupEventsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBackupRestoreRunEvents");
+
+        backupRestoreRuns.MapPost("{id:guid}/cancel", BackupRestoreRuns.Cancel)
+            .WithSummary("Cancel backup restore run")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("cancelBackupRestoreRun");
     }
 
     private static void MapContainerEndpoints(RouteGroupBuilder containers)

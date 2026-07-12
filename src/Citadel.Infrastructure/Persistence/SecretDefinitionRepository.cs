@@ -156,6 +156,48 @@ internal sealed class SecretDefinitionRepository(IDbConnection db, Func<IDbTrans
         return result?.ToDomain();
     }
 
+    public async Task<IReadOnlyList<SecretResolutionMaterial>> GetResolutionMaterialsAsync(
+        IReadOnlyCollection<Guid> secretIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = secretIds.Where(static id => id != Guid.Empty).Distinct().ToArray();
+        if (ids.Length == 0)
+            return [];
+
+        const string sql = """
+            SELECT
+                sd.Id,
+                sd.Name,
+                sd.ProviderType,
+                sd.ProviderId,
+                sd.ExternalPath,
+                sd.ExternalKey,
+                sd.ExternalVersion,
+                sd.CreatedAt,
+                sd.UpdatedAt,
+                iv.EncryptedValue AS InternalEncryptedValue,
+                iv.CreatedAt AS InternalValueCreatedAt,
+                iv.UpdatedAt AS InternalValueUpdatedAt,
+                sp.Id AS ExternalProviderId,
+                sp.Name AS ExternalProviderName,
+                sp.ProviderType AS ExternalProviderType,
+                sp.Configuration AS ExternalProviderConfiguration,
+                sp.CreatedAt AS ExternalProviderCreatedAt,
+                sp.UpdatedAt AS ExternalProviderUpdatedAt
+            FROM SecretDefinitions sd
+            LEFT JOIN InternalSecretValues iv ON iv.SecretId = sd.Id
+            LEFT JOIN SecretProviders sp ON sp.Id = sd.ProviderId
+            WHERE sd.Id = ANY(@Ids)
+            """;
+
+        var rows = await db.QueryAsync<SecretResolutionMaterialDto>(
+            sql,
+            new { Ids = ids },
+            transaction: tx());
+
+        return [.. rows.Select(static x => x.ToDomain())];
+    }
+
     public Task<int> DeleteExternalByProviderIdAsync(Guid providerId, CancellationToken cancellationToken)
     {
         const string sql = """

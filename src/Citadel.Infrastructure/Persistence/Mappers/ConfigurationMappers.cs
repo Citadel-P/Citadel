@@ -1,4 +1,5 @@
 using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Entities.ResourceBindings;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
@@ -62,5 +63,55 @@ internal static class ConfigurationMappers
             CreatedAt = dto.CreatedAt,
             UpdatedAt = dto.UpdatedAt
         };
+    }
+
+    internal static SecretResolutionMaterial ToDomain(this SecretResolutionMaterialDto dto)
+    {
+        var definition = new SecretDefinition(
+            Name: dto.Name,
+            ProviderType: Enum.Parse<SecretProviderType>(dto.ProviderType),
+            ProviderId: dto.ProviderId,
+            ExternalPath: dto.ExternalPath,
+            ExternalKey: dto.ExternalKey,
+            ExternalVersion: dto.ExternalVersion)
+        {
+            Id = dto.Id,
+            CreatedAt = dto.CreatedAt,
+            UpdatedAt = dto.UpdatedAt
+        };
+
+        InternalSecretValue? value = null;
+        if (dto.InternalEncryptedValue is not null)
+        {
+            value = new InternalSecretValue(dto.Id, dto.InternalEncryptedValue)
+            {
+                CreatedAt = dto.InternalValueCreatedAt ?? dto.CreatedAt,
+                UpdatedAt = dto.InternalValueUpdatedAt ?? dto.UpdatedAt
+            };
+        }
+
+        SecretProvider? provider = null;
+        if (dto.ExternalProviderId.HasValue
+            && dto.ExternalProviderName is not null
+            && dto.ExternalProviderType is not null
+            && dto.ExternalProviderConfiguration is not null)
+        {
+            var configuration = JsonSerializer.Deserialize(
+                dto.ExternalProviderConfiguration,
+                ConfigurationJsonContext.Default.VaultKvV2SecretProviderConfiguration)
+                ?? throw new InvalidOperationException("Secret provider configuration is invalid.");
+
+            provider = new SecretProvider(
+                Name: dto.ExternalProviderName,
+                ProviderType: Enum.Parse<SecretProviderType>(dto.ExternalProviderType),
+                Configuration: configuration)
+            {
+                Id = dto.ExternalProviderId.Value,
+                CreatedAt = dto.ExternalProviderCreatedAt ?? dto.CreatedAt,
+                UpdatedAt = dto.ExternalProviderUpdatedAt ?? dto.UpdatedAt
+            };
+        }
+
+        return new SecretResolutionMaterial(definition, value, provider);
     }
 }

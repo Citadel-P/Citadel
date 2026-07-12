@@ -876,6 +876,8 @@ public enum LookupResourceType
     Role,
     ResourceBinding,
     License,
+    BackupRepository,
+    BackupPolicy,
 }
 
 public enum StackApplyEventType
@@ -912,7 +914,8 @@ public enum TaggableResourceType
     Platform,
     GitRepository,
     Registry,
-    AutomationAction
+    AutomationAction,
+    BackupPolicy
 }
 
 public enum SecretDeliveryMode
@@ -939,4 +942,97 @@ public enum ActionRunStatus
     TimedOut,
     Cancelled,
     Rejected
+}
+
+public enum BackupSourceType
+{
+    DockerVolume,
+    CitadelSystem
+}
+
+public enum VolumeBackupConsistency
+{
+    Live,
+    StopAttachedContainers
+}
+
+public enum BackupRepositoryType
+{
+    FileSystem,
+    S3Compatible
+}
+
+public enum BackupExecutionLocation
+{
+    Core,
+    Platform
+}
+
+public enum S3BucketLookup
+{
+    Auto,
+    Path,
+    Dns
+}
+
+public enum BackupRepositoryStatus
+{
+    Unknown,
+    Uninitialized,
+    Ready
+}
+
+public enum BackupRepositoryValidationStatus
+{
+    Unknown,
+    Ready,
+    Uninitialized,
+    Unavailable,
+    InvalidPassword,
+    InvalidConfiguration
+}
+
+public enum BackupRunTrigger
+{
+    Manual,
+    Schedule,
+    Automation
+}
+
+public enum BackupRunStatus
+{
+    Queued,
+    Preparing,
+    Running,
+    ApplyingRetention,
+    Succeeded,
+    SucceededWithWarnings,
+    Failed,
+    TimedOut,
+    Cancelled,
+    Rejected,
+    Interrupted
+}
+
+public enum BackupSnapshotAvailability
+{
+    Pending,
+    Available,
+    Expired,
+    Missing,
+    NotCreated
+}
+
+public enum BackupRestoreStatus
+{
+    Queued,
+    Preparing,
+    Running,
+    Succeeded,
+    SucceededWithWarnings,
+    Failed,
+    TimedOut,
+    Cancelled,
+    Rejected,
+    Interrupted
 }

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import {
   AlertRuleStatus,
   ActionRunStatus,
+  BackupRepositoryStatus,
   ContainerStateStatus,
   DeploymentStatus,
   GitReposStatus,
@@ -20,6 +21,7 @@ type StateValue =
   | StackReleaseStatus
   | PlatformStatus
   | AlertRuleStatus
+  | BackupRepositoryStatus
   | GitReposStatus
   | ActionRunStatus;
 
@@ -144,6 +146,13 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
       return { colorClass: 'bg-green-500', tooltip: 'Enabled' };
     case AlertRuleStatus.Disabled:
       return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
+    // Backup repositories
+    case BackupRepositoryStatus.Ready:
+      return { colorClass: 'bg-green-500', tooltip: 'Ready' };
+    case BackupRepositoryStatus.Uninitialized:
+      return { colorClass: 'bg-blue-400', tooltip: 'Uninitialized' };
+    case BackupRepositoryStatus.Unknown:
+      return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
     // Automation action runs
     case ActionRunStatus.Queued:
     case ActionRunStatus.Running:

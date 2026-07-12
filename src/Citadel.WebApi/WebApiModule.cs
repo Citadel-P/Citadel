@@ -273,6 +273,15 @@ internal static class WebApiModule
             .Validate(options => options.MaxLogBytes >= 4096, "Automations:MaxLogBytes must be at least 4096 bytes.")
             .Validate(IsValidAutomationInternalBaseUrl, "Automations:InternalBaseUrl must be an absolute HTTP or HTTPS URL.")
             .ValidateOnStart();
+        builder.Services
+            .AddOptions<BackupOptions>()
+            .BindConfiguration(BackupOptions.SectionName)
+            .Validate(options => !string.IsNullOrWhiteSpace(options.ResticPath), "Backups:ResticPath is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.WorkingDirectory), "Backups:WorkingDirectory is required.")
+            .Validate(options => options.RepositoryLeaseSeconds >= 30, "Backups:RepositoryLeaseSeconds must be at least 30 seconds.")
+            .Validate(options => options.DefaultTimeoutSeconds > 0, "Backups:DefaultTimeoutSeconds must be greater than zero.")
+            .Validate(options => options.MaxLogLineBytes >= 1024, "Backups:MaxLogLineBytes must be at least 1024 bytes.")
+            .ValidateOnStart();
     }
 
     private static bool IsValidAutomationInternalBaseUrl(AutomationOptions options)
