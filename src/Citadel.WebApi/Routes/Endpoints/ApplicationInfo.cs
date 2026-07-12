@@ -1,3 +1,4 @@
+using Hosting.Common;
 using Microsoft.AspNetCore.Http.HttpResults;
 using WebApi.Routes.Endpoints.Resources;
 
@@ -7,7 +8,7 @@ public static class ApplicationInfo
 {
     public static Ok<ApplicationInfoView> Get()
     {
-        var informationalVersion = ThisAssembly.AssemblyInformationalVersion;
+        var informationalVersion = Constants.CompatibilityVersion;
         return TypedResults.Ok(new ApplicationInfoView(
             "Citadel",
             GetDisplayVersion(informationalVersion),
