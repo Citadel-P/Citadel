@@ -1,4 +1,5 @@
-﻿using Application.Permissions;
+using Application.Permissions;
+using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Volumes;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -9,6 +10,12 @@ namespace WebApi.Routes.Endpoints.Resources.Volumes;
 public sealed record VolumesView(IEnumerable<DockerVolumeResultView> Volumes, ResourceCapabilities Capabilities)
 {
     internal static async Task<VolumesView> Map(IEnumerable<DockerVolumeResult> volumes, IPermissionEvaluator permissionEvaluator)
+        => await Map(volumes, permissionEvaluator, null);
+
+    internal static async Task<VolumesView> Map(
+        IEnumerable<DockerVolumeResult> volumes,
+        IPermissionEvaluator permissionEvaluator,
+        IReadOnlyDictionary<VolumeBackupCoverageKey, BackupCoverageView>? coverage)
     {
         var list = volumes as DockerVolumeResult[] ?? [.. volumes];
         var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.Platform);
@@ -26,8 +33,12 @@ public sealed record VolumesView(IEnumerable<DockerVolumeResultView> Volumes, Re
 
         for (var i = 0; i < list.Length; i++)
         {
-            views[i] = DockerVolumeResultView.Map(list[i]) with
+            var volume = list[i];
+            BackupCoverageView? backupCoverage = null;
+            coverage?.TryGetValue(new VolumeBackupCoverageKey(volume.PlatformId, volume.Name), out backupCoverage);
+            views[i] = DockerVolumeResultView.Map(volume) with
             {
+                BackupCoverage = backupCoverage,
                 Capabilities = capabilities
             };
         }

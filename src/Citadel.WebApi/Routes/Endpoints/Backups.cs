@@ -267,10 +267,14 @@ public static class BackupRestoreRuns
         return EndpointHandlers.HandleResult(result, BackupRestoreRunView.Map);
     }
 
-    public static Task<Results<Ok<BackupLogsView>, ProblemHttpResult>> GetLogs(
+    public static async Task<Results<Ok<BackupLogsView>, ProblemHttpResult>> GetLogs(
+        IMediator mediator,
         [FromRoute][Description("Backup restore run ID")] Guid id,
         CancellationToken cancellationToken)
-        => Task.FromResult<Results<Ok<BackupLogsView>, ProblemHttpResult>>(TypedResults.Ok(new BackupLogsView(id, string.Empty)));
+    {
+        var result = await mediator.Send(new GetBackupRestoreRunLogs(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, BackupLogsView.Map);
+    }
 
     public static Task<Results<Ok<BackupEventsView>, ProblemHttpResult>> GetEvents(
         [FromRoute][Description("Backup restore run ID")] Guid id,

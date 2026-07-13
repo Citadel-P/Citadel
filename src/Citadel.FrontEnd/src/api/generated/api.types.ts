@@ -425,6 +425,14 @@ export enum BackupExecutionLocation {
   Platform = "Platform",
 }
 
+export enum BackupCoverageStatus {
+  NotApplicable = "NotApplicable",
+  Unprotected = "Unprotected",
+  Protected = "Protected",
+  Warning = "Warning",
+  Failed = "Failed",
+}
+
 export enum AutoUpdateStatus {
   Unknown = "Unknown",
   UpToDate = "UpToDate",
@@ -2446,6 +2454,24 @@ export interface BackupAffectedContainer {
   restartSucceeded: boolean;
 }
 
+export interface BackupCoverageView {
+  status: BackupCoverageStatus;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  policyCount: number | string;
+  /** @format uuid */
+  lastRunId: null | string;
+  lastRunStatus: null | BackupRunStatus;
+  /** @format date-time */
+  lastRunAt: any;
+  /** @format date-time */
+  lastSuccessfulRunAt: any;
+  /** @format date-time */
+  nextRunAt: any;
+}
+
 export interface BackupEventsView {
   /** @format uuid */
   runId: string;
@@ -3501,6 +3527,7 @@ export interface DockerVolumeResultView {
   status: Record<string, string>;
   labels: Record<string, string>;
   options: Record<string, string>;
+  backupCoverage?: null | BackupCoverageView;
   capabilities?: null | VolumeCapabilities;
 }
 

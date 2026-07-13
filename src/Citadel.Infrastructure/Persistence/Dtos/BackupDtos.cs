@@ -92,6 +92,23 @@ internal sealed record BackupPolicyDto(
     }
 }
 
+internal sealed record VolumeBackupCoverageDto(
+    Guid PlatformId,
+    string VolumeName,
+    string Status,
+    int PolicyCount,
+    Guid? LastRunId,
+    string? LastRunStatus,
+    DateTime? LastRunAt,
+    DateTime? LastSuccessfulRunAt,
+    DateTime? NextRunAt)
+{
+    public VolumeBackupCoverageDto()
+        : this(Guid.Empty, string.Empty, string.Empty, 0, null, null, null, null, null)
+    {
+    }
+}
+
 internal sealed record BackupRunDto(
     Guid Id,
     Guid BackupPolicyId,
@@ -381,6 +398,151 @@ internal sealed record BackupRestoreRunDto(
             null,
             null,
             Guid.Empty)
+    {
+    }
+}
+
+internal sealed record BackupRestoreRunExecutionPlanDto(
+    Guid RestoreRunId,
+    Guid RestoreBackupRunId,
+    Guid RestoreBackupRepositoryId,
+    string RestoreStatus,
+    Guid RestoreTargetPlatformId,
+    string RestoreTargetVolumeName,
+    bool RestoreOverwriteExisting,
+    bool RestoreTargetVolumeCreatedByCitadel,
+    string RestoreAffectedContainers,
+    string RestoreWarnings,
+    DateTime RestoreQueuedAt,
+    DateTime? RestoreStartedAt,
+    DateTime? RestoreCompletedAt,
+    int? RestoreExitCode,
+    string? RestoreErrorCode,
+    string? RestoreErrorMessage,
+    Guid RestoreTriggeredByActorId,
+    Guid RunId,
+    Guid RunBackupPolicyId,
+    Guid RunBackupRepositoryId,
+    string RunPolicyNameSnapshot,
+    string RunSourceSnapshot,
+    string RunRepositoryTypeSnapshot,
+    string RunTrigger,
+    Guid? RunTriggerSourceId,
+    string RunStatus,
+    string? RunResticSnapshotId,
+    string? RunParentSnapshotId,
+    string RunSnapshotAvailability,
+    long? RunFilesProcessed,
+    long? RunBytesProcessed,
+    long? RunBytesAdded,
+    string RunWarnings,
+    DateTime RunQueuedAt,
+    DateTime? RunStartedAt,
+    DateTime? RunCompletedAt,
+    int? RunExitCode,
+    string? RunErrorCode,
+    string? RunErrorMessage,
+    Guid RunTriggeredByActorId,
+    Guid RepositoryId,
+    string RepositoryName,
+    string RepositoryNormalizedName,
+    string? RepositoryDescription,
+    string RepositoryType,
+    string RepositorySpec,
+    Guid RepositoryPasswordSecretId,
+    string RepositoryStatus,
+    DateTime? RepositoryLastPrunedAt,
+    DateTime? RepositoryLastCheckedAt,
+    Guid RepositoryCreatedByActorId,
+    DateTime RepositoryCreatedAt,
+    DateTime RepositoryUpdatedAt,
+    DateTime? RepositoryArchivedAt,
+    long RepositoryRowVersion)
+{
+    public BackupRestoreRunExecutionPlanDto()
+        : this(
+            Guid.Empty,
+            Guid.Empty,
+            Guid.Empty,
+            string.Empty,
+            Guid.Empty,
+            string.Empty,
+            false,
+            false,
+            "[]",
+            "[]",
+            DateTime.MinValue,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Guid.Empty,
+            Guid.Empty,
+            Guid.Empty,
+            Guid.Empty,
+            string.Empty,
+            "{}",
+            string.Empty,
+            string.Empty,
+            null,
+            string.Empty,
+            null,
+            null,
+            string.Empty,
+            null,
+            null,
+            null,
+            "[]",
+            DateTime.MinValue,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Guid.Empty,
+            Guid.Empty,
+            string.Empty,
+            string.Empty,
+            null,
+            string.Empty,
+            "{}",
+            Guid.Empty,
+            string.Empty,
+            null,
+            null,
+            Guid.Empty,
+            DateTime.MinValue,
+            DateTime.MinValue,
+            null,
+            0)
+    {
+    }
+}
+
+internal sealed record BackupRestoreRunLogDto(
+    Guid Id,
+    Guid BackupRestoreRunId,
+    DateTime CreatedAt,
+    string Stream,
+    string Message)
+{
+    public BackupRestoreRunLogDto()
+        : this(Guid.Empty, Guid.Empty, DateTime.MinValue, string.Empty, string.Empty)
+    {
+    }
+}
+
+internal sealed record BackupRestoreRunLogWithRunStateDto(
+    bool RunExists,
+    Guid? LogId,
+    Guid? LogBackupRestoreRunId,
+    DateTime? LogCreatedAt,
+    string? LogStream,
+    string? LogMessage)
+{
+    public BackupRestoreRunLogWithRunStateDto()
+        : this(false, null, null, null, null, null)
     {
     }
 }

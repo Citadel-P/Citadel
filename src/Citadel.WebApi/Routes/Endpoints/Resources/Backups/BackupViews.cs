@@ -1,6 +1,7 @@
 using Application.Features.Backups.Models;
 using Application.Permissions;
 using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Entities.Backups;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -320,11 +321,24 @@ public sealed record BackupRestoreRunsView(IReadOnlyList<BackupRestoreRunView> R
 public sealed record BackupLogsView(Guid RunId, string Logs)
 {
     internal static BackupLogsView Map(BackupRunLogResult result)
+        => Map(result.RunId, result.Logs);
+
+    internal static BackupLogsView Map(BackupRestoreRunLogResult result)
+        => Map(result.RunId, result.Logs);
+
+    private static BackupLogsView Map(Guid runId, IEnumerable<BackupRunLogEntry> logs)
         => new(
-            result.RunId,
+            runId,
             string.Join(
                 Environment.NewLine,
-                result.Logs.Select(static log => log.Stream == "stderr" ? $"[stderr] {log.Message}" : log.Message)));
+                logs.Select(static log => log.Stream == "stderr" ? $"[stderr] {log.Message}" : log.Message)));
+
+    private static BackupLogsView Map(Guid runId, IEnumerable<BackupRestoreRunLogEntry> logs)
+        => new(
+            runId,
+            string.Join(
+                Environment.NewLine,
+                logs.Select(static log => log.Stream == "stderr" ? $"[stderr] {log.Message}" : log.Message)));
 }
 
 public sealed record BackupEventsView(Guid RunId, IReadOnlyList<string> Events);

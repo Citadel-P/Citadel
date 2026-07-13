@@ -5,6 +5,7 @@ using Application.Features.GitRepositories.Queries;
 using Domain;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Automation;
+using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Compose;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
@@ -93,6 +94,8 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<BackupRunTrigger>),
         typeof(JsonStringEnumConverter<BackupRunStatus>),
         typeof(JsonStringEnumConverter<BackupSnapshotAvailability>),
+        typeof(JsonStringEnumConverter<BackupCoverageStatus>),
+        typeof(JsonStringEnumConverter<BackupCoverageResourceType>),
         typeof(JsonStringEnumConverter<BackupRestoreStatus>)
     })]
 [JsonSerializable(typeof(string[]))]
@@ -196,6 +199,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(BackupRepositoryView))]
 [JsonSerializable(typeof(BackupRepositoriesView))]
 [JsonSerializable(typeof(BackupRepositoryValidationView))]
+[JsonSerializable(typeof(BackupRunStatus))]
+[JsonSerializable(typeof(BackupRunStatus?))]
 [JsonSerializable(typeof(BackupPolicyInput))]
 [JsonSerializable(typeof(UpdateBackupPolicyInput))]
 [JsonSerializable(typeof(UpdateBackupPolicyInputPatchDocument))]
@@ -209,6 +214,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(BackupRestoreRunsView))]
 [JsonSerializable(typeof(BackupLogsView))]
 [JsonSerializable(typeof(BackupEventsView))]
+[JsonSerializable(typeof(BackupCoverageView))]
 [JsonSerializable(typeof(PlatformInput))]
 [JsonSerializable(typeof(CreatePlatformInput))]
 [JsonSerializable(typeof(PrunePlatformInput))]

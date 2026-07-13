@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Tags;
@@ -209,4 +210,129 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         Assert.Equal(BackupRepositoryArchiveResult.Archived, archiveUnusedRepository);
         Assert.NotNull(archivedRepository?.ArchivedAt);
     }
+
+    [Fact]
+    public async Task BackupPolicyVolumeCoverage_ShouldReturnCoverageForRequestedVolumesInOneQuery()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var actorId = Constants.SystemId;
+        var platformId = Guid.CreateVersion7();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var passwordSecret = new SecretDefinition("RESTIC_PASSWORD_COVERAGE", SecretProviderType.InternalEncrypted);
+        await uow.SecretDefinitions.AddAsync(
+            passwordSecret,
+            new InternalSecretValue(passwordSecret.Id, "encrypted-value"),
+            cancellationToken);
+
+        var repository = new BackupRepository(
+            "repo-coverage",
+            null,
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "/backup-coverage"),
+            passwordSecret.Id,
+            actorId);
+        await uow.BackupRepositories.AddAsync(repository, cancellationToken);
+        await uow.BackupRepositoryValidations.UpsertAsync(
+            new BackupRepositoryValidation(
+                repository.Id,
+                BackupExecutionLocation.Core,
+                platformId: null,
+                BackupRepositoryValidationStatus.Ready,
+                DateTimeOffset.UtcNow,
+                null,
+                null),
+            cancellationToken);
+
+        var protectedPolicy = await AddVolumePolicyAsync(uow, repository.Id, platformId, "protected-volume", enabled: true, actorId, cancellationToken);
+        var protectedRun = CreateRun(protectedPolicy, repository);
+        protectedRun.MarkRunning(DateTimeOffset.UtcNow);
+        protectedRun.CompleteSucceeded("snapshot-protected", null, 1, 1, 1, [], DateTimeOffset.UtcNow);
+        await uow.BackupRuns.AddAsync(protectedRun, cancellationToken);
+
+        var warningPolicy = await AddVolumePolicyAsync(uow, repository.Id, platformId, "warning-volume", enabled: true, actorId, cancellationToken);
+        var warningRun = CreateRun(warningPolicy, repository);
+        warningRun.MarkRunning(DateTimeOffset.UtcNow);
+        warningRun.CompleteSucceeded(
+            "snapshot-warning",
+            null,
+            1,
+            1,
+            1,
+            [new BackupRunWarning("backup.warning", "Warning")],
+            DateTimeOffset.UtcNow);
+        await uow.BackupRuns.AddAsync(warningRun, cancellationToken);
+
+        var failedPolicy = await AddVolumePolicyAsync(uow, repository.Id, platformId, "failed-volume", enabled: true, actorId, cancellationToken);
+        var failedRun = CreateRun(failedPolicy, repository);
+        failedRun.MarkRunning(DateTimeOffset.UtcNow);
+        failedRun.Fail(BackupRunStatus.Failed, 1, "backup.failed", "Backup failed.", DateTimeOffset.UtcNow);
+        await uow.BackupRuns.AddAsync(failedRun, cancellationToken);
+
+        await AddVolumePolicyAsync(uow, repository.Id, platformId, "disabled-volume", enabled: false, actorId, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var coverage = await uow.BackupPolicies.GetVolumeCoverageAsync(
+            [
+                new VolumeBackupCoverageKey(platformId, "protected-volume"),
+                new VolumeBackupCoverageKey(platformId, "warning-volume"),
+                new VolumeBackupCoverageKey(platformId, "failed-volume"),
+                new VolumeBackupCoverageKey(platformId, "disabled-volume"),
+                new VolumeBackupCoverageKey(platformId, "unprotected-volume")
+            ],
+            userId: null,
+            ResourceType.BackupPolicy,
+            PermissionLevel.Read,
+            SpecificPermission.None,
+            cancellationToken);
+
+        var byVolume = coverage.ToDictionary(static item => item.Resource.VolumeName, static item => item.Coverage);
+
+        Assert.Equal(BackupCoverageStatus.Protected, byVolume["protected-volume"].Status);
+        Assert.Equal(BackupRunStatus.Succeeded, byVolume["protected-volume"].LastRunStatus);
+        Assert.Equal(BackupCoverageStatus.Warning, byVolume["warning-volume"].Status);
+        Assert.Equal(BackupRunStatus.SucceededWithWarnings, byVolume["warning-volume"].LastRunStatus);
+        Assert.Equal(BackupCoverageStatus.Failed, byVolume["failed-volume"].Status);
+        Assert.Equal(BackupRunStatus.Failed, byVolume["failed-volume"].LastRunStatus);
+        Assert.Equal(BackupCoverageStatus.Warning, byVolume["disabled-volume"].Status);
+        Assert.Equal(BackupCoverageStatus.Unprotected, byVolume["unprotected-volume"].Status);
+    }
+
+    private static async Task<BackupPolicy> AddVolumePolicyAsync(
+        IUnitOfWork uow,
+        Guid repositoryId,
+        Guid platformId,
+        string volumeName,
+        bool enabled,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
+        var policy = new BackupPolicy(
+            $"policy-{volumeName}",
+            null,
+            new DockerVolumeBackupSource(platformId, volumeName),
+            repositoryId,
+            enabled,
+            cron: null,
+            timeZone: null,
+            keepLastSuccessful: BackupPolicy.DefaultKeepLastSuccessful,
+            timeoutSeconds: BackupPolicy.DefaultTimeoutSeconds,
+            alertOnFailure: true,
+            runAsActorId: actorId,
+            createdByActorId: actorId);
+        await uow.BackupPolicies.AddAsync(policy, cancellationToken);
+        return policy;
+    }
+
+    private static BackupRun CreateRun(BackupPolicy policy, BackupRepository repository)
+        => new(
+            policy.Id,
+            repository.Id,
+            policy.Name,
+            policy.Source,
+            repository.Type,
+            BackupRunTrigger.Manual,
+            triggerSourceId: null,
+            triggeredByActorId: Constants.SystemId);
 }

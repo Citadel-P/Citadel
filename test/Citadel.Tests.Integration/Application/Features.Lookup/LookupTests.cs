@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Backups;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
@@ -43,6 +44,8 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
     private Guid _globalResourceBindingId;
     private Guid _deploymentResourceBindingId;
     private Guid _stackResourceBindingId;
+    private Guid _visibleBackupRepositoryId;
+    private Guid _hiddenBackupRepositoryId;
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
@@ -259,6 +262,38 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         _globalResourceBindingId = globalResourceBinding.Id;
         _deploymentResourceBindingId = deploymentResourceBinding.Id;
         _stackResourceBindingId = stackResourceBinding.Id;
+
+        var visibleBackupPassword = new SecretDefinition(
+            "LOOKUP_BACKUP_PASSWORD_VISIBLE",
+            SecretProviderType.InternalEncrypted);
+        var hiddenBackupPassword = new SecretDefinition(
+            "LOOKUP_BACKUP_PASSWORD_HIDDEN",
+            SecretProviderType.InternalEncrypted);
+        await uow.SecretDefinitions.AddAsync(
+            visibleBackupPassword,
+            new InternalSecretValue(visibleBackupPassword.Id, "encrypted-visible"),
+            TestContext.Current.CancellationToken);
+        await uow.SecretDefinitions.AddAsync(
+            hiddenBackupPassword,
+            new InternalSecretValue(hiddenBackupPassword.Id, "encrypted-hidden"),
+            TestContext.Current.CancellationToken);
+
+        var visibleBackupRepository = new BackupRepository(
+            "backup-repository-visible",
+            null,
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "/backup/visible"),
+            visibleBackupPassword.Id,
+            Constants.SystemId);
+        var hiddenBackupRepository = new BackupRepository(
+            "backup-repository-hidden",
+            null,
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "/backup/hidden"),
+            hiddenBackupPassword.Id,
+            Constants.SystemId);
+        await uow.BackupRepositories.AddAsync(visibleBackupRepository, TestContext.Current.CancellationToken);
+        await uow.BackupRepositories.AddAsync(hiddenBackupRepository, TestContext.Current.CancellationToken);
+        _visibleBackupRepositoryId = visibleBackupRepository.Id;
+        _hiddenBackupRepositoryId = hiddenBackupRepository.Id;
 
         await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
@@ -1069,6 +1104,30 @@ public class LookupTests(PostgresTestFixture fixture) : IntegrationTestBase(fixt
         var items = document.RootElement;
         Assert.Equal(1, items.GetArrayLength());
         Assert.Equal(_visibleTeamId, items[0].GetProperty("id").GetGuid());
+    }
+
+    [Fact]
+    public async Task Lookup_BackupRepository_Add_Mode_Should_Return_Only_Visible_Repositories()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.BackupRepository, _visibleBackupRepositoryId, PermissionLevel.Read)]);
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync("/api/v1/lookup?targetResourceType=BackupRepository", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        using var document = await JsonDocument.ParseAsync(
+            new MemoryStream(System.Text.Encoding.UTF8.GetBytes(responseBody)),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var items = document.RootElement;
+        Assert.Equal(1, items.GetArrayLength());
+        Assert.Equal(_visibleBackupRepositoryId, items[0].GetProperty("id").GetGuid());
+        Assert.NotEqual(_hiddenBackupRepositoryId, items[0].GetProperty("id").GetGuid());
     }
 
     [Fact]

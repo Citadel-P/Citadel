@@ -1662,6 +1662,7 @@ internal static class Configuration
         policy.HasIndex("Enabled", "Cron").HasDatabaseName($"IX_{policyTable}_Schedule");
         policy.HasIndex("ArchivedAt").HasDatabaseName($"IX_{policyTable}_ArchivedAt");
         policy.HasIndex("RunAsActorId").HasDatabaseName($"IX_{policyTable}_RunAsActorId");
+        policy.HasIndex("Source").HasMethod("gin").HasDatabaseName($"IX_{policyTable}_Source_Gin");
 
         var runTable = "BackupRuns";
         var run = builder.Entity("BackupRun");

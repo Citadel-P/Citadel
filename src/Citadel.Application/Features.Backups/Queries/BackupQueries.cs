@@ -1,6 +1,8 @@
 using Application.Features.Backups.Models;
 using Application.Features.Tags.Queries;
+using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -37,6 +39,15 @@ public sealed record GetBackupRestoreRuns(Guid? BackupRunId = null, int Limit = 
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record GetBackupRestoreRun(Guid RestoreRunId) : IQuery<Result<BackupRestoreRun>>;
+
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
+public sealed record GetBackupRestoreRunLogs(Guid RestoreRunId) : IQuery<Result<BackupRestoreRunLogResult>>;
+
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
+public sealed record GetBackupCoverage(
+    BackupCoverageResourceType CoverageResourceType,
+    IReadOnlyList<BackupCoverageResourceKey> Resources)
+    : IQuery<Result<BackupCoverageResult>>;
 
 internal sealed class GetBackupRepositoriesHandler(IUnitOfWork unitOfWork)
     : IQueryHandler<GetBackupRepositories, Result<BackupRepositoryListResult>>
@@ -159,5 +170,58 @@ internal sealed class GetBackupRestoreRunHandler(IUnitOfWork unitOfWork)
         return run is null
             ? Result.Failure<BackupRestoreRun>(new NotFoundError("Backup restore run not found."))
             : Result.Success(run);
+    }
+}
+
+internal sealed class GetBackupRestoreRunLogsHandler(IUnitOfWork unitOfWork)
+    : IQueryHandler<GetBackupRestoreRunLogs, Result<BackupRestoreRunLogResult>>
+{
+    public async ValueTask<Result<BackupRestoreRunLogResult>> Handle(GetBackupRestoreRunLogs query, CancellationToken cancellationToken)
+    {
+        var result = await unitOfWork.BackupRestoreRunLogs.GetByRunWithRunStateAsync(query.RestoreRunId, cancellationToken);
+        if (!result.RunExists)
+            return Result.Failure<BackupRestoreRunLogResult>(new NotFoundError("Backup restore run not found."));
+
+        return Result.Success(new BackupRestoreRunLogResult(query.RestoreRunId, result.Logs));
+    }
+}
+
+internal sealed class GetBackupCoverageHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor)
+    : IQueryHandler<GetBackupCoverage, Result<BackupCoverageResult>>
+{
+    public async ValueTask<Result<BackupCoverageResult>> Handle(GetBackupCoverage query, CancellationToken cancellationToken)
+    {
+        if (query.Resources.Count == 0)
+            return Result.Success(new BackupCoverageResult([]));
+
+        if (query.CoverageResourceType != BackupCoverageResourceType.Volume)
+            return Result.Failure<BackupCoverageResult>(new BadRequestError("Only volume backup coverage is currently supported."));
+
+        var volumeKeys = new List<VolumeBackupCoverageKey>(query.Resources.Count);
+        foreach (var resource in query.Resources)
+        {
+            if (!resource.PlatformId.HasValue || string.IsNullOrWhiteSpace(resource.Name))
+                return Result.Failure<BackupCoverageResult>(new BadRequestError("Volume backup coverage requires platformId and name."));
+
+            volumeKeys.Add(new VolumeBackupCoverageKey(resource.PlatformId.Value, resource.Name));
+        }
+
+        var user = userContextAccessor.Current;
+        var coverage = await unitOfWork.BackupPolicies.GetVolumeCoverageAsync(
+            volumeKeys,
+            user is not null && !user.IsAdmin ? user.UserId : null,
+            ResourceType.BackupPolicy,
+            PermissionLevel.Read,
+            SpecificPermission.None,
+            cancellationToken);
+
+        return Result.Success(new BackupCoverageResult(
+            [.. coverage.Select(static item => new BackupCoverageItem(
+                new BackupCoverageResourceKey(
+                    PlatformId: item.Resource.PlatformId,
+                    Name: item.Resource.VolumeName),
+                item.Coverage))]));
     }
 }

@@ -18,6 +18,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Infrastructure.EdgeAgents;
+using WebApi.OpenApi;
 using WebApi.Hubs;
 using WebApi.Middlewares;
 using WebApi.Routes;
@@ -42,6 +43,7 @@ internal static class WebApiModule
                 options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1; 
                 options.AddDocumentTransformer<ServerTransformer>();
                 options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+                options.AddDocumentTransformer<KnownEnumSchemaDocumentTransformer>();
                 options.AddOperationTransformer<AddCookieOperationTransformer>();
                 options.AddOperationTransformer<ProduceCookieOperationTransformer>();
                 options.AddOperationTransformer<ExampleOperationTransformer>();

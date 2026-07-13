@@ -1,6 +1,8 @@
 using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
@@ -279,6 +281,34 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
             new { IncludeArchived = includeArchived },
             transaction: tx());
         return result.ToDomain();
+    }
+
+    public Task<IEnumerable<ResourceInfo>> GetAuthorizedLookupAsync(
+        Guid userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken)
+    {
+        string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT r.Id, r.Name
+            FROM BackupRepositories r
+            WHERE r.ArchivedAt IS NULL
+              AND {{AuthorizationSql.ResourcePredicatePrefix}}r.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+            ORDER BY r.Name ASC
+            """;
+
+        return db.QueryAsync<ResourceInfo>(
+            sql,
+            new
+            {
+                UserId = userId,
+                ResourceType = (int)resourceType,
+                GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
+                SpecificPermission = (int)specificPermission
+            },
+            transaction: tx());
     }
 
     public Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken)
@@ -896,6 +926,169 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 SpecificPermission = (int)specificPermission
             },
             transaction: tx());
+    }
+
+    public async Task<IReadOnlyList<VolumeBackupCoverage>> GetVolumeCoverageAsync(
+        IReadOnlyCollection<VolumeBackupCoverageKey> volumes,
+        Guid? userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken)
+    {
+        if (volumes.Count == 0)
+            return [];
+
+        var requested = volumes
+            .Where(static volume => volume.PlatformId != Guid.Empty && !string.IsNullOrWhiteSpace(volume.VolumeName))
+            .Select(static volume => new VolumeBackupCoverageKey(volume.PlatformId, BackupRepository.NormalizeName(volume.VolumeName)))
+            .Distinct()
+            .ToArray();
+
+        if (requested.Length == 0)
+            return [];
+
+        var authorizationCtes = userId.HasValue
+            ? $", {AuthorizationSql.ActorScopeCte}, {AuthorizationSql.GlobalAccessCte}"
+            : string.Empty;
+        var authorizationPredicate = userId.HasValue
+            ? $"AND {AuthorizationSql.ResourcePredicatePrefix}p.Id{AuthorizationSql.ResourcePredicateSuffix}"
+            : string.Empty;
+
+        string sql = $$"""
+            WITH requested AS (
+                SELECT *
+                FROM unnest(@PlatformIds::uuid[], @VolumeNames::text[]) AS r(PlatformId, VolumeName)
+            )
+            {{authorizationCtes}},
+            policies AS (
+                SELECT
+                    r.PlatformId,
+                    r.VolumeName,
+                    p.Id,
+                    p.Enabled,
+                    p.BackupRepositoryId
+                FROM requested r
+                JOIN BackupPolicies p
+                  ON p.ArchivedAt IS NULL
+                 AND (
+                    p.Source @> jsonb_build_object('$type', @DockerVolumeType, 'PlatformId', r.PlatformId::text, 'VolumeName', r.VolumeName)
+                    OR p.Source @> jsonb_build_object('$type', @DockerVolumeType, 'platformId', r.PlatformId::text, 'volumeName', r.VolumeName)
+                 )
+                 {{authorizationPredicate}}
+            ),
+            aggregate AS (
+                SELECT
+                    r.PlatformId,
+                    r.VolumeName,
+                    COUNT(p.Id)::int AS PolicyCount,
+                    COUNT(p.Id) FILTER (WHERE p.Enabled)::int AS EnabledPolicyCount
+                FROM requested r
+                LEFT JOIN policies p
+                  ON p.PlatformId = r.PlatformId
+                 AND p.VolumeName = r.VolumeName
+                GROUP BY r.PlatformId, r.VolumeName
+            ),
+            repository_readiness AS (
+                SELECT
+                    p.PlatformId,
+                    p.VolumeName,
+                    BOOL_OR(v.Status = @ReadyValidationStatus) AS HasReadyValidation
+                FROM policies p
+                LEFT JOIN BackupRepositoryValidations v
+                  ON v.BackupRepositoryId = p.BackupRepositoryId
+                 AND v.Location = @CoreLocation
+                 AND v.PlatformId IS NULL
+                GROUP BY p.PlatformId, p.VolumeName
+            ),
+            latest_runs AS (
+                SELECT DISTINCT ON (p.PlatformId, p.VolumeName)
+                    p.PlatformId,
+                    p.VolumeName,
+                    r.Id AS LastRunId,
+                    r.Status AS LastRunStatus,
+                    COALESCE(r.CompletedAt, r.QueuedAt) AS LastRunAt
+                FROM policies p
+                JOIN BackupRuns r ON r.BackupPolicyId = p.Id
+                ORDER BY p.PlatformId, p.VolumeName, r.QueuedAt DESC, r.Id DESC
+            ),
+            latest_success AS (
+                SELECT DISTINCT ON (p.PlatformId, p.VolumeName)
+                    p.PlatformId,
+                    p.VolumeName,
+                    COALESCE(r.CompletedAt, r.QueuedAt) AS LastSuccessfulRunAt
+                FROM policies p
+                JOIN BackupRuns r ON r.BackupPolicyId = p.Id
+                WHERE r.Status = ANY(@SuccessfulStatuses)
+                  AND r.SnapshotAvailability = @AvailableSnapshot
+                ORDER BY p.PlatformId, p.VolumeName, COALESCE(r.CompletedAt, r.QueuedAt) DESC, r.Id DESC
+            )
+            SELECT
+                a.PlatformId AS PlatformId,
+                a.VolumeName AS VolumeName,
+                CASE
+                    WHEN a.PolicyCount = 0 THEN @UnprotectedStatus
+                    WHEN lr.LastRunStatus = @FailedRunStatus THEN @FailedStatus
+                    WHEN a.EnabledPolicyCount = 0 THEN @WarningStatus
+                    WHEN COALESCE(rr.HasReadyValidation, FALSE) = FALSE THEN @WarningStatus
+                    WHEN lr.LastRunStatus = ANY(@WarningRunStatuses) THEN @WarningStatus
+                    WHEN ls.LastSuccessfulRunAt IS NOT NULL THEN @ProtectedStatus
+                    ELSE @WarningStatus
+                END AS Status,
+                a.PolicyCount AS PolicyCount,
+                lr.LastRunId AS LastRunId,
+                lr.LastRunStatus AS LastRunStatus,
+                lr.LastRunAt AS LastRunAt,
+                ls.LastSuccessfulRunAt AS LastSuccessfulRunAt,
+                NULL::timestamp AS NextRunAt
+            FROM aggregate a
+            LEFT JOIN repository_readiness rr
+              ON rr.PlatformId = a.PlatformId
+             AND rr.VolumeName = a.VolumeName
+            LEFT JOIN latest_runs lr
+              ON lr.PlatformId = a.PlatformId
+             AND lr.VolumeName = a.VolumeName
+            LEFT JOIN latest_success ls
+              ON ls.PlatformId = a.PlatformId
+             AND ls.VolumeName = a.VolumeName
+            ORDER BY a.VolumeName ASC
+            """;
+
+        var rows = await db.QueryAsync<VolumeBackupCoverageDto>(
+            sql,
+            new
+            {
+                PlatformIds = requested.Select(static volume => volume.PlatformId).ToArray(),
+                VolumeNames = requested.Select(static volume => volume.VolumeName).ToArray(),
+                UserId = userId ?? Guid.Empty,
+                ResourceType = (int)resourceType,
+                GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
+                SpecificPermission = (int)specificPermission,
+                DockerVolumeType = "DockerVolume",
+                CoreLocation = EnumFormatter<BackupExecutionLocation>.GetValue(BackupExecutionLocation.Core),
+                ReadyValidationStatus = EnumFormatter<BackupRepositoryValidationStatus>.GetValue(BackupRepositoryValidationStatus.Ready),
+                AvailableSnapshot = EnumFormatter<BackupSnapshotAvailability>.GetValue(BackupSnapshotAvailability.Available),
+                SuccessfulStatuses = new[]
+                {
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Succeeded),
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.SucceededWithWarnings)
+                },
+                WarningRunStatuses = new[]
+                {
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.TimedOut),
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Cancelled),
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Interrupted),
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.SucceededWithWarnings)
+                },
+                FailedRunStatus = EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Failed),
+                UnprotectedStatus = EnumFormatter<BackupCoverageStatus>.GetValue(BackupCoverageStatus.Unprotected),
+                ProtectedStatus = EnumFormatter<BackupCoverageStatus>.GetValue(BackupCoverageStatus.Protected),
+                WarningStatus = EnumFormatter<BackupCoverageStatus>.GetValue(BackupCoverageStatus.Warning),
+                FailedStatus = EnumFormatter<BackupCoverageStatus>.GetValue(BackupCoverageStatus.Failed)
+            },
+            transaction: tx());
+
+        return [.. rows.Select(static row => row.ToDomain())];
     }
 
     public Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken)
@@ -1589,6 +1782,64 @@ internal sealed class BackupRunLogRepository(IDbConnection db, Func<IDbTransacti
 
 internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTransaction> tx) : IBackupRestoreRunRepository
 {
+    private const string RestoreExecutionPlanSelect = """
+            rr.Id AS RestoreRunId,
+            rr.BackupRunId AS RestoreBackupRunId,
+            rr.BackupRepositoryId AS RestoreBackupRepositoryId,
+            rr.Status AS RestoreStatus,
+            rr.TargetPlatformId AS RestoreTargetPlatformId,
+            rr.TargetVolumeName AS RestoreTargetVolumeName,
+            rr.OverwriteExisting AS RestoreOverwriteExisting,
+            rr.TargetVolumeCreatedByCitadel AS RestoreTargetVolumeCreatedByCitadel,
+            rr.AffectedContainers AS RestoreAffectedContainers,
+            rr.Warnings AS RestoreWarnings,
+            rr.QueuedAt AS RestoreQueuedAt,
+            rr.StartedAt AS RestoreStartedAt,
+            rr.CompletedAt AS RestoreCompletedAt,
+            rr.ExitCode AS RestoreExitCode,
+            rr.ErrorCode AS RestoreErrorCode,
+            rr.ErrorMessage AS RestoreErrorMessage,
+            rr.TriggeredByActorId AS RestoreTriggeredByActorId,
+            brn.Id AS RunId,
+            brn.BackupPolicyId AS RunBackupPolicyId,
+            brn.BackupRepositoryId AS RunBackupRepositoryId,
+            brn.PolicyNameSnapshot AS RunPolicyNameSnapshot,
+            brn.SourceSnapshot AS RunSourceSnapshot,
+            brn.RepositoryTypeSnapshot AS RunRepositoryTypeSnapshot,
+            brn.Trigger AS RunTrigger,
+            brn.TriggerSourceId AS RunTriggerSourceId,
+            brn.Status AS RunStatus,
+            brn.ResticSnapshotId AS RunResticSnapshotId,
+            brn.ParentSnapshotId AS RunParentSnapshotId,
+            brn.SnapshotAvailability AS RunSnapshotAvailability,
+            brn.FilesProcessed AS RunFilesProcessed,
+            brn.BytesProcessed AS RunBytesProcessed,
+            brn.BytesAdded AS RunBytesAdded,
+            brn.Warnings AS RunWarnings,
+            brn.QueuedAt AS RunQueuedAt,
+            brn.StartedAt AS RunStartedAt,
+            brn.CompletedAt AS RunCompletedAt,
+            brn.ExitCode AS RunExitCode,
+            brn.ErrorCode AS RunErrorCode,
+            brn.ErrorMessage AS RunErrorMessage,
+            brn.TriggeredByActorId AS RunTriggeredByActorId,
+            repo.Id AS RepositoryId,
+            repo.Name AS RepositoryName,
+            repo.NormalizedName AS RepositoryNormalizedName,
+            repo.Description AS RepositoryDescription,
+            repo.Type AS RepositoryType,
+            repo.Spec AS RepositorySpec,
+            repo.PasswordSecretId AS RepositoryPasswordSecretId,
+            repo.Status AS RepositoryStatus,
+            repo.LastPrunedAt AS RepositoryLastPrunedAt,
+            repo.LastCheckedAt AS RepositoryLastCheckedAt,
+            repo.CreatedByActorId AS RepositoryCreatedByActorId,
+            repo.CreatedAt AS RepositoryCreatedAt,
+            repo.UpdatedAt AS RepositoryUpdatedAt,
+            repo.ArchivedAt AS RepositoryArchivedAt,
+            repo.RowVersion AS RepositoryRowVersion
+        """;
+
     public Task<int> AddAsync(BackupRestoreRun run, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -1668,6 +1919,57 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
         return result?.ToDomain();
     }
 
+    public async Task<BackupRestoreRunExecutionPlan?> GetExecutionPlanAsync(Guid id, CancellationToken cancellationToken)
+    {
+        string sql = $$"""
+            SELECT
+                {{RestoreExecutionPlanSelect}}
+            FROM BackupRestoreRuns rr
+            JOIN BackupRuns brn ON brn.Id = rr.BackupRunId
+            JOIN BackupRepositories repo ON repo.Id = rr.BackupRepositoryId
+            WHERE rr.Id = @Id
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<BackupRestoreRunExecutionPlanDto>(
+            sql,
+            new { Id = id },
+            transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<BackupRestoreRunExecutionPlan?> TryClaimExecutionPlanAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken)
+    {
+        string sql = $$"""
+            WITH claimed AS (
+                UPDATE BackupRestoreRuns
+                SET Status = @PreparingStatus,
+                    StartedAt = COALESCE(StartedAt, @StartedAt)
+                WHERE Id = @Id
+                  AND Status = @QueuedStatus
+                RETURNING *
+            )
+            SELECT
+                {{RestoreExecutionPlanSelect}}
+            FROM claimed rr
+            JOIN BackupRuns brn ON brn.Id = rr.BackupRunId
+            JOIN BackupRepositories repo ON repo.Id = rr.BackupRepositoryId
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<BackupRestoreRunExecutionPlanDto>(
+            sql,
+            new
+            {
+                Id = id,
+                StartedAt = BackupMappers.ToUtcDateTime(startedAt),
+                QueuedStatus = EnumFormatter<BackupRestoreStatus>.GetValue(BackupRestoreStatus.Queued),
+                PreparingStatus = EnumFormatter<BackupRestoreStatus>.GetValue(BackupRestoreStatus.Preparing)
+            },
+            transaction: tx());
+        return result?.ToDomain();
+    }
+
     public async Task<IEnumerable<BackupRestoreRun>> GetPagedAsync(int limit, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -1701,6 +2003,65 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
         return result.ToDomain();
     }
 
+    public async Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT Id
+            FROM BackupRestoreRuns
+            WHERE Status = @Status
+            ORDER BY QueuedAt ASC
+            LIMIT @Limit
+            """;
+
+        var result = await db.QueryAsync<Guid>(
+            sql,
+            new
+            {
+                Status = EnumFormatter<BackupRestoreStatus>.GetValue(BackupRestoreStatus.Queued),
+                Limit = Math.Clamp(limit, 1, 100)
+            },
+            transaction: tx());
+        return [.. result];
+    }
+
+    public async Task<BackupRestoreRunFinishResult> FinishRunAsync(BackupRestoreRun run, DateTimeOffset completedAt, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BackupRestoreRuns
+            SET Status = @Status,
+                TargetVolumeCreatedByCitadel = @TargetVolumeCreatedByCitadel,
+                AffectedContainers = @AffectedContainers::jsonb,
+                Warnings = @Warnings::jsonb,
+                StartedAt = @StartedAt,
+                CompletedAt = @CompletedAt,
+                ExitCode = @ExitCode,
+                ErrorCode = @ErrorCode,
+                ErrorMessage = @ErrorMessage
+            WHERE Id = @Id
+              AND (@Status = @CancelledStatus OR Status <> @CancelledStatus)
+            """;
+
+        var rows = await db.ExecuteAsync(
+            sql,
+            new
+            {
+                run.Id,
+                Status = EnumFormatter<BackupRestoreStatus>.GetValue(run.Status),
+                CancelledStatus = EnumFormatter<BackupRestoreStatus>.GetValue(BackupRestoreStatus.Cancelled),
+                run.TargetVolumeCreatedByCitadel,
+                AffectedContainers = BackupMappers.SerializeAffectedContainers(run.AffectedContainers),
+                Warnings = BackupMappers.SerializeWarnings(run.Warnings),
+                StartedAt = BackupMappers.ToUtcDateTime(run.StartedAt),
+                CompletedAt = BackupMappers.ToUtcDateTime(completedAt),
+                run.ExitCode,
+                run.ErrorCode,
+                run.ErrorMessage
+            },
+            transaction: tx());
+
+        return rows > 0 ? BackupRestoreRunFinishResult.Completed : BackupRestoreRunFinishResult.AlreadyCancelled;
+    }
+
     public Task<int> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -1732,4 +2093,97 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
             transaction: tx());
     }
 
+}
+
+internal sealed class BackupRestoreRunLogRepository(IDbConnection db, Func<IDbTransaction> tx) : IBackupRestoreRunLogRepository
+{
+    public Task<int> AddRangeAsync(IReadOnlyCollection<BackupRestoreRunLogEntry> entries, CancellationToken cancellationToken)
+    {
+        if (entries.Count == 0)
+            return Task.FromResult(0);
+
+        var batch = entries.ToArray();
+        const string sql = """
+            INSERT INTO BackupRestoreRunLogs (Id, BackupRestoreRunId, CreatedAt, Stream, Message)
+            SELECT Id, BackupRestoreRunId, CreatedAt, Stream, Message
+            FROM unnest(
+                @Ids::uuid[],
+                @BackupRestoreRunIds::uuid[],
+                @CreatedAts::timestamp[],
+                @Streams::text[],
+                @Messages::text[])
+                AS logs(Id, BackupRestoreRunId, CreatedAt, Stream, Message)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Ids = batch.Select(static entry => entry.Id).ToArray(),
+                BackupRestoreRunIds = batch.Select(static entry => entry.BackupRestoreRunId).ToArray(),
+                CreatedAts = batch.Select(static entry => BackupMappers.ToUtcDateTime(entry.CreatedAt)).ToArray(),
+                Streams = batch.Select(static entry => entry.Stream).ToArray(),
+                Messages = batch.Select(static entry => entry.Message).ToArray()
+            },
+            transaction: tx());
+    }
+
+    public async Task<IReadOnlyList<BackupRestoreRunLogEntry>> GetByRunAsync(Guid restoreRunId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT *
+            FROM BackupRestoreRunLogs
+            WHERE BackupRestoreRunId = @RestoreRunId
+            ORDER BY CreatedAt ASC, Id ASC
+            """;
+
+        var result = await db.QueryAsync<BackupRestoreRunLogDto>(sql, new { RestoreRunId = restoreRunId }, transaction: tx());
+        return result.ToDomain();
+    }
+
+    public async Task<BackupRestoreRunLogs> GetByRunWithRunStateAsync(Guid restoreRunId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH run_state AS (
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM BackupRestoreRuns
+                    WHERE Id = @RestoreRunId
+                ) AS RunExists
+            )
+            SELECT
+                rs.RunExists AS RunExists,
+                l.Id AS LogId,
+                l.BackupRestoreRunId AS LogBackupRestoreRunId,
+                l.CreatedAt AS LogCreatedAt,
+                l.Stream AS LogStream,
+                l.Message AS LogMessage
+            FROM run_state rs
+            LEFT JOIN BackupRestoreRunLogs l
+              ON rs.RunExists
+             AND l.BackupRestoreRunId = @RestoreRunId
+            ORDER BY l.CreatedAt ASC NULLS LAST, l.Id ASC NULLS LAST
+            """;
+
+        var rows = await db.QueryAsync<BackupRestoreRunLogWithRunStateDto>(
+            sql,
+            new { RestoreRunId = restoreRunId },
+            transaction: tx());
+
+        var list = rows as BackupRestoreRunLogWithRunStateDto[] ?? [.. rows];
+        if (list.Length == 0 || !list[0].RunExists)
+            return new BackupRestoreRunLogs(false, []);
+
+        var logs = list
+            .Where(static row => row.LogId.HasValue)
+            .Select(static row => new BackupRestoreRunLogEntry(
+                row.LogId!.Value,
+                row.LogBackupRestoreRunId!.Value,
+                BackupMappers.ToOffset(row.LogCreatedAt)!.Value,
+                row.LogStream ?? string.Empty,
+                row.LogMessage ?? string.Empty))
+            .ToArray();
+
+        return new BackupRestoreRunLogs(true, logs);
+    }
 }

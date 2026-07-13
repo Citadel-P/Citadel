@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
@@ -76,6 +77,18 @@ internal static class BackupMappers
 
     internal static IEnumerable<BackupPolicy> ToDomain(this IEnumerable<BackupPolicyDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());
+
+    internal static VolumeBackupCoverage ToDomain(this VolumeBackupCoverageDto dto)
+        => new(
+            new VolumeBackupCoverageKey(dto.PlatformId, dto.VolumeName),
+            new BackupCoverageView(
+                Enum.Parse<BackupCoverageStatus>(dto.Status),
+                dto.PolicyCount,
+                dto.LastRunId,
+                dto.LastRunStatus is null ? null : Enum.Parse<BackupRunStatus>(dto.LastRunStatus),
+                ToOffset(dto.LastRunAt),
+                ToOffset(dto.LastSuccessfulRunAt),
+                ToOffset(dto.NextRunAt)));
 
     internal static BackupRun ToDomain(this BackupRunDto dto)
         => BackupRun.FromPersistence(
@@ -232,6 +245,78 @@ internal static class BackupMappers
     internal static IEnumerable<BackupRestoreRun> ToDomain(this IEnumerable<BackupRestoreRunDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());
 
+    internal static BackupRestoreRunExecutionPlan ToDomain(this BackupRestoreRunExecutionPlanDto dto)
+        => new(
+            new BackupRestoreRunDto(
+                dto.RestoreRunId,
+                dto.RestoreBackupRunId,
+                dto.RestoreBackupRepositoryId,
+                dto.RestoreStatus,
+                dto.RestoreTargetPlatformId,
+                dto.RestoreTargetVolumeName,
+                dto.RestoreOverwriteExisting,
+                dto.RestoreTargetVolumeCreatedByCitadel,
+                dto.RestoreAffectedContainers,
+                dto.RestoreWarnings,
+                dto.RestoreQueuedAt,
+                dto.RestoreStartedAt,
+                dto.RestoreCompletedAt,
+                dto.RestoreExitCode,
+                dto.RestoreErrorCode,
+                dto.RestoreErrorMessage,
+                dto.RestoreTriggeredByActorId).ToDomain(),
+            new BackupRunDto(
+                dto.RunId,
+                dto.RunBackupPolicyId,
+                dto.RunBackupRepositoryId,
+                dto.RunPolicyNameSnapshot,
+                dto.RunSourceSnapshot,
+                dto.RunRepositoryTypeSnapshot,
+                dto.RunTrigger,
+                dto.RunTriggerSourceId,
+                dto.RunStatus,
+                dto.RunResticSnapshotId,
+                dto.RunParentSnapshotId,
+                dto.RunSnapshotAvailability,
+                dto.RunFilesProcessed,
+                dto.RunBytesProcessed,
+                dto.RunBytesAdded,
+                dto.RunWarnings,
+                dto.RunQueuedAt,
+                dto.RunStartedAt,
+                dto.RunCompletedAt,
+                dto.RunExitCode,
+                dto.RunErrorCode,
+                dto.RunErrorMessage,
+                dto.RunTriggeredByActorId).ToDomain(),
+            new BackupRepositoryDto(
+                dto.RepositoryId,
+                dto.RepositoryName,
+                dto.RepositoryNormalizedName,
+                dto.RepositoryDescription,
+                dto.RepositoryType,
+                dto.RepositorySpec,
+                dto.RepositoryPasswordSecretId,
+                dto.RepositoryStatus,
+                dto.RepositoryLastPrunedAt,
+                dto.RepositoryLastCheckedAt,
+                dto.RepositoryCreatedByActorId,
+                dto.RepositoryCreatedAt,
+                dto.RepositoryUpdatedAt,
+                dto.RepositoryArchivedAt,
+                dto.RepositoryRowVersion).ToDomain());
+
+    internal static BackupRestoreRunLogEntry ToDomain(this BackupRestoreRunLogDto dto)
+        => new(
+            dto.Id,
+            dto.BackupRestoreRunId,
+            ToOffset(dto.CreatedAt),
+            dto.Stream,
+            dto.Message);
+
+    internal static IReadOnlyList<BackupRestoreRunLogEntry> ToDomain(this IEnumerable<BackupRestoreRunLogDto> dtos)
+        => [.. dtos.Select(static dto => dto.ToDomain())];
+
     internal static string SerializeSource(BackupSourceSpec source)
         => source switch
         {
@@ -296,10 +381,10 @@ internal static class BackupMappers
             ? []
             : JsonSerializer.Deserialize(json, BackupJsonContext.Default.IReadOnlyListBackupAffectedContainer) ?? [];
 
-    private static DateTimeOffset ToOffset(DateTime value)
+    internal static DateTimeOffset ToOffset(DateTime value)
         => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
 
-    private static DateTimeOffset? ToOffset(DateTime? value)
+    internal static DateTimeOffset? ToOffset(DateTime? value)
         => value.HasValue ? ToOffset(value.Value) : null;
 
     private static string SerializeWithType<T>(string type, T value, JsonTypeInfo<T> jsonTypeInfo)

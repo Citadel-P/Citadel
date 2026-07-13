@@ -1023,6 +1023,24 @@ public enum BackupSnapshotAvailability
     NotCreated
 }
 
+public enum BackupCoverageStatus
+{
+    NotApplicable,
+    Unprotected,
+    Protected,
+    Warning,
+    Failed
+}
+
+public enum BackupCoverageResourceType
+{
+    Platform,
+    Volume,
+    Container,
+    Deployment,
+    Stack
+}
+
 public enum BackupRestoreStatus
 {
     Queued,

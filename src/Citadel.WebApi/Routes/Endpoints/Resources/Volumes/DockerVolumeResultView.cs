@@ -1,4 +1,5 @@
 using Application.Permissions;
+using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Volumes;
 using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Identity;
@@ -19,6 +20,7 @@ public sealed record DockerVolumeResultView(
     IReadOnlyDictionary<string, string> Status,
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyDictionary<string, string> Options,
+    BackupCoverageView? BackupCoverage = null,
     VolumeCapabilities? Capabilities = null)
 {
     internal static async Task<DockerVolumeResultView> Map(DockerVolumeResult volume, IPermissionEvaluator permissionEvaluator)

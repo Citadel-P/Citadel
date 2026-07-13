@@ -1,4 +1,5 @@
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Oidc;
 using Domain.Contracts.Resources.Platforms;
@@ -59,6 +60,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IBackupRunRepository BackupRuns { get; }
     IBackupRunLogRepository BackupRunLogs { get; }
     IBackupRestoreRunRepository BackupRestoreRuns { get; }
+    IBackupRestoreRunLogRepository BackupRestoreRunLogs { get; }
     IBackupRepositoryLeaseRepository BackupRepositoryLeases { get; }
     IBackupSourceLeaseRepository BackupSourceLeases { get; }
     IRefreshTokenRepository RefreshTokens { get; }
@@ -126,6 +128,7 @@ public interface IBackupRepositoryRepository
     Task<int> ApplyValidationResultAsync(BackupRepositoryValidation validation, bool markChecked, bool markPruned, CancellationToken cancellationToken);
     Task<BackupRepository?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false);
     Task<IEnumerable<BackupRepository>> GetAllAsync(CancellationToken cancellationToken, bool includeArchived = false);
+    Task<IEnumerable<ResourceInfo>> GetAuthorizedLookupAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
     Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
     Task<bool> HasActiveOperationAsync(Guid id, CancellationToken cancellationToken);
@@ -150,6 +153,13 @@ public interface IBackupPolicyRepository
     Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
     Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
     Task<bool> CanAccessAsync(Guid userId, Guid id, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<IReadOnlyList<VolumeBackupCoverage>> GetVolumeCoverageAsync(
+        IReadOnlyCollection<VolumeBackupCoverageKey> volumes,
+        Guid? userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken);
     Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAfterRunAsync(Guid id, Guid runId, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken);
@@ -195,7 +205,18 @@ public interface IBackupRestoreRunRepository
     Task<BackupRestoreRun?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<BackupRestoreRun>> GetPagedAsync(int limit, CancellationToken cancellationToken);
     Task<IEnumerable<BackupRestoreRun>> GetByBackupRunAsync(Guid backupRunId, int limit, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken);
+    Task<BackupRestoreRunExecutionPlan?> GetExecutionPlanAsync(Guid id, CancellationToken cancellationToken);
+    Task<BackupRestoreRunExecutionPlan?> TryClaimExecutionPlanAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
+    Task<BackupRestoreRunFinishResult> FinishRunAsync(BackupRestoreRun run, DateTimeOffset completedAt, CancellationToken cancellationToken);
     Task<int> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
+}
+
+public interface IBackupRestoreRunLogRepository
+{
+    Task<int> AddRangeAsync(IReadOnlyCollection<BackupRestoreRunLogEntry> entries, CancellationToken cancellationToken);
+    Task<IReadOnlyList<BackupRestoreRunLogEntry>> GetByRunAsync(Guid restoreRunId, CancellationToken cancellationToken);
+    Task<BackupRestoreRunLogs> GetByRunWithRunStateAsync(Guid restoreRunId, CancellationToken cancellationToken);
 }
 
 public interface IBackupRepositoryLeaseRepository
@@ -269,12 +290,34 @@ public sealed record BackupRunExecutionPlan(
     BackupPolicy Policy,
     BackupRepository Repository);
 
+public enum BackupRestoreRunFinishResult
+{
+    Completed,
+    AlreadyCancelled
+}
+
+public sealed record BackupRestoreRunExecutionPlan(
+    BackupRestoreRun RestoreRun,
+    BackupRun BackupRun,
+    BackupRepository Repository);
+
 public sealed record BackupRunLogEntry(
     Guid Id,
     Guid BackupRunId,
     DateTimeOffset CreatedAt,
     string Stream,
     string Message);
+
+public sealed record BackupRestoreRunLogEntry(
+    Guid Id,
+    Guid BackupRestoreRunId,
+    DateTimeOffset CreatedAt,
+    string Stream,
+    string Message);
+
+public sealed record BackupRestoreRunLogs(
+    bool RunExists,
+    IReadOnlyList<BackupRestoreRunLogEntry> Logs);
 
 public interface IResticProcessRunner
 {

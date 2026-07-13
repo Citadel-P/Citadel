@@ -59,6 +59,7 @@ internal class UnitOfWork : IUnitOfWork
         BackupRuns = new Lazy<IBackupRunRepository>(() => new BackupRunRepository(connection, GetTransaction));
         BackupRunLogs = new Lazy<IBackupRunLogRepository>(() => new BackupRunLogRepository(connection, GetTransaction));
         BackupRestoreRuns = new Lazy<IBackupRestoreRunRepository>(() => new BackupRestoreRunRepository(connection, GetTransaction));
+        BackupRestoreRunLogs = new Lazy<IBackupRestoreRunLogRepository>(() => new BackupRestoreRunLogRepository(connection, GetTransaction));
         BackupRepositoryLeases = new Lazy<IBackupRepositoryLeaseRepository>(() => new BackupRepositoryLeaseRepository(connection, GetTransaction));
         BackupSourceLeases = new Lazy<IBackupSourceLeaseRepository>(() => new BackupSourceLeaseRepository(connection, GetTransaction));
     }
@@ -95,6 +96,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IBackupRunRepository> BackupRuns { get; }
     private Lazy<IBackupRunLogRepository> BackupRunLogs { get; }
     private Lazy<IBackupRestoreRunRepository> BackupRestoreRuns { get; }
+    private Lazy<IBackupRestoreRunLogRepository> BackupRestoreRunLogs { get; }
     private Lazy<IBackupRepositoryLeaseRepository> BackupRepositoryLeases { get; }
     private Lazy<IBackupSourceLeaseRepository> BackupSourceLeases { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
@@ -146,6 +148,7 @@ internal class UnitOfWork : IUnitOfWork
     IBackupRunRepository IUnitOfWork.BackupRuns => BackupRuns.Value;
     IBackupRunLogRepository IUnitOfWork.BackupRunLogs => BackupRunLogs.Value;
     IBackupRestoreRunRepository IUnitOfWork.BackupRestoreRuns => BackupRestoreRuns.Value;
+    IBackupRestoreRunLogRepository IUnitOfWork.BackupRestoreRunLogs => BackupRestoreRunLogs.Value;
     IBackupRepositoryLeaseRepository IUnitOfWork.BackupRepositoryLeases => BackupRepositoryLeases.Value;
     IBackupSourceLeaseRepository IUnitOfWork.BackupSourceLeases => BackupSourceLeases.Value;
 

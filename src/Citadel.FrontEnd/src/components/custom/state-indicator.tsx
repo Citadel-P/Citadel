@@ -2,6 +2,8 @@ import { memo } from 'react';
 import {
   AlertRuleStatus,
   ActionRunStatus,
+  BackupRestoreStatus,
+  BackupRunStatus,
   BackupRepositoryStatus,
   ContainerStateStatus,
   DeploymentStatus,
@@ -22,10 +24,12 @@ type StateValue =
   | PlatformStatus
   | AlertRuleStatus
   | BackupRepositoryStatus
+  | BackupRunStatus
+  | BackupRestoreStatus
   | GitReposStatus
   | ActionRunStatus;
 
-type StateIndicatorKind = 'automationActionRun' | 'container' | 'platform';
+type StateIndicatorKind = 'automationActionRun' | 'backupRun' | 'backupRestore' | 'container' | 'platform';
 
 type StatusStyle = {
   colorClass: string;
@@ -45,6 +49,53 @@ const getAutomationActionRunStatusStyle = (value: StateValue): StatusStyle | und
       return { colorClass: 'bg-red-500', tooltip: String(value) };
     case ActionRunStatus.Cancelled:
     case ActionRunStatus.Rejected:
+      return { colorClass: 'bg-gray-500', tooltip: String(value) };
+    default:
+      return undefined;
+  }
+};
+
+const getBackupRunStatusStyle = (value: StateValue): StatusStyle | undefined => {
+  switch (value) {
+    case BackupRunStatus.Queued:
+      return { colorClass: 'bg-yellow-500', tooltip: 'Queued' };
+    case BackupRunStatus.Preparing:
+    case BackupRunStatus.Running:
+    case BackupRunStatus.ApplyingRetention:
+      return { colorClass: 'bg-blue-500', tooltip: String(value) };
+    case BackupRunStatus.Succeeded:
+      return { colorClass: 'bg-green-500', tooltip: 'Succeeded' };
+    case BackupRunStatus.SucceededWithWarnings:
+      return { colorClass: 'bg-orange-500', tooltip: 'Succeeded with warnings' };
+    case BackupRunStatus.Failed:
+    case BackupRunStatus.TimedOut:
+    case BackupRunStatus.Interrupted:
+      return { colorClass: 'bg-red-500', tooltip: String(value) };
+    case BackupRunStatus.Cancelled:
+    case BackupRunStatus.Rejected:
+      return { colorClass: 'bg-gray-500', tooltip: String(value) };
+    default:
+      return undefined;
+  }
+};
+
+const getBackupRestoreStatusStyle = (value: StateValue): StatusStyle | undefined => {
+  switch (value) {
+    case BackupRestoreStatus.Queued:
+      return { colorClass: 'bg-yellow-500', tooltip: 'Queued' };
+    case BackupRestoreStatus.Preparing:
+    case BackupRestoreStatus.Running:
+      return { colorClass: 'bg-blue-500', tooltip: String(value) };
+    case BackupRestoreStatus.Succeeded:
+      return { colorClass: 'bg-green-500', tooltip: 'Succeeded' };
+    case BackupRestoreStatus.SucceededWithWarnings:
+      return { colorClass: 'bg-orange-500', tooltip: 'Succeeded with warnings' };
+    case BackupRestoreStatus.Failed:
+    case BackupRestoreStatus.TimedOut:
+    case BackupRestoreStatus.Interrupted:
+      return { colorClass: 'bg-red-500', tooltip: String(value) };
+    case BackupRestoreStatus.Cancelled:
+    case BackupRestoreStatus.Rejected:
       return { colorClass: 'bg-gray-500', tooltip: String(value) };
     default:
       return undefined;
@@ -96,6 +147,14 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
 
   if (kind === 'automationActionRun') {
     return getAutomationActionRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+  }
+
+  if (kind === 'backupRun') {
+    return getBackupRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+  }
+
+  if (kind === 'backupRestore') {
+    return getBackupRestoreStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
   }
 
   if (kind === 'container') {

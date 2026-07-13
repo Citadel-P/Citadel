@@ -269,11 +269,14 @@ internal sealed class QueueBackupRestoreRunHandler(
     }
 }
 
-internal sealed class CancelBackupRestoreRunHandler(IUnitOfWork unitOfWork)
+internal sealed class CancelBackupRestoreRunHandler(
+    IUnitOfWork unitOfWork,
+    IBackupRestoreRunCoordinator runCoordinator)
     : ICommandHandler<CancelBackupRestoreRun, Result>
 {
     public async ValueTask<Result> Handle(CancelBackupRestoreRun command, CancellationToken cancellationToken)
     {
+        runCoordinator.Cancel(command.RestoreRunId);
         var rows = await unitOfWork.BackupRestoreRuns.CancelQueuedOrRunningAsync(
             command.RestoreRunId,
             DateTimeOffset.UtcNow,

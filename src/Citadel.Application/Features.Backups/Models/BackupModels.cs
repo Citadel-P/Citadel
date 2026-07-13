@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
 
 namespace Application.Features.Backups.Models;
@@ -62,6 +63,8 @@ public sealed record BackupRunListResult(IReadOnlyList<BackupRun> Runs);
 
 public sealed record BackupRunLogResult(Guid RunId, IReadOnlyList<BackupRunLogEntry> Logs);
 
+public sealed record BackupRestoreRunLogResult(Guid RunId, IReadOnlyList<BackupRestoreRunLogEntry> Logs);
+
 public sealed record RestoreVolumeInputModel(
     Guid TargetPlatformId,
     string TargetVolumeName,
@@ -70,3 +73,14 @@ public sealed record RestoreVolumeInputModel(
 public sealed record BackupRestoreRunResult(BackupRestoreRun Run);
 
 public sealed record BackupRestoreRunListResult(IReadOnlyList<BackupRestoreRun> Runs);
+
+public sealed record BackupCoverageResourceKey(
+    Guid? ResourceId = null,
+    Guid? PlatformId = null,
+    string? Name = null);
+
+public sealed record BackupCoverageItem(
+    BackupCoverageResourceKey Resource,
+    BackupCoverageView Coverage);
+
+public sealed record BackupCoverageResult(IReadOnlyList<BackupCoverageItem> Items);

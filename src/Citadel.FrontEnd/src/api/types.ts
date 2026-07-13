@@ -20,6 +20,7 @@ export type ResourceType =
   | 'Automation'
   | 'AutomationAction'
   | 'BackupRepository'
+  | 'BackupPolicy'
   | 'Access'
   | 'User'
   | 'Team'
@@ -47,6 +48,7 @@ export const PluralResourceMap = {
   Automation: 'Automation',
   AutomationAction: 'Actions',
   BackupRepository: 'BackupRepositories',
+  BackupPolicy: 'BackupPolicies',
   Access: 'Access',
   User: 'Users',
   Team: 'Teams',

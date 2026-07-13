@@ -112,6 +112,8 @@ public static class ApplicationModule
             .AddSingleton<IBackupRepositoryDestinationService, BackupRepositoryDestinationService>()
             .AddSingleton<IBackupRunCoordinator, BackupRunCoordinator>()
             .AddSingleton<IBackupRunExecutionService, BackupRunExecutionService>()
+            .AddSingleton<IBackupRestoreRunCoordinator, BackupRestoreRunCoordinator>()
+            .AddSingleton<IBackupRestoreRunExecutionService, BackupRestoreRunExecutionService>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 
         services.TryAddSingleton<IAutomationApiEndpointCatalog, EmptyAutomationApiEndpointCatalog>();
@@ -181,6 +183,7 @@ public static class ApplicationModule
             .AddHostedService<AutomationActionSchedulerJob>()
             .AddHostedService<AutomationActionRunWorkerJob>()
             .AddHostedService<BackupRunWorkerJob>()
+            .AddHostedService<BackupRestoreRunWorkerJob>()
             .AddHostedService<LicenseTransitionMonitorJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services

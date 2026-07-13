@@ -33,6 +33,8 @@ import { AutomationActionComponents } from './automation-actions';
 import { AutomationActionFormComponents } from './automation-actions/form';
 import { BackupRepositoryComponents } from './backup-repositories';
 import { BackupRepositoryFormComponents } from './backup-repositories/form';
+import { BackupPolicyComponents } from './backup-policies';
+import { BackupPolicyFormComponents } from './backup-policies/form';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -60,6 +62,7 @@ export const ResourceComponents: {
   Automation: AutomationActionComponents,
   AutomationAction: AutomationActionComponents,
   BackupRepository: BackupRepositoryComponents,
+  BackupPolicy: BackupPolicyComponents,
 };
 
 export const ResourceFormComponents: {
@@ -90,6 +93,7 @@ export const ResourceFormComponents: {
   Automation: undefined,
   AutomationAction: AutomationActionFormComponents,
   BackupRepository: BackupRepositoryFormComponents,
+  BackupPolicy: BackupPolicyFormComponents,
 };
 
 export const DockerResourceInfoComponents: {

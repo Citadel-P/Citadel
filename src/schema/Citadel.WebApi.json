@@ -30253,6 +30253,66 @@
           }
         }
       },
+      "BackupCoverageStatus": {
+        "enum": [
+          "NotApplicable",
+          "Unprotected",
+          "Protected",
+          "Warning",
+          "Failed"
+        ]
+      },
+      "BackupCoverageView": {
+        "required": [
+          "status",
+          "policyCount",
+          "lastRunId",
+          "lastRunStatus",
+          "lastRunAt",
+          "lastSuccessfulRunAt",
+          "nextRunAt"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/BackupCoverageStatus"
+          },
+          "policyCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "lastRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "lastRunStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupRunStatus"
+              }
+            ]
+          },
+          "lastRunAt": {
+            "format": "date-time"
+          },
+          "lastSuccessfulRunAt": {
+            "format": "date-time"
+          },
+          "nextRunAt": {
+            "format": "date-time"
+          }
+        }
+      },
       "BackupEventsView": {
         "required": [
           "runId",
@@ -31000,7 +31060,8 @@
           "Cancelled",
           "Rejected",
           "Interrupted"
-        ]
+        ],
+        "type": "string"
       },
       "BackupRunTrigger": {
         "enum": [
@@ -34490,6 +34551,16 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "backupCoverage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupCoverageView"
+              }
+            ]
           },
           "capabilities": {
             "oneOf": [

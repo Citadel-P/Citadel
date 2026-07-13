@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DockerVolumeResultView } from '@/api/generated/api.types';
+import { BackupCoverageStatus, DockerVolumeResultView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,6 +13,8 @@ import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
 import { truncate } from '@/lib/truncate';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 export const VolumesTable = ({
   items,
@@ -74,6 +76,12 @@ const columns = (
     sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
   },
   {
+    accessorKey: 'backupCoverage.status',
+    header: ({ column }) => <SortableCell cellName="Backup" column={column} />,
+    cell: ({ row }) => <BackupCoverageBadge volume={row.original} />,
+    sortingFn: (rowA, rowB) => backupCoverageRank(rowA.original) - backupCoverageRank(rowB.original),
+  },
+  {
     accessorKey: 'driver',
     header: ({ column }) => <SortableCell cellName="Driver" column={column} />,
     cell: ({ row }) => <span className="">{row.original.driver}</span>,
@@ -100,6 +108,71 @@ const columns = (
     cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
   },
 ];
+
+const backupCoverageRank = (volume: DockerVolumeResultView) => {
+  switch (volume.backupCoverage?.status) {
+    case BackupCoverageStatus.Failed:
+      return 0;
+    case BackupCoverageStatus.Warning:
+      return 1;
+    case BackupCoverageStatus.Unprotected:
+      return 2;
+    case BackupCoverageStatus.Protected:
+      return 3;
+    case BackupCoverageStatus.NotApplicable:
+      return 4;
+    default:
+      return 5;
+  }
+};
+
+const BackupCoverageBadge = ({ volume }: { volume: DockerVolumeResultView }) => {
+  const coverage = volume.backupCoverage;
+  if (!coverage) {
+    return <span className="text-muted-foreground text-xs">-</span>;
+  }
+
+  const policyCount = Number(coverage.policyCount ?? 0);
+  const status = coverage.status;
+  const title = [
+    `${status}${policyCount > 0 ? `, ${policyCount} policy${policyCount === 1 ? '' : 'ies'}` : ''}`,
+    coverage.lastSuccessfulRunAt ? `Last successful: ${coverage.lastSuccessfulRunAt}` : null,
+    coverage.lastRunStatus ? `Last run: ${coverage.lastRunStatus}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return (
+    <Badge
+      variant="outline"
+      title={title}
+      className={cn(
+        'rounded-sm',
+        status === BackupCoverageStatus.Protected && 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-300',
+        status === BackupCoverageStatus.Warning && 'border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300',
+        status === BackupCoverageStatus.Failed && 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300',
+        status === BackupCoverageStatus.Unprotected && 'border-muted-foreground/30 bg-muted/50 text-muted-foreground',
+      )}>
+      {coverageLabel(status)}
+      {policyCount > 0 && <span className="text-muted-foreground ml-1">({policyCount})</span>}
+    </Badge>
+  );
+};
+
+const coverageLabel = (status: BackupCoverageStatus) => {
+  switch (status) {
+    case BackupCoverageStatus.NotApplicable:
+      return 'N/A';
+    case BackupCoverageStatus.Unprotected:
+      return 'Unprotected';
+    case BackupCoverageStatus.Protected:
+      return 'Protected';
+    case BackupCoverageStatus.Warning:
+      return 'Warning';
+    case BackupCoverageStatus.Failed:
+      return 'Failed';
+  }
+};
 
 const VolumeNameRow = ({ volume }: { volume: DockerVolumeResultView }) => {
   const { platformId } = useParams<{ platformId: string }>();
