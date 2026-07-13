@@ -102,13 +102,8 @@ const MenuItems: IMenuItem[] = [
             route: '/bindings',
           },
           {
-            icon: renderIcon(CitadelIcons.BackupRepository),
-            label: 'Backup Repositories',
-            route: '/backup-repositories',
-          },
-          {
             icon: renderIcon(CitadelIcons.BackupPolicy),
-            label: 'Backup Policies',
+            label: 'Backups',
             route: '/backup-policies',
           },
           {

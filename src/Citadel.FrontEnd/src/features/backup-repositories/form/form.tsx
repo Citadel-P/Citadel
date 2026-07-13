@@ -17,7 +17,6 @@ import {
   defineSection,
   FieldInput,
   FieldSwitch,
-  FieldTextArea,
   FormShell,
   ItemSelector,
 } from '@/components/custom/form-builder';
@@ -28,16 +27,16 @@ import { Cloud, FolderLock } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 
-type BackupRepositoryFormInput = BackupRepositoryInput & Partial<BackupRepositoryView>;
+export type BackupRepositoryFormInput = BackupRepositoryInput & Partial<BackupRepositoryView>;
 
-const createFileSystemSpec = (): BackupRepositorySpecFileSystemBackupRepositorySpec => ({
+export const createFileSystemSpec = (): BackupRepositorySpecFileSystemBackupRepositorySpec => ({
   $type: 'FileSystem',
   location: BackupExecutionLocation.Core,
   platformId: null,
   path: '',
 });
 
-const createS3Spec = (): BackupRepositorySpecS3CompatibleBackupRepositorySpec => ({
+export const createS3Spec = (): BackupRepositorySpecS3CompatibleBackupRepositorySpec => ({
   $type: 'S3Compatible',
   endpoint: '',
   bucket: '',
@@ -50,14 +49,14 @@ const createS3Spec = (): BackupRepositorySpecS3CompatibleBackupRepositorySpec =>
   allowInsecureHttp: false,
 });
 
-const createDefaultInput = (): BackupRepositoryFormInput => ({
+export const createDefaultInput = (): BackupRepositoryFormInput => ({
   name: '',
   description: null,
   passwordSecretId: '',
   spec: createFileSystemSpec(),
 });
 
-const repositoryTypes = {
+export const repositoryTypes = {
   FileSystem: {
     label: 'Filesystem',
     description: 'Store repository data on a Core-mounted path.',
@@ -70,7 +69,7 @@ const repositoryTypes = {
   },
 } as const;
 
-const bucketLookupOptions = {
+export const bucketLookupOptions = {
   Auto: {
     label: 'Auto',
     description: 'Use Restic default bucket lookup behavior.',
@@ -144,15 +143,6 @@ export function BackupRepositoryForm({
                     }),
                   ]
                 : []),
-              defineField<BackupRepositoryFormInput, 'description'>({
-                key: 'description',
-                label: 'Description',
-                required: false,
-                description: 'Optional notes for operators.',
-                render: (value, set) => (
-                  <FieldTextArea value={value ?? ''} onChange={(description) => set({ description })} />
-                ),
-              }),
             ],
           }),
           defineGroupField<BackupRepositoryFormInput>({
@@ -371,7 +361,7 @@ export function BackupRepositoryForm({
   );
 }
 
-function RepositoryTypeSelector({
+export function RepositoryTypeSelector({
   value,
   onChange,
   disabled,
@@ -413,7 +403,7 @@ function RepositoryTypeSelector({
   );
 }
 
-function SecretSelector({
+export function SecretSelector({
   value,
   onChange,
   disabled,
@@ -432,7 +422,7 @@ function SecretSelector({
   return (
     <Select
       value={selectValue}
-      disabled={disabled || isLoading || (!allowNone && secrets.length === 0)}
+      disabled={disabled || isLoading}
       onValueChange={(next) => onChange(next === noneValue ? null : next)}>
       <SelectTrigger className="w-full max-w-100">
         <SelectValue placeholder={isLoading ? 'Loading secrets...' : 'Select a stored secret'} />
@@ -444,18 +434,23 @@ function SecretSelector({
             <span className="font-medium">{secret.name}</span>
           </SelectItem>
         ))}
+        {secrets.length === 0 && (
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            No stored secrets found. Create one from Bindings first.
+          </div>
+        )}
       </SelectContent>
     </Select>
   );
 }
 
-function mergeSpec(original: BackupRepositorySpec, update?: BackupRepositorySpec | null): BackupRepositorySpec {
+export function mergeSpec(original: BackupRepositorySpec, update?: BackupRepositorySpec | null): BackupRepositorySpec {
   if (!update) return original;
   if (update.$type && update.$type !== original.$type) return update;
   return { ...original, ...update } as BackupRepositorySpec;
 }
 
-function toCreateInput(payload: BackupRepositoryFormInput): BackupRepositoryInput {
+export function toCreateInput(payload: BackupRepositoryFormInput): BackupRepositoryInput {
   return {
     name: payload.name,
     description: payload.description ?? null,
@@ -464,14 +459,14 @@ function toCreateInput(payload: BackupRepositoryFormInput): BackupRepositoryInpu
   };
 }
 
-function toUpdateInput(payload: BackupRepositoryFormInput): UpdateBackupRepositoryInput {
+export function toUpdateInput(payload: BackupRepositoryFormInput): UpdateBackupRepositoryInput {
   return {
     description: payload.description ?? null,
     spec: normalizeSpec(payload.spec),
   };
 }
 
-function normalizeSpec(spec: BackupRepositorySpec): BackupRepositorySpec {
+export function normalizeSpec(spec: BackupRepositorySpec): BackupRepositorySpec {
   if (spec.$type === 'S3Compatible') {
     const s3 = spec as BackupRepositorySpecS3CompatibleBackupRepositorySpec;
     return {

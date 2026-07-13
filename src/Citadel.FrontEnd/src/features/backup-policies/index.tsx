@@ -1,19 +1,25 @@
 import { BackupPolicyView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
+import { Separator } from '@/components/ui/separator';
 import { CitadelIcons } from '@/lib/icons';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { BackupPolicyDropdownActions, BackupPolicyGroupActions } from './actions';
-import { BackupPoliciesTable } from './table';
 import { useBackupPoliciesGroup } from './hooks/useBackupPoliciesGroup';
+import { BackupRepositoriesSection } from './repositories';
+import { BackupPoliciesTable } from './table';
 
 export const BackupPolicyComponents: RequiredComponents<BackupPolicyView> = {
   Icon: CitadelIcons.BackupPolicy,
   Content: ({ items, actions, isLoading }) => (
-    <BackupPoliciesTable items={items} actions={actions} isLoading={isLoading} />
+    <div className="flex flex-col gap-6">
+      <BackupPoliciesTable items={items} actions={actions} isLoading={isLoading} />
+      <Separator className="bg-border/70" />
+      <BackupRepositoriesSection />
+    </div>
   ),
   header: {
-    title: 'Backup Policies',
-    subtitle: 'Schedule and run backups for Citadel data and Docker volumes.',
+    title: 'Backups',
+    subtitle: 'Manage backup policies and encrypted repositories.',
     showSearch: true,
     showAdd: true,
     showTagFilter: true,

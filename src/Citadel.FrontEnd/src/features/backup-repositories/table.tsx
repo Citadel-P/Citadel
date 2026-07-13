@@ -138,7 +138,7 @@ const DestinationCell = ({ spec }: { spec: BackupRepositorySpec }) => (
   </span>
 );
 
-const destinationText = (spec: BackupRepositorySpec) => {
+export const destinationText = (spec: BackupRepositorySpec) => {
   if (isFileSystemSpec(spec)) {
     return spec.path;
   }
