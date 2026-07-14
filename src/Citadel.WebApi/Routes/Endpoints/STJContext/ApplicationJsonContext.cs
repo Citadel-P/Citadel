@@ -197,6 +197,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(IReadOnlyList<BackupRunWarning>))]
 [JsonSerializable(typeof(BackupAffectedContainer))]
 [JsonSerializable(typeof(IReadOnlyList<BackupAffectedContainer>))]
+[JsonSerializable(typeof(BackupWebhookConfig))]
 [JsonSerializable(typeof(BackupRepositoryInput))]
 [JsonSerializable(typeof(UpdateBackupRepositoryInput))]
 [JsonSerializable(typeof(UpdateBackupRepositoryInputPatchDocument))]

@@ -7,6 +7,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
 using Domain.Entities.Automation;
+using Domain.Entities.Backups;
 using Domain.Entities.Git;
 using Domain.Entities.Stacks;
 using FluentValidation;
@@ -133,6 +134,7 @@ internal sealed class ReceiveWebhookHandler(
                 Stack: null,
                 GitStack: null,
                 Action: null,
+                BackupPolicy: null,
                 Error: null);
         }
 
@@ -160,6 +162,7 @@ internal sealed class ReceiveWebhookHandler(
                 Stack: stack,
                 GitStack: gitStack,
                 Action: null,
+                BackupPolicy: null,
                 Error: null);
         }
 
@@ -185,6 +188,33 @@ internal sealed class ReceiveWebhookHandler(
                 Stack: null,
                 GitStack: null,
                 Action: action,
+                BackupPolicy: null,
+                Error: null);
+        }
+
+        if ((command.ResourceType.Equals("backup-policy", StringComparison.OrdinalIgnoreCase)
+                || command.ResourceType.Equals("backupPolicy", StringComparison.OrdinalIgnoreCase))
+            && command.Execution.Equals("run", StringComparison.OrdinalIgnoreCase))
+        {
+            var policy = await unitOfWork.BackupPolicies.GetAsync(command.ResourceId, cancellationToken);
+            var webhook = policy?.Webhook;
+            if (policy is null || webhook is null || !webhook.Enabled)
+                return WebhookTarget.NotFound();
+
+            if (webhook.Provider != provider)
+                return WebhookTarget.BadRequest("Webhook auth type does not match backup policy webhook provider.");
+
+            return new WebhookTarget(
+                Provider: webhook.Provider,
+                AuthScheme: webhook.AuthScheme,
+                Execution: WebhookExecution.BackupPolicyRun,
+                Secret: webhook.Secret,
+                BranchFilter: webhook.BranchFilter,
+                Repository: null,
+                Stack: null,
+                GitStack: null,
+                Action: null,
+                BackupPolicy: policy,
                 Error: null);
         }
 
@@ -205,6 +235,7 @@ internal sealed class ReceiveWebhookHandler(
             WebhookExecution.RepoPull => await DispatchRepoPullAsync(target, payload, cancellationToken),
             WebhookExecution.StackDeploy => await DispatchStackDeployAsync(target, payload, cancellationToken),
             WebhookExecution.AutomationActionRun => await DispatchAutomationActionRunAsync(command, target, payload, cancellationToken),
+            WebhookExecution.BackupPolicyRun => await DispatchBackupPolicyRunAsync(command, target, payload, cancellationToken),
             _ => WebhookDispatchResult.NoOp("Unsupported execution")
         };
     }
@@ -334,6 +365,44 @@ internal sealed class ReceiveWebhookHandler(
 
         if (result.IsFailure(out var error))
             return WebhookDispatchResult.NoOp(error.Message);
+
+        return WebhookDispatchResult.Queued(
+            gitSyncRequest: null,
+            dispatchedBranch: branch.Branch,
+            dispatchedCommitSha: payload.CommitSha);
+    }
+
+    private async Task<WebhookDispatchResult> DispatchBackupPolicyRunAsync(
+        ReceiveWebhook command,
+        WebhookTarget target,
+        WebhookPayloadInfo payload,
+        CancellationToken cancellationToken)
+    {
+        var policy = target.BackupPolicy;
+        if (policy is null)
+            return WebhookDispatchResult.NoOp("Backup policy not found");
+
+        if (!policy.Enabled)
+            return WebhookDispatchResult.NoOp("Backup policy is disabled");
+
+        var branch = ResolveBranch(target.BranchFilter, payload.Branch, fallbackBranch: null);
+        if (branch.NoOpReason is not null)
+            return WebhookDispatchResult.NoOp(branch.NoOpReason);
+
+        var queueResult = await unitOfWork.BackupRuns.QueueAsync(
+            policy.Id,
+            Guid.CreateVersion7(),
+            BackupRunTrigger.Webhook,
+            command.ResourceId,
+            Constants.SystemId,
+            usePolicyActor: true,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
+
+        if (queueResult.Status != BackupRunQueueResultStatus.Queued)
+            return WebhookDispatchResult.NoOp(BackupQueueNoOpReason(queueResult.Status));
+
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return WebhookDispatchResult.Queued(
             gitSyncRequest: null,
@@ -533,6 +602,24 @@ internal sealed class ReceiveWebhookHandler(
                 payload?.RepositoryFullName);
         }
 
+        if (target.BackupPolicy is { } backupPolicy)
+        {
+            return new WebhookAlertSnapshot(
+                backupPolicy.Id,
+                backupPolicy.Name,
+                AlertResourceType.Webhook,
+                "backup-policy",
+                provider,
+                command.Execution,
+                reason,
+                requestId,
+                payload?.EventType,
+                payload?.DeliveryId,
+                payload?.Branch,
+                payload?.CommitSha,
+                payload?.RepositoryFullName);
+        }
+
         return null;
     }
 
@@ -542,6 +629,15 @@ internal sealed class ReceiveWebhookHandler(
            && !reason.Equals("No relevant path changes", StringComparison.OrdinalIgnoreCase)
            && !reason.Equals("No new commit", StringComparison.OrdinalIgnoreCase)
            && !reason.Equals("Unsupported event type", StringComparison.OrdinalIgnoreCase);
+
+    private static string BackupQueueNoOpReason(BackupRunQueueResultStatus status)
+        => status switch
+        {
+            BackupRunQueueResultStatus.PolicyNotFound => "Backup policy not found",
+            BackupRunQueueResultStatus.PolicyArchived => "Archived backup policies cannot queue new runs",
+            BackupRunQueueResultStatus.ActiveRunExists => "Backup policy already has an active run",
+            _ => "Backup run could not be queued"
+        };
 
     private static bool TryResolveActivityEvent(
         ReceiveWebhook command,
@@ -897,13 +993,14 @@ internal sealed class ReceiveWebhookHandler(
         Stack? Stack,
         GitStack? GitStack,
         AutomationAction? Action,
+        BackupPolicy? BackupPolicy,
         Error? Error)
     {
         public static WebhookTarget NotFound()
-            => new(default, default, default, null, null, null, null, null, null, new NotFoundError("Webhook target not found."));
+            => new(default, default, default, null, null, null, null, null, null, null, new NotFoundError("Webhook target not found."));
 
         public static WebhookTarget BadRequest(string reason)
-            => new(default, default, default, null, null, null, null, null, null, new BadRequestError(reason));
+            => new(default, default, default, null, null, null, null, null, null, null, new BadRequestError(reason));
     }
 
     private sealed record WebhookPayloadInfo(

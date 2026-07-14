@@ -168,7 +168,8 @@ public static class BackupPolicies
                 patchInput.ContainsProperty("source"),
                 patchInput.ContainsProperty("backupRepositoryId"),
                 patchInput.ContainsProperty("cron"),
-                patchInput.ContainsProperty("timeZone")),
+                patchInput.ContainsProperty("timeZone"),
+                patchInput.ContainsProperty("webhook")),
             cancellationToken);
 
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, BackupPolicyView.Map);

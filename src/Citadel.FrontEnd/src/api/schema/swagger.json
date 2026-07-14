@@ -31414,6 +31414,16 @@
               "string"
             ]
           },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupWebhookConfig"
+              }
+            ]
+          },
           "keepLastSuccessful": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
@@ -31466,6 +31476,7 @@
           "enabled",
           "cron",
           "timeZone",
+          "webhook",
           "keepLastSuccessful",
           "timeoutSeconds",
           "alertOnFailure",
@@ -31519,6 +31530,16 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupWebhookConfig"
+              }
             ]
           },
           "keepLastSuccessful": {
@@ -32228,7 +32249,8 @@
         "enum": [
           "Manual",
           "Schedule",
-          "Automation"
+          "Automation",
+          "Webhook"
         ]
       },
       "BackupRunView": {
@@ -32562,6 +32584,33 @@
           "Stack",
           "Deployment"
         ]
+      },
+      "BackupWebhookConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "provider": {
+            "$ref": "#/components/schemas/WebhookProvider"
+          },
+          "authScheme": {
+            "$ref": "#/components/schemas/WebhookAuthScheme"
+          },
+          "secret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branchFilter": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
       },
       "BindOptions": {
         "required": [
@@ -44124,6 +44173,16 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupWebhookConfig"
+              }
             ]
           },
           "keepLastSuccessful": {

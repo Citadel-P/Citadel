@@ -28,6 +28,8 @@ public sealed record CreateBackupPolicy(BackupPolicyInputModel Policy) : IComman
             RuleFor(x => x.Policy.BackupRepositoryId).NotEmpty();
             RuleFor(x => x.Policy.Cron).MaximumLength(128).When(x => x.Policy.Cron is not null);
             RuleFor(x => x.Policy.TimeZone).MaximumLength(128).When(x => x.Policy.TimeZone is not null);
+            RuleFor(x => x.Policy.Webhook!.Secret).MaximumLength(256).When(x => x.Policy.Webhook?.Secret is not null);
+            RuleFor(x => x.Policy.Webhook!.BranchFilter).MaximumLength(256).When(x => x.Policy.Webhook?.BranchFilter is not null);
         }
     }
 }
@@ -40,7 +42,8 @@ public sealed record UpdateBackupPolicy(
     bool UpdateSource,
     bool UpdateBackupRepository,
     bool UpdateCron,
-    bool UpdateTimeZone)
+    bool UpdateTimeZone,
+    bool UpdateWebhook)
     : ICommand<Result<BackupPolicyResult>>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write)]
@@ -154,6 +157,7 @@ internal sealed class CreateBackupPolicyHandler(
             input.Enabled,
             input.Cron,
             input.TimeZone,
+            input.Webhook,
             input.KeepLastSuccessful ?? BackupPolicy.DefaultKeepLastSuccessful,
             input.TimeoutSeconds ?? BackupPolicy.DefaultTimeoutSeconds,
             input.AlertOnFailure,
@@ -225,6 +229,8 @@ internal sealed class UpdateBackupPolicyHandler(
                 command.UpdateCron,
                 command.Policy.TimeZone,
                 command.UpdateTimeZone,
+                command.Policy.Webhook,
+                command.UpdateWebhook,
                 command.Policy.KeepLastSuccessful,
                 command.Policy.TimeoutSeconds,
                 command.Policy.AlertOnFailure,

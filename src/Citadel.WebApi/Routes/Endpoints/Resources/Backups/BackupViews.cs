@@ -122,6 +122,7 @@ public sealed record BackupPolicyView(
     bool Enabled,
     string? Cron,
     string? TimeZone,
+    BackupWebhookConfig? Webhook,
     int KeepLastSuccessful,
     int TimeoutSeconds,
     bool AlertOnFailure,
@@ -155,6 +156,7 @@ public sealed record BackupPolicyView(
             policy.Enabled,
             policy.Cron,
             policy.TimeZone,
+            policy.Webhook,
             policy.KeepLastSuccessful,
             policy.TimeoutSeconds,
             policy.AlertOnFailure,
@@ -415,6 +417,7 @@ public sealed record BackupPolicyInput(
     bool Enabled = true,
     string? Cron = null,
     string? TimeZone = null,
+    BackupWebhookConfig? Webhook = null,
     int? KeepLastSuccessful = null,
     int? TimeoutSeconds = null,
     bool AlertOnFailure = true,
@@ -422,7 +425,7 @@ public sealed record BackupPolicyInput(
     IReadOnlyCollection<Guid>? TagIds = null)
 {
     internal BackupPolicyInputModel ToModel()
-        => new(Name, Description, Source, BackupRepositoryId, Enabled, Cron, TimeZone, KeepLastSuccessful, TimeoutSeconds, AlertOnFailure, RunAsActorId, TagIds);
+        => new(Name, Description, Source, BackupRepositoryId, Enabled, Cron, TimeZone, Webhook, KeepLastSuccessful, TimeoutSeconds, AlertOnFailure, RunAsActorId, TagIds);
 }
 
 public sealed record UpdateBackupPolicyInput(
@@ -432,13 +435,14 @@ public sealed record UpdateBackupPolicyInput(
     bool? Enabled = null,
     string? Cron = null,
     string? TimeZone = null,
+    BackupWebhookConfig? Webhook = null,
     int? KeepLastSuccessful = null,
     int? TimeoutSeconds = null,
     bool? AlertOnFailure = null,
     Guid? RunAsActorId = null)
 {
     internal UpdateBackupPolicyInputModel ToModel()
-        => new(Description, Source, BackupRepositoryId, Enabled, Cron, TimeZone, KeepLastSuccessful, TimeoutSeconds, AlertOnFailure, RunAsActorId);
+        => new(Description, Source, BackupRepositoryId, Enabled, Cron, TimeZone, Webhook, KeepLastSuccessful, TimeoutSeconds, AlertOnFailure, RunAsActorId);
 }
 
 public sealed record QueueBackupRunInput(BackupRunTrigger Trigger = BackupRunTrigger.Manual, Guid? TriggerSourceId = null)

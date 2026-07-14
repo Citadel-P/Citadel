@@ -7,6 +7,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
+using Domain.Entities.Backups;
 using Domain.Entities.Git;
 using Domain.Entities.Stacks;
 using Hosting.Common;
@@ -730,10 +731,81 @@ public sealed class ReceiveWebhookTests
         alertService.VerifyAll();
     }
 
+    [Fact]
+    public async Task BackupPolicyRun_WithMatchingPush_QueuesWebhookBackupRunAsPolicyActor()
+    {
+        var policy = CreateBackupPolicy();
+        var queuedRun = new BackupRun(
+            policy.Id,
+            policy.BackupRepositoryId,
+            policy.Name,
+            policy.Source,
+            BackupRepositoryType.FileSystem,
+            BackupRunTrigger.Webhook,
+            triggerSourceId: policy.Id,
+            triggeredByActorId: policy.RunAsActorId);
+        var backupPolicies = new Mock<IBackupPolicyRepository>();
+        backupPolicies.Setup(x => x.GetAsync(policy.Id, It.IsAny<CancellationToken>(), false)).ReturnsAsync(policy);
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.QueueAsync(
+                policy.Id,
+                It.IsAny<Guid>(),
+                BackupRunTrigger.Webhook,
+                policy.Id,
+                Constants.SystemId,
+                true,
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BackupRunQueueResult(BackupRunQueueResultStatus.Queued, queuedRun));
+
+        var handler = CreateHandler(backupPolicies: backupPolicies.Object, backupRuns: backupRuns.Object);
+
+        var result = await handler.Handle(
+            CreateBackupPolicyRunCommand(policy.Id, branch: "main"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("queued", response.Status);
+        backupRuns.VerifyAll();
+    }
+
+    [Fact]
+    public async Task BackupPolicyRun_WhenPolicyIsDisabled_ReturnsNoOpAndDoesNotQueue()
+    {
+        var policy = CreateBackupPolicy(enabled: false);
+        var backupPolicies = new Mock<IBackupPolicyRepository>();
+        backupPolicies.Setup(x => x.GetAsync(policy.Id, It.IsAny<CancellationToken>(), false)).ReturnsAsync(policy);
+        var backupRuns = new Mock<IBackupRunRepository>();
+
+        var handler = CreateHandler(backupPolicies: backupPolicies.Object, backupRuns: backupRuns.Object);
+
+        var result = await handler.Handle(
+            CreateBackupPolicyRunCommand(policy.Id, branch: "main"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("Backup policy is disabled", response.Reason);
+        backupRuns.Verify(
+            x => x.QueueAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<BackupRunTrigger>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid>(),
+                It.IsAny<bool>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
 
     private static ReceiveWebhookHandler CreateHandler(
         IGitReposRepository? gitRepos = null,
         IStackRepository? stacks = null,
+        IBackupPolicyRepository? backupPolicies = null,
+        IBackupRunRepository? backupRuns = null,
         ChannelWriter<GitRepoSyncRequest>? gitSyncWriter = null,
         INotificationQueue? notificationQueue = null,
         IApplyStackService? applyStackService = null,
@@ -757,6 +829,8 @@ public sealed class ReceiveWebhookTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.Setup(x => x.GitRepositories).Returns(gitRepos ?? Mock.Of<IGitReposRepository>());
         unitOfWork.Setup(x => x.Stacks).Returns(stacks ?? Mock.Of<IStackRepository>());
+        unitOfWork.Setup(x => x.BackupPolicies).Returns(backupPolicies ?? Mock.Of<IBackupPolicyRepository>());
+        unitOfWork.Setup(x => x.BackupRuns).Returns(backupRuns ?? Mock.Of<IBackupRunRepository>());
         unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
         unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
         unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
@@ -785,6 +859,22 @@ public sealed class ReceiveWebhookTests
             createdByActorId: Constants.SystemId,
             webhook: webhook ?? new RepoWebhookConfig(Enabled: true));
 
+    private static BackupPolicy CreateBackupPolicy(bool enabled = true)
+        => new(
+            name: "backup-policy",
+            description: "Webhook backup policy",
+            source: new CitadelSystemBackupSource(),
+            backupRepositoryId: Guid.CreateVersion7(),
+            enabled: enabled,
+            cron: null,
+            timeZone: null,
+            webhook: new BackupWebhookConfig(Enabled: true, BranchFilter: "main"),
+            keepLastSuccessful: BackupPolicy.DefaultKeepLastSuccessful,
+            timeoutSeconds: BackupPolicy.DefaultTimeoutSeconds,
+            alertOnFailure: true,
+            runAsActorId: Guid.CreateVersion7(),
+            createdByActorId: Constants.SystemId);
+
     private static ReceiveWebhook CreateRepoPullCommand(
         Guid repoId,
         string branch,
@@ -810,6 +900,15 @@ public sealed class ReceiveWebhookTests
             Execution: "deploy",
             Headers: Headers(("X-GitHub-Event", "push")),
             Body: PushPayload(branch, repositoryUrl, "octocat/Hello-World", changedPaths));
+
+    private static ReceiveWebhook CreateBackupPolicyRunCommand(Guid policyId, string branch)
+        => new(
+            AuthType: "github",
+            ResourceType: "backup-policy",
+            ResourceId: policyId,
+            Execution: "run",
+            Headers: Headers(("X-GitHub-Event", "push")),
+            Body: PushPayload(branch, "https://github.com/octocat/Hello-World.git", "octocat/Hello-World"));
 
     private static Dictionary<string, string[]> Headers(params (string Name, string Value)[] headers)
         => headers.ToDictionary(

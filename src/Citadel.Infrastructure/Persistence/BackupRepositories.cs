@@ -661,12 +661,12 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
             inserted_policy AS (
                 INSERT INTO BackupPolicies (
                     Id, Name, NormalizedName, Description, Source, BackupRepositoryId, Enabled,
-                    Cron, TimeZone, KeepLastSuccessful, TimeoutSeconds, AlertOnFailure, RunAsActorId,
+                    Cron, TimeZone, Webhook, KeepLastSuccessful, TimeoutSeconds, AlertOnFailure, RunAsActorId,
                     ControlState, CurrentRunId, LastScheduledRunAt, FirstSuccessfulRunAt,
                     CreatedByActorId, CreatedAt, UpdatedAt, ArchivedAt, RowVersion)
                 SELECT
                     @Id, @Name, @NormalizedName, @Description, @Source::jsonb, @BackupRepositoryId, @Enabled,
-                    @Cron, @TimeZone, @KeepLastSuccessful, @TimeoutSeconds, @AlertOnFailure, @RunAsActorId,
+                    @Cron, @TimeZone, @Webhook::jsonb, @KeepLastSuccessful, @TimeoutSeconds, @AlertOnFailure, @RunAsActorId,
                     @ControlState, @CurrentRunId, @LastScheduledRunAt, @FirstSuccessfulRunAt,
                     @CreatedByActorId, @CreatedAt, @UpdatedAt, @ArchivedAt, @RowVersion
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
@@ -689,6 +689,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 policy.Enabled,
                 policy.Cron,
                 policy.TimeZone,
+                Webhook = BackupMappers.SerializeWebhook(policy.Webhook),
                 policy.KeepLastSuccessful,
                 policy.TimeoutSeconds,
                 policy.AlertOnFailure,
@@ -726,6 +727,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 Enabled = @Enabled,
                 Cron = @Cron,
                 TimeZone = @TimeZone,
+                Webhook = @Webhook::jsonb,
                 KeepLastSuccessful = @KeepLastSuccessful,
                 TimeoutSeconds = @TimeoutSeconds,
                 AlertOnFailure = @AlertOnFailure,
@@ -753,6 +755,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 policy.Enabled,
                 policy.Cron,
                 policy.TimeZone,
+                Webhook = BackupMappers.SerializeWebhook(policy.Webhook),
                 policy.KeepLastSuccessful,
                 policy.TimeoutSeconds,
                 policy.AlertOnFailure,
@@ -1204,6 +1207,7 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             p.Enabled AS PolicyEnabled,
             p.Cron AS PolicyCron,
             p.TimeZone AS PolicyTimeZone,
+            p.Webhook AS PolicyWebhook,
             p.KeepLastSuccessful AS PolicyKeepLastSuccessful,
             p.TimeoutSeconds AS PolicyTimeoutSeconds,
             p.AlertOnFailure AS PolicyAlertOnFailure,

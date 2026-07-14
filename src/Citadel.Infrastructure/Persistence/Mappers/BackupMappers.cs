@@ -57,6 +57,7 @@ internal static class BackupMappers
             dto.Enabled,
             dto.Cron,
             dto.TimeZone,
+            DeserializeWebhook(dto.Webhook),
             dto.KeepLastSuccessful,
             dto.TimeoutSeconds,
             dto.AlertOnFailure,
@@ -215,6 +216,7 @@ internal static class BackupMappers
                 dto.PolicyEnabled,
                 dto.PolicyCron,
                 dto.PolicyTimeZone,
+                dto.PolicyWebhook,
                 dto.PolicyKeepLastSuccessful,
                 dto.PolicyTimeoutSeconds,
                 dto.PolicyAlertOnFailure,
@@ -358,6 +360,11 @@ internal static class BackupMappers
             _ => throw new NotSupportedException($"Backup repository spec type '{spec.GetType().Name}' is not supported.")
         };
 
+    internal static string? SerializeWebhook(BackupWebhookConfig? webhook)
+        => webhook is null
+            ? null
+            : JsonSerializer.Serialize(webhook, BackupJsonContext.Default.BackupWebhookConfig);
+
     internal static string SerializeWarnings(IReadOnlyList<BackupRunWarning> warnings)
         => JsonSerializer.Serialize(warnings, BackupJsonContext.Default.IReadOnlyListBackupRunWarning);
 
@@ -399,6 +406,11 @@ internal static class BackupMappers
             _ => throw new NotSupportedException($"Backup repository type '{type}' is not supported.")
         };
     }
+
+    private static BackupWebhookConfig? DeserializeWebhook(string? json)
+        => string.IsNullOrWhiteSpace(json)
+            ? null
+            : JsonSerializer.Deserialize(json, BackupJsonContext.Default.BackupWebhookConfig);
 
     private static IReadOnlyList<BackupRunWarning> DeserializeWarnings(string? json)
         => string.IsNullOrWhiteSpace(json)

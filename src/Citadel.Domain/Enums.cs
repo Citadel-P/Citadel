@@ -541,7 +541,8 @@ public enum WebhookExecution
 {
     RepoPull = 1,
     StackDeploy = 2,
-    AutomationActionRun = 3
+    AutomationActionRun = 3,
+    BackupPolicyRun = 4
 }
 
 public enum DeployedContainerState
@@ -1004,7 +1005,8 @@ public enum BackupRunTrigger
 {
     Manual,
     Schedule,
-    Automation
+    Automation,
+    Webhook
 }
 
 public enum BackupRunStatus

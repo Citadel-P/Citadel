@@ -1,6 +1,7 @@
 using Application.Configs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities.Backups;
@@ -73,6 +74,7 @@ internal sealed class BackupRunExecutionService(
     IServiceScopeFactory scopeFactory,
     IResticEnvironmentBuilder environmentBuilder,
     IResticProcessRunner processRunner,
+    IPlatformResticRunner platformResticRunner,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
@@ -82,6 +84,8 @@ internal sealed class BackupRunExecutionService(
     ILogger<BackupRunExecutionService> logger) : IBackupRunExecutionService
 {
     private const int LogBatchSize = 25;
+    private const string ResticExecutable = "restic";
+    private const string PlatformSourceMountPath = "/source";
     private readonly BackupOptions options = backupOptions.Value;
 
     public async IAsyncEnumerable<BackupRunStreamItem> ExecuteQueuedAsync(
@@ -194,7 +198,7 @@ internal sealed class BackupRunExecutionService(
                     return;
                 }
 
-                var sourcePlan = await ResolveSourceAsync(run.SourceSnapshot, linkedCancel.Token);
+                var sourcePlan = await ResolveSourceAsync(run.SourceSnapshot, repository, linkedCancel.Token);
                 if (!sourcePlan.IsSuccess(out var source, out var sourceError))
                 {
                     var message = sourceError?.Message ?? "Backup source could not be resolved.";
@@ -380,7 +384,10 @@ internal sealed class BackupRunExecutionService(
         return await environmentBuilder.BuildAsync(uow, repository, context, cancellationToken);
     }
 
-    private async Task<Result<BackupSourcePlan>> ResolveSourceAsync(BackupSourceSpec source, CancellationToken cancellationToken)
+    private async Task<Result<BackupSourcePlan>> ResolveSourceAsync(
+        BackupSourceSpec source,
+        BackupRepository repository,
+        CancellationToken cancellationToken)
     {
         if (source is CitadelSystemBackupSource)
         {
@@ -402,29 +409,13 @@ internal sealed class BackupRunExecutionService(
             if (!platformContainerCache.TryGetCacheEntry(volume.PlatformId, out var platform, out var error))
                 return Result.Failure<BackupSourcePlan>(error);
 
-            if (platform.ConnectorType != PlatformConnectorType.Local)
-                return Result.Failure<BackupSourcePlan>(new BadRequestError("Docker volume backup execution on remote platforms is not implemented yet."));
-
-            var connector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
-            var result = await connector.InspectVolumeAsync(
-                new InspectDockerVolumeCommand(platform.Address, volume.VolumeName),
-                cancellationToken);
-            if (!result.IsSuccess(out var dockerVolume, out var inspectError))
-                return Result.Failure<BackupSourcePlan>(inspectError!);
-
-            if (string.IsNullOrWhiteSpace(dockerVolume.Mountpoint))
-                return Result.Failure<BackupSourcePlan>(new BadRequestError("Docker volume mountpoint is not available."));
-
-            var path = Path.GetFullPath(dockerVolume.Mountpoint);
-            if (!Directory.Exists(path))
-                return Result.Failure<BackupSourcePlan>(new BadRequestError("Docker volume mountpoint does not exist on this host."));
-
-            return Result.Success(new BackupSourcePlan(
-                [new BackupSourceItem($"Docker volume {volume.VolumeName}", path, volume.PlatformId, volume.VolumeName)],
+            return await BuildDockerVolumeSourcePlanAsync(
+                repository,
+                platform,
+                [(volume.PlatformId, volume.VolumeName)],
                 $"Docker volume {volume.VolumeName}",
-                new BackupExecutionContext(BackupExecutionLocation.Core, null),
                 [],
-                []));
+                cancellationToken);
         }
 
         if (source is StackBackupSource stack)
@@ -439,40 +430,13 @@ internal sealed class BackupRunExecutionService(
             if (!platformContainerCache.TryGetCacheEntry(resolved.PlatformId, out var platform, out var error))
                 return Result.Failure<BackupSourcePlan>(error);
 
-            if (platform.ConnectorType != PlatformConnectorType.Local)
-                return Result.Failure<BackupSourcePlan>(new BadRequestError("Stack backup execution on remote platforms is not implemented yet."));
-
-            var connector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
-            var items = new List<BackupSourceItem>(resolved.Volumes.Count);
-            foreach (var stackVolume in resolved.Volumes)
-            {
-                var inspect = await connector.InspectVolumeAsync(
-                    new InspectDockerVolumeCommand(platform.Address, stackVolume.VolumeName),
-                    cancellationToken);
-
-                if (!inspect.IsSuccess(out var dockerVolume, out var inspectError))
-                    return Result.Failure<BackupSourcePlan>(inspectError!);
-
-                if (string.IsNullOrWhiteSpace(dockerVolume.Mountpoint))
-                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {stackVolume.VolumeName} mountpoint is not available."));
-
-                var path = Path.GetFullPath(dockerVolume.Mountpoint);
-                if (!Directory.Exists(path))
-                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {stackVolume.VolumeName} mountpoint does not exist on this host."));
-
-                items.Add(new BackupSourceItem(
-                    $"Docker volume {stackVolume.VolumeName}",
-                    path,
-                    stackVolume.PlatformId,
-                    stackVolume.VolumeName));
-            }
-
-            return Result.Success(new BackupSourcePlan(
-                items,
+            return await BuildDockerVolumeSourcePlanAsync(
+                repository,
+                platform,
+                [.. resolved.Volumes.Select(static volume => (volume.PlatformId, volume.VolumeName))],
                 $"Stack {resolved.StackName} ({resolved.Volumes.Count} volume{(resolved.Volumes.Count == 1 ? string.Empty : "s")})",
-                new BackupExecutionContext(BackupExecutionLocation.Core, null),
-                [],
-                [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.stack_volume_warning", warning))]));
+                [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.stack_volume_warning", warning))],
+                cancellationToken);
         }
 
         if (source is DeploymentBackupSource deployment)
@@ -487,43 +451,101 @@ internal sealed class BackupRunExecutionService(
             if (!platformContainerCache.TryGetCacheEntry(resolved.PlatformId, out var platform, out var error))
                 return Result.Failure<BackupSourcePlan>(error);
 
-            if (platform.ConnectorType != PlatformConnectorType.Local)
-                return Result.Failure<BackupSourcePlan>(new BadRequestError("Deployment backup execution on remote platforms is not implemented yet."));
-
-            var connector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
-            var items = new List<BackupSourceItem>(resolved.Volumes.Count);
-            foreach (var deploymentVolume in resolved.Volumes)
-            {
-                var inspect = await connector.InspectVolumeAsync(
-                    new InspectDockerVolumeCommand(platform.Address, deploymentVolume.VolumeName),
-                    cancellationToken);
-
-                if (!inspect.IsSuccess(out var dockerVolume, out var inspectError))
-                    return Result.Failure<BackupSourcePlan>(inspectError!);
-
-                if (string.IsNullOrWhiteSpace(dockerVolume.Mountpoint))
-                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {deploymentVolume.VolumeName} mountpoint is not available."));
-
-                var path = Path.GetFullPath(dockerVolume.Mountpoint);
-                if (!Directory.Exists(path))
-                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {deploymentVolume.VolumeName} mountpoint does not exist on this host."));
-
-                items.Add(new BackupSourceItem(
-                    $"Docker volume {deploymentVolume.VolumeName}",
-                    path,
-                    deploymentVolume.PlatformId,
-                    deploymentVolume.VolumeName));
-            }
-
-            return Result.Success(new BackupSourcePlan(
-                items,
+            return await BuildDockerVolumeSourcePlanAsync(
+                repository,
+                platform,
+                [.. resolved.Volumes.Select(static volume => (volume.PlatformId, volume.VolumeName))],
                 $"Deployment {resolved.DeploymentName} ({resolved.Volumes.Count} volume{(resolved.Volumes.Count == 1 ? string.Empty : "s")})",
-                new BackupExecutionContext(BackupExecutionLocation.Core, null),
-                [],
-                [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.deployment_volume_warning", warning))]));
+                [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.deployment_volume_warning", warning))],
+                cancellationToken);
         }
 
         return Result.Failure<BackupSourcePlan>(new BadRequestError("Unsupported backup source type."));
+    }
+
+    private async Task<Result<BackupSourcePlan>> BuildDockerVolumeSourcePlanAsync(
+        BackupRepository repository,
+        PlatformCacheEntry platform,
+        IReadOnlyCollection<(Guid PlatformId, string VolumeName)> volumes,
+        string displayName,
+        IReadOnlyList<BackupRunWarning> warnings,
+        CancellationToken cancellationToken)
+    {
+        var context = ResolveDockerVolumeExecutionContext(repository, platform);
+        if (!context.IsSuccess(out var executionContext, out var contextError))
+            return Result.Failure<BackupSourcePlan>(contextError!);
+
+        var connector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
+        var items = new List<BackupSourceItem>(volumes.Count);
+        foreach (var volume in volumes)
+        {
+            var inspect = await connector.InspectVolumeAsync(
+                new InspectDockerVolumeCommand(platform.Address, volume.VolumeName),
+                cancellationToken);
+
+            if (!inspect.IsSuccess(out var dockerVolume, out var inspectError))
+                return Result.Failure<BackupSourcePlan>(inspectError!);
+
+            var path = PlatformSourceMountPath;
+            var platformAddress = platform.Address;
+            var connectorType = platform.ConnectorType;
+            if (executionContext.Location == BackupExecutionLocation.Core)
+            {
+                if (string.IsNullOrWhiteSpace(dockerVolume.Mountpoint))
+                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {volume.VolumeName} mountpoint is not available."));
+
+                path = Path.GetFullPath(dockerVolume.Mountpoint);
+                if (!Directory.Exists(path))
+                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {volume.VolumeName} mountpoint does not exist on this host."));
+
+                platformAddress = string.Empty;
+                connectorType = default;
+            }
+
+            items.Add(new BackupSourceItem(
+                $"Docker volume {volume.VolumeName}",
+                path,
+                volume.PlatformId,
+                volume.VolumeName,
+                platformAddress,
+                connectorType));
+        }
+
+        return Result.Success(new BackupSourcePlan(
+            items,
+            displayName,
+            executionContext,
+            [],
+            warnings));
+    }
+
+    private static Result<BackupExecutionContext> ResolveDockerVolumeExecutionContext(
+        BackupRepository repository,
+        PlatformCacheEntry platform)
+    {
+        if (repository.Spec is FileSystemBackupRepositorySpec fs)
+        {
+            if (fs.Location == BackupExecutionLocation.Core)
+            {
+                return platform.ConnectorType == PlatformConnectorType.Local
+                    ? new BackupExecutionContext(BackupExecutionLocation.Core, null)
+                    : Result.Failure<BackupExecutionContext>(new BadRequestError("Core filesystem backup repositories cannot back up remote Docker volumes. Use an S3-compatible repository or a filesystem repository on the same platform."));
+            }
+
+            if (fs.PlatformId != platform.Id)
+                return Result.Failure<BackupExecutionContext>(new BadRequestError("Filesystem backup repository platform must match the Docker volume platform."));
+
+            return new BackupExecutionContext(BackupExecutionLocation.Platform, platform.Id);
+        }
+
+        if (repository.Spec is S3CompatibleBackupRepositorySpec)
+        {
+            return platform.ConnectorType == PlatformConnectorType.Local
+                ? new BackupExecutionContext(BackupExecutionLocation.Core, null)
+                : new BackupExecutionContext(BackupExecutionLocation.Platform, platform.Id);
+        }
+
+        return Result.Failure<BackupExecutionContext>(new BadRequestError("Unsupported backup repository type."));
     }
 
     private IReadOnlyList<string> BuildSystemExcludes(string sourcePath)
@@ -587,7 +609,7 @@ internal sealed class BackupRunExecutionService(
 
         args.Add(sourceItem.Path);
 
-        return RunResticAsync(run, environment, args, policy.TimeoutSeconds, cancellationToken);
+        return RunResticAsync(run, environment, args, policy.TimeoutSeconds, sourceItem, cancellationToken);
     }
 
     private BackupResticRun RunRetentionAsync(
@@ -607,7 +629,7 @@ internal sealed class BackupRunExecutionService(
             $"backup-policy:{policy.Id}"
         };
 
-        return RunResticAsync(run, environment, args, policy.TimeoutSeconds, cancellationToken);
+        return RunResticAsync(run, environment, args, policy.TimeoutSeconds, sourceItem: null, cancellationToken);
     }
 
     private BackupResticRun RunResticAsync(
@@ -615,6 +637,7 @@ internal sealed class BackupRunExecutionService(
         ResticRepositoryEnvironment environment,
         IReadOnlyList<string> arguments,
         int timeoutSeconds,
+        BackupSourceItem? sourceItem,
         CancellationToken cancellationToken)
     {
         var result = new ResticBackupResult();
@@ -625,15 +648,11 @@ internal sealed class BackupRunExecutionService(
             var pendingLogs = new List<BackupRunLogEntry>(LogBatchSize);
             try
             {
-                await foreach (var item in processRunner.RunAsync(
-                    new ResticProcessCommand(
-                        options.ResticPath,
-                        arguments,
-                        environment.Environment,
-                        environment.WorkingDirectory,
-                        TimeSpan.FromSeconds(Math.Max(60, timeoutSeconds)),
-                        environment.RedactionValues,
-                        Math.Max(1024, options.MaxLogLineBytes)),
+                await foreach (var item in BuildResticStream(
+                    environment,
+                    arguments,
+                    Math.Max(60, timeoutSeconds),
+                    sourceItem,
                     ct))
                 {
                     if (item.ExitCode.HasValue)
@@ -672,6 +691,64 @@ internal sealed class BackupRunExecutionService(
         }
 
         return new BackupResticRun(Stream(cancellationToken), result);
+    }
+
+    private IAsyncEnumerable<ResticProcessEvent> BuildResticStream(
+        ResticRepositoryEnvironment environment,
+        IReadOnlyList<string> arguments,
+        int timeoutSeconds,
+        BackupSourceItem? sourceItem,
+        CancellationToken cancellationToken)
+    {
+        if (environment.Context.Location == BackupExecutionLocation.Core)
+        {
+            return processRunner.RunAsync(
+                new ResticProcessCommand(
+                    options.ResticPath,
+                    arguments,
+                    environment.Environment,
+                    environment.WorkingDirectory,
+                    TimeSpan.FromSeconds(timeoutSeconds),
+                    environment.RedactionValues,
+                    Math.Max(1024, options.MaxLogLineBytes)),
+                cancellationToken);
+        }
+
+        if (!environment.Context.PlatformId.HasValue)
+            return SingleResticError("Platform backup execution requires a platform ID.");
+
+        if (!platformContainerCache.TryGetCacheEntry(environment.Context.PlatformId.Value, out var platform, out var cacheError))
+        {
+            return SingleResticError(cacheError.Message);
+        }
+
+        var platformAddress = string.IsNullOrWhiteSpace(sourceItem?.PlatformAddress)
+            ? platform.Address
+            : sourceItem.PlatformAddress;
+        var connectorType = sourceItem?.ConnectorType ?? platform.ConnectorType;
+
+        return platformResticRunner.RunAsync(
+            new PlatformResticCommand(
+                platform.Id,
+                platformAddress,
+                connectorType,
+                ResticExecutable,
+                arguments,
+                environment.RemoteEnvironment,
+                TimeSpan.FromSeconds(timeoutSeconds),
+                environment.RedactionValues,
+                Math.Max(1024, options.MaxLogLineBytes),
+                SourceVolumeName: sourceItem?.VolumeName,
+                RepositoryHostPath: environment.PlatformRepositoryHostPath,
+                NetworkMode: environment.RepositoryRequiresNetwork ? null : "none"),
+            cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<ResticProcessEvent> SingleResticError(string message)
+    {
+        await Task.Yield();
+        yield return new ResticProcessEvent(ResticProcessStream.StdErr, message);
+        yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: 1);
     }
 
     private async Task FlushLogsAsync(List<BackupRunLogEntry> entries, CancellationToken cancellationToken)
@@ -1024,7 +1101,9 @@ internal sealed record BackupSourceItem(
     string DisplayName,
     string Path,
     Guid? PlatformId = null,
-    string? VolumeName = null);
+    string? VolumeName = null,
+    string? PlatformAddress = null,
+    PlatformConnectorType? ConnectorType = null);
 
 internal sealed record BackupResticRun(IAsyncEnumerable<BackupRunStreamItem> Stream, ResticBackupResult Result);
 

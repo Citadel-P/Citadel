@@ -36,6 +36,8 @@ internal sealed class BackupRepositoryDestinationService(
     IServiceScopeFactory scopeFactory,
     IResticEnvironmentBuilder environmentBuilder,
     IResticProcessRunner processRunner,
+    IPlatformResticRunner platformResticRunner,
+    IPlatformContainerCache platformContainerCache,
     IOptions<BackupOptions> backupOptions)
     : IBackupRepositoryDestinationService
 {
@@ -183,9 +185,6 @@ internal sealed class BackupRepositoryDestinationService(
             return Result.Failure<LoadedBackupRepository>(new BadRequestError(ex.Message));
         }
 
-        if (context.Location != BackupExecutionLocation.Core)
-            return Result.Failure<LoadedBackupRepository>(new BadRequestError("Platform-executed backup repositories are not implemented in Slice 2."));
-
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var repository = await uow.BackupRepositories.GetAsync(repositoryId, cancellationToken);
@@ -251,16 +250,8 @@ internal sealed class BackupRepositoryDestinationService(
         var stderr = new List<string>();
         int? exitCode = null;
 
-        await foreach (var item in processRunner.RunAsync(
-            new ResticProcessCommand(
-                options.ResticPath,
-                args,
-                environment.Environment,
-                environment.WorkingDirectory,
-                TimeSpan.FromSeconds(Math.Max(5, options.DefaultTimeoutSeconds)),
-                environment.RedactionValues,
-                Math.Max(1024, options.MaxLogLineBytes)),
-            cancellationToken))
+        var stream = BuildResticStream(environment, args, cancellationToken);
+        await foreach (var item in stream)
         {
             if (item.ExitCode.HasValue)
                 exitCode = item.ExitCode.Value;
@@ -272,6 +263,59 @@ internal sealed class BackupRepositoryDestinationService(
 
         return new ResticOperationResult(exitCode ?? -1, string.Join('\n', stdout), string.Join('\n', stderr));
     }
+
+    private IAsyncEnumerable<ResticProcessEvent> BuildResticStream(
+        ResticRepositoryEnvironment environment,
+        IReadOnlyList<string> args,
+        CancellationToken cancellationToken)
+    {
+        if (environment.Context.Location == BackupExecutionLocation.Core)
+        {
+            return processRunner.RunAsync(
+                new ResticProcessCommand(
+                    options.ResticPath,
+                    args,
+                    environment.Environment,
+                    environment.WorkingDirectory,
+                    TimeSpan.FromSeconds(Math.Max(5, options.DefaultTimeoutSeconds)),
+                    environment.RedactionValues,
+                    Math.Max(1024, options.MaxLogLineBytes)),
+                cancellationToken);
+        }
+
+        if (!environment.Context.PlatformId.HasValue)
+            return SingleError("Platform backup execution requires a platform ID.");
+
+        if (!platformContainerCache.TryGetCacheEntry(environment.Context.PlatformId.Value, out var platform, out var cacheError))
+        {
+            return SingleError(cacheError.Message);
+        }
+
+        return platformResticRunner.RunAsync(
+            new PlatformResticCommand(
+                platform.Id,
+                platform.Address,
+                platform.ConnectorType,
+                ResticExecutable,
+                args,
+                environment.RemoteEnvironment,
+                TimeSpan.FromSeconds(Math.Max(5, options.DefaultTimeoutSeconds)),
+                environment.RedactionValues,
+                Math.Max(1024, options.MaxLogLineBytes),
+                SourceVolumeName: null,
+                RepositoryHostPath: environment.PlatformRepositoryHostPath,
+                NetworkMode: environment.RepositoryRequiresNetwork ? null : "none"),
+            cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<ResticProcessEvent> SingleError(string message)
+    {
+        await Task.Yield();
+        yield return new ResticProcessEvent(ResticProcessStream.StdErr, message);
+        yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: 1);
+    }
+
+    private const string ResticExecutable = "restic";
 
     private static BackupRepositoryValidation ToValidation(
         Guid repositoryId,
@@ -363,11 +407,6 @@ internal sealed class ResticEnvironmentBuilder(
             if (fs.Location != context.Location || fs.PlatformId != context.PlatformId)
                 return Result.Failure<ResticRepositoryEnvironment>(new BadRequestError("Filesystem backup repository execution context does not match its configured location."));
 
-            var path = ResolveAndValidateRepositoryPath(fs.Path);
-            if (!path.IsSuccess(out var repositoryPath, out var pathError))
-                return Result.Failure<ResticRepositoryEnvironment>(pathError!);
-
-            Directory.CreateDirectory(repositoryPath);
             var secretMaterials = await LoadSecretMaterialsAsync(uow, [repository.PasswordSecretId], cancellationToken);
             var password = await ResolveSecretAsync(
                 secretMaterials,
@@ -378,7 +417,35 @@ internal sealed class ResticEnvironmentBuilder(
             if (!password.IsSuccess(out var passwordValue, out var passwordError))
                 return Result.Failure<ResticRepositoryEnvironment>(passwordError!);
 
-            return CreateEnvironment(repositoryPath, passwordValue, new Dictionary<string, string>(), []);
+            if (context.Location == BackupExecutionLocation.Platform)
+            {
+                var platformPath = ResolveAndValidatePlatformRepositoryPath(fs.Path);
+                if (!platformPath.IsSuccess(out var platformRepositoryPath, out var platformPathError))
+                    return Result.Failure<ResticRepositoryEnvironment>(platformPathError!);
+
+                return CreateEnvironment(
+                    PlatformRepositoryMountPath,
+                    passwordValue,
+                    new Dictionary<string, string>(),
+                    [],
+                    context,
+                    platformRepositoryHostPath: platformRepositoryPath,
+                    repositoryRequiresNetwork: false);
+            }
+
+            var path = ResolveAndValidateRepositoryPath(fs.Path);
+            if (!path.IsSuccess(out var repositoryPath, out var pathError))
+                return Result.Failure<ResticRepositoryEnvironment>(pathError!);
+
+            Directory.CreateDirectory(repositoryPath);
+            return CreateEnvironment(
+                repositoryPath,
+                passwordValue,
+                new Dictionary<string, string>(),
+                [],
+                context,
+                platformRepositoryHostPath: null,
+                repositoryRequiresNetwork: false);
         }
 
         if (repository.Spec is S3CompatibleBackupRepositorySpec s3)
@@ -438,6 +505,9 @@ internal sealed class ResticEnvironmentBuilder(
                 passwordValue,
                 env,
                 [accessKeyValue, secretKeyValue, sessionTokenValue ?? string.Empty],
+                context,
+                platformRepositoryHostPath: null,
+                repositoryRequiresNetwork: true,
                 commonArgs);
         }
 
@@ -487,6 +557,33 @@ internal sealed class ResticEnvironmentBuilder(
             : StringComparison.Ordinal;
         return allowedRoots.Any(root => normalizedPath.StartsWith(root, comparison));
     }
+
+    private static Result<string> ResolveAndValidatePlatformRepositoryPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return Result.Failure<string>(new BadRequestError("Filesystem backup repository path is required."));
+
+        var normalized = path.Trim();
+        if (normalized.Contains('\0'))
+            return Result.Failure<string>(new BadRequestError("Filesystem backup repository path is invalid."));
+
+        if (!IsAbsolutePlatformPath(normalized))
+            return Result.Failure<string>(new BadRequestError("Platform filesystem backup repository path must be an absolute host path."));
+
+        var pathForChecks = normalized.Replace('\\', '/').TrimEnd('/') + "/";
+        var denied = new[] { "/var/run/docker.sock/", "/proc/", "/sys/", "/dev/" };
+        if (denied.Any(deniedPath => pathForChecks.StartsWith(deniedPath, StringComparison.Ordinal)))
+            return Result.Failure<string>(new BadRequestError("Filesystem backup repository path points to a protected system location."));
+
+        return normalized;
+    }
+
+    private static bool IsAbsolutePlatformPath(string path)
+        => path.StartsWith("/", StringComparison.Ordinal)
+           || (path.Length >= 3
+               && char.IsLetter(path[0])
+               && path[1] == ':'
+               && (path[2] == '\\' || path[2] == '/'));
 
     private static async Task<IReadOnlyDictionary<Guid, SecretResolutionMaterial>> LoadSecretMaterialsAsync(
         IUnitOfWork uow,
@@ -555,6 +652,9 @@ internal sealed class ResticEnvironmentBuilder(
         string password,
         IReadOnlyDictionary<string, string> environment,
         IReadOnlyCollection<string> redactionValues,
+        BackupExecutionContext context,
+        string? platformRepositoryHostPath,
+        bool repositoryRequiresNetwork,
         IReadOnlyList<string>? commonArguments = null)
     {
         var workDir = Path.GetFullPath(options.WorkingDirectory);
@@ -571,12 +671,22 @@ internal sealed class ResticEnvironmentBuilder(
             ["RESTIC_PASSWORD_FILE"] = passwordPath
         };
 
+        var remoteEnv = new Dictionary<string, string>(environment, StringComparer.Ordinal)
+        {
+            ["RESTIC_REPOSITORY"] = repository,
+            ["RESTIC_PASSWORD"] = password
+        };
+
         return new ResticRepositoryEnvironment(
             workDir,
             commonArguments ?? [],
             env,
+            remoteEnv,
             [password, repository, .. redactionValues],
-            passwordPath);
+            passwordPath,
+            context,
+            platformRepositoryHostPath,
+            repositoryRequiresNetwork);
     }
 
     private static string BuildS3RepositoryUri(S3CompatibleBackupRepositorySpec spec)
@@ -594,6 +704,8 @@ internal sealed class ResticEnvironmentBuilder(
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             File.SetUnixFileMode(filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
     }
+
+    private const string PlatformRepositoryMountPath = "/repository";
 }
 
 internal sealed record LoadedBackupRepository(BackupRepository Repository, ResticRepositoryEnvironment Environment);
@@ -604,13 +716,21 @@ internal sealed class ResticRepositoryEnvironment(
     string workingDirectory,
     IReadOnlyList<string> commonArguments,
     IReadOnlyDictionary<string, string> environment,
+    IReadOnlyDictionary<string, string> remoteEnvironment,
     IReadOnlyCollection<string> redactionValues,
-    string passwordFilePath) : IAsyncDisposable
+    string passwordFilePath,
+    BackupExecutionContext context,
+    string? platformRepositoryHostPath,
+    bool repositoryRequiresNetwork) : IAsyncDisposable
 {
     public string WorkingDirectory { get; } = workingDirectory;
     public IReadOnlyList<string> CommonArguments { get; } = commonArguments;
     public IReadOnlyDictionary<string, string> Environment { get; } = environment;
+    public IReadOnlyDictionary<string, string> RemoteEnvironment { get; } = remoteEnvironment;
     public IReadOnlyCollection<string> RedactionValues { get; } = redactionValues;
+    public BackupExecutionContext Context { get; } = context;
+    public string? PlatformRepositoryHostPath { get; } = platformRepositoryHostPath;
+    public bool RepositoryRequiresNetwork { get; } = repositoryRequiresNetwork;
 
     public ValueTask DisposeAsync()
     {

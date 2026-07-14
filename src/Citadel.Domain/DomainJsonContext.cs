@@ -432,7 +432,9 @@ public partial class AutomationJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<BackupCoverageResourceType>),
         typeof(JsonStringEnumConverter<BackupRestoreStatus>),
         typeof(JsonStringEnumConverter<ContainerStateStatus>),
-        typeof(JsonStringEnumConverter<ResourceControlState>)
+        typeof(JsonStringEnumConverter<ResourceControlState>),
+        typeof(JsonStringEnumConverter<WebhookProvider>),
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>)
     })]
 [JsonSerializable(typeof(BackupSourceSpec))]
 [JsonSerializable(typeof(DockerVolumeBackupSource))]
@@ -453,6 +455,7 @@ public partial class AutomationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(IReadOnlyList<BackupRunWarning>))]
 [JsonSerializable(typeof(BackupAffectedContainer))]
 [JsonSerializable(typeof(IReadOnlyList<BackupAffectedContainer>))]
+[JsonSerializable(typeof(BackupWebhookConfig))]
 public partial class BackupJsonContext : JsonSerializerContext
 {
 }

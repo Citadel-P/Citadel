@@ -6,6 +6,7 @@ import {
   BackupSourceSpecDeploymentBackupSource,
   BackupSourceSpecDockerVolumeBackupSource,
   BackupSourceSpecStackBackupSource,
+  BackupWebhookConfig,
   BackupSourceType,
   DeploymentBackupSourcePreviewView,
   DockerVolumeResultView,
@@ -28,6 +29,7 @@ import {
   ItemSelector,
 } from '@/components/custom/form-builder';
 import { TimezoneSelectField } from '@/components/custom/timezone-select';
+import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Badge } from '@/components/ui/badge';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
@@ -40,6 +42,7 @@ type BackupPolicyFormValue = Omit<BackupPolicyInput, 'runAsActorId'> & {
   id?: string;
   runAsActorId?: string | null;
   scheduleEnabled: boolean;
+  webhook: BackupWebhookConfig | null;
   tagIds?: string[] | null;
 };
 
@@ -82,6 +85,7 @@ const emptyPolicy = (): BackupPolicyFormValue => ({
   scheduleEnabled: false,
   cron: '',
   timeZone: 'UTC',
+  webhook: { enabled: false },
   keepLastSuccessful: 14,
   timeoutSeconds: 1800,
   alertOnFailure: true,
@@ -570,6 +574,27 @@ export function BackupPolicyForm({
               }),
             ],
           }),
+          defineGroupField<BackupPolicyFormValue>({
+            id: 'webhook',
+            label: 'Webhook',
+            description: 'Allow a webhook to queue this backup policy through the shared listener.',
+            items: [
+              defineField<BackupPolicyFormValue, 'webhook'>({
+                key: 'webhook',
+                label: 'Enabled',
+                render: (value, set) => (
+                  <WebhookConfigField
+                    resourceType="backup-policy"
+                    resourceId={id}
+                    execution="run"
+                    value={value ?? { enabled: false }}
+                    disabled={disabled}
+                    onChange={(webhook) => set({ webhook: webhook as BackupWebhookConfig })}
+                  />
+                ),
+              }),
+            ],
+          }),
         ],
       }),
     }),
@@ -583,6 +608,7 @@ export function BackupPolicyForm({
       deploymentPreview.isFetching,
       deploymentPreview.isLoading,
       disabled,
+      id,
       mode,
       original.source,
       resource,
@@ -899,6 +925,7 @@ function toFormValue(resource?: BackupPolicyView): BackupPolicyFormValue {
     scheduleEnabled: Boolean(resource.cron),
     cron: resource.cron ?? '',
     timeZone: resource.timeZone ?? 'UTC',
+    webhook: resource.webhook ?? { enabled: false },
     keepLastSuccessful: resource.keepLastSuccessful,
     timeoutSeconds: resource.timeoutSeconds,
     alertOnFailure: resource.alertOnFailure,
@@ -922,6 +949,7 @@ function toCreateInput(payload: BackupPolicyFormValue): BackupPolicyInput {
     enabled: payload.enabled ?? true,
     cron: payload.scheduleEnabled ? payload.cron || null : null,
     timeZone: payload.scheduleEnabled ? payload.timeZone || 'UTC' : null,
+    webhook: normalizeWebhook(payload.webhook),
     keepLastSuccessful: payload.keepLastSuccessful ?? 14,
     timeoutSeconds: payload.timeoutSeconds ?? 1800,
     alertOnFailure: payload.alertOnFailure ?? true,
@@ -944,6 +972,7 @@ function toUpdateInput(
   if ('timeoutSeconds' in update) next.timeoutSeconds = payload.timeoutSeconds ?? 1800;
   if ('alertOnFailure' in update) next.alertOnFailure = payload.alertOnFailure ?? true;
   if ('runAsActorId' in update) next.runAsActorId = payload.runAsActorId || null;
+  if ('webhook' in update) next.webhook = normalizeWebhook(payload.webhook);
 
   if ('scheduleEnabled' in update || 'cron' in update || 'timeZone' in update) {
     next.cron = payload.scheduleEnabled ? payload.cron || null : null;
@@ -951,6 +980,16 @@ function toUpdateInput(
   }
 
   return next;
+}
+
+function normalizeWebhook(webhook: BackupWebhookConfig | null | undefined): BackupWebhookConfig | null {
+  if (!webhook) return null;
+
+  return {
+    ...webhook,
+    secret: webhook.secret?.trim() || null,
+    branchFilter: webhook.branchFilter?.trim() || null,
+  };
 }
 
 function normalizeSource(source: BackupSourceSpec): BackupSourceSpec {

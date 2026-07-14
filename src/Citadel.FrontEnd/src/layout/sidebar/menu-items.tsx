@@ -33,6 +33,11 @@ const MenuItems: IMenuItem[] = [
         label: 'Platforms',
         route: '/',
       },
+      {
+        icon: renderIcon(CitadelIcons.BackupPolicy),
+        label: 'Backups',
+        route: '/backup-policies',
+      },
     ],
   },
   {
@@ -100,11 +105,6 @@ const MenuItems: IMenuItem[] = [
             icon: renderIcon(CitadelIcons.Binding),
             label: 'Bindings',
             route: '/bindings',
-          },
-          {
-            icon: renderIcon(CitadelIcons.BackupPolicy),
-            label: 'Backups',
-            route: '/backup-policies',
           },
           {
             icon: renderIcon(CitadelIcons.Tag),

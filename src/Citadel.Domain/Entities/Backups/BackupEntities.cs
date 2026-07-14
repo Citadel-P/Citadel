@@ -1,3 +1,4 @@
+using Domain.Contracts.Resources;
 using Domain.Entities;
 using Domain.Entities.Tags;
 using System.Text.Json.Serialization;
@@ -317,6 +318,7 @@ public sealed class BackupPolicy(
     bool enabled,
     string? cron,
     string? timeZone,
+    BackupWebhookConfig? webhook,
     int keepLastSuccessful,
     int timeoutSeconds,
     bool alertOnFailure,
@@ -343,6 +345,8 @@ public sealed class BackupPolicy(
     public bool Enabled { get; private set; } = enabled;
     public string? Cron { get; private set; } = BackupRepository.NormalizeOptional(cron);
     public string? TimeZone { get; private set; } = BackupRepository.NormalizeOptional(timeZone);
+    public BackupWebhookConfig? Webhook { get; private set; } = NormalizeWebhook(webhook);
+    public bool WebhookEnabled => Webhook?.Enabled == true;
     public int KeepLastSuccessful { get; private set; } = keepLastSuccessful;
     public int TimeoutSeconds { get; private set; } = timeoutSeconds;
     public bool AlertOnFailure { get; private set; } = alertOnFailure;
@@ -389,6 +393,8 @@ public sealed class BackupPolicy(
         bool updateCron,
         string? timeZone,
         bool updateTimeZone,
+        BackupWebhookConfig? webhook,
+        bool updateWebhook,
         int? keepLastSuccessful,
         int? timeoutSeconds,
         bool? alertOnFailure,
@@ -423,6 +429,9 @@ public sealed class BackupPolicy(
 
         if (updateTimeZone)
             TimeZone = BackupRepository.NormalizeOptional(timeZone);
+
+        if (updateWebhook)
+            Webhook = NormalizeWebhook(webhook);
 
         if (keepLastSuccessful.HasValue)
             KeepLastSuccessful = keepLastSuccessful.Value;
@@ -494,6 +503,12 @@ public sealed class BackupPolicy(
         if (TimeZone?.Length > 128)
             throw new ArgumentException("Backup policy time zone cannot exceed 128 characters.", nameof(TimeZone));
 
+        if (Webhook?.Secret?.Length > 256)
+            throw new ArgumentException("Backup policy webhook secret cannot exceed 256 characters.", nameof(Webhook));
+
+        if (Webhook?.BranchFilter?.Length > 256)
+            throw new ArgumentException("Backup policy webhook branch filter cannot exceed 256 characters.", nameof(Webhook));
+
         if (KeepLastSuccessful is < 1 or > 1000)
             throw new ArgumentException("Backup retention must keep between 1 and 1000 successful snapshots.", nameof(KeepLastSuccessful));
 
@@ -516,6 +531,7 @@ public sealed class BackupPolicy(
         bool enabled,
         string? cron,
         string? timeZone,
+        BackupWebhookConfig? webhook,
         int keepLastSuccessful,
         int timeoutSeconds,
         bool alertOnFailure,
@@ -537,6 +553,7 @@ public sealed class BackupPolicy(
             enabled,
             cron,
             timeZone,
+            webhook,
             keepLastSuccessful,
             timeoutSeconds,
             alertOnFailure,
@@ -571,6 +588,15 @@ public sealed class BackupPolicy(
             _ => throw new ArgumentException("Unsupported backup source type.", nameof(source))
         };
 
+    private static BackupWebhookConfig? NormalizeWebhook(BackupWebhookConfig? value)
+        => value is null
+            ? null
+            : value with
+            {
+                Secret = BackupRepository.NormalizeOptional(value.Secret),
+                BranchFilter = BackupRepository.NormalizeOptional(value.BranchFilter)
+            };
+
     private static void ValidateSource(BackupSourceSpec source)
     {
         switch (source)
@@ -601,6 +627,13 @@ public sealed class BackupPolicy(
         }
     }
 }
+
+public sealed record BackupWebhookConfig(
+    bool Enabled = false,
+    WebhookProvider Provider = WebhookProvider.GitHub,
+    WebhookAuthScheme AuthScheme = WebhookAuthScheme.GitHubHmacSha256,
+    string? Secret = null,
+    string? BranchFilter = null) : WebhookConfig(Enabled, Provider, AuthScheme, Secret, BranchFilter);
 
 public sealed record BackupRunWarning(string Code, string Message);
 

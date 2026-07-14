@@ -229,6 +229,7 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
             enabled: true,
             cron: null,
             timeZone: null,
+            webhook: null,
             keepLastSuccessful: 2,
             timeoutSeconds: 120,
             alertOnFailure: false,

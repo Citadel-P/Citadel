@@ -1633,6 +1633,7 @@ internal static class Configuration
         policy.Property<bool>("Enabled").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
         policy.Property<string>("Cron").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
         policy.Property<string>("TimeZone").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        policy.Property<string>("Webhook").HasColumnType("jsonb").IsRequired(false);
         policy.Property<int>("KeepLastSuccessful").HasColumnType(Integer).IsRequired().HasDefaultValue(14);
         policy.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(14400);
         policy.Property<bool>("AlertOnFailure").HasColumnType("boolean").IsRequired().HasDefaultValue(true);

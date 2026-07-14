@@ -389,6 +389,7 @@ export enum BackupRunTrigger {
   Manual = "Manual",
   Schedule = "Schedule",
   Automation = "Automation",
+  Webhook = "Webhook",
 }
 
 export enum BackupRunStatus {
@@ -2547,6 +2548,7 @@ export interface BackupPolicyInput {
   enabled?: boolean;
   cron?: null | string;
   timeZone?: null | string;
+  webhook?: null | BackupWebhookConfig;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -2576,6 +2578,7 @@ export interface BackupPolicyView {
   enabled: boolean;
   cron: null | string;
   timeZone: null | string;
+  webhook: null | BackupWebhookConfig;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -2878,6 +2881,15 @@ export interface BackupSourceSpecStackBackupSource {
   stackId: string;
   type?: BackupSourceType;
   stableKey?: null | string;
+}
+
+export interface BackupWebhookConfig {
+  /** @default false */
+  enabled?: boolean;
+  provider?: WebhookProvider;
+  authScheme?: WebhookAuthScheme;
+  secret?: null | string;
+  branchFilter?: null | string;
 }
 
 export interface BindOptions {
@@ -5854,6 +5866,7 @@ export interface UpdateBackupPolicyInput {
   enabled?: null | boolean;
   cron?: null | string;
   timeZone?: null | string;
+  webhook?: null | BackupWebhookConfig;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
