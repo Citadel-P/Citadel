@@ -449,10 +449,11 @@ internal sealed class ResticEnvironmentBuilder(
         if (string.IsNullOrWhiteSpace(path))
             return Result.Failure<string>(new BadRequestError("Filesystem backup repository path is required."));
 
-        if (!Path.IsPathFullyQualified(path))
-            return Result.Failure<string>(new BadRequestError("Filesystem backup repository path must be absolute."));
-
-        var fullPath = Path.GetFullPath(path);
+        var allowedRoots = options.AllowedCorePaths
+            .Where(static x => !string.IsNullOrWhiteSpace(x))
+            .Select(static x => EnsureTrailingSeparator(Path.GetFullPath(x)))
+            .ToArray();
+        var fullPath = ResolveRepositoryPath(path.Trim(), allowedRoots);
         var normalized = EnsureTrailingSeparator(fullPath);
         var denied =
             RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -462,20 +463,29 @@ internal sealed class ResticEnvironmentBuilder(
         if (denied.Any(deniedPath => normalized.StartsWith(EnsureTrailingSeparator(deniedPath), StringComparison.Ordinal)))
             return Result.Failure<string>(new BadRequestError("Filesystem backup repository path points to a protected system location."));
 
-        var allowedRoots = options.AllowedCorePaths
-            .Where(static x => !string.IsNullOrWhiteSpace(x))
-            .Select(static x => EnsureTrailingSeparator(Path.GetFullPath(x)))
-            .ToArray();
-
-        if (allowedRoots.Length > 0
-            && !allowedRoots.Any(root => normalized.StartsWith(root, RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal)))
+        if (allowedRoots.Length > 0 && !IsPathAllowed(normalized, allowedRoots))
         {
             return Result.Failure<string>(new BadRequestError("Filesystem backup repository path is outside the configured allowed backup paths."));
         }
 
         return fullPath;
+    }
+
+    private static string ResolveRepositoryPath(string path, IReadOnlyList<string> allowedRoots)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (Path.IsPathFullyQualified(path) || allowedRoots.Count == 0 || IsPathAllowed(EnsureTrailingSeparator(fullPath), allowedRoots))
+            return fullPath;
+
+        return Path.GetFullPath(Path.Combine(allowedRoots[0], path));
+    }
+
+    private static bool IsPathAllowed(string normalizedPath, IReadOnlyCollection<string> allowedRoots)
+    {
+        var comparison = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return allowedRoots.Any(root => normalizedPath.StartsWith(root, comparison));
     }
 
     private static async Task<IReadOnlyDictionary<Guid, SecretResolutionMaterial>> LoadSecretMaterialsAsync(

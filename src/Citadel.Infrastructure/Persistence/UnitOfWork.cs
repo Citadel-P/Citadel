@@ -57,6 +57,7 @@ internal class UnitOfWork : IUnitOfWork
         BackupRepositoryValidations = new Lazy<IBackupRepositoryValidationRepository>(() => new BackupRepositoryValidationRepository(connection, GetTransaction));
         BackupPolicies = new Lazy<IBackupPolicyRepository>(() => new BackupPolicyRepository(connection, GetTransaction));
         BackupRuns = new Lazy<IBackupRunRepository>(() => new BackupRunRepository(connection, GetTransaction));
+        BackupRunItems = new Lazy<IBackupRunItemRepository>(() => new BackupRunItemRepository(connection, GetTransaction));
         BackupRunLogs = new Lazy<IBackupRunLogRepository>(() => new BackupRunLogRepository(connection, GetTransaction));
         BackupRestoreRuns = new Lazy<IBackupRestoreRunRepository>(() => new BackupRestoreRunRepository(connection, GetTransaction));
         BackupRestoreRunLogs = new Lazy<IBackupRestoreRunLogRepository>(() => new BackupRestoreRunLogRepository(connection, GetTransaction));
@@ -94,6 +95,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IBackupRepositoryValidationRepository> BackupRepositoryValidations { get; }
     private Lazy<IBackupPolicyRepository> BackupPolicies { get; }
     private Lazy<IBackupRunRepository> BackupRuns { get; }
+    private Lazy<IBackupRunItemRepository> BackupRunItems { get; }
     private Lazy<IBackupRunLogRepository> BackupRunLogs { get; }
     private Lazy<IBackupRestoreRunRepository> BackupRestoreRuns { get; }
     private Lazy<IBackupRestoreRunLogRepository> BackupRestoreRunLogs { get; }
@@ -146,6 +148,7 @@ internal class UnitOfWork : IUnitOfWork
     IBackupRepositoryValidationRepository IUnitOfWork.BackupRepositoryValidations => BackupRepositoryValidations.Value;
     IBackupPolicyRepository IUnitOfWork.BackupPolicies => BackupPolicies.Value;
     IBackupRunRepository IUnitOfWork.BackupRuns => BackupRuns.Value;
+    IBackupRunItemRepository IUnitOfWork.BackupRunItems => BackupRunItems.Value;
     IBackupRunLogRepository IUnitOfWork.BackupRunLogs => BackupRunLogs.Value;
     IBackupRestoreRunRepository IUnitOfWork.BackupRestoreRuns => BackupRestoreRuns.Value;
     IBackupRestoreRunLogRepository IUnitOfWork.BackupRestoreRunLogs => BackupRestoreRunLogs.Value;

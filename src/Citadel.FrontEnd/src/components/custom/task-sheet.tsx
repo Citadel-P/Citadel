@@ -44,8 +44,11 @@ import {
   ActivityEventInfoStackWebhookReceived,
   ApplyStackInput,
   AutomationActionRunStreamItem,
+  BackupRunStatus,
+  BackupRunStreamItem,
   RollbackStackInput,
   RunAutomationActionInput,
+  QueueBackupRunInput,
   TestAutomationActionInput,
   StackReleaseSource,
   StackSnapshot,
@@ -67,6 +70,7 @@ interface PullImageParams {
 type DeployParams = { name: string } & ApplyDeploymentInput;
 type StackDeployParams = { name: string } & ApplyStackInput;
 type StackRollbackParams = { name: string; version?: string } & RollbackStackInput;
+type BackupRunParams = { id: string; name: string } & QueueBackupRunInput;
 type AutomationActionRunParams = {
   id: string;
   name: string;
@@ -80,6 +84,7 @@ export type TaskSpec =
   | { kind: 'build'; payload: Record<string, unknown> }
   | { kind: 'stack'; payload: Record<string, unknown> }
   | { kind: 'stackRollback'; payload: StackRollbackParams }
+  | { kind: 'backupRun'; payload: BackupRunParams }
   | { kind: 'automationActionRun'; payload: AutomationActionRunParams };
 
 export interface TaskSheetState {
@@ -884,6 +889,11 @@ function RollbackStackTaskRenderer({ payload, type }: { payload: StackRollbackPa
   return <TaskStreamLayout title="Rollback" refName={refName} type={type} state={state as any} />;
 }
 
+function BackupRunTaskRenderer({ payload }: { payload: BackupRunParams; type: ResourceType }) {
+  const state = useBackupRunProgress(payload);
+  return <TaskStreamLayout title="Backup" refName={payload.name} type="BackupPolicy" state={state as any} />;
+}
+
 function AutomationActionRunTaskRenderer({ payload }: { payload: AutomationActionRunParams; type: ResourceType }) {
   const state = useAutomationActionRunProgress(payload);
   const title = payload.mode === 'test' ? 'Test Action' : 'Run Action';
@@ -903,6 +913,7 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   deploy: ApplyDeployTaskRenderer,
   stack: ApplyStackTaskRenderer,
   stackRollback: RollbackStackTaskRenderer,
+  backupRun: BackupRunTaskRenderer,
   automationActionRun: AutomationActionRunTaskRenderer,
   activity: ActivityTaskRenderer,
   alertEvent: AlertEventTaskRenderer,
@@ -1011,6 +1022,46 @@ function useRollbackStackProgress(params: StackRollbackParams) {
     compactDockerComposeOutput: true,
     getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
   });
+}
+
+function useBackupRunProgress(params: BackupRunParams) {
+  const { id, trigger, triggerSourceId } = params;
+  const queryClient = useQueryClient();
+
+  const request: QueueBackupRunInput = useMemo(
+    () => ({ trigger, triggerSourceId }),
+    [trigger, triggerSourceId],
+  );
+
+  const state = useStreamProgress<QueueBackupRunInput, BackupRunStreamItem>({
+    endpoint: `api/v1/backupPolicies/${encodeURIComponent(id)}/run`,
+    request,
+    successMessage: 'Backup run finished',
+    errorMessageDefault: 'Failed to run backup',
+    pendingMessage: 'Starting backup run...',
+    streamFieldIsMetadata: true,
+    getError: (item) => {
+      if (item.status === BackupRunStatus.Failed
+        || item.status === BackupRunStatus.Rejected
+        || item.status === BackupRunStatus.TimedOut
+        || item.status === BackupRunStatus.Interrupted) {
+        return item.message;
+      }
+
+      return null;
+    },
+  });
+
+  useEffect(() => {
+    if (!state.isSuccess && !state.error) return;
+
+    queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
+    queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
+    queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
+    queryClient.invalidateQueries({ queryKey: ['listBackupRuns', { query: { policyId: id, limit: 50 } }] });
+  }, [id, queryClient, state.error, state.isSuccess]);
+
+  return state;
 }
 
 function useAutomationActionRunProgress(params: AutomationActionRunParams) {

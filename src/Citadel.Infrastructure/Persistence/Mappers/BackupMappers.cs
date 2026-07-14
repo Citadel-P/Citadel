@@ -119,6 +119,29 @@ internal static class BackupMappers
     internal static IEnumerable<BackupRun> ToDomain(this IEnumerable<BackupRunDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());
 
+    internal static BackupRunItem ToDomain(this BackupRunItemDto dto)
+        => BackupRunItem.FromPersistence(
+            dto.Id,
+            dto.BackupRunId,
+            dto.PlatformId,
+            dto.VolumeName,
+            Enum.Parse<BackupRunItemStatus>(dto.Status),
+            dto.ResticSnapshotId,
+            dto.ParentSnapshotId,
+            dto.FilesProcessed,
+            dto.BytesProcessed,
+            dto.BytesAdded,
+            ToOffset(dto.StartedAt),
+            ToOffset(dto.CompletedAt),
+            dto.ExitCode,
+            dto.ErrorCode,
+            dto.ErrorMessage,
+            ToOffset(dto.CreatedAt),
+            ToOffset(dto.UpdatedAt));
+
+    internal static IEnumerable<BackupRunItem> ToDomain(this IEnumerable<BackupRunItemDto> dtos)
+        => dtos.Select(static dto => dto.ToDomain());
+
     internal static BackupRunLogEntry ToDomain(this BackupRunLogDto dto)
         => new(
             dto.Id,
@@ -322,6 +345,7 @@ internal static class BackupMappers
         {
             DockerVolumeBackupSource volume => SerializeWithType("DockerVolume", volume, BackupJsonContext.Default.DockerVolumeBackupSource),
             CitadelSystemBackupSource system => SerializeWithType("CitadelSystem", system, BackupJsonContext.Default.CitadelSystemBackupSource),
+            StackBackupSource stack => SerializeWithType("Stack", stack, BackupJsonContext.Default.StackBackupSource),
             _ => throw new NotSupportedException($"Backup source type '{source.GetType().Name}' is not supported.")
         };
 
@@ -354,6 +378,8 @@ internal static class BackupMappers
                               ?? throw new InvalidOperationException("Backup source JSON is invalid."),
             "CitadelSystem" => JsonSerializer.Deserialize(json, BackupJsonContext.Default.CitadelSystemBackupSource)
                                ?? throw new InvalidOperationException("Backup source JSON is invalid."),
+            "Stack" => JsonSerializer.Deserialize(json, BackupJsonContext.Default.StackBackupSource)
+                       ?? throw new InvalidOperationException("Backup source JSON is invalid."),
             _ => throw new NotSupportedException($"Backup source type '{type}' is not supported.")
         };
     }

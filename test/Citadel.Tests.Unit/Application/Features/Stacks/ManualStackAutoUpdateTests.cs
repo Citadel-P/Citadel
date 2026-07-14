@@ -32,6 +32,87 @@ public class ManualStackAutoUpdateTests
     }
 
     [Fact]
+    public void ParseVolumes_extracts_declared_named_external_and_service_references()
+    {
+        const string compose = """
+        services:
+          api:
+            image: nginx
+            volumes:
+              - app-data:/var/lib/app
+              - ./config:/etc/app:ro
+              - /host/logs:/logs
+              - cache:/cache
+              - /tmp
+          worker:
+            image: busybox
+            volumes:
+              - type: volume
+                source: external-data
+                target: /external
+              - type: bind
+                source: ./worker
+                target: /worker
+              - type: tmpfs
+                target: /tmp
+        volumes:
+          app-data:
+          external-data:
+            external: true
+          cache:
+            external:
+              name: shared-cache
+        """;
+
+        var result = StackComposeParser.ParseVolumes(compose);
+
+        Assert.Collection(
+            result.DeclaredVolumes.OrderBy(x => x.Name),
+            volume =>
+            {
+                Assert.Equal("app-data", volume.Name);
+                Assert.False(volume.IsExternal);
+            },
+            volume =>
+            {
+                Assert.Equal("cache", volume.Name);
+                Assert.True(volume.IsExternal);
+            },
+            volume =>
+            {
+                Assert.Equal("external-data", volume.Name);
+                Assert.True(volume.IsExternal);
+            });
+
+        Assert.Equal(["app-data", "cache", "external-data"], result.ServiceVolumeReferences.OrderBy(x => x).ToArray());
+        Assert.True(result.HasAnonymousVolumes);
+    }
+
+    [Fact]
+    public void ParseVolumes_ignores_non_volume_sources()
+    {
+        const string compose = """
+        services:
+          api:
+            image: nginx
+            volumes:
+              - ./config:/etc/app:ro
+              - /var/run/docker.sock:/var/run/docker.sock
+              - type: bind
+                source: ./data
+                target: /data
+              - type: tmpfs
+                target: /tmp
+        """;
+
+        var result = StackComposeParser.ParseVolumes(compose);
+
+        Assert.Empty(result.DeclaredVolumes);
+        Assert.Empty(result.ServiceVolumeReferences);
+        Assert.False(result.HasAnonymousVolumes);
+    }
+
+    [Fact]
     public async Task LoadManualStackChecks_includes_only_deployed_manual_stacks_with_update_policy_and_registry()
     {
         var registryId = Guid.CreateVersion7();

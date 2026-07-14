@@ -953,7 +953,8 @@ public enum ActionRunStatus
 public enum BackupSourceType
 {
     DockerVolume,
-    CitadelSystem
+    CitadelSystem,
+    Stack
 }
 
 public enum VolumeBackupConsistency
@@ -1018,6 +1019,15 @@ public enum BackupRunStatus
     Cancelled,
     Rejected,
     Interrupted
+}
+
+public enum BackupRunItemStatus
+{
+    Pending,
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled
 }
 
 public enum BackupSnapshotAvailability

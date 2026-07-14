@@ -5,10 +5,12 @@ import {
   BackupRepositoryStatus,
   BackupRepositoryType,
   BackupRepositoryView,
+  ValidateBackupRepositoryInput,
   S3BucketLookup,
+  BackupExecutionLocation
 } from '@/api/generated/api.types';
 import { IntegrationAddCard, IntegrationCard } from '@/components/custom/common';
-import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { DropdownActionButton, RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { FieldInput, FieldSwitch, ItemSelector } from '@/components/custom/form-builder';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { Button } from '@/components/ui/button';
@@ -24,8 +26,8 @@ import { Label } from '@/components/ui/label';
 import { useMutate, useRead } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
-import { Cloud, DatabaseBackup, FolderLock, LoaderCircle, Plus } from 'lucide-react';
-import { type Dispatch, type SetStateAction, useState } from 'react';
+import { CheckCircle2, Cloud, DatabaseBackup, Eye, FolderLock, LoaderCircle, Plus, RefreshCw, Scissors } from 'lucide-react';
+import { type Dispatch, type ReactNode, type SetStateAction, useState } from 'react';
 import { toast } from 'sonner';
 import { BackupRepositoryDropdownActions } from '../backup-repositories/actions';
 import { destinationText } from '../backup-repositories/table';
@@ -42,6 +44,10 @@ import {
 } from '../backup-repositories/form/form';
 
 const EMPTY_REPOSITORIES: BackupRepositoryView[] = [];
+const coreContext: ValidateBackupRepositoryInput = {
+  location: BackupExecutionLocation.Core,
+  platformId: null,
+};
 
 export function BackupRepositoriesSection() {
   const { data, isLoading } = useRead('listBackupRepositories');
@@ -98,7 +104,14 @@ export function BackupRepositoriesSection() {
         </div>
       )}
 
-      <RepositoryDialog open={open} onOpenChange={setOpen} editing={editing} input={input} setInput={setInput} />
+      <RepositoryDialog
+        open={open}
+        onOpenChange={setOpen}
+        editing={editing}
+        setEditing={setEditing}
+        input={input}
+        setInput={setInput}
+      />
     </div>
   );
 }
@@ -106,7 +119,18 @@ export function BackupRepositoriesSection() {
 function RepositoryCard({ repository, onEdit }: { repository: BackupRepositoryView; onEdit: () => void }) {
   const Icon = repository.type === BackupRepositoryType.S3Compatible ? Cloud : FolderLock;
   const label = repository.type === BackupRepositoryType.S3Compatible ? 'S3-compatible' : 'Filesystem';
-  const { edit: _edit, ...actions } = BackupRepositoryDropdownActions;
+  const { edit: _routeEdit, ...repositoryActions } = BackupRepositoryDropdownActions;
+  const actions = {
+    edit: ({ resource }: { resource: BackupRepositoryView }) => (
+      <DropdownActionButton
+        title="Edit"
+        icon={<Eye className="h-4 w-4" />}
+        disabled={!(resource.capabilities?.canRead ?? true)}
+        onClick={onEdit}
+      />
+    ),
+    ...repositoryActions,
+  };
 
   return (
     <IntegrationCard
@@ -139,19 +163,26 @@ function RepositoryDialog({
   open,
   onOpenChange,
   editing,
+  setEditing,
   input,
   setInput,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: BackupRepositoryView | null;
+  setEditing: Dispatch<SetStateAction<BackupRepositoryView | null>>;
   input: BackupRepositoryFormInput;
   setInput: Dispatch<SetStateAction<BackupRepositoryFormInput>>;
 }) {
   const queryClient = useQueryClient();
   const create = useMutate('createBackupRepository');
   const update = useMutate('updateBackupRepository');
+  const validate = useMutate('validateBackupRepository');
+  const initialize = useMutate('initializeBackupRepository');
+  const check = useMutate('checkBackupRepository');
+  const prune = useMutate('pruneBackupRepository');
   const saving = create.isPending || update.isPending;
+  const operating = validate.isPending || initialize.isPending || check.isPending || prune.isPending;
 
   const selectedType = (input.spec?.$type ?? BackupRepositoryType.FileSystem) as BackupRepositoryType;
   const formDisabled = editing ? !(editing.capabilities?.canWrite ?? true) : false;
@@ -180,17 +211,39 @@ function RepositoryDialog({
     try {
       if (editing) {
         await update.mutateAsync({ id: editing.id, data: toUpdateInput(input) } as any);
+        toast.success('Repository updated successfully');
+        onOpenChange(false);
       } else {
-        await create.mutateAsync({ data: toCreateInput(input) });
+        const response = await create.mutateAsync({ data: toCreateInput(input) });
+        const repository = (response as any)?.data as BackupRepositoryView | undefined;
+        if (repository) {
+          setEditing(repository);
+          setInput(getInitialInput(repository));
+        }
+        toast.success('Repository created. Initialize or validate it before assigning it to critical policies.');
       }
 
       await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
       if (editing) await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: editing.id }] });
-
-      toast.success(`Repository ${editing ? 'updated' : 'created'} successfully`);
-      onOpenChange(false);
     } catch {
       toast.error(create.validationErrors ?? update.validationErrors ?? 'Failed to save repository.');
+    }
+  };
+
+  const runOperation = async (
+    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
+    successMessage: string,
+    failureMessage: string,
+  ) => {
+    if (!editing) return;
+
+    try {
+      await mutation.mutateAsync({ id: editing.id, data: coreContext } as any);
+      await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
+      await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: editing.id }] });
+      toast.success(successMessage);
+    } catch {
+      toast.error(mutation.validationErrors ?? failureMessage);
     }
   };
 
@@ -262,9 +315,12 @@ function RepositoryDialog({
                 className="max-w-full"
                 value={fileSystemSpec.path ?? ''}
                 disabled={specDisabled}
-                placeholder="/backups/citadel"
+                placeholder="daily/core"
                 onChange={(path) => setSpec({ path })}
               />
+              <p className="text-xs text-muted-foreground">
+                Relative paths are created under the configured backup repository root.
+              </p>
             </div>
           ) : (
             <div className="space-y-5">
@@ -369,6 +425,52 @@ function RepositoryDialog({
               </div>
             </div>
           )}
+
+          {editing && (
+            <div className="rounded-lg border bg-muted/10 p-4">
+              <div className="mb-3 flex flex-col gap-1">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <StateIndicator value={editing.status} />
+                  Repository setup
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Initialize a new empty destination once. Validate an existing Restic repository before using it.
+                  Check and prune are maintenance actions for ready repositories.
+                </p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <RepositoryOperationButton
+                  icon={<CheckCircle2 className="size-3.5" />}
+                  label="Validate"
+                  description="Confirm Citadel can access this repository."
+                  disabled={formDisabled || operating}
+                  onClick={() => runOperation(validate, 'Repository validated', 'Failed to validate repository.')}
+                />
+                <RepositoryOperationButton
+                  icon={<DatabaseBackup className="size-3.5" />}
+                  label="Initialize"
+                  description="Create the Restic repository in an empty destination."
+                  disabled={formDisabled || operating}
+                  onClick={() => runOperation(initialize, 'Repository initialized', 'Failed to initialize repository.')}
+                />
+                <RepositoryOperationButton
+                  icon={<RefreshCw className="size-3.5" />}
+                  label="Check"
+                  description="Verify repository integrity."
+                  disabled={formDisabled || operating || editing.status !== BackupRepositoryStatus.Ready}
+                  onClick={() => runOperation(check, 'Repository checked', 'Failed to check repository.')}
+                />
+                <RepositoryOperationButton
+                  icon={<Scissors className="size-3.5" />}
+                  label="Prune"
+                  description="Remove unreferenced repository data."
+                  disabled={formDisabled || operating || editing.status !== BackupRepositoryStatus.Ready}
+                  onClick={() => runOperation(prune, 'Repository pruned', 'Failed to prune repository.')}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -381,6 +483,37 @@ function RepositoryDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RepositoryOperationButton({
+  icon,
+  label,
+  description,
+  disabled,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  description: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'flex min-h-22 flex-col items-start gap-1.5 rounded-sm border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40',
+        disabled && 'cursor-not-allowed opacity-60 hover:border-border hover:bg-background',
+      )}>
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+        {icon}
+        {label}
+      </span>
+      <span className="text-xs leading-snug text-muted-foreground">{description}</span>
+    </button>
   );
 }
 

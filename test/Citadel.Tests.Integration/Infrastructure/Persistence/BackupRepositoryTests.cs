@@ -2,7 +2,9 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
+using Domain.Entities.Platforms;
 using Domain.Entities.ResourceBindings;
+using Domain.Entities.Stacks;
 using Domain.Entities.Tags;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -297,6 +299,125 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         Assert.Equal(BackupRunStatus.Failed, byVolume["failed-volume"].LastRunStatus);
         Assert.Equal(BackupCoverageStatus.Warning, byVolume["disabled-volume"].Status);
         Assert.Equal(BackupCoverageStatus.Unprotected, byVolume["unprotected-volume"].Status);
+    }
+
+    [Fact]
+    public async Task BackupRunItemsAndStackVolumeBindings_ShouldRoundTrip()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var actorId = Constants.SystemId;
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var platform = new Platform(
+            "backup-bindings-platform",
+            "unix:///var/run/docker.sock",
+            networkCount: 0,
+            volumeCount: 0,
+            imageCount: 0,
+            cpuCount: 1,
+            memTotal: 1024,
+            serverVersion: "test",
+            agentVersion: null,
+            PlatformStatus.Online,
+            PlatformConnectorType.Local,
+            new DockerPlatformDescriptor("daemon", 0, 0, 0, 0));
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+
+        var passwordSecret = new SecretDefinition("RESTIC_PASSWORD_RUN_ITEMS", SecretProviderType.InternalEncrypted);
+        await uow.SecretDefinitions.AddAsync(
+            passwordSecret,
+            new InternalSecretValue(passwordSecret.Id, "encrypted-value"),
+            cancellationToken);
+
+        var repository = new BackupRepository(
+            "repo-run-items",
+            null,
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "/backup-run-items"),
+            passwordSecret.Id,
+            actorId);
+        await uow.BackupRepositories.AddAsync(repository, cancellationToken);
+
+        var policy = new BackupPolicy(
+            "policy-run-items",
+            null,
+            new StackBackupSource(Guid.CreateVersion7()),
+            repository.Id,
+            enabled: true,
+            cron: null,
+            timeZone: null,
+            keepLastSuccessful: BackupPolicy.DefaultKeepLastSuccessful,
+            timeoutSeconds: BackupPolicy.DefaultTimeoutSeconds,
+            alertOnFailure: true,
+            runAsActorId: actorId,
+            createdByActorId: actorId);
+        await uow.BackupPolicies.AddAsync(policy, cancellationToken);
+
+        var run = CreateRun(policy, repository);
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        run.MarkRunning(DateTimeOffset.UtcNow);
+        run.CompleteSucceeded(null, null, 3, 1024, 256, [], DateTimeOffset.UtcNow);
+        await uow.BackupRuns.AddAsync(run, cancellationToken);
+
+        var item = new BackupRunItem(run.Id, platform.Id, "stack-db-data");
+        item.MarkRunning(DateTimeOffset.UtcNow);
+        item.CompleteSucceeded("snapshot-stack-db", null, 3, 1024, 256, DateTimeOffset.UtcNow);
+        var pendingItem = new BackupRunItem(run.Id, platform.Id, "stack-cache");
+        await uow.BackupRunItems.AddRangeAsync([item, pendingItem], cancellationToken);
+        await uow.BackupRunItems.CancelPendingOrRunningAsync(run.Id, DateTimeOffset.UtcNow, cancellationToken);
+
+        var stack = Stack.Create(
+            "stack-bindings",
+            actorId,
+            StackSource.WebEditor,
+            platform.Id,
+            new ManualStack(
+                """
+                services:
+                  db:
+                    image: postgres
+                    volumes:
+                      - db-data:/var/lib/postgresql/data
+                volumes:
+                  db-data:
+                """,
+                StackUpdateBehavior.Disabled));
+        await uow.Stacks.AddAsync(stack, cancellationToken);
+        await uow.Stacks.ReplaceReleaseVolumeBindingsAsync(
+            stack.CurrentStackReleaseId,
+            [
+                new StackReleaseVolumeBinding(
+                    stack.CurrentStackReleaseId,
+                    platform.Id,
+                    "stack-bindings_db-data",
+                    "db-data",
+                    isExternal: false,
+                    isAnonymous: false)
+            ],
+            cancellationToken);
+
+        await uow.CommitAsync(cancellationToken);
+
+        var storedRun = await uow.BackupRuns.GetAsync(run.Id, cancellationToken);
+        var storedRuns = (await uow.BackupRuns.GetByPolicyAsync(policy.Id, 50, cancellationToken)).ToArray();
+        var storedItems = await uow.BackupRunItems.GetByRunAsync(run.Id, cancellationToken);
+        var storedBindings = await uow.Stacks.GetReleaseVolumeBindingsAsync(stack.CurrentStackReleaseId, cancellationToken);
+
+        Assert.NotNull(storedRun);
+        Assert.Equal(2, storedRun.Items.Count);
+        var storedItem = Assert.Single(storedRun.Items, stored => stored.VolumeName == "stack-db-data");
+        Assert.Equal("stack-db-data", storedItem.VolumeName);
+        Assert.Equal("snapshot-stack-db", storedItem.ResticSnapshotId);
+        var cancelledItem = Assert.Single(storedRun.Items, stored => stored.VolumeName == "stack-cache");
+        Assert.Equal(BackupRunItemStatus.Cancelled, cancelledItem.Status);
+        Assert.Single(storedRuns);
+        Assert.Equal(2, storedRuns[0].Items.Count);
+        Assert.Equal(2, storedItems.Count);
+
+        var binding = Assert.Single(storedBindings);
+        Assert.Equal("stack-bindings_db-data", binding.VolumeName);
+        Assert.Equal("db-data", binding.ComposeVolumeName);
     }
 
     private static async Task<BackupPolicy> AddVolumePolicyAsync(

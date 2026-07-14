@@ -1,5 +1,7 @@
+using Application.Features.Backups.Models;
 using Application.Permissions;
 using Domain;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -124,6 +126,37 @@ public sealed record StackConfigView(
         Spec: stack.CurrentStackRelease?.Spec!,
         StackUpdateState: stack.StackUpdateState,
         DriftPolicy: stack.DriftPolicy);
+}
+
+public sealed record StackBackupSourcePreviewView(
+    Guid StackId,
+    string StackName,
+    Guid PlatformId,
+    string PlatformName,
+    PlatformStatus PlatformStatus,
+    IReadOnlyList<StackBackupVolumeView> Volumes,
+    IReadOnlyList<string> Warnings)
+{
+    internal static StackBackupSourcePreviewView Map(StackBackupSourcePreviewResult result)
+        => new(
+            result.StackId,
+            result.StackName,
+            result.PlatformId,
+            result.PlatformName,
+            result.PlatformStatus,
+            [.. result.Volumes.Select(StackBackupVolumeView.Map)],
+            result.Warnings);
+}
+
+public sealed record StackBackupVolumeView(
+    string Name,
+    StackVolumeKind Kind,
+    bool IsExternal,
+    bool IsShared,
+    bool HasBackupCoverage)
+{
+    internal static StackBackupVolumeView Map(StackBackupVolumePreviewItem item)
+        => new(item.Name, item.Kind, item.IsExternal, item.IsShared, item.HasBackupCoverage);
 }
 
 public sealed record StackReleasesView(IEnumerable<StackReleaseView> Releases)

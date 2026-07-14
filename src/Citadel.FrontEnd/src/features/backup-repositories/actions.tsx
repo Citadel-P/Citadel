@@ -55,10 +55,7 @@ const useRepositoryOperation = (
         await invalidateBackupRepositoryQueries(queryClient, selected.id);
         toast.success(successMessage);
       } catch {
-        toast.error(
-          mutation.validationErrors ??
-            `Failed to ${mutationKey.replace('BackupRepository', '').toLowerCase()} repository`,
-        );
+        /** Nope */
       }
     },
   };

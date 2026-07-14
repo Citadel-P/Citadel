@@ -209,7 +209,14 @@ export const TagChips = ({ tags, max = 3 }: { tags?: TagSummaryView[] | TagView[
   );
 };
 
-type EditableResourceType = 'Deployment' | 'Stack' | 'GitRepository' | 'Platform' | 'Registry' | 'AutomationAction';
+type EditableResourceType =
+  | 'Deployment'
+  | 'Stack'
+  | 'GitRepository'
+  | 'Platform'
+  | 'Registry'
+  | 'AutomationAction'
+  | 'BackupPolicy';
 
 const replaceTagEndpoint = {
   Deployment: 'replaceDeploymentTags',
@@ -218,6 +225,7 @@ const replaceTagEndpoint = {
   Platform: 'replacePlatformTags',
   Registry: 'replaceRegistryTags',
   AutomationAction: 'replaceAutomationActionTags',
+  BackupPolicy: 'replaceBackupPolicyTags',
 } as const;
 
 export const ResourceHeaderTagsEditor = ({
@@ -340,6 +348,7 @@ const buildReplaceVariables = (resourceType: EditableResourceType, resourceId: s
     case 'Platform':
     case 'Registry':
     case 'AutomationAction':
+    case 'BackupPolicy':
       return { id: resourceId, data };
   }
 };

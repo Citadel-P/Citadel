@@ -417,6 +417,76 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         return result.ToDomain();
     }
 
+    public async Task<IReadOnlyList<StackReleaseVolumeBinding>> GetReleaseVolumeBindingsAsync(Guid releaseId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT *
+            FROM StackReleaseVolumeBindings
+            WHERE StackReleaseId = @ReleaseId
+            ORDER BY VolumeName ASC, Id ASC
+            """;
+
+        var result = await db.QueryAsync<StackReleaseVolumeBindingDto>(
+            sql,
+            new { ReleaseId = releaseId },
+            transaction: tx());
+        return [.. result.ToDomain()];
+    }
+
+    public Task<int> ReplaceReleaseVolumeBindingsAsync(
+        Guid releaseId,
+        IReadOnlyCollection<StackReleaseVolumeBinding> bindings,
+        CancellationToken cancellationToken)
+    {
+        if (bindings.Count == 0)
+        {
+            const string deleteSql = "DELETE FROM StackReleaseVolumeBindings WHERE StackReleaseId = @ReleaseId";
+            return db.ExecuteAsync(deleteSql, new { ReleaseId = releaseId }, transaction: tx());
+        }
+
+        var batch = bindings.ToArray();
+        const string sql = """
+            WITH deleted AS (
+                DELETE FROM StackReleaseVolumeBindings
+                WHERE StackReleaseId = @ReleaseId
+            ),
+            inserted AS (
+                INSERT INTO StackReleaseVolumeBindings (
+                    Id, StackReleaseId, PlatformId, VolumeName, ComposeVolumeName, IsExternal, IsAnonymous, CreatedAt)
+                SELECT
+                    Id, StackReleaseId, PlatformId, VolumeName, ComposeVolumeName, IsExternal, IsAnonymous, CreatedAt
+                FROM unnest(
+                    @Ids::uuid[],
+                    @StackReleaseIds::uuid[],
+                    @PlatformIds::uuid[],
+                    @VolumeNames::text[],
+                    @ComposeVolumeNames::text[],
+                    @IsExternals::boolean[],
+                    @IsAnonymousValues::boolean[],
+                    @CreatedAts::timestamp[])
+                    AS bindings(Id, StackReleaseId, PlatformId, VolumeName, ComposeVolumeName, IsExternal, IsAnonymous, CreatedAt)
+                RETURNING 1
+            )
+            SELECT COUNT(*)::int FROM inserted
+            """;
+
+        return db.ExecuteScalarAsync<int>(
+            sql,
+            new
+            {
+                ReleaseId = releaseId,
+                Ids = batch.Select(static binding => binding.Id).ToArray(),
+                StackReleaseIds = batch.Select(static binding => binding.StackReleaseId).ToArray(),
+                PlatformIds = batch.Select(static binding => binding.PlatformId).ToArray(),
+                VolumeNames = batch.Select(static binding => binding.VolumeName).ToArray(),
+                ComposeVolumeNames = batch.Select(static binding => binding.ComposeVolumeName).ToArray(),
+                IsExternals = batch.Select(static binding => binding.IsExternal).ToArray(),
+                IsAnonymousValues = batch.Select(static binding => binding.IsAnonymous).ToArray(),
+                CreatedAts = batch.Select(static binding => BackupMappers.ToUtcDateTime(binding.CreatedAt)).ToArray()
+            },
+            transaction: tx());
+    }
+
     public Task<bool> ExistsAsync(string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Stacks WHERE Name = @Name)";

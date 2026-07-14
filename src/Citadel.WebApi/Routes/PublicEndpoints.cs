@@ -22,6 +22,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.ResourceBindings;
 using WebApi.Routes.Endpoints.Resources.Stacks;
+using WebApi.Routes.Endpoints.Resources.Tags;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 
 namespace WebApi.Routes;
@@ -1095,6 +1096,25 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getBackupPolicy");
 
+        backupPolicies.MapGet("{id:guid}/tags", Tags.GetBackupPolicyTags)
+            .WithSummary("Get backup policy tags")
+            .Produces<ResourceTagsView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBackupPolicyTags");
+
+        backupPolicies.MapPut("{id:guid}/tags", Tags.ReplaceBackupPolicyTags)
+            .WithSummary("Replace backup policy tags")
+            .Produces<ResourceTagsView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("replaceBackupPolicyTags");
+
         backupPolicies.MapPost("/", BackupPolicies.Create)
             .WithSummary("Create backup policy")
             .Produces<BackupPolicyView>()
@@ -1115,6 +1135,27 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("updateBackupPolicy");
 
+        backupPolicies.MapPost("rename", BackupPolicies.Rename)
+            .WithSummary("Rename backup policy")
+            .Produces<BackupPolicyView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameBackupPolicy");
+
+        backupPolicies.MapPatch("{id:guid}/_metadata", BackupPolicies.PatchMetadata)
+            .WithSummary("Update backup policy metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .Produces<BackupPolicyView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateBackupPolicyMetadata");
+
         backupPolicies.MapDelete("{id:guid}", BackupPolicies.Archive)
             .WithSummary("Archive backup policy")
             .ProducesValidationProblem()
@@ -1133,6 +1174,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("queueBackupRun");
+
+        backupPolicies.MapPost("{id:guid}/run", BackupPolicies.Run)
+            .WithSummary("Run backup policy and stream execution logs in real time")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("runBackupPolicy");
     }
 
     private static void MapBackupRunEndpoints(RouteGroupBuilder backupRuns)
@@ -1936,6 +1986,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getStackConfig");
+
+        stacks.MapGet("/{stackId}/backup-source-preview", Stacks.GetBackupSourcePreview)
+            .WithSummary("Preview stack backup source volumes")
+            .Produces<StackBackupSourcePreviewView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getStackBackupSourcePreview");
 
         stacks.MapGet("/{stackId}/duplicate-draft", Stacks.GetDuplicateDraft)
             .WithSummary("Get stack duplicate draft")

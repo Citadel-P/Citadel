@@ -1,6 +1,7 @@
 using Application.Configs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities.Backups;
 using Hosting.Common.ErrorTypes;
@@ -74,6 +75,7 @@ internal sealed class BackupRunExecutionService(
     IResticProcessRunner processRunner,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
+    IStackBackupVolumeResolver stackBackupVolumeResolver,
     IBackupRunCoordinator runCoordinator,
     IOptions<BackupOptions> backupOptions,
     ILogger<BackupRunExecutionService> logger) : IBackupRunExecutionService
@@ -215,31 +217,67 @@ internal sealed class BackupRunExecutionService(
                     await PersistRunAsync(run, linkedCancel.Token);
                     await WriteAsync(writer, Info(run.Id, BackupRunStatus.Running, $"Backing up {source.DisplayName}."), cancellationToken);
 
-                    var backup = RunBackupAsync(run, policy, environment, source, linkedCancel.Token);
-                    await foreach (var item in backup.Stream)
-                        await WriteAsync(writer, item, cancellationToken);
+                    var runItems = CreateRunItems(run, source);
+                    await PersistRunItemsAsync(runItems, linkedCancel.Token);
 
-                    if (backup.Result.ExitCode != 0)
+                    var backupResults = new List<ResticBackupResult>(source.Items.Count);
+                    foreach (var sourceItem in source.Items)
                     {
-                        var status = backup.Result.ExitCode == -2 ? BackupRunStatus.TimedOut : BackupRunStatus.Failed;
-                        var message = status == BackupRunStatus.TimedOut
-                            ? $"Backup exceeded the {policy.TimeoutSeconds} second timeout."
-                            : $"Restic backup exited with code {backup.Result.ExitCode}.";
+                        var runItem = FindRunItem(runItems, sourceItem);
+                        if (runItem is not null)
+                        {
+                            runItem.MarkRunning(DateTimeOffset.UtcNow);
+                            await PersistRunItemAsync(runItem, linkedCancel.Token);
+                        }
 
-                        await FailRunAsync(run, policy, status, backup.Result.ExitCode, ToErrorCode(status), message, CancellationToken.None);
-                        await WriteAsync(writer, Error(run.Id, status, message, backup.Result.ExitCode), cancellationToken);
-                        return;
+                        if (source.Items.Count > 1 || !string.Equals(source.DisplayName, sourceItem.DisplayName, StringComparison.Ordinal))
+                            await WriteAsync(writer, Info(run.Id, run.Status, $"Backing up {sourceItem.DisplayName}."), cancellationToken);
+
+                        var backup = RunBackupAsync(run, policy, environment, source, sourceItem, runItem, linkedCancel.Token);
+                        await foreach (var item in backup.Stream)
+                            await WriteAsync(writer, item, cancellationToken);
+
+                        if (backup.Result.ExitCode != 0)
+                        {
+                            var status = backup.Result.ExitCode == -2 ? BackupRunStatus.TimedOut : BackupRunStatus.Failed;
+                            var message = status == BackupRunStatus.TimedOut
+                                ? $"Backup exceeded the {policy.TimeoutSeconds} second timeout."
+                                : $"Restic backup exited with code {backup.Result.ExitCode}.";
+
+                            if (runItem is not null)
+                            {
+                                runItem.Fail(backup.Result.ExitCode, ToErrorCode(status), message, DateTimeOffset.UtcNow);
+                                await PersistRunItemAsync(runItem, CancellationToken.None);
+                            }
+
+                            await FailRunAsync(run, policy, status, backup.Result.ExitCode, ToErrorCode(status), message, CancellationToken.None);
+                            await WriteAsync(writer, Error(run.Id, status, message, backup.Result.ExitCode), cancellationToken);
+                            return;
+                        }
+
+                        if (runItem is not null)
+                        {
+                            runItem.CompleteSucceeded(
+                                backup.Result.SnapshotId,
+                                backup.Result.ParentSnapshotId,
+                                backup.Result.FilesProcessed,
+                                backup.Result.BytesProcessed,
+                                backup.Result.BytesAdded,
+                                DateTimeOffset.UtcNow);
+                            await PersistRunItemAsync(runItem, CancellationToken.None);
+                        }
+
+                        backupResults.Add(backup.Result);
                     }
 
-                    if (string.IsNullOrWhiteSpace(backup.Result.SnapshotId))
+                    var warnings = new List<BackupRunWarning>(source.Warnings);
+                    if (backupResults.All(static result => string.IsNullOrWhiteSpace(result.SnapshotId)))
                     {
-                        const string message = "Restic completed without returning a snapshot ID.";
-                        await FailRunAsync(run, policy, BackupRunStatus.Failed, backup.Result.ExitCode, "backup.snapshot_missing", message, CancellationToken.None);
-                        await WriteAsync(writer, Error(run.Id, BackupRunStatus.Failed, message, backup.Result.ExitCode), cancellationToken);
-                        return;
+                        warnings.Add(new BackupRunWarning(
+                            "backup.snapshot_not_created",
+                            "Restic completed successfully but did not create a snapshot. There may have been no files to back up."));
                     }
 
-                    var warnings = new List<BackupRunWarning>();
                     if (policy.KeepLastSuccessful > 0)
                     {
                         run.MarkApplyingRetention();
@@ -256,20 +294,26 @@ internal sealed class BackupRunExecutionService(
                                 "backup.retention_failed",
                                 $"Restic retention exited with code {retention.Result.ExitCode}."));
                         }
+                        else
+                        {
+                            await WriteAsync(writer, Info(run.Id, run.Status, "Retention policy applied."), cancellationToken);
+                        }
                     }
 
                     var completedAt = DateTimeOffset.UtcNow;
+                    var singleSnapshot = backupResults.Count == 1 ? backupResults[0] : null;
+                    run.AssignItems(runItems);
                     run.CompleteSucceeded(
-                        backup.Result.SnapshotId!,
-                        backup.Result.ParentSnapshotId,
-                        backup.Result.FilesProcessed,
-                        backup.Result.BytesProcessed,
-                        backup.Result.BytesAdded,
+                        singleSnapshot?.SnapshotId,
+                        singleSnapshot?.ParentSnapshotId,
+                        Sum(backupResults, static result => result.FilesProcessed),
+                        Sum(backupResults, static result => result.BytesProcessed),
+                        Sum(backupResults, static result => result.BytesAdded),
                         warnings,
                         completedAt);
 
                     await CompleteRunAsync(run, policy, successful: true, completedAt, CancellationToken.None);
-                    await WriteAsync(writer, Info(run.Id, run.Status, $"Backup \"{policy.Name}\" finished with status {run.Status}."), cancellationToken);
+                    await WriteAsync(writer, Info(run.Id, run.Status, FormatCompletionMessage(policy.Name, backupResults, warnings)), cancellationToken);
                 }
             }
             catch (OperationCanceledException) when (timeoutCancel.IsCancellationRequested)
@@ -342,10 +386,11 @@ internal sealed class BackupRunExecutionService(
             var path = Path.GetFullPath(options.CoreDataPath);
             Directory.CreateDirectory(path);
             return Result.Success(new BackupSourcePlan(
-                path,
+                [new BackupSourceItem("Citadel system data", path)],
                 "Citadel system data",
                 new BackupExecutionContext(BackupExecutionLocation.Core, null),
-                BuildSystemExcludes(path)));
+                BuildSystemExcludes(path),
+                []));
         }
 
         if (source is DockerVolumeBackupSource volume)
@@ -374,10 +419,59 @@ internal sealed class BackupRunExecutionService(
                 return Result.Failure<BackupSourcePlan>(new BadRequestError("Docker volume mountpoint does not exist on this host."));
 
             return Result.Success(new BackupSourcePlan(
-                path,
+                [new BackupSourceItem($"Docker volume {volume.VolumeName}", path, volume.PlatformId, volume.VolumeName)],
                 $"Docker volume {volume.VolumeName}",
                 new BackupExecutionContext(BackupExecutionLocation.Core, null),
+                [],
                 []));
+        }
+
+        if (source is StackBackupSource stack)
+        {
+            var resolution = await stackBackupVolumeResolver.ResolveAsync(stack.StackId, cancellationToken);
+            if (!resolution.IsSuccess(out var resolved, out var resolutionError))
+                return Result.Failure<BackupSourcePlan>(resolutionError);
+
+            if (resolved.Volumes.Count == 0)
+                return Result.Failure<BackupSourcePlan>(new BadRequestError("Stack has no resolved Docker named volumes to back up."));
+
+            if (!platformContainerCache.TryGetCacheEntry(resolved.PlatformId, out var platform, out var error))
+                return Result.Failure<BackupSourcePlan>(error);
+
+            if (platform.ConnectorType != PlatformConnectorType.Local)
+                return Result.Failure<BackupSourcePlan>(new BadRequestError("Stack backup execution on remote platforms is not implemented yet."));
+
+            var connector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
+            var items = new List<BackupSourceItem>(resolved.Volumes.Count);
+            foreach (var stackVolume in resolved.Volumes)
+            {
+                var inspect = await connector.InspectVolumeAsync(
+                    new InspectDockerVolumeCommand(platform.Address, stackVolume.VolumeName),
+                    cancellationToken);
+
+                if (!inspect.IsSuccess(out var dockerVolume, out var inspectError))
+                    return Result.Failure<BackupSourcePlan>(inspectError!);
+
+                if (string.IsNullOrWhiteSpace(dockerVolume.Mountpoint))
+                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {stackVolume.VolumeName} mountpoint is not available."));
+
+                var path = Path.GetFullPath(dockerVolume.Mountpoint);
+                if (!Directory.Exists(path))
+                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {stackVolume.VolumeName} mountpoint does not exist on this host."));
+
+                items.Add(new BackupSourceItem(
+                    $"Docker volume {stackVolume.VolumeName}",
+                    path,
+                    stackVolume.PlatformId,
+                    stackVolume.VolumeName));
+            }
+
+            return Result.Success(new BackupSourcePlan(
+                items,
+                $"Stack {resolved.StackName} ({resolved.Volumes.Count} volume{(resolved.Volumes.Count == 1 ? string.Empty : "s")})",
+                new BackupExecutionContext(BackupExecutionLocation.Core, null),
+                [],
+                [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.stack_volume_warning", warning))]));
         }
 
         return Result.Failure<BackupSourcePlan>(new BadRequestError("Unsupported backup source type."));
@@ -412,6 +506,8 @@ internal sealed class BackupRunExecutionService(
         BackupPolicy policy,
         ResticRepositoryEnvironment environment,
         BackupSourcePlan source,
+        BackupSourceItem sourceItem,
+        BackupRunItem? runItem,
         CancellationToken cancellationToken)
     {
         var args = new List<string>(environment.CommonArguments)
@@ -426,13 +522,22 @@ internal sealed class BackupRunExecutionService(
             $"backup-run:{run.Id}"
         };
 
+        if (runItem is not null)
+        {
+            args.Add("--tag");
+            args.Add($"backup-item:{runItem.Id}");
+            args.Add("--tag");
+            args.Add($"volume:{runItem.VolumeName}");
+        }
+
         foreach (var exclude in source.ExcludePaths)
         {
             args.Add("--exclude");
             args.Add(exclude);
         }
 
-        args.Add(source.Path);
+        args.Add(sourceItem.Path);
+
         return RunResticAsync(run, environment, args, policy.TimeoutSeconds, cancellationToken);
     }
 
@@ -493,16 +598,20 @@ internal sealed class BackupRunExecutionService(
                         continue;
 
                     var stream = item.Stream == ResticProcessStream.StdErr ? "stderr" : "stdout";
-                    var message = buffer.Append(item.Message);
+                    if (item.Stream == ResticProcessStream.StdOut)
+                        UpdateSummary(item.Message, result);
+
+                    var formatted = FormatResticMessage(item.Message);
+                    if (formatted is null)
+                        continue;
+
+                    var message = buffer.Append(formatted);
                     if (message is null)
                         continue;
 
                     pendingLogs.Add(new BackupRunLogEntry(Guid.CreateVersion7(), run.Id, DateTimeOffset.UtcNow, stream, message));
                     if (pendingLogs.Count >= LogBatchSize)
                         await FlushLogsAsync(pendingLogs, ct);
-
-                    if (item.Stream == ResticProcessStream.StdOut)
-                        UpdateSummary(message, result);
 
                     yield return new BackupRunStreamItem(run.Id, run.Status, message, stream);
                 }
@@ -586,10 +695,32 @@ internal sealed class BackupRunExecutionService(
         await uow.CommitAsync(cancellationToken);
     }
 
+    private async Task PersistRunItemsAsync(IReadOnlyCollection<BackupRunItem> items, CancellationToken cancellationToken)
+    {
+        if (items.Count == 0)
+            return;
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.BackupRunItems.AddRangeAsync(items, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+    }
+
+    private async Task PersistRunItemAsync(BackupRunItem item, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.BackupRunItems.UpdateAsync(item, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+    }
+
     private async Task CompleteRunAsync(BackupRun run, BackupPolicy? policy, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        if (!successful)
+            await uow.BackupRunItems.CancelPendingOrRunningAsync(run.Id, completedAt, cancellationToken);
+
         if (policy is null)
             await uow.BackupRuns.UpdateAsync(run, cancellationToken);
         else
@@ -650,6 +781,116 @@ internal sealed class BackupRunExecutionService(
         }
     }
 
+    private static string? FormatResticMessage(string line)
+    {
+        var text = line.Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                return null;
+
+            var messageType = GetString(root, "message_type");
+            return messageType?.ToLowerInvariant() switch
+            {
+                "summary" => FormatResticSummary(root),
+                "error" => FormatResticError(root),
+                "warning" => FormatResticWarning(root),
+                "status" or "verbose_status" => null,
+                _ => GetString(root, "message") ?? GetString(root, "error")
+            };
+        }
+        catch (JsonException)
+        {
+            return text;
+        }
+    }
+
+    private static string FormatResticSummary(JsonElement root)
+    {
+        var snapshotId = ShortId(GetString(root, "snapshot_id"));
+        var files = GetInt64(root, "total_files_processed");
+        var scanned = GetInt64(root, "total_bytes_processed");
+        var added = GetInt64(root, "data_added");
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(snapshotId))
+            parts.Add($"snapshot {snapshotId}");
+        if (files.HasValue)
+            parts.Add($"{files.Value:N0} file{(files.Value == 1 ? string.Empty : "s")}");
+        if (scanned.HasValue)
+            parts.Add($"{FormatBytes(scanned.Value)} scanned");
+        if (added.HasValue)
+            parts.Add($"{FormatBytes(added.Value)} added");
+
+        return parts.Count == 0
+            ? "Restic completed backup."
+            : $"Restic completed backup: {string.Join(", ", parts)}.";
+    }
+
+    private static string FormatResticError(JsonElement root)
+    {
+        var item = GetString(root, "item");
+        var error = GetString(root, "error") ?? GetString(root, "message") ?? "Unknown error";
+        return string.IsNullOrWhiteSpace(item)
+            ? $"Restic error: {error}"
+            : $"Restic error for {item}: {error}";
+    }
+
+    private static string? FormatResticWarning(JsonElement root)
+    {
+        var message = GetString(root, "message") ?? GetString(root, "warning");
+        return string.IsNullOrWhiteSpace(message) ? null : $"Restic warning: {message}";
+    }
+
+    private static string FormatCompletionMessage(
+        string policyName,
+        IReadOnlyCollection<ResticBackupResult> results,
+        IReadOnlyCollection<BackupRunWarning> warnings)
+    {
+        var snapshots = results.Count(result => !string.IsNullOrWhiteSpace(result.SnapshotId));
+        var files = Sum(results, static result => result.FilesProcessed);
+        var scanned = Sum(results, static result => result.BytesProcessed);
+        var added = Sum(results, static result => result.BytesAdded);
+        var parts = new List<string>();
+
+        if (snapshots > 0)
+            parts.Add($"{snapshots} snapshot{(snapshots == 1 ? string.Empty : "s")}");
+        if (files.HasValue)
+            parts.Add($"{files.Value:N0} file{(files.Value == 1 ? string.Empty : "s")}");
+        if (scanned.HasValue)
+            parts.Add($"{FormatBytes(scanned.Value)} scanned");
+        if (added.HasValue)
+            parts.Add($"{FormatBytes(added.Value)} added");
+        if (warnings.Count > 0)
+            parts.Add($"{warnings.Count} warning{(warnings.Count == 1 ? string.Empty : "s")}");
+
+        return parts.Count == 0
+            ? $"Backup \"{policyName}\" succeeded."
+            : $"Backup \"{policyName}\" succeeded: {string.Join(", ", parts)}.";
+    }
+
+    private static string? ShortId(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value[..Math.Min(value.Length, 12)];
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var value = (double)Math.Max(0, bytes);
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return unit == 0 ? $"{value:N0} {units[unit]}" : $"{value:N1} {units[unit]}";
+    }
+
     private static string? GetString(JsonElement element, string propertyName)
         => element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString()
@@ -664,6 +905,38 @@ internal sealed class BackupRunExecutionService(
             return value;
 
         return null;
+    }
+
+    private static IReadOnlyList<BackupRunItem> CreateRunItems(BackupRun run, BackupSourcePlan source)
+        => [.. source.Items
+            .Where(static item => item.PlatformId.HasValue && !string.IsNullOrWhiteSpace(item.VolumeName))
+            .Select(item => new BackupRunItem(run.Id, item.PlatformId!.Value, item.VolumeName!))];
+
+    private static BackupRunItem? FindRunItem(IReadOnlyList<BackupRunItem> runItems, BackupSourceItem sourceItem)
+    {
+        if (!sourceItem.PlatformId.HasValue || string.IsNullOrWhiteSpace(sourceItem.VolumeName))
+            return null;
+
+        return runItems.FirstOrDefault(item =>
+            item.PlatformId == sourceItem.PlatformId.Value
+            && string.Equals(item.VolumeName, sourceItem.VolumeName, StringComparison.Ordinal));
+    }
+
+    private static long? Sum(IReadOnlyCollection<ResticBackupResult> results, Func<ResticBackupResult, long?> selector)
+    {
+        long total = 0;
+        var hasValue = false;
+        foreach (var result in results)
+        {
+            var value = selector(result);
+            if (!value.HasValue)
+                continue;
+
+            total += value.Value;
+            hasValue = true;
+        }
+
+        return hasValue ? total : null;
     }
 
     private static string ToErrorCode(BackupRunStatus status)
@@ -692,10 +965,17 @@ internal sealed class BackupRunExecutionService(
 }
 
 internal sealed record BackupSourcePlan(
-    string Path,
+    IReadOnlyList<BackupSourceItem> Items,
     string DisplayName,
     BackupExecutionContext Context,
-    IReadOnlyList<string> ExcludePaths);
+    IReadOnlyList<string> ExcludePaths,
+    IReadOnlyList<BackupRunWarning> Warnings);
+
+internal sealed record BackupSourceItem(
+    string DisplayName,
+    string Path,
+    Guid? PlatformId = null,
+    string? VolumeName = null);
 
 internal sealed record BackupResticRun(IAsyncEnumerable<BackupRunStreamItem> Stream, ResticBackupResult Result);
 

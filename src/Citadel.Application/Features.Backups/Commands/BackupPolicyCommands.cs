@@ -1,6 +1,7 @@
 using Domain;
 using Application.Features.Backups.Models;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
 using FluentValidation;
 using Hosting.Common;
@@ -10,6 +11,7 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Application.Services.Backups;
+using System.Runtime.CompilerServices;
 
 namespace Application.Features.Backups.Commands;
 
@@ -42,10 +44,39 @@ public sealed record UpdateBackupPolicy(
     : ICommand<Result<BackupPolicyResult>>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write)]
+public sealed record RenameBackupPolicy(Guid PolicyId, string Name) : ICommand<Result<BackupPolicyResult>>
+{
+    internal sealed class Validator : AbstractValidator<RenameBackupPolicy>
+    {
+        public Validator()
+        {
+            RuleFor(x => x.PolicyId).NotEmpty();
+            RuleFor(x => x.Name).NotEmpty().MaximumLength(128);
+        }
+    }
+}
+
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write)]
+public sealed record PatchBackupPolicyMetadata(Guid PolicyId, string? Description) : ICommand<Result<BackupPolicyResult>>
+{
+    internal sealed class Validator : AbstractValidator<PatchBackupPolicyMetadata>
+    {
+        public Validator()
+        {
+            RuleFor(x => x.PolicyId).NotEmpty();
+            RuleFor(x => x.Description).MaximumLength(600).When(x => x.Description is not null);
+        }
+    }
+}
+
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write)]
 public sealed record ArchiveBackupPolicy(Guid PolicyId) : ICommand<Result>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Execute)]
 public sealed record QueueBackupRun(Guid PolicyId, QueueBackupRunInputModel Input) : ICommand<Result<BackupRunResult>>;
+
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Execute)]
+public sealed record RunBackupPolicy(Guid PolicyId, QueueBackupRunInputModel Input) : IStreamCommand<BackupRunStreamItem>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Execute)]
 public sealed record CancelBackupRun(Guid RunId) : ICommand<Result>;
@@ -56,9 +87,30 @@ public sealed record QueueBackupRestoreRun(Guid RunId, RestoreVolumeInputModel I
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record CancelBackupRestoreRun(Guid RestoreRunId) : ICommand<Result>;
 
+file static class BackupPolicySourceValidator
+{
+    public static async Task<Result> ValidateSourceAsync(
+        BackupSourceSpec source,
+        IStackBackupVolumeResolver stackBackupVolumeResolver,
+        CancellationToken cancellationToken)
+    {
+        if (source is not StackBackupSource stack)
+            return Result.Success();
+
+        var resolution = await stackBackupVolumeResolver.ResolveAsync(stack.StackId, cancellationToken);
+        if (!resolution.IsSuccess(out var resolved, out var error))
+            return Result.Failure(error);
+
+        return resolved.Volumes.Count == 0
+            ? Result.Failure(new BadRequestError("Stack has no resolved Docker named volumes to back up."))
+            : Result.Success();
+    }
+}
+
 internal sealed class CreateBackupPolicyHandler(
     IUnitOfWork unitOfWork,
-    IUserContextAccessor userContextAccessor)
+    IUserContextAccessor userContextAccessor,
+    IStackBackupVolumeResolver stackBackupVolumeResolver)
     : ICommandHandler<CreateBackupPolicy, Result<BackupPolicyResult>>
 {
     public async ValueTask<Result<BackupPolicyResult>> Handle(CreateBackupPolicy command, CancellationToken cancellationToken)
@@ -72,6 +124,10 @@ internal sealed class CreateBackupPolicyHandler(
         var repository = await unitOfWork.BackupRepositories.GetAsync(input.BackupRepositoryId, cancellationToken);
         if (repository is null)
             return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup repository not found."));
+
+        var sourceValidation = await BackupPolicySourceValidator.ValidateSourceAsync(input.Source, stackBackupVolumeResolver, cancellationToken);
+        if (sourceValidation.IsFailure(out var sourceError))
+            return Result.Failure<BackupPolicyResult>(sourceError);
 
         var policy = new BackupPolicy(
             input.Name,
@@ -111,7 +167,9 @@ internal sealed class CreateBackupPolicyHandler(
     }
 }
 
-internal sealed class UpdateBackupPolicyHandler(IUnitOfWork unitOfWork)
+internal sealed class UpdateBackupPolicyHandler(
+    IUnitOfWork unitOfWork,
+    IStackBackupVolumeResolver stackBackupVolumeResolver)
     : ICommandHandler<UpdateBackupPolicy, Result<BackupPolicyResult>>
 {
     public async ValueTask<Result<BackupPolicyResult>> Handle(UpdateBackupPolicy command, CancellationToken cancellationToken)
@@ -125,6 +183,13 @@ internal sealed class UpdateBackupPolicyHandler(IUnitOfWork unitOfWork)
             var repository = await unitOfWork.BackupRepositories.GetAsync(command.Policy.BackupRepositoryId.Value, cancellationToken);
             if (repository is null)
                 return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup repository not found."));
+        }
+
+        if (command.UpdateSource && command.Policy.Source is not null)
+        {
+            var sourceValidation = await BackupPolicySourceValidator.ValidateSourceAsync(command.Policy.Source, stackBackupVolumeResolver, cancellationToken);
+            if (sourceValidation.IsFailure(out var sourceError))
+                return Result.Failure<BackupPolicyResult>(sourceError);
         }
 
         try
@@ -149,6 +214,62 @@ internal sealed class UpdateBackupPolicyHandler(IUnitOfWork unitOfWork)
             return Result.Failure<BackupPolicyResult>(new BadRequestError(ex.Message));
         }
         catch (InvalidOperationException ex)
+        {
+            return Result.Failure<BackupPolicyResult>(new BadRequestError(ex.Message));
+        }
+
+        await unitOfWork.BackupPolicies.UpdateAsync(policy, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+
+        return Result.Success(new BackupPolicyResult(policy));
+    }
+}
+
+internal sealed class RenameBackupPolicyHandler(IUnitOfWork unitOfWork)
+    : ICommandHandler<RenameBackupPolicy, Result<BackupPolicyResult>>
+{
+    public async ValueTask<Result<BackupPolicyResult>> Handle(RenameBackupPolicy command, CancellationToken cancellationToken)
+    {
+        var policy = await unitOfWork.BackupPolicies.GetAsync(command.PolicyId, cancellationToken);
+        if (policy is null)
+            return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup policy not found."));
+
+        var normalizedName = BackupRepository.ToNormalizedName(command.Name);
+        if (await unitOfWork.BackupPolicies.ExistsByNormalizedNameExceptAsync(normalizedName, policy.Id, cancellationToken))
+            return Result.Failure<BackupPolicyResult>(new ConflictError("Backup policy name already exists."));
+
+        try
+        {
+            policy.Rename(command.Name);
+            policy.Validate();
+        }
+        catch (ArgumentException ex)
+        {
+            return Result.Failure<BackupPolicyResult>(new BadRequestError(ex.Message));
+        }
+
+        await unitOfWork.BackupPolicies.UpdateAsync(policy, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+
+        return Result.Success(new BackupPolicyResult(policy));
+    }
+}
+
+internal sealed class PatchBackupPolicyMetadataHandler(IUnitOfWork unitOfWork)
+    : ICommandHandler<PatchBackupPolicyMetadata, Result<BackupPolicyResult>>
+{
+    public async ValueTask<Result<BackupPolicyResult>> Handle(PatchBackupPolicyMetadata command, CancellationToken cancellationToken)
+    {
+        var policy = await unitOfWork.BackupPolicies.GetAsync(command.PolicyId, cancellationToken);
+        if (policy is null)
+            return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup policy not found."));
+
+        try
+        {
+            policy.UpdateDescription(command.Description);
+            policy.Validate();
+        }
+        catch (ArgumentException ex)
         {
             return Result.Failure<BackupPolicyResult>(new BadRequestError(ex.Message));
         }
@@ -216,6 +337,58 @@ internal sealed class QueueBackupRunHandler(
 
         return Result.Success(new BackupRunResult(queueResult.Run!));
     }
+}
+
+internal sealed class RunBackupPolicyHandler(
+    IUnitOfWork unitOfWork,
+    IBackupRunExecutionService executionService,
+    IUserContextAccessor userContextAccessor)
+    : IStreamCommandHandler<RunBackupPolicy, BackupRunStreamItem>
+{
+    public async IAsyncEnumerable<BackupRunStreamItem> Handle(
+        RunBackupPolicy command,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var queueResult = await unitOfWork.BackupRuns.QueueAsync(
+            command.PolicyId,
+            Guid.CreateVersion7(),
+            command.Input.Trigger,
+            command.Input.TriggerSourceId,
+            userContextAccessor.Current.ActorId,
+            command.Input.Trigger == BackupRunTrigger.Schedule,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
+
+        if (queueResult.Status != BackupRunQueueResultStatus.Queued)
+        {
+            yield return QueueError(queueResult.Status);
+            yield break;
+        }
+
+        await unitOfWork.CommitAsync(cancellationToken);
+
+        var run = queueResult.Run!;
+        yield return new BackupRunStreamItem(
+            RunId: run.Id,
+            Status: BackupRunStatus.Queued,
+            Message: $"Backup run queued for \"{run.PolicyNameSnapshot}\".");
+
+        await foreach (var item in executionService.ExecuteQueuedAsync(run.Id, cancellationToken))
+            yield return item;
+    }
+
+    private static BackupRunStreamItem QueueError(BackupRunQueueResultStatus status)
+        => new(
+            RunId: Guid.Empty,
+            Status: BackupRunStatus.Rejected,
+            Message: status switch
+            {
+                BackupRunQueueResultStatus.PolicyNotFound => "Backup policy not found.",
+                BackupRunQueueResultStatus.PolicyArchived => "Archived backup policies cannot queue new runs.",
+                BackupRunQueueResultStatus.ActiveRunExists => "Backup policy already has an active run.",
+                _ => "Backup run could not be queued."
+            },
+            Stream: "stderr");
 }
 
 internal sealed class CancelBackupRunHandler(

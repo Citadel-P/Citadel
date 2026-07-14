@@ -191,12 +191,13 @@ export function BackupRepositoryForm({
                       label: 'Repository Path',
                       required: true,
                       disabled: specDisabled,
-                      description: 'Absolute path mounted into Citadel Core and allowed by backup configuration.',
+                      description:
+                        'Filesystem path for this repository. Relative paths are created under the configured backup repository root.',
                       render: (value, set) => (
                         <FieldInput
                           value={value ?? ''}
                           disabled={specDisabled}
-                          placeholder="/backups/citadel"
+                          placeholder="daily/core"
                           onChange={(path) => set({ spec: { path } as any })}
                         />
                       ),

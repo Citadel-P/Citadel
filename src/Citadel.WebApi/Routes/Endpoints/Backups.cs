@@ -2,11 +2,14 @@ using Application.Features.Backups.Commands;
 using Application.Features.Backups.Queries;
 using Application.Models;
 using Application.Permissions;
+using Application.Services.Backups;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Backups;
 
 namespace WebApi.Routes.Endpoints;
@@ -171,6 +174,31 @@ public static class BackupPolicies
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, BackupPolicyView.Map);
     }
 
+    public static async Task<Results<Ok<BackupPolicyView>, ProblemHttpResult>> PatchMetadata(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromRoute][Description("Backup policy ID")] Guid id,
+        PatchResourceMetadataDocument patchInput,
+        CancellationToken cancellationToken)
+    {
+        var input = patchInput.ApplyTo(
+            new PatchResourceMetadata(string.Empty, []),
+            ApplicationJsonContext.Default.PatchResourceMetadata);
+
+        var result = await mediator.Send(new PatchBackupPolicyMetadata(id, input.Description), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, BackupPolicyView.Map);
+    }
+
+    public static async Task<Results<Ok<BackupPolicyView>, ProblemHttpResult>> Rename(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromBody] RenameResource renameResource,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new RenameBackupPolicy(renameResource.Id, renameResource.Name), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, BackupPolicyView.Map);
+    }
+
     public static async Task<Results<NoContent, ProblemHttpResult>> Archive(
         IMediator mediator,
         [FromRoute][Description("Backup policy ID")] Guid id,
@@ -188,6 +216,16 @@ public static class BackupPolicies
     {
         var result = await mediator.Send(new QueueBackupRun(id, input.ToModel()), cancellationToken);
         return EndpointHandlers.HandleResult(result, BackupRunView.Map);
+    }
+
+    public static async IAsyncEnumerable<BackupRunStreamItem> Run(
+        IMediator mediator,
+        [FromRoute][Description("Backup policy ID")] Guid id,
+        [FromBody] QueueBackupRunInput input,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var item in mediator.CreateStream(new RunBackupPolicy(id, input.ToModel()), cancellationToken))
+            yield return item;
     }
 }
 

@@ -29,6 +29,7 @@ import { useParams, useNavigate } from 'react-router';
 import {
   ApplyDeploymentInput,
   ApplyStackInput,
+  QueueBackupRunInput,
   RunAutomationActionInput,
   TestAutomationActionInput,
   ProblemDetails,
@@ -390,6 +391,7 @@ type PulledStreamProps =
   | ApplyStackInput
   | RollbackStackInput
   | RunAutomationActionInput
+  | QueueBackupRunInput
   | TestAutomationActionInput;
 
 const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: string, onMutate?: () => void) => {
@@ -476,6 +478,7 @@ interface UseStreamProgressOptions<TRequest, TItem> {
   errorMessageDefault: string;
   pendingMessage?: string;
   compactDockerComposeOutput?: boolean;
+  streamFieldIsMetadata?: boolean;
   // A predicate to check if an item in the stream represents an error
   getError?: (item: TItem) => string | undefined | null;
 }
@@ -650,6 +653,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   errorMessageDefault,
   pendingMessage,
   compactDockerComposeOutput,
+  streamFieldIsMetadata,
   getError,
 }: UseStreamProgressOptions<TRequest, TItem>): StreamProgressState {
   const [history, setHistory] = useState<string[]>([]);
@@ -766,7 +770,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
               }
 
               // Handle simple log messages
-              if (addText(progressMessage) || addText(stream) || addText(message)) {
+              if (addText(progressMessage) || addText(message) || (!streamFieldIsMetadata && addText(stream))) {
                 continue;
               }
 
@@ -839,7 +843,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
         });
       }
     },
-    [compactDockerComposeOutput, getError],
+    [compactDockerComposeOutput, getError, streamFieldIsMetadata],
   );
 
   const resetTimer = useCallback(() => {

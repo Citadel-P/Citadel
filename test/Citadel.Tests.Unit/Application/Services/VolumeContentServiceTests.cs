@@ -76,8 +76,11 @@ public sealed class VolumeContentServiceTests
         Assert.NotNull(createCommand);
         Assert.NotNull(execRequest);
 
-        var createEntryPoint = Assert.NotNull(createCommand.EntryPoint);
-        var createArgs = Assert.NotNull(createCommand.Command);
+        Assert.NotNull(createCommand.EntryPoint);
+        Assert.NotNull(createCommand.Command);
+
+        var createEntryPoint = createCommand.EntryPoint!;
+        var createArgs = createCommand.Command!;
 
         Assert.Equal(["/bin/sh"], createEntryPoint);
         Assert.Equal("-c", createArgs[0]);
@@ -93,6 +96,58 @@ public sealed class VolumeContentServiceTests
         Assert.Equal("citadel-volume-helper", execRequest.Command[3]);
         Assert.Equal("volume-helper", execRequest.Command[4]);
         Assert.Equal("list", execRequest.Command[5]);
+    }
+
+    [Fact]
+    public async Task ListDirectoryAsync_ShouldIncludeHelperLogsWhenHelperExitsBeforeReady()
+    {
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .Setup(connector => connector.CreateAsync(It.IsAny<CreateContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success("helper-1"));
+        containerConnector
+            .Setup(connector => connector.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        containerConnector
+            .Setup(connector => connector.InspectAsync(It.IsAny<InspectContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(ExitedContainer("helper-1", 127)));
+        containerConnector
+            .Setup(connector => connector.StreamLogsAsync(It.IsAny<StreamContainerLogsCommand>(), It.IsAny<CancellationToken>()))
+            .Returns((StreamContainerLogsCommand _, CancellationToken _) => ReadLogChunksAsync("helper executable was not found"));
+        containerConnector
+            .Setup(connector => connector.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerConnectorFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.EdgeAgent))
+            .Returns(containerConnector.Object);
+
+        var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve())
+            .Returns("citadel-agent:dev");
+
+        var service = new VolumeContentService(
+            containerConnectorFactory.Object,
+            Mock.Of<IConnectorFactory<IImageConnector>>(),
+            helperImageResolver.Object,
+            NullLogger<VolumeContentService>.Instance);
+
+        var result = await service.ListDirectoryAsync(
+            new ListVolumeDirectoryCommand(
+                "edge://platform-1",
+                Guid.CreateVersion7(),
+                PlatformConnectorType.EdgeAgent,
+                "app-data",
+                new NormalizedVolumePath("/", [])),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess(out _, out var error));
+        Assert.NotNull(error);
+        Assert.Contains("exited before it was ready", error.Message);
+        Assert.Contains("Exit code: 127", error.Message);
+        Assert.Contains("helper executable was not found", error.Message);
     }
 
     private static ContainerInspectionInfo RunningContainer(string id)
@@ -135,11 +190,57 @@ public sealed class VolumeContentServiceTests
             Config: null,
             NetworkSettings: null);
 
+    private static ContainerInspectionInfo ExitedContainer(string id, int exitCode)
+        => new(
+            Id: id,
+            Created: string.Empty,
+            Path: null,
+            Args: [],
+            State: new ContainerRuntimeState(
+                Status: ContainerStateStatus.Exited,
+                Running: false,
+                Paused: false,
+                Restarting: false,
+                OOMKilled: false,
+                Dead: false,
+                Pid: 0,
+                ExitCode: exitCode,
+                Error: null,
+                StartedAt: null,
+                FinishedAt: null,
+                Health: null),
+            Image: null,
+            ResolvConfPath: null,
+            HostnamePath: null,
+            HostsPath: null,
+            LogPath: null,
+            Name: null,
+            RestartCount: 0,
+            Driver: null,
+            Platform: null,
+            MountLabel: null,
+            ProcessLabel: null,
+            AppArmorProfile: null,
+            ExecIDs: [],
+            HostConfig: null,
+            GraphDriver: null,
+            SizeRw: null,
+            SizeRootFs: null,
+            Mounts: [],
+            Config: null,
+            NetworkSettings: null);
+
     private static async IAsyncEnumerable<ContainerBinaryExecChunk> ReadChunksAsync(string payload)
     {
         await Task.Yield();
         yield return new ContainerBinaryExecChunk(
             ContainerExecStream.Stdout,
             Encoding.UTF8.GetBytes(payload));
+    }
+
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadLogChunksAsync(string payload)
+    {
+        await Task.Yield();
+        yield return Encoding.UTF8.GetBytes(payload);
     }
 }

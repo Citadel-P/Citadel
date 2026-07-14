@@ -1483,7 +1483,12 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
     {
         const string sql = "SELECT * FROM BackupRuns WHERE Id = @Id LIMIT 1";
         var result = await db.QuerySingleOrDefaultAsync<BackupRunDto>(sql, new { Id = id }, transaction: tx());
-        return result?.ToDomain();
+        if (result is null)
+            return null;
+
+        var run = result.ToDomain();
+        await AssignItemsAsync([run], cancellationToken);
+        return run;
     }
 
     public async Task<BackupRunExecutionPlan?> GetExecutionPlanAsync(Guid id, CancellationToken cancellationToken)
@@ -1562,7 +1567,9 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             sql,
             new { PolicyId = policyId, Limit = Math.Clamp(limit, 1, 200) },
             transaction: tx());
-        return result.ToDomain();
+        var runs = result.ToDomain().ToArray();
+        await AssignItemsAsync(runs, cancellationToken);
+        return runs;
     }
 
     public async Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken)
@@ -1599,7 +1606,9 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             sql,
             new { Limit = Math.Clamp(limit, 1, 500) },
             transaction: tx());
-        return result.ToDomain();
+        var runs = result.ToDomain().ToArray();
+        await AssignItemsAsync(runs, cancellationToken);
+        return runs;
     }
 
     public async Task<IEnumerable<BackupRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken)
@@ -1711,6 +1720,195 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             transaction: tx());
     }
 
+    private async Task AssignItemsAsync(IReadOnlyCollection<BackupRun> runs, CancellationToken cancellationToken)
+    {
+        if (runs.Count == 0)
+            return;
+
+        const string sql = """
+            SELECT *
+            FROM BackupRunItems
+            WHERE BackupRunId = ANY(@BackupRunIds)
+            ORDER BY VolumeName ASC, Id ASC
+            """;
+
+        var rows = await db.QueryAsync<BackupRunItemDto>(
+            sql,
+            new { BackupRunIds = runs.Select(static run => run.Id).ToArray() },
+            transaction: tx());
+
+        var itemsByRun = rows
+            .Select(static row => row.ToDomain())
+            .GroupBy(static item => item.BackupRunId)
+            .ToDictionary(static group => group.Key, static group => (IReadOnlyList<BackupRunItem>)[.. group]);
+
+        foreach (var run in runs)
+        {
+            run.AssignItems(itemsByRun.TryGetValue(run.Id, out var items) ? items : []);
+        }
+    }
+
+}
+
+internal sealed class BackupRunItemRepository(IDbConnection db, Func<IDbTransaction> tx) : IBackupRunItemRepository
+{
+    public Task<int> AddRangeAsync(IReadOnlyCollection<BackupRunItem> items, CancellationToken cancellationToken)
+    {
+        if (items.Count == 0)
+            return Task.FromResult(0);
+
+        var batch = items.ToArray();
+        const string sql = """
+            INSERT INTO BackupRunItems (
+                Id, BackupRunId, PlatformId, VolumeName, Status, ResticSnapshotId, ParentSnapshotId,
+                FilesProcessed, BytesProcessed, BytesAdded, StartedAt, CompletedAt, ExitCode,
+                ErrorCode, ErrorMessage, CreatedAt, UpdatedAt)
+            SELECT
+                Id, BackupRunId, PlatformId, VolumeName, Status, ResticSnapshotId, ParentSnapshotId,
+                FilesProcessed, BytesProcessed, BytesAdded, StartedAt, CompletedAt, ExitCode,
+                ErrorCode, ErrorMessage, CreatedAt, UpdatedAt
+            FROM unnest(
+                @Ids::uuid[],
+                @BackupRunIds::uuid[],
+                @PlatformIds::uuid[],
+                @VolumeNames::text[],
+                @Statuses::text[],
+                @ResticSnapshotIds::text[],
+                @ParentSnapshotIds::text[],
+                @FilesProcessed::bigint[],
+                @BytesProcessed::bigint[],
+                @BytesAdded::bigint[],
+                @StartedAts::timestamp[],
+                @CompletedAts::timestamp[],
+                @ExitCodes::integer[],
+                @ErrorCodes::text[],
+                @ErrorMessages::text[],
+                @CreatedAts::timestamp[],
+                @UpdatedAts::timestamp[])
+                AS items(
+                    Id, BackupRunId, PlatformId, VolumeName, Status, ResticSnapshotId, ParentSnapshotId,
+                    FilesProcessed, BytesProcessed, BytesAdded, StartedAt, CompletedAt, ExitCode,
+                    ErrorCode, ErrorMessage, CreatedAt, UpdatedAt)
+            ON CONFLICT (Id) DO NOTHING
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Ids = batch.Select(static item => item.Id).ToArray(),
+                BackupRunIds = batch.Select(static item => item.BackupRunId).ToArray(),
+                PlatformIds = batch.Select(static item => item.PlatformId).ToArray(),
+                VolumeNames = batch.Select(static item => item.VolumeName).ToArray(),
+                Statuses = batch.Select(static item => EnumFormatter<BackupRunItemStatus>.GetValue(item.Status)).ToArray(),
+                ResticSnapshotIds = batch.Select(static item => item.ResticSnapshotId).ToArray(),
+                ParentSnapshotIds = batch.Select(static item => item.ParentSnapshotId).ToArray(),
+                FilesProcessed = batch.Select(static item => item.FilesProcessed).ToArray(),
+                BytesProcessed = batch.Select(static item => item.BytesProcessed).ToArray(),
+                BytesAdded = batch.Select(static item => item.BytesAdded).ToArray(),
+                StartedAts = batch.Select(static item => BackupMappers.ToUtcDateTime(item.StartedAt)).ToArray(),
+                CompletedAts = batch.Select(static item => BackupMappers.ToUtcDateTime(item.CompletedAt)).ToArray(),
+                ExitCodes = batch.Select(static item => item.ExitCode).ToArray(),
+                ErrorCodes = batch.Select(static item => item.ErrorCode).ToArray(),
+                ErrorMessages = batch.Select(static item => item.ErrorMessage).ToArray(),
+                CreatedAts = batch.Select(static item => BackupMappers.ToUtcDateTime(item.CreatedAt)).ToArray(),
+                UpdatedAts = batch.Select(static item => BackupMappers.ToUtcDateTime(item.UpdatedAt)).ToArray()
+            },
+            transaction: tx());
+    }
+
+    public Task<int> UpdateAsync(BackupRunItem item, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BackupRunItems
+            SET Status = @Status,
+                ResticSnapshotId = @ResticSnapshotId,
+                ParentSnapshotId = @ParentSnapshotId,
+                FilesProcessed = @FilesProcessed,
+                BytesProcessed = @BytesProcessed,
+                BytesAdded = @BytesAdded,
+                StartedAt = @StartedAt,
+                CompletedAt = @CompletedAt,
+                ExitCode = @ExitCode,
+                ErrorCode = @ErrorCode,
+                ErrorMessage = @ErrorMessage,
+                UpdatedAt = @UpdatedAt
+            WHERE Id = @Id
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                item.Id,
+                Status = EnumFormatter<BackupRunItemStatus>.GetValue(item.Status),
+                item.ResticSnapshotId,
+                item.ParentSnapshotId,
+                item.FilesProcessed,
+                item.BytesProcessed,
+                item.BytesAdded,
+                StartedAt = BackupMappers.ToUtcDateTime(item.StartedAt),
+                CompletedAt = BackupMappers.ToUtcDateTime(item.CompletedAt),
+                item.ExitCode,
+                item.ErrorCode,
+                item.ErrorMessage,
+                UpdatedAt = BackupMappers.ToUtcDateTime(item.UpdatedAt)
+            },
+            transaction: tx());
+    }
+
+    public async Task<IReadOnlyList<BackupRunItem>> GetByRunAsync(Guid backupRunId, CancellationToken cancellationToken)
+        => await GetByRunIdsAsync([backupRunId], cancellationToken);
+
+    public async Task<IReadOnlyList<BackupRunItem>> GetByRunIdsAsync(IReadOnlyCollection<Guid> backupRunIds, CancellationToken cancellationToken)
+    {
+        if (backupRunIds.Count == 0)
+            return [];
+
+        const string sql = """
+            SELECT *
+            FROM BackupRunItems
+            WHERE BackupRunId = ANY(@BackupRunIds)
+            ORDER BY BackupRunId ASC, VolumeName ASC, Id ASC
+            """;
+
+        var rows = await db.QueryAsync<BackupRunItemDto>(
+            sql,
+            new { BackupRunIds = backupRunIds.ToArray() },
+            transaction: tx());
+        return [.. rows.Select(static row => row.ToDomain())];
+    }
+
+    public Task<int> CancelPendingOrRunningAsync(Guid backupRunId, DateTimeOffset cancelledAt, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BackupRunItems
+            SET Status = @CancelledStatus,
+                CompletedAt = @CancelledAt,
+                ErrorCode = @ErrorCode,
+                ErrorMessage = @ErrorMessage,
+                UpdatedAt = @CancelledAt
+            WHERE BackupRunId = @BackupRunId
+              AND Status = ANY(@ActiveStatuses)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                BackupRunId = backupRunId,
+                CancelledAt = BackupMappers.ToUtcDateTime(cancelledAt),
+                CancelledStatus = EnumFormatter<BackupRunItemStatus>.GetValue(BackupRunItemStatus.Cancelled),
+                ErrorCode = "backup.cancelled",
+                ErrorMessage = "Backup run cancelled.",
+                ActiveStatuses = new[]
+                {
+                    EnumFormatter<BackupRunItemStatus>.GetValue(BackupRunItemStatus.Pending),
+                    EnumFormatter<BackupRunItemStatus>.GetValue(BackupRunItemStatus.Running)
+                }
+            },
+            transaction: tx());
+    }
 }
 
 internal sealed class BackupRunLogRepository(IDbConnection db, Func<IDbTransaction> tx) : IBackupRunLogRepository

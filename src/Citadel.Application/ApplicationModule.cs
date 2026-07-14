@@ -8,6 +8,7 @@ using Application.Services.SignalR;
 using Application.TaskJobs;
 using Citadel.SourceGen;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -113,6 +114,7 @@ public static class ApplicationModule
             .AddSingleton<IAutomationRunCoordinator, AutomationRunCoordinator>()
             .AddSingleton<IResticEnvironmentBuilder, ResticEnvironmentBuilder>()
             .AddSingleton<IBackupRepositoryDestinationService, BackupRepositoryDestinationService>()
+            .AddSingleton<IStackBackupVolumeResolver, StackBackupVolumeResolver>()
             .AddSingleton<IBackupRunCoordinator, BackupRunCoordinator>()
             .AddSingleton<IBackupRunExecutionService, BackupRunExecutionService>()
             .AddSingleton<IBackupRestoreRunCoordinator, BackupRestoreRunCoordinator>()

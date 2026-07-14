@@ -84,3 +84,19 @@ public sealed record BackupCoverageItem(
     BackupCoverageView Coverage);
 
 public sealed record BackupCoverageResult(IReadOnlyList<BackupCoverageItem> Items);
+
+public sealed record StackBackupSourcePreviewResult(
+    Guid StackId,
+    string StackName,
+    Guid PlatformId,
+    string PlatformName,
+    PlatformStatus PlatformStatus,
+    IReadOnlyList<StackBackupVolumePreviewItem> Volumes,
+    IReadOnlyList<string> Warnings);
+
+public sealed record StackBackupVolumePreviewItem(
+    string Name,
+    StackVolumeKind Kind,
+    bool IsExternal,
+    bool IsShared,
+    bool HasBackupCoverage);

@@ -72,6 +72,12 @@ export enum StopSignal {
   SIGINT = "SIGINT",
 }
 
+export enum StackVolumeKind {
+  DeclaredNamed = "DeclaredNamed",
+  ExternalNamed = "ExternalNamed",
+  AnonymousNamed = "AnonymousNamed",
+}
+
 export enum StackUpdateBehavior {
   Disabled = "Disabled",
   Notify = "Notify",
@@ -367,6 +373,7 @@ export enum ContainerRestartPolicy {
 export enum BackupSourceType {
   DockerVolume = "DockerVolume",
   CitadelSystem = "CitadelSystem",
+  Stack = "Stack",
 }
 
 export enum BackupSnapshotAvailability {
@@ -395,6 +402,14 @@ export enum BackupRunStatus {
   Cancelled = "Cancelled",
   Rejected = "Rejected",
   Interrupted = "Interrupted",
+}
+
+export enum BackupRunItemStatus {
+  Pending = "Pending",
+  Running = "Running",
+  Succeeded = "Succeeded",
+  Failed = "Failed",
+  Cancelled = "Cancelled",
 }
 
 export enum BackupRestoreStatus {
@@ -781,6 +796,10 @@ export type BackupSourceSpec = BaseBackupSourceSpec &
     | BaseBackupSourceSpecTypeMapping<
         "CitadelSystem",
         BackupSourceSpecCitadelSystemBackupSource
+      >
+    | BaseBackupSourceSpecTypeMapping<
+        "Stack",
+        BackupSourceSpecStackBackupSource
       >
   );
 
@@ -2712,6 +2731,58 @@ export interface BackupRestoreRunsView {
   runs: BackupRestoreRunView[];
 }
 
+export interface BackupRunItemView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  backupRunId: string;
+  /** @format uuid */
+  platformId: string;
+  volumeName: string;
+  status: BackupRunItemStatus;
+  resticSnapshotId: null | string;
+  parentSnapshotId: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  filesProcessed: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  bytesProcessed: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  bytesAdded: null | number | string;
+  /** @format date-time */
+  startedAt: any;
+  /** @format date-time */
+  completedAt: any;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  errorCode: null | string;
+  errorMessage: null | string;
+}
+
+export interface BackupRunStreamItem {
+  /** @format uuid */
+  runId: string;
+  status: null | BackupRunStatus;
+  message: null | string;
+  stream?: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode?: null | number | string;
+}
+
 export interface BackupRunView {
   /** @format uuid */
   id: string;
@@ -2760,6 +2831,7 @@ export interface BackupRunView {
   errorMessage: null | string;
   /** @format uuid */
   triggeredByActorId: string;
+  items: BackupRunItemView[];
 }
 
 export interface BackupRunWarning {
@@ -2783,6 +2855,14 @@ export interface BackupSourceSpecDockerVolumeBackupSource {
   platformId: string;
   volumeName: string;
   consistency?: VolumeBackupConsistency;
+  type?: BackupSourceType;
+  stableKey?: null | string;
+}
+
+export interface BackupSourceSpecStackBackupSource {
+  $type?: "Stack";
+  /** @format uuid */
+  stackId: string;
   type?: BackupSourceType;
   stableKey?: null | string;
 }
@@ -5224,6 +5304,26 @@ export interface SecretProviderView {
 
 export interface SecretProvidersView {
   providers: SecretProviderView[];
+}
+
+export interface StackBackupSourcePreviewView {
+  /** @format uuid */
+  stackId: string;
+  stackName: string;
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+  platformStatus: PlatformStatus;
+  volumes: StackBackupVolumeView[];
+  warnings: string[];
+}
+
+export interface StackBackupVolumeView {
+  name: string;
+  kind: StackVolumeKind;
+  isExternal: boolean;
+  isShared: boolean;
+  hasBackupCoverage: boolean;
 }
 
 export interface StackCapabilities {
@@ -10843,6 +10943,37 @@ export class Api<
      * No description
      *
      * @tags Stacks
+     * @name GetStackBackupSourcePreview
+     * @summary Preview stack backup source volumes
+     * @request GET:/api/v1/stacks/{stackId}/backup-source-preview
+     * @secure
+     * @response `200` `StackBackupSourcePreviewView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getStackBackupSourcePreview: (
+      stackId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        StackBackupSourcePreviewView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/${stackId}/backup-source-preview`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
      * @name GetStackDuplicateDraft
      * @summary Get stack duplicate draft
      * @request GET:/api/v1/stacks/{stackId}/duplicate-draft
@@ -12964,6 +13095,131 @@ export class Api<
      * No description
      *
      * @tags BackupPolicies
+     * @name GetBackupPolicyTags
+     * @summary Get backup policy tags
+     * @request GET:/api/v1/backupPolicies/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBackupPolicyTags: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupPolicies/${id}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name ReplaceBackupPolicyTags
+     * @summary Replace backup policy tags
+     * @request PUT:/api/v1/backupPolicies/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceBackupPolicyTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceTagsView, ProblemDetails>({
+        path: `/api/v1/backupPolicies/${id}/tags`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name RenameBackupPolicy
+     * @summary Rename backup policy
+     * @request POST:/api/v1/backupPolicies/rename
+     * @secure
+     * @response `200` `BackupPolicyView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameBackupPolicy: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<
+        BackupPolicyView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupPolicies/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name UpdateBackupPolicyMetadata
+     * @summary Update backup policy metadata
+     * @request PATCH:/api/v1/backupPolicies/{id}/_metadata
+     * @secure
+     * @response `200` `BackupPolicyView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateBackupPolicyMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BackupPolicyView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupPolicies/${id}/_metadata`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
      * @name QueueBackupRun
      * @summary Queue backup policy run
      * @request POST:/api/v1/backupPolicies/{id}/runs
@@ -12987,6 +13243,41 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/backupPolicies/${id}/runs`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupPolicies
+     * @name RunBackupPolicy
+     * @summary Run backup policy and stream execution logs in real time
+     * @request POST:/api/v1/backupPolicies/{id}/run
+     * @secure
+     * @response `200` `(BackupRunStreamItem)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    runBackupPolicy: (
+      id: string,
+      data: QueueBackupRunInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BackupRunStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupPolicies/${id}/run`,
         method: "POST",
         body: data,
         secure: true,

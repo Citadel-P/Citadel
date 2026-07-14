@@ -91,6 +91,29 @@ public sealed class BackupEntitiesTests
     }
 
     [Fact]
+    public void BackupPolicy_ShouldAcceptStackSource()
+    {
+        var stackId = Guid.NewGuid();
+        var policy = CreatePolicy(new StackBackupSource(stackId));
+
+        policy.Validate();
+
+        var source = Assert.IsType<StackBackupSource>(policy.Source);
+        Assert.Equal(stackId, source.StackId);
+        Assert.Equal($"stack:{stackId}", source.StableKey);
+    }
+
+    [Fact]
+    public void BackupPolicy_ShouldRejectStackSourceWithoutStackId()
+    {
+        var policy = CreatePolicy(new StackBackupSource(Guid.Empty));
+
+        var ex = Assert.Throws<ArgumentException>(policy.Validate);
+
+        Assert.Equal("Stack backup source requires a stack ID. (Parameter 'source')", ex.Message);
+    }
+
+    [Fact]
     public void BackupRun_ShouldSetSnapshotAvailabilityOnSuccessAndFailure()
     {
         var run = CreateRun();
@@ -113,6 +136,38 @@ public sealed class BackupEntitiesTests
 
         Assert.Equal(BackupRunStatus.Failed, failed.Status);
         Assert.Equal(BackupSnapshotAvailability.NotCreated, failed.SnapshotAvailability);
+    }
+
+    [Fact]
+    public void BackupRun_ShouldAllowMultiItemSuccessWithoutParentSnapshot()
+    {
+        var run = CreateRun(new StackBackupSource(Guid.NewGuid()));
+        var now = DateTimeOffset.UtcNow;
+
+        run.MarkPreparing(now);
+        run.MarkRunning(now.AddSeconds(1));
+        run.CompleteSucceeded(null, null, 4, 2048, 512, [], now.AddSeconds(2));
+
+        Assert.Equal(BackupRunStatus.Succeeded, run.Status);
+        Assert.Equal(BackupSnapshotAvailability.Available, run.SnapshotAvailability);
+        Assert.Null(run.ResticSnapshotId);
+        Assert.Equal(4, run.FilesProcessed);
+    }
+
+    [Fact]
+    public void BackupRunItem_ShouldTrackVolumeSnapshotLifecycle()
+    {
+        var item = new BackupRunItem(Guid.NewGuid(), Guid.NewGuid(), "  postgres-data  ");
+        var now = DateTimeOffset.UtcNow;
+
+        item.MarkRunning(now);
+        item.CompleteSucceeded("snapshot-volume-1", "parent-1", 3, 1024, 256, now.AddSeconds(1));
+
+        Assert.Equal("postgres-data", item.VolumeName);
+        Assert.Equal(BackupRunItemStatus.Succeeded, item.Status);
+        Assert.Equal("snapshot-volume-1", item.ResticSnapshotId);
+        Assert.Equal("parent-1", item.ParentSnapshotId);
+        Assert.Equal(3, item.FilesProcessed);
     }
 
     [Fact]
@@ -140,11 +195,11 @@ public sealed class BackupEntitiesTests
         Assert.Single(restore.Warnings);
     }
 
-    private static BackupPolicy CreatePolicy()
+    private static BackupPolicy CreatePolicy(BackupSourceSpec? source = null)
         => new(
             "  policy-1  ",
             " policy description ",
-            new DockerVolumeBackupSource(Guid.NewGuid(), "  postgres-data  "),
+            source ?? new DockerVolumeBackupSource(Guid.NewGuid(), "  postgres-data  "),
             Guid.NewGuid(),
             enabled: true,
             cron: "0 2 * * *",
@@ -155,12 +210,12 @@ public sealed class BackupEntitiesTests
             runAsActorId: Guid.NewGuid(),
             createdByActorId: Guid.NewGuid());
 
-    private static BackupRun CreateRun()
+    private static BackupRun CreateRun(BackupSourceSpec? source = null)
         => new(
             Guid.NewGuid(),
             Guid.NewGuid(),
             "policy-1",
-            new DockerVolumeBackupSource(Guid.NewGuid(), "postgres-data"),
+            source ?? new DockerVolumeBackupSource(Guid.NewGuid(), "postgres-data"),
             BackupRepositoryType.S3Compatible,
             BackupRunTrigger.Manual,
             null,

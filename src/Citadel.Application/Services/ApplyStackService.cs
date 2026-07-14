@@ -391,6 +391,12 @@ internal class ApplyStackService(
                 yield break;
             }
 
+            var volumeBindings = await ResolveVolumeBindingsAsync(stack, currentRelease, platform, containers ?? [], ct);
+            if (!string.IsNullOrWhiteSpace(volumeBindings.Warning))
+            {
+                yield return StackStreamItem.SystemMessage(volumeBindings.Warning, 0);
+            }
+
             if (!string.IsNullOrWhiteSpace(gitSnapshotRoot))
             {
                 string? sourceSnapshotWarning = null;
@@ -422,7 +428,8 @@ internal class ApplyStackService(
                     operation,
                     previousStackSnapshot,
                     releaseSource,
-                    selectedConfiguration.SnapshotEntries),
+                    selectedConfiguration.SnapshotEntries,
+                    volumeBindings.Bindings),
                 ct);
 
             yield return StackStreamItem.SystemMessage("Stack is now running.", 0);
@@ -452,6 +459,92 @@ internal class ApplyStackService(
         return containerListResult.IsFailure(out var error, out var containerDic)
             ? (error.Message, null)
             : (null, containerDic.Values.Where(container => !string.IsNullOrWhiteSpace(container.Id)).ToArray());
+    }
+
+    private async Task<(string? Warning, IReadOnlyList<StackReleaseVolumeBinding> Bindings)> ResolveVolumeBindingsAsync(
+        Stack stack,
+        StackRelease release,
+        Domain.Contracts.Resources.PlatformCacheEntry platform,
+        IReadOnlyCollection<DockerContainer> containers,
+        CancellationToken ct)
+    {
+        if (containers.Count == 0)
+            return (null, []);
+
+        var composeVolumes = release.Spec is ManualStack manual
+            ? StackComposeParser.ParseVolumes(manual.ComposeFile)
+            : new StackComposeVolumeResolution([], [], false);
+        var declared = composeVolumes.DeclaredVolumes.Select(static volume => volume.Name).ToHashSet(StringComparer.Ordinal);
+        var external = composeVolumes.DeclaredVolumes
+            .Where(static volume => volume.IsExternal)
+            .Select(static volume => volume.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        var references = composeVolumes.ServiceVolumeReferences.ToHashSet(StringComparer.Ordinal);
+        var projectName = StackProjectNameResolver.Resolve(stack);
+        var connector = containerConnectorFactory.GetConnector(platform.ConnectorType);
+        var bindings = new Dictionary<string, StackReleaseVolumeBinding>(StringComparer.Ordinal);
+        var inspectFailures = 0;
+
+        foreach (var container in containers)
+        {
+            var inspect = await connector.InspectAsync(
+                new InspectContainerCommand(platform.Address, container.Id),
+                ct);
+
+            if (!inspect.IsSuccess(out var info, out _))
+            {
+                inspectFailures++;
+                continue;
+            }
+
+            foreach (var mount in info.Mounts)
+            {
+                if (!string.Equals(mount.Type, "volume", StringComparison.OrdinalIgnoreCase)
+                    || string.IsNullOrWhiteSpace(mount.Name)
+                    || bindings.ContainsKey(mount.Name))
+                {
+                    continue;
+                }
+
+                var composeName = ResolveComposeVolumeName(mount.Name, projectName, declared, references);
+                var isExternal = external.Contains(mount.Name)
+                                 || (composeName is not null && external.Contains(composeName));
+                var isAnonymous = composeName is null && !isExternal;
+
+                bindings[mount.Name] = new StackReleaseVolumeBinding(
+                    release.Id,
+                    release.PlatformId,
+                    mount.Name,
+                    composeName,
+                    isExternal,
+                    isAnonymous);
+            }
+        }
+
+        var warning = inspectFailures == 0
+            ? null
+            : $"Could not inspect {inspectFailures} stack container{(inspectFailures == 1 ? string.Empty : "s")} while recording backup volume bindings.";
+
+        return (warning, [.. bindings.Values.OrderBy(static binding => binding.VolumeName, StringComparer.Ordinal)]);
+    }
+
+    private static string? ResolveComposeVolumeName(
+        string dockerVolumeName,
+        string projectName,
+        IReadOnlySet<string> declared,
+        IReadOnlySet<string> references)
+    {
+        if (declared.Contains(dockerVolumeName) || references.Contains(dockerVolumeName))
+            return dockerVolumeName;
+
+        var prefix = projectName + "_";
+        if (!dockerVolumeName.StartsWith(prefix, StringComparison.Ordinal))
+            return null;
+
+        var candidate = dockerVolumeName[prefix.Length..];
+        return declared.Contains(candidate) || references.Contains(candidate)
+            ? candidate
+            : null;
     }
 
     private async Task<string?> ValidateProjectContainerOwnershipAsync(
@@ -873,7 +966,8 @@ internal sealed class StackSucceededWorkItem(
     StackApplyOperation operation,
     StackSnapshot? previousStackSnapshot = null,
     StackReleaseSource? source = null,
-    IReadOnlyList<ResourceBindingSnapshot>? resourceBindings = null) : IDbWorkItem
+    IReadOnlyList<ResourceBindingSnapshot>? resourceBindings = null,
+    IReadOnlyList<StackReleaseVolumeBinding>? volumeBindings = null) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -938,6 +1032,10 @@ internal sealed class StackSucceededWorkItem(
         }
 
         await uow.Containers.BulkUpsertAsync(upserts, ct);
+        await uow.Stacks.ReplaceReleaseVolumeBindingsAsync(
+            stack.CurrentStackRelease.Id,
+            volumeBindings ?? [],
+            ct);
         await uow.Stacks.UpdateAsync(stack, ct);
 
         var containerIds = upserts.Select(container => container.DockerContainerId).ToArray();

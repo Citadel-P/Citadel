@@ -160,4 +160,23 @@ public static class Tags
         var result = await mediator.Send(new ReplaceAutomationActionTags(id, input.TagIds), cancellationToken);
         return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
     }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> GetBackupPolicyTags(
+        IMediator mediator,
+        [FromRoute][Description("Backup policy ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetBackupPolicyTags(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> ReplaceBackupPolicyTags(
+        IMediator mediator,
+        [FromRoute][Description("Backup policy ID")] Guid id,
+        [FromBody] ReplaceResourceTagsInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ReplaceBackupPolicyTags(id, input.TagIds), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
 }

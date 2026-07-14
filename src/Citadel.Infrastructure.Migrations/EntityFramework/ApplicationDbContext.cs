@@ -58,6 +58,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .AlertChannelConfiguration()
             .StackConfiguration()
             .StackReleaseConfiguration()
+            .StackReleaseVolumeBindingConfiguration()
             .AlertRuleChannelConfiguration();
 
         SeedDb(modelBuilder);
@@ -1722,6 +1723,45 @@ internal static class Configuration
         run.HasIndex("SnapshotAvailability").HasDatabaseName($"IX_{runTable}_SnapshotAvailability");
         run.HasIndex("TriggeredByActorId").HasDatabaseName($"IX_{runTable}_TriggeredByActorId");
 
+        var runItemTable = "BackupRunItems";
+        var runItem = builder.Entity("BackupRunItem");
+        runItem.ToTable(runItemTable);
+        runItem.Property<Guid>("Id").IsRequired();
+        runItem.HasKey("Id");
+        runItem.Property<Guid>("BackupRunId").IsRequired();
+        runItem.Property<Guid>("PlatformId").IsRequired();
+        runItem.Property<string>("VolumeName").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        runItem.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        runItem.Property<string>("ResticSnapshotId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        runItem.Property<string>("ParentSnapshotId").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        runItem.Property<long?>("FilesProcessed").HasColumnType(BigInt).IsRequired(false);
+        runItem.Property<long?>("BytesProcessed").HasColumnType(BigInt).IsRequired(false);
+        runItem.Property<long?>("BytesAdded").HasColumnType(BigInt).IsRequired(false);
+        runItem.Property<DateTime?>("StartedAt").HasColumnType(Timestamp).IsRequired(false);
+        runItem.Property<DateTime?>("CompletedAt").HasColumnType(Timestamp).IsRequired(false);
+        runItem.Property<int?>("ExitCode").HasColumnType(Integer).IsRequired(false);
+        runItem.Property<string>("ErrorCode").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        runItem.Property<string>("ErrorMessage").HasColumnType(Text).HasMaxLength(1200).IsRequired(false);
+        runItem.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        runItem.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        runItem
+            .HasOne("BackupRun")
+            .WithMany()
+            .HasForeignKey("BackupRunId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        runItem
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        runItem.HasIndex("BackupRunId", "VolumeName").HasDatabaseName($"IX_{runItemTable}_Run_VolumeName");
+        runItem.HasIndex("BackupRunId", "Status").HasDatabaseName($"IX_{runItemTable}_Run_Status");
+        runItem.HasIndex("PlatformId", "VolumeName").HasDatabaseName($"IX_{runItemTable}_Platform_VolumeName");
+        runItem.HasIndex("ResticSnapshotId").HasDatabaseName($"IX_{runItemTable}_ResticSnapshotId");
+
         var runLogTable = "BackupRunLogs";
         var runLog = builder.Entity("BackupRunLog");
         runLog.ToTable(runLogTable);
@@ -1968,6 +2008,40 @@ internal static class Configuration
 
         release.HasIndex("StackId").HasDatabaseName($"IX_{tableName}_StackId");
         release.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
+
+        return builder;
+    }
+
+    public static ModelBuilder StackReleaseVolumeBindingConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "StackReleaseVolumeBindings";
+        var binding = builder.Entity("StackReleaseVolumeBinding");
+
+        binding.ToTable(tableName);
+        binding.Property<Guid>("Id").IsRequired();
+        binding.HasKey("Id");
+        binding.Property<Guid>("StackReleaseId").IsRequired();
+        binding.Property<Guid>("PlatformId").IsRequired();
+        binding.Property<string>("VolumeName").HasColumnType(Text).HasMaxLength(255).IsRequired();
+        binding.Property<string>("ComposeVolumeName").HasColumnType(Text).HasMaxLength(255).IsRequired(false);
+        binding.Property<bool>("IsExternal").HasColumnType("boolean").IsRequired().HasDefaultValue(false);
+        binding.Property<bool>("IsAnonymous").HasColumnType("boolean").IsRequired().HasDefaultValue(false);
+        binding.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        binding
+            .HasOne("StackRelease")
+            .WithMany()
+            .HasForeignKey("StackReleaseId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        binding
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        binding.HasIndex("StackReleaseId", "VolumeName").IsUnique().HasDatabaseName($"IX_{tableName}_Release_VolumeName");
+        binding.HasIndex("PlatformId", "VolumeName").HasDatabaseName($"IX_{tableName}_Platform_VolumeName");
 
         return builder;
     }

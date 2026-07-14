@@ -1,6 +1,6 @@
 import { BackupPolicyView, BackupRunTrigger, ResourceControlState } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { useSelectedResources } from '@/lib/atoms';
+import { useSelectedResources, useTaskSheet } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Play, Trash2 } from 'lucide-react';
@@ -51,27 +51,22 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
     requiredCapabilities: ['canExecute'],
     useHandler: ({ resources }) => {
       const { selected, multiSelect } = singleSelection(resources);
-      const queryClient = useQueryClient();
-      const queueRun = useMutate('queueBackupRun');
+      const { open: openSheet } = useTaskSheet('BackupPolicy');
       const blocked = selected?.controlState === ResourceControlState.Processing;
 
       return {
         canExecute: !!selected && !multiSelect && selected.enabled && !blocked,
-        isPending: queueRun.isPending,
-        run: async () => {
+        run: () => {
           if (!selected || multiSelect) return;
 
-          try {
-            await queueRun.mutateAsync({
+          openSheet({
+            kind: 'backupRun',
+            payload: {
               id: selected.id,
-              data: { trigger: BackupRunTrigger.Manual },
-            } as any);
-            await invalidateBackupPolicyQueries(queryClient, selected.id);
-            toast.success(`Backup run queued for "${selected.name}"`);
-          } catch (error) {
-            toast.error(queueRun.validationErrors ?? 'Failed to queue backup run');
-            throw error;
-          }
+              name: selected.name,
+              trigger: BackupRunTrigger.Manual,
+            },
+          });
         },
       };
     },

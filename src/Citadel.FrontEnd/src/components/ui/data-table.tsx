@@ -14,7 +14,7 @@ import {
 } from '@tanstack/react-table';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Loader from './loader';
 
 interface DataTableProps<TData, TValue> {
@@ -58,12 +58,15 @@ export function DataTable<TData extends Identifiable, TValue>({
     },
   });
 
+  const tableRef = useRef(table);
+  tableRef.current = table;
+
   useEffect(() => {
     if (onSelectionChange) {
-      const selectedRows = table.getSelectedRowModel().rows.map((r) => r.original);
+      const selectedRows = tableRef.current.getSelectedRowModel().rows.map((r) => r.original);
       onSelectionChange(selectedRows);
     }
-  }, [rowSelection, data, onSelectionChange, table]);
+  }, [rowSelection, data, onSelectionChange]);
 
   return (
     <div className="rounded-none">

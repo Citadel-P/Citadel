@@ -703,6 +703,10 @@ internal sealed class VolumeContentService(
         {
             return null;
         }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     private static string BuildHelperExitedMessage(ContainerRuntimeState? state, string? logs)

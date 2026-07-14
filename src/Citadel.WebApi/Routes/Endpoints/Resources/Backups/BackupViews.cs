@@ -231,7 +231,8 @@ public sealed record BackupRunView(
     int? ExitCode,
     string? ErrorCode,
     string? ErrorMessage,
-    Guid TriggeredByActorId)
+    Guid TriggeredByActorId,
+    IReadOnlyList<BackupRunItemView> Items)
 {
     internal static BackupRunView Map(BackupRunResult result)
         => Map(result.Run);
@@ -260,7 +261,44 @@ public sealed record BackupRunView(
             run.ExitCode,
             run.ErrorCode,
             run.ErrorMessage,
-            run.TriggeredByActorId);
+            run.TriggeredByActorId,
+            [.. run.Items.Select(BackupRunItemView.Map)]);
+}
+
+public sealed record BackupRunItemView(
+    Guid Id,
+    Guid BackupRunId,
+    Guid PlatformId,
+    string VolumeName,
+    BackupRunItemStatus Status,
+    string? ResticSnapshotId,
+    string? ParentSnapshotId,
+    long? FilesProcessed,
+    long? BytesProcessed,
+    long? BytesAdded,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    int? ExitCode,
+    string? ErrorCode,
+    string? ErrorMessage)
+{
+    internal static BackupRunItemView Map(BackupRunItem item)
+        => new(
+            item.Id,
+            item.BackupRunId,
+            item.PlatformId,
+            item.VolumeName,
+            item.Status,
+            item.ResticSnapshotId,
+            item.ParentSnapshotId,
+            item.FilesProcessed,
+            item.BytesProcessed,
+            item.BytesAdded,
+            item.StartedAt,
+            item.CompletedAt,
+            item.ExitCode,
+            item.ErrorCode,
+            item.ErrorMessage);
 }
 
 public sealed record BackupRunsView(IReadOnlyList<BackupRunView> Runs)

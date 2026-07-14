@@ -1,4 +1,6 @@
 import {
+  BackupRunItemStatus,
+  BackupRunItemView,
   BackupPolicyView,
   BackupRunStatus,
   BackupRunView,
@@ -124,6 +126,12 @@ const runColumns = (
     sortingFn: (rowA, rowB) => rowA.original.trigger.localeCompare(rowB.original.trigger),
   },
   {
+    accessorKey: 'items',
+    header: ({ column }) => <SortableCell cellName="Items" column={column} />,
+    cell: ({ row }) => <BackupRunItemsSummary items={row.original.items} />,
+    sortingFn: (rowA, rowB) => Number(rowA.original.items?.length ?? 0) - Number(rowB.original.items?.length ?? 0),
+  },
+  {
     accessorKey: 'queuedAt',
     header: ({ column }) => <SortableCell cellName="Queued" column={column} />,
     cell: ({ row }) => <TimestampCell value={row.original.queuedAt} formatDateTime={formatDateTime} />,
@@ -203,6 +211,7 @@ function BackupRunLogsSheet({
           </SheetHeader>
 
           <div className="p-4 pt-0 pb-2">
+            {run && run.items.length > 0 && <BackupRunItemsList items={run.items} />}
             <LogViewer logs={isLoading ? '' : logs} autoScroll={false} allowWrap timeStamps />
           </div>
         </div>
@@ -295,6 +304,39 @@ function BackupRestoreDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function BackupRunItemsSummary({ items }: { items: BackupRunItemView[] }) {
+  if (!items.length) return <span className="text-muted-foreground text-sm">-</span>;
+
+  const failed = items.some((item) => item.status === BackupRunItemStatus.Failed);
+  const running = items.some((item) => item.status === BackupRunItemStatus.Running || item.status === BackupRunItemStatus.Pending);
+  const status = failed ? BackupRunItemStatus.Failed : running ? BackupRunItemStatus.Running : BackupRunItemStatus.Succeeded;
+  const label = items.length === 1 ? items[0].volumeName : `${items.length} volumes`;
+
+  return (
+    <span className="inline-flex min-w-0 items-center gap-2 text-sm">
+      <StateIndicator value={status} isProcessing={running} />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
+function BackupRunItemsList({ items }: { items: BackupRunItemView[] }) {
+  return (
+    <div className="mb-3 grid gap-1 rounded-md border p-2">
+      {items.map((item) => (
+        <div key={item.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-xs">
+          <span className="truncate font-medium">{item.volumeName}</span>
+          <span className="text-muted-foreground tabular-nums">{formatBytes(item.bytesAdded)}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <StateIndicator value={item.status} isProcessing={item.status === BackupRunItemStatus.Running} />
+            {item.status}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 

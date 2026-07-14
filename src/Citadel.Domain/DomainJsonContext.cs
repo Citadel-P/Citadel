@@ -426,6 +426,7 @@ public partial class AutomationJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<BackupRepositoryValidationStatus>),
         typeof(JsonStringEnumConverter<BackupRunTrigger>),
         typeof(JsonStringEnumConverter<BackupRunStatus>),
+        typeof(JsonStringEnumConverter<BackupRunItemStatus>),
         typeof(JsonStringEnumConverter<BackupSnapshotAvailability>),
         typeof(JsonStringEnumConverter<BackupCoverageStatus>),
         typeof(JsonStringEnumConverter<BackupCoverageResourceType>),
@@ -436,12 +437,17 @@ public partial class AutomationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(BackupSourceSpec))]
 [JsonSerializable(typeof(DockerVolumeBackupSource))]
 [JsonSerializable(typeof(CitadelSystemBackupSource))]
+[JsonSerializable(typeof(StackBackupSource))]
 [JsonSerializable(typeof(BackupRepositorySpec))]
 [JsonSerializable(typeof(FileSystemBackupRepositorySpec))]
 [JsonSerializable(typeof(S3CompatibleBackupRepositorySpec))]
 [JsonSerializable(typeof(BackupExecutionContext))]
 [JsonSerializable(typeof(BackupRunStatus))]
 [JsonSerializable(typeof(BackupRunStatus?))]
+[JsonSerializable(typeof(BackupRunItemStatus))]
+[JsonSerializable(typeof(BackupRunItemStatus?))]
+[JsonSerializable(typeof(BackupRunItem))]
+[JsonSerializable(typeof(IReadOnlyList<BackupRunItem>))]
 [JsonSerializable(typeof(BackupRunWarning))]
 [JsonSerializable(typeof(IReadOnlyList<BackupRunWarning>))]
 [JsonSerializable(typeof(BackupAffectedContainer))]

@@ -76,6 +76,50 @@ public sealed class BackupRepositoryDestinationTests(PostgresTestFixture fixture
     }
 
     [Fact]
+    public async Task ValidateAsync_ShouldResolveRelativeFileSystemPathUnderAllowedRoot()
+    {
+        var passwordSecretId = await CreateInternalSecretAsync("BACKUP_RELATIVE_PASSWORD", "restic-password");
+        var repository = await CreateRepositoryAsync(
+            "backup-relative",
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "backups/bb"),
+            passwordSecretId);
+        restic.Enqueue(exitCode: 0, stdout: "[]");
+
+        var service = Services.GetRequiredService<IBackupRepositoryDestinationService>();
+        var result = await service.ValidateAsync(
+            repository.Id,
+            new BackupExecutionContext(BackupExecutionLocation.Core, null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(), ErrorMessages(result.Errors));
+
+        var call = Assert.Single(restic.Calls);
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(testRoot, "repositories", "backups", "bb")),
+            call.Command.Environment["RESTIC_REPOSITORY"]);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ShouldRejectRelativeFileSystemPathOutsideAllowedRoot()
+    {
+        var passwordSecretId = await CreateInternalSecretAsync("BACKUP_OUTSIDE_PASSWORD", "restic-password");
+        var repository = await CreateRepositoryAsync(
+            "backup-outside",
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "../outside"),
+            passwordSecretId);
+
+        var service = Services.GetRequiredService<IBackupRepositoryDestinationService>();
+        var result = await service.ValidateAsync(
+            repository.Id,
+            new BackupExecutionContext(BackupExecutionLocation.Core, null),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess());
+        Assert.Contains(result.Errors, error => error.Message == "Filesystem backup repository path is outside the configured allowed backup paths.");
+        Assert.Empty(restic.Calls);
+    }
+
+    [Fact]
     public async Task InitializeAsync_ShouldInitializeUninitializedRepositoryAndReleaseLease()
     {
         var repository = await CreateFileSystemRepositoryAsync(

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import {
   AlertRuleStatus,
   ActionRunStatus,
+  BackupRunItemStatus,
   BackupRestoreStatus,
   BackupRunStatus,
   BackupRepositoryStatus,
@@ -25,6 +26,7 @@ type StateValue =
   | AlertRuleStatus
   | BackupRepositoryStatus
   | BackupRunStatus
+  | BackupRunItemStatus
   | BackupRestoreStatus
   | GitReposStatus
   | ActionRunStatus;
@@ -58,21 +60,26 @@ const getAutomationActionRunStatusStyle = (value: StateValue): StatusStyle | und
 const getBackupRunStatusStyle = (value: StateValue): StatusStyle | undefined => {
   switch (value) {
     case BackupRunStatus.Queued:
+    case BackupRunItemStatus.Pending:
       return { colorClass: 'bg-yellow-500', tooltip: 'Queued' };
     case BackupRunStatus.Preparing:
     case BackupRunStatus.Running:
     case BackupRunStatus.ApplyingRetention:
+    case BackupRunItemStatus.Running:
       return { colorClass: 'bg-blue-500', tooltip: String(value) };
     case BackupRunStatus.Succeeded:
+    case BackupRunItemStatus.Succeeded:
       return { colorClass: 'bg-green-500', tooltip: 'Succeeded' };
     case BackupRunStatus.SucceededWithWarnings:
       return { colorClass: 'bg-orange-500', tooltip: 'Succeeded with warnings' };
     case BackupRunStatus.Failed:
     case BackupRunStatus.TimedOut:
     case BackupRunStatus.Interrupted:
+    case BackupRunItemStatus.Failed:
       return { colorClass: 'bg-red-500', tooltip: String(value) };
     case BackupRunStatus.Cancelled:
     case BackupRunStatus.Rejected:
+    case BackupRunItemStatus.Cancelled:
       return { colorClass: 'bg-gray-500', tooltip: String(value) };
     default:
       return undefined;

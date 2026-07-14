@@ -163,6 +163,48 @@ internal sealed record BackupRunDto(
     }
 }
 
+internal sealed record BackupRunItemDto(
+    Guid Id,
+    Guid BackupRunId,
+    Guid PlatformId,
+    string VolumeName,
+    string Status,
+    string? ResticSnapshotId,
+    string? ParentSnapshotId,
+    long? FilesProcessed,
+    long? BytesProcessed,
+    long? BytesAdded,
+    DateTime? StartedAt,
+    DateTime? CompletedAt,
+    int? ExitCode,
+    string? ErrorCode,
+    string? ErrorMessage,
+    DateTime CreatedAt,
+    DateTime UpdatedAt)
+{
+    public BackupRunItemDto()
+        : this(
+            Guid.Empty,
+            Guid.Empty,
+            Guid.Empty,
+            string.Empty,
+            string.Empty,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            DateTime.MinValue,
+            DateTime.MinValue)
+    {
+    }
+}
+
 internal sealed record BackupRunQueueDto(
     int ResultStatus,
     Guid? Id,

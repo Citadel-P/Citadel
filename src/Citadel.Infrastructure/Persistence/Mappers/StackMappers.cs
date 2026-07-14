@@ -131,4 +131,18 @@ internal static class StackMappers
             platform: platform,
             actor: actor);
     }
+
+    internal static StackReleaseVolumeBinding ToDomain(this StackReleaseVolumeBindingDto dto)
+        => StackReleaseVolumeBinding.FromPersistence(
+            dto.Id,
+            dto.StackReleaseId,
+            dto.PlatformId,
+            dto.VolumeName,
+            dto.ComposeVolumeName,
+            dto.IsExternal,
+            dto.IsAnonymous,
+            new DateTimeOffset(DateTime.SpecifyKind(dto.CreatedAt, DateTimeKind.Utc)));
+
+    internal static IEnumerable<StackReleaseVolumeBinding> ToDomain(this IEnumerable<StackReleaseVolumeBindingDto> dtos)
+        => dtos.Select(static dto => dto.ToDomain());
 }

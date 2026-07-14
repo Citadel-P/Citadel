@@ -145,6 +145,36 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
     }
 
     [Fact]
+    public async Task ExecuteQueuedAsync_ShouldSucceedWithWarningWhenResticCreatesNoSnapshot()
+    {
+        Directory.CreateDirectory(Path.Combine(testRoot, "data"));
+        var setup = await CreateRepositoryPolicyAndRunAsync("backup-empty", keepLastSuccessful: 1);
+        restic.Enqueue(exitCode: 0);
+        restic.Enqueue(exitCode: 0);
+
+        var service = Services.GetRequiredService<IBackupRunExecutionService>();
+        var items = new List<BackupRunStreamItem>();
+        await foreach (var item in service.ExecuteQueuedAsync(setup.Run.Id, TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var storedRun = await uow.BackupRuns.GetAsync(setup.Run.Id, TestContext.Current.CancellationToken);
+        var logs = await uow.BackupRunLogs.GetByRunAsync(setup.Run.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(storedRun);
+        Assert.Equal(BackupRunStatus.SucceededWithWarnings, storedRun.Status);
+        Assert.Equal(BackupSnapshotAvailability.NotCreated, storedRun.SnapshotAvailability);
+        Assert.Null(storedRun.ResticSnapshotId);
+        Assert.Null(storedRun.ErrorMessage);
+        Assert.Contains(storedRun.Warnings, warning => warning.Code == "backup.snapshot_not_created");
+        Assert.Contains(items, item => item.Status == BackupRunStatus.SucceededWithWarnings);
+        Assert.Empty(logs);
+    }
+
+    [Fact]
     public async Task FinishRunAndMarkPolicyIdleAsync_ShouldNotOverwriteCancelledRun()
     {
         var setup = await CreateRepositoryPolicyAndRunAsync("backup-cancel-race", keepLastSuccessful: 1);

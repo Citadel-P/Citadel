@@ -58,6 +58,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IBackupRepositoryValidationRepository BackupRepositoryValidations { get; }
     IBackupPolicyRepository BackupPolicies { get; }
     IBackupRunRepository BackupRuns { get; }
+    IBackupRunItemRepository BackupRunItems { get; }
     IBackupRunLogRepository BackupRunLogs { get; }
     IBackupRestoreRunRepository BackupRestoreRuns { get; }
     IBackupRestoreRunLogRepository BackupRestoreRunLogs { get; }
@@ -189,6 +190,15 @@ public interface IBackupRunRepository
     Task<bool> HasActiveRunAsync(Guid policyId, CancellationToken cancellationToken);
     Task<bool> TryMarkPreparingAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
     Task<int> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
+}
+
+public interface IBackupRunItemRepository
+{
+    Task<int> AddRangeAsync(IReadOnlyCollection<BackupRunItem> items, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(BackupRunItem item, CancellationToken cancellationToken);
+    Task<IReadOnlyList<BackupRunItem>> GetByRunAsync(Guid backupRunId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<BackupRunItem>> GetByRunIdsAsync(IReadOnlyCollection<Guid> backupRunIds, CancellationToken cancellationToken);
+    Task<int> CancelPendingOrRunningAsync(Guid backupRunId, DateTimeOffset cancelledAt, CancellationToken cancellationToken);
 }
 
 public interface IBackupRunLogRepository
@@ -616,6 +626,8 @@ public interface IStackRepository
     Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<ResourceInfo>> GetGitRepositoryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<StackRelease>> GetReleasesByStackIdAsync(Guid stackId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<StackReleaseVolumeBinding>> GetReleaseVolumeBindingsAsync(Guid releaseId, CancellationToken cancellationToken);
+    Task<int> ReplaceReleaseVolumeBindingsAsync(Guid releaseId, IReadOnlyCollection<StackReleaseVolumeBinding> bindings, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);

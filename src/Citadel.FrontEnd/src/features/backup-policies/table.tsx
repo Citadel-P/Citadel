@@ -2,6 +2,7 @@ import {
   BackupPolicyView,
   BackupSourceSpec,
   BackupSourceSpecDockerVolumeBackupSource,
+  BackupSourceSpecStackBackupSource,
   ResourceControlState,
 } from '@/api/generated/api.types';
 import { ContentCard } from '@/components/custom/content-card';
@@ -14,10 +15,11 @@ import { DataTable } from '@/components/ui/data-table';
 import { TagChips } from '@/features/tags/components';
 import { useSelectedResources } from '@/lib/atoms';
 import type { DateTimeFormatter } from '@/lib/date-time';
+import { formatId } from '@/lib/utils';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData } from '@/pages/types';
 import { ColumnDef } from '@tanstack/react-table';
-import { CalendarClock, Database, HardDrive } from 'lucide-react';
+import { CalendarClock, Database, HardDrive, Layers } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -137,6 +139,19 @@ const SourceCell = ({ source }: { source: BackupSourceSpec }) => {
     );
   }
 
+  if (source.$type === 'Stack') {
+    const stackSource = source as BackupSourceSpecStackBackupSource;
+
+    return (
+      <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
+        <Layers className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate" title={stackSource.stackId}>
+          Stack {formatId(stackSource.stackId)}
+        </span>
+      </span>
+    );
+  }
+
   return (
     <span className="inline-flex items-center gap-2 text-sm">
       <Database className="size-3.5 text-muted-foreground" />
@@ -161,6 +176,7 @@ const ScheduleCell = ({ policy }: { policy: BackupPolicyView }) => {
 
 const sourceText = (source: BackupSourceSpec) => {
   if (source.$type === 'DockerVolume') return (source as BackupSourceSpecDockerVolumeBackupSource).volumeName;
+  if (source.$type === 'Stack') return (source as BackupSourceSpecStackBackupSource).stackId;
   if (source.$type === 'CitadelSystem') return 'Citadel system';
   return '';
 };

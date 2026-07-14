@@ -2,6 +2,7 @@ using Application.Features.Identity.Auth.Models;
 using Application.Features.Images.Queries;
 using Application.Features.ResourceBindings.Models;
 using Application.Features.GitRepositories.Queries;
+using Application.Services.Backups;
 using Domain;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Automation;
@@ -93,6 +94,7 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<BackupRepositoryValidationStatus>),
         typeof(JsonStringEnumConverter<BackupRunTrigger>),
         typeof(JsonStringEnumConverter<BackupRunStatus>),
+        typeof(JsonStringEnumConverter<BackupRunItemStatus>),
         typeof(JsonStringEnumConverter<BackupSnapshotAvailability>),
         typeof(JsonStringEnumConverter<BackupCoverageStatus>),
         typeof(JsonStringEnumConverter<BackupCoverageResourceType>),
@@ -185,6 +187,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(BackupSourceSpec))]
 [JsonSerializable(typeof(DockerVolumeBackupSource))]
 [JsonSerializable(typeof(CitadelSystemBackupSource))]
+[JsonSerializable(typeof(StackBackupSource))]
 [JsonSerializable(typeof(BackupRepositorySpec))]
 [JsonSerializable(typeof(FileSystemBackupRepositorySpec))]
 [JsonSerializable(typeof(S3CompatibleBackupRepositorySpec))]
@@ -202,6 +205,12 @@ namespace Application.Models;
 [JsonSerializable(typeof(BackupRepositoryValidationView))]
 [JsonSerializable(typeof(BackupRunStatus))]
 [JsonSerializable(typeof(BackupRunStatus?))]
+[JsonSerializable(typeof(BackupRunItemStatus))]
+[JsonSerializable(typeof(BackupRunItemStatus?))]
+[JsonSerializable(typeof(BackupRunStreamItem))]
+[JsonSerializable(typeof(IAsyncEnumerable<BackupRunStreamItem>))]
+[JsonSerializable(typeof(BackupRunItemView))]
+[JsonSerializable(typeof(IReadOnlyList<BackupRunItemView>))]
 [JsonSerializable(typeof(BackupPolicyInput))]
 [JsonSerializable(typeof(UpdateBackupPolicyInput))]
 [JsonSerializable(typeof(UpdateBackupPolicyInputPatchDocument))]
@@ -216,6 +225,9 @@ namespace Application.Models;
 [JsonSerializable(typeof(BackupLogsView))]
 [JsonSerializable(typeof(BackupEventsView))]
 [JsonSerializable(typeof(BackupCoverageView))]
+[JsonSerializable(typeof(StackBackupSourcePreviewView))]
+[JsonSerializable(typeof(StackBackupVolumeView))]
+[JsonSerializable(typeof(StackVolumeKind))]
 [JsonSerializable(typeof(PlatformInput))]
 [JsonSerializable(typeof(CreatePlatformInput))]
 [JsonSerializable(typeof(PrunePlatformInput))]

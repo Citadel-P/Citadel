@@ -27,6 +27,9 @@ public sealed record GetRegistryTags(Guid Id) : IQuery<Result<IReadOnlyList<TagS
 [RequirePermission(ResourceType.AutomationAction, PermissionLevel.Read)]
 public sealed record GetAutomationActionTags(Guid Id) : IQuery<Result<IReadOnlyList<TagSummary>>>;
 
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
+public sealed record GetBackupPolicyTags(Guid Id) : IQuery<Result<IReadOnlyList<TagSummary>>>;
+
 internal sealed class GetDeploymentTagsHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetDeploymentTags, Result<IReadOnlyList<TagSummary>>>
 {
     public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(GetDeploymentTags query, CancellationToken cancellationToken)
@@ -96,6 +99,18 @@ internal sealed class GetAutomationActionTagsHandler(IUnitOfWork unitOfWork) : I
             query.Id,
             async () => await unitOfWork.AutomationActions.GetAsync(query.Id, cancellationToken) is not null,
             "Automation action",
+            cancellationToken);
+}
+
+internal sealed class GetBackupPolicyTagsHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetBackupPolicyTags, Result<IReadOnlyList<TagSummary>>>
+{
+    public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(GetBackupPolicyTags query, CancellationToken cancellationToken)
+        => await ResourceTagResourceAccess.GetAsync(
+            unitOfWork,
+            TaggableResourceType.BackupPolicy,
+            query.Id,
+            async () => await unitOfWork.BackupPolicies.GetAsync(query.Id, cancellationToken) is not null,
+            "Backup policy",
             cancellationToken);
 }
 
