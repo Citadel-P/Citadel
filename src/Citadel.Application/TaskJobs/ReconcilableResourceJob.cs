@@ -5,6 +5,8 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Domain.Entities.Automation;
+using Domain.Entities.Backups;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,6 +72,30 @@ internal class ReconcilableResourceJob(
                     if (stuckImages.Any())
                     {
                         var workItem = new StuckImagesSyncWorkItem(notifQueue, dockerDaemonHub, stuckImages);
+                        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                    }
+
+                    // Backup repositories
+                    var stuckBackupRepositories = (await uow.BackupRepositories.GetStuckRepositoriesAsync(cancellationToken: cancellationToken)).ToArray();
+                    if (stuckBackupRepositories.Length > 0)
+                    {
+                        var workItem = new StuckBackupRepositoriesSyncWorkItem(stuckBackupRepositories);
+                        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                    }
+
+                    // Backup policies
+                    var stuckBackupPolicies = (await uow.BackupPolicies.GetStuckPoliciesAsync(cancellationToken: cancellationToken)).ToArray();
+                    if (stuckBackupPolicies.Length > 0)
+                    {
+                        var workItem = new StuckBackupPoliciesSyncWorkItem(stuckBackupPolicies);
+                        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                    }
+
+                    // Automation actions
+                    var stuckAutomationActions = (await uow.AutomationActions.GetStuckActionsAsync(cancellationToken: cancellationToken)).ToArray();
+                    if (stuckAutomationActions.Length > 0)
+                    {
+                        var workItem = new StuckAutomationActionsSyncWorkItem(stuckAutomationActions);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
                 }
@@ -227,6 +253,66 @@ internal class ReconcilableResourceJob(
             {
                 await notificationQueue.EnqueueAsync(new ImageNotificationWorkItem(dockerDaemonHub, image, "update"), cancellationToken);
             }
+        }
+    }
+
+    internal sealed class StuckBackupRepositoriesSyncWorkItem(IEnumerable<BackupRepository> repositories) : IDbWorkItem
+    {
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            foreach (var repository in repositories)
+            {
+                await uow.BackupRepositories.UpdateProcessingAsync(
+                    id: repository.Id,
+                    state: ResourceControlState.Idle,
+                    startedAt: null,
+                    rowVersion: repository.RowVersion,
+                    checkRowVersion: true,
+                    currentRunId: null,
+                    cancellationToken);
+            }
+
+            await uow.CommitAsync(cancellationToken);
+        }
+    }
+
+    internal sealed class StuckBackupPoliciesSyncWorkItem(IEnumerable<BackupPolicy> policies) : IDbWorkItem
+    {
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            foreach (var policy in policies)
+            {
+                await uow.BackupPolicies.UpdateProcessingAsync(
+                    id: policy.Id,
+                    state: ResourceControlState.Idle,
+                    startedAt: null,
+                    rowVersion: policy.RowVersion,
+                    checkRowVersion: true,
+                    currentRunId: null,
+                    cancellationToken);
+            }
+
+            await uow.CommitAsync(cancellationToken);
+        }
+    }
+
+    internal sealed class StuckAutomationActionsSyncWorkItem(IEnumerable<AutomationAction> actions) : IDbWorkItem
+    {
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            foreach (var action in actions)
+            {
+                await uow.AutomationActions.UpdateProcessingAsync(
+                    id: action.Id,
+                    state: ResourceControlState.Idle,
+                    startedAt: null,
+                    rowVersion: action.RowVersion,
+                    checkRowVersion: true,
+                    currentRunId: null,
+                    cancellationToken);
+            }
+
+            await uow.CommitAsync(cancellationToken);
         }
     }
 }

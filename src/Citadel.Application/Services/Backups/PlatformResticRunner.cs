@@ -48,6 +48,16 @@ internal sealed partial class PlatformResticRunner(
 
         var containerConnector = containerConnectorFactory.GetConnector(command.ConnectorType);
         var imageConnector = imageConnectorFactory.GetConnector(command.ConnectorType);
+        var preparedRepositoryPath = await EnsureRepositoryHostPathAsync(containerConnector, imageConnector, command, ct);
+        if (preparedRepositoryPath.IsFailure(out var prepareError))
+        {
+            yield return new ResticProcessEvent(
+                ResticProcessStream.StdErr,
+                Sanitize(prepareError.Message, command));
+            yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: 1);
+            yield break;
+        }
+
         var helper = await CreateAndStartHelperAsync(containerConnector, imageConnector, command, ct);
         if (!helper.IsSuccess(out var containerId, out var helperError))
         {
@@ -73,7 +83,7 @@ internal sealed partial class PlatformResticRunner(
 
             if (!exec.IsSuccess(out var binaryExec, out var execError))
             {
-                yield return new ResticProcessEvent(ResticProcessStream.StdErr, Sanitize(execError.Message, command));
+                yield return new ResticProcessEvent(ResticProcessStream.StdErr, Sanitize(ToExecErrorMessage(execError.Message, command), command));
                 yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: 1);
                 yield break;
             }
@@ -148,22 +158,86 @@ internal sealed partial class PlatformResticRunner(
                 new Hosting.Common.ErrorTypes.BadGatewayError("Backup helper container failed to start."));
         }
 
-        await Task.Delay(HelperStartProbeDelay, cancellationToken);
-        var inspect = await containerConnector.InspectAsync(
-            new InspectContainerCommand(command.PlatformAddress, containerId),
-            cancellationToken);
-
-        if (!inspect.IsSuccess(out var info) || info.State?.Running != true)
+        var running = await EnsureHelperIsRunningAsync(containerConnector, command.PlatformAddress, containerId, cancellationToken);
+        if (running.IsFailure(out var runningError))
         {
             await DeleteHelperAsync(containerConnector, command.PlatformAddress, containerId, CancellationToken.None);
-            var message = info?.State?.Error;
-            return LightResults.Result.Failure<string>(
-                new Hosting.Common.ErrorTypes.BadGatewayError(string.IsNullOrWhiteSpace(message)
-                    ? "Backup helper container exited before it was ready."
-                    : $"Backup helper container exited before it was ready: {message}"));
+            return LightResults.Result.Failure<string>(runningError);
         }
 
         return containerId;
+    }
+
+    private async Task<LightResults.Result> EnsureRepositoryHostPathAsync(
+        IContainerConnector containerConnector,
+        IImageConnector imageConnector,
+        PlatformResticCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.RepositoryHostPath))
+            return LightResults.Result.Success();
+
+        var preparation = BuildRepositoryPathPreparation(command.RepositoryHostPath);
+        if (!preparation.IsSuccess(out var path, out var pathError))
+            return LightResults.Result.Failure(pathError);
+
+        if (path is null)
+            return LightResults.Result.Success();
+
+        var helperImage = helperImageResolver.Resolve();
+        var containerName = $"citadel-backup-path-helper-{Guid.CreateVersion7():N}";
+        var create = await TryCreateRepositoryPathHelperAsync(
+            containerConnector,
+            command,
+            helperImage,
+            containerName,
+            path,
+            cancellationToken);
+
+        if (!create.IsSuccess(out var containerId, out var createError))
+        {
+            if (!IsMissingHelperImageError(createError))
+                return LightResults.Result.Failure(createError);
+
+            if (!CanPullHelperImage(helperImage))
+            {
+                return LightResults.Result.Failure(
+                    new Hosting.Common.ErrorTypes.BadGatewayError($"Backup helper image '{helperImage}' is not available on the target platform. Build or load the configured helper image on that Docker daemon before running platform backups."));
+            }
+
+            var pull = await PullHelperImageAsync(imageConnector, command.PlatformAddress, helperImage, cancellationToken);
+            if (pull.IsFailure(out var pullError))
+                return LightResults.Result.Failure(pullError);
+
+            create = await TryCreateRepositoryPathHelperAsync(
+                containerConnector,
+                command,
+                helperImage,
+                containerName,
+                path,
+                cancellationToken);
+            if (!create.IsSuccess(out containerId, out createError))
+                return LightResults.Result.Failure(createError);
+        }
+
+        try
+        {
+            var started = await containerConnector.PatchAsync(
+                new PatchContainerCommand(ContainerAction.START, command.PlatformAddress, [containerId]),
+                cancellationToken);
+            if (started.IsFailure(out var startError))
+                return LightResults.Result.Failure(startError);
+
+            var running = await EnsureHelperIsRunningAsync(containerConnector, command.PlatformAddress, containerId, cancellationToken);
+            if (running.IsFailure(out var runningError))
+                return LightResults.Result.Failure(runningError);
+
+            return await RunRepositoryPathPreparationAsync(containerConnector, command, containerId, path.ContainerPath, cancellationToken);
+        }
+        finally
+        {
+            await DeleteHelperAsync(containerConnector, command.PlatformAddress, containerId, CancellationToken.None);
+        }
     }
 
     private static async Task<LightResults.Result<string>> TryCreateHelperAsync(
@@ -242,6 +316,145 @@ internal sealed partial class PlatformResticRunner(
             cancellationToken);
     }
 
+    private static async Task<LightResults.Result<string>> TryCreateRepositoryPathHelperAsync(
+        IContainerConnector containerConnector,
+        PlatformResticCommand command,
+        string helperImage,
+        string containerName,
+        RepositoryPathPreparation path,
+        CancellationToken cancellationToken)
+    {
+        var create = await containerConnector.CreateAsync(
+            new CreateContainerCommand(
+                PlatformAddress: command.PlatformAddress,
+                ImageId: helperImage,
+                Name: containerName,
+                WorkingDir: HelperWorkDir,
+                User: "0",
+                MemoryLimit: HelperMemoryBytes,
+                CpuQuota: null,
+                MemoryReservation: null,
+                MemorySwap: HelperMemoryBytes,
+                PidsLimit: 128,
+                AutoRemove: false,
+                Privileged: false,
+                ReadonlyRootfs: false,
+                RestartPolicy: null,
+                Labels: new Dictionary<string, string>
+                {
+                    ["citadel.backup-helper"] = "true",
+                    ["citadel.backup-path-helper"] = "true",
+                    ["citadel.platform-id"] = command.PlatformId.ToString()
+                },
+                EnvVars: null,
+                Ports: null,
+                Volumes: null,
+                Mounts:
+                [
+                    new HostMount(
+                        Target: path.ContainerParentPath,
+                        Source: path.HostParentPath,
+                        Type: "bind",
+                        ReadOnly: false,
+                        Consistency: null,
+                        BindOptions: null,
+                        VolumeOptions: null)
+                ],
+                CapAdd: ["DAC_READ_SEARCH", "FOWNER"],
+                CapDrop: ["ALL"],
+                SecurityOpt: ["no-new-privileges"],
+                NetworkMode: "none",
+                Networks: null,
+                EntryPoint: [HelperExecutable],
+                Command:
+                [
+                    "-c",
+                    "trap 'exit 0' TERM INT; while :; do sleep 3600; done"
+                ]),
+            cancellationToken);
+
+        if (create.IsSuccess() || create.Errors.All(error => !IsMissingHostPathError(error.Message)))
+            return create;
+
+        return LightResults.Result.Failure<string>(
+            new Hosting.Common.ErrorTypes.BadGatewayError($"Backup repository parent path '{path.HostParentPath}' does not exist on the target platform. Create that parent directory first or choose a repository path under an existing host directory."));
+    }
+
+    private static async Task<LightResults.Result> RunRepositoryPathPreparationAsync(
+        IContainerConnector containerConnector,
+        PlatformResticCommand command,
+        string containerId,
+        string containerPath,
+        CancellationToken cancellationToken)
+    {
+        var exec = await containerConnector.ExecBinaryAsync(
+            command.PlatformAddress,
+            new ContainerBinaryExecRequest(
+                containerId,
+                [HelperExecutable, "-c", $"mkdir -p -- {ShellQuote(containerPath)}"],
+                Environment: null,
+                AttachStdout: true,
+                AttachStderr: true,
+                Tty: false),
+            cancellationToken);
+
+        if (!exec.IsSuccess(out var binaryExec, out var execError))
+            return LightResults.Result.Failure(execError);
+
+        await using (binaryExec)
+        {
+            var stdout = new StreamLineBuffer(ResticProcessStream.StdOut);
+            var stderr = new StreamLineBuffer(ResticProcessStream.StdErr);
+            var output = new List<string>();
+
+            await foreach (var chunk in binaryExec.Output.WithCancellation(cancellationToken))
+            {
+                var buffer = chunk.Stream == ContainerExecStream.Stderr ? stderr : stdout;
+                foreach (var line in buffer.Append(chunk.Data))
+                    output.Add(Sanitize(line, command));
+            }
+
+            foreach (var line in stdout.Flush())
+                output.Add(Sanitize(line, command));
+            foreach (var line in stderr.Flush())
+                output.Add(Sanitize(line, command));
+
+            var exitCode = await binaryExec.GetExitCodeAsync(CancellationToken.None);
+            if (exitCode is 0)
+                return LightResults.Result.Success();
+
+            var message = output.Count > 0
+                ? string.Join('\n', output)
+                : $"Backup repository path could not be created. Helper exited with code {exitCode ?? -1}.";
+            return LightResults.Result.Failure(
+                new Hosting.Common.ErrorTypes.BadGatewayError(message));
+        }
+    }
+
+    private static async Task<LightResults.Result> EnsureHelperIsRunningAsync(
+        IContainerConnector containerConnector,
+        string platformAddress,
+        string containerId,
+        CancellationToken cancellationToken)
+    {
+        await Task.Delay(HelperStartProbeDelay, cancellationToken);
+        var inspect = await containerConnector.InspectAsync(
+            new InspectContainerCommand(platformAddress, containerId),
+            cancellationToken);
+
+        if (!inspect.IsSuccess(out var info, out var error))
+            return LightResults.Result.Failure(error);
+
+        if (info.State?.Running == true)
+            return LightResults.Result.Success();
+
+        var message = info.State?.Error;
+        return LightResults.Result.Failure(
+            new Hosting.Common.ErrorTypes.BadGatewayError(string.IsNullOrWhiteSpace(message)
+                ? "Backup helper container exited before it was ready."
+                : $"Backup helper container exited before it was ready: {message}"));
+    }
+
     private static async Task<LightResults.Result> PullHelperImageAsync(
         IImageConnector imageConnector,
         string platformAddress,
@@ -281,6 +494,24 @@ internal sealed partial class PlatformResticRunner(
                || message.Contains("image not found", StringComparison.OrdinalIgnoreCase)
                || message.Contains("not found: manifest", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool IsMissingHostPathError(string message)
+        => message.Contains("bind source path does not exist", StringComparison.OrdinalIgnoreCase)
+           || message.Contains("invalid mount config for type \"bind\"", StringComparison.OrdinalIgnoreCase);
+
+    private string ToExecErrorMessage(string message, PlatformResticCommand command)
+    {
+        if (!IsMissingExecutableError(message, command.ResticExecutable))
+            return message;
+
+        var helperImage = helperImageResolver.Resolve();
+        return $"Backup helper image '{helperImage}' does not include '{command.ResticExecutable}'. Rebuild or pull the matching Citadel Agent image before running platform backups.";
+    }
+
+    private static bool IsMissingExecutableError(string message, string executable)
+        => message.Contains($"exec: \"{executable}\"", StringComparison.OrdinalIgnoreCase)
+           && (message.Contains("executable file not found", StringComparison.OrdinalIgnoreCase)
+               || message.Contains("not found in $PATH", StringComparison.OrdinalIgnoreCase));
 
     private static bool CanPullHelperImage(string helperImage)
     {
@@ -324,8 +555,41 @@ internal sealed partial class PlatformResticRunner(
             : sanitized[..command.MaxLineBytes] + "...";
     }
 
+    private static LightResults.Result<RepositoryPathPreparation?> BuildRepositoryPathPreparation(string repositoryHostPath)
+    {
+        var path = repositoryHostPath.Trim();
+        if (string.IsNullOrWhiteSpace(path))
+            return LightResults.Result.Success<RepositoryPathPreparation?>(null);
+
+        if (!path.StartsWith("/", StringComparison.Ordinal))
+            return LightResults.Result.Success<RepositoryPathPreparation?>(null);
+
+        var trimmed = path.TrimEnd('/');
+        if (trimmed.Length == 0)
+            return LightResults.Result.Success<RepositoryPathPreparation?>(null);
+
+        var separatorIndex = trimmed.LastIndexOf('/');
+        var parent = separatorIndex <= 0 ? "/" : trimmed[..separatorIndex];
+        var leaf = trimmed[(separatorIndex + 1)..];
+        if (string.IsNullOrWhiteSpace(leaf))
+            return LightResults.Result.Success<RepositoryPathPreparation?>(null);
+
+        return new RepositoryPathPreparation(
+            parent,
+            "/host-parent",
+            $"/host-parent/{leaf}");
+    }
+
+    private static string ShellQuote(string value)
+        => "'" + value.Replace("'", "'\"'\"'", StringComparison.Ordinal) + "'";
+
     [GeneratedRegex(@"\x1B\[[0-?]*[ -/]*[@-~]", RegexOptions.Compiled)]
     private static partial Regex AnsiRegex();
+
+    private sealed record RepositoryPathPreparation(
+        string HostParentPath,
+        string ContainerParentPath,
+        string ContainerPath);
 
     private sealed class StreamLineBuffer(ResticProcessStream stream)
     {

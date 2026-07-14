@@ -7,10 +7,14 @@ import {
   BackupRepositoryStatus,
   BackupRepositoryType,
   BackupRepositoryView,
+  LookupResourceType,
+  PlatformView,
   S3BucketLookup,
   SecretDefinitionView,
   UpdateBackupRepositoryInput,
+  ValidateBackupRepositoryInput,
 } from '@/api/generated/api.types';
+import { ResourceSelectorField } from '@/components/custom/common';
 import {
   defineField,
   defineGroupField,
@@ -84,6 +88,17 @@ export const bucketLookupOptions = {
   },
 } as const;
 
+export const fileSystemLocationOptions = {
+  Core: {
+    label: 'Core filesystem',
+    description: 'Store snapshots on the Citadel Core host or container volume.',
+  },
+  Platform: {
+    label: 'Platform filesystem',
+    description: 'Store snapshots on a selected Docker platform host.',
+  },
+} as const;
+
 export function BackupRepositoryForm({
   mode,
   resource,
@@ -115,6 +130,8 @@ export function BackupRepositoryForm({
   const original = resource ?? createDefaultInput();
   const currentSpec = mergeSpec(original.spec, update.spec);
   const selectedType = currentSpec?.$type ?? BackupRepositoryType.FileSystem;
+  const fileSystemSpec = currentSpec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+  const selectedLocation = fileSystemSpec.location ?? BackupExecutionLocation.Core;
   const specDisabled = disabled || (mode === 'edit' && resource?.status === BackupRepositoryStatus.Ready);
 
   const schema = useMemo(
@@ -186,13 +203,64 @@ export function BackupRepositoryForm({
               }),
               ...(selectedType === BackupRepositoryType.FileSystem
                 ? [
+                    defineField<BackupRepositoryFormInput, 'spec.location'>({
+                      key: 'spec.location',
+                      label: 'Location',
+                      required: true,
+                      disabled: specDisabled,
+                      description: 'Choose where this filesystem repository is physically stored.',
+                      render: (value, set) => (
+                        <ItemSelector
+                          collection={fileSystemLocationOptions}
+                          value={value ?? BackupExecutionLocation.Core}
+                          disabled={specDisabled}
+                          onChange={(location: BackupExecutionLocation) =>
+                            set({
+                              spec: {
+                                location,
+                                platformId:
+                                  location === BackupExecutionLocation.Platform ? fileSystemSpec.platformId : null,
+                              } as any,
+                            })
+                          }
+                        />
+                      ),
+                    }),
+                    ...(selectedLocation === BackupExecutionLocation.Platform
+                      ? [
+                          defineField<BackupRepositoryFormInput, 'spec.platformId'>({
+                            key: 'spec.platformId',
+                            label: 'Platform',
+                            required: true,
+                            disabled: specDisabled,
+                            description: 'Platform whose host filesystem stores this repository.',
+                            validate: (value) =>
+                              selectedLocation === BackupExecutionLocation.Platform && !value
+                                ? 'Platform is required'
+                                : null,
+                            render: (value, set) => (
+                              <ResourceSelectorField
+                                targetType={LookupResourceType.Platform}
+                                selected={value ?? undefined}
+                                disabled={specDisabled}
+                                onSelect={(platform: PlatformView | undefined) =>
+                                  set({ spec: { platformId: platform?.id ?? null } as any })
+                                }
+                                placeholder="Select Platform"
+                              />
+                            ),
+                          }),
+                        ]
+                      : []),
                     defineField<BackupRepositoryFormInput, 'spec.path'>({
                       key: 'spec.path',
                       label: 'Repository Path',
                       required: true,
                       disabled: specDisabled,
                       description:
-                        'Filesystem path for this repository. Relative paths are created under the configured backup repository root.',
+                        selectedLocation === BackupExecutionLocation.Core
+                          ? 'Core filesystem path. Relative paths are created under the configured Core backup repository root.'
+                          : 'Platform host path where the repository will be stored.',
                       render: (value, set) => (
                         <FieldInput
                           value={value ?? ''}
@@ -343,7 +411,7 @@ export function BackupRepositoryForm({
         ],
       }),
     }),
-    [mode, resource?.status, selectedType, specDisabled],
+    [fileSystemSpec.platformId, mode, resource?.status, selectedLocation, selectedType, specDisabled],
   );
 
   return (
@@ -485,10 +553,27 @@ export function normalizeSpec(spec: BackupRepositorySpec): BackupRepositorySpec 
   }
 
   const fileSystem = spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+  const location = fileSystem.location ?? BackupExecutionLocation.Core;
   return {
     $type: 'FileSystem',
-    location: fileSystem.location ?? BackupExecutionLocation.Core,
-    platformId: fileSystem.platformId ?? null,
+    location,
+    platformId: location === BackupExecutionLocation.Platform ? fileSystem.platformId : null,
     path: fileSystem.path,
+  };
+}
+
+export function getRepositoryOperationContext(repository: BackupRepositoryView): ValidateBackupRepositoryInput {
+  if (repository.spec.$type === 'FileSystem') {
+    const fileSystem = repository.spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+    const location = fileSystem.location ?? BackupExecutionLocation.Core;
+    return {
+      location,
+      platformId: location === BackupExecutionLocation.Platform ? fileSystem.platformId ?? null : null,
+    };
+  }
+
+  return {
+    location: BackupExecutionLocation.Core,
+    platformId: null,
   };
 }

@@ -16,7 +16,41 @@ For filesystem repositories:
 - **Core** location stores backups on the Citadel Core host or container volume.
 - **Platform** location stores backups on the selected Docker platform.
 
+Choose the repository location based on where the backup runs:
+
+- Use **Core filesystem** for Citadel system backups and Docker volume backups from a local platform.
+- Use **Platform filesystem** for Docker volume, stack, or deployment backups from a regular agent or edge agent when snapshots should stay on that platform host.
+- Use **S3 compatible** when backups should be independent of the Core host and platform host filesystem.
+
+Citadel prevents policies that combine a remote regular agent or edge agent source with a Core filesystem repository. Core cannot directly write a filesystem snapshot for Docker volumes that live behind an agent.
+
 For remote regular agent and edge agent platforms, prefer an S3-compatible repository unless you explicitly want snapshots stored on that platform's host filesystem.
+
+### Filesystem Repository Paths
+
+Filesystem repository paths are resolved where the repository is executed:
+
+- **Core filesystem** paths are on the Citadel Core host or inside the Core container volume.
+- **Platform filesystem** paths are on the selected platform's Docker host.
+- **Regular agent** and **edge agent** platform paths are still Docker host paths, not paths inside the agent container.
+
+For example, a Platform filesystem repository path of `/srv/backup-01` on an agent platform creates the restic repository on the Docker host managed by that agent. The repository contains folders such as `config`, `data`, `index`, `keys`, `locks`, and `snapshots`.
+
+When Citadel runs against Docker Desktop on Windows, Linux-style paths such as `/srv/backup-01` are usually inside Docker Desktop's Linux VM filesystem. They will not appear as `C:\srv\backup-01` or `D:\srv\backup-01` in Windows Explorer unless that path is explicitly backed by a shared Windows bind mount.
+
+To inspect a Platform filesystem repository on the same Docker daemon, run a temporary container:
+
+```powershell
+docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup citadel-agent:dev
+```
+
+Then inside the container:
+
+```sh
+ls -la /backup
+```
+
+Check the path carefully. `/srv/backup-01` and `/serv/backup-01` are different paths.
 
 After creating a repository:
 

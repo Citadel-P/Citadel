@@ -27,13 +27,13 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
                 Id, Name, Description, Code, DefaultArgsJson, Enabled,
                 ScheduleEnabled, ScheduleCron, ScheduleTimeZone,
                 Webhook, TimeoutSeconds, AlertOnFailure,
-                RunAsActorId, LastScheduledRunAt, ControlState, CurrentRunId, RowVersion,
+                RunAsActorId, LastScheduledRunAt, ControlState, CurrentRunId, ControlStartedAt, RowVersion,
                 CreatedByActorId, CreatedAt, UpdatedAt)
                 SELECT
                 @Id, @Name, @Description, @Code, @DefaultArgsJson::jsonb, @Enabled,
                 @ScheduleEnabled, @ScheduleCron, @ScheduleTimeZone,
                 @Webhook::jsonb, @TimeoutSeconds, @AlertOnFailure,
-                @RunAsActorId, @LastScheduledRunAt, @ControlState, @CurrentRunId, @RowVersion,
+                @RunAsActorId, @LastScheduledRunAt, @ControlState, @CurrentRunId, @ControlStartedAt, @RowVersion,
                 @CreatedByActorId, @CreatedAt, @UpdatedAt
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
                 RETURNING Id
@@ -64,6 +64,7 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
                 action.LastScheduledRunAt,
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(action.ControlState),
                 action.CurrentRunId,
+                action.ControlStartedAt,
                 action.RowVersion,
                 action.CreatedByActorId,
                 action.CreatedAt,
@@ -99,6 +100,7 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
                 LastScheduledRunAt = @LastScheduledRunAt,
                 ControlState = @ControlState,
                 CurrentRunId = @CurrentRunId,
+                ControlStartedAt = @ControlStartedAt,
                 RowVersion = @RowVersion,
                 UpdatedAt = @UpdatedAt
             WHERE Id = @Id
@@ -126,6 +128,7 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
                 action.LastScheduledRunAt,
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(action.ControlState),
                 action.CurrentRunId,
+                action.ControlStartedAt,
                 action.RowVersion,
                 action.UpdatedAt
             },
@@ -299,6 +302,7 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
             UPDATE Actions
             SET ControlState = @ControlState,
                 CurrentRunId = @RunId,
+                ControlStartedAt = @ControlStartedAt,
                 UpdatedAt = @UpdatedAt,
                 RowVersion = RowVersion + 1
             WHERE Id = @Id
@@ -311,6 +315,7 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
                 Id = id,
                 RunId = runId,
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 UpdatedAt = DateTime.UtcNow
             },
             transaction: tx());
@@ -322,6 +327,7 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
             UPDATE Actions
             SET ControlState = @ControlState,
                 CurrentRunId = NULL,
+                ControlStartedAt = NULL,
                 UpdatedAt = @UpdatedAt,
                 RowVersion = RowVersion + 1
             WHERE Id = @Id
@@ -336,6 +342,63 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
                 RunId = runId,
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle),
                 UpdatedAt = DateTime.UtcNow
+            },
+            transaction: tx());
+    }
+
+    public async Task<IEnumerable<AutomationAction>> GetStuckActionsAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    {
+        string sql = $$"""
+            SELECT a.*,
+                {{ResourceTagSql.TagAggregate("a")}}
+            FROM Actions a
+            WHERE a.ControlState = @ControlState
+              AND a.ControlStartedAt IS NOT NULL
+              AND a.ControlStartedAt < @ControlStartedAt
+            ORDER BY a.ControlStartedAt ASC
+            """;
+
+        var result = await db.QueryAsync<AutomationActionDto>(
+            sql,
+            new
+            {
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.AutomationAction)
+            },
+            transaction: tx());
+        return result.ToDomain();
+    }
+
+    public Task<int> UpdateProcessingAsync(
+        Guid id,
+        ResourceControlState state,
+        long? startedAt,
+        long rowVersion,
+        bool checkRowVersion,
+        Guid? currentRunId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Actions
+            SET ControlState = @State,
+                CurrentRunId = @CurrentRunId,
+                ControlStartedAt = @StartedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND (@CheckRowVersion = false OR RowVersion = @RowVersion)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                State = EnumFormatter<ResourceControlState>.GetValue(state),
+                CurrentRunId = currentRunId,
+                StartedAt = startedAt,
+                RowVersion = rowVersion,
+                CheckRowVersion = checkRowVersion
             },
             transaction: tx());
     }

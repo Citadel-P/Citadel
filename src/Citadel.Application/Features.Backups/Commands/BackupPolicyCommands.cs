@@ -89,6 +89,9 @@ public sealed record CancelBackupRun(Guid RunId) : ICommand<Result>;
 public sealed record QueueBackupRestoreRun(Guid RunId, RestoreVolumeInputModel Input) : ICommand<Result<BackupRestoreRunResult>>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
+public sealed record RunBackupRestoreVolume(Guid RunId, RestoreVolumeInputModel Input) : IStreamCommand<BackupRestoreRunStreamItem>;
+
+[RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record CancelBackupRestoreRun(Guid RestoreRunId) : ICommand<Result>;
 
 file static class BackupPolicySourceValidator
@@ -546,8 +549,62 @@ internal sealed class QueueBackupRestoreRunHandler(
     : ICommandHandler<QueueBackupRestoreRun, Result<BackupRestoreRunResult>>
 {
     public async ValueTask<Result<BackupRestoreRunResult>> Handle(QueueBackupRestoreRun command, CancellationToken cancellationToken)
+        => await BackupRestoreRunQueuer.QueueAsync(
+            unitOfWork,
+            userContextAccessor,
+            command.RunId,
+            command.Input,
+            cancellationToken);
+}
+
+internal sealed class RunBackupRestoreVolumeHandler(
+    IUnitOfWork unitOfWork,
+    IBackupRestoreRunExecutionService executionService,
+    IUserContextAccessor userContextAccessor)
+    : IStreamCommandHandler<RunBackupRestoreVolume, BackupRestoreRunStreamItem>
+{
+    public async IAsyncEnumerable<BackupRestoreRunStreamItem> Handle(
+        RunBackupRestoreVolume command,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var backupRun = await unitOfWork.BackupRuns.GetAsync(command.RunId, cancellationToken);
+        var result = await BackupRestoreRunQueuer.QueueAsync(
+            unitOfWork,
+            userContextAccessor,
+            command.RunId,
+            command.Input,
+            cancellationToken);
+
+        if (!result.IsSuccess(out var queued, out var error))
+        {
+            yield return new BackupRestoreRunStreamItem(
+                RestoreRunId: Guid.Empty,
+                Status: BackupRestoreStatus.Rejected,
+                Message: error.Message,
+                Stream: "stderr");
+            yield break;
+        }
+
+        var run = queued.Run;
+        yield return new BackupRestoreRunStreamItem(
+            RestoreRunId: run.Id,
+            Status: BackupRestoreStatus.Queued,
+            Message: $"Restore run queued for volume \"{run.TargetVolumeName}\".");
+
+        await foreach (var item in executionService.ExecuteQueuedAsync(run.Id, cancellationToken))
+            yield return item;
+    }
+}
+
+file static class BackupRestoreRunQueuer
+{
+    public static async ValueTask<Result<BackupRestoreRunResult>> QueueAsync(
+        IUnitOfWork unitOfWork,
+        IUserContextAccessor userContextAccessor,
+        Guid runId,
+        RestoreVolumeInputModel input,
+        CancellationToken cancellationToken)
+    {
+        var backupRun = await unitOfWork.BackupRuns.GetAsync(runId, cancellationToken);
         if (backupRun is null)
             return Result.Failure<BackupRestoreRunResult>(new NotFoundError("Backup run not found."));
 
@@ -557,9 +614,9 @@ internal sealed class QueueBackupRestoreRunHandler(
         var run = new BackupRestoreRun(
             backupRun.Id,
             backupRun.BackupRepositoryId,
-            command.Input.TargetPlatformId,
-            command.Input.TargetVolumeName,
-            command.Input.OverwriteExisting,
+            input.TargetPlatformId,
+            input.TargetVolumeName,
+            input.OverwriteExisting,
             userContextAccessor.Current.ActorId);
 
         await unitOfWork.BackupRestoreRuns.AddAsync(run, cancellationToken);

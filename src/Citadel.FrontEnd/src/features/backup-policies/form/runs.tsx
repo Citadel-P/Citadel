@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
+import { useTaskSheet } from '@/lib/atoms';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
@@ -91,10 +92,6 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
           key={restoreRun.id}
           run={restoreRun}
           onClose={() => setRestoreRun(undefined)}
-          onQueued={async () => {
-            await queryClient.invalidateQueries({ queryKey: ['listBackupRestoreRuns'] });
-            setRestoreRun(undefined);
-          }}
         />
       )}
     </div>
@@ -223,37 +220,32 @@ function BackupRunLogsSheet({
 function BackupRestoreDialog({
   run,
   onClose,
-  onQueued,
 }: {
   run: BackupRunView;
   onClose: () => void;
-  onQueued: () => Promise<void>;
 }) {
   const source = run.sourceSnapshot as BackupSourceSpecDockerVolumeBackupSource;
   const [targetPlatformId, setTargetPlatformId] = useState(source.platformId);
   const [targetVolumeName, setTargetVolumeName] = useState(source.volumeName);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
-  const restore = useMutate('restoreBackupVolume');
+  const { open: openSheet } = useTaskSheet('BackupPolicy');
 
-  const canSubmit = targetPlatformId && targetVolumeName.trim();
+  const canSubmit = Boolean(targetPlatformId && targetVolumeName.trim());
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!canSubmit) return;
 
-    try {
-      await restore.mutateAsync({
+    openSheet({
+      kind: 'backupRestoreRun',
+      payload: {
         id: run.id,
-        data: {
-          targetPlatformId,
-          targetVolumeName: targetVolumeName.trim(),
-          overwriteExisting,
-        },
-      } as any);
-      toast.success('Restore run queued');
-      await onQueued();
-    } catch {
-      toast.error(restore.validationErrors ?? 'Failed to queue restore run');
-    }
+        name: targetVolumeName.trim(),
+        targetPlatformId,
+        targetVolumeName: targetVolumeName.trim(),
+        overwriteExisting,
+      },
+    });
+    onClose();
   };
 
   return (
@@ -298,7 +290,7 @@ function BackupRestoreDialog({
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" disabled={!canSubmit || restore.isPending} onClick={handleSubmit}>
+          <Button type="button" disabled={!canSubmit} onClick={handleSubmit}>
             Restore
           </Button>
         </DialogFooter>

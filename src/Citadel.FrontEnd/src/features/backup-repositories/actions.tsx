@@ -1,8 +1,4 @@
-import {
-  BackupExecutionLocation,
-  BackupRepositoryView,
-  ValidateBackupRepositoryInput,
-} from '@/api/generated/api.types';
+import { BackupRepositoryView } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
@@ -10,11 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, DatabaseZap, Eye, RefreshCw, Scissors, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-
-const coreContext: ValidateBackupRepositoryInput = {
-  location: BackupExecutionLocation.Core,
-  platformId: null,
-};
+import { getRepositoryOperationContext } from './form/form';
 
 const singleSelection = (resources: BackupRepositoryView | BackupRepositoryView[]) => {
   const selected = Array.isArray(resources) ? resources[0] : resources;
@@ -51,7 +43,7 @@ const useRepositoryOperation = (
       if (!selected || multiSelect) return;
 
       try {
-        await mutation.mutateAsync({ id: selected.id, data: coreContext } as any);
+        await mutation.mutateAsync({ id: selected.id, data: getRepositoryOperationContext(selected) } as any);
         await invalidateBackupRepositoryQueries(queryClient, selected.id);
         toast.success(successMessage);
       } catch {

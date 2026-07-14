@@ -48,16 +48,30 @@ internal sealed class BackupRepositoryDestinationService(
         BackupExecutionContext context,
         CancellationToken cancellationToken)
     {
-        var load = await LoadRepositoryAsync(repositoryId, context, cancellationToken);
-        if (!load.IsSuccess(out var loaded, out var loadError))
-            return Result.Failure<BackupRepositoryValidation>(loadError!);
+        var ownerRunId = Guid.CreateVersion7();
+        var lease = await AcquireLeaseAsync(repositoryId, "Validate", ownerRunId, cancellationToken);
+        if (!lease.IsSuccess())
+            return Result.Failure<BackupRepositoryValidation>(lease.Errors);
 
-        await using var environment = loaded.Environment;
-        var result = await RunResticAsync(environment, ["snapshots", "--json"], cancellationToken);
-        var validation = ToValidation(repositoryId, context, result, DateTimeOffset.UtcNow);
+        await MarkRepositoryProcessingAsync(repositoryId, ownerRunId, cancellationToken);
 
-        await PersistValidationAsync(validation, markChecked: false, markPruned: false, cancellationToken);
-        return Result.Success(validation);
+        try
+        {
+            var load = await LoadRepositoryAsync(repositoryId, context, cancellationToken);
+            if (!load.IsSuccess(out var loaded, out var loadError))
+                return Result.Failure<BackupRepositoryValidation>(loadError!);
+
+            await using var environment = loaded.Environment;
+            var result = await RunResticAsync(environment, ["snapshots", "--json"], cancellationToken);
+            var validation = ToValidation(repositoryId, context, result, DateTimeOffset.UtcNow);
+
+            await PersistValidationAsync(validation, markChecked: false, markPruned: false, cancellationToken);
+            return Result.Success(validation);
+        }
+        finally
+        {
+            await ReleaseRepositoryOperationAsync(repositoryId, ownerRunId, CancellationToken.None);
+        }
     }
 
     public async ValueTask<Result> InitializeAsync(Guid repositoryId, BackupExecutionContext context, CancellationToken cancellationToken)
@@ -66,6 +80,8 @@ internal sealed class BackupRepositoryDestinationService(
         var lease = await AcquireLeaseAsync(repositoryId, "Initialize", ownerRunId, cancellationToken);
         if (!lease.IsSuccess())
             return Result.Failure(lease.Errors);
+
+        await MarkRepositoryProcessingAsync(repositoryId, ownerRunId, cancellationToken);
 
         try
         {
@@ -108,7 +124,7 @@ internal sealed class BackupRepositoryDestinationService(
         }
         finally
         {
-            await ReleaseLeaseAsync(repositoryId, ownerRunId, CancellationToken.None);
+            await ReleaseRepositoryOperationAsync(repositoryId, ownerRunId, CancellationToken.None);
         }
     }
 
@@ -118,6 +134,8 @@ internal sealed class BackupRepositoryDestinationService(
         var lease = await AcquireLeaseAsync(repositoryId, "Check", ownerRunId, cancellationToken);
         if (!lease.IsSuccess())
             return Result.Failure(lease.Errors);
+
+        await MarkRepositoryProcessingAsync(repositoryId, ownerRunId, cancellationToken);
 
         try
         {
@@ -136,7 +154,7 @@ internal sealed class BackupRepositoryDestinationService(
         }
         finally
         {
-            await ReleaseLeaseAsync(repositoryId, ownerRunId, CancellationToken.None);
+            await ReleaseRepositoryOperationAsync(repositoryId, ownerRunId, CancellationToken.None);
         }
     }
 
@@ -146,6 +164,8 @@ internal sealed class BackupRepositoryDestinationService(
         var lease = await AcquireLeaseAsync(repositoryId, "Prune", ownerRunId, cancellationToken);
         if (!lease.IsSuccess())
             return Result.Failure(lease.Errors);
+
+        await MarkRepositoryProcessingAsync(repositoryId, ownerRunId, cancellationToken);
 
         try
         {
@@ -164,7 +184,7 @@ internal sealed class BackupRepositoryDestinationService(
         }
         finally
         {
-            await ReleaseLeaseAsync(repositoryId, ownerRunId, CancellationToken.None);
+            await ReleaseRepositoryOperationAsync(repositoryId, ownerRunId, CancellationToken.None);
         }
     }
 
@@ -220,10 +240,19 @@ internal sealed class BackupRepositoryDestinationService(
         };
     }
 
-    private async Task ReleaseLeaseAsync(Guid repositoryId, Guid ownerRunId, CancellationToken cancellationToken)
+    private async Task MarkRepositoryProcessingAsync(Guid repositoryId, Guid ownerRunId, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.BackupRepositories.MarkProcessingAsync(repositoryId, ownerRunId, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+    }
+
+    private async Task ReleaseRepositoryOperationAsync(Guid repositoryId, Guid ownerRunId, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.BackupRepositories.MarkIdleAsync(repositoryId, ownerRunId, cancellationToken);
         await uow.BackupRepositoryLeases.ReleaseAsync(repositoryId, ownerRunId, cancellationToken);
         await uow.CommitAsync(cancellationToken);
     }

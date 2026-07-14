@@ -2683,6 +2683,14 @@ export interface BackupRepositoryView {
   /** @format uuid */
   passwordSecretId: string;
   status: BackupRepositoryStatus;
+  controlState: ResourceControlState;
+  /** @format uuid */
+  currentRunId: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  controlStartedAt: null | number | string;
   /** @format date-time */
   lastPrunedAt: any;
   /** @format date-time */
@@ -2701,6 +2709,19 @@ export interface BackupRepositoryView {
    */
   rowVersion: number | string;
   capabilities?: null | ResourceCapabilities;
+}
+
+export interface BackupRestoreRunStreamItem {
+  /** @format uuid */
+  restoreRunId: string;
+  status: null | BackupRestoreStatus;
+  message: null | string;
+  stream?: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode?: null | number | string;
 }
 
 export interface BackupRestoreRunView {
@@ -13520,6 +13541,40 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/backupRuns/${id}/restoreVolume`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BackupRuns
+     * @name RunBackupRestoreVolume
+     * @summary Run backup volume restore
+     * @request POST:/api/v1/backupRuns/{id}/restoreVolume/run
+     * @secure
+     * @response `200` `(BackupRestoreRunStreamItem)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    runBackupRestoreVolume: (
+      id: string,
+      data: RestoreVolumeInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BackupRestoreRunStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/backupRuns/${id}/restoreVolume/run`,
         method: "POST",
         body: data,
         secure: true,

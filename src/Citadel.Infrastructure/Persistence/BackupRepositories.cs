@@ -21,10 +21,12 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
         const string sql = """
             INSERT INTO BackupRepositories (
                 Id, Name, NormalizedName, Description, Type, Spec, PasswordSecretId, Status,
-                LastPrunedAt, LastCheckedAt, CreatedByActorId, CreatedAt, UpdatedAt, ArchivedAt, RowVersion)
+                ControlState, CurrentRunId, ControlStartedAt, LastPrunedAt, LastCheckedAt,
+                CreatedByActorId, CreatedAt, UpdatedAt, ArchivedAt, RowVersion)
             VALUES (
                 @Id, @Name, @NormalizedName, @Description, @Type, @Spec::jsonb, @PasswordSecretId, @Status,
-                @LastPrunedAt, @LastCheckedAt, @CreatedByActorId, @CreatedAt, @UpdatedAt, @ArchivedAt, @RowVersion)
+                @ControlState, @CurrentRunId, @ControlStartedAt, @LastPrunedAt, @LastCheckedAt,
+                @CreatedByActorId, @CreatedAt, @UpdatedAt, @ArchivedAt, @RowVersion)
             """;
 
         return db.ExecuteAsync(
@@ -39,6 +41,9 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
                 Spec = BackupMappers.SerializeRepositorySpec(repository.Spec),
                 repository.PasswordSecretId,
                 Status = EnumFormatter<BackupRepositoryStatus>.GetValue(repository.Status),
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(repository.ControlState),
+                repository.CurrentRunId,
+                repository.ControlStartedAt,
                 LastPrunedAt = BackupMappers.ToUtcDateTime(repository.LastPrunedAt),
                 LastCheckedAt = BackupMappers.ToUtcDateTime(repository.LastCheckedAt),
                 repository.CreatedByActorId,
@@ -63,6 +68,9 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
                 Spec = @Spec::jsonb,
                 PasswordSecretId = @PasswordSecretId,
                 Status = @Status,
+                ControlState = @ControlState,
+                CurrentRunId = @CurrentRunId,
+                ControlStartedAt = @ControlStartedAt,
                 LastPrunedAt = @LastPrunedAt,
                 LastCheckedAt = @LastCheckedAt,
                 UpdatedAt = @UpdatedAt,
@@ -83,6 +91,9 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
                 Spec = BackupMappers.SerializeRepositorySpec(repository.Spec),
                 repository.PasswordSecretId,
                 Status = EnumFormatter<BackupRepositoryStatus>.GetValue(repository.Status),
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(repository.ControlState),
+                repository.CurrentRunId,
+                repository.ControlStartedAt,
                 LastPrunedAt = BackupMappers.ToUtcDateTime(repository.LastPrunedAt),
                 LastCheckedAt = BackupMappers.ToUtcDateTime(repository.LastCheckedAt),
                 UpdatedAt = BackupMappers.ToUtcDateTime(repository.UpdatedAt),
@@ -128,6 +139,13 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
                   AND Status = ANY(@RestoreStatuses)
                 LIMIT 1
             ),
+            active_repository_operation AS (
+                SELECT 1
+                FROM BackupRepositories
+                WHERE Id = @Id
+                  AND ControlState = @ProcessingControlState
+                LIMIT 1
+            ),
             active_policies AS (
                 SELECT 1
                 FROM BackupPolicies
@@ -144,13 +162,16 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
                   AND ArchivedAt IS NULL
                   AND NOT EXISTS (SELECT 1 FROM active_operations)
                   AND NOT EXISTS (SELECT 1 FROM active_restores)
+                  AND NOT EXISTS (SELECT 1 FROM active_repository_operation)
                   AND NOT EXISTS (SELECT 1 FROM active_policies)
                 RETURNING 1
             )
             SELECT CASE
                 WHEN EXISTS (SELECT 1 FROM archived) THEN 0
                 WHEN NOT EXISTS (SELECT 1 FROM target) THEN 1
-                WHEN EXISTS (SELECT 1 FROM active_operations) OR EXISTS (SELECT 1 FROM active_restores) THEN 2
+                WHEN EXISTS (SELECT 1 FROM active_operations)
+                  OR EXISTS (SELECT 1 FROM active_restores)
+                  OR EXISTS (SELECT 1 FROM active_repository_operation) THEN 2
                 ELSE 3
             END
             """;
@@ -161,6 +182,7 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
             {
                 Id = id,
                 ArchivedAt = BackupMappers.ToUtcDateTime(archivedAt),
+                ProcessingControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
                 BackupStatuses = ActiveBackupStatuses(),
                 RestoreStatuses = ActiveRestoreStatuses()
             },
@@ -377,6 +399,114 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
             """;
 
         return db.ExecuteScalarAsync<bool>(sql, new { Id = id }, transaction: tx());
+    }
+
+    public Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BackupRepositories
+            SET ControlState = @ControlState,
+                CurrentRunId = @RunId,
+                ControlStartedAt = @ControlStartedAt,
+                UpdatedAt = @UpdatedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND ArchivedAt IS NULL
+            """;
+
+        var updatedAt = DateTime.UtcNow;
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                RunId = runId,
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                UpdatedAt = updatedAt
+            },
+            transaction: tx());
+    }
+
+    public Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BackupRepositories
+            SET ControlState = @ControlState,
+                CurrentRunId = NULL,
+                ControlStartedAt = NULL,
+                UpdatedAt = @UpdatedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND CurrentRunId = @RunId
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                RunId = runId,
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle),
+                UpdatedAt = DateTime.UtcNow
+            },
+            transaction: tx());
+    }
+
+    public async Task<IEnumerable<BackupRepository>> GetStuckRepositoriesAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT *
+            FROM BackupRepositories
+            WHERE ArchivedAt IS NULL
+              AND ControlState = @ControlState
+              AND ControlStartedAt IS NOT NULL
+              AND ControlStartedAt < @ControlStartedAt
+            ORDER BY ControlStartedAt ASC
+            """;
+
+        var result = await db.QueryAsync<BackupRepositoryDto>(
+            sql,
+            new
+            {
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s
+            },
+            transaction: tx());
+        return result.ToDomain();
+    }
+
+    public Task<int> UpdateProcessingAsync(
+        Guid id,
+        ResourceControlState state,
+        long? startedAt,
+        long rowVersion,
+        bool checkRowVersion,
+        Guid? currentRunId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BackupRepositories
+            SET ControlState = @State,
+                CurrentRunId = @CurrentRunId,
+                ControlStartedAt = @StartedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND (@CheckRowVersion = false OR RowVersion = @RowVersion)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                State = EnumFormatter<ResourceControlState>.GetValue(state),
+                CurrentRunId = currentRunId,
+                StartedAt = startedAt,
+                RowVersion = rowVersion,
+                CheckRowVersion = checkRowVersion
+            },
+            transaction: tx());
     }
 
     private static string[] ActiveBackupStatuses() =>
@@ -662,12 +792,12 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 INSERT INTO BackupPolicies (
                     Id, Name, NormalizedName, Description, Source, BackupRepositoryId, Enabled,
                     Cron, TimeZone, Webhook, KeepLastSuccessful, TimeoutSeconds, AlertOnFailure, RunAsActorId,
-                    ControlState, CurrentRunId, LastScheduledRunAt, FirstSuccessfulRunAt,
+                    ControlState, CurrentRunId, ControlStartedAt, LastScheduledRunAt, FirstSuccessfulRunAt,
                     CreatedByActorId, CreatedAt, UpdatedAt, ArchivedAt, RowVersion)
                 SELECT
                     @Id, @Name, @NormalizedName, @Description, @Source::jsonb, @BackupRepositoryId, @Enabled,
                     @Cron, @TimeZone, @Webhook::jsonb, @KeepLastSuccessful, @TimeoutSeconds, @AlertOnFailure, @RunAsActorId,
-                    @ControlState, @CurrentRunId, @LastScheduledRunAt, @FirstSuccessfulRunAt,
+                    @ControlState, @CurrentRunId, @ControlStartedAt, @LastScheduledRunAt, @FirstSuccessfulRunAt,
                     @CreatedByActorId, @CreatedAt, @UpdatedAt, @ArchivedAt, @RowVersion
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
                 RETURNING Id
@@ -696,6 +826,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 policy.RunAsActorId,
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(policy.ControlState),
                 policy.CurrentRunId,
+                policy.ControlStartedAt,
                 LastScheduledRunAt = BackupMappers.ToUtcDateTime(policy.LastScheduledRunAt),
                 FirstSuccessfulRunAt = BackupMappers.ToUtcDateTime(policy.FirstSuccessfulRunAt),
                 policy.CreatedByActorId,
@@ -734,6 +865,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 RunAsActorId = @RunAsActorId,
                 ControlState = @ControlState,
                 CurrentRunId = @CurrentRunId,
+                ControlStartedAt = @ControlStartedAt,
                 LastScheduledRunAt = @LastScheduledRunAt,
                 FirstSuccessfulRunAt = @FirstSuccessfulRunAt,
                 UpdatedAt = @UpdatedAt,
@@ -762,6 +894,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 policy.RunAsActorId,
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(policy.ControlState),
                 policy.CurrentRunId,
+                policy.ControlStartedAt,
                 LastScheduledRunAt = BackupMappers.ToUtcDateTime(policy.LastScheduledRunAt),
                 FirstSuccessfulRunAt = BackupMappers.ToUtcDateTime(policy.FirstSuccessfulRunAt),
                 UpdatedAt = BackupMappers.ToUtcDateTime(policy.UpdatedAt),
@@ -1146,6 +1279,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
             UPDATE BackupPolicies
             SET ControlState = @ControlState,
                 CurrentRunId = @RunId,
+                ControlStartedAt = @ControlStartedAt,
                 UpdatedAt = @UpdatedAt,
                 RowVersion = RowVersion + 1
             WHERE Id = @Id
@@ -1158,6 +1292,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 Id = id,
                 RunId = runId,
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 UpdatedAt = DateTime.UtcNow
             },
             transaction: tx());
@@ -1169,6 +1304,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
             UPDATE BackupPolicies
             SET ControlState = @ControlState,
                 CurrentRunId = NULL,
+                ControlStartedAt = NULL,
                 UpdatedAt = @UpdatedAt,
                 RowVersion = RowVersion + 1
             WHERE Id = @Id
@@ -1193,6 +1329,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
             UPDATE BackupPolicies
             SET ControlState = @ControlState,
                 CurrentRunId = NULL,
+                ControlStartedAt = NULL,
                 FirstSuccessfulRunAt = CASE
                     WHEN @Successful THEN COALESCE(FirstSuccessfulRunAt, @CompletedAt)
                     ELSE FirstSuccessfulRunAt
@@ -1212,6 +1349,64 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
                 Successful = successful,
                 CompletedAt = BackupMappers.ToUtcDateTime(completedAt),
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle)
+            },
+            transaction: tx());
+    }
+
+    public async Task<IEnumerable<BackupPolicy>> GetStuckPoliciesAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    {
+        string sql = $$"""
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BackupPolicies p
+            WHERE p.ArchivedAt IS NULL
+              AND p.ControlState = @ControlState
+              AND p.ControlStartedAt IS NOT NULL
+              AND p.ControlStartedAt < @ControlStartedAt
+            ORDER BY p.ControlStartedAt ASC
+            """;
+
+        var result = await db.QueryAsync<BackupPolicyDto>(
+            sql,
+            new
+            {
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.BackupPolicy)
+            },
+            transaction: tx());
+        return result.ToDomain();
+    }
+
+    public Task<int> UpdateProcessingAsync(
+        Guid id,
+        ResourceControlState state,
+        long? startedAt,
+        long rowVersion,
+        bool checkRowVersion,
+        Guid? currentRunId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BackupPolicies
+            SET ControlState = @State,
+                CurrentRunId = @CurrentRunId,
+                ControlStartedAt = @StartedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND (@CheckRowVersion = false OR RowVersion = @RowVersion)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                State = EnumFormatter<ResourceControlState>.GetValue(state),
+                CurrentRunId = currentRunId,
+                StartedAt = startedAt,
+                RowVersion = rowVersion,
+                CheckRowVersion = checkRowVersion
             },
             transaction: tx());
     }
@@ -1260,6 +1455,7 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             p.RunAsActorId AS PolicyRunAsActorId,
             p.ControlState AS PolicyControlState,
             p.CurrentRunId AS PolicyCurrentRunId,
+            p.ControlStartedAt AS PolicyControlStartedAt,
             p.LastScheduledRunAt AS PolicyLastScheduledRunAt,
             p.FirstSuccessfulRunAt AS PolicyFirstSuccessfulRunAt,
             p.CreatedByActorId AS PolicyCreatedByActorId,
@@ -1275,6 +1471,9 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             br.Spec AS RepositorySpec,
             br.PasswordSecretId AS RepositoryPasswordSecretId,
             br.Status AS RepositoryStatus,
+            br.ControlState AS RepositoryControlState,
+            br.CurrentRunId AS RepositoryCurrentRunId,
+            br.ControlStartedAt AS RepositoryControlStartedAt,
             br.LastPrunedAt AS RepositoryLastPrunedAt,
             br.LastCheckedAt AS RepositoryLastCheckedAt,
             br.CreatedByActorId AS RepositoryCreatedByActorId,
@@ -1578,6 +1777,7 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
                 UPDATE BackupPolicies
                 SET ControlState = @IdleControlState,
                     CurrentRunId = NULL,
+                    ControlStartedAt = NULL,
                     FirstSuccessfulRunAt = CASE
                         WHEN @Successful AND EXISTS (SELECT 1 FROM updated_run) THEN COALESCE(FirstSuccessfulRunAt, @CompletedAt)
                         ELSE FirstSuccessfulRunAt
@@ -1668,6 +1868,7 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
                 UPDATE BackupPolicies p
                 SET ControlState = @ProcessingControlState,
                     CurrentRunId = @Id,
+                    ControlStartedAt = @ControlStartedAt,
                     UpdatedAt = @StartedAt,
                     RowVersion = RowVersion + 1
                 FROM claimed c
@@ -1688,6 +1889,7 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             {
                 Id = id,
                 StartedAt = BackupMappers.ToUtcDateTime(startedAt),
+                ControlStartedAt = startedAt.ToUniversalTime().ToUnixTimeSeconds(),
                 QueuedStatus = EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Queued),
                 PreparingStatus = EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Preparing),
                 ProcessingControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing)
@@ -2172,6 +2374,9 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
             repo.Spec AS RepositorySpec,
             repo.PasswordSecretId AS RepositoryPasswordSecretId,
             repo.Status AS RepositoryStatus,
+            repo.ControlState AS RepositoryControlState,
+            repo.CurrentRunId AS RepositoryCurrentRunId,
+            repo.ControlStartedAt AS RepositoryControlStartedAt,
             repo.LastPrunedAt AS RepositoryLastPrunedAt,
             repo.LastCheckedAt AS RepositoryLastCheckedAt,
             repo.CreatedByActorId AS RepositoryCreatedByActorId,

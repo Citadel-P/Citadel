@@ -96,8 +96,8 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
             await invalidateBackupPolicyQueries(queryClient);
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'policy' : 'policies'} archived`);
-          } catch (error) {
-            /**Nope */
+          } catch (_error) {
+            toast.error(archive.validationErrors ?? 'Failed to archive selected policies');
           }
         },
       };

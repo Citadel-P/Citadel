@@ -247,6 +247,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                 LastScheduledRunAt = (DateTime?)null,
                 ControlState = ResourceControlState.Idle.ToString(),
                 CurrentRunId = (Guid?)null,
+                ControlStartedAt = (long?)null,
                 RowVersion = 0L,
                 CreatedByActorId = systemActorId,
                 CreatedAt = seedDate,
@@ -284,6 +285,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                 LastScheduledRunAt = (DateTime?)null,
                 ControlState = ResourceControlState.Idle.ToString(),
                 CurrentRunId = (Guid?)null,
+                ControlStartedAt = (long?)null,
                 RowVersion = 0L,
                 CreatedByActorId = systemActorId,
                 CreatedAt = seedDate,
@@ -1484,6 +1486,7 @@ internal static class Configuration
         action.Property<DateTime?>("LastScheduledRunAt").HasColumnType(Timestamp).IsRequired(false);
         action.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
         action.Property<Guid?>("CurrentRunId").IsRequired(false);
+        action.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
         action.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
         action.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -1499,6 +1502,7 @@ internal static class Configuration
         action.HasIndex("CreatedByActorId").HasDatabaseName($"IX_{tableName}_CreatedByActorId");
         action.HasIndex("RunAsActorId").HasDatabaseName($"IX_{tableName}_RunAsActorId");
         action.HasIndex("Enabled", "ScheduleEnabled", "ScheduleCron").HasDatabaseName($"IX_{tableName}_Schedule");
+        action.HasIndex("ControlState", "ControlStartedAt").HasDatabaseName($"IX_{tableName}_ControlState_ControlStartedAt");
 
         return builder;
     }
@@ -1572,6 +1576,9 @@ internal static class Configuration
         repository.Property<string>("Spec").HasColumnType("jsonb").IsRequired();
         repository.Property<Guid>("PasswordSecretId").IsRequired();
         repository.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        repository.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
+        repository.Property<Guid?>("CurrentRunId").IsRequired(false);
+        repository.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
         repository.Property<DateTime?>("LastPrunedAt").HasColumnType(Timestamp).IsRequired(false);
         repository.Property<DateTime?>("LastCheckedAt").HasColumnType(Timestamp).IsRequired(false);
         repository.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -1587,6 +1594,7 @@ internal static class Configuration
 
         repository.HasIndex("NormalizedName").IsUnique().HasDatabaseName($"IX_{repositoryTable}_NormalizedName");
         repository.HasIndex("Status").HasDatabaseName($"IX_{repositoryTable}_Status");
+        repository.HasIndex("ControlState", "ControlStartedAt").HasDatabaseName($"IX_{repositoryTable}_ControlState_ControlStartedAt");
         repository.HasIndex("ArchivedAt").HasDatabaseName($"IX_{repositoryTable}_ArchivedAt");
         repository.HasIndex("PasswordSecretId").HasDatabaseName($"IX_{repositoryTable}_PasswordSecretId");
 
@@ -1640,6 +1648,7 @@ internal static class Configuration
         policy.Property<Guid>("RunAsActorId").IsRequired();
         policy.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
         policy.Property<Guid?>("CurrentRunId").IsRequired(false);
+        policy.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
         policy.Property<DateTime?>("LastScheduledRunAt").HasColumnType(Timestamp).IsRequired(false);
         policy.Property<DateTime?>("FirstSuccessfulRunAt").HasColumnType(Timestamp).IsRequired(false);
         policy.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -1662,6 +1671,7 @@ internal static class Configuration
         policy.HasIndex("NormalizedName").IsUnique().HasDatabaseName($"IX_{policyTable}_NormalizedName");
         policy.HasIndex("BackupRepositoryId").HasDatabaseName($"IX_{policyTable}_BackupRepositoryId");
         policy.HasIndex("Enabled", "Cron").HasDatabaseName($"IX_{policyTable}_Schedule");
+        policy.HasIndex("ControlState", "ControlStartedAt").HasDatabaseName($"IX_{policyTable}_ControlState_ControlStartedAt");
         policy.HasIndex("ArchivedAt").HasDatabaseName($"IX_{policyTable}_ArchivedAt");
         policy.HasIndex("RunAsActorId").HasDatabaseName($"IX_{policyTable}_RunAsActorId");
         policy.HasIndex("Source").HasMethod("gin").HasDatabaseName($"IX_{policyTable}_Source_Gin");

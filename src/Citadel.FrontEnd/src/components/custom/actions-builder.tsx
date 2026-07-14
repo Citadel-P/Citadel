@@ -113,6 +113,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
         separatorBefore={act.separatorBefore}
         variant={variant}
         disabled={!canExecute || isPending}
+        loading={isPending}
         onClick={
           act.confirm || act.destructive
             ? () =>
@@ -224,6 +225,7 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
             : run
         }
         disabled={!canExecute || isPending}
+        loading={isPending}
         separatorBefore={act.separatorBefore}
       />
     );

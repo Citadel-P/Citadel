@@ -1,3 +1,4 @@
+using Application.Services.Backups;
 using Domain;
 using Domain.Entities.Deployments;
 using Hosting.Common;
@@ -1234,6 +1235,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("restoreBackupVolume");
+
+        backupRuns.MapPost("{id:guid}/restoreVolume/run", BackupRuns.RunRestoreVolume)
+            .WithSummary("Run backup volume restore")
+            .Produces<BackupRestoreRunStreamItem[]>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("runBackupRestoreVolume");
     }
 
     private static void MapBackupRestoreRunEndpoints(RouteGroupBuilder backupRestoreRuns)

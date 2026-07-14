@@ -9,6 +9,9 @@ internal sealed record BackupRepositoryDto(
     string Spec,
     Guid PasswordSecretId,
     string Status,
+    string ControlState,
+    Guid? CurrentRunId,
+    long? ControlStartedAt,
     DateTime? LastPrunedAt,
     DateTime? LastCheckedAt,
     Guid CreatedByActorId,
@@ -18,7 +21,7 @@ internal sealed record BackupRepositoryDto(
     long RowVersion)
 {
     public BackupRepositoryDto()
-        : this(Guid.Empty, string.Empty, string.Empty, null, string.Empty, "{}", Guid.Empty, string.Empty, null, null, Guid.Empty, DateTime.MinValue, DateTime.MinValue, null, 0)
+        : this(Guid.Empty, string.Empty, string.Empty, null, string.Empty, "{}", Guid.Empty, string.Empty, string.Empty, null, null, null, null, Guid.Empty, DateTime.MinValue, DateTime.MinValue, null, 0)
     {
     }
 }
@@ -56,6 +59,7 @@ internal sealed record BackupPolicyDto(
     Guid RunAsActorId,
     string ControlState,
     Guid? CurrentRunId,
+    long? ControlStartedAt,
     DateTime? LastScheduledRunAt,
     DateTime? FirstSuccessfulRunAt,
     Guid CreatedByActorId,
@@ -82,6 +86,7 @@ internal sealed record BackupPolicyDto(
             true,
             Guid.Empty,
             string.Empty,
+            null,
             null,
             null,
             null,
@@ -311,6 +316,7 @@ internal sealed record BackupRunExecutionPlanDto(
     Guid PolicyRunAsActorId,
     string PolicyControlState,
     Guid? PolicyCurrentRunId,
+    long? PolicyControlStartedAt,
     DateTime? PolicyLastScheduledRunAt,
     DateTime? PolicyFirstSuccessfulRunAt,
     Guid PolicyCreatedByActorId,
@@ -326,6 +332,9 @@ internal sealed record BackupRunExecutionPlanDto(
     string RepositorySpec,
     Guid RepositoryPasswordSecretId,
     string RepositoryStatus,
+    string RepositoryControlState,
+    Guid? RepositoryCurrentRunId,
+    long? RepositoryControlStartedAt,
     DateTime? RepositoryLastPrunedAt,
     DateTime? RepositoryLastCheckedAt,
     Guid RepositoryCreatedByActorId,
@@ -377,6 +386,7 @@ internal sealed record BackupRunExecutionPlanDto(
             null,
             null,
             null,
+            null,
             Guid.Empty,
             DateTime.MinValue,
             DateTime.MinValue,
@@ -390,6 +400,9 @@ internal sealed record BackupRunExecutionPlanDto(
             "{}",
             Guid.Empty,
             string.Empty,
+            string.Empty,
+            null,
+            null,
             null,
             null,
             Guid.Empty,
@@ -505,6 +518,9 @@ internal sealed record BackupRestoreRunExecutionPlanDto(
     string RepositorySpec,
     Guid RepositoryPasswordSecretId,
     string RepositoryStatus,
+    string RepositoryControlState,
+    Guid? RepositoryCurrentRunId,
+    long? RepositoryControlStartedAt,
     DateTime? RepositoryLastPrunedAt,
     DateTime? RepositoryLastCheckedAt,
     Guid RepositoryCreatedByActorId,
@@ -563,6 +579,9 @@ internal sealed record BackupRestoreRunExecutionPlanDto(
             "{}",
             Guid.Empty,
             string.Empty,
+            string.Empty,
+            null,
+            null,
             null,
             null,
             Guid.Empty,

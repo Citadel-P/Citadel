@@ -1,5 +1,6 @@
 using Application.Features.Backups.Commands;
 using Application.Features.Backups.Models;
+using Application.Services.Backups;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Backups;
@@ -79,6 +80,169 @@ public sealed class BackupPolicyCommandsTests
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task UpdateBackupPolicy_ShouldRejectRemoteDockerVolumeSourceWithCoreFilesystemRepository()
+    {
+        var platformId = Guid.CreateVersion7();
+        var repository = CreateRepository(new FileSystemBackupRepositorySpec(
+            BackupExecutionLocation.Core,
+            PlatformId: null,
+            Path: "remote-volume-backups"));
+        var policy = CreatePolicy(repository.Id, new CitadelSystemBackupSource());
+        var backupPolicies = CreateBackupPolicyRepository(policy);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(x => x.GetInfoAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PlatformConnectionInfo(platformId, "agent-01", "http://agent:9000", PlatformConnectorType.Agent));
+        var unitOfWork = CreateUnitOfWork(repository, backupPolicies.Object, platforms.Object);
+        var handler = CreateUpdateHandler(unitOfWork.Object);
+
+        var result = await handler.Handle(
+            new UpdateBackupPolicy(
+                policy.Id,
+                new UpdateBackupPolicyInputModel(Source: new DockerVolumeBackupSource(platformId, "app-data")),
+                UpdateDescription: false,
+                UpdateSource: true,
+                UpdateBackupRepository: false,
+                UpdateCron: false,
+                UpdateTimeZone: false,
+                UpdateWebhook: false),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess(out _, out var error));
+        Assert.Equal(
+            "Core filesystem backup repositories cannot back up remote Docker volumes. Use an S3-compatible repository or a filesystem repository on the same platform.",
+            error.Message);
+        backupPolicies.Verify(x => x.UpdateAsync(It.IsAny<BackupPolicy>(), It.IsAny<CancellationToken>()), Times.Never);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateBackupPolicy_ShouldRejectCoreFilesystemRepositoryForExistingRemoteDockerVolumeSource()
+    {
+        var platformId = Guid.CreateVersion7();
+        var originalRepository = CreateRepository(new S3CompatibleBackupRepositorySpec(
+            Endpoint: new Uri("https://s3.example.com"),
+            Bucket: "citadel-backups",
+            Prefix: null,
+            Region: null,
+            BucketLookup: S3BucketLookup.Auto,
+            AccessKeySecretId: Guid.CreateVersion7(),
+            SecretKeySecretId: Guid.CreateVersion7(),
+            SessionTokenSecretId: null));
+        var coreRepository = CreateRepository(new FileSystemBackupRepositorySpec(
+            BackupExecutionLocation.Core,
+            PlatformId: null,
+            Path: "remote-volume-backups"));
+        var policy = CreatePolicy(originalRepository.Id, new DockerVolumeBackupSource(platformId, "app-data"));
+        var backupPolicies = CreateBackupPolicyRepository(policy);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(x => x.GetInfoAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PlatformConnectionInfo(platformId, "edge-01", "edge://edge-01", PlatformConnectorType.EdgeAgent));
+        var unitOfWork = CreateUnitOfWork(coreRepository, backupPolicies.Object, platforms.Object);
+        var handler = CreateUpdateHandler(unitOfWork.Object);
+
+        var result = await handler.Handle(
+            new UpdateBackupPolicy(
+                policy.Id,
+                new UpdateBackupPolicyInputModel(BackupRepositoryId: coreRepository.Id),
+                UpdateDescription: false,
+                UpdateSource: false,
+                UpdateBackupRepository: true,
+                UpdateCron: false,
+                UpdateTimeZone: false,
+                UpdateWebhook: false),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess(out _, out var error));
+        Assert.Equal(
+            "Core filesystem backup repositories cannot back up remote Docker volumes. Use an S3-compatible repository or a filesystem repository on the same platform.",
+            error.Message);
+        backupPolicies.Verify(x => x.UpdateAsync(It.IsAny<BackupPolicy>(), It.IsAny<CancellationToken>()), Times.Never);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RunBackupRestoreVolume_ShouldReturnRejectedWhenBackupRunDoesNotExist()
+    {
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((BackupRun?)null);
+        var restoreRuns = new Mock<IBackupRestoreRunRepository>();
+        var unitOfWork = CreateUnitOfWork(backupRuns.Object, restoreRuns.Object);
+        var executionService = new Mock<IBackupRestoreRunExecutionService>();
+        var handler = new RunBackupRestoreVolumeHandler(unitOfWork.Object, executionService.Object, CreateUserContextAccessor());
+
+        var items = await ToListAsync(handler.Handle(
+            new RunBackupRestoreVolume(
+                Guid.CreateVersion7(),
+                new RestoreVolumeInputModel(Guid.CreateVersion7(), "restored-data", OverwriteExisting: false)),
+            TestContext.Current.CancellationToken));
+
+        var item = Assert.Single(items);
+        Assert.Equal(BackupRestoreStatus.Rejected, item.Status);
+        Assert.Equal("Backup run not found.", item.Message);
+        restoreRuns.Verify(x => x.AddAsync(It.IsAny<BackupRestoreRun>(), It.IsAny<CancellationToken>()), Times.Never);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+        executionService.Verify(
+            x => x.ExecuteQueuedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RunBackupRestoreVolume_ShouldQueueRestoreRunAndStreamExecution()
+    {
+        var backupRun = CreateSuccessfulBackupRun();
+        BackupRestoreRun? restoreRun = null;
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.GetAsync(backupRun.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(backupRun);
+        var restoreRuns = new Mock<IBackupRestoreRunRepository>();
+        restoreRuns
+            .Setup(x => x.AddAsync(It.IsAny<BackupRestoreRun>(), It.IsAny<CancellationToken>()))
+            .Callback<BackupRestoreRun, CancellationToken>((run, _) => restoreRun = run)
+            .ReturnsAsync(1);
+        var unitOfWork = CreateUnitOfWork(backupRuns.Object, restoreRuns.Object);
+        var executionService = new Mock<IBackupRestoreRunExecutionService>();
+        executionService
+            .Setup(x => x.ExecuteQueuedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns((Guid runId, CancellationToken _) => ToAsyncEnumerable(
+                new BackupRestoreRunStreamItem(runId, BackupRestoreStatus.Running, "Restoring volume."),
+                new BackupRestoreRunStreamItem(runId, BackupRestoreStatus.Succeeded, "Restore finished.")));
+        var handler = new RunBackupRestoreVolumeHandler(unitOfWork.Object, executionService.Object, CreateUserContextAccessor());
+
+        var items = await ToListAsync(handler.Handle(
+            new RunBackupRestoreVolume(
+                backupRun.Id,
+                new RestoreVolumeInputModel(Guid.CreateVersion7(), "restored-data", OverwriteExisting: true)),
+            TestContext.Current.CancellationToken));
+
+        Assert.NotNull(restoreRun);
+        Assert.Collection(
+            items,
+            item =>
+            {
+                Assert.Equal(restoreRun.Id, item.RestoreRunId);
+                Assert.Equal(BackupRestoreStatus.Queued, item.Status);
+            },
+            item =>
+            {
+                Assert.Equal(restoreRun.Id, item.RestoreRunId);
+                Assert.Equal(BackupRestoreStatus.Running, item.Status);
+            },
+            item =>
+            {
+                Assert.Equal(restoreRun.Id, item.RestoreRunId);
+                Assert.Equal(BackupRestoreStatus.Succeeded, item.Status);
+            });
+        restoreRuns.Verify(x => x.AddAsync(It.IsAny<BackupRestoreRun>(), It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        executionService.Verify(x => x.ExecuteQueuedAsync(restoreRun.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static CreateBackupPolicy CreatePolicyCommand(Guid repositoryId, BackupSourceSpec source)
         => new(new BackupPolicyInputModel(
             Name: "daily-volume-backup",
@@ -102,12 +266,27 @@ public sealed class BackupPolicyCommandsTests
             Mock.Of<IStackBackupVolumeResolver>(),
             Mock.Of<IDeploymentBackupVolumeResolver>());
 
+    private static UpdateBackupPolicyHandler CreateUpdateHandler(IUnitOfWork unitOfWork)
+        => new(
+            unitOfWork,
+            Mock.Of<IStackBackupVolumeResolver>(),
+            Mock.Of<IDeploymentBackupVolumeResolver>());
+
     private static Mock<IBackupPolicyRepository> CreateBackupPolicyRepository()
     {
         var backupPolicies = new Mock<IBackupPolicyRepository>();
         backupPolicies
             .Setup(x => x.ExistsByNormalizedNameAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
+        return backupPolicies;
+    }
+
+    private static Mock<IBackupPolicyRepository> CreateBackupPolicyRepository(BackupPolicy policy)
+    {
+        var backupPolicies = CreateBackupPolicyRepository();
+        backupPolicies
+            .Setup(x => x.GetAsync(policy.Id, It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync(policy);
         return backupPolicies;
     }
 
@@ -131,6 +310,17 @@ public sealed class BackupPolicyCommandsTests
         return unitOfWork;
     }
 
+    private static Mock<IUnitOfWork> CreateUnitOfWork(
+        IBackupRunRepository backupRuns,
+        IBackupRestoreRunRepository backupRestoreRuns)
+    {
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.BackupRuns).Returns(backupRuns);
+        unitOfWork.Setup(x => x.BackupRestoreRuns).Returns(backupRestoreRuns);
+        unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        return unitOfWork;
+    }
+
     private static BackupRepository CreateRepository(BackupRepositorySpec spec)
         => new(
             name: "repo",
@@ -139,6 +329,53 @@ public sealed class BackupPolicyCommandsTests
             passwordSecretId: Guid.CreateVersion7(),
             createdByActorId: Guid.CreateVersion7(),
             status: BackupRepositoryStatus.Ready);
+
+    private static BackupPolicy CreatePolicy(Guid repositoryId, BackupSourceSpec source)
+        => new(
+            name: "policy",
+            description: null,
+            source: source,
+            backupRepositoryId: repositoryId,
+            enabled: true,
+            cron: null,
+            timeZone: null,
+            webhook: null,
+            keepLastSuccessful: BackupPolicy.DefaultKeepLastSuccessful,
+            timeoutSeconds: BackupPolicy.DefaultTimeoutSeconds,
+            alertOnFailure: true,
+            runAsActorId: Guid.CreateVersion7(),
+            createdByActorId: Guid.CreateVersion7());
+
+    private static BackupRun CreateSuccessfulBackupRun()
+        => new(
+            backupPolicyId: Guid.CreateVersion7(),
+            backupRepositoryId: Guid.CreateVersion7(),
+            policyNameSnapshot: "policy",
+            sourceSnapshot: new DockerVolumeBackupSource(Guid.CreateVersion7(), "app-data"),
+            repositoryTypeSnapshot: BackupRepositoryType.FileSystem,
+            trigger: BackupRunTrigger.Manual,
+            triggerSourceId: null,
+            triggeredByActorId: Guid.CreateVersion7(),
+            status: BackupRunStatus.Succeeded,
+            resticSnapshotId: "snapshot-01",
+            snapshotAvailability: BackupSnapshotAvailability.Available,
+            completedAt: DateTimeOffset.UtcNow);
+
+    private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> stream)
+    {
+        var items = new List<T>();
+        await foreach (var item in stream)
+            items.Add(item);
+        return items;
+    }
+
+    private static async IAsyncEnumerable<T> ToAsyncEnumerable<T>(params T[] items)
+    {
+        foreach (var item in items)
+            yield return item;
+
+        await Task.CompletedTask;
+    }
 
     private static IUserContextAccessor CreateUserContextAccessor()
     {

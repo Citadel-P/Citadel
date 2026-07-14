@@ -46,9 +46,11 @@ import {
   AutomationActionRunStreamItem,
   BackupRunStatus,
   BackupRunStreamItem,
+  BackupRestoreStatus,
   RollbackStackInput,
   RunAutomationActionInput,
   QueueBackupRunInput,
+  RestoreVolumeInput,
   TestAutomationActionInput,
   StackReleaseSource,
   StackSnapshot,
@@ -71,10 +73,19 @@ type DeployParams = { name: string } & ApplyDeploymentInput;
 type StackDeployParams = { name: string } & ApplyStackInput;
 type StackRollbackParams = { name: string; version?: string } & RollbackStackInput;
 type BackupRunParams = { id: string; name: string } & QueueBackupRunInput;
+type BackupRestoreRunParams = { id: string; name: string } & RestoreVolumeInput;
 type AutomationActionRunParams = {
   id: string;
   name: string;
 } & (({ mode: 'run' } & RunAutomationActionInput) | ({ mode: 'test' } & TestAutomationActionInput));
+
+type BackupRestoreRunStreamItem = {
+  restoreRunId: string;
+  status?: BackupRestoreStatus | null;
+  message?: string | null;
+  stream?: string | null;
+  exitCode?: number | null;
+};
 
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
@@ -85,6 +96,7 @@ export type TaskSpec =
   | { kind: 'stack'; payload: Record<string, unknown> }
   | { kind: 'stackRollback'; payload: StackRollbackParams }
   | { kind: 'backupRun'; payload: BackupRunParams }
+  | { kind: 'backupRestoreRun'; payload: BackupRestoreRunParams }
   | { kind: 'automationActionRun'; payload: AutomationActionRunParams };
 
 export interface TaskSheetState {
@@ -894,6 +906,11 @@ function BackupRunTaskRenderer({ payload }: { payload: BackupRunParams; type: Re
   return <TaskStreamLayout title="Backup" refName={payload.name} type="BackupPolicy" state={state as any} />;
 }
 
+function BackupRestoreRunTaskRenderer({ payload }: { payload: BackupRestoreRunParams; type: ResourceType }) {
+  const state = useBackupRestoreRunProgress(payload);
+  return <TaskStreamLayout title="Restore" refName={payload.name} type="BackupPolicy" state={state as any} />;
+}
+
 function AutomationActionRunTaskRenderer({ payload }: { payload: AutomationActionRunParams; type: ResourceType }) {
   const state = useAutomationActionRunProgress(payload);
   const title = payload.mode === 'test' ? 'Test Action' : 'Run Action';
@@ -914,6 +931,7 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   stack: ApplyStackTaskRenderer,
   stackRollback: RollbackStackTaskRenderer,
   backupRun: BackupRunTaskRenderer,
+  backupRestoreRun: BackupRestoreRunTaskRenderer,
   automationActionRun: AutomationActionRunTaskRenderer,
   activity: ActivityTaskRenderer,
   alertEvent: AlertEventTaskRenderer,
@@ -1053,12 +1071,70 @@ function useBackupRunProgress(params: BackupRunParams) {
   });
 
   useEffect(() => {
+    if (!state.isPending) return;
+
+    queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
+    queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
+
+    const timeout = window.setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
+      queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
+    }, 750);
+
+    return () => window.clearTimeout(timeout);
+  }, [id, queryClient, state.isPending]);
+
+  useEffect(() => {
     if (!state.isSuccess && !state.error) return;
 
     queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
     queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
     queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
     queryClient.invalidateQueries({ queryKey: ['listBackupRuns', { query: { policyId: id, limit: 50 } }] });
+  }, [id, queryClient, state.error, state.isSuccess]);
+
+  return state;
+}
+
+function useBackupRestoreRunProgress(params: BackupRestoreRunParams) {
+  const { id, targetPlatformId, targetVolumeName, overwriteExisting } = params;
+  const queryClient = useQueryClient();
+
+  const request: RestoreVolumeInput = useMemo(
+    () => ({
+      targetPlatformId,
+      targetVolumeName,
+      overwriteExisting,
+    }),
+    [overwriteExisting, targetPlatformId, targetVolumeName],
+  );
+
+  const state = useStreamProgress<RestoreVolumeInput, BackupRestoreRunStreamItem>({
+    endpoint: `api/v1/backupRuns/${encodeURIComponent(id)}/restoreVolume/run`,
+    request,
+    successMessage: 'Restore run finished',
+    errorMessageDefault: 'Failed to restore backup',
+    pendingMessage: 'Starting restore run...',
+    streamFieldIsMetadata: true,
+    getError: (item) => {
+      if (item.status === BackupRestoreStatus.Failed
+        || item.status === BackupRestoreStatus.Rejected
+        || item.status === BackupRestoreStatus.TimedOut
+        || item.status === BackupRestoreStatus.Cancelled) {
+        return item.message;
+      }
+
+      return null;
+    },
+  });
+
+  useEffect(() => {
+    if (!state.isSuccess && !state.error) return;
+
+    queryClient.invalidateQueries({ queryKey: ['listBackupRestoreRuns'] });
+    queryClient.invalidateQueries({ queryKey: ['listBackupRestoreRuns', { query: { backupRunId: id, limit: 50 } }] });
+    queryClient.invalidateQueries({ queryKey: ['getBackupRun', { id }] });
+    queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
   }, [id, queryClient, state.error, state.isSuccess]);
 
   return state;
@@ -1090,6 +1166,20 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
     pendingMessage: mode === 'test' ? 'Starting automation test...' : 'Starting automation action...',
     getError: (item) => item.errorMessage ?? item.error?.message,
   });
+
+  useEffect(() => {
+    if (!state.isPending) return;
+
+    queryClient.invalidateQueries({ queryKey: ['listAutomationActions'] });
+    queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id }] });
+
+    const timeout = window.setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['listAutomationActions'] });
+      queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id }] });
+    }, 750);
+
+    return () => window.clearTimeout(timeout);
+  }, [id, queryClient, state.isPending]);
 
   useEffect(() => {
     if (!state.isSuccess && !state.error) return;

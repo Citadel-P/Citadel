@@ -5,11 +5,13 @@ import {
   BackupRepositoryStatus,
   BackupRepositoryType,
   BackupRepositoryView,
-  ValidateBackupRepositoryInput,
   S3BucketLookup,
-  BackupExecutionLocation
+  BackupExecutionLocation,
+  LookupResourceType,
+  PlatformView,
+  ResourceControlState,
 } from '@/api/generated/api.types';
-import { IntegrationAddCard, IntegrationCard } from '@/components/custom/common';
+import { IntegrationAddCard, IntegrationCard, ResourceSelectorField } from '@/components/custom/common';
 import { DropdownActionButton, RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { FieldInput, FieldSwitch, ItemSelector } from '@/components/custom/form-builder';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -24,9 +26,20 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useMutate, useRead } from '@/lib/hooks';
+import { hasCapability } from '@/lib/resource-capabilities';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Cloud, DatabaseBackup, Eye, FolderLock, LoaderCircle, Plus, RefreshCw, Scissors } from 'lucide-react';
+import {
+  CheckCircle2,
+  Cloud,
+  DatabaseBackup,
+  Eye,
+  FolderLock,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Scissors,
+} from 'lucide-react';
 import { type Dispatch, type ReactNode, type SetStateAction, useState } from 'react';
 import { toast } from 'sonner';
 import { BackupRepositoryDropdownActions } from '../backup-repositories/actions';
@@ -37,6 +50,8 @@ import {
   createDefaultInput,
   createFileSystemSpec,
   createS3Spec,
+  fileSystemLocationOptions,
+  getRepositoryOperationContext,
   RepositoryTypeSelector,
   SecretSelector,
   toCreateInput,
@@ -44,10 +59,8 @@ import {
 } from '../backup-repositories/form/form';
 
 const EMPTY_REPOSITORIES: BackupRepositoryView[] = [];
-const coreContext: ValidateBackupRepositoryInput = {
-  location: BackupExecutionLocation.Core,
-  platformId: null,
-};
+type RepositoryOperation = 'validate' | 'initialize' | 'check' | 'prune';
+type PendingRepositoryOperations = Partial<Record<string, RepositoryOperation>>;
 
 export function BackupRepositoriesSection() {
   const { data, isLoading } = useRead('listBackupRepositories');
@@ -58,6 +71,18 @@ export function BackupRepositoriesSection() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<BackupRepositoryView | null>(null);
   const [input, setInput] = useState<BackupRepositoryFormInput>(createDefaultInput);
+  const [pendingOperations, setPendingOperations] = useState<PendingRepositoryOperations>({});
+
+  const setRepositoryOperation = (repositoryId: string, operation: RepositoryOperation | null) => {
+    setPendingOperations((current) => {
+      if (operation) {
+        return { ...current, [repositoryId]: operation };
+      }
+
+      const { [repositoryId]: _removed, ...next } = current;
+      return next;
+    });
+  };
 
   const openAdd = () => {
     setEditing(null);
@@ -97,7 +122,13 @@ export function BackupRepositoriesSection() {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {repositories.map((repository) => (
-            <RepositoryCard key={repository.id} repository={repository} onEdit={() => openEdit(repository)} />
+            <RepositoryCard
+              key={repository.id}
+              repository={repository}
+              pendingOperation={pendingOperations[repository.id] ?? null}
+              onPendingOperationChange={setRepositoryOperation}
+              onEdit={() => openEdit(repository)}
+            />
           ))}
 
           <IntegrationAddCard label="Add Repository" disabled={!canWrite} onClick={openAdd} />
@@ -116,10 +147,88 @@ export function BackupRepositoriesSection() {
   );
 }
 
-function RepositoryCard({ repository, onEdit }: { repository: BackupRepositoryView; onEdit: () => void }) {
+function RepositoryCard({
+  repository,
+  pendingOperation,
+  onPendingOperationChange,
+  onEdit,
+}: {
+  repository: BackupRepositoryView;
+  pendingOperation: RepositoryOperation | null;
+  onPendingOperationChange: (repositoryId: string, operation: RepositoryOperation | null) => void;
+  onEdit: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const validate = useMutate('validateBackupRepository');
+  const initialize = useMutate('initializeBackupRepository');
+  const check = useMutate('checkBackupRepository');
+  const prune = useMutate('pruneBackupRepository');
+
   const Icon = repository.type === BackupRepositoryType.S3Compatible ? Cloud : FolderLock;
   const label = repository.type === BackupRepositoryType.S3Compatible ? 'S3-compatible' : 'Filesystem';
-  const { edit: _routeEdit, ...repositoryActions } = BackupRepositoryDropdownActions;
+  const {
+    edit: _routeEdit,
+    validate: _validateAction,
+    initialize: _initializeAction,
+    check: _checkAction,
+    prune: _pruneAction,
+    ...repositoryActions
+  } = BackupRepositoryDropdownActions;
+  const canExecute = hasCapability(repository, 'canExecute');
+  const isResourceProcessing = repository.controlState === ResourceControlState.Processing;
+  const operating = pendingOperation !== null || isResourceProcessing;
+
+  const refreshRepository = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
+    await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: repository.id }] });
+  };
+
+  const runOperation = async (
+    operation: RepositoryOperation,
+    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
+    successMessage: string,
+    failureMessage: string,
+  ) => {
+    if (operating) return;
+
+    onPendingOperationChange(repository.id, operation);
+    window.setTimeout(() => {
+      void refreshRepository();
+    }, 300);
+
+    try {
+      await mutation.mutateAsync({ id: repository.id, data: getRepositoryOperationContext(repository) } as any);
+      await refreshRepository();
+      toast.success(successMessage);
+    } catch {
+      toast.error(mutation.validationErrors ?? failureMessage);
+    } finally {
+      onPendingOperationChange(repository.id, null);
+    }
+  };
+
+  const operationAction = (
+    operation: RepositoryOperation,
+    title: string,
+    icon: ReactNode,
+    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
+    successMessage: string,
+    failureMessage: string,
+    readyOnly = false,
+  ) => {
+    const loading = pendingOperation === operation;
+    const disabled = !canExecute || operating || (readyOnly && repository.status !== BackupRepositoryStatus.Ready);
+    return (
+      <DropdownActionButton
+        title={title}
+        icon={icon}
+        loading={loading}
+        disabled={disabled}
+        onClick={() => runOperation(operation, mutation, successMessage, failureMessage)}
+      />
+    );
+  };
+
   const actions = {
     edit: ({ resource }: { resource: BackupRepositoryView }) => (
       <DropdownActionButton
@@ -129,8 +238,56 @@ function RepositoryCard({ repository, onEdit }: { repository: BackupRepositoryVi
         onClick={onEdit}
       />
     ),
+    validate: () =>
+      operationAction(
+        'validate',
+        'Validate',
+        <CheckCircle2 className="h-4 w-4" />,
+        validate,
+        'Repository validated',
+        'Failed to validate repository.',
+      ),
+    initialize: () =>
+      operationAction(
+        'initialize',
+        'Initialize',
+        <DatabaseBackup className="h-4 w-4" />,
+        initialize,
+        'Repository initialized',
+        'Failed to initialize repository.',
+      ),
+    check: () =>
+      operationAction(
+        'check',
+        'Check',
+        <RefreshCw className="h-4 w-4" />,
+        check,
+        'Repository checked',
+        'Failed to check repository.',
+        true,
+      ),
+    prune: () =>
+      operationAction(
+        'prune',
+        'Prune',
+        <Scissors className="h-4 w-4" />,
+        prune,
+        'Repository pruned',
+        'Failed to prune repository.',
+        true,
+      ),
     ...repositoryActions,
   };
+  const progressLabel = pendingOperation
+    ? {
+        validate: 'Validating',
+        initialize: 'Initializing',
+        check: 'Checking',
+        prune: 'Pruning',
+      }[pendingOperation]
+    : isResourceProcessing
+      ? 'Processing'
+      : null;
 
   return (
     <IntegrationCard
@@ -149,10 +306,17 @@ function RepositoryCard({ repository, onEdit }: { repository: BackupRepositoryVi
         </div>
       }
       footerLeft={
-        <div className="flex min-w-0 items-center gap-1.5">
-          <StateIndicator value={repository.status} />
-          <span className="truncate text-xs font-medium text-muted-foreground">{label}</span>
-        </div>
+        progressLabel ? (
+          <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+            <span className="truncate text-xs font-medium">{progressLabel}</span>
+          </div>
+        ) : (
+          <div className="flex min-w-0 items-center gap-1.5">
+            <StateIndicator value={repository.status} />
+            <span className="truncate text-xs font-medium text-muted-foreground">{label}</span>
+          </div>
+        )
       }
       footerRight={<RowActionMenu resource={repository} actions={actions} />}
     />
@@ -181,8 +345,10 @@ function RepositoryDialog({
   const initialize = useMutate('initializeBackupRepository');
   const check = useMutate('checkBackupRepository');
   const prune = useMutate('pruneBackupRepository');
+  const [pendingOperation, setPendingOperation] = useState<RepositoryOperation | null>(null);
   const saving = create.isPending || update.isPending;
-  const operating = validate.isPending || initialize.isPending || check.isPending || prune.isPending;
+  const operating =
+    pendingOperation !== null || validate.isPending || initialize.isPending || check.isPending || prune.isPending;
 
   const selectedType = (input.spec?.$type ?? BackupRepositoryType.FileSystem) as BackupRepositoryType;
   const formDisabled = editing ? !(editing.capabilities?.canWrite ?? true) : false;
@@ -190,6 +356,7 @@ function RepositoryDialog({
   const isS3 = selectedType === BackupRepositoryType.S3Compatible;
   const s3Spec = input.spec as BackupRepositorySpecS3CompatibleBackupRepositorySpec;
   const fileSystemSpec = input.spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+  const fileSystemLocation = fileSystemSpec.location ?? BackupExecutionLocation.Core;
 
   const setSpec = (
     patch: Partial<
@@ -231,19 +398,23 @@ function RepositoryDialog({
   };
 
   const runOperation = async (
+    operation: RepositoryOperation,
     mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
     successMessage: string,
     failureMessage: string,
   ) => {
     if (!editing) return;
 
+    setPendingOperation(operation);
     try {
-      await mutation.mutateAsync({ id: editing.id, data: coreContext } as any);
+      await mutation.mutateAsync({ id: editing.id, data: getRepositoryOperationContext(editing) } as any);
       await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
       await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: editing.id }] });
       toast.success(successMessage);
     } catch {
       toast.error(mutation.validationErrors ?? failureMessage);
+    } finally {
+      setPendingOperation(null);
     }
   };
 
@@ -251,7 +422,9 @@ function RepositoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-175" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent
+        className="max-h-[85vh] overflow-y-auto sm:max-w-175"
+        onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
@@ -309,18 +482,56 @@ function RepositoryDialog({
           )}
 
           {!isS3 ? (
-            <div className="space-y-2">
-              <Label>Repository Path</Label>
-              <FieldInput
-                className="max-w-full"
-                value={fileSystemSpec.path ?? ''}
-                disabled={specDisabled}
-                placeholder="daily/core"
-                onChange={(path) => setSpec({ path })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Relative paths are created under the configured backup repository root.
-              </p>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label>Location</Label>
+                <ItemSelector
+                  className="max-w-full"
+                  collection={fileSystemLocationOptions}
+                  value={fileSystemLocation}
+                  disabled={specDisabled}
+                  onChange={(location: BackupExecutionLocation) =>
+                    setSpec({
+                      location,
+                      platformId:
+                        location === BackupExecutionLocation.Platform ? (fileSystemSpec.platformId ?? null) : null,
+                    })
+                  }
+                />
+              </div>
+
+              {fileSystemLocation === BackupExecutionLocation.Platform && (
+                <div className="space-y-2">
+                  <Label>Platform</Label>
+                  <ResourceSelectorField
+                    targetType={LookupResourceType.Platform}
+                    selected={fileSystemSpec.platformId ?? undefined}
+                    disabled={specDisabled}
+                    onSelect={(platform: PlatformView | undefined) => setSpec({ platformId: platform?.id ?? null })}
+                    placeholder="Select Platform"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The backup repository is stored on this platform host. Use this for regular or edge agent filesystem
+                    backups.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label>Repository Path</Label>
+                <FieldInput
+                  className="max-w-full"
+                  value={fileSystemSpec.path ?? ''}
+                  disabled={specDisabled}
+                  placeholder={fileSystemLocation === BackupExecutionLocation.Core ? 'daily/core' : '/srv/backups'}
+                  onChange={(path) => setSpec({ path })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {fileSystemLocation === BackupExecutionLocation.Core
+                    ? 'Relative paths are created under the configured Core backup repository root.'
+                    : 'Use a host path that exists on the selected platform or can be created by the backup runner.'}
+                </p>
+              </div>
             </div>
           ) : (
             <div className="space-y-5">
@@ -434,8 +645,8 @@ function RepositoryDialog({
                   Repository setup
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Initialize a new empty destination once. Validate an existing Restic repository before using it.
-                  Check and prune are maintenance actions for ready repositories.
+                  Initialize a new empty destination once. Validate an existing Restic repository before using it. Check
+                  and prune are maintenance actions for ready repositories.
                 </p>
               </div>
 
@@ -445,28 +656,36 @@ function RepositoryDialog({
                   label="Validate"
                   description="Confirm Citadel can access this repository."
                   disabled={formDisabled || operating}
-                  onClick={() => runOperation(validate, 'Repository validated', 'Failed to validate repository.')}
+                  loading={pendingOperation === 'validate'}
+                  onClick={() =>
+                    runOperation('validate', validate, 'Repository validated', 'Failed to validate repository.')
+                  }
                 />
                 <RepositoryOperationButton
                   icon={<DatabaseBackup className="size-3.5" />}
                   label="Initialize"
                   description="Create the Restic repository in an empty destination."
                   disabled={formDisabled || operating}
-                  onClick={() => runOperation(initialize, 'Repository initialized', 'Failed to initialize repository.')}
+                  loading={pendingOperation === 'initialize'}
+                  onClick={() =>
+                    runOperation('initialize', initialize, 'Repository initialized', 'Failed to initialize repository.')
+                  }
                 />
                 <RepositoryOperationButton
                   icon={<RefreshCw className="size-3.5" />}
                   label="Check"
                   description="Verify repository integrity."
                   disabled={formDisabled || operating || editing.status !== BackupRepositoryStatus.Ready}
-                  onClick={() => runOperation(check, 'Repository checked', 'Failed to check repository.')}
+                  loading={pendingOperation === 'check'}
+                  onClick={() => runOperation('check', check, 'Repository checked', 'Failed to check repository.')}
                 />
                 <RepositoryOperationButton
                   icon={<Scissors className="size-3.5" />}
                   label="Prune"
                   description="Remove unreferenced repository data."
                   disabled={formDisabled || operating || editing.status !== BackupRepositoryStatus.Ready}
-                  onClick={() => runOperation(prune, 'Repository pruned', 'Failed to prune repository.')}
+                  loading={pendingOperation === 'prune'}
+                  onClick={() => runOperation('prune', prune, 'Repository pruned', 'Failed to prune repository.')}
                 />
               </div>
             </div>
@@ -491,12 +710,14 @@ function RepositoryOperationButton({
   label,
   description,
   disabled,
+  loading,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   description: string;
   disabled?: boolean;
+  loading?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -509,7 +730,7 @@ function RepositoryOperationButton({
         disabled && 'cursor-not-allowed opacity-60 hover:border-border hover:bg-background',
       )}>
       <span className="inline-flex items-center gap-1.5 text-xs font-medium">
-        {icon}
+        {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : icon}
         {label}
       </span>
       <span className="text-xs leading-snug text-muted-foreground">{description}</span>
@@ -541,6 +762,7 @@ function validateRepositoryInput(input: BackupRepositoryFormInput, editing: Back
   }
 
   const spec = input.spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+  if (spec.location === BackupExecutionLocation.Platform && !spec.platformId) return 'Platform is required.';
   if (!spec.path?.trim()) return 'Repository path is required.';
   return null;
 }

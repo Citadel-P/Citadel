@@ -1,4 +1,5 @@
 using Domain.Contracts.Resources;
+using Domain.Entities;
 using Domain.Entities.Tags;
 
 namespace Domain.Entities.Automation;
@@ -20,9 +21,10 @@ public sealed class AutomationAction(
     DateTime? lastScheduledRunAt = null,
     ResourceControlState controlState = ResourceControlState.Idle,
     Guid? currentRunId = null,
+    long? controlStartedAt = null,
     long rowVersion = 0,
     DateTime? createdAt = null,
-    DateTime? updatedAt = null) : IAuditedEntity
+    DateTime? updatedAt = null) : IAuditedEntity, IReconcilableResource
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = NormalizeRequired(name);
@@ -41,7 +43,9 @@ public sealed class AutomationAction(
     public DateTime? LastScheduledRunAt { get; private set; } = lastScheduledRunAt;
     public ResourceControlState ControlState { get; private set; } = controlState;
     public Guid? CurrentRunId { get; private set; } = currentRunId;
+    public long? ControlStartedAt { get; private set; } = controlStartedAt;
     public long RowVersion { get; private set; } = rowVersion;
+    public Guid? ControlTriggeredBy => null;
     public DateTime CreatedAt { get; private set; } = createdAt ?? DateTime.UtcNow;
     public Guid CreatedByActorId { get; private set; } = createdByActorId;
     public DateTime UpdatedAt { get; private set; } = updatedAt ?? DateTime.UtcNow;
@@ -120,6 +124,7 @@ public sealed class AutomationAction(
     {
         ControlState = ResourceControlState.Processing;
         CurrentRunId = runId;
+        ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         Touch();
     }
 
@@ -127,6 +132,7 @@ public sealed class AutomationAction(
     {
         ControlState = ResourceControlState.Idle;
         CurrentRunId = null;
+        ControlStartedAt = null;
         Touch();
     }
 
@@ -189,6 +195,7 @@ public sealed class AutomationAction(
         DateTime? lastScheduledRunAt,
         ResourceControlState controlState,
         Guid? currentRunId,
+        long? controlStartedAt,
         long rowVersion,
         Guid createdByActorId,
         DateTime createdAt,
@@ -211,6 +218,7 @@ public sealed class AutomationAction(
             lastScheduledRunAt,
             controlState,
             currentRunId,
+            controlStartedAt,
             rowVersion,
             createdAt,
             updatedAt)

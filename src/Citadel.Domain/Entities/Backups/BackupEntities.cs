@@ -92,12 +92,15 @@ public sealed class BackupRepository(
     Guid passwordSecretId,
     Guid createdByActorId,
     BackupRepositoryStatus status = BackupRepositoryStatus.Unknown,
+    ResourceControlState controlState = ResourceControlState.Idle,
+    Guid? currentRunId = null,
+    long? controlStartedAt = null,
     DateTimeOffset? lastPrunedAt = null,
     DateTimeOffset? lastCheckedAt = null,
     DateTimeOffset? archivedAt = null,
     long rowVersion = 0,
     DateTimeOffset? createdAt = null,
-    DateTimeOffset? updatedAt = null) : IAuditedEntity
+    DateTimeOffset? updatedAt = null) : IAuditedEntity, IReconcilableResource
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = NormalizeName(name);
@@ -107,6 +110,9 @@ public sealed class BackupRepository(
     public BackupRepositorySpec Spec { get; private set; } = NormalizeSpec(spec);
     public Guid PasswordSecretId { get; private set; } = passwordSecretId;
     public BackupRepositoryStatus Status { get; private set; } = status;
+    public ResourceControlState ControlState { get; private set; } = controlState;
+    public Guid? CurrentRunId { get; private set; } = currentRunId;
+    public long? ControlStartedAt { get; private set; } = controlStartedAt;
     public DateTimeOffset? LastPrunedAt { get; private set; } = lastPrunedAt;
     public DateTimeOffset? LastCheckedAt { get; private set; } = lastCheckedAt;
     public Guid CreatedByActorId { get; private set; } = createdByActorId;
@@ -114,6 +120,7 @@ public sealed class BackupRepository(
     public DateTimeOffset UpdatedAt { get; private set; } = updatedAt ?? DateTimeOffset.UtcNow;
     public DateTimeOffset? ArchivedAt { get; private set; } = archivedAt;
     public long RowVersion { get; private set; } = rowVersion;
+    public Guid? ControlTriggeredBy => null;
 
     DateTime IAuditedEntity.CreatedAt => CreatedAt.UtcDateTime;
 
@@ -164,6 +171,25 @@ public sealed class BackupRepository(
         Touch(now);
     }
 
+    public void MarkProcessing(Guid runId, DateTimeOffset now)
+    {
+        ControlState = ResourceControlState.Processing;
+        CurrentRunId = runId;
+        ControlStartedAt = now.ToUniversalTime().ToUnixTimeSeconds();
+        Touch(now);
+    }
+
+    public void MarkIdle(Guid? runId, DateTimeOffset now)
+    {
+        if (runId.HasValue && CurrentRunId.HasValue && CurrentRunId != runId)
+            return;
+
+        ControlState = ResourceControlState.Idle;
+        CurrentRunId = null;
+        ControlStartedAt = null;
+        Touch(now);
+    }
+
     public void Archive(DateTimeOffset now)
     {
         ArchivedAt ??= now.ToUniversalTime();
@@ -188,6 +214,9 @@ public sealed class BackupRepository(
         BackupRepositorySpec spec,
         Guid passwordSecretId,
         BackupRepositoryStatus status,
+        ResourceControlState controlState,
+        Guid? currentRunId,
+        long? controlStartedAt,
         DateTimeOffset? lastPrunedAt,
         DateTimeOffset? lastCheckedAt,
         Guid createdByActorId,
@@ -195,7 +224,7 @@ public sealed class BackupRepository(
         DateTimeOffset updatedAt,
         DateTimeOffset? archivedAt,
         long rowVersion)
-        => new(name, description, spec, passwordSecretId, createdByActorId, status, lastPrunedAt, lastCheckedAt, archivedAt, rowVersion, createdAt, updatedAt)
+        => new(name, description, spec, passwordSecretId, createdByActorId, status, controlState, currentRunId, controlStartedAt, lastPrunedAt, lastCheckedAt, archivedAt, rowVersion, createdAt, updatedAt)
         {
             Id = id,
             NormalizedName = normalizedName
@@ -326,12 +355,13 @@ public sealed class BackupPolicy(
     Guid createdByActorId,
     ResourceControlState controlState = ResourceControlState.Idle,
     Guid? currentRunId = null,
+    long? controlStartedAt = null,
     DateTimeOffset? lastScheduledRunAt = null,
     DateTimeOffset? firstSuccessfulRunAt = null,
     DateTimeOffset? archivedAt = null,
     long rowVersion = 0,
     DateTimeOffset? createdAt = null,
-    DateTimeOffset? updatedAt = null) : IAuditedEntity
+    DateTimeOffset? updatedAt = null) : IAuditedEntity, IReconcilableResource
 {
     public const int DefaultKeepLastSuccessful = 14;
     public const int DefaultTimeoutSeconds = 14_400;
@@ -353,6 +383,7 @@ public sealed class BackupPolicy(
     public Guid RunAsActorId { get; private set; } = runAsActorId;
     public ResourceControlState ControlState { get; private set; } = controlState;
     public Guid? CurrentRunId { get; private set; } = currentRunId;
+    public long? ControlStartedAt { get; private set; } = controlStartedAt;
     public DateTimeOffset? LastScheduledRunAt { get; private set; } = lastScheduledRunAt;
     public DateTimeOffset? FirstSuccessfulRunAt { get; private set; } = firstSuccessfulRunAt;
     public Guid CreatedByActorId { get; private set; } = createdByActorId;
@@ -360,6 +391,7 @@ public sealed class BackupPolicy(
     public DateTimeOffset UpdatedAt { get; private set; } = updatedAt ?? DateTimeOffset.UtcNow;
     public DateTimeOffset? ArchivedAt { get; private set; } = archivedAt;
     public long RowVersion { get; private set; } = rowVersion;
+    public Guid? ControlTriggeredBy => null;
     public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
 
     DateTime IAuditedEntity.CreatedAt => CreatedAt.UtcDateTime;
@@ -452,6 +484,7 @@ public sealed class BackupPolicy(
     {
         ControlState = ResourceControlState.Processing;
         CurrentRunId = runId;
+        ControlStartedAt = now.ToUniversalTime().ToUnixTimeSeconds();
         Touch(now);
     }
 
@@ -462,6 +495,7 @@ public sealed class BackupPolicy(
 
         ControlState = ResourceControlState.Idle;
         CurrentRunId = null;
+        ControlStartedAt = null;
         Touch(now);
     }
 
@@ -538,6 +572,7 @@ public sealed class BackupPolicy(
         Guid runAsActorId,
         ResourceControlState controlState,
         Guid? currentRunId,
+        long? controlStartedAt,
         DateTimeOffset? lastScheduledRunAt,
         DateTimeOffset? firstSuccessfulRunAt,
         Guid createdByActorId,
@@ -561,6 +596,7 @@ public sealed class BackupPolicy(
             createdByActorId,
             controlState,
             currentRunId,
+            controlStartedAt,
             lastScheduledRunAt,
             firstSuccessfulRunAt,
             archivedAt,

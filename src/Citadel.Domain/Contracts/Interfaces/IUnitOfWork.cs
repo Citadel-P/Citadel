@@ -92,6 +92,8 @@ public interface IAutomationActionRepository
     Task<bool> TryMarkScheduledAsync(Guid id, DateTime scheduledMinuteUtc, CancellationToken cancellationToken);
     Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+    Task<IEnumerable<AutomationAction>> GetStuckActionsAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? currentRunId, CancellationToken cancellationToken);
 }
 
 public interface IActionRunRepository
@@ -134,6 +136,10 @@ public interface IBackupRepositoryRepository
     Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
     Task<bool> HasActiveOperationAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> HasNonArchivedPolicyAsync(Guid id, CancellationToken cancellationToken);
+    Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+    Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+    Task<IEnumerable<BackupRepository>> GetStuckRepositoriesAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? currentRunId, CancellationToken cancellationToken);
 }
 
 public interface IBackupRepositoryValidationRepository
@@ -166,6 +172,8 @@ public interface IBackupPolicyRepository
     Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAfterRunAsync(Guid id, Guid runId, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken);
+    Task<IEnumerable<BackupPolicy>> GetStuckPoliciesAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? currentRunId, CancellationToken cancellationToken);
 }
 
 public interface IBackupRunRepository

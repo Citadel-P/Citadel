@@ -28,6 +28,7 @@ internal static class AutomationMappers
             dto.LastScheduledRunAt,
             string.IsNullOrWhiteSpace(dto.ControlState) ? ResourceControlState.Idle : Enum.Parse<ResourceControlState>(dto.ControlState),
             dto.CurrentRunId,
+            dto.ControlStartedAt,
             dto.RowVersion,
             dto.CreatedByActorId,
             dto.CreatedAt,

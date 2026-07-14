@@ -5,7 +5,10 @@ using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Domain.Entities.Automation;
+using Domain.Entities.Backups;
 using Domain.Entities.Deployments;
+using Domain.Entities.ResourceBindings;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
@@ -23,6 +26,9 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<INotificationQueue> notificationMock = new();
     private Guid platformId;
+    private Guid backupRepositoryId;
+    private Guid backupPolicyId;
+    private Guid automationActionId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
@@ -102,12 +108,58 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
             size: 123456,
             createdAt: DateTime.UtcNow
         );
+        var passwordSecret = new SecretDefinition("RESTIC_PASSWORD_RECONCILABLE_RESOURCE_JOB", SecretProviderType.InternalEncrypted);
+        var backupRepository = new BackupRepository(
+            name: "Reconcilable repository",
+            description: null,
+            spec: new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "backups/reconcilable"),
+            passwordSecretId: passwordSecret.Id,
+            createdByActorId: Constants.SystemId);
+        var backupPolicy = new BackupPolicy(
+            name: "Reconcilable policy",
+            description: null,
+            source: new CitadelSystemBackupSource(),
+            backupRepositoryId: backupRepository.Id,
+            enabled: true,
+            cron: null,
+            timeZone: null,
+            webhook: null,
+            keepLastSuccessful: BackupPolicy.DefaultKeepLastSuccessful,
+            timeoutSeconds: BackupPolicy.DefaultTimeoutSeconds,
+            alertOnFailure: true,
+            runAsActorId: Constants.SystemId,
+            createdByActorId: Constants.SystemId);
+        var automationAction = new AutomationAction(
+            name: "Reconcilable action",
+            description: null,
+            code: "console.log('ok');",
+            defaultArgsJson: "{}",
+            enabled: true,
+            scheduleEnabled: false,
+            scheduleCron: null,
+            scheduleTimeZone: "UTC",
+            webhook: null,
+            timeoutSeconds: 300,
+            alertOnFailure: true,
+            runAsActorId: Constants.SystemId,
+            createdByActorId: Constants.SystemId);
+
+        backupRepositoryId = backupRepository.Id;
+        backupPolicyId = backupPolicy.Id;
+        automationActionId = automationAction.Id;
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
         await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
         await uow.Images.AddOrUpdateAsync(image, TestContext.Current.CancellationToken);
-        await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken); 
+        await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
+        await uow.SecretDefinitions.AddAsync(
+            passwordSecret,
+            new InternalSecretValue(passwordSecret.Id, "encrypted"),
+            TestContext.Current.CancellationToken);
+        await uow.BackupRepositories.AddAsync(backupRepository, TestContext.Current.CancellationToken);
+        await uow.BackupPolicies.AddAsync(backupPolicy, TestContext.Current.CancellationToken);
+        await uow.AutomationActions.AddAsync(automationAction, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
 
@@ -188,6 +240,57 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
         notificationMock.Verify(
            nq => nq.EnqueueAsync(It.IsAny<ImageNotificationWorkItem>(), It.IsAny<CancellationToken>()),
            Times.Once);
+    }
+
+    [Fact]
+    public async Task RunPeriodicJanitor_Clean_Stuck_BackupRepository()
+    {
+        await MarkBackupRepositoryAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var repository = await uow.BackupRepositories.GetAsync(backupRepositoryId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(repository);
+        Assert.Equal(ResourceControlState.Idle, repository.ControlState);
+        Assert.Null(repository.CurrentRunId);
+        Assert.Null(repository.ControlStartedAt);
+    }
+
+    [Fact]
+    public async Task RunPeriodicJanitor_Clean_Stuck_BackupPolicy()
+    {
+        await MarkBackupPolicyAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var policy = await uow.BackupPolicies.GetAsync(backupPolicyId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(policy);
+        Assert.Equal(ResourceControlState.Idle, policy.ControlState);
+        Assert.Null(policy.CurrentRunId);
+        Assert.Null(policy.ControlStartedAt);
+    }
+
+    [Fact]
+    public async Task RunPeriodicJanitor_Clean_Stuck_AutomationAction()
+    {
+        await MarkAutomationActionAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var action = await uow.AutomationActions.GetAsync(automationActionId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(action);
+        Assert.Equal(ResourceControlState.Idle, action.ControlState);
+        Assert.Null(action.CurrentRunId);
+        Assert.Null(action.ControlStartedAt);
     }
 
     [Fact]
@@ -300,6 +403,60 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
             startedAt: startedAt,
             rowVersion: image.RowVersion,
             checkRowVersion: false,
+            TestContext.Current.CancellationToken);
+
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task MarkBackupRepositoryAsync(ResourceControlState state, long? startedAt)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var repository = await uow.BackupRepositories.GetAsync(backupRepositoryId, TestContext.Current.CancellationToken);
+
+        await uow.BackupRepositories.UpdateProcessingAsync(
+            id: backupRepositoryId,
+            state: state,
+            startedAt: startedAt,
+            rowVersion: repository!.RowVersion,
+            checkRowVersion: false,
+            currentRunId: state == ResourceControlState.Processing ? Guid.CreateVersion7() : null,
+            TestContext.Current.CancellationToken);
+
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task MarkBackupPolicyAsync(ResourceControlState state, long? startedAt)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var policy = await uow.BackupPolicies.GetAsync(backupPolicyId, TestContext.Current.CancellationToken);
+
+        await uow.BackupPolicies.UpdateProcessingAsync(
+            id: backupPolicyId,
+            state: state,
+            startedAt: startedAt,
+            rowVersion: policy!.RowVersion,
+            checkRowVersion: false,
+            currentRunId: state == ResourceControlState.Processing ? Guid.CreateVersion7() : null,
+            TestContext.Current.CancellationToken);
+
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task MarkAutomationActionAsync(ResourceControlState state, long? startedAt)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var action = await uow.AutomationActions.GetAsync(automationActionId, TestContext.Current.CancellationToken);
+
+        await uow.AutomationActions.UpdateProcessingAsync(
+            id: automationActionId,
+            state: state,
+            startedAt: startedAt,
+            rowVersion: action!.RowVersion,
+            checkRowVersion: false,
+            currentRunId: state == ResourceControlState.Processing ? Guid.CreateVersion7() : null,
             TestContext.Current.CancellationToken);
 
         await uow.CommitAsync(TestContext.Current.CancellationToken);

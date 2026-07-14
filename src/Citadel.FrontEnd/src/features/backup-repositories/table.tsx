@@ -1,25 +1,32 @@
 import {
+  BackupExecutionLocation,
   BackupRepositorySpec,
   BackupRepositorySpecFileSystemBackupRepositorySpec,
   BackupRepositorySpecS3CompatibleBackupRepositorySpec,
+  BackupRepositoryStatus,
   BackupRepositoryType,
   BackupRepositoryView,
+  ResourceControlState,
 } from '@/api/generated/api.types';
-import { ContentCard } from '@/components/custom/content-card';
-import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import SortableCell from '@/components/custom/sortable-cell';
+import { IntegrationCard } from '@/components/custom/common';
+import { DropdownActionButton, RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
-import { Checkbox } from '@/components/ui/checkbox';
-import { DataTable } from '@/components/ui/data-table';
-import { useSelectedResources } from '@/lib/atoms';
-import type { DateTimeFormatter } from '@/lib/date-time';
-import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { hasCapability } from '@/lib/resource-capabilities';
+import { useMutate } from '@/lib/hooks';
+import { cn } from '@/lib/utils';
 import { ActionData } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
-import { Cloud, FolderLock } from 'lucide-react';
-import { useMemo } from 'react';
-import { Link } from 'react-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, Cloud, DatabaseBackup, Eye, FolderLock, LoaderCircle, RefreshCw, Scissors } from 'lucide-react';
+import { type FC, type ReactNode, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
+import { getRepositoryOperationContext } from './form/form';
+
+type BackupRepositoryActions = Record<
+  string,
+  FC<{ resource: BackupRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+>;
+type RepositoryOperation = 'validate' | 'initialize' | 'check' | 'prune';
 
 export function BackupRepositoriesTable({
   items,
@@ -28,119 +35,196 @@ export function BackupRepositoriesTable({
 }: {
   items: BackupRepositoryView[];
   isLoading: boolean;
-  actions: Record<
-    string,
-    React.FC<{ resource: BackupRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
-  >;
+  actions: BackupRepositoryActions;
 }) {
-  const [, setSelectedResources] = useSelectedResources<BackupRepositoryView>('BackupRepository');
-  const formatDateTime = useProfileDateTimeFormatter();
-  const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div key={index} className="h-35 animate-pulse rounded-xl border bg-muted/20" />
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-    </ContentCard>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {items.map((repository) => (
+        <RepositoryCard key={repository.id} repository={repository} actions={actions} />
+      ))}
+    </div>
   );
 }
 
-const columns = (
-  actions: Record<
-    string,
-    React.FC<{ resource: BackupRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
-  >,
-  formatDateTime: DateTimeFormatter,
-): ColumnDef<BackupRepositoryView>[] => [
-  {
-    id: 'select',
-    header: ({ table }) => (
-      <Checkbox
-        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select backup repository"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: 'name',
-    header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => <RepositoryNameRow repository={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
-  },
-  {
-    accessorKey: 'type',
-    header: ({ column }) => <SortableCell cellName="Type" column={column} />,
-    cell: ({ row }) => <RepositoryTypeCell repository={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.type.localeCompare(rowB.original.type),
-  },
-  {
-    id: 'destination',
-    header: ({ column }) => <SortableCell cellName="Destination" column={column} />,
-    cell: ({ row }) => <DestinationCell spec={row.original.spec} />,
-    sortingFn: (rowA, rowB) => destinationText(rowA.original.spec).localeCompare(destinationText(rowB.original.spec)),
-  },
-  {
-    accessorKey: 'lastCheckedAt',
-    header: ({ column }) => <SortableCell cellName="Last Check" column={column} />,
-    cell: ({ row }) => <TimestampCell value={row.original.lastCheckedAt} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) =>
-      String(rowA.original.lastCheckedAt ?? '').localeCompare(String(rowB.original.lastCheckedAt ?? '')),
-  },
-  {
-    accessorKey: 'lastPrunedAt',
-    header: ({ column }) => <SortableCell cellName="Last Prune" column={column} />,
-    cell: ({ row }) => <TimestampCell value={row.original.lastPrunedAt} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) =>
-      String(rowA.original.lastPrunedAt ?? '').localeCompare(String(rowB.original.lastPrunedAt ?? '')),
-  },
-  {
-    id: 'actions',
-    cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
-  },
-];
+function RepositoryCard({ repository, actions }: { repository: BackupRepositoryView; actions: BackupRepositoryActions }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const validate = useMutate('validateBackupRepository');
+  const initialize = useMutate('initializeBackupRepository');
+  const check = useMutate('checkBackupRepository');
+  const prune = useMutate('pruneBackupRepository');
+  const [pendingOperation, setPendingOperation] = useState<RepositoryOperation | null>(null);
 
-const RepositoryNameRow = ({ repository }: { repository: BackupRepositoryView }) => (
-  <div className="flex min-w-0 items-center gap-1">
-    <StateIndicator value={repository.status} />
-    <Link
-      to={`../backup-repositories/edit/${repository.id}`}
-      title={repository.name}
-      className="truncate text-sm hover:underline">
-      {repository.name}
-    </Link>
-  </div>
-);
-
-const RepositoryTypeCell = ({ repository }: { repository: BackupRepositoryView }) => {
   const Icon = repository.type === BackupRepositoryType.S3Compatible ? Cloud : FolderLock;
   const label = repository.type === BackupRepositoryType.S3Compatible ? 'S3-compatible' : 'Filesystem';
+  const {
+    edit: _routeEdit,
+    validate: _validateAction,
+    initialize: _initializeAction,
+    check: _checkAction,
+    prune: _pruneAction,
+    ...repositoryActions
+  } = actions;
+  const canRead = hasCapability(repository, 'canRead');
+  const canExecute = hasCapability(repository, 'canExecute');
+  const isResourceProcessing = repository.controlState === ResourceControlState.Processing;
+  const operating = pendingOperation !== null || isResourceProcessing;
+
+  const openEdit = () => {
+    if (canRead) navigate(`/backup-repositories/edit/${repository.id}`);
+  };
+
+  const runOperation = async (
+    operation: RepositoryOperation,
+    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
+    successMessage: string,
+    failureMessage: string,
+  ) => {
+    if (operating) return;
+
+    setPendingOperation(operation);
+    try {
+      await mutation.mutateAsync({ id: repository.id, data: getRepositoryOperationContext(repository) } as any);
+      await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
+      await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: repository.id }] });
+      toast.success(successMessage);
+    } catch {
+      toast.error(mutation.validationErrors ?? failureMessage);
+    } finally {
+      setPendingOperation(null);
+    }
+  };
+
+  const operationAction = (
+    operation: RepositoryOperation,
+    title: string,
+    icon: ReactNode,
+    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
+    successMessage: string,
+    failureMessage: string,
+    readyOnly = false,
+  ) => {
+    const loading = pendingOperation === operation;
+    const disabled = !canExecute || operating || (readyOnly && repository.status !== BackupRepositoryStatus.Ready);
+    return (
+      <DropdownActionButton
+        title={title}
+        icon={icon}
+        loading={loading}
+        disabled={disabled}
+        onClick={() => runOperation(operation, mutation, successMessage, failureMessage)}
+      />
+    );
+  };
+
+  const cardActions = {
+    edit: () => (
+      <DropdownActionButton
+        title="Edit"
+        icon={<Eye className="h-4 w-4" />}
+        disabled={!canRead}
+        onClick={openEdit}
+      />
+    ),
+    validate: () =>
+      operationAction(
+        'validate',
+        'Validate',
+        <CheckCircle2 className="h-4 w-4" />,
+        validate,
+        'Repository validated',
+        'Failed to validate repository.',
+      ),
+    initialize: () =>
+      operationAction(
+        'initialize',
+        'Initialize',
+        <DatabaseBackup className="h-4 w-4" />,
+        initialize,
+        'Repository initialized',
+        'Failed to initialize repository.',
+      ),
+    check: () =>
+      operationAction(
+        'check',
+        'Check',
+        <RefreshCw className="h-4 w-4" />,
+        check,
+        'Repository checked',
+        'Failed to check repository.',
+        true,
+      ),
+    prune: () =>
+      operationAction(
+        'prune',
+        'Prune',
+        <Scissors className="h-4 w-4" />,
+        prune,
+        'Repository pruned',
+        'Failed to prune repository.',
+        true,
+      ),
+    ...repositoryActions,
+  };
+  const progressLabel = pendingOperation
+    ? {
+        validate: 'Validating',
+        initialize: 'Initializing',
+        check: 'Checking',
+        prune: 'Pruning',
+      }[pendingOperation]
+    : isResourceProcessing
+      ? 'Processing'
+      : null;
 
   return (
-    <span className="inline-flex items-center gap-2 text-sm">
-      <Icon className="size-3.5 text-muted-foreground" />
-      {label}
-    </span>
+    <IntegrationCard
+      title={repository.name}
+      subtitle={destinationText(repository.spec)}
+      disabled={!canRead}
+      onEdit={openEdit}
+      icon={
+        <div
+          className={cn(
+            'flex h-10 w-10 items-center justify-center rounded-lg border shadow-sm',
+            repository.type === BackupRepositoryType.S3Compatible
+              ? 'border-sky-500/15 bg-sky-500/10 text-sky-600'
+              : 'border-emerald-500/15 bg-emerald-500/10 text-emerald-600',
+          )}>
+          <Icon className="h-4 w-4" />
+        </div>
+      }
+      footerLeft={
+        progressLabel ? (
+          <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+            <span className="truncate text-xs font-medium">{progressLabel}</span>
+          </div>
+        ) : (
+          <div className="flex min-w-0 items-center gap-1.5">
+            <StateIndicator value={repository.status} />
+            <span className="truncate text-xs font-medium text-muted-foreground">{label}</span>
+          </div>
+        )
+      }
+      footerRight={<RowActionMenu resource={repository} actions={cardActions} />}
+    />
   );
-};
-
-const DestinationCell = ({ spec }: { spec: BackupRepositorySpec }) => (
-  <span className="block max-w-100 truncate text-[13px]" title={destinationText(spec)}>
-    {destinationText(spec)}
-  </span>
-);
+}
 
 export const destinationText = (spec: BackupRepositorySpec) => {
   if (isFileSystemSpec(spec)) {
-    return spec.path;
+    return spec.location === BackupExecutionLocation.Platform ? `Platform: ${spec.path}` : `Core: ${spec.path}`;
   }
 
   if (isS3Spec(spec)) {

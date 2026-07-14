@@ -23303,6 +23303,117 @@
         ]
       }
     },
+    "/api/v1/backupRuns/{id}/restoreVolume/run": {
+      "post": {
+        "tags": [
+          "BackupRuns"
+        ],
+        "summary": "Run backup volume restore",
+        "operationId": "runBackupRestoreVolume",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Backup run ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreVolumeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BackupRestoreRunStreamItem"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/backupRestoreRuns": {
       "get": {
         "tags": [
@@ -31865,6 +31976,9 @@
           "spec",
           "passwordSecretId",
           "status",
+          "controlState",
+          "currentRunId",
+          "controlStartedAt",
           "lastPrunedAt",
           "lastCheckedAt",
           "createdByActorId",
@@ -31904,6 +32018,25 @@
           "status": {
             "$ref": "#/components/schemas/BackupRepositoryStatus"
           },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "currentRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "controlStartedAt": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
           "lastPrunedAt": {
             "format": "date-time"
           },
@@ -31940,6 +32073,51 @@
                 "$ref": "#/components/schemas/ResourceCapabilities"
               }
             ]
+          }
+        }
+      },
+      "BackupRestoreRunStreamItem": {
+        "required": [
+          "restoreRunId",
+          "status",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "restoreRunId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupRestoreStatus"
+              }
+            ]
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stream": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "exitCode": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

@@ -283,6 +283,16 @@ public static class BackupRuns
         var result = await mediator.Send(new QueueBackupRestoreRun(id, input.ToModel()), cancellationToken);
         return EndpointHandlers.HandleResult(result, BackupRestoreRunView.Map);
     }
+
+    public static async IAsyncEnumerable<BackupRestoreRunStreamItem> RunRestoreVolume(
+        IMediator mediator,
+        [FromRoute][Description("Backup run ID")] Guid id,
+        [FromBody] RestoreVolumeInput input,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var item in mediator.CreateStream(new RunBackupRestoreVolume(id, input.ToModel()), cancellationToken))
+            yield return item;
+    }
 }
 
 public static class BackupRestoreRuns
