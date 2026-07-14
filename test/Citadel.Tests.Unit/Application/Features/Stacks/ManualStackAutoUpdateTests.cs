@@ -113,6 +113,23 @@ public class ManualStackAutoUpdateTests
     }
 
     [Fact]
+    public void ParseVolumeReferences_extracts_named_volumes_and_ignores_bind_mounts()
+    {
+        var result = StackComposeParser.ParseVolumeReferences(
+            [
+                "postgres-data:/var/lib/postgresql/data",
+                "./config:/etc/app:ro",
+                "/host/logs:/logs",
+                "cache:/cache",
+                "/tmp"
+            ]);
+
+        Assert.Empty(result.DeclaredVolumes);
+        Assert.Equal(["cache", "postgres-data"], result.ServiceVolumeReferences.OrderBy(x => x).ToArray());
+        Assert.True(result.HasAnonymousVolumes);
+    }
+
+    [Fact]
     public async Task LoadManualStackChecks_includes_only_deployed_manual_stacks_with_update_policy_and_registry()
     {
         var registryId = Guid.CreateVersion7();

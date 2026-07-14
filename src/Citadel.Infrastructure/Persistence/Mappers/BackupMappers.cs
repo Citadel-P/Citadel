@@ -346,6 +346,7 @@ internal static class BackupMappers
             DockerVolumeBackupSource volume => SerializeWithType("DockerVolume", volume, BackupJsonContext.Default.DockerVolumeBackupSource),
             CitadelSystemBackupSource system => SerializeWithType("CitadelSystem", system, BackupJsonContext.Default.CitadelSystemBackupSource),
             StackBackupSource stack => SerializeWithType("Stack", stack, BackupJsonContext.Default.StackBackupSource),
+            DeploymentBackupSource deployment => SerializeWithType("Deployment", deployment, BackupJsonContext.Default.DeploymentBackupSource),
             _ => throw new NotSupportedException($"Backup source type '{source.GetType().Name}' is not supported.")
         };
 
@@ -380,6 +381,8 @@ internal static class BackupMappers
                                ?? throw new InvalidOperationException("Backup source JSON is invalid."),
             "Stack" => JsonSerializer.Deserialize(json, BackupJsonContext.Default.StackBackupSource)
                        ?? throw new InvalidOperationException("Backup source JSON is invalid."),
+            "Deployment" => JsonSerializer.Deserialize(json, BackupJsonContext.Default.DeploymentBackupSource)
+                            ?? throw new InvalidOperationException("Backup source JSON is invalid."),
             _ => throw new NotSupportedException($"Backup source type '{type}' is not supported.")
         };
     }

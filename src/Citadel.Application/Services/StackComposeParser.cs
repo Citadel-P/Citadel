@@ -50,6 +50,33 @@ internal static class StackComposeParser
     public static StackComposeVolumeResolution ParseVolumes(string composeFile)
         => ParseVolumesFromYaml(composeFile);
 
+    public static StackComposeVolumeResolution ParseVolumeReferences(IReadOnlyCollection<string>? volumeReferences)
+    {
+        if (volumeReferences is null || volumeReferences.Count == 0)
+            return new StackComposeVolumeResolution([], [], false);
+
+        var serviceReferences = new HashSet<string>(StringComparer.Ordinal);
+        var hasAnonymousVolumes = false;
+
+        foreach (var volumeReference in volumeReferences)
+        {
+            var reference = ParseShortVolumeReference(volumeReference);
+            if (reference is null)
+                continue;
+
+            if (reference.IsAnonymous)
+            {
+                hasAnonymousVolumes = true;
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(reference.Source))
+                serviceReferences.Add(reference.Source);
+        }
+
+        return new StackComposeVolumeResolution([], [.. serviceReferences], hasAnonymousVolumes);
+    }
+
     private static IReadOnlyDictionary<string, StackComposeService> ParseServicesFromYaml(string composeFile)
     {
         var services = new Dictionary<string, StackComposeService>(StringComparer.OrdinalIgnoreCase);

@@ -3,9 +3,12 @@ import {
   BackupPolicyView,
   BackupSourceSpec,
   BackupSourceSpecCitadelSystemBackupSource,
+  BackupSourceSpecDeploymentBackupSource,
   BackupSourceSpecDockerVolumeBackupSource,
   BackupSourceSpecStackBackupSource,
   BackupSourceType,
+  DeploymentBackupSourcePreviewView,
+  DockerVolumeResultView,
   LookupResourceType,
   PlatformView,
   StackBackupSourcePreviewView,
@@ -29,7 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { Database, Layers, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { Box, Database, Layers, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 
@@ -52,6 +55,10 @@ const sourceTypes = {
   Stack: {
     label: 'Stack',
     description: 'Back up all resolved named volumes used by a stack.',
+  },
+  Deployment: {
+    label: 'Deployment',
+    description: 'Back up all resolved named volumes used by a deployment.',
   },
 } as const;
 
@@ -111,9 +118,27 @@ export function BackupPolicyForm({
     currentSource.$type === BackupSourceType.Stack
       ? (currentSource as BackupSourceSpecStackBackupSource).stackId
       : undefined;
+  const currentDeploymentId =
+    currentSource.$type === BackupSourceType.Deployment
+      ? (currentSource as BackupSourceSpecDeploymentBackupSource).deploymentId
+      : undefined;
+  const volumeListArgs = useMemo(
+    () => ({ platformId: currentPlatformId ?? '', query: {} }),
+    [currentPlatformId],
+  );
+  const volumeList = useRead('listVolumes', volumeListArgs, {
+    enabled: currentSourceType === BackupSourceType.DockerVolume && Boolean(currentPlatformId),
+  });
   const stackPreviewArgs = useMemo(() => ({ stackId: currentStackId ?? '' }), [currentStackId]);
   const stackPreview = useRead('getStackBackupSourcePreview', stackPreviewArgs, {
     enabled: currentSourceType === BackupSourceType.Stack && Boolean(currentStackId),
+  });
+  const deploymentPreviewArgs = useMemo(
+    () => ({ deploymentId: currentDeploymentId ?? '' }),
+    [currentDeploymentId],
+  );
+  const deploymentPreview = useRead('getDeploymentBackupSourcePreview', deploymentPreviewArgs, {
+    enabled: currentSourceType === BackupSourceType.Deployment && Boolean(currentDeploymentId),
   });
 
   const refreshData = useCallback(() => {
@@ -217,7 +242,9 @@ export function BackupPolicyForm({
                             ? createDockerVolumeSource()
                             : nextType === BackupSourceType.Stack
                               ? createStackSource()
-                              : createCitadelSystemSource(),
+                              : nextType === BackupSourceType.Deployment
+                                ? createDeploymentSource()
+                                : createCitadelSystemSource(),
                       })
                     }
                   />
@@ -245,6 +272,7 @@ export function BackupPolicyForm({
                                 ) as BackupSourceSpecDockerVolumeBackupSource),
                                 $type: BackupSourceType.DockerVolume,
                                 platformId: platform?.id ?? '',
+                                volumeName: '',
                               },
                             }))
                           }
@@ -263,9 +291,11 @@ export function BackupPolicyForm({
                           ? 'Volume name is required'
                           : null,
                       render: (value, set) => (
-                        <FieldInput
+                        <VolumeSelector
                           value={value ?? ''}
-                          placeholder="postgres_data"
+                          volumes={volumeList.data?.data.volumes ?? []}
+                          isLoading={volumeList.isLoading || volumeList.isFetching}
+                          hasPlatform={Boolean(currentPlatformId)}
                           disabled={disabled || isSourceLocked(resource) || !currentPlatformId}
                           onChange={(volumeName) => set({ source: { volumeName } as any })}
                         />
@@ -321,6 +351,48 @@ export function BackupPolicyForm({
                             preview={stackPreview.data?.data}
                             isLoading={stackPreview.isLoading || stackPreview.isFetching}
                             hasSelection={Boolean(currentStackId)}
+                          />
+                        </div>
+                      ),
+                    }),
+                  ]
+                : []),
+              ...(currentSourceType === BackupSourceType.Deployment
+                ? [
+                    defineField<BackupPolicyFormValue, 'source.deploymentId'>({
+                      key: 'source.deploymentId',
+                      label: 'Deployment',
+                      required: true,
+                      disabled: isSourceLocked(resource),
+                      description: 'Deployment whose Docker named volumes will be backed up together.',
+                      validate: (value) =>
+                        currentSourceType === BackupSourceType.Deployment && !String(value ?? '').trim()
+                          ? 'Deployment is required'
+                          : null,
+                      render: (value, set) => (
+                        <div className="flex max-w-150 flex-col gap-4">
+                          <ResourceSelectorField
+                            targetType={LookupResourceType.Deployment}
+                            selected={value}
+                            disabled={disabled || isSourceLocked(resource)}
+                            onSelect={(deployment: { id: string } | undefined) =>
+                              set((prev) => ({
+                                source: {
+                                  ...(mergeSource(
+                                    original.source,
+                                    prev.source,
+                                  ) as BackupSourceSpecDeploymentBackupSource),
+                                  $type: BackupSourceType.Deployment,
+                                  deploymentId: deployment?.id ?? '',
+                                },
+                              }))
+                            }
+                            placeholder="Select Deployment"
+                          />
+                          <DeploymentSourcePreview
+                            preview={deploymentPreview.data?.data}
+                            isLoading={deploymentPreview.isLoading || deploymentPreview.isFetching}
+                            hasSelection={Boolean(currentDeploymentId)}
                           />
                         </div>
                       ),
@@ -503,9 +575,13 @@ export function BackupPolicyForm({
     }),
     [
       currentPlatformId,
+      currentDeploymentId,
       currentScheduleEnabled,
       currentStackId,
       currentSourceType,
+      deploymentPreview.data?.data,
+      deploymentPreview.isFetching,
+      deploymentPreview.isLoading,
       disabled,
       mode,
       original.source,
@@ -513,6 +589,9 @@ export function BackupPolicyForm({
       stackPreview.data?.data,
       stackPreview.isFetching,
       stackPreview.isLoading,
+      volumeList.data?.data,
+      volumeList.isFetching,
+      volumeList.isLoading,
     ],
   );
 
@@ -529,6 +608,78 @@ export function BackupPolicyForm({
       draftKey={`backup-policy:${id ?? 'new'}`}
       draftVersion={resource?.rowVersion ?? 1}
     />
+  );
+}
+
+function VolumeSelector({
+  value,
+  volumes,
+  isLoading,
+  hasPlatform,
+  disabled,
+  onChange,
+}: {
+  value?: string;
+  volumes: DockerVolumeResultView[];
+  isLoading: boolean;
+  hasPlatform: boolean;
+  disabled?: boolean;
+  onChange: (volumeName: string) => void;
+}) {
+  const collection = useMemo(() => {
+    const items = Object.fromEntries(
+      volumes.map((volume) => [
+        volume.name,
+        {
+          label: volume.name,
+          description: [
+            volume.driver || 'local',
+            volume.inUse ? 'In use' : 'Not in use',
+            volume.backupCoverage ? 'Protected' : null,
+          ]
+            .filter(Boolean)
+            .join(' - '),
+        },
+      ]),
+    );
+
+    if (value && !items[value]) {
+      items[value] = {
+        label: value,
+        description: 'Saved volume name',
+      };
+    }
+
+    return items;
+  }, [value, volumes]);
+
+  if (!hasPlatform) {
+    return <div className="text-xs text-muted-foreground">Select a platform to load Docker volumes.</div>;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+        <LoaderCircle className="size-3.5 animate-spin" />
+        Loading Docker volumes...
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex max-w-150 flex-col gap-2">
+      {volumes.length > 0 || value ? (
+        <ItemSelector value={value} collection={collection} disabled={disabled} onChange={onChange} />
+      ) : (
+        <div className="rounded-sm border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
+          No Docker named volumes were found on this platform.
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Only Docker named volumes can be backed up. Bind mounts such as ./data:/app/data or /host/path:/data are not
+        Docker volumes and will not appear here.
+      </p>
+    </div>
   );
 }
 
@@ -611,6 +762,80 @@ function StackSourcePreview({
   );
 }
 
+function DeploymentSourcePreview({
+  preview,
+  isLoading,
+  hasSelection,
+}: {
+  preview?: DeploymentBackupSourcePreviewView;
+  isLoading: boolean;
+  hasSelection: boolean;
+}) {
+  if (!hasSelection) {
+    return <div className="text-xs text-muted-foreground">Select a deployment to preview resolved volumes.</div>;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+        <LoaderCircle className="size-3.5 animate-spin" />
+        Loading deployment volumes...
+      </div>
+    );
+  }
+
+  if (!preview) return null;
+
+  return (
+    <div className="rounded-sm border border-border/70 bg-muted/20 p-3">
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+          <Box className="size-3.5 text-muted-foreground" />
+          <span className="font-medium">{preview.deploymentName}</span>
+          <span className="text-muted-foreground">on</span>
+          <span className="truncate text-muted-foreground">{preview.platformName}</span>
+        </div>
+
+        {preview.volumes.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {preview.volumes.map((volume) => (
+              <div
+                key={volume.name}
+                className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border bg-background px-2 py-1 text-xs">
+                <Database className="size-3 shrink-0 text-muted-foreground" />
+                <span className="truncate" title={volume.name}>
+                  {volume.name}
+                </span>
+                <Badge variant="secondary" className="h-5 rounded-sm px-1.5 text-[10px]">
+                  {volumeKindLabel(volume.kind)}
+                </Badge>
+                {volume.hasBackupCoverage && (
+                  <Badge className="h-5 rounded-sm bg-green-500/15 px-1.5 text-[10px] text-green-700 dark:text-green-300">
+                    Protected
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-muted-foreground">No named Docker volumes were resolved for this deployment.</div>
+        )}
+
+        {preview.warnings.length > 0 && (
+          <div className="flex flex-col gap-1.5 border-t border-dashed pt-3">
+            {preview.warnings.map((warning) => (
+              <div key={warning} className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+                <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                <span>{warning}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function volumeKindLabel(kind: StackVolumeKind) {
   switch (kind) {
     case StackVolumeKind.DeclaredNamed:
@@ -645,6 +870,14 @@ function createStackSource(): BackupSourceSpecStackBackupSource {
   return {
     $type: BackupSourceType.Stack,
     stackId: '',
+    stableKey: null,
+  };
+}
+
+function createDeploymentSource(): BackupSourceSpecDeploymentBackupSource {
+  return {
+    $type: BackupSourceType.Deployment,
+    deploymentId: '',
     stableKey: null,
   };
 }
@@ -738,6 +971,15 @@ function normalizeSource(source: BackupSourceSpec): BackupSourceSpec {
       $type: BackupSourceType.Stack,
       stackId: stackSource.stackId,
       stableKey: stackSource.stableKey ?? null,
+    };
+  }
+
+  if (source.$type === BackupSourceType.Deployment) {
+    const deploymentSource = source as BackupSourceSpecDeploymentBackupSource;
+    return {
+      $type: BackupSourceType.Deployment,
+      deploymentId: deploymentSource.deploymentId,
+      stableKey: deploymentSource.stableKey ?? null,
     };
   }
 

@@ -100,3 +100,12 @@ public sealed record StackBackupVolumePreviewItem(
     bool IsExternal,
     bool IsShared,
     bool HasBackupCoverage);
+
+public sealed record DeploymentBackupSourcePreviewResult(
+    Guid DeploymentId,
+    string DeploymentName,
+    Guid PlatformId,
+    string PlatformName,
+    PlatformStatus PlatformStatus,
+    IReadOnlyList<StackBackupVolumePreviewItem> Volumes,
+    IReadOnlyList<string> Warnings);

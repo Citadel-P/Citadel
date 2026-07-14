@@ -954,7 +954,8 @@ public enum BackupSourceType
 {
     DockerVolume,
     CitadelSystem,
-    Stack
+    Stack,
+    Deployment
 }
 
 public enum VolumeBackupConsistency

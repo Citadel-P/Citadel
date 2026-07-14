@@ -52,5 +52,6 @@ function filterBackupPolicies(items: BackupPolicyView[], search: string) {
 function sourceText(policy: BackupPolicyView) {
   if (policy.source.$type === 'DockerVolume') return policy.source.volumeName;
   if (policy.source.$type === 'CitadelSystem') return 'citadel system';
+  if (policy.source.$type === 'Deployment') return policy.source.deploymentId;
   return '';
 }

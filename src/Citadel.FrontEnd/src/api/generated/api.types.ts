@@ -374,6 +374,7 @@ export enum BackupSourceType {
   DockerVolume = "DockerVolume",
   CitadelSystem = "CitadelSystem",
   Stack = "Stack",
+  Deployment = "Deployment",
 }
 
 export enum BackupSnapshotAvailability {
@@ -800,6 +801,10 @@ export type BackupSourceSpec = BaseBackupSourceSpec &
     | BaseBackupSourceSpecTypeMapping<
         "Stack",
         BackupSourceSpecStackBackupSource
+      >
+    | BaseBackupSourceSpecTypeMapping<
+        "Deployment",
+        BackupSourceSpecDeploymentBackupSource
       >
   );
 
@@ -2849,6 +2854,14 @@ export interface BackupSourceSpecCitadelSystemBackupSource {
   stableKey?: null | string;
 }
 
+export interface BackupSourceSpecDeploymentBackupSource {
+  $type?: "Deployment";
+  /** @format uuid */
+  deploymentId: string;
+  type?: BackupSourceType;
+  stableKey?: null | string;
+}
+
 export interface BackupSourceSpecDockerVolumeBackupSource {
   $type?: "DockerVolume";
   /** @format uuid */
@@ -3415,6 +3428,26 @@ export interface DeploymentApplyError {
    */
   code: null | number | string;
   message: null | string;
+}
+
+export interface DeploymentBackupSourcePreviewView {
+  /** @format uuid */
+  deploymentId: string;
+  deploymentName: string;
+  /** @format uuid */
+  platformId: string;
+  platformName: string;
+  platformStatus: PlatformStatus;
+  volumes: DeploymentBackupVolumeView[];
+  warnings: string[];
+}
+
+export interface DeploymentBackupVolumeView {
+  name: string;
+  kind: StackVolumeKind;
+  isExternal: boolean;
+  isShared: boolean;
+  hasBackupCoverage: boolean;
 }
 
 export interface DeploymentCapabilities {
@@ -10419,6 +10452,37 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/deployments/${deploymentId}/duplicate-draft`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name GetDeploymentBackupSourcePreview
+     * @summary Preview deployment backup source volumes
+     * @request GET:/api/v1/deployments/{deploymentId}/backup-source-preview
+     * @secure
+     * @response `200` `DeploymentBackupSourcePreviewView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getDeploymentBackupSourcePreview: (
+      deploymentId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DeploymentBackupSourcePreviewView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/${deploymentId}/backup-source-preview`,
         method: "GET",
         secure: true,
         format: "json",

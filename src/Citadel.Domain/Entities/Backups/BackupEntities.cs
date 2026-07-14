@@ -8,6 +8,7 @@ namespace Domain.Entities.Backups;
 [JsonDerivedType(typeof(DockerVolumeBackupSource), "DockerVolume")]
 [JsonDerivedType(typeof(CitadelSystemBackupSource), "CitadelSystem")]
 [JsonDerivedType(typeof(StackBackupSource), "Stack")]
+[JsonDerivedType(typeof(DeploymentBackupSource), "Deployment")]
 public abstract record BackupSourceSpec
 {
     public abstract BackupSourceType Type { get; }
@@ -33,6 +34,12 @@ public sealed record StackBackupSource(Guid StackId) : BackupSourceSpec
 {
     public override BackupSourceType Type => BackupSourceType.Stack;
     public override string StableKey => $"stack:{StackId}";
+}
+
+public sealed record DeploymentBackupSource(Guid DeploymentId) : BackupSourceSpec
+{
+    public override BackupSourceType Type => BackupSourceType.Deployment;
+    public override string StableKey => $"deployment:{DeploymentId}";
 }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
@@ -560,6 +567,7 @@ public sealed class BackupPolicy(
             DockerVolumeBackupSource volume => volume with { VolumeName = volume.VolumeName.Trim() },
             CitadelSystemBackupSource system => system,
             StackBackupSource stack => stack,
+            DeploymentBackupSource deployment => deployment,
             _ => throw new ArgumentException("Unsupported backup source type.", nameof(source))
         };
 
@@ -581,6 +589,11 @@ public sealed class BackupPolicy(
             case StackBackupSource stack:
                 if (stack.StackId == Guid.Empty)
                     throw new ArgumentException("Stack backup source requires a stack ID.", nameof(source));
+                break;
+
+            case DeploymentBackupSource deployment:
+                if (deployment.DeploymentId == Guid.Empty)
+                    throw new ArgumentException("Deployment backup source requires a deployment ID.", nameof(source));
                 break;
 
             default:

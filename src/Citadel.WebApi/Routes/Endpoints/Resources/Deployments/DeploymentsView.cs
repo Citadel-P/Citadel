@@ -1,6 +1,8 @@
 ﻿
 using Application.Permissions;
+using Application.Features.Backups.Models;
 using Domain;
+using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using WebApi.Routes.Endpoints.Resources.Activities;
@@ -120,4 +122,35 @@ public sealed record DeploymentConfigView(
         Description: deployment.Description,
         Spec: deployment.Spec
         );
+}
+
+public sealed record DeploymentBackupSourcePreviewView(
+    Guid DeploymentId,
+    string DeploymentName,
+    Guid PlatformId,
+    string PlatformName,
+    PlatformStatus PlatformStatus,
+    IReadOnlyList<DeploymentBackupVolumeView> Volumes,
+    IReadOnlyList<string> Warnings)
+{
+    internal static DeploymentBackupSourcePreviewView Map(DeploymentBackupSourcePreviewResult result)
+        => new(
+            result.DeploymentId,
+            result.DeploymentName,
+            result.PlatformId,
+            result.PlatformName,
+            result.PlatformStatus,
+            [.. result.Volumes.Select(DeploymentBackupVolumeView.Map)],
+            result.Warnings);
+}
+
+public sealed record DeploymentBackupVolumeView(
+    string Name,
+    StackVolumeKind Kind,
+    bool IsExternal,
+    bool IsShared,
+    bool HasBackupCoverage)
+{
+    internal static DeploymentBackupVolumeView Map(StackBackupVolumePreviewItem item)
+        => new(item.Name, item.Kind, item.IsExternal, item.IsShared, item.HasBackupCoverage);
 }

@@ -438,6 +438,7 @@ public partial class AutomationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(DockerVolumeBackupSource))]
 [JsonSerializable(typeof(CitadelSystemBackupSource))]
 [JsonSerializable(typeof(StackBackupSource))]
+[JsonSerializable(typeof(DeploymentBackupSource))]
 [JsonSerializable(typeof(BackupRepositorySpec))]
 [JsonSerializable(typeof(FileSystemBackupRepositorySpec))]
 [JsonSerializable(typeof(S3CompatibleBackupRepositorySpec))]

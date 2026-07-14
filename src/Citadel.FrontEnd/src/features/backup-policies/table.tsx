@@ -1,6 +1,7 @@
 import {
   BackupPolicyView,
   BackupSourceSpec,
+  BackupSourceSpecDeploymentBackupSource,
   BackupSourceSpecDockerVolumeBackupSource,
   BackupSourceSpecStackBackupSource,
   ResourceControlState,
@@ -19,7 +20,7 @@ import { formatId } from '@/lib/utils';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData } from '@/pages/types';
 import { ColumnDef } from '@tanstack/react-table';
-import { CalendarClock, Database, HardDrive, Layers } from 'lucide-react';
+import { Box, CalendarClock, Database, HardDrive, Layers } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -152,6 +153,19 @@ const SourceCell = ({ source }: { source: BackupSourceSpec }) => {
     );
   }
 
+  if (source.$type === 'Deployment') {
+    const deploymentSource = source as BackupSourceSpecDeploymentBackupSource;
+
+    return (
+      <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
+        <Box className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate" title={deploymentSource.deploymentId}>
+          Deployment {formatId(deploymentSource.deploymentId)}
+        </span>
+      </span>
+    );
+  }
+
   return (
     <span className="inline-flex items-center gap-2 text-sm">
       <Database className="size-3.5 text-muted-foreground" />
@@ -177,6 +191,7 @@ const ScheduleCell = ({ policy }: { policy: BackupPolicyView }) => {
 const sourceText = (source: BackupSourceSpec) => {
   if (source.$type === 'DockerVolume') return (source as BackupSourceSpecDockerVolumeBackupSource).volumeName;
   if (source.$type === 'Stack') return (source as BackupSourceSpecStackBackupSource).stackId;
+  if (source.$type === 'Deployment') return (source as BackupSourceSpecDeploymentBackupSource).deploymentId;
   if (source.$type === 'CitadelSystem') return 'Citadel system';
   return '';
 };

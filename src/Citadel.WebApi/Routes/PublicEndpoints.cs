@@ -1836,6 +1836,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getDeploymentDuplicateDraft");
 
+        deployment.MapGet("/{deploymentId}/backup-source-preview", Deployments.GetBackupSourcePreview)
+            .WithSummary("Preview deployment backup source volumes")
+            .Produces<DeploymentBackupSourcePreviewView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getDeploymentBackupSourcePreview");
+
         deployment.MapGet("{id}/info", Deployments.GetInfo)
             .WithSummary("Get basic container details")
             .ProducesValidationProblem()

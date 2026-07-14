@@ -13392,6 +13392,104 @@
         ]
       }
     },
+    "/api/v1/deployments/{deploymentId}/backup-source-preview": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Preview deployment backup source volumes",
+        "operationId": "getDeploymentBackupSourcePreview",
+        "parameters": [
+          {
+            "name": "deploymentId",
+            "in": "path",
+            "description": "Deployment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentBackupSourcePreviewView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/deployments/{id}/info": {
       "get": {
         "tags": [
@@ -32338,6 +32436,9 @@
           },
           {
             "$ref": "#/components/schemas/BackupSourceSpecStackBackupSource"
+          },
+          {
+            "$ref": "#/components/schemas/BackupSourceSpecDeploymentBackupSource"
           }
         ],
         "discriminator": {
@@ -32345,7 +32446,8 @@
           "mapping": {
             "DockerVolume": "#/components/schemas/BackupSourceSpecDockerVolumeBackupSource",
             "CitadelSystem": "#/components/schemas/BackupSourceSpecCitadelSystemBackupSource",
-            "Stack": "#/components/schemas/BackupSourceSpecStackBackupSource"
+            "Stack": "#/components/schemas/BackupSourceSpecStackBackupSource",
+            "Deployment": "#/components/schemas/BackupSourceSpecDeploymentBackupSource"
           }
         }
       },
@@ -32356,6 +32458,32 @@
               "CitadelSystem"
             ],
             "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/BackupSourceType"
+          },
+          "stableKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "BackupSourceSpecDeploymentBackupSource": {
+        "required": [
+          "deploymentId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Deployment"
+            ],
+            "type": "string"
+          },
+          "deploymentId": {
+            "type": "string",
+            "format": "uuid"
           },
           "type": {
             "$ref": "#/components/schemas/BackupSourceType"
@@ -32431,7 +32559,8 @@
         "enum": [
           "DockerVolume",
           "CitadelSystem",
-          "Stack"
+          "Stack",
+          "Deployment"
         ]
       },
       "BindOptions": {
@@ -34699,6 +34828,76 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "DeploymentBackupSourcePreviewView": {
+        "required": [
+          "deploymentId",
+          "deploymentName",
+          "platformId",
+          "platformName",
+          "platformStatus",
+          "volumes",
+          "warnings"
+        ],
+        "type": "object",
+        "properties": {
+          "deploymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deploymentName": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "platformStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentBackupVolumeView"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DeploymentBackupVolumeView": {
+        "required": [
+          "name",
+          "kind",
+          "isExternal",
+          "isShared",
+          "hasBackupCoverage"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StackVolumeKind"
+          },
+          "isExternal": {
+            "type": "boolean"
+          },
+          "isShared": {
+            "type": "boolean"
+          },
+          "hasBackupCoverage": {
+            "type": "boolean"
           }
         }
       },

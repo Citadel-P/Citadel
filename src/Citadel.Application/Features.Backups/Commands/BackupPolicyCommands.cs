@@ -92,8 +92,20 @@ file static class BackupPolicySourceValidator
     public static async Task<Result> ValidateSourceAsync(
         BackupSourceSpec source,
         IStackBackupVolumeResolver stackBackupVolumeResolver,
+        IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
         CancellationToken cancellationToken)
     {
+        if (source is DeploymentBackupSource deployment)
+        {
+            var deploymentResolution = await deploymentBackupVolumeResolver.ResolveAsync(deployment.DeploymentId, cancellationToken);
+            if (!deploymentResolution.IsSuccess(out var resolvedDeployment, out var deploymentError))
+                return Result.Failure(deploymentError);
+
+            return resolvedDeployment.Volumes.Count == 0
+                ? Result.Failure(new BadRequestError("Deployment has no resolved Docker named volumes to back up."))
+                : Result.Success();
+        }
+
         if (source is not StackBackupSource stack)
             return Result.Success();
 
@@ -110,7 +122,8 @@ file static class BackupPolicySourceValidator
 internal sealed class CreateBackupPolicyHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
-    IStackBackupVolumeResolver stackBackupVolumeResolver)
+    IStackBackupVolumeResolver stackBackupVolumeResolver,
+    IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver)
     : ICommandHandler<CreateBackupPolicy, Result<BackupPolicyResult>>
 {
     public async ValueTask<Result<BackupPolicyResult>> Handle(CreateBackupPolicy command, CancellationToken cancellationToken)
@@ -125,7 +138,11 @@ internal sealed class CreateBackupPolicyHandler(
         if (repository is null)
             return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup repository not found."));
 
-        var sourceValidation = await BackupPolicySourceValidator.ValidateSourceAsync(input.Source, stackBackupVolumeResolver, cancellationToken);
+        var sourceValidation = await BackupPolicySourceValidator.ValidateSourceAsync(
+            input.Source,
+            stackBackupVolumeResolver,
+            deploymentBackupVolumeResolver,
+            cancellationToken);
         if (sourceValidation.IsFailure(out var sourceError))
             return Result.Failure<BackupPolicyResult>(sourceError);
 
@@ -169,7 +186,8 @@ internal sealed class CreateBackupPolicyHandler(
 
 internal sealed class UpdateBackupPolicyHandler(
     IUnitOfWork unitOfWork,
-    IStackBackupVolumeResolver stackBackupVolumeResolver)
+    IStackBackupVolumeResolver stackBackupVolumeResolver,
+    IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver)
     : ICommandHandler<UpdateBackupPolicy, Result<BackupPolicyResult>>
 {
     public async ValueTask<Result<BackupPolicyResult>> Handle(UpdateBackupPolicy command, CancellationToken cancellationToken)
@@ -187,7 +205,11 @@ internal sealed class UpdateBackupPolicyHandler(
 
         if (command.UpdateSource && command.Policy.Source is not null)
         {
-            var sourceValidation = await BackupPolicySourceValidator.ValidateSourceAsync(command.Policy.Source, stackBackupVolumeResolver, cancellationToken);
+            var sourceValidation = await BackupPolicySourceValidator.ValidateSourceAsync(
+                command.Policy.Source,
+                stackBackupVolumeResolver,
+                deploymentBackupVolumeResolver,
+                cancellationToken);
             if (sourceValidation.IsFailure(out var sourceError))
                 return Result.Failure<BackupPolicyResult>(sourceError);
         }

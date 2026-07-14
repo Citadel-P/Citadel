@@ -76,6 +76,7 @@ internal sealed class BackupRunExecutionService(
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
+    IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
     IBackupRunCoordinator runCoordinator,
     IOptions<BackupOptions> backupOptions,
     ILogger<BackupRunExecutionService> logger) : IBackupRunExecutionService
@@ -472,6 +473,54 @@ internal sealed class BackupRunExecutionService(
                 new BackupExecutionContext(BackupExecutionLocation.Core, null),
                 [],
                 [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.stack_volume_warning", warning))]));
+        }
+
+        if (source is DeploymentBackupSource deployment)
+        {
+            var resolution = await deploymentBackupVolumeResolver.ResolveAsync(deployment.DeploymentId, cancellationToken);
+            if (!resolution.IsSuccess(out var resolved, out var resolutionError))
+                return Result.Failure<BackupSourcePlan>(resolutionError);
+
+            if (resolved.Volumes.Count == 0)
+                return Result.Failure<BackupSourcePlan>(new BadRequestError("Deployment has no resolved Docker named volumes to back up."));
+
+            if (!platformContainerCache.TryGetCacheEntry(resolved.PlatformId, out var platform, out var error))
+                return Result.Failure<BackupSourcePlan>(error);
+
+            if (platform.ConnectorType != PlatformConnectorType.Local)
+                return Result.Failure<BackupSourcePlan>(new BadRequestError("Deployment backup execution on remote platforms is not implemented yet."));
+
+            var connector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
+            var items = new List<BackupSourceItem>(resolved.Volumes.Count);
+            foreach (var deploymentVolume in resolved.Volumes)
+            {
+                var inspect = await connector.InspectVolumeAsync(
+                    new InspectDockerVolumeCommand(platform.Address, deploymentVolume.VolumeName),
+                    cancellationToken);
+
+                if (!inspect.IsSuccess(out var dockerVolume, out var inspectError))
+                    return Result.Failure<BackupSourcePlan>(inspectError!);
+
+                if (string.IsNullOrWhiteSpace(dockerVolume.Mountpoint))
+                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {deploymentVolume.VolumeName} mountpoint is not available."));
+
+                var path = Path.GetFullPath(dockerVolume.Mountpoint);
+                if (!Directory.Exists(path))
+                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {deploymentVolume.VolumeName} mountpoint does not exist on this host."));
+
+                items.Add(new BackupSourceItem(
+                    $"Docker volume {deploymentVolume.VolumeName}",
+                    path,
+                    deploymentVolume.PlatformId,
+                    deploymentVolume.VolumeName));
+            }
+
+            return Result.Success(new BackupSourcePlan(
+                items,
+                $"Deployment {resolved.DeploymentName} ({resolved.Volumes.Count} volume{(resolved.Volumes.Count == 1 ? string.Empty : "s")})",
+                new BackupExecutionContext(BackupExecutionLocation.Core, null),
+                [],
+                [.. resolved.Warnings.Select(static warning => new BackupRunWarning("backup.deployment_volume_warning", warning))]));
         }
 
         return Result.Failure<BackupSourcePlan>(new BadRequestError("Unsupported backup source type."));

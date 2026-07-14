@@ -115,6 +115,7 @@ public static class ApplicationModule
             .AddSingleton<IResticEnvironmentBuilder, ResticEnvironmentBuilder>()
             .AddSingleton<IBackupRepositoryDestinationService, BackupRepositoryDestinationService>()
             .AddSingleton<IStackBackupVolumeResolver, StackBackupVolumeResolver>()
+            .AddSingleton<IDeploymentBackupVolumeResolver, DeploymentBackupVolumeResolver>()
             .AddSingleton<IBackupRunCoordinator, BackupRunCoordinator>()
             .AddSingleton<IBackupRunExecutionService, BackupRunExecutionService>()
             .AddSingleton<IBackupRestoreRunCoordinator, BackupRestoreRunCoordinator>()

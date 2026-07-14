@@ -114,6 +114,29 @@ public sealed class BackupEntitiesTests
     }
 
     [Fact]
+    public void BackupPolicy_ShouldAcceptDeploymentSource()
+    {
+        var deploymentId = Guid.NewGuid();
+        var policy = CreatePolicy(new DeploymentBackupSource(deploymentId));
+
+        policy.Validate();
+
+        var source = Assert.IsType<DeploymentBackupSource>(policy.Source);
+        Assert.Equal(deploymentId, source.DeploymentId);
+        Assert.Equal($"deployment:{deploymentId}", source.StableKey);
+    }
+
+    [Fact]
+    public void BackupPolicy_ShouldRejectDeploymentSourceWithoutDeploymentId()
+    {
+        var policy = CreatePolicy(new DeploymentBackupSource(Guid.Empty));
+
+        var ex = Assert.Throws<ArgumentException>(policy.Validate);
+
+        Assert.Equal("Deployment backup source requires a deployment ID. (Parameter 'source')", ex.Message);
+    }
+
+    [Fact]
     public void BackupRun_ShouldSetSnapshotAvailabilityOnSuccessAndFailure()
     {
         var run = CreateRun();
