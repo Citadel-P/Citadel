@@ -73,12 +73,21 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
                 MemoryLimit = createContainerCommand.MemoryLimit,
                 CpuQuota = createContainerCommand.CpuQuota,
                 MemoryReservation = createContainerCommand.MemoryReservation,
+                MemorySwap = createContainerCommand.MemorySwap,
+                PidsLimit = createContainerCommand.PidsLimit,
                 AutoRemove = createContainerCommand.AutoRemove ?? false,
+                Privileged = createContainerCommand.Privileged ?? false,
+                ReadonlyRootfs = createContainerCommand.ReadonlyRootfs,
                 RestartPolicy = createContainerCommand.RestartPolicy.Map(),
                 Labels = { createContainerCommand.Labels ?? [] },
                 EnvVars = { createContainerCommand.EnvVars ?? [] },
                 Ports = { createContainerCommand.Ports ?? [] },
                 Volumes = { createContainerCommand.Volumes ?? [] },
+                Mounts = { createContainerCommand.Mounts?.Select(mount => mount.MapAgent()) ?? [] },
+                CapAdd = { createContainerCommand.CapAdd ?? [] },
+                CapDrop = { createContainerCommand.CapDrop ?? [] },
+                SecurityOpt = { createContainerCommand.SecurityOpt ?? [] },
+                NetworkMode = createContainerCommand.NetworkMode,
                 Networks = { networks },
                 EntryPoint = { createContainerCommand.EntryPoint ?? [] },
                 Command = { createContainerCommand.Command ?? [] }
@@ -188,6 +197,80 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
         await call.RequestStream.WriteAsync(open, cancellationToken).ConfigureAwait(false);
 
         return new AgentExecSession(call);
+    }
+
+    public Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(string platformAddress, ContainerBinaryExecRequest request, CancellationToken cancellationToken)
+    {
+        var containerClient = clientFactory.GetContainerClient(platformAddress);
+        var call = containerClient.ExecBinary(
+            new ExecBinaryRequest
+            {
+                ContainerId = request.ContainerId,
+                Cmd = { request.Command },
+                Env = { request.Environment?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? [] },
+                AttachStdout = request.AttachStdout,
+                AttachStderr = request.AttachStderr,
+                Tty = request.Tty
+            },
+            cancellationToken: cancellationToken);
+
+        var exitCode = new TaskCompletionSource<int?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completed = false;
+
+        return Task.FromResult(Result.Success<ContainerBinaryExecResult>(new ContainerBinaryExecResult
+        {
+            Output = ReadBinaryOutputAsync(call, exitCode, cancellationToken),
+            GetExitCodeAsync = async ct => await exitCode.Task.WaitAsync(ct).ConfigureAwait(false),
+            CleanupAsync = () =>
+            {
+                if (!completed)
+                {
+                    completed = true;
+                    exitCode.TrySetCanceled();
+                }
+
+                call.Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }));
+    }
+
+    private static async IAsyncEnumerable<ContainerBinaryExecChunk> ReadBinaryOutputAsync(
+        AsyncServerStreamingCall<ExecServerMessage> call,
+        TaskCompletionSource<int?> exitCode,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var message in call.ResponseStream.ReadAllAsync(cancellationToken))
+            {
+                switch (message.MsgCase)
+                {
+                    case ExecServerMessage.MsgOneofCase.Output when message.Output?.Data.Length > 0:
+                        yield return new ContainerBinaryExecChunk(
+                            message.Output.Stream == StreamType.Stderr ? ContainerExecStream.Stderr : ContainerExecStream.Stdout,
+                            message.Output.Data.Memory);
+                        break;
+
+                    case ExecServerMessage.MsgOneofCase.Error:
+                        exitCode.TrySetResult(1);
+                        yield return new ContainerBinaryExecChunk(
+                            ContainerExecStream.Stderr,
+                            Encoding.UTF8.GetBytes(message.Error?.Message ?? "Binary exec failed."));
+                        yield break;
+
+                    case ExecServerMessage.MsgOneofCase.Exit:
+                        exitCode.TrySetResult(message.Exit?.ExitCode);
+                        yield break;
+                }
+            }
+
+            exitCode.TrySetResult(null);
+        }
+        finally
+        {
+            exitCode.TrySetResult(null);
+        }
     }
 }
 

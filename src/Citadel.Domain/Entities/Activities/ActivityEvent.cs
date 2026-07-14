@@ -157,6 +157,9 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.LicenseValidationFailed
                 => ActivityResourceType.License,
 
+            ActivityEventType.VolumeContentDownloaded
+                => ActivityResourceType.Volume,
+
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
         };
@@ -292,6 +295,8 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.LicenseEnteredGracePeriod, LicenseEnteredGracePeriod) => true,
             (ActivityEventType.LicenseExpired, LicenseExpired) => true,
             (ActivityEventType.LicenseValidationFailed, LicenseValidationFailed) => true,
+
+            (ActivityEventType.VolumeContentDownloaded, VolumeContentDownloaded) => true,
 
             _ => false
         };

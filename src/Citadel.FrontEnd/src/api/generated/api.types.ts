@@ -35,6 +35,13 @@ export enum VolumeScope {
   Multi = "Multi",
 }
 
+export enum VolumeFileEntryType {
+  Directory = "Directory",
+  File = "File",
+  Symlink = "Symlink",
+  Other = "Other",
+}
+
 /** @default "Live" */
 export enum VolumeBackupConsistency {
   Live = "Live",
@@ -127,6 +134,8 @@ export enum SpecificPermission {
   ResourceBindings = "ResourceBindings",
   Releases = "Releases",
   Restore = "Restore",
+  Browse = "Browse",
+  Download = "Download",
 }
 
 export enum SecretProviderType {
@@ -168,6 +177,7 @@ export enum ResourceType {
   License = "License",
   BackupRepository = "BackupRepository",
   BackupPolicy = "BackupPolicy",
+  Volume = "Volume",
 }
 
 export enum ResourceControlState {
@@ -548,6 +558,7 @@ export enum ActivityResourceType {
   AutomationAction = "AutomationAction",
   User = "User",
   License = "License",
+  Volume = "Volume",
 }
 
 export enum ActivityEventType {
@@ -625,6 +636,7 @@ export enum ActivityEventType {
   LicenseEnteredGracePeriod = "LicenseEnteredGracePeriod",
   LicenseExpired = "LicenseExpired",
   LicenseValidationFailed = "LicenseValidationFailed",
+  VolumeContentDownloaded = "VolumeContentDownloaded",
 }
 
 export enum ActionRunTrigger {
@@ -1206,6 +1218,10 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "LicenseValidationFailed",
         ActivityEventInfoLicenseValidationFailed
       >
+    | BaseActivityEventInfoTypeMapping<
+        "VolumeContentDownloaded",
+        ActivityEventInfoVolumeContentDownloaded
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -1701,6 +1717,14 @@ export interface ActivityEventInfoUserSessionRevoked {
   $type?: "UserSessionRevoked";
   /** @format uuid */
   sessionId: string;
+}
+
+export interface ActivityEventInfoVolumeContentDownloaded {
+  $type?: "VolumeContentDownloaded";
+  volumeName: string;
+  path: string;
+  isDirectory: boolean;
+  fileName: string;
 }
 
 export interface ActivitySourceResource {
@@ -5854,6 +5878,8 @@ export interface VolumeAccessMode {
 
 export interface VolumeCapabilities {
   canInspect: boolean;
+  canBrowse: boolean;
+  canDownload: boolean;
   canRead: boolean;
   canWrite: boolean;
   canExecute: boolean;
@@ -5870,6 +5896,29 @@ export interface VolumeCapacityRange {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   limitBytes: null | number | string;
+}
+
+export interface VolumeDirectoryView {
+  /** @format uuid */
+  platformId: string;
+  volumeName: string;
+  path: string;
+  entries: VolumeFileEntryView[];
+  isTruncated: boolean;
+}
+
+export interface VolumeFileEntryView {
+  name: string;
+  path: string;
+  type: VolumeFileEntryType;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  size: null | number | string;
+  /** @format date-time */
+  modifiedAt: any;
+  linkTarget?: null | string;
 }
 
 export interface VolumeOptions {
@@ -8307,6 +8356,71 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ListVolumeDirectory
+     * @summary List volume directory contents
+     * @request GET:/api/v1/platforms/{platformId}/volumes/{name}/files
+     * @secure
+     * @response `200` `VolumeDirectoryView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listVolumeDirectory: (
+      platformId: string,
+      name: string,
+      query?: {
+        path?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<VolumeDirectoryView, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/volumes/${name}/files`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name DownloadVolumePath
+     * @summary Download a volume file or directory archive
+     * @request GET:/api/v1/platforms/{platformId}/volumes/{name}/files/download
+     * @secure
+     * @response `200` `void` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    downloadVolumePath: (
+      platformId: string,
+      name: string,
+      query?: {
+        path?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/platforms/${platformId}/volumes/${name}/files/download`,
+        method: "GET",
+        query: query,
+        secure: true,
         ...params,
       }),
 

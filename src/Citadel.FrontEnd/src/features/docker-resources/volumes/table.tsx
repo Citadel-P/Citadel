@@ -3,7 +3,7 @@ import { BackupCoverageStatus, DockerVolumeResultView } from '@/api/generated/ap
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 import { useNavigate, useParams } from 'react-router';
@@ -15,6 +15,8 @@ import { ContentCard } from '@/components/custom/content-card';
 import { truncate } from '@/lib/truncate';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useAppContext } from '@/lib/context/app-context';
+import { VolumeBrowserSheet } from './volume-browser-sheet';
 
 export const VolumesTable = ({
   items,
@@ -29,12 +31,22 @@ export const VolumesTable = ({
   >;
 }) => {
   const [_, setSelectedResources] = useSelectedResources<DockerVolumeResultView>('Volume');
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const { currentPlatform } = useAppContext();
+  const [browsingVolume, setBrowsingVolume] = useState<DockerVolumeResultView | null>(null);
+  const cols = useMemo(() => columns(actions ?? {}, setBrowsingVolume), [actions]);
 
   return (
-    <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-    </ContentCard>
+    <>
+      <ContentCard>
+        <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      </ContentCard>
+      <VolumeBrowserSheet
+        open={!!browsingVolume}
+        onOpenChange={(open) => !open && setBrowsingVolume(null)}
+        volume={browsingVolume}
+        platformId={currentPlatform?.id}
+      />
+    </>
   );
 };
 
@@ -43,6 +55,7 @@ const columns = (
     string,
     React.FC<{ resource: DockerVolumeResultView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
+  onBrowse: (volume: DockerVolumeResultView) => void,
 ): ColumnDef<DockerVolumeResultView>[] => [
   {
     id: 'select',
@@ -105,7 +118,15 @@ const columns = (
   },
   {
     id: 'actions',
-    cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
+    cell: ({ row }) => (
+      <RowActionMenu
+        resource={row.original}
+        actions={actions}
+        onAction={(action) => {
+          if (action.key === 'browse') onBrowse(row.original);
+        }}
+      />
+    ),
   },
 ];
 
@@ -148,8 +169,10 @@ const BackupCoverageBadge = ({ volume }: { volume: DockerVolumeResultView }) => 
       title={title}
       className={cn(
         'rounded-sm',
-        status === BackupCoverageStatus.Protected && 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-300',
-        status === BackupCoverageStatus.Warning && 'border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300',
+        status === BackupCoverageStatus.Protected &&
+          'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-300',
+        status === BackupCoverageStatus.Warning &&
+          'border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300',
         status === BackupCoverageStatus.Failed && 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300',
         status === BackupCoverageStatus.Unprotected && 'border-muted-foreground/30 bg-muted/50 text-muted-foreground',
       )}>

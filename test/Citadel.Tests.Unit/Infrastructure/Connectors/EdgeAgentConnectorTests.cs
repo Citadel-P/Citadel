@@ -5,6 +5,7 @@ using Citadel.Platforms.V1;
 using Citadel.SharedModels.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Google.Protobuf;
 using Infrastructure.Connectors.EdgeAgentConnectors;
@@ -137,6 +138,63 @@ public class EdgeAgentConnectorTests
         Assert.Equal("echo test", Encoding.UTF8.GetString(ExecClientMessage.Parser.ParseFrom(router.Inputs[0]).Stdin.Data.Span));
         Assert.Equal(120, ExecClientMessage.Parser.ParseFrom(router.Inputs[1]).Resize.Cols);
         Assert.True(router.Cancelled);
+    }
+
+    [Fact]
+    public async Task ExecBinaryAsync_Should_Route_ContainerExecBinary_Stream()
+    {
+        var platformId = Guid.CreateVersion7();
+        var router = new TestEdgeAgentCommandRouter();
+        router.StreamItems.Add(EdgeAgentStreamItem.Output(new ExecServerMessage
+        {
+            Output = new ExecOutput
+            {
+                Data = ByteString.CopyFromUtf8("out"),
+                Stream = StreamType.Stdout
+            }
+        }.ToByteArray()));
+        router.StreamItems.Add(EdgeAgentStreamItem.Output(new ExecServerMessage
+        {
+            Output = new ExecOutput
+            {
+                Data = ByteString.CopyFromUtf8("err"),
+                Stream = StreamType.Stderr
+            }
+        }.ToByteArray()));
+        router.StreamItems.Add(EdgeAgentStreamItem.Output(new ExecServerMessage
+        {
+            Exit = new ExecExit { ExitCode = 7 }
+        }.ToByteArray()));
+        router.StreamItems.Add(EdgeAgentStreamItem.Complete());
+        var connector = new EdgeContainerConnector(router);
+
+        var result = await connector.ExecBinaryAsync(
+            $"edge://{platformId}",
+            new ContainerBinaryExecRequest("container-1", ["volume-helper", "stream-file"], Environment: new Dictionary<string, string> { ["A"] = "B" }),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess(out var exec, out var error), error?.Message);
+        var chunks = new List<ContainerBinaryExecChunk>();
+        await foreach (var chunk in exec.Output)
+        {
+            chunks.Add(chunk);
+        }
+
+        var exitCode = await exec.GetExitCodeAsync(CancellationToken.None);
+
+        Assert.Equal(platformId, router.PlatformId);
+        Assert.Equal(EdgeAgentCommandKind.ContainerExecBinary, router.Kind);
+        Assert.NotNull(router.Payload);
+        var request = ExecBinaryRequest.Parser.ParseFrom(router.Payload);
+        Assert.Equal("container-1", request.ContainerId);
+        Assert.Equal(["volume-helper", "stream-file"], request.Cmd);
+        Assert.Equal("B", request.Env["A"]);
+        Assert.Equal(2, chunks.Count);
+        Assert.Equal(ContainerExecStream.Stdout, chunks[0].Stream);
+        Assert.Equal("out", Encoding.UTF8.GetString(chunks[0].Data.Span));
+        Assert.Equal(ContainerExecStream.Stderr, chunks[1].Stream);
+        Assert.Equal("err", Encoding.UTF8.GetString(chunks[1].Data.Span));
+        Assert.Equal(7, exitCode);
     }
 
     private sealed class TestEdgeAgentCommandRouter : IEdgeAgentCommandRouter

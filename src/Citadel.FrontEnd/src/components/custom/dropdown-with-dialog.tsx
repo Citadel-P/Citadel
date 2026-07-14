@@ -63,9 +63,11 @@ export const DropdownActions = ({ items }: DropdownActionsProps) => (
 export const RowActionMenu = <T extends { id: string; name: string }>({
   actions,
   resource,
+  onAction,
 }: {
   actions: Record<string, DropdownActionComponent<T>>;
   resource: T;
+  onAction?: (action: { key: string; data?: ActionData }) => void;
 }) => {
   const [activeAction, setActiveAction] = useState<{
     key: string;
@@ -74,7 +76,18 @@ export const RowActionMenu = <T extends { id: string; name: string }>({
 
   return (
     <>
-      <RowActionDropdown actions={actions} resource={resource} onActionSelect={setActiveAction} />
+      <RowActionDropdown
+        actions={actions}
+        resource={resource}
+        onActionSelect={(action) => {
+          if (action.key === 'confirm') {
+            setActiveAction(action);
+            return;
+          }
+
+          onAction?.(action);
+        }}
+      />
       <ActionDialog action={activeAction} onClose={() => setActiveAction(null)} />
     </>
   );

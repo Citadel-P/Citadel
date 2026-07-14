@@ -6690,6 +6690,223 @@
         ]
       }
     },
+    "/api/v1/platforms/{platformId}/volumes/{name}/files": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "List volume directory contents",
+        "operationId": "listVolumeDirectory",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolumeDirectoryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/platforms/{platformId}/volumes/{name}/files/download": {
+      "get": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Download a volume file or directory archive",
+        "operationId": "downloadVolumePath",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/platforms/{id}/stats": {
       "get": {
         "tags": [
@@ -25584,6 +25801,9 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoLicenseValidationFailed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoVolumeContentDownloaded"
           }
         ],
         "discriminator": {
@@ -25662,7 +25882,8 @@
             "LicenseRemoved": "#/components/schemas/ActivityEventInfoLicenseRemoved",
             "LicenseEnteredGracePeriod": "#/components/schemas/ActivityEventInfoLicenseEnteredGracePeriod",
             "LicenseExpired": "#/components/schemas/ActivityEventInfoLicenseExpired",
-            "LicenseValidationFailed": "#/components/schemas/ActivityEventInfoLicenseValidationFailed"
+            "LicenseValidationFailed": "#/components/schemas/ActivityEventInfoLicenseValidationFailed",
+            "VolumeContentDownloaded": "#/components/schemas/ActivityEventInfoVolumeContentDownloaded"
           }
         }
       },
@@ -27312,6 +27533,34 @@
           }
         }
       },
+      "ActivityEventInfoVolumeContentDownloaded": {
+        "required": [
+          "volumeName",
+          "path",
+          "isDirectory",
+          "fileName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "VolumeContentDownloaded"
+            ],
+            "type": "string"
+          },
+          "volumeName": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "isDirectory": {
+            "type": "boolean"
+          },
+          "fileName": {
+            "type": "string"
+          }
+        }
+      },
       "ActivityEventType": {
         "enum": [
           "DeploymentCreated",
@@ -27387,7 +27636,8 @@
           "LicenseRemoved",
           "LicenseEnteredGracePeriod",
           "LicenseExpired",
-          "LicenseValidationFailed"
+          "LicenseValidationFailed",
+          "VolumeContentDownloaded"
         ]
       },
       "ActivityResourceType": {
@@ -27401,7 +27651,8 @@
           "OidcProvider",
           "AutomationAction",
           "User",
-          "License"
+          "License",
+          "Volume"
         ]
       },
       "ActivitySourceResource": {
@@ -40409,7 +40660,8 @@
           "AutomationAction",
           "License",
           "BackupRepository",
-          "BackupPolicy"
+          "BackupPolicy",
+          "Volume"
         ]
       },
       "RestartPolicy": {
@@ -40747,7 +40999,9 @@
           "Terminal",
           "ResourceBindings",
           "Releases",
-          "Restore"
+          "Restore",
+          "Browse",
+          "Download"
         ]
       },
       "StackApplyEventType": {
@@ -43347,6 +43601,8 @@
       "VolumeCapabilities": {
         "required": [
           "canInspect",
+          "canBrowse",
+          "canDownload",
           "canRead",
           "canWrite",
           "canExecute"
@@ -43354,6 +43610,12 @@
         "type": "object",
         "properties": {
           "canInspect": {
+            "type": "boolean"
+          },
+          "canBrowse": {
+            "type": "boolean"
+          },
+          "canDownload": {
             "type": "boolean"
           },
           "canRead": {
@@ -43391,6 +43653,84 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "VolumeDirectoryView": {
+        "required": [
+          "platformId",
+          "volumeName",
+          "path",
+          "entries",
+          "isTruncated"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "volumeName": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VolumeFileEntryView"
+            }
+          },
+          "isTruncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "VolumeFileEntryType": {
+        "enum": [
+          "Directory",
+          "File",
+          "Symlink",
+          "Other"
+        ]
+      },
+      "VolumeFileEntryView": {
+        "required": [
+          "name",
+          "path",
+          "type",
+          "size",
+          "modifiedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/VolumeFileEntryType"
+          },
+          "size": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "modifiedAt": {
+            "format": "date-time"
+          },
+          "linkTarget": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

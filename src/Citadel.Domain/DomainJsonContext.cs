@@ -222,6 +222,7 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(LicenseEnteredGracePeriod))]
 [JsonSerializable(typeof(LicenseExpired))]
 [JsonSerializable(typeof(LicenseValidationFailed))]
+[JsonSerializable(typeof(VolumeContentDownloaded))]
 
 public partial class EventInfoJsonContext : JsonSerializerContext
 {

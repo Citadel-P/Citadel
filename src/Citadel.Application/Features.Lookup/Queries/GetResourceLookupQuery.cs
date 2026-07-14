@@ -3,6 +3,7 @@ using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities.ResourceBindings;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -20,6 +21,8 @@ public sealed record GetResourceLookupQuery(
 
 internal sealed class GetResourceLookupQueryHandler(
     INetworkService networkService,
+    IPlatformContainerCache platformContainerCache,
+    IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
     IUserContextAccessor userContextAccessor,
     TimeProvider timeProvider,
     IUnitOfWork unitOfWork) : IQueryHandler<GetResourceLookupQuery, Result<IEnumerable<ResourceInfo>>>
@@ -259,7 +262,31 @@ internal sealed class GetResourceLookupQueryHandler(
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformVolumeLookupAsync(Guid? sourceId, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        if (!sourceId.HasValue)
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(new BadRequestError("sourceResourceId is required for Platform -> Volume lookup."));
+        }
+
+        if (!platformContainerCache.TryGetCacheEntry(sourceId.Value, out var platform, out var platformError))
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(platformError);
+        }
+
+        var volumeConnector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
+        var result = await volumeConnector.ListVolumesAsync(
+            new ListdDockerVolumesCommand(
+                PlatformAddress: platform.Address,
+                Dangling: null,
+                Driver: null,
+                Name: null),
+            cancellationToken);
+
+        if (result.IsFailure(out var error, out var volumes))
+        {
+            return Result.Failure<IEnumerable<ResourceInfo>>(error);
+        }
+
+        return Result.Success(volumes.Select(static item => new ResourceInfo(Guid.Empty, item.Name)));
     }
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetPlatformNetworkLookupAsync(Guid? sourceId, CancellationToken cancellationToken)

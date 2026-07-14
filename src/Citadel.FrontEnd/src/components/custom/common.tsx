@@ -1406,6 +1406,12 @@ export const TargetCell = ({
     [ActivityResourceType.GitRepository]: { Icon: GitBranch, path: `/git-repos/edit/${resourceId}` },
     [ActivityResourceType.AutomationAction]: { Icon: Workflow, path: `/automation/edit/${resourceId}` },
     [ActivityResourceType.User]: { Icon: User, path: `/access/users/edit/${resourceId}` },
+    [ActivityResourceType.Volume]: {
+      Icon: Database,
+      path: resourceName
+        ? `/platforms/${resourceId}/volumes/${encodeURIComponent(resourceName)}`
+        : `/platforms/${resourceId}/volumes`,
+    },
   };
 
   const config = resourceConfig[resourceType];

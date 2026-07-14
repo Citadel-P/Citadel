@@ -128,12 +128,21 @@ internal sealed class EdgeContainerConnector(IEdgeAgentCommandRouter commandRout
             MemoryLimit = createContainerCommand.MemoryLimit,
             CpuQuota = createContainerCommand.CpuQuota,
             MemoryReservation = createContainerCommand.MemoryReservation,
+            MemorySwap = createContainerCommand.MemorySwap,
+            PidsLimit = createContainerCommand.PidsLimit,
             AutoRemove = createContainerCommand.AutoRemove ?? false,
+            Privileged = createContainerCommand.Privileged ?? false,
+            ReadonlyRootfs = createContainerCommand.ReadonlyRootfs,
             RestartPolicy = createContainerCommand.RestartPolicy.Map(),
             Labels = { createContainerCommand.Labels ?? [] },
             EnvVars = { createContainerCommand.EnvVars ?? [] },
             Ports = { createContainerCommand.Ports ?? [] },
             Volumes = { createContainerCommand.Volumes ?? [] },
+            Mounts = { createContainerCommand.Mounts?.Select(mount => mount.MapAgent()) ?? [] },
+            CapAdd = { createContainerCommand.CapAdd ?? [] },
+            CapDrop = { createContainerCommand.CapDrop ?? [] },
+            SecurityOpt = { createContainerCommand.SecurityOpt ?? [] },
+            NetworkMode = createContainerCommand.NetworkMode,
             Networks = { networks },
             EntryPoint = { createContainerCommand.EntryPoint ?? [] },
             Command = { createContainerCommand.Command ?? [] }
@@ -236,6 +245,45 @@ internal sealed class EdgeContainerConnector(IEdgeAgentCommandRouter commandRout
         return new EdgeExecSession(platformId, command.CommandId, command.Output, commandRouter);
     }
 
+    public Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(string platformAddress, ContainerBinaryExecRequest request, CancellationToken cancellationToken)
+    {
+        if (!EdgeConnectorHelpers.TryGetPlatformId(platformAddress, out var platformId, out var addressError))
+        {
+            return Task.FromResult(Result.Failure<ContainerBinaryExecResult>(addressError!));
+        }
+
+        var rpcRequest = new ExecBinaryRequest
+        {
+            ContainerId = request.ContainerId,
+            Cmd = { request.Command },
+            Env = { request.Environment?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? [] },
+            AttachStdout = request.AttachStdout,
+            AttachStderr = request.AttachStderr,
+            Tty = request.Tty
+        };
+
+        var stream = commandRouter.SendServerStreamAsync(
+            platformId,
+            EdgeAgentCommandKind.ContainerExecBinary,
+            rpcRequest.ToByteArray(),
+            Timeout.InfiniteTimeSpan,
+            correlationId: null,
+            cancellationToken);
+
+        var exitCode = new TaskCompletionSource<int?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        return Task.FromResult(Result.Success<ContainerBinaryExecResult>(new ContainerBinaryExecResult
+        {
+            Output = ReadBinaryOutputAsync(stream, exitCode, cancellationToken),
+            GetExitCodeAsync = async ct => await exitCode.Task.WaitAsync(ct).ConfigureAwait(false),
+            CleanupAsync = () =>
+            {
+                exitCode.TrySetCanceled();
+                return ValueTask.CompletedTask;
+            }
+        }));
+    }
+
     public async IAsyncEnumerable<DockerContainer> StreamContainerStatsAsync(
         StreamContainerStatsCommand streamStatsCommand,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -310,6 +358,65 @@ internal sealed class EdgeContainerConnector(IEdgeAgentCommandRouter commandRout
             ContainerAction.RESTART => EdgeAgentCommandKind.ContainerRestart,
             _ => EdgeAgentCommandKind.Unspecified
         };
+
+    private static async IAsyncEnumerable<ContainerBinaryExecChunk> ReadBinaryOutputAsync(
+        IAsyncEnumerable<EdgeAgentStreamItem> stream,
+        TaskCompletionSource<int?> exitCode,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var item in stream.WithCancellation(cancellationToken))
+            {
+                if (!string.IsNullOrWhiteSpace(item.ErrorMessage))
+                {
+                    exitCode.TrySetResult(1);
+                    yield return new ContainerBinaryExecChunk(
+                        ContainerExecStream.Stderr,
+                        Encoding.UTF8.GetBytes(item.ErrorMessage));
+                    yield break;
+                }
+
+                if (item.Completed)
+                {
+                    exitCode.TrySetResult(null);
+                    yield break;
+                }
+
+                if (item.Payload is not { Length: > 0 })
+                {
+                    continue;
+                }
+
+                var message = ExecServerMessage.Parser.ParseFrom(item.Payload);
+                switch (message.MsgCase)
+                {
+                    case ExecServerMessage.MsgOneofCase.Output when message.Output?.Data.Length > 0:
+                        yield return new ContainerBinaryExecChunk(
+                            message.Output.Stream == StreamType.Stderr ? ContainerExecStream.Stderr : ContainerExecStream.Stdout,
+                            message.Output.Data.Memory);
+                        break;
+
+                    case ExecServerMessage.MsgOneofCase.Error:
+                        exitCode.TrySetResult(1);
+                        yield return new ContainerBinaryExecChunk(
+                            ContainerExecStream.Stderr,
+                            Encoding.UTF8.GetBytes(message.Error?.Message ?? "Binary exec failed."));
+                        yield break;
+
+                    case ExecServerMessage.MsgOneofCase.Exit:
+                        exitCode.TrySetResult(message.Exit?.ExitCode);
+                        break;
+                }
+            }
+
+            exitCode.TrySetResult(null);
+        }
+        finally
+        {
+            exitCode.TrySetResult(null);
+        }
+    }
 }
 
 internal sealed class EdgeExecSession(

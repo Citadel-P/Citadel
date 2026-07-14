@@ -43,7 +43,9 @@ public sealed record VolumeCapabilities(
     bool CanRead,
     bool CanWrite,
     bool CanExecute,
-    bool CanInspect
+    bool CanInspect,
+    bool CanBrowse,
+    bool CanDownload
 ) : ResourceCapabilities(
     CanRead,
     CanWrite,
@@ -138,9 +140,12 @@ public static class CapabilityMapper
         );
     }
 
-    public static VolumeCapabilities ToVolumeCapabilities(PermissionMetadata permission)
+    public static VolumeCapabilities ToVolumeCapabilities(
+        PermissionMetadata permission,
+        PermissionMetadata? contentPermission = null)
     {
         var common = ToResourceCapabilities(permission);
+        var content = contentPermission ?? permission;
 
         return new VolumeCapabilities(
             common.CanRead,
@@ -149,7 +154,13 @@ public static class CapabilityMapper
 
             CanInspect:
                common.CanRead &&
-                (permission.SpecificPermissions & SpecificPermission.Inspect) != 0
+                (permission.SpecificPermissions & SpecificPermission.Inspect) != 0,
+
+            CanBrowse:
+                content.Has(PermissionLevel.Read, SpecificPermission.Browse),
+
+            CanDownload:
+                content.Has(PermissionLevel.Read, SpecificPermission.Download)
         );
     }
 

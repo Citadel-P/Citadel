@@ -765,6 +765,44 @@ internal static class ContainerMappers
         };
     }
 
+    internal static Mount MapAgent(this HostMount mount)
+        => new()
+        {
+            Target = mount.Target,
+            Source = mount.Source,
+            Type = mount.Type,
+            ReadOnly = mount.ReadOnly,
+            Consistency = mount.Consistency,
+            BindOptions = mount.BindOptions?.MapAgent(),
+            VolumeOptions = mount.VolumeOptions?.MapAgent()
+        };
+
+    private static Citadel.SharedModels.V1.BindOptions MapAgent(this Domain.Contracts.Resources.Containers.BindOptions options)
+        => new()
+        {
+            Propagation = options.Propagation,
+            NonRecursive = options.NonRecursive,
+            CreateMountpoint = options.CreateMountpoint,
+            ReadOnlyNonRecursive = options.ReadOnlyNonRecursive,
+            ReadOnlyForceRecursive = options.ReadOnlyForceRecursive
+        };
+
+    private static Citadel.SharedModels.V1.VolumeOptions MapAgent(this Domain.Contracts.Resources.Containers.VolumeOptions options)
+        => new()
+        {
+            NoCopy = options.NoCopy,
+            Labels = { options.Labels.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) },
+            DriverConfig = options.DriverConfig?.MapAgent(),
+            Subpath = options.Subpath
+        };
+
+    private static DriverConfig MapAgent(this DriverConfiguration driverConfig)
+        => new()
+        {
+            Name = driverConfig.Name,
+            Options = { driverConfig.Options.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) }
+        };
+
     internal static Hosting.DockerClient.EndpointIPAMConfig Map(this Domain.Contracts.Resources.Networks.EndpointIPAMConfig ipamConfig)
         => new Hosting.DockerClient.EndpointIPAMConfig
         {

@@ -257,6 +257,7 @@ public enum EdgeAgentCommandKind
     ContainerStatsStream = 20,
     ContainersStatsStream = 21,
     ContainerExec = 22,
+    ContainerExecBinary = 23,
     ImageGet = 30,
     ImageList = 31,
     ImageInspect = 32,
@@ -575,7 +576,8 @@ public enum ActivityResourceType
     OidcProvider,
     AutomationAction,
     User,
-    License
+    License,
+    Volume
 }
 
 public enum ActivityEventType
@@ -682,6 +684,10 @@ public enum ActivityEventType
     LicenseEnteredGracePeriod,
     LicenseExpired,
     LicenseValidationFailed,
+    #endregion
+
+    #region Volume Events
+    VolumeContentDownloaded,
     #endregion
 }
 

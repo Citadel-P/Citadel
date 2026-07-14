@@ -22,6 +22,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.ResourceBindings;
 using WebApi.Routes.Endpoints.Resources.Stacks;
+using WebApi.Routes.Endpoints.Resources.Volumes;
 
 namespace WebApi.Routes;
 
@@ -1374,6 +1375,26 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listContainers");
+
+        platforms.MapGet("{platformId}/volumes/{name}/files", Volumes.ListDirectory)
+            .WithSummary("List volume directory contents")
+            .Produces<VolumeDirectoryView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listVolumeDirectory");
+
+        platforms.MapGet("{platformId}/volumes/{name}/files/download", Volumes.Download)
+            .WithSummary("Download a volume file or directory archive")
+            .Produces(StatusCodes.Status200OK, contentType: "application/octet-stream")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("downloadVolumePath");
 
         platforms.MapGet("{id}/stats", Platforms.GetStats)
             .WithSummary("Get platform stats")

@@ -425,6 +425,7 @@ internal sealed class EdgeAgentCommandRouter(
             EdgeAgentCommandKind.ContainerStatsStream => ProtoEdgeCommandKind.ContainerStatsStream,
             EdgeAgentCommandKind.ContainersStatsStream => ProtoEdgeCommandKind.ContainersStatsStream,
             EdgeAgentCommandKind.ContainerExec => ProtoEdgeCommandKind.ContainerExec,
+            EdgeAgentCommandKind.ContainerExecBinary => ProtoEdgeCommandKind.ContainerExecBinary,
             EdgeAgentCommandKind.ImageGet => ProtoEdgeCommandKind.ImageGet,
             EdgeAgentCommandKind.ImageList => ProtoEdgeCommandKind.ImageList,
             EdgeAgentCommandKind.ImageInspect => ProtoEdgeCommandKind.ImageInspect,

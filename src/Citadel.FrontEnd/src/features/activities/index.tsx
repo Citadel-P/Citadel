@@ -22,6 +22,7 @@ const activityResourceIcons = {
   [ActivityResourceType.AutomationAction]: CitadelIcons.AutomationAction,
   [ActivityResourceType.User]: CitadelIcons.User,
   [ActivityResourceType.License]: CitadelIcons.License,
+  [ActivityResourceType.Volume]: CitadelIcons.Volume,
 } satisfies Record<ActivityResourceType, any>;
 
 const activityEventPrefixes = {
@@ -35,6 +36,7 @@ const activityEventPrefixes = {
   [ActivityResourceType.AutomationAction]: 'Action',
   [ActivityResourceType.User]: 'User',
   [ActivityResourceType.License]: 'License',
+  [ActivityResourceType.Volume]: 'Volume',
 } satisfies Record<ActivityResourceType, string>;
 
 const activityLookupTargets = {
@@ -48,6 +50,7 @@ const activityLookupTargets = {
   [ActivityResourceType.AutomationAction]: LookupResourceType.AutomationAction,
   [ActivityResourceType.User]: LookupResourceType.User,
   [ActivityResourceType.License]: LookupResourceType.License,
+  [ActivityResourceType.Volume]: LookupResourceType.Platform,
 } satisfies Record<ActivityResourceType, LookupResourceType>;
 
 export const ActivityComponents: RequiredComponents = {
@@ -137,7 +140,7 @@ function SearchSection() {
           targetType={activityLookupTargets[query.resourceType]}
           onSelect={handleResourceChange as any}
           selected={query.resourceId}
-          placeholder={'Select ' + query.resourceType}
+          placeholder={query.resourceType === ActivityResourceType.Volume ? 'Select Platform' : 'Select ' + query.resourceType}
           className={filterFieldClassName}
         />
       )}

@@ -13,7 +13,9 @@ public class Permission
         (int)SpecificPermission.Inspect |
         (int)SpecificPermission.ResourceBindings |
         (int)SpecificPermission.Releases |
-        (int)SpecificPermission.Restore;
+        (int)SpecificPermission.Restore |
+        (int)SpecificPermission.Browse |
+        (int)SpecificPermission.Download;
 
     public Guid Id { get; private set; }
     public Guid RoleId { get; private set; }
@@ -109,6 +111,12 @@ public class Permission
 
         if ((mask & (int)SpecificPermission.Restore) != 0)
             permissions.Add(SpecificPermission.Restore);
+
+        if ((mask & (int)SpecificPermission.Browse) != 0)
+            permissions.Add(SpecificPermission.Browse);
+
+        if ((mask & (int)SpecificPermission.Download) != 0)
+            permissions.Add(SpecificPermission.Download);
 
         return [.. permissions];
     }

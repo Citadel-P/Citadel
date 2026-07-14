@@ -132,6 +132,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<UserPasswordChanged>]
 [GenerateShapeFor<UserSessionRevoked>]
 [GenerateShapeFor<UserOtherSessionsRevoked>]
+[GenerateShapeFor<VolumeContentDownloaded>]
 [GenerateShapeFor<WebhookAuthenticationFailedAlertInfo>]
 [GenerateShapeFor<WebhookDispatchFailedAlertInfo>]
 [GenerateShapeFor<WebhookGitRepoSyncFailedAlertInfo>]
@@ -223,5 +224,6 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.UserPasswordChanged)] = typeof(UserPasswordChanged),
         [nameof(ActivityEventType.UserSessionRevoked)] = typeof(UserSessionRevoked),
         [nameof(ActivityEventType.UserOtherSessionsRevoked)] = typeof(UserOtherSessionsRevoked),
+        [nameof(ActivityEventType.VolumeContentDownloaded)] = typeof(VolumeContentDownloaded),
     };
 }

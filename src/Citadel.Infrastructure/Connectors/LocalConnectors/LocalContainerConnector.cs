@@ -27,7 +27,11 @@ internal class LocalContainerConnector(IContainerService containerService) : ICo
             MemoryLimit: createContainerCommand.MemoryLimit,
             CpuQuota: createContainerCommand.CpuQuota,
             MemoryReservation: createContainerCommand.MemoryReservation,
+            MemorySwap: createContainerCommand.MemorySwap,
+            PidsLimit: createContainerCommand.PidsLimit,
             AutoRemove: createContainerCommand.AutoRemove,
+            Privileged: createContainerCommand.Privileged,
+            ReadonlyRootfs: createContainerCommand.ReadonlyRootfs,
             RestartPolicy: createContainerCommand.RestartPolicy?.Map(),
             Labels: createContainerCommand.Labels,
             Networks: networks,
@@ -35,7 +39,12 @@ internal class LocalContainerConnector(IContainerService containerService) : ICo
             Command: createContainerCommand.Command,
             EnvVars: createContainerCommand.EnvVars,
             Ports: createContainerCommand.Ports,
-            Volumes: createContainerCommand.Volumes
+            Volumes: createContainerCommand.Volumes,
+            Mounts: createContainerCommand.Mounts?.Select(MapMount).ToList(),
+            CapAdd: createContainerCommand.CapAdd,
+            CapDrop: createContainerCommand.CapDrop,
+            SecurityOpt: createContainerCommand.SecurityOpt,
+            NetworkMode: createContainerCommand.NetworkMode
         );
         return containerService.CreateAsync(command, cancellationToken);
     }
@@ -59,6 +68,21 @@ internal class LocalContainerConnector(IContainerService containerService) : ICo
         }
 
         return new LocalExecSessionAdapter(resp);
+    }
+
+    public async Task<Result<ContainerBinaryExecResult>> ExecBinaryAsync(string platformAddress, ContainerBinaryExecRequest request, CancellationToken cancellationToken)
+    {
+        var result = await containerService.ExecBinaryAsync(
+            new BinaryExecCommand(
+                request.ContainerId,
+                request.Command,
+                request.Environment,
+                request.AttachStdout,
+                request.AttachStderr,
+                request.Tty),
+            cancellationToken);
+
+        return ServiceResultHandlers.HandleResult(result, MapBinaryExecResult);
     }
 
     public async Task<Result<ContainerInspectionInfo>> InspectAsync(InspectContainerCommand inspectContainerCommand, CancellationToken cancellationToken)
@@ -111,6 +135,39 @@ internal class LocalContainerConnector(IContainerService containerService) : ICo
         await foreach (var data in containerService.StreamLogsAsync(streamContainerLogsCommand.ContainerId, cancellationToken))
         {
             yield return data;
+        }
+    }
+
+    private static Hosting.DockerClient.Models.Containers.ContainerMount MapMount(HostMount mount)
+        => new(
+            Type: mount.Type?.Equals("bind", StringComparison.OrdinalIgnoreCase) == true
+                ? Hosting.DockerClient.Models.Containers.ContainerMountType.Bind
+                : mount.Type?.Equals("tmpfs", StringComparison.OrdinalIgnoreCase) == true
+                    ? Hosting.DockerClient.Models.Containers.ContainerMountType.Tmpfs
+                    : Hosting.DockerClient.Models.Containers.ContainerMountType.Volume,
+            Source: mount.Source,
+            Target: mount.Target ?? "/data",
+            ReadOnly: mount.ReadOnly ?? false);
+
+    private static ContainerBinaryExecResult MapBinaryExecResult(BinaryExecSession session)
+        => new()
+        {
+            Output = MapOutput(session.Output),
+            GetExitCodeAsync = session.GetExitCodeAsync,
+            CleanupAsync = session.DisposeAsync
+        };
+
+    private static async IAsyncEnumerable<ContainerBinaryExecChunk> MapOutput(
+        IAsyncEnumerable<BinaryExecChunk> output,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var chunk in output.WithCancellation(cancellationToken))
+        {
+            yield return new ContainerBinaryExecChunk(
+                chunk.Stream == BinaryExecStream.Stderr
+                    ? ContainerExecStream.Stderr
+                    : ContainerExecStream.Stdout,
+                chunk.Data);
         }
     }
 }

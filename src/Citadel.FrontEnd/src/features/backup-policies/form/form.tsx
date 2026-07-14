@@ -447,7 +447,6 @@ export function BackupPolicyForm({
       currentScheduleEnabled,
       currentSourceType,
       disabled,
-      id,
       mode,
       original.source,
       resource,

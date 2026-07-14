@@ -96,7 +96,8 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<BackupSnapshotAvailability>),
         typeof(JsonStringEnumConverter<BackupCoverageStatus>),
         typeof(JsonStringEnumConverter<BackupCoverageResourceType>),
-        typeof(JsonStringEnumConverter<BackupRestoreStatus>)
+        typeof(JsonStringEnumConverter<BackupRestoreStatus>),
+        typeof(JsonStringEnumConverter<VolumeFileEntryType>)
     })]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Guid[]))]
@@ -300,6 +301,10 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeleteVolumesInput))]
 [JsonSerializable(typeof(ListVolumesRequest))]
 [JsonSerializable(typeof(VolumesView))]
+[JsonSerializable(typeof(VolumeDirectoryView))]
+[JsonSerializable(typeof(VolumeFileEntryView))]
+[JsonSerializable(typeof(IReadOnlyList<VolumeFileEntryView>))]
+[JsonSerializable(typeof(VolumeFileEntryType))]
 [JsonSerializable(typeof(IEnumerable<DockerHubRepositoryInfo>))]
 [JsonSerializable(typeof(DockerHubTag))]
 [JsonSerializable(typeof(IEnumerable<DockerHubImage>))]

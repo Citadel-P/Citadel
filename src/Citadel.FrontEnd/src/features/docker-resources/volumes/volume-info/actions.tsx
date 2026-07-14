@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { DockerVolumeResultView } from '@/api/generated/api.types';
+import { VolumeBrowseInfoAction } from '../volume-browser-sheet';
 
-export const { info: VolumeInfoActions } = createActionsBuilder<DockerVolumeResultView>()
+const volumeInfoActions = createActionsBuilder<DockerVolumeResultView>()
   .addAction({
     key: 'delete',
     type: 'command',
@@ -37,3 +38,8 @@ export const { info: VolumeInfoActions } = createActionsBuilder<DockerVolumeResu
     },
   })
   .build();
+
+export const VolumeInfoActions = {
+  browse: VolumeBrowseInfoAction,
+  ...volumeInfoActions.info,
+};

@@ -26,8 +26,11 @@ public sealed record VolumesView(IEnumerable<DockerVolumeResultView> Volumes, Re
         var platformId = list[0].PlatformId;
 
         var meta = await permissionEvaluator.EvaluateAsync(platformId, ResourceType.Platform);
+        var contentMeta = await permissionEvaluator.EvaluateAsync(platformId, ResourceType.Volume);
 
-        var capabilities = CapabilityMapper.ToVolumeCapabilities(meta == default ? PermissionMetadata.Empty : meta);
+        var capabilities = CapabilityMapper.ToVolumeCapabilities(
+            meta == default ? PermissionMetadata.Empty : meta,
+            contentMeta == default ? PermissionMetadata.Empty : contentMeta);
 
         var views = new DockerVolumeResultView[list.Length];
 

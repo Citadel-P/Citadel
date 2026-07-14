@@ -1,4 +1,4 @@
-import { LicenseLimitView, LicenseStatus, LicenseView } from '@/api/generated/api.types';
+import { LicenseLimitView, LicenseStatus } from '@/api/generated/api.types';
 import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';

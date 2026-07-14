@@ -88,6 +88,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(LicenseEnteredGracePeriod), nameof(ActivityEventType.LicenseEnteredGracePeriod))]
 [JsonDerivedType(typeof(LicenseExpired), nameof(ActivityEventType.LicenseExpired))]
 [JsonDerivedType(typeof(LicenseValidationFailed), nameof(ActivityEventType.LicenseValidationFailed))]
+[JsonDerivedType(typeof(VolumeContentDownloaded), nameof(ActivityEventType.VolumeContentDownloaded))]
 
 public abstract record ActivityEventInfo;
 
@@ -279,3 +280,9 @@ public sealed record LicenseRemoved(LicenseActivitySnapshot License) : ActivityE
 public sealed record LicenseEnteredGracePeriod(LicenseActivitySnapshot License) : ActivityEventInfo;
 public sealed record LicenseExpired(LicenseActivitySnapshot License) : ActivityEventInfo;
 public sealed record LicenseValidationFailed(string? Fingerprint, LicenseStatus Status, string? ErrorCode) : ActivityEventInfo;
+
+public sealed record VolumeContentDownloaded(
+    string VolumeName,
+    string Path,
+    bool IsDirectory,
+    string FileName) : ActivityEventInfo;
