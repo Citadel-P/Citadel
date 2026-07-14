@@ -150,6 +150,9 @@ public static class ApplicationModule
             .AddSingleton<ContainerStreamManager>()
             .AddSingleton<DockerDaemonStreamManager>()
             .AddSingleton<GitRepositoryStreamManager>()
+            .AddSingleton<BackupRepositoryStreamManager>()
+            .AddSingleton<BackupPolicyStreamManager>()
+            .AddSingleton<AutomationActionStreamManager>()
             .AddSingleton<IImageStreamManager>(s => s.GetRequiredService<ImageStreamManager>())
             .AddSingleton<IExecSessionManager>(s => s.GetRequiredService<ExecSessionManager>())
             .AddSingleton<IActivityStreamManager>(s => s.GetRequiredService<ActivityStreamManager>())
@@ -161,6 +164,9 @@ public static class ApplicationModule
             .AddSingleton<IContainerLogStreamManager>(s => s.GetRequiredService<ContainerLogStreamManager>())
             .AddSingleton<IStackLogStreamManager>(s => s.GetRequiredService<StackLogStreamManager>())
             .AddSingleton<IGitRepositoryStreamManager>(s => s.GetRequiredService<GitRepositoryStreamManager>())
+            .AddSingleton<IBackupRepositoryStreamManager>(s => s.GetRequiredService<BackupRepositoryStreamManager>())
+            .AddSingleton<IBackupPolicyStreamManager>(s => s.GetRequiredService<BackupPolicyStreamManager>())
+            .AddSingleton<IAutomationActionStreamManager>(s => s.GetRequiredService<AutomationActionStreamManager>())
             .AddSingleton<IStackStreamManager>(s => s.GetRequiredService<StackStreamManager>());
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)

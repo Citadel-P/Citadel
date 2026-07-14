@@ -9,7 +9,7 @@ import {
   LookupResourceType,
   PlatformView,
 } from '@/api/generated/api.types';
-import { LogViewer, ResourceSelectorField } from '@/components/custom/common';
+import { ResourceSelectorField } from '@/components/custom/common';
 import { ContentCard } from '@/components/custom/content-card';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -19,9 +19,9 @@ import { DataTable } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { useTaskSheet } from '@/lib/atoms';
+import { byteTransform } from '@/lib/bytes.helper';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
@@ -32,11 +32,11 @@ import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }) {
-  const [logRunId, setLogRunId] = useState<string | undefined>();
   const [restoreRun, setRestoreRun] = useState<BackupRunView | undefined>();
   const queryClient = useQueryClient();
   const formatDateTime = useProfileDateTimeFormatter();
   const cancelRun = useMutate('cancelBackupRun');
+  const { open: openSheet } = useTaskSheet('BackupPolicy');
   const readArgs = useMemo(() => ({ query: { policyId: resource.id, limit: 50 } }), [resource.id]);
   const { data, isLoading } = useRead('listBackupRuns', readArgs, {
     refetchInterval: (query) => {
@@ -48,9 +48,6 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
   });
 
   const runs = useMemo(() => data?.data.runs ?? [], [data?.data.runs]);
-  const selectedRun = useMemo(() => runs.find((run) => run.id === logRunId), [logRunId, runs]);
-  const logsArgs = useMemo(() => ({ id: logRunId ?? '' }), [logRunId]);
-  const logs = useRead('getBackupRunLogs', logsArgs, { enabled: Boolean(logRunId) });
 
   const handleCancel = useCallback(
     async (run: BackupRunView) => {
@@ -66,9 +63,24 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
     [cancelRun, queryClient, resource.id],
   );
 
+  const handleOpenLogs = useCallback(
+    (run: BackupRunView) => {
+      openSheet({
+        kind: 'backupRunLogs',
+        payload: {
+          id: run.id,
+          name: run.policyNameSnapshot,
+          trigger: run.trigger,
+          items: run.items,
+        },
+      });
+    },
+    [openSheet],
+  );
+
   const columns = useMemo(
-    () => runColumns(setLogRunId, setRestoreRun, handleCancel, cancelRun.isPending, formatDateTime),
-    [cancelRun.isPending, formatDateTime, handleCancel],
+    () => runColumns(handleOpenLogs, setRestoreRun, handleCancel, cancelRun.isPending, formatDateTime),
+    [cancelRun.isPending, formatDateTime, handleCancel, handleOpenLogs],
   );
 
   return (
@@ -76,16 +88,6 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
       <ContentCard>
         <DataTable columns={columns} data={runs} isLoading={isLoading} />
       </ContentCard>
-
-      <BackupRunLogsSheet
-        open={Boolean(logRunId)}
-        run={selectedRun}
-        logs={logs.data?.data.logs ?? ''}
-        isLoading={logs.isLoading}
-        onOpenChange={(open) => {
-          if (!open) setLogRunId(undefined);
-        }}
-      />
 
       {restoreRun && (
         <BackupRestoreDialog
@@ -99,7 +101,7 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
 }
 
 const runColumns = (
-  onSelectLog: (id: string) => void,
+  onSelectLog: (run: BackupRunView) => void,
   onRestore: (run: BackupRunView) => void,
   onCancel: (run: BackupRunView) => void,
   cancelPending: boolean,
@@ -137,7 +139,11 @@ const runColumns = (
   {
     accessorKey: 'bytesAdded',
     header: ({ column }) => <SortableCell cellName="Added" column={column} />,
-    cell: ({ row }) => <span className="text-sm tabular-nums">{formatBytes(row.original.bytesAdded)}</span>,
+    cell: ({ row }) => (
+      <span className="text-sm tabular-nums">
+        {(row.original.bytesAdded ?? 0) > 0 ? byteTransform(row.original.bytesAdded, 2) : '-'}
+      </span>
+    ),
     sortingFn: (rowA, rowB) => Number(rowA.original.bytesAdded ?? 0) - Number(rowB.original.bytesAdded ?? 0),
   },
   {
@@ -155,7 +161,7 @@ const runColumns = (
 
       return (
         <div className="flex justify-end gap-1">
-          <Button type="button" size="icon-sm" variant="ghost" onClick={() => onSelectLog(run.id)} title="View logs">
+          <Button type="button" size="icon-sm" variant="ghost" onClick={() => onSelectLog(run)} title="View logs">
             <FileText className="size-3.5" />
           </Button>
           {restorable && (
@@ -179,43 +185,6 @@ const runColumns = (
     },
   },
 ];
-
-function BackupRunLogsSheet({
-  open,
-  run,
-  logs,
-  isLoading,
-  onOpenChange,
-}: {
-  open: boolean;
-  run?: BackupRunView;
-  logs: string;
-  isLoading: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const description = run ? `${run.trigger} backup run` : isLoading ? 'Loading backup logs...' : 'Backup run logs';
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        onOpenAutoFocus={(event) => event.preventDefault()}
-        side="top"
-        className="mx-auto w-300 max-w-[100vw] rounded-b-md">
-        <div className="p-2">
-          <SheetHeader>
-            <SheetTitle>{run ? `${run.policyNameSnapshot} logs` : 'Backup logs'}</SheetTitle>
-            <SheetDescription>{description}</SheetDescription>
-          </SheetHeader>
-
-          <div className="p-4 pt-0 pb-2">
-            {run && run.items.length > 0 && <BackupRunItemsList items={run.items} />}
-            <LogViewer logs={isLoading ? '' : logs} autoScroll={false} allowWrap timeStamps />
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
 
 function BackupRestoreDialog({
   run,
@@ -315,23 +284,6 @@ function BackupRunItemsSummary({ items }: { items: BackupRunItemView[] }) {
   );
 }
 
-function BackupRunItemsList({ items }: { items: BackupRunItemView[] }) {
-  return (
-    <div className="mb-3 grid gap-1 rounded-md border p-2">
-      {items.map((item) => (
-        <div key={item.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-xs">
-          <span className="truncate font-medium">{item.volumeName}</span>
-          <span className="text-muted-foreground tabular-nums">{formatBytes(item.bytesAdded)}</span>
-          <span className="inline-flex items-center gap-1.5">
-            <StateIndicator value={item.status} isProcessing={item.status === BackupRunItemStatus.Running} />
-            {item.status}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function isActiveRun(run: Pick<BackupRunView, 'status'>) {
   return (
     run.status === BackupRunStatus.Queued ||
@@ -343,19 +295,4 @@ function isActiveRun(run: Pick<BackupRunView, 'status'>) {
 
 function canRestore(run: BackupRunView) {
   return run.sourceSnapshot.$type === 'DockerVolume' && run.snapshotAvailability === BackupSnapshotAvailability.Available;
-}
-
-function formatBytes(value: BackupRunView['bytesAdded']) {
-  const bytes = Number(value ?? 0);
-  if (!Number.isFinite(bytes) || bytes <= 0) return '-';
-
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let next = bytes;
-  let unit = 0;
-  while (next >= 1024 && unit < units.length - 1) {
-    next /= 1024;
-    unit += 1;
-  }
-
-  return `${next.toFixed(next >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }

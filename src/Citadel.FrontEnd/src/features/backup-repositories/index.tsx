@@ -1,9 +1,9 @@
 import { BackupRepositoryView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
-import { useRead } from '@/lib/hooks';
 import { CitadelIcons } from '@/lib/icons';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { BackupRepositoryDropdownActions, BackupRepositoryGroupActions } from './actions';
+import { useBackupRepositoriesGroup } from './hooks/useBackupRepositoriesGroup';
 import { BackupRepositoriesTable } from './table';
 
 const EMPTY_REPOSITORIES: BackupRepositoryView[] = [];
@@ -24,11 +24,11 @@ export const BackupRepositoryComponents: RequiredComponents<BackupRepositoryView
     <ActionBar type="BackupRepository" items={items} actions={Object.values(BackupRepositoryGroupActions)} />
   ),
   useData(): ResourceDataHookResult<BackupRepositoryView> {
-    const { data, isLoading } = useRead('listBackupRepositories');
+    const { repositories, isLoading, capabilities } = useBackupRepositoriesGroup();
     return {
-      items: data?.data.repositories ?? EMPTY_REPOSITORIES,
+      items: repositories ?? EMPTY_REPOSITORIES,
       isLoading,
-      capabilities: data?.data.capabilities,
+      capabilities,
     };
   },
   filterItems: (items, search) => {

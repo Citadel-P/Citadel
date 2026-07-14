@@ -6,11 +6,15 @@ using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
+using Domain.Entities.Automation;
+using Domain.Entities.Backups;
 using Domain.Entities.Platforms;
 using Nerdbank.MessagePack;
 using PolyType;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
+using WebApi.Routes.Endpoints.Resources.Automation;
+using WebApi.Routes.Endpoints.Resources.Backups;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
@@ -58,6 +62,20 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<List<AlertEventView>>]
 [GenerateShapeFor<UnresolvedAlertsCountView>]
 [GenerateShapeFor<GitRepositoryView>]
+[GenerateShapeFor<BackupRepositoryView>]
+[GenerateShapeFor<BackupPolicyView>]
+[GenerateShapeFor<BackupRepositorySpec>]
+[GenerateShapeFor<FileSystemBackupRepositorySpec>]
+[GenerateShapeFor<S3CompatibleBackupRepositorySpec>]
+[GenerateShapeFor<BackupSourceSpec>]
+[GenerateShapeFor<DockerVolumeBackupSource>]
+[GenerateShapeFor<CitadelSystemBackupSource>]
+[GenerateShapeFor<StackBackupSource>]
+[GenerateShapeFor<DeploymentBackupSource>]
+[GenerateShapeFor<BackupWebhookConfig>]
+[GenerateShapeFor<AutomationActionView>]
+[GenerateShapeFor<AutomationActionRunView>]
+[GenerateShapeFor<AutomationWebhookConfig>]
 [GenerateShapeFor<LatestActivityView>]
 [GenerateShapeFor<ActivitySourceResource>]
 [GenerateShapeFor<ActivityChangedField>]
@@ -152,6 +170,20 @@ internal static class DerivedTypesMapping
         [nameof(PlatformType.Docker)] = typeof(DockerPlatformDescriptor),
         [nameof(PlatformType.Kubernetes)] = typeof(KubernetesPlatformDescriptor),
         [nameof(PlatformType.DockerSwarm)] = typeof(DockerSwarmPlatformDescriptor),
+    };
+
+    internal static DerivedTypeMapping<BackupRepositorySpec> BackupRepositorySpecMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
+    {
+        [nameof(BackupRepositoryType.FileSystem)] = typeof(FileSystemBackupRepositorySpec),
+        [nameof(BackupRepositoryType.S3Compatible)] = typeof(S3CompatibleBackupRepositorySpec),
+    };
+
+    internal static DerivedTypeMapping<BackupSourceSpec> BackupSourceSpecMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
+    {
+        [nameof(BackupSourceType.DockerVolume)] = typeof(DockerVolumeBackupSource),
+        [nameof(BackupSourceType.CitadelSystem)] = typeof(CitadelSystemBackupSource),
+        [nameof(BackupSourceType.Stack)] = typeof(StackBackupSource),
+        [nameof(BackupSourceType.Deployment)] = typeof(DeploymentBackupSource),
     };
 
     internal static DerivedTypeMapping<ActivityEventInfo> ActivityEventInfoMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)

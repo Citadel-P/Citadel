@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { useMutate, useRead } from '@/lib/hooks';
+import { useMutate } from '@/lib/hooks';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
@@ -57,15 +57,15 @@ import {
   toCreateInput,
   toUpdateInput,
 } from '../backup-repositories/form/form';
+import { useBackupRepositoriesGroup } from '../backup-repositories/hooks/useBackupRepositoriesGroup';
 
 const EMPTY_REPOSITORIES: BackupRepositoryView[] = [];
 type RepositoryOperation = 'validate' | 'initialize' | 'check' | 'prune';
 type PendingRepositoryOperations = Partial<Record<string, RepositoryOperation>>;
 
 export function BackupRepositoriesSection() {
-  const { data, isLoading } = useRead('listBackupRepositories');
-  const repositories = data?.data.repositories ?? EMPTY_REPOSITORIES;
-  const capabilities = data?.data.capabilities;
+  const { repositories: loadedRepositories, isLoading, capabilities } = useBackupRepositoriesGroup();
+  const repositories = loadedRepositories ?? EMPTY_REPOSITORIES;
   const canWrite = capabilities?.canWrite ?? false;
 
   const [open, setOpen] = useState(false);
@@ -192,10 +192,6 @@ function RepositoryCard({
     if (operating) return;
 
     onPendingOperationChange(repository.id, operation);
-    window.setTimeout(() => {
-      void refreshRepository();
-    }, 300);
-
     try {
       await mutation.mutateAsync({ id: repository.id, data: getRepositoryOperationContext(repository) } as any);
       await refreshRepository();

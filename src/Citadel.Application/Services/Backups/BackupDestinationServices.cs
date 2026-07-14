@@ -1,4 +1,6 @@
 using Application.Configs;
+using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Backups;
@@ -38,6 +40,8 @@ internal sealed class BackupRepositoryDestinationService(
     IResticProcessRunner processRunner,
     IPlatformResticRunner platformResticRunner,
     IPlatformContainerCache platformContainerCache,
+    IBackupRepositoryStreamManager backupRepositoryStreamManager,
+    INotificationQueue notificationQueue,
     IOptions<BackupOptions> backupOptions)
     : IBackupRepositoryDestinationService
 {
@@ -242,19 +246,43 @@ internal sealed class BackupRepositoryDestinationService(
 
     private async Task MarkRepositoryProcessingAsync(Guid repositoryId, Guid ownerRunId, CancellationToken cancellationToken)
     {
+        BackupRepository? repository = null;
+
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        await uow.BackupRepositories.MarkProcessingAsync(repositoryId, ownerRunId, cancellationToken);
+        var updated = await uow.BackupRepositories.MarkProcessingAsync(repositoryId, ownerRunId, cancellationToken);
+        if (updated > 0)
+            repository = await uow.BackupRepositories.GetAsync(repositoryId, cancellationToken);
+
         await uow.CommitAsync(cancellationToken);
+
+        if (repository is not null)
+        {
+            await notificationQueue.EnqueueAsync(
+                new BackupRepositoryNotificationWorkItem(backupRepositoryStreamManager, repository),
+                cancellationToken);
+        }
     }
 
     private async Task ReleaseRepositoryOperationAsync(Guid repositoryId, Guid ownerRunId, CancellationToken cancellationToken)
     {
+        BackupRepository? repository = null;
+
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        await uow.BackupRepositories.MarkIdleAsync(repositoryId, ownerRunId, cancellationToken);
+        var updated = await uow.BackupRepositories.MarkIdleAsync(repositoryId, ownerRunId, cancellationToken);
         await uow.BackupRepositoryLeases.ReleaseAsync(repositoryId, ownerRunId, cancellationToken);
+        if (updated > 0)
+            repository = await uow.BackupRepositories.GetAsync(repositoryId, cancellationToken);
+
         await uow.CommitAsync(cancellationToken);
+
+        if (repository is not null)
+        {
+            await notificationQueue.EnqueueAsync(
+                new BackupRepositoryNotificationWorkItem(backupRepositoryStreamManager, repository),
+                cancellationToken);
+        }
     }
 
     private async Task PersistValidationAsync(

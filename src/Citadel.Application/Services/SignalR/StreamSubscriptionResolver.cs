@@ -27,6 +27,12 @@ internal sealed class StreamSubscriptionResolver(IServiceProvider provider) : IS
         ["deployments"] = typeof(DeploymentStreamManager),
         ["git-repo"] = typeof(GitRepositoryStreamManager),
         ["git-repositories"] = typeof(GitRepositoryStreamManager),
+        ["backup-repository"] = typeof(BackupRepositoryStreamManager),
+        ["backup-repositories"] = typeof(BackupRepositoryStreamManager),
+        ["backup-policy"] = typeof(BackupPolicyStreamManager),
+        ["backup-policies"] = typeof(BackupPolicyStreamManager),
+        ["automation-action"] = typeof(AutomationActionStreamManager),
+        ["automation-actions"] = typeof(AutomationActionStreamManager),
         ["alert-events"] = typeof(AlertEventStreamManager),
         ["docker-daemon"] = typeof(DockerDaemonStreamManager),
     };

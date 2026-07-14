@@ -146,7 +146,13 @@ internal static class WebApiModule
         {
             SerializeEnumValuesByName = true,
             PropertyNamingPolicy = MessagePackNamingPolicy.CamelCase,
-            DerivedTypeUnions = [DerivedTypesMapping.PlatformDescriptorMappings, DerivedTypesMapping.ActivityEventInfoMappings],
+            DerivedTypeUnions =
+            [
+                DerivedTypesMapping.PlatformDescriptorMappings,
+                DerivedTypesMapping.BackupRepositorySpecMappings,
+                DerivedTypesMapping.BackupSourceSpecMappings,
+                DerivedTypesMapping.ActivityEventInfoMappings
+            ],
         }
         .WithGuidConverter(GuidStringFormat.StringD)
         .WithAssumedDateTimeKind(DateTimeKind.Utc));

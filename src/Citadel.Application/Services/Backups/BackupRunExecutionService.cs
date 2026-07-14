@@ -1,4 +1,6 @@
 using Application.Configs;
+using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
@@ -80,6 +82,8 @@ internal sealed class BackupRunExecutionService(
     IStackBackupVolumeResolver stackBackupVolumeResolver,
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
     IBackupRunCoordinator runCoordinator,
+    IBackupPolicyStreamManager backupPolicyStreamManager,
+    INotificationQueue notificationQueue,
     IOptions<BackupOptions> backupOptions,
     ILogger<BackupRunExecutionService> logger) : IBackupRunExecutionService
 {
@@ -364,6 +368,14 @@ internal sealed class BackupRunExecutionService(
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var plan = await uow.BackupRuns.TryClaimExecutionPlanAsync(runId, DateTimeOffset.UtcNow, cancellationToken);
         await uow.CommitAsync(cancellationToken);
+
+        if (plan?.Policy is not null)
+        {
+            await notificationQueue.EnqueueAsync(
+                new BackupPolicyNotificationWorkItem(backupPolicyStreamManager, plan.Policy),
+                cancellationToken);
+        }
+
         return plan;
     }
 
@@ -842,17 +854,31 @@ internal sealed class BackupRunExecutionService(
 
     private async Task CompleteRunAsync(BackupRun run, BackupPolicy? policy, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken)
     {
+        BackupPolicy? updatedPolicy = null;
+
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         if (!successful)
             await uow.BackupRunItems.CancelPendingOrRunningAsync(run.Id, completedAt, cancellationToken);
 
         if (policy is null)
+        {
             await uow.BackupRuns.UpdateAsync(run, cancellationToken);
+        }
         else
+        {
             await uow.BackupRuns.FinishRunAndMarkPolicyIdleAsync(run, policy.Id, successful, completedAt, cancellationToken);
+            updatedPolicy = await uow.BackupPolicies.GetAsync(policy.Id, cancellationToken);
+        }
 
         await uow.CommitAsync(cancellationToken);
+
+        if (updatedPolicy is not null)
+        {
+            await notificationQueue.EnqueueAsync(
+                new BackupPolicyNotificationWorkItem(backupPolicyStreamManager, updatedPolicy),
+                cancellationToken);
+        }
     }
 
     private async Task FailRunAsync(

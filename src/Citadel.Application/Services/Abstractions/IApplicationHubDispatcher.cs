@@ -6,6 +6,8 @@ using Domain.Entities.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
+using Domain.Entities.Automation;
+using Domain.Entities.Backups;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
@@ -51,6 +53,15 @@ public interface IApplicationHubDispatcher
 
     #region Deployments
     Task SendDeploymentInfo(Deployment deployment, string action);
+    #endregion
+
+    #region Backups
+    Task SendBackupRepositoryInfo(BackupRepository repository, string action);
+    Task SendBackupPolicyInfo(BackupPolicy policy, string action);
+    #endregion
+
+    #region Automation
+    Task SendAutomationActionInfo(AutomationAction action, string actionName);
     #endregion
 
     #region Stacks

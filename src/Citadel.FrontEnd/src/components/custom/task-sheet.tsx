@@ -44,6 +44,8 @@ import {
   ActivityEventInfoStackWebhookReceived,
   ApplyStackInput,
   AutomationActionRunStreamItem,
+  BackupRunItemStatus,
+  BackupRunItemView,
   BackupRunStatus,
   BackupRunStreamItem,
   BackupRestoreStatus,
@@ -63,6 +65,8 @@ import { Button } from '@/components/ui/button';
 import { AlertMessage } from './alert-message';
 import { CitadelIcons } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
+import { StateIndicator } from './state-indicator';
+import { byteTransform } from '@/lib/bytes.helper';
 
 interface PullImageParams {
   imageTag: string;
@@ -73,6 +77,12 @@ type DeployParams = { name: string } & ApplyDeploymentInput;
 type StackDeployParams = { name: string } & ApplyStackInput;
 type StackRollbackParams = { name: string; version?: string } & RollbackStackInput;
 type BackupRunParams = { id: string; name: string } & QueueBackupRunInput;
+type BackupRunLogsParams = {
+  id: string;
+  name: string;
+  trigger: string;
+  items: BackupRunItemView[];
+};
 type BackupRestoreRunParams = { id: string; name: string } & RestoreVolumeInput;
 type AutomationActionRunParams = {
   id: string;
@@ -96,6 +106,7 @@ export type TaskSpec =
   | { kind: 'stack'; payload: Record<string, unknown> }
   | { kind: 'stackRollback'; payload: StackRollbackParams }
   | { kind: 'backupRun'; payload: BackupRunParams }
+  | { kind: 'backupRunLogs'; payload: BackupRunLogsParams }
   | { kind: 'backupRestoreRun'; payload: BackupRestoreRunParams }
   | { kind: 'automationActionRun'; payload: AutomationActionRunParams };
 
@@ -906,6 +917,25 @@ function BackupRunTaskRenderer({ payload }: { payload: BackupRunParams; type: Re
   return <TaskStreamLayout title="Backup" refName={payload.name} type="BackupPolicy" state={state as any} />;
 }
 
+function BackupRunLogsTaskRenderer({ payload }: { payload: BackupRunLogsParams; type: ResourceType }) {
+  const { data, isLoading } = useRead('getBackupRunLogs', { id: payload.id }, { enabled: Boolean(payload.id) });
+  const logs = data?.data.logs ?? '';
+
+  return (
+    <div className="p-2">
+      <SheetHeader>
+        <SheetTitle>{payload.name} logs</SheetTitle>
+        <SheetDescription>{isLoading ? 'Loading backup logs...' : `${payload.trigger} backup run`}</SheetDescription>
+      </SheetHeader>
+
+      <div className="p-4 pt-0 pb-2">
+        {payload.items.length > 0 && <BackupRunItemsList items={payload.items} />}
+        <LogViewer logs={isLoading ? '' : logs} autoScroll={false} />
+      </div>
+    </div>
+  );
+}
+
 function BackupRestoreRunTaskRenderer({ payload }: { payload: BackupRestoreRunParams; type: ResourceType }) {
   const state = useBackupRestoreRunProgress(payload);
   return <TaskStreamLayout title="Restore" refName={payload.name} type="BackupPolicy" state={state as any} />;
@@ -931,6 +961,7 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   stack: ApplyStackTaskRenderer,
   stackRollback: RollbackStackTaskRenderer,
   backupRun: BackupRunTaskRenderer,
+  backupRunLogs: BackupRunLogsTaskRenderer,
   backupRestoreRun: BackupRestoreRunTaskRenderer,
   automationActionRun: AutomationActionRunTaskRenderer,
   activity: ActivityTaskRenderer,
@@ -949,7 +980,10 @@ export const TaskSheet = memo(function TaskSheet({ type }: { type: ResourceType 
 
   if (!state.open || !state.task) return null;
 
-  const side = state.task.kind === 'activity' || state.task.kind === 'alertEvent' ? 'top' : 'bottom';
+  const side =
+    state.task.kind === 'activity' || state.task.kind === 'alertEvent' || state.task.kind === 'backupRunLogs'
+      ? 'top'
+      : 'bottom';
   const Renderer = taskRenderers[state.task.kind];
 
   return (
@@ -971,6 +1005,25 @@ export const TaskSheet = memo(function TaskSheet({ type }: { type: ResourceType 
 });
 
 export default TaskSheet;
+
+function BackupRunItemsList({ items }: { items: BackupRunItemView[] }) {
+  return (
+    <div className="mb-3 grid gap-1 rounded-md border p-2">
+      {items.map((item) => (
+        <div key={item.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-xs">
+          <span className="truncate font-medium">{item.volumeName}</span>
+          <span className="text-muted-foreground tabular-nums">
+            {(item.bytesAdded ?? 0) > 0 ? byteTransform(item.bytesAdded, 2) : '-'}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <StateIndicator value={item.status} isProcessing={item.status === BackupRunItemStatus.Running} />
+            {item.status}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function useImagePullProgress(params: PullImageParams) {
   const { currentPlatform } = useAppContext();
@@ -1046,10 +1099,7 @@ function useBackupRunProgress(params: BackupRunParams) {
   const { id, trigger, triggerSourceId } = params;
   const queryClient = useQueryClient();
 
-  const request: QueueBackupRunInput = useMemo(
-    () => ({ trigger, triggerSourceId }),
-    [trigger, triggerSourceId],
-  );
+  const request: QueueBackupRunInput = useMemo(() => ({ trigger, triggerSourceId }), [trigger, triggerSourceId]);
 
   const state = useStreamProgress<QueueBackupRunInput, BackupRunStreamItem>({
     endpoint: `api/v1/backupPolicies/${encodeURIComponent(id)}/run`,
@@ -1059,30 +1109,18 @@ function useBackupRunProgress(params: BackupRunParams) {
     pendingMessage: 'Starting backup run...',
     streamFieldIsMetadata: true,
     getError: (item) => {
-      if (item.status === BackupRunStatus.Failed
-        || item.status === BackupRunStatus.Rejected
-        || item.status === BackupRunStatus.TimedOut
-        || item.status === BackupRunStatus.Interrupted) {
+      if (
+        item.status === BackupRunStatus.Failed ||
+        item.status === BackupRunStatus.Rejected ||
+        item.status === BackupRunStatus.TimedOut ||
+        item.status === BackupRunStatus.Interrupted
+      ) {
         return item.message;
       }
 
       return null;
     },
   });
-
-  useEffect(() => {
-    if (!state.isPending) return;
-
-    queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
-    queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
-
-    const timeout = window.setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
-      queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
-    }, 750);
-
-    return () => window.clearTimeout(timeout);
-  }, [id, queryClient, state.isPending]);
 
   useEffect(() => {
     if (!state.isSuccess && !state.error) return;
@@ -1117,10 +1155,12 @@ function useBackupRestoreRunProgress(params: BackupRestoreRunParams) {
     pendingMessage: 'Starting restore run...',
     streamFieldIsMetadata: true,
     getError: (item) => {
-      if (item.status === BackupRestoreStatus.Failed
-        || item.status === BackupRestoreStatus.Rejected
-        || item.status === BackupRestoreStatus.TimedOut
-        || item.status === BackupRestoreStatus.Cancelled) {
+      if (
+        item.status === BackupRestoreStatus.Failed ||
+        item.status === BackupRestoreStatus.Rejected ||
+        item.status === BackupRestoreStatus.TimedOut ||
+        item.status === BackupRestoreStatus.Cancelled
+      ) {
         return item.message;
       }
 
@@ -1166,20 +1206,6 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
     pendingMessage: mode === 'test' ? 'Starting automation test...' : 'Starting automation action...',
     getError: (item) => item.errorMessage ?? item.error?.message,
   });
-
-  useEffect(() => {
-    if (!state.isPending) return;
-
-    queryClient.invalidateQueries({ queryKey: ['listAutomationActions'] });
-    queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id }] });
-
-    const timeout = window.setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ['listAutomationActions'] });
-      queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id }] });
-    }, 750);
-
-    return () => window.clearTimeout(timeout);
-  }, [id, queryClient, state.isPending]);
 
   useEffect(() => {
     if (!state.isSuccess && !state.error) return;

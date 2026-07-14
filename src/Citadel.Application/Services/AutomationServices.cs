@@ -1,5 +1,7 @@
 using Application.Configs;
 using Application.Services.Alerts;
+using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Automation;
@@ -105,6 +107,8 @@ internal sealed class AutomationExecutionService(
     IAutomationRunCoordinator runCoordinator,
     IAutomationApiEndpointCatalog endpointCatalog,
     IAlertService alertService,
+    IAutomationActionStreamManager automationActionStreamManager,
+    INotificationQueue notificationQueue,
     IOptions<AutomationOptions> options,
     ILogger<AutomationExecutionService> logger) : IAutomationExecutionService
 {
@@ -143,7 +147,9 @@ internal sealed class AutomationExecutionService(
             yield break;
         }
 
-        await dbWorkQueue.EnqueueAndWaitAsync(new AutomationRunStartedWorkItem(action.Id, run.Id), cancellationToken);
+        await dbWorkQueue.EnqueueAndWaitAsync(
+            new AutomationRunStartedWorkItem(action.Id, run.Id, notificationQueue, automationActionStreamManager),
+            cancellationToken);
         yield return Info(run.Id, ActionRunStatus.Running, $"Action \"{action.Name}\" started.");
 
         var runCancel = runCoordinator.Register(run.Id);
@@ -292,7 +298,9 @@ internal sealed class AutomationExecutionService(
             run.Complete(status, exitCode, logs.ToString(), errorMessage, finished);
 
             var completionToken = cancellationToken.IsCancellationRequested ? CancellationToken.None : cancellationToken;
-            await dbWorkQueue.EnqueueAndWaitAsync(new AutomationRunCompletedWorkItem(run), completionToken);
+            await dbWorkQueue.EnqueueAndWaitAsync(
+                new AutomationRunCompletedWorkItem(run, notificationQueue, automationActionStreamManager),
+                completionToken);
             await ProcessFailureAlertAsync(action, run, completionToken);
             yield return Info(run.Id, run.Status, $"Action \"{action.Name}\" finished with status {run.Status}.");
         }
@@ -340,7 +348,9 @@ internal sealed class AutomationExecutionService(
     private async Task CompleteWithoutAction(ActionRun run, string errorMessage, CancellationToken cancellationToken)
     {
         run.Complete(ActionRunStatus.Failed, null, errorMessage, errorMessage, DateTime.UtcNow);
-        await dbWorkQueue.EnqueueAndWaitAsync(new AutomationRunCompletedWorkItem(run), cancellationToken);
+        await dbWorkQueue.EnqueueAndWaitAsync(
+            new AutomationRunCompletedWorkItem(run, notificationQueue, automationActionStreamManager),
+            cancellationToken);
     }
 
     private Task ProcessFailureAlertAsync(AutomationAction action, ActionRun run, CancellationToken cancellationToken)
@@ -488,7 +498,11 @@ internal sealed record AutomationRunContext(ActionRun Run, AutomationAction? Act
 
 internal sealed record AutomationRunPaths(string RunDir, string DenoCacheDir);
 
-internal sealed class AutomationRunStartedWorkItem(Guid actionId, Guid runId) : IDbWorkItem
+internal sealed class AutomationRunStartedWorkItem(
+    Guid actionId,
+    Guid runId,
+    INotificationQueue notificationQueue,
+    IAutomationActionStreamManager automationActionStreamManager) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
@@ -497,7 +511,10 @@ internal sealed class AutomationRunStartedWorkItem(Guid actionId, Guid runId) : 
         if (action is null || run is null)
             return;
 
-        await uow.AutomationActions.MarkProcessingAsync(action.Id, run.Id, cancellationToken);
+        var updated = await uow.AutomationActions.MarkProcessingAsync(action.Id, run.Id, cancellationToken);
+        if (updated > 0)
+            action.MarkProcessing(run.Id);
+
         await AddRunActivityAsync(
             uow,
             action,
@@ -507,6 +524,13 @@ internal sealed class AutomationRunStartedWorkItem(Guid actionId, Guid runId) : 
             new AutomationActionRunStarted(run.Id, run.Trigger),
             cancellationToken);
         await uow.CommitAsync(cancellationToken);
+
+        if (updated > 0)
+        {
+            await notificationQueue.EnqueueAsync(
+                new AutomationActionNotificationWorkItem(automationActionStreamManager, action),
+                cancellationToken);
+        }
     }
 
     internal static Task AddRunActivityAsync(
@@ -529,20 +553,34 @@ internal sealed class AutomationRunStartedWorkItem(Guid actionId, Guid runId) : 
             cancellationToken);
 }
 
-internal sealed class AutomationRunCompletedWorkItem(ActionRun run) : IDbWorkItem
+internal sealed class AutomationRunCompletedWorkItem(
+    ActionRun run,
+    INotificationQueue notificationQueue,
+    IAutomationActionStreamManager automationActionStreamManager) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
         var action = await uow.AutomationActions.GetAsync(run.ActionId, cancellationToken);
+        var updated = 0;
 
         await uow.ActionRuns.UpdateAsync(run, cancellationToken);
         if (action is not null)
         {
-            await uow.AutomationActions.MarkIdleAsync(action.Id, run.Id, cancellationToken);
+            updated = await uow.AutomationActions.MarkIdleAsync(action.Id, run.Id, cancellationToken);
+            if (updated > 0)
+                action.MarkIdle();
+
             await AddCompletionActivityAsync(uow, action, run, cancellationToken);
         }
 
         await uow.CommitAsync(cancellationToken);
+
+        if (action is not null && updated > 0)
+        {
+            await notificationQueue.EnqueueAsync(
+                new AutomationActionNotificationWorkItem(automationActionStreamManager, action),
+                cancellationToken);
+        }
     }
 
     private static Task AddCompletionActivityAsync(

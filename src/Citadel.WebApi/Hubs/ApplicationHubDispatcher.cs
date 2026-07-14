@@ -6,6 +6,8 @@ using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
+using Domain.Entities.Automation;
+using Domain.Entities.Backups;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Stacks;
@@ -13,6 +15,8 @@ using Domain.Entities.Platforms;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
+using WebApi.Routes.Endpoints.Resources.Automation;
+using WebApi.Routes.Endpoints.Resources.Backups;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
@@ -100,6 +104,52 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.PlatformsGroup)
             .SendAsync("PlatformStatsUpdated", PlatformStatsBatchView.Map(platformId, platform));
+    #endregion
+
+    #region Backups
+    public Task SendBackupRepositoryInfo(BackupRepository repository, string action)
+    {
+        var map = BackupRepositoryView.Map(repository);
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.BackupRepositoryGroup(repository.Id))
+            .SendAsync("BackupRepositoryInfoUpdated", map, action);
+
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.BackupRepositoriesGroup)
+            .SendAsync("BackupRepositoryInfoUpdated", map, action);
+
+        return Task.CompletedTask;
+    }
+
+    public Task SendBackupPolicyInfo(BackupPolicy policy, string action)
+    {
+        var map = BackupPolicyView.Map(policy);
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.BackupPolicyGroup(policy.Id))
+            .SendAsync("BackupPolicyInfoUpdated", map, action);
+
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.BackupPoliciesGroup)
+            .SendAsync("BackupPolicyInfoUpdated", map, action);
+
+        return Task.CompletedTask;
+    }
+    #endregion
+
+    #region Automation
+    public Task SendAutomationActionInfo(AutomationAction action, string actionName)
+    {
+        var map = AutomationActionView.Map(action);
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.AutomationActionGroup(action.Id))
+            .SendAsync("AutomationActionInfoUpdated", map, actionName);
+
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.AutomationActionsGroup)
+            .SendAsync("AutomationActionInfoUpdated", map, actionName);
+
+        return Task.CompletedTask;
+    }
     #endregion
 
     #region Docker Daemon Events

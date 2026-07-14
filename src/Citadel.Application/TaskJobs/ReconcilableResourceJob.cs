@@ -22,6 +22,9 @@ internal class ReconcilableResourceJob(
     INotificationQueue notifQueue,
     IServiceScopeFactory scopeFactory,
     IDeploymentStreamManager deploymentHub,
+    IBackupRepositoryStreamManager backupRepositoryStreamManager,
+    IBackupPolicyStreamManager backupPolicyStreamManager,
+    IAutomationActionStreamManager automationActionStreamManager,
     IDockerDaemonStreamManager dockerDaemonHub,
     IDelayWithJitterService delayWithJitterService,
     IContainerEventBroadcaster containerEventBroadcaster,
@@ -79,7 +82,10 @@ internal class ReconcilableResourceJob(
                     var stuckBackupRepositories = (await uow.BackupRepositories.GetStuckRepositoriesAsync(cancellationToken: cancellationToken)).ToArray();
                     if (stuckBackupRepositories.Length > 0)
                     {
-                        var workItem = new StuckBackupRepositoriesSyncWorkItem(stuckBackupRepositories);
+                        var workItem = new StuckBackupRepositoriesSyncWorkItem(
+                            notifQueue,
+                            backupRepositoryStreamManager,
+                            stuckBackupRepositories);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
 
@@ -87,7 +93,10 @@ internal class ReconcilableResourceJob(
                     var stuckBackupPolicies = (await uow.BackupPolicies.GetStuckPoliciesAsync(cancellationToken: cancellationToken)).ToArray();
                     if (stuckBackupPolicies.Length > 0)
                     {
-                        var workItem = new StuckBackupPoliciesSyncWorkItem(stuckBackupPolicies);
+                        var workItem = new StuckBackupPoliciesSyncWorkItem(
+                            notifQueue,
+                            backupPolicyStreamManager,
+                            stuckBackupPolicies);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
 
@@ -95,7 +104,10 @@ internal class ReconcilableResourceJob(
                     var stuckAutomationActions = (await uow.AutomationActions.GetStuckActionsAsync(cancellationToken: cancellationToken)).ToArray();
                     if (stuckAutomationActions.Length > 0)
                     {
-                        var workItem = new StuckAutomationActionsSyncWorkItem(stuckAutomationActions);
+                        var workItem = new StuckAutomationActionsSyncWorkItem(
+                            notifQueue,
+                            automationActionStreamManager,
+                            stuckAutomationActions);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
                 }
@@ -256,63 +268,114 @@ internal class ReconcilableResourceJob(
         }
     }
 
-    internal sealed class StuckBackupRepositoriesSyncWorkItem(IEnumerable<BackupRepository> repositories) : IDbWorkItem
+    internal sealed class StuckBackupRepositoriesSyncWorkItem(
+        INotificationQueue notificationQueue,
+        IBackupRepositoryStreamManager streamManager,
+        IEnumerable<BackupRepository> repositories) : IDbWorkItem
     {
         public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
         {
+            var successfullyUpdated = new List<BackupRepository>();
+
             foreach (var repository in repositories)
             {
-                await uow.BackupRepositories.UpdateProcessingAsync(
+                var rowVersion = repository.RowVersion;
+                repository.MarkIdle(repository.CurrentRunId, DateTimeOffset.UtcNow);
+                var row = await uow.BackupRepositories.UpdateProcessingAsync(
                     id: repository.Id,
-                    state: ResourceControlState.Idle,
-                    startedAt: null,
-                    rowVersion: repository.RowVersion,
+                    state: repository.ControlState,
+                    startedAt: repository.ControlStartedAt,
+                    rowVersion: rowVersion,
                     checkRowVersion: true,
-                    currentRunId: null,
+                    currentRunId: repository.CurrentRunId,
                     cancellationToken);
+
+                if (row > 0)
+                    successfullyUpdated.Add(repository);
             }
 
             await uow.CommitAsync(cancellationToken);
+
+            foreach (var repository in successfullyUpdated)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new BackupRepositoryNotificationWorkItem(streamManager, repository),
+                    cancellationToken);
+            }
         }
     }
 
-    internal sealed class StuckBackupPoliciesSyncWorkItem(IEnumerable<BackupPolicy> policies) : IDbWorkItem
+    internal sealed class StuckBackupPoliciesSyncWorkItem(
+        INotificationQueue notificationQueue,
+        IBackupPolicyStreamManager streamManager,
+        IEnumerable<BackupPolicy> policies) : IDbWorkItem
     {
         public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
         {
+            var successfullyUpdated = new List<BackupPolicy>();
+
             foreach (var policy in policies)
             {
-                await uow.BackupPolicies.UpdateProcessingAsync(
+                var rowVersion = policy.RowVersion;
+                policy.MarkIdle(policy.CurrentRunId, DateTimeOffset.UtcNow);
+                var row = await uow.BackupPolicies.UpdateProcessingAsync(
                     id: policy.Id,
-                    state: ResourceControlState.Idle,
-                    startedAt: null,
-                    rowVersion: policy.RowVersion,
+                    state: policy.ControlState,
+                    startedAt: policy.ControlStartedAt,
+                    rowVersion: rowVersion,
                     checkRowVersion: true,
-                    currentRunId: null,
+                    currentRunId: policy.CurrentRunId,
                     cancellationToken);
+
+                if (row > 0)
+                    successfullyUpdated.Add(policy);
             }
 
             await uow.CommitAsync(cancellationToken);
+
+            foreach (var policy in successfullyUpdated)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new BackupPolicyNotificationWorkItem(streamManager, policy),
+                    cancellationToken);
+            }
         }
     }
 
-    internal sealed class StuckAutomationActionsSyncWorkItem(IEnumerable<AutomationAction> actions) : IDbWorkItem
+    internal sealed class StuckAutomationActionsSyncWorkItem(
+        INotificationQueue notificationQueue,
+        IAutomationActionStreamManager streamManager,
+        IEnumerable<AutomationAction> actions) : IDbWorkItem
     {
         public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
         {
+            var successfullyUpdated = new List<AutomationAction>();
+
             foreach (var action in actions)
             {
-                await uow.AutomationActions.UpdateProcessingAsync(
+                var rowVersion = action.RowVersion;
+                action.MarkIdle();
+                var row = await uow.AutomationActions.UpdateProcessingAsync(
                     id: action.Id,
-                    state: ResourceControlState.Idle,
-                    startedAt: null,
-                    rowVersion: action.RowVersion,
+                    state: action.ControlState,
+                    startedAt: action.ControlStartedAt,
+                    rowVersion: rowVersion,
                     checkRowVersion: true,
-                    currentRunId: null,
+                    currentRunId: action.CurrentRunId,
                     cancellationToken);
+
+                if (row > 0)
+                    successfullyUpdated.Add(action);
             }
 
             await uow.CommitAsync(cancellationToken);
+
+            foreach (var action in successfullyUpdated)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new AutomationActionNotificationWorkItem(streamManager, action),
+                    cancellationToken);
+            }
         }
     }
 }
