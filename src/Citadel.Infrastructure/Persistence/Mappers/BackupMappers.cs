@@ -79,6 +79,12 @@ internal static class BackupMappers
     internal static IEnumerable<BackupPolicy> ToDomain(this IEnumerable<BackupPolicyDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());
 
+    internal static ScheduledBackupPolicy ToDomain(this ScheduledBackupPolicyDto dto)
+        => new(dto.Id, dto.Cron, dto.TimeZone);
+
+    internal static IEnumerable<ScheduledBackupPolicy> ToDomain(this IEnumerable<ScheduledBackupPolicyDto> dtos)
+        => dtos.Select(static dto => dto.ToDomain());
+
     internal static VolumeBackupCoverage ToDomain(this VolumeBackupCoverageDto dto)
         => new(
             new VolumeBackupCoverageKey(dto.PlatformId, dto.VolumeName),

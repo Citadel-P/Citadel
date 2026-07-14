@@ -150,6 +150,7 @@ public interface IBackupPolicyRepository
     Task<int> ArchiveAsync(Guid id, DateTimeOffset archivedAt, CancellationToken cancellationToken);
     Task<BackupPolicy?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false);
     Task<IEnumerable<BackupPolicy>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, bool includeArchived = false);
+    Task<IEnumerable<ScheduledBackupPolicy>> GetScheduledAsync(DateTimeOffset scheduledMinuteUtc, CancellationToken cancellationToken);
     Task<IEnumerable<BackupPolicy>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
     Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
@@ -161,6 +162,7 @@ public interface IBackupPolicyRepository
         PermissionLevel permissionLevel,
         SpecificPermission specificPermission,
         CancellationToken cancellationToken);
+    Task<bool> TryMarkScheduledAsync(Guid id, DateTimeOffset scheduledMinuteUtc, CancellationToken cancellationToken);
     Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAfterRunAsync(Guid id, Guid runId, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken);
@@ -177,6 +179,11 @@ public interface IBackupRunRepository
         Guid triggeredByActorId,
         bool usePolicyActor,
         DateTimeOffset queuedAt,
+        CancellationToken cancellationToken);
+    Task<BackupRunQueueResult> QueueScheduledAsync(
+        Guid policyId,
+        Guid runId,
+        DateTimeOffset scheduledMinuteUtc,
         CancellationToken cancellationToken);
     Task<int> UpdateAsync(BackupRun run, CancellationToken cancellationToken);
     Task<BackupRun?> GetAsync(Guid id, CancellationToken cancellationToken);
@@ -284,10 +291,13 @@ public enum BackupRunQueueResultStatus
     Queued,
     PolicyNotFound,
     PolicyArchived,
-    ActiveRunExists
+    ActiveRunExists,
+    AlreadyScheduled
 }
 
 public sealed record BackupRunQueueResult(BackupRunQueueResultStatus Status, BackupRun? Run);
+
+public sealed record ScheduledBackupPolicy(Guid Id, string? Cron, string? TimeZone);
 
 public enum BackupRunFinishResult
 {
@@ -621,6 +631,7 @@ public interface IStackRepository
     Task<IEnumerable<Container>> GetContainersAsync(Guid stackId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null);
     Task<bool> CanAccessAsync(Guid userId, Guid stackId, CancellationToken cancellationToken);
+    Task<PlatformConnectionInfo?> GetPlatformByStackIdAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<ResourceInfo>> GetPlatformLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken);

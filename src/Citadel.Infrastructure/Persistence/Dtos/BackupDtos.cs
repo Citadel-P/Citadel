@@ -94,6 +94,14 @@ internal sealed record BackupPolicyDto(
     }
 }
 
+internal sealed record ScheduledBackupPolicyDto(Guid Id, string? Cron, string? TimeZone)
+{
+    public ScheduledBackupPolicyDto()
+        : this(Guid.Empty, null, null)
+    {
+    }
+}
+
 internal sealed record VolumeBackupCoverageDto(
     Guid PlatformId,
     string VolumeName,

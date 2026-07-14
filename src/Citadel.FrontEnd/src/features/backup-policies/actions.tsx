@@ -97,8 +97,7 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'policy' : 'policies'} archived`);
           } catch (error) {
-            toast.error(archive.validationErrors ?? 'Failed to archive selected policies');
-            throw error;
+            /**Nope */
           }
         },
       };

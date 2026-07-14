@@ -12,6 +12,7 @@ public sealed class BackupOptions
     public int RepositoryLeaseSeconds { get; set; } = 300;
     public int SourceLeaseSeconds { get; set; } = 300;
     public int PollIntervalSeconds { get; set; } = 2;
+    public int SchedulePollIntervalSeconds { get; set; } = 30;
     public int MaxParallelRuns { get; set; } = 2;
     public int DefaultTimeoutSeconds { get; set; } = 120;
     public int MaxLogLineBytes { get; set; } = 8192;

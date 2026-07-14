@@ -1,6 +1,10 @@
 import {
+  BackupExecutionLocation,
   BackupPolicyInput,
   BackupPolicyView,
+  BackupRepositorySpecFileSystemBackupRepositorySpec,
+  BackupRepositoryType,
+  BackupRepositoryView,
   BackupSourceSpec,
   BackupSourceSpecCitadelSystemBackupSource,
   BackupSourceSpecDeploymentBackupSource,
@@ -11,6 +15,7 @@ import {
   DeploymentBackupSourcePreviewView,
   DockerVolumeResultView,
   LookupResourceType,
+  PlatformConnectorType,
   PlatformView,
   StackBackupSourcePreviewView,
   StackVolumeKind,
@@ -45,6 +50,8 @@ type BackupPolicyFormValue = Omit<BackupPolicyInput, 'runAsActorId'> & {
   webhook: BackupWebhookConfig | null;
   tagIds?: string[] | null;
 };
+
+const EMPTY_BACKUP_REPOSITORIES: BackupRepositoryView[] = [];
 
 const sourceTypes = {
   CitadelSystem: {
@@ -116,34 +123,57 @@ export function BackupPolicyForm({
   const currentScheduleEnabled = update.scheduleEnabled ?? original.scheduleEnabled;
   const currentPlatformId =
     currentSource.$type === BackupSourceType.DockerVolume
-      ? (currentSource as BackupSourceSpecDockerVolumeBackupSource).platformId
-      : undefined;
+      ? String((currentSource as BackupSourceSpecDockerVolumeBackupSource).platformId ?? '')
+      : '';
   const currentStackId =
     currentSource.$type === BackupSourceType.Stack
-      ? (currentSource as BackupSourceSpecStackBackupSource).stackId
-      : undefined;
+      ? String((currentSource as BackupSourceSpecStackBackupSource).stackId ?? '')
+      : '';
   const currentDeploymentId =
     currentSource.$type === BackupSourceType.Deployment
-      ? (currentSource as BackupSourceSpecDeploymentBackupSource).deploymentId
-      : undefined;
+      ? String((currentSource as BackupSourceSpecDeploymentBackupSource).deploymentId ?? '')
+      : '';
   const volumeListArgs = useMemo(
-    () => ({ platformId: currentPlatformId ?? '', query: {} }),
+    () => ({ platformId: currentPlatformId, query: {} }),
     [currentPlatformId],
   );
   const volumeList = useRead('listVolumes', volumeListArgs, {
     enabled: currentSourceType === BackupSourceType.DockerVolume && Boolean(currentPlatformId),
   });
-  const stackPreviewArgs = useMemo(() => ({ stackId: currentStackId ?? '' }), [currentStackId]);
+  const stackPreviewArgs = useMemo(() => ({ stackId: currentStackId }), [currentStackId]);
   const stackPreview = useRead('getStackBackupSourcePreview', stackPreviewArgs, {
     enabled: currentSourceType === BackupSourceType.Stack && Boolean(currentStackId),
   });
   const deploymentPreviewArgs = useMemo(
-    () => ({ deploymentId: currentDeploymentId ?? '' }),
+    () => ({ deploymentId: currentDeploymentId }),
     [currentDeploymentId],
   );
   const deploymentPreview = useRead('getDeploymentBackupSourcePreview', deploymentPreviewArgs, {
     enabled: currentSourceType === BackupSourceType.Deployment && Boolean(currentDeploymentId),
   });
+  const backupRepositories = useRead('listBackupRepositories');
+  const currentBackupRepositoryId = update.backupRepositoryId ?? original.backupRepositoryId;
+  const repositories = backupRepositories.data?.data.repositories ?? EMPTY_BACKUP_REPOSITORIES;
+  const selectedRepository = useMemo(
+    () => repositories.find((repository) => repository.id === currentBackupRepositoryId),
+    [repositories, currentBackupRepositoryId],
+  );
+  const currentSourcePlatformId =
+    currentSourceType === BackupSourceType.DockerVolume
+      ? currentPlatformId
+      : currentSourceType === BackupSourceType.Stack
+        ? stackPreview.data?.data.platformId
+        : currentSourceType === BackupSourceType.Deployment
+          ? deploymentPreview.data?.data.platformId
+          : undefined;
+  const sourcePlatformArgs = useMemo(() => ({ id: currentSourcePlatformId ?? '' }), [currentSourcePlatformId]);
+  const sourcePlatform = useRead('getPlatfom', sourcePlatformArgs, { enabled: Boolean(currentSourcePlatformId) });
+  const repositoryCompatibilityMessage = getRepositoryCompatibilityMessage(
+    currentSourceType,
+    selectedRepository,
+    sourcePlatform.data?.data,
+    currentSourcePlatformId,
+  );
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`backup-policy:${id ?? 'new'}`);
@@ -414,17 +444,25 @@ export function BackupPolicyForm({
                 label: 'Repository',
                 required: true,
                 description: 'Backup repository where snapshots are stored.',
-                validate: (value) => (!value ? 'Backup repository is required' : null),
+                validate: (value) => (!value ? 'Backup repository is required' : repositoryCompatibilityMessage),
                 render: (value, set) => (
-                  <ResourceSelectorField
-                    targetType={LookupResourceType.BackupRepository}
-                    selected={value}
-                    disabled={disabled || isSourceLocked(resource)}
-                    onSelect={(repository: { id: string } | undefined) =>
-                      set({ backupRepositoryId: repository?.id ?? '' })
-                    }
-                    placeholder="Select Backup Repository"
-                  />
+                  <div className="flex max-w-150 flex-col gap-2">
+                    <ResourceSelectorField
+                      targetType={LookupResourceType.BackupRepository}
+                      selected={value}
+                      disabled={disabled || isSourceLocked(resource)}
+                      onSelect={(repository: { id: string } | undefined) =>
+                        set({ backupRepositoryId: repository?.id ?? '' })
+                      }
+                      placeholder="Select Backup Repository"
+                    />
+                    {repositoryCompatibilityMessage && (
+                      <div className="flex items-start gap-2 rounded-sm border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+                        <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                        <span>{repositoryCompatibilityMessage}</span>
+                      </div>
+                    )}
+                  </div>
                 ),
               }),
               defineField<BackupPolicyFormValue, 'keepLastSuccessful'>({
@@ -611,6 +649,7 @@ export function BackupPolicyForm({
       id,
       mode,
       original.source,
+      repositoryCompatibilityMessage,
       resource,
       stackPreview.data?.data,
       stackPreview.isFetching,
@@ -910,6 +949,34 @@ function createDeploymentSource(): BackupSourceSpecDeploymentBackupSource {
 
 function isSourceLocked(resource?: BackupPolicyView) {
   return Boolean(resource?.firstSuccessfulRunAt);
+}
+
+function getRepositoryCompatibilityMessage(
+  sourceType: BackupSourceType,
+  repository?: BackupRepositoryView,
+  sourcePlatform?: PlatformView,
+  sourcePlatformId?: string,
+) {
+  if (!repository || repository.type !== BackupRepositoryType.FileSystem) return null;
+
+  const spec = repository.spec as BackupRepositorySpecFileSystemBackupRepositorySpec;
+  if (sourceType === BackupSourceType.CitadelSystem) {
+    return spec.location === BackupExecutionLocation.Core
+      ? null
+      : 'Citadel system backups can only use a Core filesystem repository or an S3-compatible repository.';
+  }
+
+  if (!sourcePlatformId || !sourcePlatform) return null;
+
+  if (spec.location === BackupExecutionLocation.Core && sourcePlatform.connectorType !== PlatformConnectorType.Local) {
+    return 'Core filesystem repositories cannot back up Docker volumes on regular or edge agents. Use an S3-compatible repository or a filesystem repository on the same platform.';
+  }
+
+  if (spec.location === BackupExecutionLocation.Platform && spec.platformId !== sourcePlatform.id) {
+    return `This filesystem repository belongs to another platform. Select a repository on ${sourcePlatform.name} or use an S3-compatible repository.`;
+  }
+
+  return null;
 }
 
 function toFormValue(resource?: BackupPolicyView): BackupPolicyFormValue {

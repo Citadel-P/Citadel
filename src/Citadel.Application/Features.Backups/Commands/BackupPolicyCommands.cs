@@ -12,6 +12,7 @@ using LightResults;
 using Mediator;
 using Application.Services.Backups;
 using System.Runtime.CompilerServices;
+using Domain.Contracts.Resources.Platforms;
 
 namespace Application.Features.Backups.Commands;
 
@@ -94,6 +95,29 @@ file static class BackupPolicySourceValidator
 {
     public static async Task<Result> ValidateSourceAsync(
         BackupSourceSpec source,
+        BackupRepository repository,
+        IUnitOfWork unitOfWork,
+        IStackBackupVolumeResolver stackBackupVolumeResolver,
+        IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
+        bool validateVolumeResolution,
+        CancellationToken cancellationToken)
+    {
+        if (validateVolumeResolution)
+        {
+            var volumeValidation = await ValidateVolumesAsync(
+                source,
+                stackBackupVolumeResolver,
+                deploymentBackupVolumeResolver,
+                cancellationToken);
+            if (volumeValidation.IsFailure(out var volumeError))
+                return Result.Failure(volumeError);
+        }
+
+        return await ValidateRepositoryCompatibilityAsync(source, repository, unitOfWork, cancellationToken);
+    }
+
+    private static async Task<Result> ValidateVolumesAsync(
+        BackupSourceSpec source,
         IStackBackupVolumeResolver stackBackupVolumeResolver,
         IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
         CancellationToken cancellationToken)
@@ -120,6 +144,66 @@ file static class BackupPolicySourceValidator
             ? Result.Failure(new BadRequestError("Stack has no resolved Docker named volumes to back up."))
             : Result.Success();
     }
+
+    private static async Task<Result> ValidateRepositoryCompatibilityAsync(
+        BackupSourceSpec source,
+        BackupRepository repository,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        if (repository.Spec is not FileSystemBackupRepositorySpec fs)
+            return Result.Success();
+
+        var sourcePlatform = await GetSourcePlatformAsync(source, unitOfWork, cancellationToken);
+        if (!sourcePlatform.IsSuccess(out var platform, out var error))
+            return Result.Failure(error);
+
+        if (platform is null)
+        {
+            return fs.Location == BackupExecutionLocation.Core
+                ? Result.Success()
+                : Result.Failure(new BadRequestError("Citadel system backups can only use a Core filesystem repository or an S3-compatible repository."));
+        }
+
+        if (fs.Location == BackupExecutionLocation.Core)
+        {
+            return platform.ConnectorType == PlatformConnectorType.Local
+                ? Result.Success()
+                : Result.Failure(new BadRequestError("Core filesystem backup repositories cannot back up remote Docker volumes. Use an S3-compatible repository or a filesystem repository on the same platform."));
+        }
+
+        return fs.PlatformId == platform.Id
+            ? Result.Success()
+            : Result.Failure(new BadRequestError("Filesystem backup repository platform must match the backup source platform."));
+    }
+
+    private static async Task<Result<PlatformConnectionInfo?>> GetSourcePlatformAsync(
+        BackupSourceSpec source,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        if (source is CitadelSystemBackupSource)
+            return Result.Success<PlatformConnectionInfo?>(null);
+
+        PlatformConnectionInfo? platform = source switch
+        {
+            DockerVolumeBackupSource volume => await unitOfWork.Platforms.GetInfoAsync(volume.PlatformId, cancellationToken),
+            StackBackupSource stack => await unitOfWork.Stacks.GetPlatformByStackIdAsync(stack.StackId, cancellationToken),
+            DeploymentBackupSource deployment => await unitOfWork.Deployments.GetPlatformByDeploymentIdAsync(deployment.DeploymentId, cancellationToken),
+            _ => null
+        };
+
+        if (platform is not null)
+            return Result.Success<PlatformConnectionInfo?>(platform);
+
+        return source switch
+        {
+            DockerVolumeBackupSource => Result.Failure<PlatformConnectionInfo?>(new NotFoundError("Platform not found.")),
+            StackBackupSource => Result.Failure<PlatformConnectionInfo?>(new NotFoundError("Stack not found.")),
+            DeploymentBackupSource => Result.Failure<PlatformConnectionInfo?>(new NotFoundError("Deployment not found.")),
+            _ => Result.Failure<PlatformConnectionInfo?>(new BadRequestError("Unsupported backup source type."))
+        };
+    }
 }
 
 internal sealed class CreateBackupPolicyHandler(
@@ -143,8 +227,11 @@ internal sealed class CreateBackupPolicyHandler(
 
         var sourceValidation = await BackupPolicySourceValidator.ValidateSourceAsync(
             input.Source,
+            repository,
+            unitOfWork,
             stackBackupVolumeResolver,
             deploymentBackupVolumeResolver,
+            validateVolumeResolution: true,
             cancellationToken);
         if (sourceValidation.IsFailure(out var sourceError))
             return Result.Failure<BackupPolicyResult>(sourceError);
@@ -200,19 +287,31 @@ internal sealed class UpdateBackupPolicyHandler(
         if (policy is null)
             return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup policy not found."));
 
+        BackupRepository? repository = null;
         if (command.UpdateBackupRepository && command.Policy.BackupRepositoryId.HasValue)
         {
-            var repository = await unitOfWork.BackupRepositories.GetAsync(command.Policy.BackupRepositoryId.Value, cancellationToken);
+            repository = await unitOfWork.BackupRepositories.GetAsync(command.Policy.BackupRepositoryId.Value, cancellationToken);
             if (repository is null)
                 return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup repository not found."));
         }
 
-        if (command.UpdateSource && command.Policy.Source is not null)
+        if ((command.UpdateSource && command.Policy.Source is not null)
+            || (command.UpdateBackupRepository && command.Policy.BackupRepositoryId.HasValue))
         {
+            var source = command.UpdateSource && command.Policy.Source is not null
+                ? command.Policy.Source
+                : policy.Source;
+            repository ??= await unitOfWork.BackupRepositories.GetAsync(policy.BackupRepositoryId, cancellationToken);
+            if (repository is null)
+                return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup repository not found."));
+
             var sourceValidation = await BackupPolicySourceValidator.ValidateSourceAsync(
-                command.Policy.Source,
+                source,
+                repository,
+                unitOfWork,
                 stackBackupVolumeResolver,
                 deploymentBackupVolumeResolver,
+                validateVolumeResolution: command.UpdateSource && command.Policy.Source is not null,
                 cancellationToken);
             if (sourceValidation.IsFailure(out var sourceError))
                 return Result.Failure<BackupPolicyResult>(sourceError);

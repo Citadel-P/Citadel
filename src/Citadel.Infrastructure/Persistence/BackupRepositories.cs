@@ -836,6 +836,26 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
         return result.ToDomain();
     }
 
+    public async Task<IEnumerable<ScheduledBackupPolicy>> GetScheduledAsync(DateTimeOffset scheduledMinuteUtc, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT p.Id,
+                   p.Cron,
+                   p.TimeZone
+            FROM BackupPolicies p
+            WHERE p.ArchivedAt IS NULL
+              AND p.Enabled
+              AND p.Cron IS NOT NULL
+              AND (p.LastScheduledRunAt IS NULL OR p.LastScheduledRunAt < @ScheduledMinuteUtc)
+            """;
+
+        var result = await db.QueryAsync<ScheduledBackupPolicyDto>(
+            sql,
+            new { ScheduledMinuteUtc = BackupMappers.ToUtcDateTime(scheduledMinuteUtc) },
+            transaction: tx());
+        return result.ToDomain();
+    }
+
     public async Task<IEnumerable<BackupPolicy>> GetAuthorizedAsync(
         Guid userId,
         ResourceType resourceType,
@@ -1092,6 +1112,32 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
             transaction: tx());
 
         return [.. rows.Select(static row => row.ToDomain())];
+    }
+
+    public async Task<bool> TryMarkScheduledAsync(Guid id, DateTimeOffset scheduledMinuteUtc, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BackupPolicies
+            SET LastScheduledRunAt = @ScheduledMinuteUtc,
+                UpdatedAt = @ScheduledMinuteUtc,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND ArchivedAt IS NULL
+              AND Enabled
+              AND Cron IS NOT NULL
+              AND (LastScheduledRunAt IS NULL OR LastScheduledRunAt < @ScheduledMinuteUtc)
+            """;
+
+        var affected = await db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                ScheduledMinuteUtc = BackupMappers.ToUtcDateTime(scheduledMinuteUtc)
+            },
+            transaction: tx());
+
+        return affected > 0;
     }
 
     public Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken)
@@ -1362,6 +1408,99 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             0 => new BackupRunQueueResult(BackupRunQueueResultStatus.Queued, result.ToDomain()),
             1 => new BackupRunQueueResult(BackupRunQueueResultStatus.PolicyNotFound, null),
             2 => new BackupRunQueueResult(BackupRunQueueResultStatus.PolicyArchived, null),
+            4 => new BackupRunQueueResult(BackupRunQueueResultStatus.AlreadyScheduled, null),
+            _ => new BackupRunQueueResult(BackupRunQueueResultStatus.ActiveRunExists, null)
+        };
+    }
+
+    public async Task<BackupRunQueueResult> QueueScheduledAsync(
+        Guid policyId,
+        Guid runId,
+        DateTimeOffset scheduledMinuteUtc,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH policy AS (
+                SELECT
+                    p.Id AS BackupPolicyId,
+                    p.BackupRepositoryId,
+                    p.Name AS PolicyNameSnapshot,
+                    p.Source AS SourceSnapshot,
+                    p.RunAsActorId,
+                    p.Enabled,
+                    p.Cron,
+                    p.LastScheduledRunAt,
+                    p.ArchivedAt,
+                    r.Type AS RepositoryTypeSnapshot
+                FROM BackupPolicies p
+                JOIN BackupRepositories r ON r.Id = p.BackupRepositoryId
+                WHERE p.Id = @PolicyId
+                LIMIT 1
+            ),
+            marked AS (
+                UPDATE BackupPolicies p
+                SET LastScheduledRunAt = @ScheduledMinuteUtc,
+                    UpdatedAt = @ScheduledMinuteUtc,
+                    RowVersion = p.RowVersion + 1
+                FROM policy target
+                WHERE p.Id = target.BackupPolicyId
+                  AND target.ArchivedAt IS NULL
+                  AND target.Enabled
+                  AND target.Cron IS NOT NULL
+                  AND (target.LastScheduledRunAt IS NULL OR target.LastScheduledRunAt < @ScheduledMinuteUtc)
+                RETURNING p.Id
+            ),
+            inserted AS (
+                INSERT INTO BackupRuns (
+                    Id, BackupPolicyId, BackupRepositoryId, PolicyNameSnapshot, SourceSnapshot, RepositoryTypeSnapshot,
+                    Trigger, TriggerSourceId, Status, ResticSnapshotId, ParentSnapshotId, SnapshotAvailability,
+                    FilesProcessed, BytesProcessed, BytesAdded, Warnings, QueuedAt, StartedAt, CompletedAt,
+                    ExitCode, ErrorCode, ErrorMessage, TriggeredByActorId)
+                SELECT
+                    @RunId, p.BackupPolicyId, p.BackupRepositoryId, p.PolicyNameSnapshot, p.SourceSnapshot, p.RepositoryTypeSnapshot,
+                    @Trigger, NULL, @Status, NULL, NULL, @SnapshotAvailability,
+                    NULL, NULL, NULL, @Warnings::jsonb, @ScheduledMinuteUtc, NULL, NULL,
+                    NULL, NULL, NULL, p.RunAsActorId
+                FROM policy p
+                JOIN marked m ON m.Id = p.BackupPolicyId
+                ON CONFLICT (BackupPolicyId)
+                    WHERE Status IN ('Queued', 'Preparing', 'Running', 'ApplyingRetention')
+                    DO NOTHING
+                RETURNING *
+            )
+            SELECT
+                CASE
+                    WHEN EXISTS (SELECT 1 FROM inserted) THEN 0
+                    WHEN NOT EXISTS (SELECT 1 FROM policy) THEN 1
+                    WHEN EXISTS (SELECT 1 FROM policy WHERE ArchivedAt IS NOT NULL) THEN 2
+                    WHEN NOT EXISTS (SELECT 1 FROM marked) THEN 4
+                    ELSE 3
+                END AS ResultStatus,
+                i.*
+            FROM inserted i
+            RIGHT JOIN (SELECT 1) s ON TRUE
+            """;
+
+        var result = await db.QuerySingleAsync<BackupRunQueueDto>(
+            sql,
+            new
+            {
+                PolicyId = policyId,
+                RunId = runId,
+                ScheduledMinuteUtc = BackupMappers.ToUtcDateTime(scheduledMinuteUtc),
+                Trigger = EnumFormatter<BackupRunTrigger>.GetValue(BackupRunTrigger.Schedule),
+                Status = EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Queued),
+                SnapshotAvailability = EnumFormatter<BackupSnapshotAvailability>.GetValue(BackupSnapshotAvailability.Pending),
+                Warnings = BackupMappers.SerializeWarnings([])
+            },
+            transaction: tx());
+
+        return result.ResultStatus switch
+        {
+            0 => new BackupRunQueueResult(BackupRunQueueResultStatus.Queued, result.ToDomain()),
+            1 => new BackupRunQueueResult(BackupRunQueueResultStatus.PolicyNotFound, null),
+            2 => new BackupRunQueueResult(BackupRunQueueResultStatus.PolicyArchived, null),
+            4 => new BackupRunQueueResult(BackupRunQueueResultStatus.AlreadyScheduled, null),
             _ => new BackupRunQueueResult(BackupRunQueueResultStatus.ActiveRunExists, null)
         };
     }

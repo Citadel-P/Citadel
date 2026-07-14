@@ -2,6 +2,7 @@ using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Stacks;
@@ -340,6 +341,25 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             SpecificPermission = (int)SpecificPermission.None,
             StackId = stackId
         }, transaction: tx());
+    }
+
+    public async Task<PlatformConnectionInfo?> GetPlatformByStackIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                p.Id,
+                p.Name,
+                p.Address,
+                p.ConnectorType
+            FROM Stacks s
+            JOIN StackReleases sr ON sr.Id = s.CurrentStackReleaseId
+            JOIN Platforms p ON p.Id = sr.PlatformId
+            WHERE s.Id = @StackId
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<PlatformConnectionInfoDto>(sql, new { StackId = id }, transaction: tx());
+        return result?.ToDomain();
     }
 
     public Task<IEnumerable<ResourceInfo>> GetRegistryLookupAsync(Guid stackId, Guid userId, CancellationToken cancellationToken)
