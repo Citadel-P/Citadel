@@ -84,6 +84,11 @@ type BackupRunLogsParams = {
   items: BackupRunItemView[];
 };
 type BackupRestoreRunParams = { id: string; name: string } & RestoreVolumeInput;
+type BackupRestoreRunLogsParams = {
+  id: string;
+  name: string;
+  status: string;
+};
 type AutomationActionRunParams = {
   id: string;
   name: string;
@@ -108,6 +113,7 @@ export type TaskSpec =
   | { kind: 'backupRun'; payload: BackupRunParams }
   | { kind: 'backupRunLogs'; payload: BackupRunLogsParams }
   | { kind: 'backupRestoreRun'; payload: BackupRestoreRunParams }
+  | { kind: 'backupRestoreRunLogs'; payload: BackupRestoreRunLogsParams }
   | { kind: 'automationActionRun'; payload: AutomationActionRunParams };
 
 export interface TaskSheetState {
@@ -941,6 +947,24 @@ function BackupRestoreRunTaskRenderer({ payload }: { payload: BackupRestoreRunPa
   return <TaskStreamLayout title="Restore" refName={payload.name} type="BackupPolicy" state={state as any} />;
 }
 
+function BackupRestoreRunLogsTaskRenderer({ payload }: { payload: BackupRestoreRunLogsParams; type: ResourceType }) {
+  const { data, isLoading } = useRead('getBackupRestoreRunLogs', { id: payload.id }, { enabled: Boolean(payload.id) });
+  const logs = data?.data.logs ?? '';
+
+  return (
+    <div className="p-2">
+      <SheetHeader>
+        <SheetTitle>{payload.name} restore logs</SheetTitle>
+        <SheetDescription>{isLoading ? 'Loading restore logs...' : `${payload.status} restore run`}</SheetDescription>
+      </SheetHeader>
+
+      <div className="p-4 pt-0 pb-2">
+        <LogViewer logs={isLoading ? '' : logs} autoScroll={false} />
+      </div>
+    </div>
+  );
+}
+
 function AutomationActionRunTaskRenderer({ payload }: { payload: AutomationActionRunParams; type: ResourceType }) {
   const state = useAutomationActionRunProgress(payload);
   const title = payload.mode === 'test' ? 'Test Action' : 'Run Action';
@@ -963,6 +987,7 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   backupRun: BackupRunTaskRenderer,
   backupRunLogs: BackupRunLogsTaskRenderer,
   backupRestoreRun: BackupRestoreRunTaskRenderer,
+  backupRestoreRunLogs: BackupRestoreRunLogsTaskRenderer,
   automationActionRun: AutomationActionRunTaskRenderer,
   activity: ActivityTaskRenderer,
   alertEvent: AlertEventTaskRenderer,
@@ -981,7 +1006,10 @@ export const TaskSheet = memo(function TaskSheet({ type }: { type: ResourceType 
   if (!state.open || !state.task) return null;
 
   const side =
-    state.task.kind === 'activity' || state.task.kind === 'alertEvent' || state.task.kind === 'backupRunLogs'
+    state.task.kind === 'activity' ||
+    state.task.kind === 'alertEvent' ||
+    state.task.kind === 'backupRunLogs' ||
+    state.task.kind === 'backupRestoreRunLogs'
       ? 'top'
       : 'bottom';
   const Renderer = taskRenderers[state.task.kind];

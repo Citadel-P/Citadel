@@ -35,7 +35,7 @@ public sealed record GetBackupRun(Guid RunId) : IQuery<Result<BackupRun>>;
 public sealed record GetBackupRunLogs(Guid RunId) : IQuery<Result<BackupRunLogResult>>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
-public sealed record GetBackupRestoreRuns(Guid? BackupRunId = null, int Limit = 50) : IQuery<Result<BackupRestoreRunListResult>>;
+public sealed record GetBackupRestoreRuns(Guid? BackupRunId = null, Guid? PolicyId = null, int Limit = 50) : IQuery<Result<BackupRestoreRunListResult>>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.Restore)]
 public sealed record GetBackupRestoreRun(Guid RestoreRunId) : IQuery<Result<BackupRestoreRun>>;
@@ -155,6 +155,8 @@ internal sealed class GetBackupRestoreRunsHandler(IUnitOfWork unitOfWork)
     {
         var runs = query.BackupRunId.HasValue
             ? await unitOfWork.BackupRestoreRuns.GetByBackupRunAsync(query.BackupRunId.Value, query.Limit, cancellationToken)
+            : query.PolicyId.HasValue
+                ? await unitOfWork.BackupRestoreRuns.GetByPolicyAsync(query.PolicyId.Value, query.Limit, cancellationToken)
             : await unitOfWork.BackupRestoreRuns.GetPagedAsync(query.Limit, cancellationToken);
 
         return Result.Success(new BackupRestoreRunListResult([.. runs]));

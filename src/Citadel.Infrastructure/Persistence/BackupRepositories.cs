@@ -1746,14 +1746,14 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             transaction: tx());
     }
 
-    public async Task<BackupRunFinishResult> FinishRunAndMarkPolicyIdleAsync(
+    public async Task<BackupRunFinishOutcome> FinishRunAndMarkPolicyIdleAsync(
         BackupRun run,
         Guid policyId,
         bool successful,
         DateTimeOffset completedAt,
         CancellationToken cancellationToken)
     {
-        const string sql = """
+        string sql = $$"""
             WITH updated_run AS (
                 UPDATE BackupRuns
                 SET Status = @Status,
@@ -1774,7 +1774,7 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
                 RETURNING 1
             ),
             updated_policy AS (
-                UPDATE BackupPolicies
+                UPDATE BackupPolicies p
                 SET ControlState = @IdleControlState,
                     CurrentRunId = NULL,
                     ControlStartedAt = NULL,
@@ -1784,17 +1784,22 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
                     END,
                     UpdatedAt = @CompletedAt,
                     RowVersion = RowVersion + 1
-                WHERE Id = @PolicyId
+                WHERE p.Id = @PolicyId
                   AND CurrentRunId = @Id
-                RETURNING 1
+                RETURNING p.*
             )
-            SELECT CASE
-                WHEN EXISTS (SELECT 1 FROM updated_run) THEN 0
-                ELSE 1
-            END
+            SELECT
+                CASE
+                    WHEN EXISTS (SELECT 1 FROM updated_run) THEN 0
+                    ELSE 1
+                END AS ResultStatus,
+                p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM (SELECT 1) s
+            LEFT JOIN updated_policy p ON TRUE
             """;
 
-        var result = await db.ExecuteScalarAsync<int>(
+        var result = await db.QuerySingleAsync<BackupRunFinishDto>(
             sql,
             new
             {
@@ -1815,11 +1820,12 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
                 run.ExitCode,
                 run.ErrorCode,
                 run.ErrorMessage,
-                IdleControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle)
+                IdleControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle),
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.BackupPolicy)
             },
             transaction: tx());
 
-        return result == 0 ? BackupRunFinishResult.Completed : BackupRunFinishResult.AlreadyCancelled;
+        return result.ToDomain();
     }
 
     public async Task<BackupRun?> GetAsync(Guid id, CancellationToken cancellationToken)
@@ -2027,7 +2033,7 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
         return rows > 0;
     }
 
-    public Task<int> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken)
+    public async Task<BackupRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE BackupRuns
@@ -2041,9 +2047,10 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
                 ErrorMessage = @Reason
             WHERE Id = @Id
               AND Status = ANY(@ActiveStatuses)
+            RETURNING *
             """;
 
-        return db.ExecuteAsync(
+        var result = await db.QuerySingleOrDefaultAsync<BackupRunDto>(
             sql,
             new
             {
@@ -2063,6 +2070,13 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
                 }
             },
             transaction: tx());
+
+        if (result is null)
+            return null;
+
+        var run = result.ToDomain();
+        await AssignItemsAsync([run], cancellationToken);
+        return run;
     }
 
     private async Task AssignItemsAsync(IReadOnlyCollection<BackupRun> runs, CancellationToken cancellationToken)
@@ -2549,6 +2563,24 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
         return result.ToDomain();
     }
 
+    public async Task<IEnumerable<BackupRestoreRun>> GetByPolicyAsync(Guid policyId, int limit, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT rr.*
+            FROM BackupRestoreRuns rr
+            JOIN BackupRuns br ON br.Id = rr.BackupRunId
+            WHERE br.BackupPolicyId = @PolicyId
+            ORDER BY rr.QueuedAt DESC
+            LIMIT @Limit
+            """;
+
+        var result = await db.QueryAsync<BackupRestoreRunDto>(
+            sql,
+            new { PolicyId = policyId, Limit = Math.Clamp(limit, 1, 200) },
+            transaction: tx());
+        return result.ToDomain();
+    }
+
     public async Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -2608,19 +2640,26 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
         return rows > 0 ? BackupRestoreRunFinishResult.Completed : BackupRestoreRunFinishResult.AlreadyCancelled;
     }
 
-    public Task<int> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken)
+    public async Task<BackupRestoreRunWithPolicy?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken)
     {
         const string sql = """
-            UPDATE BackupRestoreRuns
-            SET Status = @CancelledStatus,
-                CompletedAt = @CancelledAt,
-                ErrorCode = @ErrorCode,
-                ErrorMessage = @Reason
-            WHERE Id = @Id
-              AND Status = ANY(@ActiveStatuses)
+            WITH cancelled AS (
+                UPDATE BackupRestoreRuns
+                SET Status = @CancelledStatus,
+                    CompletedAt = @CancelledAt,
+                    ErrorCode = @ErrorCode,
+                    ErrorMessage = @Reason
+                WHERE Id = @Id
+                  AND Status = ANY(@ActiveStatuses)
+                RETURNING *
+            )
+            SELECT cancelled.*, br.BackupPolicyId
+            FROM cancelled
+            JOIN BackupRuns br ON br.Id = cancelled.BackupRunId
+            LIMIT 1
             """;
 
-        return db.ExecuteAsync(
+        var result = await db.QuerySingleOrDefaultAsync<BackupRestoreRunWithPolicyDto>(
             sql,
             new
             {
@@ -2637,6 +2676,7 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
                 }
             },
             transaction: tx());
+        return result?.ToDomain();
     }
 
 }

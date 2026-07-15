@@ -82,7 +82,7 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         var taggedPolicies = (await uow.BackupPolicies.GetAllAsync(cancellationToken, [tag.Id])).ToArray();
         var runs = (await uow.BackupRuns.GetByPolicyAsync(policy.Id, 50, cancellationToken)).ToArray();
 
-        var cancelledRows = await uow.BackupRuns.CancelQueuedOrRunningAsync(
+        var cancelled = await uow.BackupRuns.CancelQueuedOrRunningAsync(
             run.Id,
             DateTimeOffset.UtcNow,
             "Cancelled by test.",
@@ -100,7 +100,8 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         Assert.Equal(policy.Id, taggedPolicy.Id);
         Assert.Contains(taggedPolicy.Tags, x => x.Id == tag.Id);
         Assert.Single(runs);
-        Assert.Equal(1, cancelledRows);
+        Assert.NotNull(cancelled);
+        Assert.Equal(run.Id, cancelled.Id);
         Assert.Equal(BackupRunStatus.Cancelled, cancelledRun?.Status);
         Assert.Equal(BackupSnapshotAvailability.NotCreated, cancelledRun?.SnapshotAvailability);
     }
@@ -423,6 +424,58 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         Assert.Equal("db-data", binding.ComposeVolumeName);
     }
 
+    [Fact]
+    public async Task BackupRestoreRuns_ShouldFilterByPolicyInDatabase()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var actorId = Constants.SystemId;
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var passwordSecret = new SecretDefinition("RESTIC_PASSWORD_RESTORE_POLICY_FILTER", SecretProviderType.InternalEncrypted);
+        await uow.SecretDefinitions.AddAsync(
+            passwordSecret,
+            new InternalSecretValue(passwordSecret.Id, "encrypted-value"),
+            cancellationToken);
+
+        var repository = new BackupRepository(
+            "repo-restore-policy-filter",
+            null,
+            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, "/backup-restore-policy-filter"),
+            passwordSecret.Id,
+            actorId);
+        await uow.BackupRepositories.AddAsync(repository, cancellationToken);
+
+        var platform = CreatePlatform("backup-restore-policy-filter-platform");
+        await uow.Platforms.AddAsync(platform, cancellationToken);
+
+        var policy = await AddVolumePolicyAsync(uow, repository.Id, platform.Id, "policy-volume", enabled: true, actorId, cancellationToken);
+        var otherPolicy = await AddVolumePolicyAsync(uow, repository.Id, platform.Id, "other-policy-volume", enabled: true, actorId, cancellationToken);
+
+        var firstRun = CreateCompletedRun(policy, repository, "snapshot-filter-001");
+        var secondRun = CreateCompletedRun(policy, repository, "snapshot-filter-002");
+        var otherRun = CreateCompletedRun(otherPolicy, repository, "snapshot-filter-other");
+        await uow.BackupRuns.AddAsync(firstRun, cancellationToken);
+        await uow.BackupRuns.AddAsync(secondRun, cancellationToken);
+        await uow.BackupRuns.AddAsync(otherRun, cancellationToken);
+
+        var firstRestoreRun = new BackupRestoreRun(firstRun.Id, repository.Id, platform.Id, "target-one", false, actorId);
+        var secondRestoreRun = new BackupRestoreRun(secondRun.Id, repository.Id, platform.Id, "target-two", false, actorId);
+        var otherRestoreRun = new BackupRestoreRun(otherRun.Id, repository.Id, platform.Id, "target-other", false, actorId);
+        await uow.BackupRestoreRuns.AddAsync(firstRestoreRun, cancellationToken);
+        await uow.BackupRestoreRuns.AddAsync(secondRestoreRun, cancellationToken);
+        await uow.BackupRestoreRuns.AddAsync(otherRestoreRun, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+
+        var restoreRuns = (await uow.BackupRestoreRuns.GetByPolicyAsync(policy.Id, 50, cancellationToken)).ToArray();
+
+        Assert.Equal(2, restoreRuns.Length);
+        Assert.Contains(restoreRuns, run => run.Id == firstRestoreRun.Id);
+        Assert.Contains(restoreRuns, run => run.Id == secondRestoreRun.Id);
+        Assert.DoesNotContain(restoreRuns, run => run.Id == otherRestoreRun.Id);
+    }
+
     private static async Task<BackupPolicy> AddVolumePolicyAsync(
         IUnitOfWork uow,
         Guid repositoryId,
@@ -460,4 +513,27 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
             BackupRunTrigger.Manual,
             triggerSourceId: null,
             triggeredByActorId: Constants.SystemId);
+
+    private static Platform CreatePlatform(string name)
+        => new(
+            name,
+            "unix:///var/run/docker.sock",
+            networkCount: 0,
+            volumeCount: 0,
+            imageCount: 0,
+            cpuCount: 1,
+            memTotal: 1024,
+            serverVersion: "test",
+            agentVersion: null,
+            PlatformStatus.Online,
+            PlatformConnectorType.Local,
+            new DockerPlatformDescriptor("daemon", 0, 0, 0, 0));
+
+    private static BackupRun CreateCompletedRun(BackupPolicy policy, BackupRepository repository, string snapshotId)
+    {
+        var run = CreateRun(policy, repository);
+        run.MarkRunning(DateTimeOffset.UtcNow);
+        run.CompleteSucceeded(snapshotId, null, 1, 1, 1, [], DateTimeOffset.UtcNow);
+        return run;
+    }
 }

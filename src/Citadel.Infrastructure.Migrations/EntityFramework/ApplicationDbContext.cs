@@ -1766,7 +1766,7 @@ internal static class Configuration
             .HasOne("Platform")
             .WithMany()
             .HasForeignKey("PlatformId")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         runItem.HasIndex("BackupRunId", "VolumeName").HasDatabaseName($"IX_{runItemTable}_Run_VolumeName");
         runItem.HasIndex("BackupRunId", "Status").HasDatabaseName($"IX_{runItemTable}_Run_Status");

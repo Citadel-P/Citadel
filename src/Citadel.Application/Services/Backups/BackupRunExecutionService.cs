@@ -83,6 +83,7 @@ internal sealed class BackupRunExecutionService(
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
     IBackupRunCoordinator runCoordinator,
     IBackupPolicyStreamManager backupPolicyStreamManager,
+    IBackupRunStreamManager backupRunStreamManager,
     INotificationQueue notificationQueue,
     IOptions<BackupOptions> backupOptions,
     ILogger<BackupRunExecutionService> logger) : IBackupRunExecutionService
@@ -228,6 +229,8 @@ internal sealed class BackupRunExecutionService(
 
                     var runItems = CreateRunItems(run, source);
                     await PersistRunItemsAsync(runItems, linkedCancel.Token);
+                    run.AssignItems(runItems);
+                    await NotifyBackupRunAsync(run, linkedCancel.Token);
 
                     var backupResults = new List<ResticBackupResult>(source.Items.Count);
                     foreach (var sourceItem in source.Items)
@@ -237,6 +240,8 @@ internal sealed class BackupRunExecutionService(
                         {
                             runItem.MarkRunning(DateTimeOffset.UtcNow);
                             await PersistRunItemAsync(runItem, linkedCancel.Token);
+                            run.AssignItems(runItems);
+                            await NotifyBackupRunAsync(run, linkedCancel.Token);
                         }
 
                         if (source.Items.Count > 1 || !string.Equals(source.DisplayName, sourceItem.DisplayName, StringComparison.Ordinal))
@@ -257,8 +262,11 @@ internal sealed class BackupRunExecutionService(
                             {
                                 runItem.Fail(backup.Result.ExitCode, ToErrorCode(status), message, DateTimeOffset.UtcNow);
                                 await PersistRunItemAsync(runItem, CancellationToken.None);
+                                run.AssignItems(runItems);
+                                await NotifyBackupRunAsync(run, CancellationToken.None);
                             }
 
+                            run.AssignItems(runItems);
                             await FailRunAsync(run, policy, status, backup.Result.ExitCode, ToErrorCode(status), message, CancellationToken.None);
                             await WriteAsync(writer, Error(run.Id, status, message, backup.Result.ExitCode), cancellationToken);
                             return;
@@ -274,6 +282,8 @@ internal sealed class BackupRunExecutionService(
                                 backup.Result.BytesAdded,
                                 DateTimeOffset.UtcNow);
                             await PersistRunItemAsync(runItem, CancellationToken.None);
+                            run.AssignItems(runItems);
+                            await NotifyBackupRunAsync(run, CancellationToken.None);
                         }
 
                         backupResults.Add(backup.Result);
@@ -369,11 +379,16 @@ internal sealed class BackupRunExecutionService(
         var plan = await uow.BackupRuns.TryClaimExecutionPlanAsync(runId, DateTimeOffset.UtcNow, cancellationToken);
         await uow.CommitAsync(cancellationToken);
 
-        if (plan?.Policy is not null)
+        if (plan is not null)
         {
-            await notificationQueue.EnqueueAsync(
-                new BackupPolicyNotificationWorkItem(backupPolicyStreamManager, plan.Policy),
-                cancellationToken);
+            if (plan.Policy is not null)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new BackupPolicyNotificationWorkItem(backupPolicyStreamManager, plan.Policy),
+                    cancellationToken);
+            }
+
+            await NotifyBackupRunAsync(plan.Run, cancellationToken);
         }
 
         return plan;
@@ -751,6 +766,7 @@ internal sealed class BackupRunExecutionService(
                 environment.RedactionValues,
                 Math.Max(1024, options.MaxLogLineBytes),
                 SourceVolumeName: sourceItem?.VolumeName,
+                TargetVolumeName: null,
                 RepositoryHostPath: environment.PlatformRepositoryHostPath,
                 NetworkMode: environment.RepositoryRequiresNetwork ? null : "none"),
             cancellationToken);
@@ -831,6 +847,7 @@ internal sealed class BackupRunExecutionService(
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         await uow.BackupRuns.UpdateAsync(run, cancellationToken);
         await uow.CommitAsync(cancellationToken);
+        await NotifyBackupRunAsync(run, cancellationToken);
     }
 
     private async Task PersistRunItemsAsync(IReadOnlyCollection<BackupRunItem> items, CancellationToken cancellationToken)
@@ -867,8 +884,8 @@ internal sealed class BackupRunExecutionService(
         }
         else
         {
-            await uow.BackupRuns.FinishRunAndMarkPolicyIdleAsync(run, policy.Id, successful, completedAt, cancellationToken);
-            updatedPolicy = await uow.BackupPolicies.GetAsync(policy.Id, cancellationToken);
+            var finish = await uow.BackupRuns.FinishRunAndMarkPolicyIdleAsync(run, policy.Id, successful, completedAt, cancellationToken);
+            updatedPolicy = finish.Policy;
         }
 
         await uow.CommitAsync(cancellationToken);
@@ -879,7 +896,14 @@ internal sealed class BackupRunExecutionService(
                 new BackupPolicyNotificationWorkItem(backupPolicyStreamManager, updatedPolicy),
                 cancellationToken);
         }
+
+        await NotifyBackupRunAsync(run, cancellationToken);
     }
+
+    private ValueTask NotifyBackupRunAsync(BackupRun run, CancellationToken cancellationToken)
+        => notificationQueue.EnqueueAsync(
+            new BackupRunNotificationWorkItem(backupRunStreamManager, run),
+            cancellationToken);
 
     private async Task FailRunAsync(
         BackupRun run,

@@ -72,7 +72,7 @@ public sealed record RestoreVolumeInputModel(
     string TargetVolumeName,
     bool OverwriteExisting);
 
-public sealed record BackupRestoreRunResult(BackupRestoreRun Run);
+public sealed record BackupRestoreRunResult(BackupRestoreRun Run, Guid BackupPolicyId);
 
 public sealed record BackupRestoreRunListResult(IReadOnlyList<BackupRestoreRun> Runs);
 

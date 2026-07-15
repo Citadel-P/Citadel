@@ -4687,7 +4687,7 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasOne("Platform", null)
                         .WithMany()
                         .HasForeignKey("PlatformId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_backuprunitems_platforms_platformid");
                 });

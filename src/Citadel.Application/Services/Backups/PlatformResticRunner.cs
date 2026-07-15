@@ -24,6 +24,7 @@ internal sealed record PlatformResticCommand(
     IReadOnlyCollection<string> RedactionValues,
     int MaxLineBytes,
     string? SourceVolumeName,
+    string? TargetVolumeName,
     string? RepositoryHostPath,
     string? NetworkMode);
 
@@ -35,6 +36,7 @@ internal sealed partial class PlatformResticRunner(
 {
     private const string HelperExecutable = "/bin/sh";
     private const string HelperSourceRoot = "/source";
+    private const string HelperTargetRoot = "/target";
     private const string HelperRepositoryRoot = "/repository";
     private const string HelperWorkDir = "/tmp";
     private const long HelperMemoryBytes = 512L * 1024 * 1024;
@@ -255,6 +257,18 @@ internal sealed partial class PlatformResticRunner(
                 Source: command.SourceVolumeName,
                 Type: "volume",
                 ReadOnly: true,
+                Consistency: null,
+                BindOptions: null,
+                VolumeOptions: null));
+        }
+
+        if (!string.IsNullOrWhiteSpace(command.TargetVolumeName))
+        {
+            mounts.Add(new HostMount(
+                Target: HelperTargetRoot,
+                Source: command.TargetVolumeName,
+                Type: "volume",
+                ReadOnly: false,
                 Consistency: null,
                 BindOptions: null,
                 VolumeOptions: null));

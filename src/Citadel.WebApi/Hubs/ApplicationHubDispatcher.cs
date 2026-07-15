@@ -110,29 +110,49 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     public Task SendBackupRepositoryInfo(BackupRepository repository, string action)
     {
         var map = BackupRepositoryView.Map(repository);
-        hubContext.Clients
-            .Group(WellKnownSignalRGroups.BackupRepositoryGroup(repository.Id))
-            .SendAsync("BackupRepositoryInfoUpdated", map, action);
-
-        hubContext.Clients
-            .Group(WellKnownSignalRGroups.BackupRepositoriesGroup)
-            .SendAsync("BackupRepositoryInfoUpdated", map, action);
-
-        return Task.CompletedTask;
+        return Task.WhenAll(
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BackupRepositoryGroup(repository.Id))
+                .SendAsync("BackupRepositoryInfoUpdated", map, action),
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BackupRepositoriesGroup)
+                .SendAsync("BackupRepositoryInfoUpdated", map, action));
     }
 
     public Task SendBackupPolicyInfo(BackupPolicy policy, string action)
     {
         var map = BackupPolicyView.Map(policy);
-        hubContext.Clients
-            .Group(WellKnownSignalRGroups.BackupPolicyGroup(policy.Id))
-            .SendAsync("BackupPolicyInfoUpdated", map, action);
+        return Task.WhenAll(
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BackupPolicyGroup(policy.Id))
+                .SendAsync("BackupPolicyInfoUpdated", map, action),
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BackupPoliciesGroup)
+                .SendAsync("BackupPolicyInfoUpdated", map, action));
+    }
 
-        hubContext.Clients
-            .Group(WellKnownSignalRGroups.BackupPoliciesGroup)
-            .SendAsync("BackupPolicyInfoUpdated", map, action);
+    public Task SendBackupRunInfo(BackupRun run, string action)
+    {
+        var map = BackupRunView.Map(run);
+        return Task.WhenAll(
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BackupRunGroup(run.Id))
+                .SendAsync("BackupRunInfoUpdated", map, action),
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BackupRunsGroup(run.BackupPolicyId))
+                .SendAsync("BackupRunInfoUpdated", map, action));
+    }
 
-        return Task.CompletedTask;
+    public Task SendBackupRestoreRunInfo(BackupRestoreRun run, Guid backupPolicyId, string action)
+    {
+        var map = BackupRestoreRunView.Map(run);
+        return Task.WhenAll(
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BackupRestoreRunGroup(run.Id))
+                .SendAsync("BackupRestoreRunInfoUpdated", map, action),
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BackupRestoreRunsGroup(backupPolicyId))
+                .SendAsync("BackupRestoreRunInfoUpdated", map, action));
     }
     #endregion
 

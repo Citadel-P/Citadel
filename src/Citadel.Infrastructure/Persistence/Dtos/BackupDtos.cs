@@ -178,6 +178,40 @@ internal sealed record BackupRunDto(
     }
 }
 
+internal sealed record BackupRunFinishDto(
+    int ResultStatus,
+    Guid? Id,
+    string? Name,
+    string? NormalizedName,
+    string? Description,
+    string? Source,
+    Guid? BackupRepositoryId,
+    bool? Enabled,
+    string? Cron,
+    string? TimeZone,
+    string? Webhook,
+    int? KeepLastSuccessful,
+    int? TimeoutSeconds,
+    bool? AlertOnFailure,
+    Guid? RunAsActorId,
+    string? ControlState,
+    Guid? CurrentRunId,
+    long? ControlStartedAt,
+    DateTime? LastScheduledRunAt,
+    DateTime? FirstSuccessfulRunAt,
+    Guid? CreatedByActorId,
+    DateTime? CreatedAt,
+    DateTime? UpdatedAt,
+    DateTime? ArchivedAt,
+    long? RowVersion,
+    string? TagsJson = null)
+{
+    public BackupRunFinishDto()
+        : this(0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null)
+    {
+    }
+}
+
 internal sealed record BackupRunItemDto(
     Guid Id,
     Guid BackupRunId,
@@ -464,6 +498,50 @@ internal sealed record BackupRestoreRunDto(
             null,
             null,
             null,
+            Guid.Empty)
+    {
+    }
+}
+
+internal sealed record BackupRestoreRunWithPolicyDto(
+    Guid Id,
+    Guid BackupRunId,
+    Guid BackupRepositoryId,
+    string Status,
+    Guid TargetPlatformId,
+    string TargetVolumeName,
+    bool OverwriteExisting,
+    bool TargetVolumeCreatedByCitadel,
+    string AffectedContainers,
+    string Warnings,
+    DateTime QueuedAt,
+    DateTime? StartedAt,
+    DateTime? CompletedAt,
+    int? ExitCode,
+    string? ErrorCode,
+    string? ErrorMessage,
+    Guid TriggeredByActorId,
+    Guid BackupPolicyId)
+{
+    public BackupRestoreRunWithPolicyDto()
+        : this(
+            Guid.Empty,
+            Guid.Empty,
+            Guid.Empty,
+            string.Empty,
+            Guid.Empty,
+            string.Empty,
+            false,
+            false,
+            "[]",
+            "[]",
+            DateTime.MinValue,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Guid.Empty,
             Guid.Empty)
     {
     }

@@ -13601,6 +13601,8 @@ export class Api<
       query?: {
         /** @format uuid */
         backupRunId?: string;
+        /** @format uuid */
+        policyId?: string;
         /**
          * @format int32
          * @pattern ^-?(?:0|[1-9]\d*)$

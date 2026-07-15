@@ -11,6 +11,8 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Application.Services.Backups;
+using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using System.Runtime.CompilerServices;
 using Domain.Contracts.Resources.Platforms;
 
@@ -441,7 +443,9 @@ internal sealed class ArchiveBackupPolicyHandler(IUnitOfWork unitOfWork)
 
 internal sealed class QueueBackupRunHandler(
     IUnitOfWork unitOfWork,
-    IUserContextAccessor userContextAccessor)
+    IUserContextAccessor userContextAccessor,
+    IBackupRunStreamManager backupRunStreamManager,
+    INotificationQueue notificationQueue)
     : ICommandHandler<QueueBackupRun, Result<BackupRunResult>>
 {
     public async ValueTask<Result<BackupRunResult>> Handle(QueueBackupRun command, CancellationToken cancellationToken)
@@ -465,6 +469,10 @@ internal sealed class QueueBackupRunHandler(
 
         await unitOfWork.CommitAsync(cancellationToken);
 
+        await notificationQueue.EnqueueAsync(
+            new BackupRunNotificationWorkItem(backupRunStreamManager, queueResult.Run!, "create"),
+            cancellationToken);
+
         return Result.Success(new BackupRunResult(queueResult.Run!));
     }
 }
@@ -472,7 +480,9 @@ internal sealed class QueueBackupRunHandler(
 internal sealed class RunBackupPolicyHandler(
     IUnitOfWork unitOfWork,
     IBackupRunExecutionService executionService,
-    IUserContextAccessor userContextAccessor)
+    IUserContextAccessor userContextAccessor,
+    IBackupRunStreamManager backupRunStreamManager,
+    INotificationQueue notificationQueue)
     : IStreamCommandHandler<RunBackupPolicy, BackupRunStreamItem>
 {
     public async IAsyncEnumerable<BackupRunStreamItem> Handle(
@@ -498,6 +508,10 @@ internal sealed class RunBackupPolicyHandler(
         await unitOfWork.CommitAsync(cancellationToken);
 
         var run = queueResult.Run!;
+        await notificationQueue.EnqueueAsync(
+            new BackupRunNotificationWorkItem(backupRunStreamManager, run, "create"),
+            cancellationToken);
+
         yield return new BackupRunStreamItem(
             RunId: run.Id,
             Status: BackupRunStatus.Queued,
@@ -523,44 +537,66 @@ internal sealed class RunBackupPolicyHandler(
 
 internal sealed class CancelBackupRunHandler(
     IUnitOfWork unitOfWork,
-    IBackupRunCoordinator runCoordinator)
+    IBackupRunCoordinator runCoordinator,
+    IBackupRunStreamManager backupRunStreamManager,
+    INotificationQueue notificationQueue)
     : ICommandHandler<CancelBackupRun, Result>
 {
     public async ValueTask<Result> Handle(CancelBackupRun command, CancellationToken cancellationToken)
     {
         runCoordinator.Cancel(command.RunId);
-        var rows = await unitOfWork.BackupRuns.CancelQueuedOrRunningAsync(
+        var run = await unitOfWork.BackupRuns.CancelQueuedOrRunningAsync(
             command.RunId,
             DateTimeOffset.UtcNow,
             "Backup run cancelled.",
             cancellationToken);
 
-        if (rows == 0)
+        if (run is null)
             return Result.Failure(new NotFoundError("Active backup run not found."));
 
         await unitOfWork.CommitAsync(cancellationToken);
+
+        await notificationQueue.EnqueueAsync(
+            new BackupRunNotificationWorkItem(backupRunStreamManager, run),
+            cancellationToken);
+
         return Result.Success();
     }
 }
 
 internal sealed class QueueBackupRestoreRunHandler(
     IUnitOfWork unitOfWork,
-    IUserContextAccessor userContextAccessor)
+    IUserContextAccessor userContextAccessor,
+    IBackupRestoreRunStreamManager backupRestoreRunStreamManager,
+    INotificationQueue notificationQueue)
     : ICommandHandler<QueueBackupRestoreRun, Result<BackupRestoreRunResult>>
 {
     public async ValueTask<Result<BackupRestoreRunResult>> Handle(QueueBackupRestoreRun command, CancellationToken cancellationToken)
-        => await BackupRestoreRunQueuer.QueueAsync(
+    {
+        var result = await BackupRestoreRunQueuer.QueueAsync(
             unitOfWork,
             userContextAccessor,
             command.RunId,
             command.Input,
             cancellationToken);
+
+        if (result.IsSuccess(out var queued))
+        {
+            await notificationQueue.EnqueueAsync(
+                new BackupRestoreRunNotificationWorkItem(backupRestoreRunStreamManager, queued.Run, queued.BackupPolicyId, "create"),
+                cancellationToken);
+        }
+
+        return result;
+    }
 }
 
 internal sealed class RunBackupRestoreVolumeHandler(
     IUnitOfWork unitOfWork,
     IBackupRestoreRunExecutionService executionService,
-    IUserContextAccessor userContextAccessor)
+    IUserContextAccessor userContextAccessor,
+    IBackupRestoreRunStreamManager backupRestoreRunStreamManager,
+    INotificationQueue notificationQueue)
     : IStreamCommandHandler<RunBackupRestoreVolume, BackupRestoreRunStreamItem>
 {
     public async IAsyncEnumerable<BackupRestoreRunStreamItem> Handle(
@@ -585,6 +621,10 @@ internal sealed class RunBackupRestoreVolumeHandler(
         }
 
         var run = queued.Run;
+        await notificationQueue.EnqueueAsync(
+            new BackupRestoreRunNotificationWorkItem(backupRestoreRunStreamManager, run, queued.BackupPolicyId, "create"),
+            cancellationToken);
+
         yield return new BackupRestoreRunStreamItem(
             RestoreRunId: run.Id,
             Status: BackupRestoreStatus.Queued,
@@ -622,28 +662,35 @@ file static class BackupRestoreRunQueuer
         await unitOfWork.BackupRestoreRuns.AddAsync(run, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return Result.Success(new BackupRestoreRunResult(run));
+        return Result.Success(new BackupRestoreRunResult(run, backupRun.BackupPolicyId));
     }
 }
 
 internal sealed class CancelBackupRestoreRunHandler(
     IUnitOfWork unitOfWork,
-    IBackupRestoreRunCoordinator runCoordinator)
+    IBackupRestoreRunCoordinator runCoordinator,
+    IBackupRestoreRunStreamManager backupRestoreRunStreamManager,
+    INotificationQueue notificationQueue)
     : ICommandHandler<CancelBackupRestoreRun, Result>
 {
     public async ValueTask<Result> Handle(CancelBackupRestoreRun command, CancellationToken cancellationToken)
     {
         runCoordinator.Cancel(command.RestoreRunId);
-        var rows = await unitOfWork.BackupRestoreRuns.CancelQueuedOrRunningAsync(
+        var cancelled = await unitOfWork.BackupRestoreRuns.CancelQueuedOrRunningAsync(
             command.RestoreRunId,
             DateTimeOffset.UtcNow,
             "Backup restore run cancelled.",
             cancellationToken);
 
-        if (rows == 0)
+        if (cancelled is null)
             return Result.Failure(new NotFoundError("Active backup restore run not found."));
 
         await unitOfWork.CommitAsync(cancellationToken);
+
+        await notificationQueue.EnqueueAsync(
+            new BackupRestoreRunNotificationWorkItem(backupRestoreRunStreamManager, cancelled.Run, cancelled.BackupPolicyId),
+            cancellationToken);
+
         return Result.Success();
     }
 }

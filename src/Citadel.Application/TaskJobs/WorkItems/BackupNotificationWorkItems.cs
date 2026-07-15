@@ -21,3 +21,22 @@ internal sealed class BackupPolicyNotificationWorkItem(
     public Task ExecuteAsync(CancellationToken cancellationToken)
         => streamManager.SendBackupPolicyInfo(policy, action);
 }
+
+internal sealed class BackupRunNotificationWorkItem(
+    IBackupRunStreamManager streamManager,
+    BackupRun run,
+    string action = "update") : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+        => streamManager.SendBackupRunInfo(run, action);
+}
+
+internal sealed class BackupRestoreRunNotificationWorkItem(
+    IBackupRestoreRunStreamManager streamManager,
+    BackupRestoreRun run,
+    Guid backupPolicyId,
+    string action = "update") : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+        => streamManager.SendBackupRestoreRunInfo(run, backupPolicyId, action);
+}

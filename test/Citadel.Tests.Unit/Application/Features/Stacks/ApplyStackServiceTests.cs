@@ -1123,6 +1123,97 @@ public class ApplyStackServiceTests
     }
 
     [Fact]
+    public async Task StackSucceededWorkItem_Should_Mark_Stack_Degraded_When_Applied_Containers_Have_Mixed_States()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "minio-stack",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  minio:\n    image: minio/minio\n  minio-init:\n    image: minio/mc\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+        stack.MarkProcessing(actorId);
+
+        var dockerContainers = new[]
+        {
+            new DockerContainer(
+                Name: "/minio-stack-minio-1",
+                Image: "minio/minio:latest",
+                Id: "minio-container-id",
+                ImageId: "sha256:minio",
+                State: ContainerStateStatus.Running,
+                Created: 123,
+                Stack: "minio-stack"),
+            new DockerContainer(
+                Name: "/minio-stack-minio-init-1",
+                Image: "minio/mc:latest",
+                Id: "minio-init-container-id",
+                ImageId: "sha256:minio-mc",
+                State: ContainerStateStatus.Exited,
+                Created: 124,
+                Stack: "minio-stack")
+        };
+
+        var stacks = new Mock<IStackRepository>();
+        stacks
+            .Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stacks
+            .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var containers = new Mock<IContainerRepository>();
+        containers
+            .Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        containers
+            .Setup(x => x.BulkUpsertAsync(It.IsAny<IEnumerable<Container>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(2);
+
+        var images = new Mock<IImageRepository>();
+        images
+            .Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents
+            .Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var actors = new Mock<IActorRepository>();
+        actors
+            .Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Actor?)null);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
+        unitOfWork.Setup(x => x.Images).Returns(images.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var workItem = new StackSucceededWorkItem(
+            stack.Id,
+            actorId,
+            dockerContainers,
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            StackApplyOperation.Apply);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, CancellationToken.None);
+
+        Assert.Equal(StackReleaseStatus.Degraded, stack.CurrentStackRelease?.Status);
+        Assert.Equal(ResourceControlState.Idle, stack.ControlState);
+    }
+
+    [Fact]
     public async Task StackSucceededWorkItem_Should_Record_Rollback_Activity_For_Rollback_Operation()
     {
         var platformId = Guid.CreateVersion7();

@@ -432,7 +432,7 @@ internal class ApplyStackService(
                     volumeBindings.Bindings),
                 ct);
 
-            yield return StackStreamItem.SystemMessage("Stack is now running.", 0);
+            yield return StackStreamItem.SystemMessage("Stack applied successfully.", 0);
             yield break;
         }
 
@@ -993,7 +993,7 @@ internal sealed class StackSucceededWorkItem(
         }
 
         stack.CurrentStackRelease.UpdateResourceBindings(resourceBindings);
-        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        stack.ReleaseProcessing(GetAppliedStackStatus(dockerContainers));
 
         var platformId = stack.CurrentStackRelease.PlatformId;
         var images = await uow.Images.GetByPlatformIdAsync(platformId, ct);
@@ -1061,6 +1061,11 @@ internal sealed class StackSucceededWorkItem(
         await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, stack), ct);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, ct)), ct);
     }
+
+    private static StackReleaseStatus GetAppliedStackStatus(IReadOnlyCollection<DockerContainer> containers)
+        => containers.Count == 0
+            ? StackReleaseStatus.Healthy
+            : Stack.ToStackStatus(containers.Select(container => container.State));
 }
 
 internal static class StackActivityFactory

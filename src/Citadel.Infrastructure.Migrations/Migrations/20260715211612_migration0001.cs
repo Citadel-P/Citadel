@@ -28,6 +28,21 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "backupsourceleases",
+                columns: table => new
+                {
+                    sourcekey = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    expiresat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    operationtype = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    ownerrunid = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backupsourceleases", x => x.sourcekey);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "citadelinstanceidentity",
                 columns: table => new
                 {
@@ -118,6 +133,7 @@ namespace Infrastructure.Migrations.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     alertonfailure = table.Column<bool>(type: "boolean", nullable: false),
                     code = table.Column<string>(type: "text", nullable: false),
+                    controlstartedat = table.Column<long>(type: "bigint", nullable: true),
                     controlstate = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Idle"),
                     createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
@@ -1064,6 +1080,46 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "backuprepositories",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    archivedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    controlstartedat = table.Column<long>(type: "bigint", nullable: true),
+                    controlstate = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Idle"),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    currentrunid = table.Column<Guid>(type: "uuid", nullable: true),
+                    description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
+                    lastcheckedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastprunedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    name = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    normalizedname = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    passwordsecretid = table.Column<Guid>(type: "uuid", nullable: false),
+                    rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
+                    spec = table.Column<string>(type: "jsonb", nullable: false),
+                    status = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    type = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backuprepositories", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_backuprepositories_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuprepositories_secretdefinitions_passwordsecretid",
+                        column: x => x.passwordsecretid,
+                        principalTable: "secretdefinitions",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "internalsecretvalues",
                 columns: table => new
                 {
@@ -1191,6 +1247,139 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "stackreleasevolumebindings",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    composevolumename = table.Column<string>(type: "text", maxLength: 255, nullable: true),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    isanonymous = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    isexternal = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    stackreleaseid = table.Column<Guid>(type: "uuid", nullable: false),
+                    volumename = table.Column<string>(type: "text", maxLength: 255, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_stackreleasevolumebindings", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_stackreleasevolumebindings_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_stackreleasevolumebindings_stackreleases_stackreleaseid",
+                        column: x => x.stackreleaseid,
+                        principalTable: "stackreleases",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "backuppolicies",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    alertonfailure = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    archivedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    backuprepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    controlstartedat = table.Column<long>(type: "bigint", nullable: true),
+                    controlstate = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Idle"),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    cron = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    currentrunid = table.Column<Guid>(type: "uuid", nullable: true),
+                    description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
+                    enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    firstsuccessfulrunat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    keeplastsuccessful = table.Column<int>(type: "integer", nullable: false, defaultValue: 14),
+                    lastscheduledrunat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    name = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    normalizedname = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
+                    runasactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    source = table.Column<string>(type: "jsonb", nullable: false),
+                    timezone = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    timeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 14400),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    webhook = table.Column<string>(type: "jsonb", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backuppolicies", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_backuppolicies_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuppolicies_actors_runasactorid",
+                        column: x => x.runasactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuppolicies_backuprepositories_backuprepositoryid",
+                        column: x => x.backuprepositoryid,
+                        principalTable: "backuprepositories",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "backuprepositoryleases",
+                columns: table => new
+                {
+                    backuprepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    expiresat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    operationtype = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    ownerrunid = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backuprepositoryleases", x => x.backuprepositoryid);
+                    table.ForeignKey(
+                        name: "fk_backuprepositoryleases_backuprepositories_backuprepositoryid",
+                        column: x => x.backuprepositoryid,
+                        principalTable: "backuprepositories",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "backuprepositoryvalidations",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    backuprepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    lasterrorcode = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    lasterrormessage = table.Column<string>(type: "text", maxLength: 600, nullable: true),
+                    lastvalidatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    location = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: true),
+                    status = table.Column<string>(type: "text", maxLength: 64, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backuprepositoryvalidations", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_backuprepositoryvalidations_backuprepositories_backupreposi~",
+                        column: x => x.backuprepositoryid,
+                        principalTable: "backuprepositories",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_backuprepositoryvalidations_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "containerstats",
                 columns: table => new
                 {
@@ -1211,6 +1400,189 @@ namespace Infrastructure.Migrations.Migrations
                         name: "fk_containerstats_containers_containerid",
                         column: x => x.containerid,
                         principalTable: "containers",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "backupruns",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    backuppolicyid = table.Column<Guid>(type: "uuid", nullable: false),
+                    backuprepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    bytesadded = table.Column<long>(type: "bigint", nullable: true),
+                    bytesprocessed = table.Column<long>(type: "bigint", nullable: true),
+                    completedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    errorcode = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    errormessage = table.Column<string>(type: "text", maxLength: 1200, nullable: true),
+                    exitcode = table.Column<int>(type: "integer", nullable: true),
+                    filesprocessed = table.Column<long>(type: "bigint", nullable: true),
+                    parentsnapshotid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    policynamesnapshot = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    queuedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    repositorytypesnapshot = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    resticsnapshotid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    snapshotavailability = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    sourcesnapshot = table.Column<string>(type: "jsonb", nullable: false),
+                    startedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    status = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    trigger = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    triggersourceid = table.Column<Guid>(type: "uuid", nullable: true),
+                    triggeredbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    warnings = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backupruns", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_backupruns_actors_triggeredbyactorid",
+                        column: x => x.triggeredbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backupruns_backuppolicies_backuppolicyid",
+                        column: x => x.backuppolicyid,
+                        principalTable: "backuppolicies",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backupruns_backuprepositories_backuprepositoryid",
+                        column: x => x.backuprepositoryid,
+                        principalTable: "backuprepositories",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "backuprestoreruns",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    affectedcontainers = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    backuprepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    backuprunid = table.Column<Guid>(type: "uuid", nullable: false),
+                    completedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    errorcode = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    errormessage = table.Column<string>(type: "text", maxLength: 1200, nullable: true),
+                    exitcode = table.Column<int>(type: "integer", nullable: true),
+                    overwriteexisting = table.Column<bool>(type: "boolean", nullable: false),
+                    queuedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    startedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    status = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    targetplatformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    targetvolumecreatedbycitadel = table.Column<bool>(type: "boolean", nullable: false),
+                    targetvolumename = table.Column<string>(type: "text", maxLength: 255, nullable: false),
+                    triggeredbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    warnings = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backuprestoreruns", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_backuprestoreruns_actors_triggeredbyactorid",
+                        column: x => x.triggeredbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuprestoreruns_backuprepositories_backuprepositoryid",
+                        column: x => x.backuprepositoryid,
+                        principalTable: "backuprepositories",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuprestoreruns_backupruns_backuprunid",
+                        column: x => x.backuprunid,
+                        principalTable: "backupruns",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_backuprestoreruns_platforms_targetplatformid",
+                        column: x => x.targetplatformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "backuprunitems",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    backuprunid = table.Column<Guid>(type: "uuid", nullable: false),
+                    bytesadded = table.Column<long>(type: "bigint", nullable: true),
+                    bytesprocessed = table.Column<long>(type: "bigint", nullable: true),
+                    completedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    errorcode = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    errormessage = table.Column<string>(type: "text", maxLength: 1200, nullable: true),
+                    exitcode = table.Column<int>(type: "integer", nullable: true),
+                    filesprocessed = table.Column<long>(type: "bigint", nullable: true),
+                    parentsnapshotid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    resticsnapshotid = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    startedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    status = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    volumename = table.Column<string>(type: "text", maxLength: 255, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backuprunitems", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_backuprunitems_backupruns_backuprunid",
+                        column: x => x.backuprunid,
+                        principalTable: "backupruns",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_backuprunitems_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "backuprunlogs",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    backuprunid = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    message = table.Column<string>(type: "text", nullable: false),
+                    stream = table.Column<string>(type: "text", maxLength: 32, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backuprunlogs", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_backuprunlogs_backupruns_backuprunid",
+                        column: x => x.backuprunid,
+                        principalTable: "backupruns",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "backuprestorerunlogs",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    backuprestorerunid = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    message = table.Column<string>(type: "text", nullable: false),
+                    stream = table.Column<string>(type: "text", maxLength: 32, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_backuprestorerunlogs", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_backuprestorerunlogs_backuprestoreruns_backuprestorerunid",
+                        column: x => x.backuprestorerunid,
+                        principalTable: "backuprestoreruns",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -1237,11 +1609,11 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.InsertData(
                 table: "actions",
-                columns: new[] { "id", "alertonfailure", "code", "controlstate", "createdat", "createdbyactorid", "currentrunid", "defaultargsjson", "description", "enabled", "lastscheduledrunat", "name", "runasactorid", "schedulecron", "scheduleenabled", "scheduletimezone", "timeoutseconds", "updatedat", "webhook" },
+                columns: new[] { "id", "alertonfailure", "code", "controlstartedat", "controlstate", "createdat", "createdbyactorid", "currentrunid", "defaultargsjson", "description", "enabled", "lastscheduledrunat", "name", "runasactorid", "schedulecron", "scheduleenabled", "scheduletimezone", "timeoutseconds", "updatedat", "webhook" },
                 values: new object[,]
                 {
-                    { new Guid("41000000-0000-0000-0000-000000000001"), true, "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet pruned = 0;\nlet reclaimedBytes = 0;\n\nfor (const platform of platforms) {\n  const result = await citadel.platforms.prunePlatform(platform.id, { resource: \"Image\" });\n  const imagesDeleted = result?.imagesDeleted ?? [];\n  const reclaimed = Number(result?.spaceReclaimed ?? 0);\n  reclaimedBytes += reclaimed;\n  pruned += imagesDeleted.length;\n\n  if (imagesDeleted.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);\n}\n\nconsole.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);", "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Prunes unused Docker images on every platform.", false, null, "Prune images", new Guid("00000000-0000-0000-0000-000000000002"), "0 12 * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null },
-                    { new Guid("41000000-0000-0000-0000-000000000002"), true, "const stacksResponse = await citadel.stacks.listStacks({ tags: [\"Prod\"] });\nconst stacks = stacksResponse?.stacks ?? [];\nconst unhealthyStacks = stacks.filter(\n  (stack) => stack.status !== \"Healthy\" && stack.controlState !== \"Processing\"\n);\n\nif (unhealthyStacks.length === 0) {\n  console.log(\"No unhealthy Prod stacks found.\");\n} else {\n  const stackIds = unhealthyStacks.map((stack) => stack.id);\n  await citadel.stacks.restartStacks(stackIds);\n  console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);\n}", "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Restarts stacks tagged Prod when their current release is not healthy.", false, null, "Restart unhealthy stacks", new Guid("00000000-0000-0000-0000-000000000002"), "*/15 * * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null }
+                    { new Guid("41000000-0000-0000-0000-000000000001"), true, "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet pruned = 0;\nlet reclaimedBytes = 0;\n\nfor (const platform of platforms) {\n  const result = await citadel.platforms.prunePlatform(platform.id, { resource: \"Image\" });\n  const imagesDeleted = result?.imagesDeleted ?? [];\n  const reclaimed = Number(result?.spaceReclaimed ?? 0);\n  reclaimedBytes += reclaimed;\n  pruned += imagesDeleted.length;\n\n  if (imagesDeleted.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);\n}\n\nconsole.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);", null, "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Prunes unused Docker images on every platform.", false, null, "Prune images", new Guid("00000000-0000-0000-0000-000000000002"), "0 12 * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null },
+                    { new Guid("41000000-0000-0000-0000-000000000002"), true, "const stacksResponse = await citadel.stacks.listStacks({ tags: [\"Prod\"] });\nconst stacks = stacksResponse?.stacks ?? [];\nconst unhealthyStacks = stacks.filter(\n  (stack) => stack.status !== \"Healthy\" && stack.controlState !== \"Processing\"\n);\n\nif (unhealthyStacks.length === 0) {\n  console.log(\"No unhealthy Prod stacks found.\");\n} else {\n  const stackIds = unhealthyStacks.map((stack) => stack.id);\n  await citadel.stacks.restartStacks(stackIds);\n  console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);\n}", null, "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Restarts stacks tagged Prod when their current release is not healthy.", false, null, "Restart unhealthy stacks", new Guid("00000000-0000-0000-0000-000000000002"), "*/15 * * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null }
                 });
 
             migrationBuilder.InsertData(
@@ -1305,23 +1677,29 @@ namespace Infrastructure.Migrations.Migrations
                 {
                     { new Guid("030c8f34-4447-d6b0-bc28-62b9626999c7"), 1, 1, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("07b143ad-6b02-c7ff-3d7d-48af137b2bbc"), 2, 0, new Guid("30000000-0000-0000-0000-000000000002"), 27 },
+                    { new Guid("102eae03-0582-a53c-2287-ce55c2f222a8"), 2, 16, new Guid("30000000-0000-0000-0000-000000000002"), 128 },
                     { new Guid("197f429f-cbe9-0e6c-239b-2f24196ec817"), 2, 2, new Guid("30000000-0000-0000-0000-000000000002"), 103 },
                     { new Guid("2533e6f2-53e3-1281-01f7-cc28045cbc4f"), 2, 10, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9"), 4, 3, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("361e1bf8-ef0f-1409-9137-6fa885696a19"), 4, 7, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("378efbb8-bac7-1928-e93a-7d152a50b3b6"), 1, 15, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("3bf8e221-07a0-052c-d831-2c82d22f7660"), 2, 9, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("4032d1e2-fe5e-16ef-f554-69bd2c2ac19d"), 1, 10, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("440deb9d-ace8-5e15-ef80-3a42f11a0c42"), 4, 10, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("44debca1-5d97-b691-196c-8e421143e307"), 2, 8, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("51ac9abd-9f17-8530-e1a4-8fe69e44ac1d"), 4, 1, new Guid("30000000-0000-0000-0000-000000000001"), 55 },
+                    { new Guid("6128787e-901d-f15b-c094-054be267a6c8"), 1, 16, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("645b4c54-7937-2180-7186-be24ac6bf330"), 4, 5, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("656ccf45-65a9-33b3-de65-d18d5988151a"), 4, 12, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("662623f3-aa3b-220d-546b-971d2947f7cd"), 2, 13, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("672ebf04-40e5-547b-29f2-6daf5c3c3856"), 1, 8, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("677df0f0-2ce5-4b25-76ad-eb4e21f0748d"), 4, 17, new Guid("30000000-0000-0000-0000-000000000001"), 768 },
                     { new Guid("7125b1ec-d593-d356-f559-c4655a392c31"), 2, 1, new Guid("30000000-0000-0000-0000-000000000002"), 55 },
+                    { new Guid("7cb0a723-f754-2be2-38fa-8d151c2e1c7f"), 2, 15, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("80aa1c34-79dd-6587-52db-52605326fe77"), 2, 7, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("86dadd60-fced-3dcd-cdbe-8d262bec7d22"), 2, 5, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("8b91dc54-cf72-44f6-0505-3c426552df35"), 4, 14, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
+                    { new Guid("9042fcd7-44f2-8a16-dca9-2fabdba5a0bc"), 1, 17, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("909763b4-50a0-e1c7-6df1-61add076910c"), 1, 2, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("936632a5-4e74-0a17-fb8e-497c960c3005"), 1, 0, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("94717f37-cc1a-de60-9bca-dc6379444bfb"), 1, 5, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
@@ -1337,12 +1715,15 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("b104e60e-87ef-a58f-f04a-ba2fc634f037"), 1, 6, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("b2298835-c351-7367-ad8d-e5884be235f3"), 2, 12, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("b3abb382-80da-8170-b011-05af044e7908"), 2, 3, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
+                    { new Guid("ba1393e4-1090-990e-aee3-a3e36ede0fee"), 4, 16, new Guid("30000000-0000-0000-0000-000000000001"), 128 },
                     { new Guid("d5fa8563-b0a2-4f11-7e16-7c1877e43dda"), 4, 6, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("dbb104e4-d7e2-5173-b0b2-6d1519c2f682"), 4, 8, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("e04cd0d3-47bf-2d28-e099-c7a9b61e3875"), 1, 3, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("e89ccf24-0132-149c-c8bc-33265af98ed8"), 1, 12, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("e9b46175-cc60-8d02-1dbd-ddf7f907eb16"), 4, 15, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("ee9254c3-9b59-15a0-aa85-898f5974a603"), 2, 6, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("f1633935-71e7-32f3-4264-d7120dcf22f1"), 1, 13, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("f2552404-ef60-5f22-0eaf-fd7db21f2579"), 2, 17, new Guid("30000000-0000-0000-0000-000000000002"), 768 },
                     { new Guid("fb710f21-c146-e381-00f0-820f58ecb69a"), 1, 9, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("fbb8ef70-2ec3-134f-0c18-1533173d5849"), 4, 9, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("fd0c028a-8225-0f65-8a7b-cb058f29c740"), 4, 2, new Guid("30000000-0000-0000-0000-000000000001"), 103 }
@@ -1401,6 +1782,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_actionruns_triggeredbyactorid",
                 table: "actionruns",
                 column: "triggeredbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actions_controlstate_controlstartedat",
+                table: "actions",
+                columns: new[] { "controlstate", "controlstartedat" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_actions_createdbyactorid",
@@ -1508,6 +1894,196 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_alertrulestates_createdbyactorid",
                 table: "alertrulestates",
                 column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuppolicies_archivedat",
+                table: "backuppolicies",
+                column: "archivedat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuppolicies_backuprepositoryid",
+                table: "backuppolicies",
+                column: "backuprepositoryid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuppolicies_controlstate_controlstartedat",
+                table: "backuppolicies",
+                columns: new[] { "controlstate", "controlstartedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuppolicies_createdbyactorid",
+                table: "backuppolicies",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuppolicies_normalizedname",
+                table: "backuppolicies",
+                column: "normalizedname",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuppolicies_runasactorid",
+                table: "backuppolicies",
+                column: "runasactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuppolicies_schedule",
+                table: "backuppolicies",
+                columns: new[] { "enabled", "cron" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuppolicies_source_gin",
+                table: "backuppolicies",
+                column: "source")
+                .Annotation("Npgsql:IndexMethod", "gin");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositories_archivedat",
+                table: "backuprepositories",
+                column: "archivedat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositories_controlstate_controlstartedat",
+                table: "backuprepositories",
+                columns: new[] { "controlstate", "controlstartedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositories_createdbyactorid",
+                table: "backuprepositories",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositories_normalizedname",
+                table: "backuprepositories",
+                column: "normalizedname",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositories_passwordsecretid",
+                table: "backuprepositories",
+                column: "passwordsecretid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositories_status",
+                table: "backuprepositories",
+                column: "status");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositoryleases_expiresat",
+                table: "backuprepositoryleases",
+                column: "expiresat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositoryvalidations_platformid",
+                table: "backuprepositoryvalidations",
+                column: "platformid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositoryvalidations_repository_location_platform",
+                table: "backuprepositoryvalidations",
+                columns: new[] { "backuprepositoryid", "location", "platformid" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprestorerunlogs_restorerun_createdat",
+                table: "backuprestorerunlogs",
+                columns: new[] { "backuprestorerunid", "createdat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprestoreruns_backuprun_queuedat",
+                table: "backuprestoreruns",
+                columns: new[] { "backuprunid", "queuedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprestoreruns_queuedat",
+                table: "backuprestoreruns",
+                column: "queuedat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprestoreruns_repository_status",
+                table: "backuprestoreruns",
+                columns: new[] { "backuprepositoryid", "status" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprestoreruns_status_queuedat",
+                table: "backuprestoreruns",
+                columns: new[] { "status", "queuedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprestoreruns_targetvolume",
+                table: "backuprestoreruns",
+                columns: new[] { "targetplatformid", "targetvolumename" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprestoreruns_triggeredbyactorid",
+                table: "backuprestoreruns",
+                column: "triggeredbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprunitems_platform_volumename",
+                table: "backuprunitems",
+                columns: new[] { "platformid", "volumename" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprunitems_resticsnapshotid",
+                table: "backuprunitems",
+                column: "resticsnapshotid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprunitems_run_status",
+                table: "backuprunitems",
+                columns: new[] { "backuprunid", "status" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprunitems_run_volumename",
+                table: "backuprunitems",
+                columns: new[] { "backuprunid", "volumename" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprunlogs_run_createdat",
+                table: "backuprunlogs",
+                columns: new[] { "backuprunid", "createdat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backupruns_active_policy",
+                table: "backupruns",
+                column: "backuppolicyid",
+                unique: true,
+                filter: "status IN ('Queued', 'Preparing', 'Running', 'ApplyingRetention')");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backupruns_policy_queuedat",
+                table: "backupruns",
+                columns: new[] { "backuppolicyid", "queuedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backupruns_queuedat",
+                table: "backupruns",
+                column: "queuedat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backupruns_repository_status",
+                table: "backupruns",
+                columns: new[] { "backuprepositoryid", "status" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backupruns_snapshotavailability",
+                table: "backupruns",
+                column: "snapshotavailability");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backupruns_status_queuedat",
+                table: "backupruns",
+                columns: new[] { "status", "queuedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backupruns_triggeredbyactorid",
+                table: "backupruns",
+                column: "triggeredbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backupsourceleases_expiresat",
+                table: "backupsourceleases",
+                column: "expiresat");
 
             migrationBuilder.CreateIndex(
                 name: "ix_citadelinstanceidentity_instanceid",
@@ -1853,6 +2429,17 @@ namespace Infrastructure.Migrations.Migrations
                 column: "stackid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_stackreleasevolumebindings_platform_volumename",
+                table: "stackreleasevolumebindings",
+                columns: new[] { "platformid", "volumename" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_stackreleasevolumebindings_release_volumename",
+                table: "stackreleasevolumebindings",
+                columns: new[] { "stackreleaseid", "volumename" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_stacks_controltriggeredby",
                 table: "stacks",
                 column: "controltriggeredby");
@@ -1934,6 +2521,24 @@ namespace Infrastructure.Migrations.Migrations
                 name: "alertrulestates");
 
             migrationBuilder.DropTable(
+                name: "backuprepositoryleases");
+
+            migrationBuilder.DropTable(
+                name: "backuprepositoryvalidations");
+
+            migrationBuilder.DropTable(
+                name: "backuprestorerunlogs");
+
+            migrationBuilder.DropTable(
+                name: "backuprunitems");
+
+            migrationBuilder.DropTable(
+                name: "backuprunlogs");
+
+            migrationBuilder.DropTable(
+                name: "backupsourceleases");
+
+            migrationBuilder.DropTable(
                 name: "citadelinstanceidentity");
 
             migrationBuilder.DropTable(
@@ -1979,7 +2584,7 @@ namespace Infrastructure.Migrations.Migrations
                 name: "resourcetags");
 
             migrationBuilder.DropTable(
-                name: "stackreleases");
+                name: "stackreleasevolumebindings");
 
             migrationBuilder.DropTable(
                 name: "userpreferences");
@@ -1997,6 +2602,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "alertrules");
 
             migrationBuilder.DropTable(
+                name: "backuprestoreruns");
+
+            migrationBuilder.DropTable(
                 name: "containers");
 
             migrationBuilder.DropTable(
@@ -2006,10 +2614,10 @@ namespace Infrastructure.Migrations.Migrations
                 name: "oidcproviders");
 
             migrationBuilder.DropTable(
-                name: "secretdefinitions");
+                name: "tags");
 
             migrationBuilder.DropTable(
-                name: "tags");
+                name: "stackreleases");
 
             migrationBuilder.DropTable(
                 name: "teams");
@@ -2018,13 +2626,13 @@ namespace Infrastructure.Migrations.Migrations
                 name: "users");
 
             migrationBuilder.DropTable(
+                name: "backupruns");
+
+            migrationBuilder.DropTable(
                 name: "deployments");
 
             migrationBuilder.DropTable(
                 name: "images");
-
-            migrationBuilder.DropTable(
-                name: "stacks");
 
             migrationBuilder.DropTable(
                 name: "gitaccounts");
@@ -2033,7 +2641,10 @@ namespace Infrastructure.Migrations.Migrations
                 name: "roles");
 
             migrationBuilder.DropTable(
-                name: "secretproviders");
+                name: "stacks");
+
+            migrationBuilder.DropTable(
+                name: "backuppolicies");
 
             migrationBuilder.DropTable(
                 name: "platforms");
@@ -2042,7 +2653,16 @@ namespace Infrastructure.Migrations.Migrations
                 name: "registries");
 
             migrationBuilder.DropTable(
+                name: "backuprepositories");
+
+            migrationBuilder.DropTable(
                 name: "actors");
+
+            migrationBuilder.DropTable(
+                name: "secretdefinitions");
+
+            migrationBuilder.DropTable(
+                name: "secretproviders");
         }
     }
 }

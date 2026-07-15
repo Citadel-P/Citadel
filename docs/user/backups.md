@@ -125,7 +125,20 @@ When retention is enabled, Citadel runs restic retention after the backup comple
 
 Docker volume snapshots can be restored from a backup run into a Docker named volume.
 
-Use a new target volume name unless you intentionally want to overwrite an existing volume. Citadel rejects overwrite when the target volume is currently in use.
+Open a backup policy, go to **Runs**, and select the restore action on an available Docker volume backup run. Citadel opens a restore dialog and then streams progress in a sheet.
+
+By default, restore to a new volume name. This is the safest option because the original volume is left untouched.
+
+Overwrite restore is destructive. When **Overwrite existing target volume** is enabled, Citadel deletes and recreates the target volume before restoring the snapshot. The UI requires you to type the exact target volume name before the restore can start. Citadel rejects overwrite when the target volume is currently in use.
+
+Restore history is shown in the same **Runs** tab under **Restore runs**. Use the log action on a restore run to inspect the restore output after the progress sheet is closed.
+
+Repository and platform rules for restore:
+
+- A Core filesystem repository can restore to the local platform only.
+- A Platform filesystem repository restores on the same platform that owns that repository path.
+- An S3-compatible repository can restore to local, regular agent, or edge agent platforms because the restore runs from the target platform.
+- Citadel system backups are restored offline, not through the web UI.
 
 ## Alerts
 

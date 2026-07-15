@@ -152,6 +152,8 @@ public static class ApplicationModule
             .AddSingleton<GitRepositoryStreamManager>()
             .AddSingleton<BackupRepositoryStreamManager>()
             .AddSingleton<BackupPolicyStreamManager>()
+            .AddSingleton<BackupRunStreamManager>()
+            .AddSingleton<BackupRestoreRunStreamManager>()
             .AddSingleton<AutomationActionStreamManager>()
             .AddSingleton<IImageStreamManager>(s => s.GetRequiredService<ImageStreamManager>())
             .AddSingleton<IExecSessionManager>(s => s.GetRequiredService<ExecSessionManager>())
@@ -166,6 +168,8 @@ public static class ApplicationModule
             .AddSingleton<IGitRepositoryStreamManager>(s => s.GetRequiredService<GitRepositoryStreamManager>())
             .AddSingleton<IBackupRepositoryStreamManager>(s => s.GetRequiredService<BackupRepositoryStreamManager>())
             .AddSingleton<IBackupPolicyStreamManager>(s => s.GetRequiredService<BackupPolicyStreamManager>())
+            .AddSingleton<IBackupRunStreamManager>(s => s.GetRequiredService<BackupRunStreamManager>())
+            .AddSingleton<IBackupRestoreRunStreamManager>(s => s.GetRequiredService<BackupRestoreRunStreamManager>())
             .AddSingleton<IAutomationActionStreamManager>(s => s.GetRequiredService<AutomationActionStreamManager>())
             .AddSingleton<IStackStreamManager>(s => s.GetRequiredService<StackStreamManager>());
 

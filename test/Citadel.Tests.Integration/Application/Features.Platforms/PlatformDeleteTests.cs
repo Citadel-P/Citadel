@@ -1,11 +1,15 @@
+using Dapper;
 using System.Net.Http.Json;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using Npgsql;
+using System.Text.Json;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
@@ -13,37 +17,89 @@ public class PlatformDeleteTests(PostgresTestFixture fixture) : IntegrationTestB
 {
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
     private Guid platformId;
+    private Guid backupRunId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.AddSingleton(_ => healthMonitorMock.Object);
     }
 
-    protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
+    protected override async ValueTask SeedDbAsync(IUnitOfWork _)
     {
-        var platform = new Platform(
-            name: "P-DELETE",
-            address: "https://delete.address",
-            networkCount: 1,
-            volumeCount: 2,
-            imageCount: 3,
-            cpuCount: 4,
-            memTotal: 500,
-            serverVersion: "1.0.0",
-            agentVersion: "1.0.0",
-            status: PlatformStatus.Online,
-            connectorType: PlatformConnectorType.Agent,
-            platformDescriptor: new DockerPlatformDescriptor(
+        platformId = Guid.CreateVersion7();
+        backupRunId = Guid.CreateVersion7();
+        var secretId = Guid.CreateVersion7();
+        var repositoryId = Guid.CreateVersion7();
+        var policyId = Guid.CreateVersion7();
+        var platformDescriptor = JsonSerializer.Serialize(
+            new DockerPlatformDescriptor(
                 DaemonId: "123456",
                 ContainerCount: 5,
                 ContainersRunning: 2,
                 ContainersPaused: 2,
-                ContainersStopped: 1));
+                ContainersStopped: 1),
+            PlatformJsonContext.Default.PlatformDescriptor);
 
-        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
-        await uow.CommitAsync(TestContext.Current.CancellationToken);
+        await using var connection = Services.GetRequiredService<NpgsqlDataSource>().CreateConnection();
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO platforms (
+                id, name, address, description, networkcount, volumecount, imagecount, cpucount,
+                memtotal, serverversion, agentversion, status, connectortype, platformdescriptor)
+            VALUES (
+                @PlatformId, 'P-DELETE', 'https://delete.address', NULL, 1, 2, 3, 4,
+                500, '1.0.0', '1.0.0', 'Online', 'Agent', @PlatformDescriptor::json);
 
-        platformId = platform.Id;
+            INSERT INTO secretdefinitions (id, name, providertype)
+            VALUES (@SecretId, 'PLATFORM_DELETE_BACKUP_PASSWORD', 'InternalEncrypted');
+
+            INSERT INTO internalsecretvalues (secretid, encryptedvalue)
+            VALUES (@SecretId, 'encrypted-value');
+
+            INSERT INTO backuprepositories (
+                id, name, normalizedname, description, type, spec, passwordsecretid, status,
+                controlstate, createdbyactorid)
+            VALUES (
+                @RepositoryId, 'platform-delete-repository', 'platform-delete-repository', NULL, 'FileSystem',
+                '{"$type":"FileSystem","location":"Core","path":"/tmp/platform-delete-backups"}'::jsonb,
+                @SecretId, 'Unknown', 'Idle', @ActorId);
+
+            INSERT INTO backuppolicies (
+                id, name, normalizedname, source, backuprepositoryid, enabled, keeplastsuccessful,
+                timeoutseconds, alertonfailure, runasactorid, createdbyactorid)
+            VALUES (
+                @PolicyId, 'platform-delete-policy', 'platform-delete-policy',
+                @Source::jsonb, @RepositoryId, TRUE, 14, 14400, FALSE, @ActorId, @ActorId);
+
+            INSERT INTO backupruns (
+                id, backuppolicyid, backuprepositoryid, policynamesnapshot, sourcesnapshot,
+                repositorytypesnapshot, trigger, status, snapshotavailability, resticsnapshotid,
+                filesprocessed, bytesprocessed, bytesadded, completedat, triggeredbyactorid)
+            VALUES (
+                @BackupRunId, @PolicyId, @RepositoryId, 'platform-delete-policy', @Source::jsonb,
+                'FileSystem', 'Manual', 'Succeeded', 'Available', 'snapshot-platform-delete',
+                1, 128, 64, @UtcNow, @ActorId);
+
+            INSERT INTO backuprunitems (
+                id, backuprunid, platformid, volumename, status, resticsnapshotid,
+                filesprocessed, bytesprocessed, bytesadded, startedat, completedat)
+            VALUES (
+                @BackupRunItemId, @BackupRunId, @PlatformId, 'platform-delete-volume',
+                'Succeeded', 'snapshot-platform-delete', 1, 128, 64, @UtcNow, @UtcNow);
+            """,
+            new
+            {
+                PlatformId = platformId,
+                PlatformDescriptor = platformDescriptor,
+                SecretId = secretId,
+                RepositoryId = repositoryId,
+                PolicyId = policyId,
+                BackupRunId = backupRunId,
+                BackupRunItemId = Guid.CreateVersion7(),
+                ActorId = Constants.SystemId,
+                UtcNow = DateTime.UtcNow,
+                Source = $$"""{"$type":"DockerVolume","platformId":"{{platformId}}","volumeName":"platform-delete-volume"}"""
+            });
     }
 
     [Fact]
@@ -68,6 +124,7 @@ public class PlatformDeleteTests(PostgresTestFixture fixture) : IntegrationTestB
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var exists = await uow.Platforms.ExistsAsync(platformId, TestContext.Current.CancellationToken);
+        var backupRunItems = await uow.BackupRunItems.GetByRunAsync(backupRunId, TestContext.Current.CancellationToken);
         var activities = await uow.ActivityEventRepository.GetPagedAsync(
             platformId,
             ActivityResourceType.Platform,
@@ -81,6 +138,7 @@ public class PlatformDeleteTests(PostgresTestFixture fixture) : IntegrationTestB
         var deleted = Assert.IsType<PlatformDeleted>(activity?.Info);
 
         Assert.False(exists);
+        Assert.Empty(backupRunItems);
         Assert.Equal(platformId, deleted.Platform.Id);
         Assert.Equal("P-DELETE", deleted.Platform.Name);
         Assert.Equal("https://delete.address", deleted.Platform.Address);

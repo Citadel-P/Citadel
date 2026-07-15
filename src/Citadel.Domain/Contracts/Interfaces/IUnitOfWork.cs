@@ -201,10 +201,10 @@ public interface IBackupRunRepository
     Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken);
     Task<BackupRunExecutionPlan?> GetExecutionPlanAsync(Guid id, CancellationToken cancellationToken);
     Task<BackupRunExecutionPlan?> TryClaimExecutionPlanAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
-    Task<BackupRunFinishResult> FinishRunAndMarkPolicyIdleAsync(BackupRun run, Guid policyId, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken);
+    Task<BackupRunFinishOutcome> FinishRunAndMarkPolicyIdleAsync(BackupRun run, Guid policyId, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken);
     Task<bool> HasActiveRunAsync(Guid policyId, CancellationToken cancellationToken);
     Task<bool> TryMarkPreparingAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
-    Task<int> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
+    Task<BackupRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
 }
 
 public interface IBackupRunItemRepository
@@ -230,12 +230,15 @@ public interface IBackupRestoreRunRepository
     Task<BackupRestoreRun?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<BackupRestoreRun>> GetPagedAsync(int limit, CancellationToken cancellationToken);
     Task<IEnumerable<BackupRestoreRun>> GetByBackupRunAsync(Guid backupRunId, int limit, CancellationToken cancellationToken);
+    Task<IEnumerable<BackupRestoreRun>> GetByPolicyAsync(Guid policyId, int limit, CancellationToken cancellationToken);
     Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken);
     Task<BackupRestoreRunExecutionPlan?> GetExecutionPlanAsync(Guid id, CancellationToken cancellationToken);
     Task<BackupRestoreRunExecutionPlan?> TryClaimExecutionPlanAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
     Task<BackupRestoreRunFinishResult> FinishRunAsync(BackupRestoreRun run, DateTimeOffset completedAt, CancellationToken cancellationToken);
-    Task<int> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
+    Task<BackupRestoreRunWithPolicy?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
 }
+
+public sealed record BackupRestoreRunWithPolicy(BackupRestoreRun Run, Guid BackupPolicyId);
 
 public interface IBackupRestoreRunLogRepository
 {
@@ -312,6 +315,8 @@ public enum BackupRunFinishResult
     Completed,
     AlreadyCancelled
 }
+
+public sealed record BackupRunFinishOutcome(BackupRunFinishResult Status, BackupPolicy? Policy);
 
 public sealed record BackupRunExecutionPlan(
     BackupRun Run,

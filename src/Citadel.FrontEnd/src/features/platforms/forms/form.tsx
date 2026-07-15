@@ -131,11 +131,7 @@ export const PlatformForm = ({
                       description: 'Provide a unique name for this platform.',
                       validate: (v) => (!v ? 'Name is required' : null),
                       render: (val, set) => (
-                        <FieldInput
-                          value={val}
-                          onChange={(v) => set({ name: v })}
-                          placeholder="e.g. production-web-server"
-                        />
+                        <FieldInput value={val} onChange={(v) => set({ name: v })} placeholder="e.g. platfom-01" />
                       ),
                     }),
                     defineField({

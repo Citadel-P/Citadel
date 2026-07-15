@@ -300,10 +300,11 @@ public static class BackupRestoreRuns
     public static async Task<Results<Ok<BackupRestoreRunsView>, ProblemHttpResult>> List(
         IMediator mediator,
         [FromQuery] Guid? backupRunId = null,
+        [FromQuery] Guid? policyId = null,
         [FromQuery] int? limit = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await mediator.Send(new GetBackupRestoreRuns(backupRunId, limit ?? 50), cancellationToken);
+        var result = await mediator.Send(new GetBackupRestoreRuns(backupRunId, policyId, limit ?? 50), cancellationToken);
         return EndpointHandlers.HandleResult(result, BackupRestoreRunsView.Map);
     }
 

@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260712195605_migration0002")]
+    [Migration("20260715212312_migration0002")]
     partial class migration0002
     {
         /// <inheritdoc />
@@ -908,6 +908,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("code");
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("controlstartedat");
+
                     b.Property<string>("ControlState")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1008,6 +1012,9 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("RunAsActorId")
                         .HasDatabaseName("ix_actions_runasactorid");
 
+                    b.HasIndex("ControlState", "ControlStartedAt")
+                        .HasDatabaseName("ix_actions_controlstate_controlstartedat");
+
                     b.HasIndex("Enabled", "ScheduleEnabled", "ScheduleCron")
                         .HasDatabaseName("ix_actions_schedule");
 
@@ -1076,6 +1083,10 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<Guid>("BackupRepositoryId")
                         .HasColumnType("uuid")
                         .HasColumnName("backuprepositoryid");
+
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("controlstartedat");
 
                     b.Property<string>("ControlState")
                         .IsRequired()
@@ -1173,6 +1184,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnName("updatedat")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("Webhook")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("webhook");
+
                     b.HasKey("Id")
                         .HasName("pk_backuppolicies");
 
@@ -1192,6 +1207,14 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("RunAsActorId")
                         .HasDatabaseName("ix_backuppolicies_runasactorid");
 
+                    b.HasIndex("Source")
+                        .HasDatabaseName("ix_backuppolicies_source_gin");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Source"), "gin");
+
+                    b.HasIndex("ControlState", "ControlStartedAt")
+                        .HasDatabaseName("ix_backuppolicies_controlstate_controlstartedat");
+
                     b.HasIndex("Enabled", "Cron")
                         .HasDatabaseName("ix_backuppolicies_schedule");
 
@@ -1209,6 +1232,18 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("archivedat");
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("controlstartedat");
+
+                    b.Property<string>("ControlState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Idle")
+                        .HasColumnName("controlstate");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1218,6 +1253,10 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<Guid>("CreatedByActorId")
                         .HasColumnType("uuid")
                         .HasColumnName("createdbyactorid");
+
+                    b.Property<Guid?>("CurrentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("currentrunid");
 
                     b.Property<string>("Description")
                         .HasMaxLength(600)
@@ -1295,6 +1334,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_backuprepositories_status");
+
+                    b.HasIndex("ControlState", "ControlStartedAt")
+                        .HasDatabaseName("ix_backuprepositories_controlstate_controlstartedat");
 
                     b.ToTable("backuprepositories", (string)null);
                 });
@@ -1671,6 +1713,107 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_backupruns_status_queuedat");
 
                     b.ToTable("backupruns", (string)null);
+                });
+
+            modelBuilder.Entity("BackupRunItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BackupRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("backuprunid");
+
+                    b.Property<long?>("BytesAdded")
+                        .HasColumnType("bigint")
+                        .HasColumnName("bytesadded");
+
+                    b.Property<long?>("BytesProcessed")
+                        .HasColumnType("bigint")
+                        .HasColumnName("bytesprocessed");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completedat");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("errorcode");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1200)
+                        .HasColumnType("text")
+                        .HasColumnName("errormessage");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("exitcode");
+
+                    b.Property<long?>("FilesProcessed")
+                        .HasColumnType("bigint")
+                        .HasColumnName("filesprocessed");
+
+                    b.Property<string>("ParentSnapshotId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("parentsnapshotid");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<string>("ResticSnapshotId")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("resticsnapshotid");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("startedat");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("VolumeName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("volumename");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backuprunitems");
+
+                    b.HasIndex("ResticSnapshotId")
+                        .HasDatabaseName("ix_backuprunitems_resticsnapshotid");
+
+                    b.HasIndex("BackupRunId", "Status")
+                        .HasDatabaseName("ix_backuprunitems_run_status");
+
+                    b.HasIndex("BackupRunId", "VolumeName")
+                        .HasDatabaseName("ix_backuprunitems_run_volumename");
+
+                    b.HasIndex("PlatformId", "VolumeName")
+                        .HasDatabaseName("ix_backuprunitems_platform_volumename");
+
+                    b.ToTable("backuprunitems", (string)null);
                 });
 
             modelBuilder.Entity("BackupRunLog", b =>
@@ -3182,6 +3325,30 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("677df0f0-2ce5-4b25-76ad-eb4e21f0748d"),
+                            PermissionLevel = 4,
+                            ResourceType = 17,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
+                            SpecificPermissions = 768
+                        },
+                        new
+                        {
+                            Id = new Guid("9042fcd7-44f2-8a16-dca9-2fabdba5a0bc"),
+                            PermissionLevel = 1,
+                            ResourceType = 17,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("f2552404-ef60-5f22-0eaf-fd7db21f2579"),
+                            PermissionLevel = 2,
+                            ResourceType = 17,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
+                            SpecificPermissions = 768
+                        },
+                        new
+                        {
                             Id = new Guid("2d9c5d81-bce2-e0a6-004b-138d3ac0a4a9"),
                             PermissionLevel = 4,
                             ResourceType = 3,
@@ -3958,6 +4125,63 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("stackreleases", (string)null);
                 });
 
+            modelBuilder.Entity("StackReleaseVolumeBinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ComposeVolumeName")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("composevolumename");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<bool>("IsAnonymous")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("isanonymous");
+
+                    b.Property<bool>("IsExternal")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("isexternal");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<Guid>("StackReleaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stackreleaseid");
+
+                    b.Property<string>("VolumeName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("volumename");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stackreleasevolumebindings");
+
+                    b.HasIndex("PlatformId", "VolumeName")
+                        .HasDatabaseName("ix_stackreleasevolumebindings_platform_volumename");
+
+                    b.HasIndex("StackReleaseId", "VolumeName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stackreleasevolumebindings_release_volumename");
+
+                    b.ToTable("stackreleasevolumebindings", (string)null);
+                });
+
             modelBuilder.Entity("Tag", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4454,6 +4678,23 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_backupruns_actors_triggeredbyactorid");
                 });
 
+            modelBuilder.Entity("BackupRunItem", b =>
+                {
+                    b.HasOne("BackupRun", null)
+                        .WithMany()
+                        .HasForeignKey("BackupRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprunitems_backupruns_backuprunid");
+
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_backuprunitems_platforms_platformid");
+                });
+
             modelBuilder.Entity("BackupRunLog", b =>
                 {
                     b.HasOne("BackupRun", null)
@@ -4797,6 +5038,23 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_stackreleases_stacks_stackid");
+                });
+
+            modelBuilder.Entity("StackReleaseVolumeBinding", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackreleasevolumebindings_platforms_platformid");
+
+                    b.HasOne("StackRelease", null)
+                        .WithMany()
+                        .HasForeignKey("StackReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stackreleasevolumebindings_stackreleases_stackreleaseid");
                 });
 
             modelBuilder.Entity("Tag", b =>

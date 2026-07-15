@@ -360,6 +360,7 @@ internal sealed class BackupRepositoryDestinationService(
                 environment.RedactionValues,
                 Math.Max(1024, options.MaxLogLineBytes),
                 SourceVolumeName: null,
+                TargetVolumeName: null,
                 RepositoryHostPath: environment.PlatformRepositoryHostPath,
                 NetworkMode: environment.RepositoryRequiresNetwork ? null : "none"),
             cancellationToken);

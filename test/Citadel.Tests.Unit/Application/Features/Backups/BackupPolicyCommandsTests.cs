@@ -1,6 +1,8 @@
 using Application.Features.Backups.Commands;
 using Application.Features.Backups.Models;
 using Application.Services.Backups;
+using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Backups;
@@ -13,6 +15,128 @@ namespace Tests.Unit.Application.Features.Backups;
 
 public sealed class BackupPolicyCommandsTests
 {
+    [Fact]
+    public async Task QueueBackupRun_ShouldNotifyCreatedRunAfterCommit()
+    {
+        var run = CreateQueuedBackupRun();
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.QueueAsync(
+                run.BackupPolicyId,
+                It.IsAny<Guid>(),
+                BackupRunTrigger.Manual,
+                null,
+                It.IsAny<Guid>(),
+                false,
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BackupRunQueueResult(BackupRunQueueResultStatus.Queued, run));
+        var unitOfWork = CreateUnitOfWork(backupRuns.Object);
+        var streamManager = new Mock<IBackupRunStreamManager>();
+        var notifications = new List<INotificationWorkItem>();
+        var notificationQueue = CreateNotificationQueue(notifications);
+        var handler = new QueueBackupRunHandler(
+            unitOfWork.Object,
+            CreateUserContextAccessor(),
+            streamManager.Object,
+            notificationQueue.Object);
+
+        var result = await handler.Handle(
+            new QueueBackupRun(run.BackupPolicyId, new QueueBackupRunInputModel()),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var queued, out _));
+        Assert.Equal(run.Id, queued.Run.Id);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        var notification = Assert.Single(notifications);
+
+        await notification.ExecuteAsync(TestContext.Current.CancellationToken);
+
+        streamManager.Verify(x => x.SendBackupRunInfo(run, "create"), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunBackupPolicy_ShouldNotifyCreatedRunBeforeStreamingExecution()
+    {
+        var run = CreateQueuedBackupRun();
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.QueueAsync(
+                run.BackupPolicyId,
+                It.IsAny<Guid>(),
+                BackupRunTrigger.Manual,
+                null,
+                It.IsAny<Guid>(),
+                false,
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BackupRunQueueResult(BackupRunQueueResultStatus.Queued, run));
+        var unitOfWork = CreateUnitOfWork(backupRuns.Object);
+        var executionService = new Mock<IBackupRunExecutionService>();
+        executionService
+            .Setup(x => x.ExecuteQueuedAsync(run.Id, It.IsAny<CancellationToken>()))
+            .Returns(ToAsyncEnumerable(new BackupRunStreamItem(run.Id, BackupRunStatus.Succeeded, "Backup finished.")));
+        var streamManager = new Mock<IBackupRunStreamManager>();
+        var notifications = new List<INotificationWorkItem>();
+        var notificationQueue = CreateNotificationQueue(notifications);
+        var handler = new RunBackupPolicyHandler(
+            unitOfWork.Object,
+            executionService.Object,
+            CreateUserContextAccessor(),
+            streamManager.Object,
+            notificationQueue.Object);
+
+        var items = await ToListAsync(handler.Handle(
+            new RunBackupPolicy(run.BackupPolicyId, new QueueBackupRunInputModel()),
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, items.Count);
+        Assert.Equal(BackupRunStatus.Queued, items[0].Status);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        var notification = Assert.Single(notifications);
+
+        await notification.ExecuteAsync(TestContext.Current.CancellationToken);
+
+        streamManager.Verify(x => x.SendBackupRunInfo(run, "create"), Times.Once);
+        executionService.Verify(x => x.ExecuteQueuedAsync(run.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelBackupRun_ShouldNotifyUpdatedRunAfterCommit()
+    {
+        var run = CreateQueuedBackupRun();
+        run.Cancel(DateTimeOffset.UtcNow);
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.CancelQueuedOrRunningAsync(
+                run.Id,
+                It.IsAny<DateTimeOffset>(),
+                "Backup run cancelled.",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(run);
+        var unitOfWork = CreateUnitOfWork(backupRuns.Object);
+        var coordinator = new Mock<IBackupRunCoordinator>();
+        var streamManager = new Mock<IBackupRunStreamManager>();
+        var notifications = new List<INotificationWorkItem>();
+        var notificationQueue = CreateNotificationQueue(notifications);
+        var handler = new CancelBackupRunHandler(
+            unitOfWork.Object,
+            coordinator.Object,
+            streamManager.Object,
+            notificationQueue.Object);
+
+        var result = await handler.Handle(new CancelBackupRun(run.Id), TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        var notification = Assert.Single(notifications);
+
+        await notification.ExecuteAsync(TestContext.Current.CancellationToken);
+
+        coordinator.Verify(x => x.Cancel(run.Id), Times.Once);
+        streamManager.Verify(x => x.SendBackupRunInfo(run, "update"), Times.Once);
+    }
+
     [Fact]
     public async Task CreateBackupPolicy_ShouldRejectCoreFilesystemRepositoryForRemoteDockerVolume()
     {
@@ -173,7 +297,15 @@ public sealed class BackupPolicyCommandsTests
         var restoreRuns = new Mock<IBackupRestoreRunRepository>();
         var unitOfWork = CreateUnitOfWork(backupRuns.Object, restoreRuns.Object);
         var executionService = new Mock<IBackupRestoreRunExecutionService>();
-        var handler = new RunBackupRestoreVolumeHandler(unitOfWork.Object, executionService.Object, CreateUserContextAccessor());
+        var notifications = new List<INotificationWorkItem>();
+        var notificationQueue = CreateNotificationQueue(notifications);
+        var restoreRunStreamManager = new Mock<IBackupRestoreRunStreamManager>();
+        var handler = new RunBackupRestoreVolumeHandler(
+            unitOfWork.Object,
+            executionService.Object,
+            CreateUserContextAccessor(),
+            restoreRunStreamManager.Object,
+            notificationQueue.Object);
 
         var items = await ToListAsync(handler.Handle(
             new RunBackupRestoreVolume(
@@ -186,6 +318,7 @@ public sealed class BackupPolicyCommandsTests
         Assert.Equal("Backup run not found.", item.Message);
         restoreRuns.Verify(x => x.AddAsync(It.IsAny<BackupRestoreRun>(), It.IsAny<CancellationToken>()), Times.Never);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+        notificationQueue.Verify(x => x.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()), Times.Never);
         executionService.Verify(
             x => x.ExecuteQueuedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
             Times.Never);
@@ -212,7 +345,15 @@ public sealed class BackupPolicyCommandsTests
             .Returns((Guid runId, CancellationToken _) => ToAsyncEnumerable(
                 new BackupRestoreRunStreamItem(runId, BackupRestoreStatus.Running, "Restoring volume."),
                 new BackupRestoreRunStreamItem(runId, BackupRestoreStatus.Succeeded, "Restore finished.")));
-        var handler = new RunBackupRestoreVolumeHandler(unitOfWork.Object, executionService.Object, CreateUserContextAccessor());
+        var notifications = new List<INotificationWorkItem>();
+        var notificationQueue = CreateNotificationQueue(notifications);
+        var restoreRunStreamManager = new Mock<IBackupRestoreRunStreamManager>();
+        var handler = new RunBackupRestoreVolumeHandler(
+            unitOfWork.Object,
+            executionService.Object,
+            CreateUserContextAccessor(),
+            restoreRunStreamManager.Object,
+            notificationQueue.Object);
 
         var items = await ToListAsync(handler.Handle(
             new RunBackupRestoreVolume(
@@ -240,6 +381,8 @@ public sealed class BackupPolicyCommandsTests
             });
         restoreRuns.Verify(x => x.AddAsync(It.IsAny<BackupRestoreRun>(), It.IsAny<CancellationToken>()), Times.Once);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Single(notifications);
+        Assert.IsType<BackupRestoreRunNotificationWorkItem>(notifications[0]);
         executionService.Verify(x => x.ExecuteQueuedAsync(restoreRun.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -321,6 +464,24 @@ public sealed class BackupPolicyCommandsTests
         return unitOfWork;
     }
 
+    private static Mock<IUnitOfWork> CreateUnitOfWork(IBackupRunRepository backupRuns)
+    {
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.BackupRuns).Returns(backupRuns);
+        unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        return unitOfWork;
+    }
+
+    private static Mock<INotificationQueue> CreateNotificationQueue(List<INotificationWorkItem> notifications)
+    {
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(x => x.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Callback<INotificationWorkItem, CancellationToken>((item, _) => notifications.Add(item))
+            .Returns(ValueTask.CompletedTask);
+        return notificationQueue;
+    }
+
     private static BackupRepository CreateRepository(BackupRepositorySpec spec)
         => new(
             name: "repo",
@@ -360,6 +521,17 @@ public sealed class BackupPolicyCommandsTests
             resticSnapshotId: "snapshot-01",
             snapshotAvailability: BackupSnapshotAvailability.Available,
             completedAt: DateTimeOffset.UtcNow);
+
+    private static BackupRun CreateQueuedBackupRun()
+        => new(
+            backupPolicyId: Guid.CreateVersion7(),
+            backupRepositoryId: Guid.CreateVersion7(),
+            policyNameSnapshot: "policy",
+            sourceSnapshot: new CitadelSystemBackupSource(),
+            repositoryTypeSnapshot: BackupRepositoryType.FileSystem,
+            trigger: BackupRunTrigger.Manual,
+            triggerSourceId: null,
+            triggeredByActorId: Guid.CreateVersion7());
 
     private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> stream)
     {

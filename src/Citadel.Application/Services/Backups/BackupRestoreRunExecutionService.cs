@@ -1,6 +1,9 @@
 using Application.Configs;
+using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities.Backups;
 using Hosting.Common.ErrorTypes;
@@ -70,13 +73,19 @@ internal sealed class BackupRestoreRunExecutionService(
     IServiceScopeFactory scopeFactory,
     IResticEnvironmentBuilder environmentBuilder,
     IResticProcessRunner processRunner,
+    IPlatformResticRunner platformResticRunner,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
     IBackupRestoreRunCoordinator runCoordinator,
+    IBackupRestoreRunStreamManager backupRestoreRunStreamManager,
+    INotificationQueue notificationQueue,
     IOptions<BackupOptions> backupOptions,
     ILogger<BackupRestoreRunExecutionService> logger) : IBackupRestoreRunExecutionService
 {
     private const int LogBatchSize = 25;
+    private const string ResticExecutable = "restic";
+    private const string PlatformSourceMountPath = "/source";
+    private const string PlatformTargetMountPath = "/target";
     private readonly BackupOptions options = backupOptions.Value;
 
     public async IAsyncEnumerable<BackupRestoreRunStreamItem> ExecuteQueuedAsync(
@@ -89,6 +98,8 @@ internal sealed class BackupRestoreRunExecutionService(
             yield return Error(restoreRunId, BackupRestoreStatus.Rejected, "Backup restore run is no longer queued.");
             yield break;
         }
+
+        await NotifyBackupRestoreRunAsync(plan.RestoreRun, plan.BackupRun.BackupPolicyId, cancellationToken);
 
         await foreach (var item in ExecutePlanAsync(plan, cancellationToken))
             yield return item;
@@ -150,6 +161,7 @@ internal sealed class BackupRestoreRunExecutionService(
     {
         var run = context.RestoreRun;
         var backupRun = context.BackupRun;
+        var backupPolicyId = backupRun.BackupPolicyId;
         var repository = context.Repository;
         var operationToken = runCoordinator.Register(run.Id);
 
@@ -162,7 +174,7 @@ internal sealed class BackupRestoreRunExecutionService(
 
             if (!options.Enabled)
             {
-                await FailRunAsync(run, BackupRestoreStatus.Rejected, null, "backup.restore.disabled", "Backups are disabled.", cancellationToken);
+                await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.disabled", "Backups are disabled.", cancellationToken);
                 await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, "Backups are disabled."), cancellationToken);
                 return;
             }
@@ -170,7 +182,7 @@ internal sealed class BackupRestoreRunExecutionService(
             if (backupRun.SnapshotAvailability != BackupSnapshotAvailability.Available || string.IsNullOrWhiteSpace(backupRun.ResticSnapshotId))
             {
                 const string message = "Backup snapshot is not available for restore.";
-                await FailRunAsync(run, BackupRestoreStatus.Rejected, null, "backup.restore.snapshot_unavailable", message, cancellationToken);
+                await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.snapshot_unavailable", message, cancellationToken);
                 await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
                 return;
             }
@@ -179,7 +191,7 @@ internal sealed class BackupRestoreRunExecutionService(
             if (!repositoryLease)
             {
                 const string message = "Backup repository already has an active operation.";
-                await FailRunAsync(run, BackupRestoreStatus.Rejected, null, "backup.repository_busy", message, cancellationToken);
+                await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.repository_busy", message, cancellationToken);
                 await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
                 return;
             }
@@ -192,43 +204,51 @@ internal sealed class BackupRestoreRunExecutionService(
                 if (!sourceLease)
                 {
                     const string message = "Backup restore target already has an active operation.";
-                    await FailRunAsync(run, BackupRestoreStatus.Rejected, null, "backup.restore.target_busy", message, cancellationToken);
+                    await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.target_busy", message, cancellationToken);
                     await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
                     return;
                 }
 
-                var repositoryContext = GetRepositoryContext(repository);
-                if (repositoryContext.Location != BackupExecutionLocation.Core)
+                if (!platformContainerCache.TryGetCacheEntry(run.TargetPlatformId, out var targetPlatform, out var targetPlatformError))
                 {
-                    const string message = "Platform-executed backup repositories are not implemented for restore yet.";
-                    await FailRunAsync(run, BackupRestoreStatus.Rejected, null, "backup.restore.repository_location_unsupported", message, cancellationToken);
+                    var message = targetPlatformError.Message;
+                    await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.target_unavailable", message, cancellationToken);
                     await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
                     return;
                 }
 
-                var sourceResult = await ResolveSourceSnapshotAsync(backupRun, linkedCancel.Token);
+                var repositoryContext = ResolveRestoreExecutionContext(repository, targetPlatform);
+                if (!repositoryContext.IsSuccess(out var executionContext, out var contextError))
+                {
+                    var message = contextError?.Message ?? "Backup repository cannot restore to the target platform.";
+                    await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.repository_location_unsupported", message, cancellationToken);
+                    await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
+                    return;
+                }
+
+                var sourceResult = await ResolveSourceSnapshotAsync(backupRun, repository, linkedCancel.Token);
                 if (!sourceResult.IsSuccess(out var source, out var sourceError))
                 {
                     var message = sourceError?.Message ?? "Backup source could not be resolved.";
-                    await FailRunAsync(run, BackupRestoreStatus.Rejected, null, "backup.restore.source_unavailable", message, cancellationToken);
+                    await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.source_unavailable", message, cancellationToken);
                     await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
                     return;
                 }
 
-                var targetResult = await PrepareTargetVolumeAsync(run, linkedCancel.Token);
+                var targetResult = await PrepareTargetVolumeAsync(run, targetPlatform, executionContext, linkedCancel.Token);
                 if (!targetResult.IsSuccess(out var target, out var targetError))
                 {
                     var message = targetError?.Message ?? "Backup restore target could not be prepared.";
-                    await FailRunAsync(run, BackupRestoreStatus.Rejected, null, "backup.restore.target_unavailable", message, cancellationToken);
+                    await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Rejected, null, "backup.restore.target_unavailable", message, cancellationToken);
                     await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Rejected, message), cancellationToken);
                     return;
                 }
 
-                var environmentResult = await BuildEnvironmentAsync(repository, repositoryContext, linkedCancel.Token);
+                var environmentResult = await BuildEnvironmentAsync(repository, executionContext, linkedCancel.Token);
                 if (!environmentResult.IsSuccess(out var environment, out var environmentError))
                 {
                     var message = environmentError?.Message ?? "Backup repository could not be prepared.";
-                    await FailRunAsync(run, BackupRestoreStatus.Failed, null, "backup.repository_unavailable", message, cancellationToken);
+                    await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Failed, null, "backup.repository_unavailable", message, cancellationToken);
                     await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Failed, message), cancellationToken);
                     return;
                 }
@@ -236,7 +256,7 @@ internal sealed class BackupRestoreRunExecutionService(
                 await using (environment)
                 {
                     run.MarkRunning(DateTimeOffset.UtcNow);
-                    await PersistRunAsync(run, linkedCancel.Token);
+                    await PersistRunAsync(run, backupPolicyId, linkedCancel.Token);
                     await WriteAsync(writer, Info(run.Id, BackupRestoreStatus.Running, $"Restoring snapshot into volume \"{run.TargetVolumeName}\"."), cancellationToken);
 
                     var restore = RunRestoreAsync(run, backupRun.ResticSnapshotId!, environment, source, target, linkedCancel.Token);
@@ -250,37 +270,37 @@ internal sealed class BackupRestoreRunExecutionService(
                             ? $"Restore exceeded the {options.DefaultTimeoutSeconds} second timeout."
                             : $"Restic restore exited with code {restore.Result.ExitCode}.";
 
-                        await FailRunAsync(run, status, restore.Result.ExitCode, ToErrorCode(status), message, CancellationToken.None);
+                        await FailRunAsync(run, backupPolicyId, status, restore.Result.ExitCode, ToErrorCode(status), message, CancellationToken.None);
                         await WriteAsync(writer, Error(run.Id, status, message, restore.Result.ExitCode), cancellationToken);
                         return;
                     }
 
                     var completedAt = DateTimeOffset.UtcNow;
                     run.CompleteSucceeded(target.CreatedByCitadel, [], [], completedAt);
-                    await CompleteRunAsync(run, completedAt, CancellationToken.None);
+                    await CompleteRunAsync(run, backupPolicyId, completedAt, CancellationToken.None);
                     await WriteAsync(writer, Info(run.Id, run.Status, $"Restore finished with status {run.Status}."), cancellationToken);
                 }
             }
             catch (OperationCanceledException) when (timeoutCancel.IsCancellationRequested)
             {
                 var message = $"Restore exceeded the {options.DefaultTimeoutSeconds} second timeout.";
-                await FailRunAsync(run, BackupRestoreStatus.TimedOut, -2, "backup.restore.timeout", message, CancellationToken.None);
+                await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.TimedOut, -2, "backup.restore.timeout", message, CancellationToken.None);
                 await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.TimedOut, message, -2), CancellationToken.None);
             }
             catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
             {
-                await CancelRunAsync(run, CancellationToken.None);
+                await CancelRunAsync(run, backupPolicyId, CancellationToken.None);
                 await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Cancelled, "Backup restore run cancelled."), CancellationToken.None);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                await CancelRunAsync(run, CancellationToken.None);
+                await CancelRunAsync(run, backupPolicyId, CancellationToken.None);
                 await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Cancelled, "Backup restore run cancelled."), CancellationToken.None);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Backup restore run {RestoreRunId} failed.", run.Id);
-                await FailRunAsync(run, BackupRestoreStatus.Failed, null, "backup.restore.failed", ex.Message, CancellationToken.None);
+                await FailRunAsync(run, backupPolicyId, BackupRestoreStatus.Failed, null, "backup.restore.failed", ex.Message, CancellationToken.None);
                 await WriteAsync(writer, Error(run.Id, BackupRestoreStatus.Failed, ex.Message), CancellationToken.None);
             }
             finally
@@ -324,7 +344,10 @@ internal sealed class BackupRestoreRunExecutionService(
         return await environmentBuilder.BuildAsync(uow, repository, context, cancellationToken);
     }
 
-    private async Task<Result<BackupRestoreSourcePlan>> ResolveSourceSnapshotAsync(BackupRun backupRun, CancellationToken cancellationToken)
+    private async Task<Result<BackupRestoreSourcePlan>> ResolveSourceSnapshotAsync(
+        BackupRun backupRun,
+        BackupRepository repository,
+        CancellationToken cancellationToken)
     {
         if (backupRun.SourceSnapshot is not DockerVolumeBackupSource source)
             return Result.Failure<BackupRestoreSourcePlan>(new BadRequestError("Only Docker volume backup snapshots can be restored to Docker volumes."));
@@ -332,8 +355,12 @@ internal sealed class BackupRestoreRunExecutionService(
         if (!platformContainerCache.TryGetCacheEntry(source.PlatformId, out var platform, out var cacheError))
             return Result.Failure<BackupRestoreSourcePlan>(cacheError);
 
-        if (platform.ConnectorType != PlatformConnectorType.Local)
-            return Result.Failure<BackupRestoreSourcePlan>(new BadRequestError("Docker volume restore from remote source platforms is not implemented yet."));
+        var backupContext = ResolveBackupExecutionContext(repository, platform);
+        if (!backupContext.IsSuccess(out var executionContext, out var contextError))
+            return Result.Failure<BackupRestoreSourcePlan>(contextError!);
+
+        if (executionContext.Location == BackupExecutionLocation.Platform)
+            return Result.Success(new BackupRestoreSourcePlan(PlatformSourceMountPath));
 
         var connector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
         var volumeResult = await connector.InspectVolumeAsync(
@@ -352,14 +379,12 @@ internal sealed class BackupRestoreRunExecutionService(
         return Result.Success(new BackupRestoreSourcePlan(path));
     }
 
-    private async Task<Result<BackupRestoreTargetPlan>> PrepareTargetVolumeAsync(BackupRestoreRun run, CancellationToken cancellationToken)
+    private async Task<Result<BackupRestoreTargetPlan>> PrepareTargetVolumeAsync(
+        BackupRestoreRun run,
+        PlatformCacheEntry platform,
+        BackupExecutionContext executionContext,
+        CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(run.TargetPlatformId, out var platform, out var cacheError))
-            return Result.Failure<BackupRestoreTargetPlan>(cacheError);
-
-        if (platform.ConnectorType != PlatformConnectorType.Local)
-            return Result.Failure<BackupRestoreTargetPlan>(new BadRequestError("Docker volume restore to remote platforms is not implemented yet."));
-
         var connector = volumeConnectorFactory.GetConnector(platform.ConnectorType);
         var listResult = await connector.ListVolumesAsync(
             new ListdDockerVolumesCommand(platform.Address, Dangling: null, Driver: null, Name: run.TargetVolumeName),
@@ -392,6 +417,9 @@ internal sealed class BackupRestoreRunExecutionService(
             cancellationToken);
         if (!createResult.IsSuccess(out var created, out var createError))
             return Result.Failure<BackupRestoreTargetPlan>(createError!);
+
+        if (executionContext.Location == BackupExecutionLocation.Platform)
+            return Result.Success(new BackupRestoreTargetPlan(PlatformTargetMountPath, CreatedByCitadel: true));
 
         if (string.IsNullOrWhiteSpace(created.Mountpoint))
             return Result.Failure<BackupRestoreTargetPlan>(new BadRequestError("Target volume mountpoint is not available."));
@@ -436,16 +464,7 @@ internal sealed class BackupRestoreRunExecutionService(
             var pendingLogs = new List<BackupRestoreRunLogEntry>(LogBatchSize);
             try
             {
-                await foreach (var item in processRunner.RunAsync(
-                    new ResticProcessCommand(
-                        options.ResticPath,
-                        arguments,
-                        environment.Environment,
-                        environment.WorkingDirectory,
-                        TimeSpan.FromSeconds(Math.Max(60, options.DefaultTimeoutSeconds)),
-                        environment.RedactionValues,
-                        Math.Max(1024, options.MaxLogLineBytes)),
-                    ct))
+                await foreach (var item in BuildResticStream(run, environment, arguments, ct))
                 {
                     if (item.ExitCode.HasValue)
                     {
@@ -476,6 +495,58 @@ internal sealed class BackupRestoreRunExecutionService(
         }
 
         return new BackupRestoreResticRun(Stream(cancellationToken), result);
+    }
+
+    private IAsyncEnumerable<ResticProcessEvent> BuildResticStream(
+        BackupRestoreRun run,
+        ResticRepositoryEnvironment environment,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        var timeout = TimeSpan.FromSeconds(Math.Max(60, options.DefaultTimeoutSeconds));
+        if (environment.Context.Location == BackupExecutionLocation.Core)
+        {
+            return processRunner.RunAsync(
+                new ResticProcessCommand(
+                    options.ResticPath,
+                    arguments,
+                    environment.Environment,
+                    environment.WorkingDirectory,
+                    timeout,
+                    environment.RedactionValues,
+                    Math.Max(1024, options.MaxLogLineBytes)),
+                cancellationToken);
+        }
+
+        if (!environment.Context.PlatformId.HasValue)
+            return SingleResticError("Platform restore execution requires a platform ID.");
+
+        if (!platformContainerCache.TryGetCacheEntry(environment.Context.PlatformId.Value, out var platform, out var cacheError))
+            return SingleResticError(cacheError.Message);
+
+        return platformResticRunner.RunAsync(
+            new PlatformResticCommand(
+                platform.Id,
+                platform.Address,
+                platform.ConnectorType,
+                ResticExecutable,
+                arguments,
+                environment.RemoteEnvironment,
+                timeout,
+                environment.RedactionValues,
+                Math.Max(1024, options.MaxLogLineBytes),
+                SourceVolumeName: null,
+                TargetVolumeName: run.TargetVolumeName,
+                RepositoryHostPath: environment.PlatformRepositoryHostPath,
+                NetworkMode: environment.RepositoryRequiresNetwork ? null : "none"),
+            cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<ResticProcessEvent> SingleResticError(string message)
+    {
+        await Task.Yield();
+        yield return new ResticProcessEvent(ResticProcessStream.StdErr, message);
+        yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: 1);
     }
 
     private async Task FlushLogsAsync(List<BackupRestoreRunLogEntry> entries, CancellationToken cancellationToken)
@@ -540,24 +611,32 @@ internal sealed class BackupRestoreRunExecutionService(
         await uow.CommitAsync(cancellationToken);
     }
 
-    private async Task PersistRunAsync(BackupRestoreRun run, CancellationToken cancellationToken)
+    private async Task PersistRunAsync(BackupRestoreRun run, Guid backupPolicyId, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         await uow.BackupRestoreRuns.UpdateAsync(run, cancellationToken);
         await uow.CommitAsync(cancellationToken);
+        await NotifyBackupRestoreRunAsync(run, backupPolicyId, cancellationToken);
     }
 
-    private async Task CompleteRunAsync(BackupRestoreRun run, DateTimeOffset completedAt, CancellationToken cancellationToken)
+    private async Task CompleteRunAsync(BackupRestoreRun run, Guid backupPolicyId, DateTimeOffset completedAt, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         await uow.BackupRestoreRuns.FinishRunAsync(run, completedAt, cancellationToken);
         await uow.CommitAsync(cancellationToken);
+        await NotifyBackupRestoreRunAsync(run, backupPolicyId, cancellationToken);
     }
+
+    private ValueTask NotifyBackupRestoreRunAsync(BackupRestoreRun run, Guid backupPolicyId, CancellationToken cancellationToken)
+        => notificationQueue.EnqueueAsync(
+            new BackupRestoreRunNotificationWorkItem(backupRestoreRunStreamManager, run, backupPolicyId),
+            cancellationToken);
 
     private async Task FailRunAsync(
         BackupRestoreRun run,
+        Guid backupPolicyId,
         BackupRestoreStatus status,
         int? exitCode,
         string errorCode,
@@ -565,10 +644,10 @@ internal sealed class BackupRestoreRunExecutionService(
         CancellationToken cancellationToken)
     {
         run.Fail(status, exitCode, errorCode, errorMessage, DateTimeOffset.UtcNow);
-        await CompleteRunAsync(run, run.CompletedAt ?? DateTimeOffset.UtcNow, cancellationToken);
+        await CompleteRunAsync(run, backupPolicyId, run.CompletedAt ?? DateTimeOffset.UtcNow, cancellationToken);
     }
 
-    private async Task CancelRunAsync(BackupRestoreRun run, CancellationToken cancellationToken)
+    private async Task CancelRunAsync(BackupRestoreRun run, Guid backupPolicyId, CancellationToken cancellationToken)
     {
         try
         {
@@ -578,13 +657,66 @@ internal sealed class BackupRestoreRunExecutionService(
         {
         }
 
-        await CompleteRunAsync(run, run.CompletedAt ?? DateTimeOffset.UtcNow, cancellationToken);
+        await CompleteRunAsync(run, backupPolicyId, run.CompletedAt ?? DateTimeOffset.UtcNow, cancellationToken);
     }
 
-    private static BackupExecutionContext GetRepositoryContext(BackupRepository repository)
-        => repository.Spec is FileSystemBackupRepositorySpec fs
-            ? new BackupExecutionContext(fs.Location, fs.PlatformId)
-            : new BackupExecutionContext(BackupExecutionLocation.Core, null);
+    private static Result<BackupExecutionContext> ResolveRestoreExecutionContext(
+        BackupRepository repository,
+        PlatformCacheEntry targetPlatform)
+    {
+        if (repository.Spec is FileSystemBackupRepositorySpec fs)
+        {
+            if (fs.Location == BackupExecutionLocation.Core)
+            {
+                return targetPlatform.ConnectorType == PlatformConnectorType.Local
+                    ? new BackupExecutionContext(BackupExecutionLocation.Core, null)
+                    : Result.Failure<BackupExecutionContext>(new BadRequestError("Core filesystem backup repositories cannot restore to remote Docker volumes. Use an S3-compatible repository or a filesystem repository on the same platform."));
+            }
+
+            if (fs.PlatformId != targetPlatform.Id)
+                return Result.Failure<BackupExecutionContext>(new BadRequestError("Filesystem backup repository platform must match the restore target platform."));
+
+            return new BackupExecutionContext(BackupExecutionLocation.Platform, targetPlatform.Id);
+        }
+
+        if (repository.Spec is S3CompatibleBackupRepositorySpec)
+        {
+            return targetPlatform.ConnectorType == PlatformConnectorType.Local
+                ? new BackupExecutionContext(BackupExecutionLocation.Core, null)
+                : new BackupExecutionContext(BackupExecutionLocation.Platform, targetPlatform.Id);
+        }
+
+        return Result.Failure<BackupExecutionContext>(new BadRequestError("Unsupported backup repository type."));
+    }
+
+    private static Result<BackupExecutionContext> ResolveBackupExecutionContext(
+        BackupRepository repository,
+        PlatformCacheEntry sourcePlatform)
+    {
+        if (repository.Spec is FileSystemBackupRepositorySpec fs)
+        {
+            if (fs.Location == BackupExecutionLocation.Core)
+            {
+                return sourcePlatform.ConnectorType == PlatformConnectorType.Local
+                    ? new BackupExecutionContext(BackupExecutionLocation.Core, null)
+                    : Result.Failure<BackupExecutionContext>(new BadRequestError("Core filesystem backup repositories cannot contain remote Docker volume backups."));
+            }
+
+            if (fs.PlatformId != sourcePlatform.Id)
+                return Result.Failure<BackupExecutionContext>(new BadRequestError("Filesystem backup repository platform must match the backup source platform."));
+
+            return new BackupExecutionContext(BackupExecutionLocation.Platform, sourcePlatform.Id);
+        }
+
+        if (repository.Spec is S3CompatibleBackupRepositorySpec)
+        {
+            return sourcePlatform.ConnectorType == PlatformConnectorType.Local
+                ? new BackupExecutionContext(BackupExecutionLocation.Core, null)
+                : new BackupExecutionContext(BackupExecutionLocation.Platform, sourcePlatform.Id);
+        }
+
+        return Result.Failure<BackupExecutionContext>(new BadRequestError("Unsupported backup repository type."));
+    }
 
     private static string ToErrorCode(BackupRestoreStatus status)
         => status switch

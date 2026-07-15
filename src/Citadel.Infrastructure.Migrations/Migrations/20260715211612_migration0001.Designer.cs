@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260714103514_migration0004")]
-    partial class migration0004
+    [Migration("20260715211612_migration0001")]
+    partial class migration0001
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -908,6 +908,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("code");
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("controlstartedat");
+
                     b.Property<string>("ControlState")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1008,6 +1012,9 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("RunAsActorId")
                         .HasDatabaseName("ix_actions_runasactorid");
 
+                    b.HasIndex("ControlState", "ControlStartedAt")
+                        .HasDatabaseName("ix_actions_controlstate_controlstartedat");
+
                     b.HasIndex("Enabled", "ScheduleEnabled", "ScheduleCron")
                         .HasDatabaseName("ix_actions_schedule");
 
@@ -1076,6 +1083,10 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<Guid>("BackupRepositoryId")
                         .HasColumnType("uuid")
                         .HasColumnName("backuprepositoryid");
+
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("controlstartedat");
 
                     b.Property<string>("ControlState")
                         .IsRequired()
@@ -1173,6 +1184,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnName("updatedat")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("Webhook")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("webhook");
+
                     b.HasKey("Id")
                         .HasName("pk_backuppolicies");
 
@@ -1197,6 +1212,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Source"), "gin");
 
+                    b.HasIndex("ControlState", "ControlStartedAt")
+                        .HasDatabaseName("ix_backuppolicies_controlstate_controlstartedat");
+
                     b.HasIndex("Enabled", "Cron")
                         .HasDatabaseName("ix_backuppolicies_schedule");
 
@@ -1214,6 +1232,18 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("archivedat");
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("controlstartedat");
+
+                    b.Property<string>("ControlState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Idle")
+                        .HasColumnName("controlstate");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1223,6 +1253,10 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<Guid>("CreatedByActorId")
                         .HasColumnType("uuid")
                         .HasColumnName("createdbyactorid");
+
+                    b.Property<Guid?>("CurrentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("currentrunid");
 
                     b.Property<string>("Description")
                         .HasMaxLength(600)
@@ -1300,6 +1334,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_backuprepositories_status");
+
+                    b.HasIndex("ControlState", "ControlStartedAt")
+                        .HasDatabaseName("ix_backuprepositories_controlstate_controlstartedat");
 
                     b.ToTable("backuprepositories", (string)null);
                 });
@@ -4653,7 +4690,7 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasOne("Platform", null)
                         .WithMany()
                         .HasForeignKey("PlatformId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_backuprunitems_platforms_platformid");
                 });

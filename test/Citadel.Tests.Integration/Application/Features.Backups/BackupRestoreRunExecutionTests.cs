@@ -22,12 +22,14 @@ namespace Tests.Integration.Application.Features.Backups;
 public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly FakeResticProcessRunner restic = new();
+    private readonly FakePlatformResticRunner platformRestic = new();
     private readonly FakeVolumeConnector volumeConnector = new();
     private readonly string testRoot = Path.Combine(Path.GetTempPath(), $"citadel-backup-restore-test-{Guid.NewGuid():N}");
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.ReplaceService<IResticProcessRunner>(restic);
+        services.ReplaceService<IPlatformResticRunner>(platformRestic);
         services.ReplaceService<IConnectorFactory<IVolumeConnector>>(new FakeVolumeConnectorFactory(volumeConnector));
         services.Configure<BackupOptions>(options =>
         {
@@ -107,6 +109,56 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
     }
 
     [Fact]
+    public async Task ExecuteQueuedAsync_ShouldRestoreRemoteVolumeUsingPlatformRunner()
+    {
+        var platformId = await SeedPlatformAsync(PlatformConnectorType.Agent, "http://restore-agent:9000");
+        volumeConnector.AddVolume("source-volume", CreateVolumeMountpoint("remote-source-volume"));
+        platformRestic.Enqueue(exitCode: 0, stdout: "remote restored files");
+        var repositoryPath = "/srv/citadel-backups/restore-success";
+        var setup = await CreateRepositoryBackupRunAndRestoreRunAsync(
+            "restore-remote-success",
+            platformId,
+            sourceVolumeName: "source-volume",
+            targetVolumeName: "target-volume",
+            overwriteExisting: false,
+            repositorySpec: new FileSystemBackupRepositorySpec(BackupExecutionLocation.Platform, platformId, repositoryPath));
+
+        var service = Services.GetRequiredService<IBackupRestoreRunExecutionService>();
+        var items = new List<BackupRestoreRunStreamItem>();
+        await foreach (var item in service.ExecuteQueuedAsync(setup.RestoreRun.Id, TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        Assert.Empty(restic.Calls);
+        Assert.Single(platformRestic.Calls);
+        Assert.Contains(items, item => item.Status == BackupRestoreStatus.Succeeded);
+
+        var command = platformRestic.Calls[0].Command;
+        Assert.Equal(platformId, command.PlatformId);
+        Assert.Equal("http://restore-agent:9000", command.PlatformAddress);
+        Assert.Equal(PlatformConnectorType.Agent, command.ConnectorType);
+        Assert.Equal("target-volume", command.TargetVolumeName);
+        Assert.Null(command.SourceVolumeName);
+        Assert.Equal(repositoryPath, command.RepositoryHostPath);
+        Assert.Equal("none", command.NetworkMode);
+        Assert.Contains("restore", command.Arguments);
+        Assert.Contains("snapshot-restore-001:/source", command.Arguments);
+        Assert.Contains("--target", command.Arguments);
+        Assert.Contains("/target", command.Arguments);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var storedRun = await uow.BackupRestoreRuns.GetAsync(setup.RestoreRun.Id, TestContext.Current.CancellationToken);
+        var logs = await uow.BackupRestoreRunLogs.GetByRunAsync(setup.RestoreRun.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(storedRun);
+        Assert.Equal(BackupRestoreStatus.Succeeded, storedRun.Status);
+        Assert.True(storedRun.TargetVolumeCreatedByCitadel);
+        Assert.Contains(logs, log => log.Stream == "stdout" && log.Message == "remote restored files");
+    }
+
+    [Fact]
     public async Task ExecuteQueuedAsync_ShouldFailRunAndPersistStderr_WhenResticFails()
     {
         var platformId = await SeedLocalPlatformAsync();
@@ -165,11 +217,14 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
         Assert.Contains("Target volume already exists", storedRun.ErrorMessage);
     }
 
-    private async Task<Guid> SeedLocalPlatformAsync()
+    private Task<Guid> SeedLocalPlatformAsync()
+        => SeedPlatformAsync(PlatformConnectorType.Local, Constants.LocalDockerHostUrl);
+
+    private async Task<Guid> SeedPlatformAsync(PlatformConnectorType connectorType, string address)
     {
         var platform = new Platform(
             name: $"restore-platform-{Guid.CreateVersion7():N}",
-            address: Constants.LocalDockerHostUrl,
+            address: address,
             networkCount: 0,
             volumeCount: 0,
             imageCount: 0,
@@ -178,7 +233,7 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
             serverVersion: "test",
             agentVersion: "test",
             status: PlatformStatus.Online,
-            connectorType: PlatformConnectorType.Local,
+            connectorType: connectorType,
             platformDescriptor: new DockerPlatformDescriptor(
                 DaemonId: "restore-platform",
                 ContainerCount: 0,
@@ -194,7 +249,7 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
         var cache = Services.GetRequiredService<IPlatformContainerCache>();
         cache.ReplacePlatformContainers(
             platform.Id,
-            new PlatformCacheEntry(platform.Id, Constants.LocalDockerHostUrl, PlatformConnectorType.Local, ImmutableDictionary<string, Guid>.Empty));
+            new PlatformCacheEntry(platform.Id, address, connectorType, ImmutableDictionary<string, Guid>.Empty));
 
         return platform.Id;
     }
@@ -211,14 +266,15 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
         Guid platformId,
         string sourceVolumeName,
         string targetVolumeName,
-        bool overwriteExisting)
+        bool overwriteExisting,
+        BackupRepositorySpec? repositorySpec = null)
     {
         var passwordSecretId = await CreateInternalSecretAsync($"{name.Replace('-', '_').ToUpperInvariant()}_PASSWORD", "restic-password");
         var repositoryPath = Path.Combine(testRoot, "data", "backups", "repositories", name);
         var repository = new BackupRepository(
             $"{name}-repository",
             null,
-            new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, Path.GetFullPath(repositoryPath)),
+            repositorySpec ?? new FileSystemBackupRepositorySpec(BackupExecutionLocation.Core, null, Path.GetFullPath(repositoryPath)),
             passwordSecretId,
             Constants.SystemId);
         var policy = new BackupPolicy(
@@ -314,6 +370,33 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
         }
     }
 
+    private sealed class FakePlatformResticRunner : IPlatformResticRunner
+    {
+        private readonly Queue<ResticResponse> responses = new();
+
+        public List<PlatformResticProcessCall> Calls { get; } = [];
+
+        public void Enqueue(int exitCode, string? stdout = null, string? stderr = null)
+            => responses.Enqueue(new ResticResponse(exitCode, stdout, stderr));
+
+        public async IAsyncEnumerable<ResticProcessEvent> RunAsync(
+            PlatformResticCommand command,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            Calls.Add(new PlatformResticProcessCall(command));
+            var response = responses.Count > 0 ? responses.Dequeue() : new ResticResponse(0, null, null);
+            await Task.Yield();
+
+            if (response.Stdout is not null)
+                yield return new ResticProcessEvent(ResticProcessStream.StdOut, response.Stdout.Trim());
+
+            if (response.Stderr is not null)
+                yield return new ResticProcessEvent(ResticProcessStream.StdErr, response.Stderr);
+
+            yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: response.ExitCode);
+        }
+    }
+
     private sealed class FakeVolumeConnectorFactory(IVolumeConnector connector) : IConnectorFactory<IVolumeConnector>
     {
         public IVolumeConnector GetConnector(PlatformConnectorType type) => connector;
@@ -386,4 +469,5 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
     private sealed record BackupRestoreRunSetup(BackupRepository Repository, BackupRun BackupRun, BackupRestoreRun RestoreRun);
     private sealed record ResticResponse(int ExitCode, string? Stdout, string? Stderr);
     private sealed record ResticProcessCall(ResticProcessCommand Command);
+    private sealed record PlatformResticProcessCall(PlatformResticCommand Command);
 }

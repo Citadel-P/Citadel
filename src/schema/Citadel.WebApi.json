@@ -23431,6 +23431,14 @@
             }
           },
           {
+            "name": "policyId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "schema": {

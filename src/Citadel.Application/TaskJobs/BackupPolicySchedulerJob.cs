@@ -1,4 +1,6 @@
 using Application.Configs;
+using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +18,8 @@ internal interface IBackupPolicyScheduler
 internal sealed class BackupPolicyScheduler(
     IServiceScopeFactory scopeFactory,
     IOptions<BackupOptions> backupOptions,
+    IBackupRunStreamManager backupRunStreamManager,
+    INotificationQueue notificationQueue,
     ILogger<BackupPolicyScheduler> logger) : IBackupPolicyScheduler
 {
     private readonly BackupOptions options = backupOptions.Value;
@@ -77,6 +81,14 @@ internal sealed class BackupPolicyScheduler(
             nowUtc,
             cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        if (queueResult.Status == BackupRunQueueResultStatus.Queued)
+        {
+            await notificationQueue.EnqueueAsync(
+                new BackupRunNotificationWorkItem(backupRunStreamManager, queueResult.Run!, "create"),
+                cancellationToken);
+        }
+
         return queueResult;
     }
 

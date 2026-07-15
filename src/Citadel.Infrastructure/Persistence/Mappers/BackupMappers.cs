@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Backups;
 using Domain.Entities.Backups;
 using Infrastructure.Persistence.Dtos;
@@ -129,6 +130,45 @@ internal static class BackupMappers
 
     internal static IEnumerable<BackupRun> ToDomain(this IEnumerable<BackupRunDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());
+
+    internal static BackupRunFinishOutcome ToDomain(this BackupRunFinishDto dto)
+    {
+        var status = dto.ResultStatus == 0
+            ? BackupRunFinishResult.Completed
+            : BackupRunFinishResult.AlreadyCancelled;
+
+        if (status != BackupRunFinishResult.Completed || !dto.Id.HasValue)
+            return new BackupRunFinishOutcome(status, null);
+
+        var policy = new BackupPolicyDto(
+            dto.Id.Value,
+            dto.Name ?? string.Empty,
+            dto.NormalizedName ?? string.Empty,
+            dto.Description,
+            dto.Source ?? "{}",
+            dto.BackupRepositoryId.GetValueOrDefault(),
+            dto.Enabled.GetValueOrDefault(),
+            dto.Cron,
+            dto.TimeZone,
+            dto.Webhook,
+            dto.KeepLastSuccessful.GetValueOrDefault(BackupPolicy.DefaultKeepLastSuccessful),
+            dto.TimeoutSeconds.GetValueOrDefault(BackupPolicy.DefaultTimeoutSeconds),
+            dto.AlertOnFailure.GetValueOrDefault(),
+            dto.RunAsActorId.GetValueOrDefault(),
+            dto.ControlState ?? ResourceControlState.Idle.ToString(),
+            dto.CurrentRunId,
+            dto.ControlStartedAt,
+            dto.LastScheduledRunAt,
+            dto.FirstSuccessfulRunAt,
+            dto.CreatedByActorId.GetValueOrDefault(),
+            dto.CreatedAt.GetValueOrDefault(),
+            dto.UpdatedAt.GetValueOrDefault(),
+            dto.ArchivedAt,
+            dto.RowVersion.GetValueOrDefault(),
+            dto.TagsJson);
+
+        return new BackupRunFinishOutcome(status, policy.ToDomain());
+    }
 
     internal static BackupRunItem ToDomain(this BackupRunItemDto dto)
         => BackupRunItem.FromPersistence(
@@ -283,6 +323,28 @@ internal static class BackupMappers
 
     internal static IEnumerable<BackupRestoreRun> ToDomain(this IEnumerable<BackupRestoreRunDto> dtos)
         => dtos.Select(static dto => dto.ToDomain());
+
+    internal static BackupRestoreRunWithPolicy ToDomain(this BackupRestoreRunWithPolicyDto dto)
+        => new(
+            new BackupRestoreRunDto(
+                dto.Id,
+                dto.BackupRunId,
+                dto.BackupRepositoryId,
+                dto.Status,
+                dto.TargetPlatformId,
+                dto.TargetVolumeName,
+                dto.OverwriteExisting,
+                dto.TargetVolumeCreatedByCitadel,
+                dto.AffectedContainers,
+                dto.Warnings,
+                dto.QueuedAt,
+                dto.StartedAt,
+                dto.CompletedAt,
+                dto.ExitCode,
+                dto.ErrorCode,
+                dto.ErrorMessage,
+                dto.TriggeredByActorId).ToDomain(),
+            dto.BackupPolicyId);
 
     internal static BackupRestoreRunExecutionPlan ToDomain(this BackupRestoreRunExecutionPlanDto dto)
         => new(

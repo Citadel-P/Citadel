@@ -270,13 +270,14 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
         await using (var scope = Services.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var rows = await uow.BackupRuns.CancelQueuedOrRunningAsync(
+            var cancelled = await uow.BackupRuns.CancelQueuedOrRunningAsync(
                 setup.Run.Id,
                 DateTimeOffset.UtcNow,
                 "Backup run cancelled.",
                 TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
-            Assert.Equal(1, rows);
+            Assert.NotNull(cancelled);
+            Assert.Equal(BackupRunStatus.Cancelled, cancelled.Status);
         }
 
         plan.Run.MarkRunning(DateTimeOffset.UtcNow);
@@ -292,7 +293,7 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
                 plan.Run.CompletedAt ?? DateTimeOffset.UtcNow,
                 TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
-            Assert.Equal(BackupRunFinishResult.AlreadyCancelled, result);
+            Assert.Equal(BackupRunFinishResult.AlreadyCancelled, result.Status);
         }
 
         await using (var scope = Services.CreateAsyncScope())
