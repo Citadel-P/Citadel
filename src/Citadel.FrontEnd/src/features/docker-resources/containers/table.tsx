@@ -60,15 +60,9 @@ export const ContainersTable = ({
   );
   const handleSelectionChange = useCallback(
     (selectedRows: ContainerTableRow[]) => {
-      const selectedGroups = selectedRows.filter(isContainerStackGroup);
-      const groupedContainerIds = new Set(
-        selectedGroups.flatMap((group) => group.containers.map((container) => container.containerId)),
-      );
-      const selectedResources = selectedRows.filter(
-        (resource) => isContainerStackGroup(resource) || !groupedContainerIds.has(resource.containerId),
-      );
+      const selectedResources = getSelectedContainers(selectedRows);
       const selectionKey = selectedResources
-        .map((resource) => resource.id)
+        .map(getSelectionSignature)
         .sort()
         .join('|');
 
@@ -92,6 +86,30 @@ export const ContainersTable = ({
     </ContentCard>
   );
 };
+
+const getSelectedContainers = (selectedRows: ContainerTableRow[]) => {
+  const selectedByContainerId = new Map<string, ContainerView>();
+
+  selectedRows.forEach((resource) => {
+    const containers = isContainerStackGroup(resource) ? resource.containers : [resource];
+
+    containers.forEach((container) => {
+      selectedByContainerId.set(container.containerId, container);
+    });
+  });
+
+  return Array.from(selectedByContainerId.values());
+};
+
+const getSelectionSignature = (container: ContainerView) =>
+  [
+    container.containerId,
+    container.state,
+    container.controlState,
+    container.capabilities?.canRead,
+    container.capabilities?.canWrite,
+    container.capabilities?.canExecute,
+  ].join(':');
 
 const columns = (
   actions: Record<

@@ -135,6 +135,42 @@ public class StackDuplicateTests(PostgresTestFixture fixture) : IntegrationTestB
     }
 
     [Fact]
+    public async Task DuplicateDraft_Should_NotCopyComposeProjectName()
+    {
+        var sourceId = await AddStackAsync("source-with-project-name", projectName: "source-runtime-name");
+
+        var draftResponse = await Client.GetAsync(
+            $"/api/v1/stacks/{sourceId}/duplicate-draft",
+            TestContext.Current.CancellationToken);
+        draftResponse.EnsureSuccessStatusCode();
+
+        var draftDocument = await ReadJsonObjectAsync(draftResponse);
+        var draft = draftDocument["draft"]!.AsObject();
+        var spec = draft["spec"]!.AsObject();
+
+        Assert.Equal("source-with-project-name-copy", draft["name"]!.GetValue<string>());
+        Assert.True(!spec.TryGetPropertyValue("projectName", out var projectName) || projectName is null);
+        AssertHasWarning(draftDocument["warnings"]!.AsArray(), "COMPOSE_PROJECT_NAME_NOT_COPIED");
+
+        var createResponse = await Client.PostAsync(
+            "/api/v1/stacks",
+            JsonContent(draft.ToJsonString()),
+            TestContext.Current.CancellationToken);
+        createResponse.EnsureSuccessStatusCode();
+
+        var createDocument = await ReadJsonObjectAsync(createResponse);
+        var createdStackId = createDocument["id"]!.GetValue<Guid>();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var created = await uow.Stacks.GetAsync(createdStackId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(created);
+        Assert.Equal("source-with-project-name-copy", created.Name);
+        Assert.Null(Assert.IsType<ManualStack>(created.CurrentStackRelease!.Spec).ProjectName);
+    }
+
+    [Fact]
     public async Task DuplicateDraft_ForGitStack_Should_OmitWebhookSecret_And_Warn()
     {
         var gitStackId = await AddGitStackWithWebhookSecretAsync();
@@ -229,7 +265,7 @@ public class StackDuplicateTests(PostgresTestFixture fixture) : IntegrationTestB
             TestContext.Current.CancellationToken));
     }
 
-    private async Task AddStackAsync(string name)
+    private async Task<Guid> AddStackAsync(string name, string? projectName = null)
     {
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -240,10 +276,12 @@ public class StackDuplicateTests(PostgresTestFixture fixture) : IntegrationTestB
             platformId: _platformId,
             spec: new ManualStack(
                 ComposeFile: "services:\n  app:\n    image: nginx:latest\n",
-                UpdateBehavior: StackUpdateBehavior.Disabled));
+                UpdateBehavior: StackUpdateBehavior.Disabled,
+                ProjectName: projectName));
 
         await uow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
+        return stack.Id;
     }
 
     private async Task<Guid> AddGitStackWithWebhookSecretAsync()

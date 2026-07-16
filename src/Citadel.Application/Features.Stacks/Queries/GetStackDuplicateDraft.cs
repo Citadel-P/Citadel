@@ -72,6 +72,14 @@ internal sealed class GetStackDuplicateDraftHandler(IUnitOfWork unitOfWork)
 
     private static StackSpec SanitizeSpec(StackSpec spec, ICollection<DuplicateDraftWarning> warnings)
     {
+        if (!string.IsNullOrWhiteSpace(spec.ProjectName))
+        {
+            warnings.Add(new DuplicateDraftWarning(
+                "COMPOSE_PROJECT_NAME_NOT_COPIED",
+                "The Compose project name was intentionally omitted so the duplicate can deploy with its own stack name.",
+                "spec.projectName"));
+        }
+
         if (spec is GitStack { Webhook.Secret: not null } git)
         {
             warnings.Add(new DuplicateDraftWarning(
@@ -79,10 +87,19 @@ internal sealed class GetStackDuplicateDraftHandler(IUnitOfWork unitOfWork)
                 "The stack webhook secret was intentionally omitted. Generate a new secret after saving the duplicate.",
                 "spec.webhook.secret"));
 
-            return git with { Webhook = git.Webhook with { Secret = null } };
+            return git with
+            {
+                ProjectName = null,
+                Webhook = git.Webhook with { Secret = null }
+            };
         }
 
-        return spec;
+        return spec switch
+        {
+            ManualStack manual => manual with { ProjectName = null },
+            GitStack gitSpec => gitSpec with { ProjectName = null },
+            _ => spec
+        };
     }
 
     private async Task<string> GetAvailableDuplicateNameAsync(string sourceName, CancellationToken cancellationToken)
