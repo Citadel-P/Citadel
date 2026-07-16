@@ -381,6 +381,8 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
                 It.IsAny<Guid>(),
                 It.IsAny<IReadOnlyList<string>?>(),
                 It.IsAny<bool>(),
+                It.IsAny<bool>(),
+                It.IsAny<bool>(),
                 StackApplyOperation.Apply,
                 null,
                 It.IsAny<CancellationToken>()),

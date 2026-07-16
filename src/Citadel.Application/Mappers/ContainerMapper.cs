@@ -25,7 +25,8 @@ internal static class ContainerMapper
             created: container.Created,
             state: container.State,
             ports: container.Ports,
-            imageId: imageId
+            imageId: imageId,
+            stackId: container.StackId
         );
 
     internal static ContainerStat Map(this DockerContainerStat container, Guid containerId, long? created)

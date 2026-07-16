@@ -809,6 +809,7 @@ export const UpdateAvailableNotice = ({
 export interface LogEntry {
   timestamp?: string;
   message: string;
+  severity?: LogSeverity;
 }
 
 interface RenderedLogEntry extends LogEntry {
@@ -817,7 +818,7 @@ interface RenderedLogEntry extends LogEntry {
   severity?: LogSeverity;
 }
 
-type LogSeverity = 'info' | 'success' | 'warning' | 'error';
+export type LogSeverity = 'info' | 'success' | 'warning' | 'error';
 
 interface LogViewerProps {
   logs: string | string[] | LogEntry[];
@@ -1025,6 +1026,7 @@ export const LogViewer = memo(
           return parseAnsiTerminalStream(log.message).map((line) => ({
             timestamp: log.timestamp,
             message: line,
+            severity: log.severity,
           }));
         }
 
@@ -1073,7 +1075,7 @@ export const LogViewer = memo(
           html = ansiConverter.toHtml(message);
           ansiCache.set(message, html);
         }
-        return { ...log, message, containerName: parsed.containerName, html, severity: formatted.severity };
+        return { ...log, message, containerName: parsed.containerName, html, severity: log.severity ?? formatted.severity };
       });
     }, [containerFilteringEnabled, normalizedLogs]);
 
@@ -1273,7 +1275,6 @@ function formatLogMessage(message: string): { message: string; severity?: LogSev
   if (isTaskSuccessMessage(plainMessage)) {
     return { message, severity: 'success' };
   }
-
   const levelMatch = plainMessage.match(/\blevel=(debug|info|warning|warn|error|fatal|panic)\b/i);
   if (!levelMatch) return { message };
 

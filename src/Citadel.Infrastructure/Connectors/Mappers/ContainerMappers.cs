@@ -571,7 +571,8 @@ internal static class ContainerMappers
             Created: container.Created,
             State: container.State.Map(),
             ContainerStat: container.ContainerStatMessage?.Map(),
-            Ports: container.Ports?.Map()
+            Ports: container.Ports?.Map(),
+            StackId: ParseStackId(container.StackId)
         );
 
     internal static DockerContainerStat Map(this ContainerStatMessage statMessage)
@@ -681,7 +682,8 @@ internal static class ContainerMappers
             Created: container?.Created,
             ContainerStat: container?.ContainerStat?.Map(),
             Ports: container?.Ports?.Map(),
-            State: container?.State?.Map() ?? ContainerStateStatus.Unknown
+            State: container?.State?.Map() ?? ContainerStateStatus.Unknown,
+            StackId: container?.StackId
         );
 
     internal static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this IDictionary<string, IReadOnlyList<Hosting.DockerClient.PortBinding>> bindings)
@@ -875,6 +877,11 @@ internal static class ContainerMappers
             Hosting.DockerClient.ContainerStateStatus.Created => ContainerStateStatus.Created,
             _ => ContainerStateStatus.Unknown,
         };
+
+    private static Guid? ParseStackId(string? value)
+        => Guid.TryParse(value, out var stackId)
+            ? stackId
+            : null;
 
     internal static Hosting.DockerClient.Models.Containers.ContainerAction Map(this Domain.ContainerAction action)
         => action switch

@@ -26,6 +26,8 @@ public interface IApplyStackService
         Guid actorId,
         IReadOnlyList<string>? serviceNames,
         bool pullImages,
+        bool recreate,
+        bool waitForCompletion,
         StackApplyOperation operation,
         StackSnapshot? previousStackSnapshot,
         CancellationToken ct);
@@ -56,6 +58,8 @@ internal class ApplyStackService(
         Guid actorId,
         IReadOnlyList<string>? serviceNames,
         bool pullImages,
+        bool recreate,
+        bool waitForCompletion,
         StackApplyOperation operation,
         StackSnapshot? previousStackSnapshot,
         [EnumeratorCancellation] CancellationToken ct)
@@ -300,6 +304,7 @@ internal class ApplyStackService(
             registryHost,
             serviceNames,
             pullImages,
+            recreate,
             sourceWorkingDirectory,
             sourceComposeFilePaths,
             sourceEnvFilePaths,
@@ -309,6 +314,7 @@ internal class ApplyStackService(
             secretTargetServiceNames);
 
         int? exitCode = null;
+        StackReleaseStatus? composeStatus = null;
         var errorLogs = new List<string>(); 
         var enumerator = connector.StackApplyAsync(command, ct).GetAsyncEnumerator(ct);
 
@@ -332,6 +338,10 @@ internal class ApplyStackService(
                 }
 
                 var result = next.Result;
+                if (result.StackStatus is StackReleaseStatus reportedStatus)
+                {
+                    composeStatus = reportedStatus;
+                }
 
                 if (!string.IsNullOrWhiteSpace(result.Message))
                 {
@@ -417,22 +427,33 @@ internal class ApplyStackService(
                 }
             }
         
-            await dbWorkQueue.EnqueueAsync(
-                new StackSucceededWorkItem(
-                    stack.Id,
-                    actorId,
-                    containers ?? [],
-                    stackHub,
-                    activityHub,
-                    notificationQueue,
-                    operation,
-                    previousStackSnapshot,
-                    releaseSource,
-                    selectedConfiguration.SnapshotEntries,
-                    volumeBindings.Bindings),
-                ct);
+            var workItem = new StackSucceededWorkItem(
+                stack.Id,
+                actorId,
+                containers ?? [],
+                composeStatus,
+                stackHub,
+                activityHub,
+                notificationQueue,
+                operation,
+                previousStackSnapshot,
+                releaseSource,
+                selectedConfiguration.SnapshotEntries,
+                volumeBindings.Bindings);
 
-            yield return StackStreamItem.SystemMessage("Stack applied successfully.", 0);
+            if (waitForCompletion)
+            {
+                await dbWorkQueue.EnqueueAndWaitAsync(workItem, ct);
+            }
+            else
+            {
+                await dbWorkQueue.EnqueueAsync(workItem, ct);
+            }
+
+            yield return StackStreamItem.SystemMessage(
+                GetStackAppliedMessage(composeStatus),
+                0,
+                composeStatus);
             yield break;
         }
 
@@ -455,6 +476,22 @@ internal class ApplyStackService(
 
         var containerConnector = containerConnectorFactory.GetConnector(platform.ConnectorType);
         var containerListResult = await containerConnector.ListContainersAsync(filter, ct);
+        if (containerListResult.IsSuccess(out var ownedContainers, out _))
+        {
+            var containers = ownedContainers.Values
+                .Where(container => !string.IsNullOrWhiteSpace(container.Id))
+                .ToArray();
+
+            if (containers.Length > 0)
+            {
+                return (null, containers);
+            }
+        }
+
+        var projectFilter = StackContainerOwnership.CreateComposeProjectContainerFilter(
+            platform.Address,
+            StackProjectNameResolver.Resolve(stack));
+        containerListResult = await containerConnector.ListContainersAsync(projectFilter, ct);
 
         return containerListResult.IsFailure(out var error, out var containerDic)
             ? (error.Message, null)
@@ -500,8 +537,7 @@ internal class ApplyStackService(
             foreach (var mount in info.Mounts)
             {
                 if (!string.Equals(mount.Type, "volume", StringComparison.OrdinalIgnoreCase)
-                    || string.IsNullOrWhiteSpace(mount.Name)
-                    || bindings.ContainsKey(mount.Name))
+                    || string.IsNullOrWhiteSpace(mount.Name))
                 {
                     continue;
                 }
@@ -510,14 +546,15 @@ internal class ApplyStackService(
                 var isExternal = external.Contains(mount.Name)
                                  || (composeName is not null && external.Contains(composeName));
                 var isAnonymous = composeName is null && !isExternal;
-
-                bindings[mount.Name] = new StackReleaseVolumeBinding(
+                var binding = new StackReleaseVolumeBinding(
                     release.Id,
                     release.PlatformId,
                     mount.Name,
                     composeName,
                     isExternal,
                     isAnonymous);
+
+                bindings.TryAdd(binding.VolumeName, binding);
             }
         }
 
@@ -554,16 +591,7 @@ internal class ApplyStackService(
         HashSet<string> knownStackContainerIds,
         CancellationToken ct)
     {
-        var filter = new ContainerFilterCommand(
-            PlatformAddress: platform.Address,
-            All: true,
-            Filters: new Dictionary<string, IDictionary<string, bool>>
-            {
-                ["label"] = new Dictionary<string, bool>
-                {
-                    [$"{ComposeLabels.Project}={projectName}"] = true
-                }
-            });
+        var filter = StackContainerOwnership.CreateComposeProjectContainerFilter(platform.Address, projectName);
 
         var containerConnector = containerConnectorFactory.GetConnector(platform.ConnectorType);
         var containerListResult = await containerConnector.ListContainersAsync(filter, ct);
@@ -652,6 +680,7 @@ internal class ApplyStackService(
         string? registryAuth, string? registryName, string? registryHost,
         IReadOnlyList<string>? serviceNames,
         bool pullImages,
+        bool recreate,
         string? sourceWorkingDirectory,
         IReadOnlyList<string>? sourceComposeFilePaths,
         IReadOnlyList<string>? sourceEnvFilePaths,
@@ -671,7 +700,7 @@ internal class ApplyStackService(
             RegistryAuth: registryAuth,
             RegistryName: registryName,
             RegistryHost: registryHost,
-            DestroyBeforeDeploy: stackSpec.DestroyBeforeDeploy && serviceNames is not { Count: > 0 },
+            DestroyBeforeDeploy: (recreate || stackSpec.DestroyBeforeDeploy) && serviceNames is not { Count: > 0 },
             Spec: stackSpec,
             ServiceNames: serviceNames,
             PullImages: pullImages,
@@ -786,6 +815,11 @@ internal class ApplyStackService(
             return (false, null, $"Stack apply failed: {ex.Message}");
         }
     }
+
+    private static string GetStackAppliedMessage(StackReleaseStatus? status)
+        => status is null or StackReleaseStatus.Healthy
+            ? "Stack applied successfully."
+            : $"Stack applied with status {status}.";
 
     private async Task<(bool IsSuccess, Stack? Stack, string? ErrorMessage)> MarkProcessingAsync(Guid stackId, Guid actorId, CancellationToken ct)
     {
@@ -960,6 +994,7 @@ internal sealed class StackSucceededWorkItem(
     Guid stackId,
     Guid actorId,
     DockerContainer[] dockerContainers,
+    StackReleaseStatus? composeStatus,
     IStackStreamManager stackHub,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
@@ -993,7 +1028,7 @@ internal sealed class StackSucceededWorkItem(
         }
 
         stack.CurrentStackRelease.UpdateResourceBindings(resourceBindings);
-        stack.ReleaseProcessing(GetAppliedStackStatus(dockerContainers));
+        stack.ReleaseProcessing(composeStatus ?? GetAppliedStackStatus(dockerContainers));
 
         var platformId = stack.CurrentStackRelease.PlatformId;
         var images = await uow.Images.GetByPlatformIdAsync(platformId, ct);
@@ -1034,7 +1069,7 @@ internal sealed class StackSucceededWorkItem(
         await uow.Containers.BulkUpsertAsync(upserts, ct);
         await uow.Stacks.ReplaceReleaseVolumeBindingsAsync(
             stack.CurrentStackRelease.Id,
-            volumeBindings ?? [],
+            DeduplicateVolumeBindings(volumeBindings),
             ct);
         await uow.Stacks.UpdateAsync(stack, ct);
 
@@ -1054,10 +1089,9 @@ internal sealed class StackSucceededWorkItem(
                         );
 
         await uow.ActivityEventRepository.AddAsync(activity, ct);
+        stack.AssignActivityEvent(activity);
 
         await uow.CommitAsync(ct);
-
-        stack.AssignActivityEvent(activity);
         await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, stack), ct);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, ct)), ct);
     }
@@ -1066,6 +1100,21 @@ internal sealed class StackSucceededWorkItem(
         => containers.Count == 0
             ? StackReleaseStatus.Healthy
             : Stack.ToStackStatus(containers.Select(container => container.State));
+
+    private static IReadOnlyList<StackReleaseVolumeBinding> DeduplicateVolumeBindings(
+        IReadOnlyList<StackReleaseVolumeBinding>? volumeBindings)
+    {
+        if (volumeBindings is null or { Count: 0 })
+            return [];
+
+        var bindings = new Dictionary<string, StackReleaseVolumeBinding>(StringComparer.Ordinal);
+        foreach (var binding in volumeBindings)
+        {
+            bindings.TryAdd(binding.VolumeName, binding);
+        }
+
+        return [.. bindings.Values];
+    }
 }
 
 internal static class StackActivityFactory

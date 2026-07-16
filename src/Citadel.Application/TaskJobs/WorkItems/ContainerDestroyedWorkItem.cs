@@ -76,7 +76,7 @@ internal sealed class ContainerDestroyedWorkItem(
                 await notificationQueue.EnqueueAsync(deploymentNotification, cancellationToken);
             }
 
-            if (stack != null)
+            if (stack != null && await uow.Stacks.ExistsAsync(stack.Id, cancellationToken))
             {
                 var stackNotification = new StackNotificationWorkItem(stackHub, stack);
                 await notificationQueue.EnqueueAsync(stackNotification, cancellationToken);
@@ -126,7 +126,7 @@ internal sealed class ContainerDestroyedWorkItem(
 
         if (ShouldSkipStackStatusChange(stack, status))
         {
-            return (stack, null);
+            return (null, null);
         }
 
         ActivityEvent? activity = null;

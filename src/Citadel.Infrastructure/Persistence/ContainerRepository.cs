@@ -225,7 +225,9 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             INSERT INTO Containers (
                 Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId, deploymentId, StackId
             ) VALUES (
-                @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId, @DeploymentId, @StackId
+                @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId,
+                CASE WHEN @DeploymentId IS NULL OR EXISTS (SELECT 1 FROM Deployments WHERE Id = @DeploymentId) THEN @DeploymentId ELSE NULL END,
+                CASE WHEN @StackId IS NULL OR EXISTS (SELECT 1 FROM Stacks WHERE Id = @StackId) THEN @StackId ELSE NULL END
             )
         """;
         return db.ExecuteAsync(sql, new 
@@ -250,7 +252,17 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             UPDATE Containers
-            SET Name = @Name, DockerImageId = @DockerImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports::json, Created = @Created, ImageId = @ImageId, DeploymentId = @DeploymentId, PlatformId = @PlatformId, StackId = @StackId
+            SET Name = @Name,
+                DockerImageId = @DockerImageId,
+                Updated = @Updated,
+                State = @State,
+                Stack = @Stack,
+                Ports = @Ports::json,
+                Created = @Created,
+                ImageId = @ImageId,
+                DeploymentId = CASE WHEN @DeploymentId IS NULL OR EXISTS (SELECT 1 FROM Deployments WHERE Id = @DeploymentId) THEN @DeploymentId ELSE NULL END,
+                PlatformId = @PlatformId,
+                StackId = CASE WHEN @StackId IS NULL OR EXISTS (SELECT 1 FROM Stacks WHERE Id = @StackId) THEN @StackId ELSE NULL END
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -276,7 +288,10 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
         INSERT INTO Containers (Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId, StackId)
-        VALUES (@Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId, @StackId)
+        VALUES (
+            @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports::json, @ImageId,
+            CASE WHEN @StackId IS NULL OR EXISTS (SELECT 1 FROM Stacks WHERE Id = @StackId) THEN @StackId ELSE NULL END
+        )
         ON CONFLICT(Id) DO UPDATE SET
             Name = excluded.Name,
             DockerImageId = excluded.DockerImageId,

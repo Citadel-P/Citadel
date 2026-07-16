@@ -241,7 +241,8 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                         state: freshContainer.State,
                         dockerStack: freshContainer.Stack,
                         created: freshContainer.Created,
-                        ports: freshContainer.Ports);
+                        ports: freshContainer.Ports,
+                        stackId: freshContainer.StackId);
 
                     currentActiveContainers.Add(existingDbContainer);
                 }

@@ -157,67 +157,119 @@ internal sealed class DeleteStacksHandler(
             return Result.Failure(new NotFoundError(platformError?.Message ?? "Platform not found or disconnected."));
         }
 
-        string projectName;
-        try
-        {
-            projectName = StackProjectNameResolver.Resolve(stack);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure(new BadRequestError(ex.Message));
-        }
-
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
-        var listResult = await connector.ListContainersAsync(
-            new ContainerFilterCommand(
-                PlatformAddress: platform.Address,
-                All: true,
-                Filters: new Dictionary<string, IDictionary<string, bool>>
-                {
-                    ["label"] = new Dictionary<string, bool>
-                    {
-                        [$"{ComposeLabels.Project}={projectName}"] = true
-                    }
-                }),
+        var ownedContainerIds = await GetOwnedContainerIdsByStackLabelsAsync(
+            connector,
+            platform.Address,
+            stack.Id,
             cancellationToken);
-
-        if (listResult.IsFailure(out var listError, out var containers))
+        if (ownedContainerIds.IsFailure(out var ownershipListError, out var containerIds))
         {
-            return Result.Failure(new BadRequestError(listError.Message));
+            return Result.Failure(ownershipListError);
         }
 
-        var ownedContainerIds = new List<string>();
-        foreach (var container in containers.Values)
+        if (containerIds.Count == 0)
         {
-            var inspectResult = await connector.InspectAsync(
-                new InspectContainerCommand(platform.Address, container.Id),
+            string projectName;
+            try
+            {
+                projectName = StackProjectNameResolver.Resolve(stack);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Result.Failure(new BadRequestError(ex.Message));
+            }
+
+            var projectContainerIds = await GetOwnedContainerIdsByProjectNameAsync(
+                connector,
+                platform.Address,
+                projectName,
+                stack.Id,
                 cancellationToken);
-
-            if (inspectResult.IsFailure(out var inspectError, out var inspect))
+            if (projectContainerIds.IsFailure(out var projectListError, out var projectOwnedContainerIds))
             {
-                return Result.Failure(new BadRequestError(
-                    $"Unable to inspect stack container '{container.Name}' ({container.Id}): {inspectError.Message}"));
+                return Result.Failure(projectListError);
             }
 
-            var labels = inspect.Config?.Labels ?? new Dictionary<string, string>();
-            if (StackContainerOwnership.IsOwnedByStack(labels, stack.Id))
-            {
-                ownedContainerIds.Add(container.Id);
-            }
+            containerIds = projectOwnedContainerIds;
         }
 
-        if (ownedContainerIds.Count == 0)
+        if (containerIds.Count == 0)
         {
             return Result.Success();
         }
 
         return await connector.DeleteAsync(
             new DeleteContainerCommand(
-                ownedContainerIds.Distinct(StringComparer.OrdinalIgnoreCase),
+                containerIds,
                 platform.Address,
                 Volume: false,
                 Force: true,
                 Link: false),
             cancellationToken);
+    }
+
+    private static async Task<Result<IReadOnlyCollection<string>>> GetOwnedContainerIdsByStackLabelsAsync(
+        IContainerConnector connector,
+        string platformAddress,
+        Guid stackId,
+        CancellationToken cancellationToken)
+    {
+        var listResult = await connector.ListContainersAsync(
+            StackContainerOwnership.CreateStackOwnedContainerFilter(platformAddress, stackId),
+            cancellationToken);
+
+        if (listResult.IsFailure(out var listError, out var containers))
+        {
+            return Result.Failure<IReadOnlyCollection<string>>(new BadRequestError(listError.Message));
+        }
+
+        var containerIds = containers.Values
+            .Select(container => container.Id)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return Result.Success<IReadOnlyCollection<string>>(containerIds);
+    }
+
+    private static async Task<Result<IReadOnlyCollection<string>>> GetOwnedContainerIdsByProjectNameAsync(
+        IContainerConnector connector,
+        string platformAddress,
+        string projectName,
+        Guid stackId,
+        CancellationToken cancellationToken)
+    {
+        var listResult = await connector.ListContainersAsync(
+            StackContainerOwnership.CreateComposeProjectContainerFilter(platformAddress, projectName),
+            cancellationToken);
+
+        if (listResult.IsFailure(out var listError, out var containers))
+        {
+            return Result.Failure<IReadOnlyCollection<string>>(new BadRequestError(listError.Message));
+        }
+
+        var ownedContainerIds = new List<string>();
+        foreach (var container in containers.Values)
+        {
+            var inspectResult = await connector.InspectAsync(
+                new InspectContainerCommand(platformAddress, container.Id),
+                cancellationToken);
+
+            if (inspectResult.IsFailure(out var inspectError, out var inspect))
+            {
+                return Result.Failure<IReadOnlyCollection<string>>(new BadRequestError(
+                    $"Unable to inspect stack container '{container.Name}' ({container.Id}): {inspectError.Message}"));
+            }
+
+            var labels = inspect.Config?.Labels ?? new Dictionary<string, string>();
+            if (StackContainerOwnership.IsOwnedByStack(labels, stackId))
+            {
+                ownedContainerIds.Add(container.Id);
+            }
+        }
+
+        return Result.Success<IReadOnlyCollection<string>>(
+            ownedContainerIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 }

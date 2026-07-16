@@ -319,7 +319,9 @@ internal sealed class ReceiveWebhookHandler(
                     Constants.SystemId,
                     serviceNames: null,
                     pullImages: true,
-                    StackApplyOperation.Apply,
+                    recreate: false,
+                    waitForCompletion: true,
+                    operation: StackApplyOperation.Apply,
                     previousStackSnapshot: null,
                     CancellationToken.None))
                 {

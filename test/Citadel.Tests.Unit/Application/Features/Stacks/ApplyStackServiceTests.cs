@@ -208,7 +208,9 @@ public class ApplyStackServiceTests
                 actorId,
                 serviceNames: null,
                 pullImages: true,
-                StackApplyOperation.Apply,
+                recreate: false,
+                waitForCompletion: true,
+                operation: StackApplyOperation.Apply,
                 previousStackSnapshot: null,
                 TestContext.Current.CancellationToken))
             {
@@ -444,7 +446,9 @@ public class ApplyStackServiceTests
             actorId,
             serviceNames: null,
             pullImages: true,
-            StackApplyOperation.Apply,
+            recreate: false,
+            waitForCompletion: true,
+            operation: StackApplyOperation.Apply,
             previousStackSnapshot: null,
             TestContext.Current.CancellationToken))
         {
@@ -588,7 +592,9 @@ public class ApplyStackServiceTests
             actorId,
             serviceNames: null,
             pullImages: true,
-            StackApplyOperation.Apply,
+            recreate: false,
+            waitForCompletion: true,
+            operation: StackApplyOperation.Apply,
             previousStackSnapshot: null,
             TestContext.Current.CancellationToken))
         {
@@ -736,7 +742,9 @@ public class ApplyStackServiceTests
             actorId,
             serviceNames: null,
             pullImages: true,
-            StackApplyOperation.Apply,
+            recreate: false,
+            waitForCompletion: true,
+            operation: StackApplyOperation.Apply,
             previousStackSnapshot: null,
             TestContext.Current.CancellationToken))
         {
@@ -833,7 +841,9 @@ public class ApplyStackServiceTests
             actorId,
             serviceNames: null,
             pullImages: true,
-            StackApplyOperation.Apply,
+            recreate: false,
+            waitForCompletion: true,
+            operation: StackApplyOperation.Apply,
             previousStackSnapshot: null,
             TestContext.Current.CancellationToken))
         {
@@ -844,6 +854,131 @@ public class ApplyStackServiceTests
         Assert.Equal(releaseId, stack.CurrentStackReleaseId);
         Assert.Equal(releaseVersion, stack.CurrentStackRelease!.Version);
         Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease.Status);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_Should_Clear_Processing_When_Degraded_ManualStack_Is_Redeployed_Again()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "minio-stack",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  minio:\n    image: minio/minio\n  minio-init:\n    image: minio/mc\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+
+        var runningContainer = new DockerContainer(
+            Name: "/minio-stack-minio-1",
+            Image: "minio/minio:latest",
+            Id: "minio-container-id",
+            ImageId: "sha256:minio",
+            State: ContainerStateStatus.Running,
+            Created: 123,
+            Stack: "minio-stack");
+        var exitedContainer = new DockerContainer(
+            Name: "/minio-stack-minio-init-1",
+            Image: "minio/mc:latest",
+            Id: "minio-init-container-id",
+            ImageId: "sha256:minio-mc",
+            State: ContainerStateStatus.Exited,
+            Created: 124,
+            Stack: "minio-stack");
+
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer>
+                {
+                    [runningContainer.Id] = runningContainer,
+                    [exitedContainer.Id] = exitedContainer
+                }));
+
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerConnectorFactory
+            .Setup(x => x.GetConnector(PlatformConnectorType.Local))
+            .Returns(containerConnector.Object);
+
+        var capturedCommands = new List<StackApplyCommand>();
+        var stackConnector = new Mock<IStackConnector>();
+        stackConnector
+            .Setup(x => x.StackApplyAsync(It.IsAny<StackApplyCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<StackApplyCommand, CancellationToken>((command, _) => capturedCommands.Add(command))
+            .Returns(() => DegradedStackApplyStream());
+
+        var stackConnectorFactory = new Mock<IConnectorFactory<IStackConnector>>();
+        stackConnectorFactory
+            .Setup(x => x.GetConnector(PlatformConnectorType.Local))
+            .Returns(stackConnector.Object);
+
+        var repository = new GitRepository(
+            name: "unused",
+            description: null,
+            url: "https://example.invalid/repo.git",
+            defaultBranch: "main",
+            gitAccountId: null,
+            createdByActorId: actorId);
+        var unitOfWork = CreateApplyUnitOfWork(stack, repository, platformId, actorId);
+        var services = new ServiceCollection()
+            .AddSingleton(unitOfWork.Object)
+            .BuildServiceProvider();
+
+        var service = new ApplyStackService(
+            new InlineDbWorkQueue(unitOfWork.Object),
+            Mock.Of<IStackStreamManager>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            new TestPlatformContainerCache(new PlatformCacheEntry(
+                platformId,
+                "http://docker.local",
+                PlatformConnectorType.Local,
+                ImmutableDictionary<string, Guid>.Empty)),
+            stackConnectorFactory.Object,
+            containerConnectorFactory.Object,
+            Mock.Of<IGitStackMaterializer>(),
+            new EmptyResourceBindingResolver(),
+            new PassThroughSecretRedactor(),
+            Mock.Of<IAlertService>());
+
+        await foreach (var _ in service.ApplyAsync(
+            stack.Id,
+            actorId,
+            serviceNames: null,
+            pullImages: true,
+            recreate: false,
+            waitForCompletion: true,
+            operation: StackApplyOperation.Apply,
+            previousStackSnapshot: null,
+            TestContext.Current.CancellationToken))
+        {
+        }
+
+        Assert.Equal(StackReleaseStatus.Degraded, stack.CurrentStackRelease!.Status);
+        Assert.Equal(ResourceControlState.Idle, stack.ControlState);
+
+        await foreach (var _ in service.ApplyAsync(
+            stack.Id,
+            actorId,
+            serviceNames: null,
+            pullImages: true,
+            recreate: true,
+            waitForCompletion: true,
+            operation: StackApplyOperation.Apply,
+            previousStackSnapshot: null,
+            TestContext.Current.CancellationToken))
+        {
+        }
+
+        Assert.Equal(StackReleaseStatus.Degraded, stack.CurrentStackRelease!.Status);
+        Assert.Equal(ResourceControlState.Idle, stack.ControlState);
+        Assert.Collection(
+            capturedCommands,
+            command => Assert.False(command.DestroyBeforeDeploy),
+            command => Assert.True(command.DestroyBeforeDeploy));
     }
 
     [Fact]
@@ -975,7 +1110,9 @@ public class ApplyStackServiceTests
             actorId,
             serviceNames: null,
             pullImages: false,
-            StackApplyOperation.Apply,
+            recreate: false,
+            waitForCompletion: true,
+            operation: StackApplyOperation.Apply,
             previousStackSnapshot: null,
             TestContext.Current.CancellationToken))
         {
@@ -1098,6 +1235,7 @@ public class ApplyStackServiceTests
             stack.Id,
             actorId,
             dockerContainers,
+            null,
             Mock.Of<IStackStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
             notificationQueue,
@@ -1202,6 +1340,7 @@ public class ApplyStackServiceTests
             stack.Id,
             actorId,
             dockerContainers,
+            null,
             Mock.Of<IStackStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
             new TestNotificationQueue(),
@@ -1211,6 +1350,177 @@ public class ApplyStackServiceTests
 
         Assert.Equal(StackReleaseStatus.Degraded, stack.CurrentStackRelease?.Status);
         Assert.Equal(ResourceControlState.Idle, stack.ControlState);
+    }
+
+    [Fact]
+    public async Task StackSucceededWorkItem_Should_Use_Compose_Status_When_Reported()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "minio-stack",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  minio:\n    image: minio/minio\n  minio-init:\n    image: minio/mc\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+        stack.MarkProcessing(actorId);
+
+        var dockerContainers = new[]
+        {
+            new DockerContainer(
+                Name: "/minio-stack-minio-1",
+                Image: "minio/minio:latest",
+                Id: "minio-container-id",
+                ImageId: "sha256:minio",
+                State: ContainerStateStatus.Running,
+                Created: 123,
+                Stack: "minio-stack")
+        };
+
+        var stacks = new Mock<IStackRepository>();
+        stacks
+            .Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stacks
+            .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var containers = new Mock<IContainerRepository>();
+        containers
+            .Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        containers
+            .Setup(x => x.BulkUpsertAsync(It.IsAny<IEnumerable<Container>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var images = new Mock<IImageRepository>();
+        images
+            .Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents
+            .Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var actors = new Mock<IActorRepository>();
+        actors
+            .Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Actor?)null);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
+        unitOfWork.Setup(x => x.Images).Returns(images.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var workItem = new StackSucceededWorkItem(
+            stack.Id,
+            actorId,
+            dockerContainers,
+            StackReleaseStatus.Degraded,
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            StackApplyOperation.Apply);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, CancellationToken.None);
+
+        Assert.Equal(StackReleaseStatus.Degraded, stack.CurrentStackRelease?.Status);
+        Assert.Equal(ResourceControlState.Idle, stack.ControlState);
+    }
+
+    [Fact]
+    public async Task StackSucceededWorkItem_Should_Deduplicate_Volume_Bindings_Before_Persisting()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "volume-stack",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  app:\n    image: nginx\n    volumes:\n      - data:/data\nvolumes:\n  data:\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+        stack.MarkProcessing(actorId);
+
+        IReadOnlyCollection<StackReleaseVolumeBinding>? persistedBindings = null;
+        var stacks = new Mock<IStackRepository>();
+        stacks
+            .Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stacks
+            .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        stacks
+            .Setup(x => x.ReplaceReleaseVolumeBindingsAsync(
+                stack.CurrentStackReleaseId,
+                It.IsAny<IReadOnlyCollection<StackReleaseVolumeBinding>>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<Guid, IReadOnlyCollection<StackReleaseVolumeBinding>, CancellationToken>((_, bindings, _) =>
+                persistedBindings = bindings)
+            .ReturnsAsync(1);
+
+        var containers = new Mock<IContainerRepository>();
+        containers
+            .Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        containers
+            .Setup(x => x.BulkUpsertAsync(It.IsAny<IEnumerable<Container>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var images = new Mock<IImageRepository>();
+        images
+            .Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents
+            .Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var actors = new Mock<IActorRepository>();
+        actors
+            .Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Actor?)null);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
+        unitOfWork.Setup(x => x.Images).Returns(images.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var duplicateBindings = new[]
+        {
+            new StackReleaseVolumeBinding(stack.CurrentStackReleaseId, platformId, "data", "data"),
+            new StackReleaseVolumeBinding(stack.CurrentStackReleaseId, platformId, "data ", "data")
+        };
+        var workItem = new StackSucceededWorkItem(
+            stack.Id,
+            actorId,
+            [],
+            null,
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            StackApplyOperation.Apply,
+            volumeBindings: duplicateBindings);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, CancellationToken.None);
+
+        var binding = Assert.Single(persistedBindings ?? []);
+        Assert.Equal("data", binding.VolumeName);
     }
 
     [Fact]
@@ -1281,6 +1591,7 @@ public class ApplyStackServiceTests
             stack.Id,
             actorId,
             [],
+            null,
             Mock.Of<IStackStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
             new TestNotificationQueue(),
@@ -1380,6 +1691,7 @@ public class ApplyStackServiceTests
             stack.Id,
             actorId,
             [],
+            null,
             Mock.Of<IStackStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
             new TestNotificationQueue(),
@@ -1416,6 +1728,14 @@ public class ApplyStackServiceTests
     {
         yield return StackApplyResult.StdOut("compose up");
         yield return StackApplyResult.Finished(0);
+        await Task.CompletedTask;
+    }
+
+    private static async IAsyncEnumerable<StackApplyResult> DegradedStackApplyStream()
+    {
+        yield return StackApplyResult.StdOut("compose up");
+        yield return StackApplyResult.Finished(0);
+        yield return StackApplyResult.ComposeStatus(StackReleaseStatus.Degraded);
         await Task.CompletedTask;
     }
 

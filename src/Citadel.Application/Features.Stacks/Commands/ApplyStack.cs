@@ -9,7 +9,7 @@ using System.Runtime.CompilerServices;
 namespace Application.Features.Stacks.Commands;
 
 [RequirePermission(ResourceType.Stack, PermissionLevel.Read, SpecificPermission.Apply)]
-public sealed record ApplyStack(Guid Id) : IStreamCommand<StackStreamItem>;
+public sealed record ApplyStack(Guid Id, bool? Recreate = false) : IStreamCommand<StackStreamItem>;
 
 internal sealed class ApplyStackHandler(
     IApplyStackService applyStackService,
@@ -26,7 +26,9 @@ internal sealed class ApplyStackHandler(
             actorId,
             serviceNames: null,
             pullImages: false,
-            StackApplyOperation.Apply,
+            recreate: request.Recreate == true,
+            waitForCompletion: true,
+            operation: StackApplyOperation.Apply,
             previousStackSnapshot: null,
             cancellationToken))
         {

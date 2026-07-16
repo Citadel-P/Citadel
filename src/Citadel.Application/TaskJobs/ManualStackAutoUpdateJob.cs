@@ -190,7 +190,9 @@ internal sealed class ManualStackAutoUpdateJob(
                 Constants.SystemId,
                 serviceNames,
                 pullImages: true,
-                StackApplyOperation.Apply,
+                recreate: false,
+                waitForCompletion: false,
+                operation: StackApplyOperation.Apply,
                 previousStackSnapshot: null,
                 cancellationToken))
             {

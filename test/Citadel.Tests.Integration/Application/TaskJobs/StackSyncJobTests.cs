@@ -95,6 +95,62 @@ public class StackSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
             Times.Once);
     }
 
+    [Fact]
+    public async Task Online_Platform_Should_Not_Recalculate_Processing_Stack()
+    {
+        await using (var arrangeScope = Services.CreateAsyncScope())
+        {
+            var arrangeUow = arrangeScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var stack = await arrangeUow.Stacks.GetAsync(healthyStackId, TestContext.Current.CancellationToken);
+            Assert.NotNull(stack);
+
+            stack.MarkProcessing(Constants.SystemId);
+            stack.PartialUpdate(StackReleaseStatus.Applying);
+            await arrangeUow.Stacks.UpdateAsync(stack, TestContext.Current.CancellationToken);
+            await arrangeUow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await ExecuteStackSync(platformIsOnline: true);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var persisted = await uow.Stacks.GetInfoAsync(healthyStackId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ResourceControlState.Processing, persisted?.ControlState);
+        Assert.Equal(StackReleaseStatus.Applying, persisted?.CurrentStackRelease?.Status);
+        notificationQueue.Verify(
+            q => q.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Online_Platform_Should_Release_Stale_Processing_Stack_With_Final_Status()
+    {
+        await using (var arrangeScope = Services.CreateAsyncScope())
+        {
+            var arrangeUow = arrangeScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var stack = await arrangeUow.Stacks.GetAsync(healthyStackId, TestContext.Current.CancellationToken);
+            Assert.NotNull(stack);
+
+            stack.MarkProcessing(Constants.SystemId);
+            stack.PartialUpdate(StackReleaseStatus.Degraded);
+            await arrangeUow.Stacks.UpdateAsync(stack, TestContext.Current.CancellationToken);
+            await arrangeUow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await ExecuteStackSync(platformIsOnline: true);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var persisted = await uow.Stacks.GetInfoAsync(healthyStackId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ResourceControlState.Idle, persisted?.ControlState);
+        Assert.Equal(StackReleaseStatus.Degraded, persisted?.CurrentStackRelease?.Status);
+        notificationQueue.Verify(
+            q => q.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     private async Task ExecuteStackSync(bool platformIsOnline)
     {
         notificationQueue.Reset();

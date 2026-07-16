@@ -458,10 +458,16 @@ const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: str
   return { mutate, isPending, isSuccess, error, validationErrors };
 };
 
-type StreamStatus = 'pending' | 'success' | 'error';
+type StreamStatus = 'pending' | 'success' | 'warning' | 'error';
+type StreamLogSeverity = 'info' | 'success' | 'warning' | 'error';
+type StreamLogEntry = {
+  message: string;
+  severity?: StreamLogSeverity;
+};
 
 interface StreamProgressState {
   lines: string[];
+  logs: StreamLogEntry[];
   text: string;
   isPending: boolean;
   isSuccess: boolean;
@@ -481,6 +487,7 @@ interface UseStreamProgressOptions<TRequest, TItem> {
   streamFieldIsMetadata?: boolean;
   // A predicate to check if an item in the stream represents an error
   getError?: (item: TItem) => string | undefined | null;
+  getMessageSeverity?: (item: TItem) => StreamLogSeverity | undefined | null;
 }
 
 const formatBytes = (bytes: number) => {
@@ -655,8 +662,9 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   compactDockerComposeOutput,
   streamFieldIsMetadata,
   getError,
+  getMessageSeverity,
 }: UseStreamProgressOptions<TRequest, TItem>): StreamProgressState {
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<StreamLogEntry[]>([]);
   const [activeItems, setActiveItems] = useState<Map<string, string>>(new Map());
   const [internalError, setInternalError] = useState<string | undefined>();
 
@@ -670,17 +678,17 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
       bufferRef.current += chunk;
       let braceCount = 0;
       let startIndex = -1;
-      const newHistory: string[] = [];
+      const newHistory: StreamLogEntry[] = [];
       const updatedActive = new Map<string, string>();
       let processedIndex = 0;
       let inString = false;
       let isEscaped = false;
       const activeKeysToDelete = new Set<string>();
       const activePrefixesToDelete = new Set<string>();
-      const addText = (value: string | undefined | null) => {
+      const addText = (value: string | undefined | null, severity?: StreamLogSeverity | null) => {
         if (!value) return false;
         if (!compactDockerComposeOutput) {
-          newHistory.push(value.trimEnd());
+          newHistory.push({ message: value.trimEnd(), severity: severity ?? undefined });
           return true;
         }
 
@@ -690,7 +698,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
         for (const entry of entries) {
           const compacted = compactDockerComposeLine(entry);
           if (!compacted) {
-            newHistory.push(entry);
+            newHistory.push({ message: entry, severity: severity ?? undefined });
             continue;
           }
 
@@ -707,7 +715,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
           compacted.deletePrefixes?.forEach((prefix) => activePrefixesToDelete.add(prefix));
 
           if (compacted.line) {
-            newHistory.push(compacted.line);
+            newHistory.push({ message: compacted.line, severity: severity ?? undefined });
           }
         }
 
@@ -759,18 +767,24 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
                 stream?: string;
                 message?: string;
                 type?: string;
+                severity?: string | null;
               };
               const { id, status, progress, progressMessage, stream, message, type } = item;
               const errorMessage = getError?.(item);
+              const messageSeverity = normalizeStreamLogSeverity(item.severity) ?? getMessageSeverity?.(item);
 
               if (errorMessage) {
-                newHistory.push(errorMessage);
+                newHistory.push({ message: errorMessage, severity: 'error' });
                 setInternalError(errorMessage);
                 continue;
               }
 
               // Handle simple log messages
-              if (addText(progressMessage) || addText(message) || (!streamFieldIsMetadata && addText(stream))) {
+              if (
+                addText(progressMessage, messageSeverity) ||
+                addText(message, messageSeverity) ||
+                (!streamFieldIsMetadata && addText(stream, messageSeverity))
+              ) {
                 continue;
               }
 
@@ -806,15 +820,15 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
 
                 if (isFinished) {
                   // If it's done, move to history and remove from active map
-                  newHistory.push(line);
+                  newHistory.push({ message: line });
                   activeKeysToDelete.add(id);
                 } else if (isProgressing) {
                   updatedActive.set(id, line);
                 } else {
-                  newHistory.push(line);
+                  newHistory.push({ message: line });
                 }
               } else if (status) {
-                newHistory.push(status);
+                newHistory.push({ message: status, severity: messageSeverity ?? undefined });
               }
             } catch {
               // If parse fails, we just skip this object
@@ -843,7 +857,7 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
         });
       }
     },
-    [compactDockerComposeOutput, getError, streamFieldIsMetadata],
+    [compactDockerComposeOutput, getError, getMessageSeverity, streamFieldIsMetadata],
   );
 
   const resetTimer = useCallback(() => {
@@ -858,15 +872,24 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
     mutate,
   } = usePulledStream(handleChunkReceived, endpoint, resetTimer);
 
-  const text = useMemo(() => {
-    const activeLines = Array.from(activeItems.values());
-    const combined = [...history, ...activeLines];
-    if (combined.length === 0 && isPending) return pendingMessage ?? 'Connecting to registry...';
+  const logs = useMemo(() => {
+    const activeLogs = Array.from(activeItems.values()).map((message) => ({ message }));
+    const combined = [...history, ...activeLogs];
+    if (combined.length === 0 && isPending) return [{ message: pendingMessage ?? 'Connecting to registry...' }];
     if (combined.length === 0 && (internalError || streamError)) {
-      return internalError || (streamError as Error | null)?.message || errorMessageDefault;
+      return [
+        {
+          message: internalError || (streamError as Error | null)?.message || errorMessageDefault,
+          severity: 'error' as const,
+        },
+      ];
     }
-    return combined.join('\n');
+    return combined;
   }, [history, activeItems, isPending, internalError, streamError, errorMessageDefault, pendingMessage]);
+
+  const text = useMemo(() => logs.map((log) => log.message).join('\n'), [logs]);
+  const lines = useMemo(() => history.map((log) => log.message), [history]);
+  const hasWarning = useMemo(() => logs.some((log) => log.severity === 'warning'), [logs]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -902,13 +925,15 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   const status: StreamStatus = useMemo(() => {
     if (isPending) return 'pending';
     if (internalError || streamError) return 'error';
+    if (hasWarning) return 'warning';
     return 'success';
-  }, [isPending, internalError, streamError]);
+  }, [hasWarning, isPending, internalError, streamError]);
 
   const elapsedLabel = useMemo(() => (Math.floor(elapsedMs / 100) / 10).toFixed(1).replace('.', ','), [elapsedMs]);
 
   return {
-    lines: history,
+    lines,
+    logs,
     text,
     isPending,
     isSuccess,
@@ -917,6 +942,13 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
     elapsedMs,
     elapsedLabel,
   };
+}
+
+function normalizeStreamLogSeverity(value: string | null | undefined): StreamLogSeverity | undefined {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === 'info' || normalized === 'success' || normalized === 'warning' || normalized === 'error'
+    ? normalized
+    : undefined;
 }
 
 export function useSaveResource<TInput = any, TResponse = unknown>({

@@ -3,7 +3,8 @@
 public sealed record StackApplyResult(
     StackApplyEventType Type,
     string? Message = null,
-    int? ExitCode = null)
+    int? ExitCode = null,
+    StackReleaseStatus? StackStatus = null)
 {
     public static StackApplyResult StdOut(string message) => new(StackApplyEventType.StdOut, message);
 
@@ -12,4 +13,6 @@ public sealed record StackApplyResult(
     public static StackApplyResult SystemMessage(string message) => new(StackApplyEventType.SystemMessage, message);
 
     public static StackApplyResult Finished(int exitCode) => new(StackApplyEventType.CommandCompleted, ExitCode: exitCode);
+
+    public static StackApplyResult ComposeStatus(StackReleaseStatus status) => new(StackApplyEventType.SystemMessage, StackStatus: status);
 }

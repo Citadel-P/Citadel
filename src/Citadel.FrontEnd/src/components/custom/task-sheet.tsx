@@ -54,6 +54,7 @@ import {
   QueueBackupRunInput,
   RestoreVolumeInput,
   TestAutomationActionInput,
+  StackReleaseStatus,
   StackReleaseSource,
   StackSnapshot,
   StackStreamItem,
@@ -129,8 +130,9 @@ interface TaskStreamLayoutProps {
 }
 
 function TaskStreamLayout({ title, refName, type, state }: TaskStreamLayoutProps) {
-  const { status, elapsedLabel, text } = state;
+  const { status, elapsedLabel } = state;
   const Icon = CitadelIcons[type] ?? CitadelIcons.Platform;
+  const iconClassName = getTaskStreamIconClassName(state);
 
   return (
     <>
@@ -140,7 +142,7 @@ function TaskStreamLayout({ title, refName, type, state }: TaskStreamLayoutProps
           <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="inline-flex flex-row gap-2 items-center">
               {status === 'pending' && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
-              <span className={status === 'error' ? 'text-destructive' : status === 'success' ? 'text-success' : ''}>
+              <span className={iconClassName}>
                 <Icon className="w-3.5 h-3.5" />
               </span>
               <span>{refName}</span>
@@ -154,10 +156,17 @@ function TaskStreamLayout({ title, refName, type, state }: TaskStreamLayoutProps
         </SheetDescription>
       </SheetHeader>
       <div className="pt-0 pb-4 px-4">
-        <LogViewer logs={text} autoScroll={true} />
+        <LogViewer logs={state.logs} autoScroll={true} />
       </div>
     </>
   );
+}
+
+function getTaskStreamIconClassName(state: ReturnType<typeof useStreamProgress>) {
+  if (state.status === 'error') return 'text-destructive';
+  if (state.status === 'warning') return 'text-amber-500';
+  if (state.status === 'success') return 'text-success';
+  return '';
 }
 
 function TaskActivityLayout({ activityId }: { activityId: string }) {
@@ -1095,25 +1104,54 @@ function useApplyDeploymentProgress(params: DeployParams) {
 
 function useApplyStackProgress(params: StackDeployParams) {
   const { id, recreate } = params;
+  const queryClient = useQueryClient();
 
   const request: ApplyStackInput = useMemo(() => ({ id, recreate }), [id, recreate]);
 
-  return useStreamProgress<ApplyStackInput, StackStreamItem>({
+  const state = useStreamProgress<ApplyStackInput, StackStreamItem>({
     endpoint: 'api/v1/stacks/apply',
     request,
     successMessage: 'Stack applied successfully',
     errorMessageDefault: 'Failed to deploy',
     compactDockerComposeOutput: true,
     getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
+    getMessageSeverity: getStackStreamMessageSeverity,
   });
+
+  useEffect(() => {
+    if (!state.isSuccess || state.error) return;
+
+    queryClient.invalidateQueries({ queryKey: ['listStacks'] });
+    queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: id }] });
+  }, [id, queryClient, state.error, state.isSuccess]);
+
+  return state;
+}
+
+function getStackStreamMessageSeverity(item: StackStreamItem) {
+  if (
+    item.stackStatus === StackReleaseStatus.Degraded ||
+    item.stackStatus?.toString() === StackReleaseStatus.Degraded ||
+    item.stackStatus?.toString() === '6'
+  ) {
+    return 'warning';
+  }
+
+  const message = (item.progressMessage ?? item.message)?.trim();
+  if (message === 'Stack applied with status Degraded.') {
+    return 'warning';
+  }
+
+  return undefined;
 }
 
 function useRollbackStackProgress(params: StackRollbackParams) {
   const { stackId, releaseId } = params;
+  const queryClient = useQueryClient();
 
   const request: RollbackStackInput = useMemo(() => ({ stackId, releaseId }), [stackId, releaseId]);
 
-  return useStreamProgress<RollbackStackInput, StackStreamItem>({
+  const state = useStreamProgress<RollbackStackInput, StackStreamItem>({
     endpoint: 'api/v1/stacks/rollback',
     request,
     successMessage: 'Stack rolled back successfully',
@@ -1121,6 +1159,15 @@ function useRollbackStackProgress(params: StackRollbackParams) {
     compactDockerComposeOutput: true,
     getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
   });
+
+  useEffect(() => {
+    if (!state.isSuccess || state.error) return;
+
+    queryClient.invalidateQueries({ queryKey: ['listStacks'] });
+    queryClient.invalidateQueries({ queryKey: ['getStack', { stackId }] });
+  }, [queryClient, stackId, state.error, state.isSuccess]);
+
+  return state;
 }
 
 function useBackupRunProgress(params: BackupRunParams) {

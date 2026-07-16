@@ -45,7 +45,8 @@ internal static class StackMappers
         return new StackApplyResult(
             Type: result.Type.Map(),
             Message: result.Message,
-            ExitCode: result.ExitCode);
+            ExitCode: result.ExitCode,
+            StackStatus: ParseStatus(result.StackStatus));
     }
 
     public static AgentStackApplyRequest ToAgentRequest(this StackApplyCommand cmd)
@@ -104,7 +105,8 @@ internal static class StackMappers
         return new StackApplyResult(
             Type: result.Type.Map(),
             Message: result.HasMessage ? result.Message : null,
-            ExitCode: result.HasExitCode ? result.ExitCode : null);
+            ExitCode: result.HasExitCode ? result.ExitCode : null,
+            StackStatus: result.HasStackStatus ? ParseStatus(result.StackStatus) : null);
     }
 
     private static StackApplyEventType Map(this Hosting.DockerClient.Models.Stacks.StackApplyEventType type)
@@ -132,6 +134,11 @@ internal static class StackMappers
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
     }
+
+    private static StackReleaseStatus? ParseStatus(string? value)
+        => Enum.TryParse<StackReleaseStatus>(value, ignoreCase: true, out var status)
+            ? status
+            : null;
 
     private static Hosting.DockerClient.Models.Stacks.StackCommand? Map(this StackCommand cmd)
     {

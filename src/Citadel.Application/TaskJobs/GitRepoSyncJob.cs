@@ -366,7 +366,9 @@ internal sealed class GitRepoSyncSuccessWorkItem(
                 Constants.SystemId,
                 serviceNames: null,
                 pullImages: true,
-                StackApplyOperation.Apply,
+                recreate: false,
+                waitForCompletion: false,
+                operation: StackApplyOperation.Apply,
                 previousStackSnapshot: null,
                 cancellationToken))
             {

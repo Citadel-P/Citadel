@@ -62,6 +62,8 @@ public class RollbackStackTests
                 actorId,
                 null,
                 false,
+                false,
+                true,
                 StackApplyOperation.Rollback,
                 It.Is<StackSnapshot?>(snapshot => snapshot != null),
                 It.IsAny<CancellationToken>()))
@@ -91,6 +93,8 @@ public class RollbackStackTests
             actorId,
             null,
             false,
+            false,
+            true,
             StackApplyOperation.Rollback,
             It.Is<StackSnapshot?>(snapshot => snapshot != null),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -171,6 +175,8 @@ public class RollbackStackTests
                 actorId,
                 null,
                 false,
+                false,
+                true,
                 StackApplyOperation.Rollback,
                 It.Is<StackSnapshot?>(snapshot => snapshot != null),
                 It.IsAny<CancellationToken>()))
@@ -204,6 +210,8 @@ public class RollbackStackTests
             actorId,
             null,
             false,
+            false,
+            true,
             StackApplyOperation.Rollback,
             It.Is<StackSnapshot?>(snapshot => snapshot != null),
             It.IsAny<CancellationToken>()), Times.Once);

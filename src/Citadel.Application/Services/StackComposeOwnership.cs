@@ -43,6 +43,37 @@ internal static class StackContainerOwnership
                 }
             });
 
+    public static ContainerFilterCommand CreateStackOwnedContainerFilter(
+        string platformAddress,
+        Guid stackId,
+        bool all = true)
+        => new(
+            PlatformAddress: platformAddress,
+            All: all,
+            Filters: new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["label"] = new Dictionary<string, bool>
+                {
+                    [$"{CitadelLabels.Managed}=true"] = true,
+                    [$"{CitadelLabels.StackId}={FormatStackId(stackId)}"] = true
+                }
+            });
+
+    public static ContainerFilterCommand CreateComposeProjectContainerFilter(
+        string platformAddress,
+        string projectName,
+        bool all = true)
+        => new(
+            PlatformAddress: platformAddress,
+            All: all,
+            Filters: new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["label"] = new Dictionary<string, bool>
+                {
+                    [$"{ComposeLabels.Project}={projectName}"] = true
+                }
+            });
+
     public static bool IsOwnedByStack(IReadOnlyDictionary<string, string> labels, Guid stackId)
         => TryGetLabelValue(labels, CitadelLabels.Managed, CitadelLabels.LegacyExtensionPrefix + "managed", out var managed)
            && string.Equals(managed, "true", StringComparison.OrdinalIgnoreCase)

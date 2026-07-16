@@ -5654,6 +5654,8 @@ export interface StackStreamItem {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   exitCode?: null | number | string;
+  stackStatus?: null | StackReleaseStatus;
+  severity?: null | "info" | "success" | "warning" | "error";
 }
 
 export interface StackUpdateStateGitStackUpdateState {

@@ -43514,6 +43514,13 @@
               "string"
             ],
             "format": "int32"
+          },
+          "stackStatus": { },
+          "severity": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

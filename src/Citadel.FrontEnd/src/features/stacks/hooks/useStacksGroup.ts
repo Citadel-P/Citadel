@@ -19,13 +19,14 @@ export const useStacksGroup = () => {
   const [stacks, setStacks] = useState<StackView[] | undefined>();
   const [capabilities, setcapabilities] = useState<ResourceCapabilities | undefined>();
   const lastFetchedRef = useRef<StackView[]>([]);
+  const deletedStackIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!data) return;
     const newBase = data.data.stacks;
     if (newBase !== lastFetchedRef.current) {
       lastFetchedRef.current = newBase;
-      setStacks(newBase);
+      setStacks(newBase.filter((stack) => !deletedStackIdsRef.current.has(stack.id)));
       setcapabilities(data.data.capabilities);
     }
   }, [data]);
@@ -45,10 +46,15 @@ export const useStacksGroup = () => {
     setStacks((prev) => {
       if (!prev) return prev;
       if (action === 'create') {
+        deletedStackIdsRef.current.delete(stack.id);
         return matchesActiveFilters(stack) ? [...prev, stack] : prev;
       }
       if (action === 'delete') {
+        deletedStackIdsRef.current.add(stack.id);
         return prev.filter((d) => d.id !== stack.id);
+      }
+      if (deletedStackIdsRef.current.has(stack.id)) {
+        return prev;
       }
 
       const index = prev.findIndex((d) => d.id === stack.id);

@@ -106,6 +106,25 @@ internal sealed class StackSyncWorkItem(
             if (release is null || release.Status == StackReleaseStatus.Created)
                 continue;
 
+            if (stack.ControlState == ResourceControlState.Processing)
+            {
+                if (release.Status is StackReleaseStatus.Applying or StackReleaseStatus.Pending)
+                    continue;
+
+                stack.ReleaseProcessing(release.Status);
+                await uow.Stacks.UpdateProcessingAsync(
+                    id: stack.Id,
+                    status: release.Status,
+                    state: stack.ControlState,
+                    startedAt: stack.ControlStartedAt,
+                    rowVersion: stack.RowVersion,
+                    checkRowVersion: false,
+                    controlTriggeredBy: stack.ControlTriggeredBy,
+                    cancellationToken: ct);
+                updated.Add(stack);
+                continue;
+            }
+
             var nextStatus = platformIsOnline
                 ? GetOnlineStatus(stack, containersByStackId)
                 : StackReleaseStatus.Degraded;

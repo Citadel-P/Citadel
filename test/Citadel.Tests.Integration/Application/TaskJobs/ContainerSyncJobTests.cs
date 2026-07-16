@@ -2,17 +2,21 @@
 using Application.Services;
 using Application.Services.SignalR;
 using Application.TaskJobs;
+using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Domain.Entities.Stacks;
 using Infrastructure.Repositories.DbQueue;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using System.Threading.Channels;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -171,6 +175,133 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var dbContainers = await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
         Assert.Contains(dbContainers, c => c.DockerContainerId == "new-id");
+    }
+
+    [Fact]
+    public async Task OnlineSync_Should_Persist_Provided_StackId()
+    {
+        var stack = Stack.Create(
+            name: "stack-sync-app",
+            createdByActorId: Guid.CreateVersion7(),
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  app:\n    image: nginx\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+
+        await using (var seedScope = Services.CreateAsyncScope())
+        {
+            var seedUow = seedScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await seedUow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
+            await seedUow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var dockerContainer = new DockerContainer(
+            Name: "/stack-sync-app-app-1",
+            Image: "nginx:latest",
+            ImageId: "sha256:nginx",
+            Id: "stack-sync-app-container-id",
+            State: ContainerStateStatus.Running,
+            Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+            Created: 123456,
+            Stack: "stack-sync-app",
+            StackId: stack.Id);
+
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+        var dbWorkQueue = new Mock<IDbWorkQueue>();
+        dbWorkQueue
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<IDbWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+
+        await using (var syncScope = Services.CreateAsyncScope())
+        {
+            var syncUow = syncScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var cache = syncScope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
+            var workItem = new SyncOnlinePlatformContainersWorkItem(
+                new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+                notificationQueue.Object,
+                new Dictionary<string, DockerContainer>
+                {
+                    [dockerContainer.Id] = dockerContainer
+                },
+                cache,
+                Mock.Of<IContainerStreamManager>(),
+                dbWorkQueue.Object,
+                Mock.Of<IDeploymentStreamManager>(),
+                Mock.Of<IStackStreamManager>(),
+                Mock.Of<ILogger<ContainerSyncJob>>());
+
+            await workItem.ExecuteAsync(syncUow, TestContext.Current.CancellationToken);
+        }
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var uow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var dbContainers = await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
+        var linked = Assert.Single(dbContainers, container => container.DockerContainerId == dockerContainer.Id);
+        Assert.Equal(stack.Id, linked.StackId);
+    }
+
+    [Fact]
+    public async Task CreatedEvent_Should_Persist_Provided_StackId()
+    {
+        var stack = Stack.Create(
+            name: "daemon-stack",
+            createdByActorId: Guid.CreateVersion7(),
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  app:\n    image: nginx\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+
+        await using (var seedScope = Services.CreateAsyncScope())
+        {
+            var seedUow = seedScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await seedUow.Stacks.AddAsync(stack, TestContext.Current.CancellationToken);
+            await seedUow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        var dockerContainer = new DockerContainer(
+            Name: "/daemon-stack-app-1",
+            Image: "nginx:latest",
+            ImageId: "sha256:nginx",
+            Id: "daemon-stack-container-id",
+            State: ContainerStateStatus.Running,
+            Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+            Created: 123456,
+            Stack: "daemon-stack",
+            StackId: stack.Id);
+
+        var notificationQueue = new Mock<INotificationQueue>();
+        notificationQueue
+            .Setup(queue => queue.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+        var unmanagedAlerts = Channel.CreateUnbounded<UnmanagedContainerAlertRequest>();
+
+        await using (var syncScope = Services.CreateAsyncScope())
+        {
+            var syncUow = syncScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var cache = syncScope.ServiceProvider.GetRequiredService<IPlatformContainerCache>();
+            var workItem = new ContainerCreatedWorkItem(
+                new DaemonContainerEventInfo("create", dockerContainer.Id, dockerContainer),
+                platformId,
+                notificationQueue.Object,
+                unmanagedAlerts.Writer,
+                Mock.Of<IDockerDaemonStreamManager>(),
+                cache,
+                Mock.Of<IContainerEventBroadcaster>(),
+                Mock.Of<ILogger<ContainerCreatedWorkItem>>());
+
+            await workItem.ExecuteAsync(syncUow, TestContext.Current.CancellationToken);
+        }
+
+        await using var assertScope = Services.CreateAsyncScope();
+        var uow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var dbContainers = await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
+        var linked = Assert.Single(dbContainers, container => container.DockerContainerId == dockerContainer.Id);
+        Assert.Equal(stack.Id, linked.StackId);
     }
 
     [Fact]

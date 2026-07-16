@@ -244,6 +244,16 @@ public class StackLifecycleTests
                 It.Is<ContainerFilterCommand>(command =>
                     command.PlatformAddress == "http://docker.local" &&
                     command.All == true &&
+                    command.Filters!["label"].ContainsKey($"{CitadelLabels.Managed}=true") &&
+                    command.Filters!["label"].ContainsKey($"{CitadelLabels.StackId}={stack.Id:D}")),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer>()));
+        connector
+            .Setup(x => x.ListContainersAsync(
+                It.Is<ContainerFilterCommand>(command =>
+                    command.PlatformAddress == "http://docker.local" &&
+                    command.All == true &&
                     command.Filters!["label"].ContainsKey($"{ComposeLabels.Project}=beszel")),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
@@ -318,6 +328,114 @@ public class StackLifecycleTests
             It.IsAny<CancellationToken>()), Times.Once);
         unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
         stackHub.Verify(x => x.SendStackInfo(stack, "delete"), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteStacks_deletes_owned_runtime_containers_by_stack_labels_when_project_name_changed()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "new-name",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  app:\n    image: nginx\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+        stack.PartialUpdate(StackReleaseStatus.Healthy);
+
+        var stacks = new Mock<IStackRepository>();
+        stacks
+            .Setup(x => x.GetAllAsync(
+                It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([stack]);
+        stacks
+            .Setup(x => x.RemoveRangeAsync(
+                It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var platforms = new Mock<IPlatformRepository>();
+        platforms
+            .Setup(x => x.GetPlatformsWithLatestStatByIdsAsync(
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { platformId })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.Platforms).Returns(platforms.Object);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var platform = new PlatformCacheEntry(
+            platformId,
+            "http://docker.local",
+            PlatformConnectorType.Local,
+            ImmutableDictionary<string, Guid>.Empty);
+        var platformCache = new TestPlatformContainerCache(platform);
+        var ownedContainer = new DockerContainer(
+            Name: "/old-name-app-1",
+            Image: "nginx",
+            Id: "owned-container",
+            ImageId: "sha256:owned",
+            State: ContainerStateStatus.Running,
+            Stack: "old-name");
+
+        var connector = new Mock<IContainerConnector>();
+        connector
+            .Setup(x => x.ListContainersAsync(
+                It.Is<ContainerFilterCommand>(command =>
+                    command.PlatformAddress == "http://docker.local" &&
+                    command.All == true &&
+                    command.Filters!["label"].ContainsKey($"{CitadelLabels.Managed}=true") &&
+                    command.Filters!["label"].ContainsKey($"{CitadelLabels.StackId}={stack.Id:D}")),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(
+                new Dictionary<string, DockerContainer>
+                {
+                    [ownedContainer.Id] = ownedContainer
+                }));
+        connector
+            .Setup(x => x.DeleteAsync(
+                It.Is<DeleteContainerCommand>(command =>
+                    command.PlatformAddress == "http://docker.local" &&
+                    command.Force == true &&
+                    command.Volume == false &&
+                    command.ContainerIds.SequenceEqual(new[] { ownedContainer.Id })),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        var connectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        connectorFactory
+            .Setup(x => x.GetConnector(PlatformConnectorType.Local))
+            .Returns(connector.Object);
+        using var stackStorage = new TestStackStoragePathProvider();
+        var handler = new DeleteStacksHandler(
+            unitOfWork.Object,
+            platformCache,
+            connectorFactory.Object,
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IPlatformStreamManager>(),
+            stackStorage);
+
+        var result = await handler.Handle(new DeleteStacks([stack.Id]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess());
+        connector.Verify(
+            x => x.ListContainersAsync(
+                It.Is<ContainerFilterCommand>(command =>
+                    command.Filters!["label"].ContainsKey($"{ComposeLabels.Project}=new-name")),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        connector.Verify(x => x.InspectAsync(It.IsAny<InspectContainerCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        connector.Verify(x => x.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()), Times.Once);
+        stacks.Verify(x => x.RemoveRangeAsync(
+            It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { stack.Id })),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static ContainerInspectionInfo InspectionWithLabels(IReadOnlyDictionary<string, string> labels)

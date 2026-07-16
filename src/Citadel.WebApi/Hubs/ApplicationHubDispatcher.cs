@@ -214,14 +214,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     public Task SendStackInfo(Stack stack, string action)
     {
         var map = StackView.Map(stack);
-        hubContext.Clients
+        var stackGroup = hubContext.Clients
             .Group(WellKnownSignalRGroups.StackGroup(stack.Id))
             .SendAsync("StackInfoUpdated", map, action);
 
-        hubContext.Clients
+        var stacksGroup = hubContext.Clients
             .Group(WellKnownSignalRGroups.StacksGroup)
             .SendAsync("StackInfoUpdated", map, action);
-        return Task.CompletedTask;
+
+        return Task.WhenAll(stackGroup, stacksGroup);
     }
 
     public Task SendStackContainersInfo(Guid stackId, IEnumerable<DockerContainer> containers, CancellationToken cancellationToken) =>

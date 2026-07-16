@@ -25,7 +25,7 @@ public class StackServiceTests
         File.WriteAllText(repoEnvFile, "APP_ENV=repo");
 
         var executor = new CapturingCommandExecutor();
-        var service = new StackService(executor);
+        var service = CreateStackService(executor);
 
         var command = new StackApplyCommand(
             PlatformAddress: "http://localhost.docker",
@@ -88,7 +88,7 @@ public class StackServiceTests
         File.WriteAllText(composePath, "services: {}");
 
         var executor = new CapturingCommandExecutor();
-        var service = new StackService(executor);
+        var service = CreateStackService(executor);
 
         var command = new StackApplyCommand(
             PlatformAddress: "http://localhost.docker",
@@ -136,7 +136,7 @@ public class StackServiceTests
         using var temp = new TempDirectory();
         var warning = """time="2026-07-02T14:22:18Z" level=warning msg="The \"stripe_api_key\" variable is not set. Defaulting to a blank string." """;
         var executor = new CapturingCommandExecutor(stdErr: warning);
-        var service = new StackService(executor);
+        var service = CreateStackService(executor);
 
         var command = new StackApplyCommand(
             PlatformAddress: "http://localhost.docker",
@@ -167,6 +167,97 @@ public class StackServiceTests
     }
 
     [Fact]
+    public async Task ApplyStreamAsync_Should_Query_Compose_Status_After_Successful_Apply()
+    {
+        using var temp = new TempDirectory();
+        var workingDirectory = Path.Combine(temp.Path, "source", "app");
+        var generatedDirectory = Path.Combine(temp.Path, "citadel");
+        Directory.CreateDirectory(workingDirectory);
+        Directory.CreateDirectory(generatedDirectory);
+
+        var composePath = Path.Combine(workingDirectory, "compose.yml");
+        File.WriteAllText(composePath, "services:\n  minio:\n    image: minio/minio\n  minio-init:\n    image: minio/mc\n");
+
+        var executor = new CapturingCommandExecutor(executeStdOut: """
+            [
+              { "Service": "minio", "State": "running", "Health": "", "ExitCode": 0 },
+              { "Service": "minio-init", "State": "exited", "Health": "", "ExitCode": 1 }
+            ]
+            """);
+        var settleDelays = new List<TimeSpan>();
+        var service = CreateStackService(executor, settleDelays);
+
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: null,
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: null,
+            RegistryName: null,
+            RegistryHost: null,
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            ServiceNames: null,
+            PullImages: false,
+            SourceWorkingDirectory: workingDirectory,
+            SourceComposeFilePaths: [composePath],
+            GeneratedFilesDirectory: generatedDirectory);
+
+        var results = new List<StackApplyResult>();
+        await foreach (var result in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+        {
+            results.Add(result);
+        }
+
+        var status = Assert.Single(results, result => result.StackStatus is not null);
+        Assert.Equal("Degraded", status.StackStatus);
+        Assert.Equal(TimeSpan.FromSeconds(5), Assert.Single(settleDelays));
+        var invocation = Assert.Single(executor.ExecuteInvocations);
+        Assert.Equal("docker", invocation.FileName);
+        Assert.Equal(workingDirectory, invocation.WorkingDirectory);
+        Assert.Equal(
+            [
+                "compose",
+                "--project-directory", workingDirectory,
+                "-p", "demo",
+                "-f", composePath,
+                "ps",
+                "--all",
+                "--format", "json"
+            ],
+            invocation.Arguments);
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_Should_Mark_Compose_Status_Degraded_For_Mixed_Running_And_Stopped()
+    {
+        var results = await ApplyAndCollectStatusAsync("""
+            [
+              { "Service": "app", "State": "running", "Health": "", "ExitCode": 0 },
+              { "Service": "init", "State": "exited", "Health": "", "ExitCode": 0 }
+            ]
+            """);
+
+        Assert.Equal("Degraded", Assert.Single(results, result => result.StackStatus is not null).StackStatus);
+    }
+
+    [Fact]
+    public async Task ApplyStreamAsync_Should_Mark_Compose_Status_Stopped_When_All_Containers_Are_Stopped()
+    {
+        var results = await ApplyAndCollectStatusAsync("""
+            [
+              { "Service": "app", "State": "exited", "Health": "", "ExitCode": 0 },
+              { "Service": "init", "State": "exited", "Health": "", "ExitCode": 0 }
+            ]
+            """);
+
+        Assert.Equal("Stopped", Assert.Single(results, result => result.StackStatus is not null).StackStatus);
+    }
+
+    [Fact]
     public async Task ApplyStreamAsync_Should_Delete_Generated_Docker_Config_After_Apply()
     {
         using var temp = new TempDirectory();
@@ -174,7 +265,7 @@ public class StackServiceTests
         Directory.CreateDirectory(generatedDirectory);
 
         var executor = new CapturingCommandExecutor();
-        var service = new StackService(executor);
+        var service = CreateStackService(executor);
 
         var command = new StackApplyCommand(
             PlatformAddress: "http://localhost.docker",
@@ -219,7 +310,7 @@ public class StackServiceTests
         File.WriteAllText(staleSecretFile, "old-secret");
 
         var executor = new CapturingCommandExecutor();
-        var service = new StackService(executor);
+        var service = CreateStackService(executor);
 
         var command = new StackApplyCommand(
             PlatformAddress: "http://localhost.docker",
@@ -298,7 +389,7 @@ public class StackServiceTests
         File.WriteAllText(secretOverride, "services: {}\n");
 
         var executor = new CapturingCommandExecutor();
-        var service = new StackService(executor);
+        var service = CreateStackService(executor);
 
         var command = new StackApplyCommand(
             PlatformAddress: "http://localhost.docker",
@@ -348,7 +439,7 @@ public class StackServiceTests
         File.WriteAllText(previousOverride, "services: {}\n");
 
         var executor = new CapturingCommandExecutor(exitCode: 1);
-        var service = new StackService(executor);
+        var service = CreateStackService(executor);
 
         var command = new StackApplyCommand(
             PlatformAddress: "http://localhost.docker",
@@ -387,9 +478,69 @@ public class StackServiceTests
         Assert.True(Directory.GetFiles(Path.Combine(generatedDirectory, "secrets"), "POSTGRES_PASSWORD", SearchOption.AllDirectories).Length >= 2);
     }
 
-    private sealed class CapturingCommandExecutor(int exitCode = 0, string? stdOut = null, string? stdErr = null) : ICommandExecutor
+    private static async Task<List<StackApplyResult>> ApplyAndCollectStatusAsync(string composePsJson)
+    {
+        using var temp = new TempDirectory();
+        var workingDirectory = Path.Combine(temp.Path, "source", "app");
+        var generatedDirectory = Path.Combine(temp.Path, "citadel");
+        Directory.CreateDirectory(workingDirectory);
+        Directory.CreateDirectory(generatedDirectory);
+
+        var composePath = Path.Combine(workingDirectory, "compose.yml");
+        File.WriteAllText(composePath, "services:\n  app:\n    image: nginx\n");
+
+        var executor = new CapturingCommandExecutor(executeStdOut: composePsJson);
+        var service = CreateStackService(executor);
+
+        var command = new StackApplyCommand(
+            PlatformAddress: "http://localhost.docker",
+            StackName: "demo",
+            ComposeFileContent: null,
+            ProjectName: "demo",
+            EnvironmentFilePath: null,
+            RegistryAuth: null,
+            RegistryName: null,
+            RegistryHost: null,
+            DestroyBeforeDeploy: false,
+            EnvironmentVariables: null,
+            PreDeploy: null,
+            PostDeploy: null,
+            ServiceNames: null,
+            PullImages: false,
+            SourceWorkingDirectory: workingDirectory,
+            SourceComposeFilePaths: [composePath],
+            GeneratedFilesDirectory: generatedDirectory);
+
+        var results = new List<StackApplyResult>();
+        await foreach (var result in service.ApplyStreamAsync(command, TestContext.Current.CancellationToken))
+        {
+            results.Add(result);
+        }
+
+        return results;
+    }
+
+    private static StackService CreateStackService(
+        CapturingCommandExecutor executor,
+        List<TimeSpan>? settleDelays = null)
+        => new(
+            executor,
+            (delay, _) =>
+            {
+                settleDelays?.Add(delay);
+                return ValueTask.CompletedTask;
+            });
+
+    private sealed class CapturingCommandExecutor(
+        int exitCode = 0,
+        string? stdOut = null,
+        string? stdErr = null,
+        int executeExitCode = 0,
+        string? executeStdOut = null,
+        string? executeStdErr = null) : ICommandExecutor
     {
         public List<Invocation> Invocations { get; } = [];
+        public List<Invocation> ExecuteInvocations { get; } = [];
 
         public Task<ProcessExecutionResult> ExecuteAsync(
             string fileName,
@@ -397,7 +548,19 @@ public class StackServiceTests
             IDictionary<string, string>? environmentVariables = null,
             string? workingDirectory = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new ProcessExecutionResult(0, string.Empty, string.Empty));
+        {
+            ExecuteInvocations.Add(new Invocation(
+                fileName,
+                [.. arguments],
+                new Dictionary<string, string>(environmentVariables ?? new Dictionary<string, string>()),
+                workingDirectory,
+                DockerConfigDirectory: null));
+
+            return Task.FromResult(new ProcessExecutionResult(
+                executeExitCode,
+                executeStdOut ?? string.Empty,
+                executeStdErr ?? string.Empty));
+        }
 
         public async IAsyncEnumerable<ProcessOutput> StreamAsync(
             string fileName,

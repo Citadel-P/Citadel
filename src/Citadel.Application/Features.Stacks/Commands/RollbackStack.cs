@@ -41,7 +41,9 @@ internal sealed class RollbackStackHandler(
             actorId,
             serviceNames: null,
             pullImages: false,
-            StackApplyOperation.Rollback,
+            recreate: false,
+            waitForCompletion: true,
+            operation: StackApplyOperation.Rollback,
             prepare.PreviousStackSnapshot,
             cancellationToken))
         {

@@ -77,7 +77,7 @@ internal sealed class ContainerUpdatedWorkItem(
             }
 
             // Notify Stack
-            if (stack != null)
+            if (stack != null && await uow.Stacks.ExistsAsync(stack.Id, cancellationToken))
             {
                 var stackWorkItem = new StackNotificationWorkItem(stackHub, stack);
                 await notificationQueue.EnqueueAsync(stackWorkItem, cancellationToken);
