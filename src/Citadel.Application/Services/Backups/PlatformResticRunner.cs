@@ -50,7 +50,8 @@ internal sealed partial class PlatformResticRunner(
 
         var containerConnector = containerConnectorFactory.GetConnector(command.ConnectorType);
         var imageConnector = imageConnectorFactory.GetConnector(command.ConnectorType);
-        var preparedRepositoryPath = await EnsureRepositoryHostPathAsync(containerConnector, imageConnector, command, ct);
+        var helperImage = await ResolveHelperImageAsync(containerConnector, command, ct);
+        var preparedRepositoryPath = await EnsureRepositoryHostPathAsync(containerConnector, imageConnector, command, helperImage, ct);
         if (preparedRepositoryPath.IsFailure(out var prepareError))
         {
             yield return new ResticProcessEvent(
@@ -60,7 +61,7 @@ internal sealed partial class PlatformResticRunner(
             yield break;
         }
 
-        var helper = await CreateAndStartHelperAsync(containerConnector, imageConnector, command, ct);
+        var helper = await CreateAndStartHelperAsync(containerConnector, imageConnector, command, helperImage, ct);
         if (!helper.IsSuccess(out var containerId, out var helperError))
         {
             yield return new ResticProcessEvent(
@@ -85,7 +86,7 @@ internal sealed partial class PlatformResticRunner(
 
             if (!exec.IsSuccess(out var binaryExec, out var execError))
             {
-                yield return new ResticProcessEvent(ResticProcessStream.StdErr, Sanitize(ToExecErrorMessage(execError.Message, command), command));
+                yield return new ResticProcessEvent(ResticProcessStream.StdErr, Sanitize(ToExecErrorMessage(execError.Message, command, helperImage), command));
                 yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: 1);
                 yield break;
             }
@@ -119,13 +120,35 @@ internal sealed partial class PlatformResticRunner(
         }
     }
 
+    private async Task<string> ResolveHelperImageAsync(
+        IContainerConnector containerConnector,
+        PlatformResticCommand command,
+        CancellationToken cancellationToken)
+    {
+        var configuredImage = helperImageResolver.Resolve(command.ConnectorType);
+        if (helperImageResolver.IsExplicitlyConfigured || command.ConnectorType != PlatformConnectorType.Local)
+            return configuredImage;
+
+        var currentContainerId = Environment.MachineName;
+        if (string.IsNullOrWhiteSpace(currentContainerId))
+            return configuredImage;
+
+        var currentContainer = await containerConnector.InspectAsync(
+            new InspectContainerCommand(command.PlatformAddress, currentContainerId),
+            cancellationToken);
+
+        return currentContainer.IsSuccess(out var container) && !string.IsNullOrWhiteSpace(container.Config?.Image)
+            ? container.Config.Image
+            : configuredImage;
+    }
+
     private async Task<LightResults.Result<string>> CreateAndStartHelperAsync(
         IContainerConnector containerConnector,
         IImageConnector imageConnector,
         PlatformResticCommand command,
+        string helperImage,
         CancellationToken cancellationToken)
     {
-        var helperImage = helperImageResolver.Resolve();
         var containerName = $"citadel-backup-helper-{Guid.CreateVersion7():N}";
         var create = await TryCreateHelperAsync(containerConnector, command, helperImage, containerName, cancellationToken);
 
@@ -174,6 +197,7 @@ internal sealed partial class PlatformResticRunner(
         IContainerConnector containerConnector,
         IImageConnector imageConnector,
         PlatformResticCommand command,
+        string helperImage,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(command.RepositoryHostPath))
@@ -186,7 +210,6 @@ internal sealed partial class PlatformResticRunner(
         if (path is null)
             return LightResults.Result.Success();
 
-        var helperImage = helperImageResolver.Resolve();
         var containerName = $"citadel-backup-path-helper-{Guid.CreateVersion7():N}";
         var create = await TryCreateRepositoryPathHelperAsync(
             containerConnector,
@@ -513,13 +536,12 @@ internal sealed partial class PlatformResticRunner(
         => message.Contains("bind source path does not exist", StringComparison.OrdinalIgnoreCase)
            || message.Contains("invalid mount config for type \"bind\"", StringComparison.OrdinalIgnoreCase);
 
-    private string ToExecErrorMessage(string message, PlatformResticCommand command)
+    private static string ToExecErrorMessage(string message, PlatformResticCommand command, string helperImage)
     {
         if (!IsMissingExecutableError(message, command.ResticExecutable))
             return message;
 
-        var helperImage = helperImageResolver.Resolve();
-        return $"Backup helper image '{helperImage}' does not include '{command.ResticExecutable}'. Rebuild or pull the matching Citadel Agent image before running platform backups.";
+        return $"Backup helper image '{helperImage}' does not include '{command.ResticExecutable}'. Rebuild or pull the matching Citadel helper image before running platform backups.";
     }
 
     private static bool IsMissingExecutableError(string message, string executable)
@@ -529,6 +551,9 @@ internal sealed partial class PlatformResticRunner(
 
     private static bool CanPullHelperImage(string helperImage)
     {
+        if (string.Equals(helperImage, VolumeContentService.DevelopmentHelperImage, StringComparison.OrdinalIgnoreCase))
+            return false;
+
         var (_, tag) = SplitImageReference(helperImage);
         if (!string.Equals(tag, "dev", StringComparison.OrdinalIgnoreCase))
             return true;

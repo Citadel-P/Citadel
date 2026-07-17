@@ -314,19 +314,19 @@ Include:
 * `pg_restore`.
 * CA certificates.
 
-## Backup helper image
+## Shared helper image
 
-Create and pin:
+Use and pin the Citadel Core image for platform-scoped backup and volume-browser helper containers:
 
 ```text
-ghcr.io/citadel-p/citadel-backup-helper:<compatible-version>
+ghcr.io/citadel-p/citadel:<compatible-version>
 ```
 
 Include:
 
 * Restic.
+* The `Citadel.VolumeHelper` executable.
 * CA certificates.
-* Minimal runtime and entrypoint.
 
 Do not include:
 
@@ -347,7 +347,7 @@ Include:
 
 ## Agent and Edge Agent images
 
-Agents orchestrate helper containers.
+Agents orchestrate helper containers on their target Docker daemon.
 
 Restic does not need to be installed directly in Agent or Edge Agent images when all Platform-scoped Restic operations execute inside the helper container.
 
@@ -2710,28 +2710,21 @@ public sealed class BackupOptions
 
     public IReadOnlyList<string> AllowedCorePaths { get; init; } = [];
 
-    public IReadOnlyList<string> AllowedLocalPlatformHostPaths
-        { get; init; } = [];
-
-    public string HelperImage { get; init; } =
-        "ghcr.io/citadel-p/citadel-backup-helper:<version>";
-
     public int RepositoryLeaseSeconds { get; init; } = 60;
     public int MaxParallelRuns { get; init; } = 2;
 }
 ```
 
-Agent:
+The platform helper image is shared with the volume browser and resolved by `IVolumeHelperImageResolver`.
+The resolver must choose the image for the connector that will execute the helper:
 
-```csharp
-public sealed class AgentBackupOptions
-{
-    public IReadOnlyList<string> AllowedHostPaths { get; init; } = [];
-
-    public string HelperImage { get; init; } =
-        "ghcr.io/citadel-p/citadel-backup-helper:<version>";
-}
+```text
+Local connector:      ghcr.io/citadel-p/citadel:<compatible-version>
+Agent connector:      ghcr.io/citadel-p/citadel.agent:<compatible-version>
+Edge Agent connector: ghcr.io/citadel-p/citadel.agent:<compatible-version>
 ```
+
+Local Docker development may use the currently running Core container image when Core itself is running in Docker. Development installations may still opt into a specific helper image by setting `VolumeBrowser__HelperImage` explicitly, for example `VolumeBrowser__HelperImage=citadel.dev`. That override applies to every connector, so Agent and Edge Agent platforms must also be able to run that image.
 
 Required installation settings should remain minimal.
 
@@ -2739,15 +2732,8 @@ Core `.env` example:
 
 ```env
 Backups__AllowedCorePaths__0=/backups
-Backups__AllowedLocalPlatformHostPaths__0=/mnt/backups
 Backups__WorkingDirectory=/app/data/backups/work
 Backups__MaxParallelRuns=2
-```
-
-Agent `.env`:
-
-```env
-Backups__AllowedHostPaths__0=/mnt/backups
 ```
 
 A Core filesystem destination such as `/backups` must be mounted persistently into the Core container.

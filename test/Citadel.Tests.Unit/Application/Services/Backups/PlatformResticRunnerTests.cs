@@ -1,3 +1,4 @@
+using Application.Services;
 using Application.Services.Backups;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -57,7 +58,9 @@ public sealed class PlatformResticRunnerTests
             .Returns(Mock.Of<IImageConnector>());
 
         var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
-        helperImageResolver.Setup(resolver => resolver.Resolve()).Returns("citadel-agent:dev");
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve(PlatformConnectorType.Agent))
+            .Returns(VolumeContentService.DevelopmentHelperImage);
 
         var runner = new PlatformResticRunner(
             containerFactory.Object,
@@ -141,7 +144,9 @@ public sealed class PlatformResticRunnerTests
             .Returns(Mock.Of<IImageConnector>());
 
         var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
-        helperImageResolver.Setup(resolver => resolver.Resolve()).Returns("citadel-agent:dev");
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve(PlatformConnectorType.Agent))
+            .Returns(VolumeContentService.DevelopmentHelperImage);
 
         var runner = new PlatformResticRunner(
             containerFactory.Object,
@@ -169,9 +174,98 @@ public sealed class PlatformResticRunnerTests
             events.Add(item);
         }
 
-        var error = Assert.Single(events.Where(item => item.Stream == ResticProcessStream.StdErr));
-        Assert.Contains("Backup helper image 'citadel-agent:dev' does not include 'restic'", error.Message);
+        var error = Assert.Single(events, item => item.Stream == ResticProcessStream.StdErr);
+        Assert.Contains($"Backup helper image '{VolumeContentService.DevelopmentHelperImage}' does not include 'restic'", error.Message);
+        Assert.Contains("Citadel helper image", error.Message);
         Assert.Contains(events, item => item.Stream == ResticProcessStream.Exit && item.ExitCode == 1);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldUseCurrentContainerImageForLocalDevelopment()
+    {
+        CreateContainerCommand? createCommand = null;
+        var currentContainerId = Environment.MachineName;
+
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .Setup(connector => connector.InspectAsync(
+                It.Is<InspectContainerCommand>(command => command.ContainerId == currentContainerId),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(CurrentDevelopmentContainer(currentContainerId)));
+        containerConnector
+            .Setup(connector => connector.CreateAsync(It.IsAny<CreateContainerCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateContainerCommand, CancellationToken>((command, _) => createCommand = command)
+            .ReturnsAsync(Result.Success("restic-helper"));
+        containerConnector
+            .Setup(connector => connector.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        containerConnector
+            .Setup(connector => connector.InspectAsync(
+                It.Is<InspectContainerCommand>(command => command.ContainerId == "restic-helper"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(RunningContainer("restic-helper")));
+        containerConnector
+            .Setup(connector => connector.ExecBinaryAsync(
+                "local://docker",
+                It.IsAny<ContainerBinaryExecRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new ContainerBinaryExecResult
+            {
+                Output = ReadChunksAsync("[]", TestContext.Current.CancellationToken),
+                GetExitCodeAsync = _ => Task.FromResult<int?>(0),
+                CleanupAsync = () => ValueTask.CompletedTask
+            }));
+        containerConnector
+            .Setup(connector => connector.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        var containerFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Local))
+            .Returns(containerConnector.Object);
+
+        var imageFactory = new Mock<IConnectorFactory<IImageConnector>>();
+        imageFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Local))
+            .Returns(Mock.Of<IImageConnector>());
+
+        var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
+        helperImageResolver
+            .SetupGet(resolver => resolver.IsExplicitlyConfigured)
+            .Returns(false);
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve(PlatformConnectorType.Local))
+            .Returns("ghcr.io/citadel-p/citadel:1.0");
+
+        var runner = new PlatformResticRunner(
+            containerFactory.Object,
+            imageFactory.Object,
+            helperImageResolver.Object);
+
+        var events = new List<ResticProcessEvent>();
+        await foreach (var item in runner.RunAsync(
+                           new PlatformResticCommand(
+                               Guid.CreateVersion7(),
+                               "local://docker",
+                               PlatformConnectorType.Local,
+                               "restic",
+                               ["snapshots", "--json"],
+                               new Dictionary<string, string> { ["RESTIC_REPOSITORY"] = "/repository" },
+                               TimeSpan.FromSeconds(30),
+                               [],
+                               4096,
+                               SourceVolumeName: null,
+                               TargetVolumeName: null,
+                               RepositoryHostPath: null,
+                               NetworkMode: "none"),
+                           CancellationToken.None))
+        {
+            events.Add(item);
+        }
+
+        Assert.NotNull(createCommand);
+        Assert.Equal("citadel.dev:dev", createCommand.ImageId);
+        Assert.Contains(events, item => item.Stream == ResticProcessStream.Exit && item.ExitCode == 0);
     }
 
     private static ContainerInspectionInfo RunningContainer(string id)
@@ -213,6 +307,32 @@ public sealed class PlatformResticRunnerTests
             Mounts: [],
             Config: null,
             NetworkSettings: null);
+
+    private static ContainerInspectionInfo CurrentDevelopmentContainer(string id)
+        => RunningContainer(id) with
+        {
+            Config = new ContainerConfiguration(
+                Hostname: id,
+                Domainname: null,
+                User: null,
+                AttachStdin: null,
+                AttachStdout: null,
+                AttachStderr: null,
+                ExposedPorts: null,
+                Tty: null,
+                OpenStdin: null,
+                StdinOnce: null,
+                Env: [],
+                Cmd: [],
+                Image: "citadel.dev:dev",
+                Volumes: null,
+                WorkingDir: null,
+                Entrypoint: [],
+                NetworkDisabled: null,
+                MacAddress: null,
+                OnBuild: [],
+                Labels: new Dictionary<string, string>())
+        };
 
     private static async IAsyncEnumerable<ContainerBinaryExecChunk> ReadChunksAsync(
         string? stdout,

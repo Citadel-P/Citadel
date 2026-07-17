@@ -38,10 +38,18 @@ For example, a Platform filesystem repository path of `/srv/backup-01` on an age
 
 When Citadel runs against Docker Desktop on Windows, Linux-style paths such as `/srv/backup-01` are usually inside Docker Desktop's Linux VM filesystem. They will not appear as `C:\srv\backup-01` or `D:\srv\backup-01` in Windows Explorer unless that path is explicitly backed by a shared Windows bind mount.
 
-To inspect a Platform filesystem repository on the same Docker daemon, run a temporary container:
+To inspect a Platform filesystem repository on the same Docker daemon, run a temporary container with the image used by that platform type.
+
+For a local platform:
 
 ```powershell
-docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup citadel-agent:dev
+docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup ghcr.io/citadel-p/citadel:1.0
+```
+
+For a regular agent or edge agent platform:
+
+```powershell
+docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup ghcr.io/citadel-p/citadel.agent:1.0
 ```
 
 Then inside the container:
