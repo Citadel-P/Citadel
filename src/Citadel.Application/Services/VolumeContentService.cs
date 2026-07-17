@@ -469,7 +469,7 @@ internal sealed class VolumeContentService(
         =>
         [
             "-c",
-            HelperLauncherScript,
+            HelperLauncherScript.ReplaceLineEndings("\n"),
             HelperLauncherName,
             .. args
         ];

@@ -84,6 +84,7 @@ public sealed class VolumeContentServiceTests
 
         Assert.Equal(["/bin/sh"], createEntryPoint);
         Assert.Equal("-c", createArgs[0]);
+        Assert.DoesNotContain('\r', createArgs[1]);
         Assert.Contains("/app/Citadel.VolumeHelper", createArgs[1]);
         Assert.Contains("Citadel.VolumeHelper.dll", createArgs[1]);
         Assert.Contains("/app/Citadel.Agent.VolumeHelper", createArgs[1]);
@@ -93,6 +94,7 @@ public sealed class VolumeContentServiceTests
 
         Assert.Equal("/bin/sh", execRequest.Command[0]);
         Assert.Equal("-c", execRequest.Command[1]);
+        Assert.DoesNotContain('\r', execRequest.Command[2]);
         Assert.Contains("/app/Citadel.VolumeHelper", execRequest.Command[2]);
         Assert.Contains("Citadel.VolumeHelper.dll", execRequest.Command[2]);
         Assert.Contains("/app/Citadel.Agent.VolumeHelper", execRequest.Command[2]);

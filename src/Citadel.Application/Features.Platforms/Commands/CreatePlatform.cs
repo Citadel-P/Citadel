@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Application.Features.Images.Queries;
 using Application.Features.Deployments.Notifications;
 using Application.Features.Platforms;
@@ -7,6 +8,7 @@ using Application.Services.Licensing;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
@@ -48,6 +50,7 @@ internal sealed class CreatePlatformHandler(
     IConnectorFactory<IImageConnector> imageConnectorFactory,
     IConnectorFactory<IPlatformConnector> platformConnectorFactory,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
+    IPlatformContainerCache platformContainerCache,
     IUserContextAccessor userContext,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
@@ -193,6 +196,7 @@ internal sealed class CreatePlatformHandler(
 
         await unitOfWork.CommitAsync(cancellationToken);
 
+        PopulatePlatformCache(platform, containers);
         platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id, platform.ConnectorType);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
 
@@ -251,5 +255,22 @@ internal sealed class CreatePlatformHandler(
             containersRunning: running,
             containersPaused: paused,
             containersStopped: stopped));
+    }
+
+    private void PopulatePlatformCache(Platform platform, IReadOnlyCollection<Container>? containers)
+    {
+        var containerMap = (containers ?? Array.Empty<Container>())
+            .ToImmutableDictionary(
+                container => container.DockerContainerId,
+                container => container.Id,
+                StringComparer.OrdinalIgnoreCase);
+
+        platformContainerCache.ReplacePlatformContainers(
+            platform.Id,
+            new PlatformCacheEntry(
+                platform.Id,
+                platform.Address,
+                platform.ConnectorType,
+                containerMap));
     }
 }
