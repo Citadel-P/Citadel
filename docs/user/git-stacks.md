@@ -2,6 +2,12 @@
 
 Git stacks let Citadel deploy Docker Compose projects from a Git repository. They are useful for a single repository with one compose file and for monorepos that hold many independent compose projects.
 
+Configure the Git repository and any required Git account before creating a Git stack. See `docs/user/git-repositories.md`.
+
+Use deployments instead when the workload is a single Docker container and does not need Compose. See `docs/user/deployments.md`.
+
+Use web editor stacks instead when the Compose YAML should be stored and edited directly in Citadel. See `docs/user/web-editor-stacks.md`.
+
 ## Simple Repository
 
 Use this setup when the repository contains one compose project.
@@ -106,6 +112,8 @@ Pinned stacks set `Commit` to a SHA. They do not track branch updates and webhoo
 ## Webhooks
 
 Repository webhooks trigger repository sync. Git stack webhooks trigger deploy for that stack.
+
+For the shared listener model, authentication options, URL shape, and troubleshooting, see `docs/user/webhooks.md`.
 
 For Git stacks, webhook deploy still validates:
 

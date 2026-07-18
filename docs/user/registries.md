@@ -1,0 +1,193 @@
+# Registries
+
+Registries let Citadel pull container images and check image updates for deployments and web editor stacks.
+
+Use registries when:
+
+- a deployment pulls an external image
+- a web editor stack checks service images for updates
+- you want to pull an image onto a platform from Citadel
+- private registry credentials are required
+
+## Supported Providers
+
+The registry form supports:
+
+- `DockerHub`
+- `GitHub`
+- `Custom`
+
+DockerHub uses `docker.io` as the registry host. GitHub uses `ghcr.io` and displays the selected namespace as part of the host. Custom registries require you to enter the registry host.
+
+Azure, AWS, and GitLab registry configuration types exist in the backend model, but they are not currently exposed in the registry form.
+
+## Basic Setup
+
+Create a registry and choose:
+
+- Provider: DockerHub, GitHub, or Custom
+- Name: a unique name used inside Citadel
+- Description: optional notes
+- Tags: optional filters for organizing registries
+- Status: whether the registry is active, deprecated, or disabled
+- Provider settings: credentials and provider-specific fields
+
+Citadel validates supported registry credentials when the registry is created or updated.
+
+## Registry Status
+
+Registry status controls how the registry is presented for use.
+
+- `Active`: available for normal selection and use.
+- `Deprecated`: still available, but shown with a warning.
+- `Disabled`: hidden from selection and cannot be used for new configuration.
+
+Use `Deprecated` when you are migrating workloads away from a registry but existing resources still depend on it. Use `Disabled` when the registry should no longer be selected.
+
+## Default Registry
+
+Citadel includes a default registry entry. The default registry cannot be edited or deleted.
+
+Use the default registry for public images that do not require credentials. Create a separate registry when you need private credentials, provider-specific package discovery, or clearer ownership in deployment and stack configuration.
+
+## DockerHub
+
+Use DockerHub for images hosted on Docker Hub.
+
+Required fields:
+
+- Username
+- Personal access token
+
+The DockerHub registry host is set to `docker.io` automatically.
+
+Use a DockerHub personal access token instead of an account password. The token is used when Citadel pulls images, checks tags, and lists DockerHub repositories or tags where supported.
+
+Example image references:
+
+```text
+nginx:1.27
+library/postgres:16
+my-org/my-app:1.4.2
+```
+
+## GitHub Container Registry
+
+Use GitHub for images hosted in GitHub Container Registry.
+
+Required fields:
+
+- Namespace: the GitHub user or organization that owns the packages
+- Authentication: optional for public packages, required for private packages
+- PAT: required when authentication is enabled
+
+The GitHub registry host is set to `ghcr.io` automatically. In the registry list, Citadel displays the host with the namespace, for example:
+
+```text
+ghcr.io/my-org
+```
+
+For private packages, enable authentication and provide a GitHub personal access token with package read access.
+
+Example image references:
+
+```text
+ghcr.io/my-org/api:1.4.2
+ghcr.io/my-user/worker:latest
+```
+
+For public packages, authentication is optional, but it can help avoid GitHub rate limits.
+
+## Custom Registry
+
+Use Custom for an OCI-compatible registry that is not DockerHub or GitHub Container Registry.
+
+Required fields:
+
+- Registry Host: host or `host:port`, without `http://` or `https://`
+- Authentication: enable only when credentials are required
+- Username and password: required when authentication is enabled
+
+Examples:
+
+```text
+registry.example.com
+registry.example.com:5000
+10.0.10.15:5000
+```
+
+Example image references:
+
+```text
+registry.example.com/team/api:1.4.2
+registry.example.com:5000/internal/job:2026.07
+```
+
+Citadel assumes custom registry connectivity is valid when saving the registry. If credentials, TLS, or network access are wrong, image pull or update checks can fail later during deployment.
+
+## Using Registries In Deployments
+
+For a deployment with image source `External`, select a registry and enter an image reference.
+
+During deploy, Citadel:
+
+1. pulls the image from the selected registry
+2. resolves the local Docker image id
+3. injects deployment variables and secrets
+4. creates or recreates the container
+
+Auto update for deployments also depends on the selected registry. It checks the configured external image tag for a new digest.
+
+For deployment setup, see `docs/user/deployments.md`.
+
+## Using Registries In Web Editor Stacks
+
+Web editor stacks can select a registry for image update checks.
+
+The registry is used to check service image tags for new digests. Stack deploy still uses Docker Compose and the images defined in the Compose file.
+
+For web editor stack setup, see `docs/user/web-editor-stacks.md`.
+
+## Pulling Images To A Platform
+
+Registries are also used when pulling an image into a platform from the Images page.
+
+Select:
+
+- the target platform
+- the registry
+- the image reference
+
+Citadel uses the registry credentials to pull the image onto the selected Docker host. After that, the image can be selected as a local deployment image.
+
+## Credentials And Secrets
+
+Registry credentials are stored in the registry configuration. Sensitive values are masked in snapshots and activity details.
+
+Use least-privilege tokens:
+
+- DockerHub: token that can read the required repositories
+- GitHub Container Registry: token with package read access
+- Custom registry: read-only credentials when the registry supports them
+
+Rotate registry tokens regularly. After updating a registry token, redeploy affected workloads if they need to pull images again.
+
+## Choosing A Registry
+
+Use DockerHub when:
+
+- images are hosted on Docker Hub
+- DockerHub repository/tag browsing is useful
+- DockerHub credentials are required for private images
+
+Use GitHub when:
+
+- images are hosted on `ghcr.io`
+- images belong to a GitHub user or organization namespace
+- private GHCR packages need package read credentials
+
+Use Custom when:
+
+- images are hosted on a private OCI-compatible registry
+- the registry uses a custom host or port
+- the registry does not match DockerHub or GHCR behavior

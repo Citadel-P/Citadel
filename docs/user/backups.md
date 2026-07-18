@@ -113,6 +113,8 @@ If a policy contains multiple volumes, Citadel creates one backup item per volum
 
 Enable **Webhook** on a backup policy when an external system should queue the backup.
 
+For the shared listener model, authentication options, URL shape, and troubleshooting, see `docs/user/webhooks.md`.
+
 Common uses:
 
 - run a backup before a deployment pipeline updates a stack

@@ -179,6 +179,8 @@ If the action is already running, Citadel records a rejected run instead of star
 
 Enable `Webhook` to let a Git webhook queue the action.
 
+For the shared listener model, authentication options, URL shape, and troubleshooting, see `docs/user/webhooks.md`.
+
 Select the provider and authentication format, set an optional branch filter, and copy the listener URL into the Git provider webhook settings.
 
 Webhook URL shape:
