@@ -1354,7 +1354,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260715211612_migration0001', '10.0.9');
+VALUES ('20260717135725_migration0001', '10.0.9');
 
 COMMIT;
 
