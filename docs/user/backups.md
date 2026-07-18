@@ -26,6 +26,40 @@ Citadel prevents policies that combine a remote regular agent or edge agent sour
 
 For remote regular agent and edge agent platforms, prefer an S3-compatible repository unless you explicitly want snapshots stored on that platform's host filesystem.
 
+### S3-Compatible Repository Settings
+
+S3-compatible repositories use restic over an S3-compatible API. The bucket stores restic's encrypted repository layout, not plain backup files.
+
+Common repository objects include:
+
+- `config`: repository metadata
+- `keys/`: encrypted restic key material
+- `data/`: encrypted content packs
+- `index/`: content indexes
+- `snapshots/`: snapshot metadata
+
+When creating an S3-compatible repository, configure:
+
+- Endpoint: the S3 API URL, such as `https://s3.example.com` or `http://192.168.1.50:9000`
+- Bucket: the bucket name, such as `citadel-backups`
+- Prefix: optional path inside the bucket for this repository
+- Region: required by some providers; `us-east-1` is usually fine for local MinIO or RustFS-style stores
+- Bucket Lookup: use `Path` for local S3-compatible stores unless DNS-style bucket hosts are configured
+- Allow Insecure HTTP: enable only for local or private HTTP endpoints
+- Password secret: the restic repository password used to encrypt and unlock backups
+- Access Key Secret: the S3 access key
+- Secret Key Secret: the S3 secret key
+- Session Token Secret: optional, only for temporary S3 credentials
+
+The restic password is separate from the S3 credentials. Losing the password secret means existing snapshots in that repository cannot be restored.
+
+For Docker volume, stack, and deployment backups, the S3 endpoint must be reachable from the selected Docker platform's helper container. For Citadel system backups, the S3 endpoint must be reachable from Citadel Core.
+
+Examples:
+
+- If Citadel Core and the local Docker platform run on Docker Desktop, `http://host.docker.internal:9000` can be useful for a local RustFS or MinIO test service exposed on the host.
+- If a regular agent or edge agent runs on another machine, do not use `host.docker.internal` unless that name is valid on that machine. Use a LAN-reachable IP address or DNS name, such as `http://192.168.1.50:9000` or `https://s3.internal.example.com`.
+
 ### Filesystem Repository Paths
 
 Filesystem repository paths are resolved where the repository is executed:
@@ -80,7 +114,7 @@ Supported sources:
 
 Only Docker named volumes are backed up. Bind mounts such as `./data:/app/data` or `/host/path:/data` are host paths, not Docker volumes, and are not included in Docker volume, stack, or deployment backups.
 
-## Remote Platforms
+## Docker Platform Backups
 
 Backups can run against:
 
@@ -88,13 +122,13 @@ Backups can run against:
 - Regular agent platforms
 - Edge agent platforms
 
-For remote Docker volume, stack, and deployment backups:
+For Docker volume, stack, and deployment backups:
 
 - S3-compatible repositories run from the target platform and upload directly to the bucket.
 - Platform filesystem repositories run on the selected platform and write to the configured host path.
 - Core filesystem repositories are only valid for Citadel system backups and local-platform backups.
 
-This avoids routing remote volume contents through Citadel Core.
+This means Citadel mounts Docker named volumes through the platform's Docker daemon, then runs restic in the backup helper container. For regular agent and edge agent platforms, this avoids routing remote volume contents through Citadel Core. For local Docker Desktop platforms, it also avoids relying on Docker's internal `/var/lib/docker/volumes/...` paths being visible to the host.
 
 ## Running A Backup
 

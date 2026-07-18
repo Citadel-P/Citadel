@@ -48,6 +48,67 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
     }
 
     [Fact]
+    public async Task ExecuteQueuedAsync_ShouldRunLocalS3DockerVolumeBackupThroughPlatformHelper()
+    {
+        var platformId = Guid.CreateVersion7();
+        Services.GetRequiredService<IPlatformContainerCache>().ReplacePlatformContainers(
+            platformId,
+            new PlatformCacheEntry(platformId, Constants.LocalDockerHostUrl, PlatformConnectorType.Local, ImmutableDictionary<string, Guid>.Empty));
+
+        volumeConnector.Volume = new DockerVolumeResult(
+            Id: "remote-data",
+            Name: "remote-data",
+            InUse: true,
+            Scope: "local",
+            Driver: "local",
+            Mountpoint: "/var/lib/docker/volumes/remote-data/_data",
+            CreatedAt: DateTimeOffset.UtcNow.ToString("O"),
+            ClusterVolume: null,
+            UsageData: null,
+            Containers: [],
+            Status: new Dictionary<string, string>(),
+            Labels: new Dictionary<string, string>(),
+            Options: new Dictionary<string, string>());
+
+        containerConnector.EnqueueExec(
+            exitCode: 0,
+            stdout: """
+                {"message_type":"summary","snapshot_id":"local-s3-snapshot","total_files_processed":2,"total_bytes_processed":512,"data_added":128}
+                """);
+
+        var setup = await CreateRemoteVolumeRepositoryPolicyAndRunAsync(platformId, keepLastSuccessful: 0);
+
+        var service = Services.GetRequiredService<IBackupRunExecutionService>();
+        await foreach (var _ in service.ExecuteQueuedAsync(setup.Run.Id, TestContext.Current.CancellationToken))
+        {
+        }
+
+        Assert.Empty(restic.Calls);
+
+        var create = Assert.Single(containerConnector.CreateCommands);
+        Assert.Equal(Constants.LocalDockerHostUrl, create.PlatformAddress);
+        Assert.Contains(create.Mounts ?? [], mount =>
+            mount.Type == "volume"
+            && mount.Source == "remote-data"
+            && mount.Target == "/source"
+            && mount.ReadOnly == true);
+        Assert.Null(create.NetworkMode);
+
+        var exec = Assert.Single(containerConnector.ExecRequests);
+        Assert.Equal("restic", exec.Request.Command[0]);
+        Assert.Contains("backup", exec.Request.Command);
+        Assert.Contains("/source", exec.Request.Command);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var storedRun = await uow.BackupRuns.GetAsync(setup.Run.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(storedRun);
+        Assert.Equal(BackupRunStatus.Succeeded, storedRun.Status);
+        Assert.Equal("local-s3-snapshot", storedRun.ResticSnapshotId);
+    }
+
+    [Fact]
     public async Task ExecuteQueuedAsync_ShouldRunRemoteDockerVolumeBackupThroughPlatformHelper()
     {
         var platformId = Guid.CreateVersion7();

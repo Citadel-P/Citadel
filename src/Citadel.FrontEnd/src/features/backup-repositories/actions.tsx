@@ -128,9 +128,9 @@ const { dropdown, group, info } = createActionsBuilder<BackupRepositoryView>()
             await invalidateBackupRepositoryQueries(queryClient);
             setSelectedResources([]);
             toast.success(`${selected.length} ${selected.length === 1 ? 'repository' : 'repositories'} archived`);
-          } catch (error) {
-            toast.error(archive.validationErrors ?? 'Failed to archive selected repositories');
-            throw error;
+          } catch {
+            // toast.error(archive.validationErrors ?? 'Failed to archive selected repositories');
+            // throw error;
           }
         },
       };

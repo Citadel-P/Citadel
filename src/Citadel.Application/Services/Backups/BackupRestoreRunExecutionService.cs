@@ -681,9 +681,7 @@ internal sealed class BackupRestoreRunExecutionService(
 
         if (repository.Spec is S3CompatibleBackupRepositorySpec)
         {
-            return targetPlatform.ConnectorType == PlatformConnectorType.Local
-                ? new BackupExecutionContext(BackupExecutionLocation.Core, null)
-                : new BackupExecutionContext(BackupExecutionLocation.Platform, targetPlatform.Id);
+            return new BackupExecutionContext(BackupExecutionLocation.Platform, targetPlatform.Id);
         }
 
         return Result.Failure<BackupExecutionContext>(new BadRequestError("Unsupported backup repository type."));
@@ -710,9 +708,7 @@ internal sealed class BackupRestoreRunExecutionService(
 
         if (repository.Spec is S3CompatibleBackupRepositorySpec)
         {
-            return sourcePlatform.ConnectorType == PlatformConnectorType.Local
-                ? new BackupExecutionContext(BackupExecutionLocation.Core, null)
-                : new BackupExecutionContext(BackupExecutionLocation.Platform, sourcePlatform.Id);
+            return new BackupExecutionContext(BackupExecutionLocation.Platform, sourcePlatform.Id);
         }
 
         return Result.Failure<BackupExecutionContext>(new BadRequestError("Unsupported backup repository type."));

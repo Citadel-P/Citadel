@@ -197,7 +197,7 @@ function RepositoryCard({
       await refreshRepository();
       toast.success(successMessage);
     } catch {
-      toast.error(mutation.validationErrors ?? failureMessage);
+      //toast.error(mutation.validationErrors ?? failureMessage);
     } finally {
       onPendingOperationChange(repository.id, null);
     }
@@ -389,7 +389,7 @@ function RepositoryDialog({
       await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
       if (editing) await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: editing.id }] });
     } catch {
-      toast.error(create.validationErrors ?? update.validationErrors ?? 'Failed to save repository.');
+     // toast.error(create.validationErrors ?? update.validationErrors ?? 'Failed to save repository.');
     }
   };
 
@@ -408,7 +408,7 @@ function RepositoryDialog({
       await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: editing.id }] });
       toast.success(successMessage);
     } catch {
-      toast.error(mutation.validationErrors ?? failureMessage);
+      //toast.error(mutation.validationErrors ?? failureMessage);
     } finally {
       setPendingOperation(null);
     }

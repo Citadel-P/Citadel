@@ -567,9 +567,7 @@ internal sealed class BackupRunExecutionService(
 
         if (repository.Spec is S3CompatibleBackupRepositorySpec)
         {
-            return platform.ConnectorType == PlatformConnectorType.Local
-                ? new BackupExecutionContext(BackupExecutionLocation.Core, null)
-                : new BackupExecutionContext(BackupExecutionLocation.Platform, platform.Id);
+            return new BackupExecutionContext(BackupExecutionLocation.Platform, platform.Id);
         }
 
         return Result.Failure<BackupExecutionContext>(new BadRequestError("Unsupported backup repository type."));

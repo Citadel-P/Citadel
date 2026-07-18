@@ -47,6 +47,55 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
     }
 
     [Fact]
+    public async Task ExecuteQueuedAsync_ShouldRestoreLocalS3VolumeUsingPlatformRunner()
+    {
+        var platformId = await SeedLocalPlatformAsync();
+        volumeConnector.AddVolume("source-volume", "/var/lib/docker/volumes/source-volume/_data");
+        platformRestic.Enqueue(exitCode: 0, stdout: "local s3 restored files");
+        var accessKeySecretId = await CreateInternalSecretAsync("RESTORE_LOCAL_S3_ACCESS_KEY", "access-key");
+        var secretKeySecretId = await CreateInternalSecretAsync("RESTORE_LOCAL_S3_SECRET_KEY", "secret-key");
+        var setup = await CreateRepositoryBackupRunAndRestoreRunAsync(
+            "restore-local-s3-success",
+            platformId,
+            sourceVolumeName: "source-volume",
+            targetVolumeName: "target-volume",
+            overwriteExisting: false,
+            repositorySpec: new S3CompatibleBackupRepositorySpec(
+                new Uri("https://minio.example.com"),
+                "citadel",
+                "restore-local-s3",
+                "us-east-1",
+                S3BucketLookup.Path,
+                accessKeySecretId,
+                secretKeySecretId,
+                SessionTokenSecretId: null));
+
+        var service = Services.GetRequiredService<IBackupRestoreRunExecutionService>();
+        var items = new List<BackupRestoreRunStreamItem>();
+        await foreach (var item in service.ExecuteQueuedAsync(setup.RestoreRun.Id, TestContext.Current.CancellationToken))
+        {
+            items.Add(item);
+        }
+
+        Assert.Empty(restic.Calls);
+        Assert.Single(platformRestic.Calls);
+        Assert.Contains(items, item => item.Status == BackupRestoreStatus.Succeeded);
+
+        var command = platformRestic.Calls[0].Command;
+        Assert.Equal(platformId, command.PlatformId);
+        Assert.Equal(Constants.LocalDockerHostUrl, command.PlatformAddress);
+        Assert.Equal(PlatformConnectorType.Local, command.ConnectorType);
+        Assert.Equal("target-volume", command.TargetVolumeName);
+        Assert.Null(command.SourceVolumeName);
+        Assert.Null(command.RepositoryHostPath);
+        Assert.Null(command.NetworkMode);
+        Assert.Contains("restore", command.Arguments);
+        Assert.Contains("snapshot-restore-001:/source", command.Arguments);
+        Assert.Contains("--target", command.Arguments);
+        Assert.Contains("/target", command.Arguments);
+    }
+
+    [Fact]
     public async Task ExecuteQueuedAsync_ShouldRestoreVolumeAndPersistLogs()
     {
         var platformId = await SeedLocalPlatformAsync();

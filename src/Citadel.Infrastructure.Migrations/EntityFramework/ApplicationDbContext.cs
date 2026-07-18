@@ -223,6 +223,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                     let reclaimedBytes = 0;
 
                     for (const platform of platforms) {
+                      if (platform.status === 'Offline') continue
                       const result = await citadel.platforms.prunePlatform(platform.id, { resource: "Image" });
                       const imagesDeleted = result?.imagesDeleted ?? [];
                       const reclaimed = Number(result?.spaceReclaimed ?? 0);
