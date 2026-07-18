@@ -16,10 +16,10 @@ export const Sidebar = () => {
   const { ref, open, setOpen } = useAnimatedDropdown('dropDown');
   return (
     <aside
-      className={`w-[calc(var(--sidebar-width)-40px)] hidden h-full flex-col justify-between bg-background pt-3 transition-all duration-300 lg:flex`}>
-      <div className="px-4">
+      className={`w-[calc(var(--sidebar-width)-40px)] hidden h-full min-h-0 flex-col bg-background pt-3 transition-all duration-300 lg:flex`}>
+      <div className="flex min-h-0 flex-1 flex-col px-4">
         {/* Logo */}
-        <div className="relative h-10">
+        <div className="relative h-10 shrink-0">
           {!sidebarMinimized && (
             <div className="flex items-center">
               <span
@@ -41,15 +41,17 @@ export const Sidebar = () => {
         </div>
 
         {/** Separator */}
-        <div className="pt-3">
+        <div className="shrink-0 pt-3">
           <hr className="border-dashed border-muted" />
         </div>
 
         {/* Menu Items */}
-        <SidebarMenu />
+        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1 pb-3">
+          <SidebarMenu />
+        </div>
       </div>
 
-      <div className="flex justify-between items-center mx-4 my-4 space-y-1 hover:bg-card">
+      <div className="mx-4 my-4 flex shrink-0 items-center justify-between space-y-1 hover:bg-card">
         {/* Version */}
         <a
           target="_blank"
