@@ -31,6 +31,8 @@ import { OidcProviderComponents } from './oidc-providers';
 import { OidcProviderFormComponents } from './oidc-providers/form';
 import { AutomationActionComponents } from './automation-actions';
 import { AutomationActionFormComponents } from './automation-actions/form';
+import { BuildComponents } from './builds';
+import { BuildFormComponents } from './builds/form';
 import { BackupRepositoryComponents } from './backup-repositories';
 import { BackupRepositoryFormComponents } from './backup-repositories/form';
 import { BackupPolicyComponents } from './backup-policies';
@@ -61,6 +63,7 @@ export const ResourceComponents: {
   OidcProvider: OidcProviderComponents,
   Automation: AutomationActionComponents,
   AutomationAction: AutomationActionComponents,
+  Build: BuildComponents,
   BackupRepository: BackupRepositoryComponents,
   BackupPolicy: BackupPolicyComponents,
 };
@@ -92,6 +95,7 @@ export const ResourceFormComponents: {
   OidcProvider: OidcProviderFormComponents,
   Automation: undefined,
   AutomationAction: AutomationActionFormComponents,
+  Build: BuildFormComponents,
   BackupRepository: BackupRepositoryFormComponents,
   BackupPolicy: BackupPolicyFormComponents,
 };

@@ -1,4 +1,6 @@
+using Application.Configs;
 using Application.Features.Identity.Auth.Commands;
+using Application.Features.Identity.Mfa.Services;
 using Application.Services;
 using Application.Services.Identity;
 using Domain.Contracts.Interfaces;
@@ -6,6 +8,7 @@ using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using LightResults;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using Moq;
 using System.Security.Claims;
 
@@ -37,22 +40,31 @@ public class LoginCommandCacheTests
 
         uow.SetupGet(x => x.Users).Returns(users.Object);
 
-        var jwtService = new Mock<IJwtService>();
-        jwtService.Setup(x => x.CreateAccessToken(It.IsAny<IEnumerable<System.Security.Claims.Claim>>()))
-            .Returns("token");
-        jwtService.Setup(x => x.CreateRefreshToken()).Returns((Guid.NewGuid(), "refresh", DateTime.UtcNow.AddDays(30)));
+        var userMfa = new Mock<IUserMfaRepository>();
+        userMfa.Setup(x => x.GetSettingsAsync(testUser.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserMfaSettings?)null);
+        uow.SetupGet(x => x.UserMfa).Returns(userMfa.Object);
 
-        var refreshTokens = new Mock<IRefreshTokenRepository>();
-        uow.SetupGet(x => x.RefreshTokens).Returns(refreshTokens.Object);
-        refreshTokens.Setup(x => x.AddAsync(It.IsAny<RefreshToken>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
-        refreshTokens.Setup(x => x.CountAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
+        var mfaChallenges = new Mock<IMfaChallengeRepository>();
+        uow.SetupGet(x => x.MfaChallenges).Returns(mfaChallenges.Object);
 
-        var requestMetadata = new Mock<IRequestSessionMetadataAccessor>();
-        requestMetadata.Setup(x => x.GetCurrent()).Returns(new RequestSessionMetadata("test-agent", "127.0.0.1"));
-        var refreshTokenCookieService = new Mock<IRefreshTokenCookieService>();
+        var mfaPolicy = new Mock<IMfaPolicyService>();
+        mfaPolicy.Setup(x => x.RequiresMfa(testUser)).Returns(false);
 
-        var handler = new LoginCommandHandler(uow.Object, jwtService.Object, roleCache, requestMetadata.Object, refreshTokenCookieService.Object);
+        var sessionIssuer = new Mock<IAuthenticationSessionIssuer>();
+        sessionIssuer.Setup(x => x.IssueAsync(testUser, It.IsAny<CancellationToken>()))
+            .Callback(() => roleCache.SetRoles(testUser.Id, testUser.Roles))
+            .ReturnsAsync("token");
+
+        var handler = new LoginCommandHandler(
+            uow.Object,
+            Mock.Of<ITotpService>(),
+            mfaPolicy.Object,
+            Mock.Of<ISecretValueProtector>(),
+            sessionIssuer.Object,
+            Mock.Of<IMfaChallengeCookieService>(),
+            Mock.Of<IMfaSetupCookieService>(),
+            Options.Create(new MfaOptions()));
 
         var result = await handler.Handle(new LoginCommand(testUser.Email, "password"), CancellationToken.None);
 
@@ -61,7 +73,7 @@ public class LoginCommandCacheTests
         var roles = roleCache.GetRoles(testUser.Id);
         Assert.NotNull(roles);
         Assert.Contains("admin", roles, StringComparer.OrdinalIgnoreCase);
-        refreshTokenCookieService.Verify(x => x.Set("refresh", It.IsAny<DateTime>()), Times.Once);
+        sessionIssuer.Verify(x => x.IssueAsync(testUser, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -78,11 +90,15 @@ public class LoginCommandCacheTests
 
         uow.SetupGet(x => x.Users).Returns(users.Object);
 
-        var jwtService = new Mock<IJwtService>();
-        var requestMetadata = new Mock<IRequestSessionMetadataAccessor>();
-        var refreshTokenCookieService = new Mock<IRefreshTokenCookieService>();
-
-        var handler = new LoginCommandHandler(uow.Object, jwtService.Object, roleCache, requestMetadata.Object, refreshTokenCookieService.Object);
+        var handler = new LoginCommandHandler(
+            uow.Object,
+            Mock.Of<ITotpService>(),
+            Mock.Of<IMfaPolicyService>(),
+            Mock.Of<ISecretValueProtector>(),
+            Mock.Of<IAuthenticationSessionIssuer>(),
+            Mock.Of<IMfaChallengeCookieService>(),
+            Mock.Of<IMfaSetupCookieService>(),
+            Options.Create(new MfaOptions()));
 
         var result = await handler.Handle(new LoginCommand("missing", "password"), CancellationToken.None);
 

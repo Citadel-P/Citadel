@@ -8,6 +8,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
 using Domain.Entities.Backups;
+using Domain.Entities.Builds;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Stacks;
@@ -17,6 +18,7 @@ using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Automation;
 using WebApi.Routes.Endpoints.Resources.Backups;
+using WebApi.Routes.Endpoints.Resources.Builds;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
@@ -153,6 +155,32 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
             hubContext.Clients
                 .Group(WellKnownSignalRGroups.BackupRestoreRunsGroup(backupPolicyId))
                 .SendAsync("BackupRestoreRunInfoUpdated", map, action));
+    }
+    #endregion
+
+    #region Builds
+    public Task SendBuildProjectInfo(BuildProject project, string action)
+    {
+        var map = BuildProjectView.Map(project);
+        return Task.WhenAll(
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BuildProjectGroup(project.Id))
+                .SendAsync("BuildProjectInfoUpdated", map, action),
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BuildProjectsGroup)
+                .SendAsync("BuildProjectInfoUpdated", map, action));
+    }
+
+    public Task SendBuildRunInfo(BuildRun run, string action)
+    {
+        var map = BuildRunView.Map(run);
+        return Task.WhenAll(
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BuildRunGroup(run.Id))
+                .SendAsync("BuildRunInfoUpdated", map, action),
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BuildRunsGroup(run.BuildProjectId))
+                .SendAsync("BuildRunInfoUpdated", map, action));
     }
     #endregion
 

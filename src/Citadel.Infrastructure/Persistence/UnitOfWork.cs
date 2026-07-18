@@ -65,6 +65,9 @@ internal class UnitOfWork : IUnitOfWork
         BackupRestoreRunLogs = new Lazy<IBackupRestoreRunLogRepository>(() => new BackupRestoreRunLogRepository(connection, GetTransaction));
         BackupRepositoryLeases = new Lazy<IBackupRepositoryLeaseRepository>(() => new BackupRepositoryLeaseRepository(connection, GetTransaction));
         BackupSourceLeases = new Lazy<IBackupSourceLeaseRepository>(() => new BackupSourceLeaseRepository(connection, GetTransaction));
+        BuildProjects = new Lazy<IBuildProjectRepository>(() => new BuildProjectRepository(connection, GetTransaction));
+        BuildRuns = new Lazy<IBuildRunRepository>(() => new BuildRunRepository(connection, GetTransaction));
+        BuildRunLogs = new Lazy<IBuildRunLogRepository>(() => new BuildRunLogRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -103,6 +106,9 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IBackupRestoreRunLogRepository> BackupRestoreRunLogs { get; }
     private Lazy<IBackupRepositoryLeaseRepository> BackupRepositoryLeases { get; }
     private Lazy<IBackupSourceLeaseRepository> BackupSourceLeases { get; }
+    private Lazy<IBuildProjectRepository> BuildProjects { get; }
+    private Lazy<IBuildRunRepository> BuildRuns { get; }
+    private Lazy<IBuildRunLogRepository> BuildRunLogs { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IUserMfaRepository> UserMfa { get; }
     private Lazy<IMfaChallengeRepository> MfaChallenges { get; }
@@ -160,6 +166,9 @@ internal class UnitOfWork : IUnitOfWork
     IBackupRestoreRunLogRepository IUnitOfWork.BackupRestoreRunLogs => BackupRestoreRunLogs.Value;
     IBackupRepositoryLeaseRepository IUnitOfWork.BackupRepositoryLeases => BackupRepositoryLeases.Value;
     IBackupSourceLeaseRepository IUnitOfWork.BackupSourceLeases => BackupSourceLeases.Value;
+    IBuildProjectRepository IUnitOfWork.BuildProjects => BuildProjects.Value;
+    IBuildRunRepository IUnitOfWork.BuildRuns => BuildRuns.Value;
+    IBuildRunLogRepository IUnitOfWork.BuildRunLogs => BuildRunLogs.Value;
 
     // Lazily creates a transaction
     private IDbTransaction GetTransaction()

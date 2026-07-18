@@ -437,6 +437,8 @@ public partial class AutomationJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<BackupCoverageStatus>),
         typeof(JsonStringEnumConverter<BackupCoverageResourceType>),
         typeof(JsonStringEnumConverter<BackupRestoreStatus>),
+        typeof(JsonStringEnumConverter<BuildRunTrigger>),
+        typeof(JsonStringEnumConverter<BuildRunStatus>),
         typeof(JsonStringEnumConverter<ContainerStateStatus>),
         typeof(JsonStringEnumConverter<ResourceControlState>),
         typeof(JsonStringEnumConverter<WebhookProvider>),
@@ -463,6 +465,27 @@ public partial class AutomationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(IReadOnlyList<BackupAffectedContainer>))]
 [JsonSerializable(typeof(BackupWebhookConfig))]
 public partial class BackupJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<BuildRunTrigger>),
+        typeof(JsonStringEnumConverter<BuildRunStatus>),
+        typeof(JsonStringEnumConverter<PlatformConnectorType>)
+    })]
+[JsonSerializable(typeof(Domain.Entities.Builds.BuildArgSpec))]
+[JsonSerializable(typeof(IReadOnlyList<Domain.Entities.Builds.BuildArgSpec>))]
+[JsonSerializable(typeof(Domain.Entities.Builds.BuildSecretSpec))]
+[JsonSerializable(typeof(IReadOnlyList<Domain.Entities.Builds.BuildSecretSpec>))]
+[JsonSerializable(typeof(Domain.Entities.Builds.BuildPlatformSnapshot))]
+[JsonSerializable(typeof(Domain.Entities.Builds.BuildRegistrySnapshot))]
+[JsonSerializable(typeof(IReadOnlyList<string>))]
+[JsonSerializable(typeof(string[]))]
+public partial class BuildJsonContext : JsonSerializerContext
 {
 }
 

@@ -9,6 +9,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
 using Domain.Entities.Backups;
+using Domain.Entities.Builds;
 using Domain.Entities.ResourceBindings;
 using Domain.Entities.Tags;
 using Domain.Entities.Deployments;
@@ -64,6 +65,9 @@ public interface IUnitOfWork : IAsyncDisposable
     IBackupRestoreRunLogRepository BackupRestoreRunLogs { get; }
     IBackupRepositoryLeaseRepository BackupRepositoryLeases { get; }
     IBackupSourceLeaseRepository BackupSourceLeases { get; }
+    IBuildProjectRepository BuildProjects { get; }
+    IBuildRunRepository BuildRuns { get; }
+    IBuildRunLogRepository BuildRunLogs { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IUserMfaRepository UserMfa { get; }
     IMfaChallengeRepository MfaChallenges { get; }
@@ -123,6 +127,47 @@ public interface IAutomationProcessRunner
 }
 
 public sealed record AutomationProcessOutput(string? StdOut, string? StdErr, int? ExitCode = null);
+
+public interface IBuildProcessRunner
+{
+    IAsyncEnumerable<BuildProcessEvent> RunAsync(
+        BuildProcessCommand command,
+        CancellationToken cancellationToken);
+}
+
+public sealed record BuildProcessCommand(
+    string WorkingDirectory,
+    string ContextPath,
+    string DockerfilePath,
+    string? Target,
+    IReadOnlyList<string> ImageReferences,
+    IReadOnlyList<BuildProcessBuildArg> BuildArgs,
+    IReadOnlyList<BuildProcessSecret> Secrets,
+    BuildProcessRegistryCredential? RegistryCredential,
+    TimeSpan Timeout,
+    int MaxLineBytes = 16_384);
+
+public sealed record BuildProcessBuildArg(string Name, string Value);
+
+public sealed record BuildProcessSecret(string Id, string Value);
+
+public sealed record BuildProcessRegistryCredential(
+    string RegistryHost,
+    string UserName,
+    string Password);
+
+public enum BuildProcessStream
+{
+    StdOut,
+    StdErr,
+    Exit
+}
+
+public sealed record BuildProcessEvent(
+    BuildProcessStream Stream,
+    string? Message = null,
+    int? ExitCode = null,
+    string? Digest = null);
 
 public interface IBackupRepositoryRepository
 {
@@ -247,6 +292,41 @@ public interface IBackupRestoreRunLogRepository
     Task<int> AddRangeAsync(IReadOnlyCollection<BackupRestoreRunLogEntry> entries, CancellationToken cancellationToken);
     Task<IReadOnlyList<BackupRestoreRunLogEntry>> GetByRunAsync(Guid restoreRunId, CancellationToken cancellationToken);
     Task<BackupRestoreRunLogs> GetByRunWithRunStateAsync(Guid restoreRunId, CancellationToken cancellationToken);
+}
+
+public interface IBuildProjectRepository
+{
+    Task<int> AddAsync(BuildProject project, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
+    Task<int> UpdateAsync(BuildProject project, CancellationToken cancellationToken);
+    Task<int> ArchiveAsync(Guid id, DateTimeOffset archivedAt, CancellationToken cancellationToken);
+    Task<BuildProject?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false);
+    Task<IEnumerable<BuildProject>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, bool includeArchived = false);
+    Task<IEnumerable<BuildProject>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
+    Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
+    Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(Guid userId, Guid id, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+    Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+}
+
+public interface IBuildRunRepository
+{
+    Task<int> AddAsync(BuildRun run, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(BuildRun run, CancellationToken cancellationToken);
+    Task<BuildRun?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<BuildRun>> GetByProjectAsync(Guid projectId, int limit, CancellationToken cancellationToken);
+    Task<IEnumerable<BuildRun>> GetPagedAsync(int limit, CancellationToken cancellationToken);
+    Task<IEnumerable<BuildRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken);
+    Task<BuildRun?> TryClaimAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
+    Task<bool> HasActiveRunAsync(Guid projectId, CancellationToken cancellationToken);
+    Task<BuildRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
+}
+
+public interface IBuildRunLogRepository
+{
+    Task<int> AddAsync(BuildRunLogEntry entry, CancellationToken cancellationToken);
+    Task<int> AddRangeAsync(IReadOnlyCollection<BuildRunLogEntry> entries, CancellationToken cancellationToken);
+    Task<IReadOnlyList<BuildRunLogEntry>> GetByRunAsync(Guid buildRunId, CancellationToken cancellationToken);
 }
 
 public interface IBackupRepositoryLeaseRepository

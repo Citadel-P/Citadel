@@ -179,4 +179,23 @@ public static class Tags
         var result = await mediator.Send(new ReplaceBackupPolicyTags(id, input.TagIds), cancellationToken);
         return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
     }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> GetBuildTags(
+        IMediator mediator,
+        [FromRoute][Description("Build project ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetBuildTags(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> ReplaceBuildTags(
+        IMediator mediator,
+        [FromRoute][Description("Build project ID")] Guid id,
+        [FromBody] ReplaceResourceTagsInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ReplaceBuildTags(id, input.TagIds), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
 }

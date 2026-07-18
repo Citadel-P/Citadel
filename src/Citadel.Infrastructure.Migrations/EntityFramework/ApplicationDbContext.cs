@@ -55,6 +55,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .AutomationActionConfiguration()
             .ActionRunConfiguration()
             .BackupConfiguration()
+            .BuildConfiguration()
             .ActivityEventConfiguration()
             .AlertRuleConfiguration()
             .AlertEventConfiguration()
@@ -1996,6 +1997,104 @@ internal static class Configuration
         sourceLease.Property<DateTime>("ExpiresAt").HasColumnType(Timestamp).IsRequired();
         sourceLease.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
         sourceLease.HasIndex("ExpiresAt").HasDatabaseName($"IX_{sourceLeaseTable}_ExpiresAt");
+
+        return builder;
+    }
+
+    public static ModelBuilder BuildConfiguration(this ModelBuilder builder)
+    {
+        var projectTable = "BuildProjects";
+        var project = builder.Entity("BuildProject");
+        project.ToTable(projectTable);
+        project.Property<Guid>("Id").IsRequired();
+        project.HasKey("Id");
+        project.Property<string>("Name").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        project.Property<string>("NormalizedName").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        project.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        project.Property<bool>("Enabled").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
+        project.Property<Guid>("GitRepositoryId").IsRequired();
+        project.Property<string>("Branch").HasColumnType(Text).HasMaxLength(256).IsRequired();
+        project.Property<string>("ContextPath").HasColumnType(Text).HasMaxLength(512).IsRequired().HasDefaultValue(".");
+        project.Property<string>("DockerfilePath").HasColumnType(Text).HasMaxLength(512).IsRequired().HasDefaultValue("Dockerfile");
+        project.Property<string>("Target").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        project.Property<string>("BuildArgs").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
+        project.Property<string>("BuildSecrets").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
+        project.Property<Guid>("PlatformId").IsRequired();
+        project.Property<Guid>("RegistryId").IsRequired();
+        project.Property<string>("ImageRepository").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        project.Property<string>("TagTemplates").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[\"{branch}-{shortSha}\"]'::jsonb");
+        project.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(1800);
+        project.Property<int>("RetentionRunCount").HasColumnType(Integer).IsRequired().HasDefaultValue(20);
+        project.Property<Guid?>("CurrentRunId").IsRequired(false);
+        project.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        project.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
+        project.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
+        project.AddAuditedMemebers();
+
+        project.HasOne("GitRepository").WithMany().HasForeignKey("GitRepositoryId").OnDelete(DeleteBehavior.Restrict);
+        project.HasOne("Platform").WithMany().HasForeignKey("PlatformId").OnDelete(DeleteBehavior.Restrict);
+        project.HasOne("Registry").WithMany().HasForeignKey("RegistryId").OnDelete(DeleteBehavior.Restrict);
+
+        project.HasIndex("NormalizedName").IsUnique().HasDatabaseName($"IX_{projectTable}_NormalizedName");
+        project.HasIndex("GitRepositoryId").HasDatabaseName($"IX_{projectTable}_GitRepositoryId");
+        project.HasIndex("PlatformId").HasDatabaseName($"IX_{projectTable}_PlatformId");
+        project.HasIndex("RegistryId").HasDatabaseName($"IX_{projectTable}_RegistryId");
+        project.HasIndex("ArchivedAt").HasDatabaseName($"IX_{projectTable}_ArchivedAt");
+
+        var runTable = "BuildRuns";
+        var run = builder.Entity("BuildRun");
+        run.ToTable(runTable);
+        run.Property<Guid>("Id").IsRequired();
+        run.HasKey("Id");
+        run.Property<Guid>("BuildProjectId").IsRequired();
+        run.Property<string>("ProjectNameSnapshot").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        run.Property<Guid>("GitRepositoryId").IsRequired();
+        run.Property<string>("GitRepositoryNameSnapshot").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        run.Property<string>("Branch").HasColumnType(Text).HasMaxLength(256).IsRequired();
+        run.Property<string>("ResolvedCommitSha").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        run.Property<string>("ContextPath").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        run.Property<string>("DockerfilePath").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        run.Property<string>("Target").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        run.Property<string>("BuildArgsSnapshot").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
+        run.Property<string>("BuildSecretIdsSnapshot").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
+        run.Property<string>("PlatformSnapshot").HasColumnType("jsonb").IsRequired();
+        run.Property<string>("RegistrySnapshot").HasColumnType("jsonb").IsRequired();
+        run.Property<string>("ImageRepository").HasColumnType(Text).HasMaxLength(512).IsRequired();
+        run.Property<string>("TagTemplatesSnapshot").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
+        run.Property<string>("ImageReferences").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
+        run.Property<string>("Trigger").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        run.Property<Guid?>("TriggerSourceId").IsRequired(false);
+        run.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        run.Property<string>("ImageDigest").HasColumnType(Text).HasMaxLength(256).IsRequired(false);
+        run.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired();
+        run.Property<DateTime>("QueuedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        run.Property<DateTime?>("StartedAt").HasColumnType(Timestamp).IsRequired(false);
+        run.Property<DateTime?>("CompletedAt").HasColumnType(Timestamp).IsRequired(false);
+        run.Property<int?>("ExitCode").HasColumnType(Integer).IsRequired(false);
+        run.Property<string>("ErrorCode").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
+        run.Property<string>("ErrorMessage").HasColumnType(Text).HasMaxLength(1200).IsRequired(false);
+        run.Property<Guid>("TriggeredByActorId").IsRequired();
+
+        run.HasOne("BuildProject").WithMany().HasForeignKey("BuildProjectId").OnDelete(DeleteBehavior.Restrict);
+        run.HasOne("GitRepository").WithMany().HasForeignKey("GitRepositoryId").OnDelete(DeleteBehavior.Restrict);
+        run.HasOne("Actor").WithMany().HasForeignKey("TriggeredByActorId").OnDelete(DeleteBehavior.Restrict);
+        run.HasIndex("BuildProjectId", "QueuedAt").HasDatabaseName($"IX_{runTable}_Project_QueuedAt");
+        run.HasIndex("BuildProjectId").IsUnique().HasFilter("status IN ('Queued', 'Preparing', 'Running')").HasDatabaseName($"IX_{runTable}_Active_Project");
+        run.HasIndex("Status", "QueuedAt").HasDatabaseName($"IX_{runTable}_Status_QueuedAt");
+        run.HasIndex("QueuedAt").HasDatabaseName($"IX_{runTable}_QueuedAt");
+        run.HasIndex("TriggeredByActorId").HasDatabaseName($"IX_{runTable}_TriggeredByActorId");
+
+        var runLogTable = "BuildRunLogs";
+        var runLog = builder.Entity("BuildRunLog");
+        runLog.ToTable(runLogTable);
+        runLog.Property<Guid>("Id").IsRequired();
+        runLog.HasKey("Id");
+        runLog.Property<Guid>("BuildRunId").IsRequired();
+        runLog.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+        runLog.Property<string>("Stream").HasColumnType(Text).HasMaxLength(32).IsRequired();
+        runLog.Property<string>("Message").HasColumnType(Text).IsRequired();
+        runLog.HasOne("BuildRun").WithMany().HasForeignKey("BuildRunId").OnDelete(DeleteBehavior.Cascade);
+        runLog.HasIndex("BuildRunId", "CreatedAt").HasDatabaseName($"IX_{runLogTable}_Run_CreatedAt");
 
         return builder;
     }

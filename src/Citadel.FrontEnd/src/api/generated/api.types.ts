@@ -184,6 +184,7 @@ export enum ResourceType {
   BackupRepository = "BackupRepository",
   BackupPolicy = "BackupPolicy",
   Volume = "Volume",
+  Build = "Build",
 }
 
 export enum ResourceControlState {
@@ -379,6 +380,24 @@ export enum ContainerRestartPolicy {
   Always = "Always",
   OnFailure = "OnFailure",
   UnlessStopped = "UnlessStopped",
+}
+
+export enum BuildRunTrigger {
+  Manual = "Manual",
+  Automation = "Automation",
+  Schedule = "Schedule",
+  Webhook = "Webhook",
+}
+
+export enum BuildRunStatus {
+  Queued = "Queued",
+  Preparing = "Preparing",
+  Running = "Running",
+  Succeeded = "Succeeded",
+  Failed = "Failed",
+  TimedOut = "TimedOut",
+  Cancelled = "Cancelled",
+  Interrupted = "Interrupted",
 }
 
 export enum BackupSourceType {
@@ -586,6 +605,7 @@ export enum ActivityResourceType {
   AutomationAction = "AutomationAction",
   User = "User",
   License = "License",
+  Build = "Build",
   Volume = "Volume",
 }
 
@@ -2988,6 +3008,189 @@ export interface BindOptions {
   readOnlyForceRecursive: null | boolean;
 }
 
+export interface BuildArgSpec {
+  name: string;
+  value?: null | string;
+  /** @format uuid */
+  resourceBindingId?: null | string;
+}
+
+export interface BuildLogsView {
+  /** @format uuid */
+  runId: string;
+  logs: BuildRunLogEntry[];
+}
+
+export interface BuildPlatformSnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  address: string;
+  connectorType: PlatformConnectorType;
+}
+
+export interface BuildProjectInput {
+  name: string;
+  description: null | string;
+  enabled: boolean;
+  /** @format uuid */
+  gitRepositoryId: string;
+  branch: null | string;
+  contextPath: null | string;
+  dockerfilePath: null | string;
+  target: null | string;
+  buildArgs: null | BuildArgSpec[];
+  buildSecrets: null | BuildSecretSpec[];
+  /** @format uuid */
+  platformId: string;
+  /** @format uuid */
+  registryId: string;
+  imageRepository: string;
+  tagTemplates: null | string[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  retentionRunCount: null | number | string;
+  tagIds: null | string[];
+}
+
+export interface BuildProjectView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  normalizedName: string;
+  description: null | string;
+  enabled: boolean;
+  /** @format uuid */
+  gitRepositoryId: string;
+  branch: string;
+  contextPath: string;
+  dockerfilePath: string;
+  target: null | string;
+  buildArgs: BuildArgSpec[];
+  buildSecrets: BuildSecretSpec[];
+  /** @format uuid */
+  platformId: string;
+  /** @format uuid */
+  registryId: string;
+  imageRepository: string;
+  tagTemplates: string[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  retentionRunCount: number | string;
+  /** @format uuid */
+  currentRunId: null | string;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+  /** @format date-time */
+  archivedAt: any;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  rowVersion: number | string;
+  tags: TagSummaryView[];
+  capabilities?: null | ResourceCapabilities;
+}
+
+export interface BuildProjectsView {
+  projects: BuildProjectView[];
+  capabilities: ResourceCapabilities;
+}
+
+export interface BuildRegistrySnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  registryHost: string;
+}
+
+export interface BuildRunLogEntry {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  buildRunId: string;
+  /** @format date-time */
+  createdAt: any;
+  stream: string;
+  message: string;
+}
+
+export interface BuildRunView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  buildProjectId: string;
+  projectNameSnapshot: string;
+  /** @format uuid */
+  gitRepositoryId: string;
+  gitRepositoryNameSnapshot: string;
+  branch: string;
+  resolvedCommitSha: null | string;
+  contextPath: string;
+  dockerfilePath: string;
+  target: null | string;
+  buildArgsSnapshot: BuildArgSpec[];
+  buildSecretIdsSnapshot: string[];
+  platformSnapshot: BuildPlatformSnapshot;
+  registrySnapshot: BuildRegistrySnapshot;
+  imageRepository: string;
+  tagTemplatesSnapshot: string[];
+  imageReferences: string[];
+  trigger: BuildRunTrigger;
+  /** @format uuid */
+  triggerSourceId: null | string;
+  status: BuildRunStatus;
+  imageDigest: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: number | string;
+  /** @format date-time */
+  queuedAt: any;
+  /** @format date-time */
+  startedAt: any;
+  /** @format date-time */
+  completedAt: any;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  errorCode: null | string;
+  errorMessage: null | string;
+  /** @format uuid */
+  triggeredByActorId: string;
+}
+
+export interface BuildRunsView {
+  runs: BuildRunView[];
+}
+
+export interface BuildSecretSpec {
+  id: string;
+  /** @format uuid */
+  secretId: string;
+}
+
 export interface ChangeCurrentPasswordInput {
   currentPassword: string;
   newPassword: string;
@@ -3969,6 +4172,15 @@ export interface GitHubCrPackageVersionMetadata {
 export interface GitRepositoriesView {
   gitRepositories: GitRepositoryView[];
   capabilities: ResourceCapabilities;
+}
+
+export interface GitRepositoryBranchView {
+  branch: string;
+  commitSha: string;
+}
+
+export interface GitRepositoryBranchesView {
+  branches: GitRepositoryBranchView[];
 }
 
 export interface GitRepositoryComposeDiscovery {
@@ -5163,6 +5375,12 @@ export interface QueueBackupRunInput {
   triggerSourceId?: null | string;
 }
 
+export interface QueueBuildRunInput {
+  trigger?: BuildRunTrigger;
+  /** @format uuid */
+  triggerSourceId?: null | string;
+}
+
 export interface RecreateStackOnNewCommitState {
   currentCommitSha: string;
   remoteCommitSha: null | string;
@@ -6044,6 +6262,35 @@ export interface UpdateBackupPolicyInput {
 export interface UpdateBackupRepositoryInput {
   description?: null | string;
   spec?: null | BackupRepositorySpec;
+}
+
+export interface UpdateBuildProjectInput {
+  description?: null | string;
+  enabled?: null | boolean;
+  /** @format uuid */
+  gitRepositoryId?: null | string;
+  branch?: null | string;
+  contextPath?: null | string;
+  dockerfilePath?: null | string;
+  target?: null | string;
+  buildArgs?: null | BuildArgSpec[];
+  buildSecrets?: null | BuildSecretSpec[];
+  /** @format uuid */
+  platformId?: null | string;
+  /** @format uuid */
+  registryId?: null | string;
+  imageRepository?: null | string;
+  tagTemplates?: null | string[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  retentionRunCount?: null | number | string;
 }
 
 export interface UpdateCurrentProfileInput {
@@ -9941,6 +10188,34 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/gitRepositories/${id}/refs`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name DiscoverGitRepositoryBranches
+     * @summary Discover remote Git repository branches
+     * @request GET:/api/v1/gitRepositories/{id}/branches
+     * @secure
+     * @response `200` `GitRepositoryBranchesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    discoverGitRepositoryBranches: (id: string, params: RequestParams = {}) =>
+      this.request<
+        GitRepositoryBranchesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/${id}/branches`,
         method: "GET",
         secure: true,
         format: "json",
@@ -14099,6 +14374,415 @@ export class Api<
     cancelBackupRestoreRun: (id: string, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/backupRestoreRuns/${id}/cancel`,
+        method: "POST",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name ListBuildProjects
+     * @summary List build projects
+     * @request GET:/api/v1/buildProjects
+     * @secure
+     * @response `200` `BuildProjectsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listBuildProjects: (
+      query?: {
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<BuildProjectsView, ProblemDetails>({
+        path: `/api/v1/buildProjects`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name CreateBuildProject
+     * @summary Create build project
+     * @request POST:/api/v1/buildProjects
+     * @secure
+     * @response `200` `BuildProjectView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createBuildProject: (data: BuildProjectInput, params: RequestParams = {}) =>
+      this.request<
+        BuildProjectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildProjects`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name GetBuildProject
+     * @summary Get build project
+     * @request GET:/api/v1/buildProjects/{id}
+     * @secure
+     * @response `200` `BuildProjectView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBuildProject: (id: string, params: RequestParams = {}) =>
+      this.request<BuildProjectView, ProblemDetails>({
+        path: `/api/v1/buildProjects/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name UpdateBuildProject
+     * @summary Update build project
+     * @request PATCH:/api/v1/buildProjects/{id}
+     * @secure
+     * @response `200` `BuildProjectView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateBuildProject: (
+      id: string,
+      data: UpdateBuildProjectInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BuildProjectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildProjects/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name ArchiveBuildProject
+     * @summary Archive build project
+     * @request DELETE:/api/v1/buildProjects/{id}
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    archiveBuildProject: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/buildProjects/${id}`,
+        method: "DELETE",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name GetBuildTags
+     * @summary Get build project tags
+     * @request GET:/api/v1/buildProjects/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBuildTags: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildProjects/${id}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name ReplaceBuildTags
+     * @summary Replace build project tags
+     * @request PUT:/api/v1/buildProjects/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceBuildTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceTagsView, ProblemDetails>({
+        path: `/api/v1/buildProjects/${id}/tags`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name RenameBuild
+     * @summary Rename build project
+     * @request POST:/api/v1/buildProjects/rename
+     * @secure
+     * @response `200` `BuildProjectView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameBuild: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<
+        BuildProjectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildProjects/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name UpdateBuildMetadata
+     * @summary Update build project metadata
+     * @request PATCH:/api/v1/buildProjects/{id}/_metadata
+     * @secure
+     * @response `200` `BuildProjectView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateBuildMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BuildProjectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildProjects/${id}/_metadata`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildProjects
+     * @name QueueBuildRun
+     * @summary Queue build run
+     * @request POST:/api/v1/buildProjects/{id}/runs
+     * @secure
+     * @response `200` `BuildRunView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    queueBuildRun: (
+      id: string,
+      data: QueueBuildRunInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<BuildRunView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/buildProjects/${id}/runs`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
+
+    /**
+     * No description
+     *
+     * @tags BuildRuns
+     * @name ListBuildRuns
+     * @summary List build runs
+     * @request GET:/api/v1/buildRuns
+     * @secure
+     * @response `200` `BuildRunsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listBuildRuns: (
+      query?: {
+        /** @format uuid */
+        projectId?: string;
+        /**
+         * @format int32
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        limit?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<BuildRunsView, ProblemDetails>({
+        path: `/api/v1/buildRuns`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildRuns
+     * @name GetBuildRun
+     * @summary Get build run
+     * @request GET:/api/v1/buildRuns/{id}
+     * @secure
+     * @response `200` `BuildRunView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBuildRun: (id: string, params: RequestParams = {}) =>
+      this.request<BuildRunView, ProblemDetails>({
+        path: `/api/v1/buildRuns/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildRuns
+     * @name GetBuildRunLogs
+     * @summary Get build run logs
+     * @request GET:/api/v1/buildRuns/{id}/logs
+     * @secure
+     * @response `200` `BuildLogsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBuildRunLogs: (id: string, params: RequestParams = {}) =>
+      this.request<BuildLogsView, ProblemDetails>({
+        path: `/api/v1/buildRuns/${id}/logs`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildRuns
+     * @name CancelBuildRun
+     * @summary Cancel build run
+     * @request POST:/api/v1/buildRuns/{id}/cancel
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    cancelBuildRun: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/buildRuns/${id}/cancel`,
         method: "POST",
         secure: true,
         ...params,

@@ -584,6 +584,7 @@ public enum ActivityResourceType
     AutomationAction,
     User,
     License,
+    Build,
     Volume
 }
 
@@ -934,7 +935,8 @@ public enum TaggableResourceType
     GitRepository,
     Registry,
     AutomationAction,
-    BackupPolicy
+    BackupPolicy,
+    Build
 }
 
 public enum SecretDeliveryMode
@@ -1033,6 +1035,26 @@ public enum BackupRunStatus
     TimedOut,
     Cancelled,
     Rejected,
+    Interrupted
+}
+
+public enum BuildRunTrigger
+{
+    Manual,
+    Automation,
+    Schedule,
+    Webhook
+}
+
+public enum BuildRunStatus
+{
+    Queued,
+    Preparing,
+    Running,
+    Succeeded,
+    Failed,
+    TimedOut,
+    Cancelled,
     Interrupted
 }
 

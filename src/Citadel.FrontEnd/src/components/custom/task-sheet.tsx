@@ -644,19 +644,22 @@ export function ActivityAlertZone({
     | ActivityEventInfoGitRepoCloned
     | ActivityEventInfoDeploymentApplied
     | ActivityEventInfoStackApplied
-    | ActivityEventInfoStackRollback;
-  activity: ActivityView;
+    | ActivityEventInfoStackRollback
+    | null
+    | undefined;
+  activity: ActivityView | null | undefined;
   title?: string;
   date?: any;
 }) {
-  if (!(activity.status === ActivityStatus.Failure || activity.status === ActivityStatus.Warning)) return;
+  if (!activity || !info) return null;
+  if (!(activity.status === ActivityStatus.Failure || activity.status === ActivityStatus.Warning)) return null;
   return (
     <AlertMessage
       title={title}
       date={date}
-      type={activity.status === ActivityStatus.Failure ? 'error' : 'warning'}
-      children={info.result?.message}
-    />
+      type={activity.status === ActivityStatus.Failure ? 'error' : 'warning'}>
+      {info.result?.message}
+    </AlertMessage>
   );
 }
 
@@ -1034,7 +1037,9 @@ export const TaskSheet = memo(function TaskSheet({ type }: { type: ResourceType 
         {Renderer ? (
           <Renderer payload={state.task.payload} type={type} />
         ) : (
-          <div className="p-8 text-center text-muted-foreground">Task "{state.task.kind}" is not registered.</div>
+          <div className="p-8 text-center text-muted-foreground">
+            Task &quot;{state.task.kind}&quot; is not registered.
+          </div>
         )}
       </SheetContent>
     </Sheet>

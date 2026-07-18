@@ -2,10 +2,8 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
-using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Deployments;
-using Domain.Entities.Platforms;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;

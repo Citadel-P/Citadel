@@ -3,6 +3,7 @@ using Application.Features.Identity.Mfa.Services;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.Backups;
+using Application.Services.Builds;
 using Application.Services.Identity;
 using Application.Services.Licensing;
 using Application.Services.SignalR;
@@ -128,6 +129,8 @@ public static class ApplicationModule
             .AddSingleton<IBackupRunExecutionService, BackupRunExecutionService>()
             .AddSingleton<IBackupRestoreRunCoordinator, BackupRestoreRunCoordinator>()
             .AddSingleton<IBackupRestoreRunExecutionService, BackupRestoreRunExecutionService>()
+            .AddSingleton<IBuildRunCoordinator, BuildRunCoordinator>()
+            .AddScoped<IBuildRunExecutionService, BuildRunExecutionService>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
 
         services.TryAddSingleton<IAutomationApiEndpointCatalog, EmptyAutomationApiEndpointCatalog>();
@@ -176,6 +179,10 @@ public static class ApplicationModule
             .AddSingleton<IBackupPolicyStreamManager>(s => s.GetRequiredService<BackupPolicyStreamManager>())
             .AddSingleton<IBackupRunStreamManager>(s => s.GetRequiredService<BackupRunStreamManager>())
             .AddSingleton<IBackupRestoreRunStreamManager>(s => s.GetRequiredService<BackupRestoreRunStreamManager>())
+            .AddSingleton<BuildProjectStreamManager>()
+            .AddSingleton<BuildRunStreamManager>()
+            .AddSingleton<IBuildProjectStreamManager>(s => s.GetRequiredService<BuildProjectStreamManager>())
+            .AddSingleton<IBuildRunStreamManager>(s => s.GetRequiredService<BuildRunStreamManager>())
             .AddSingleton<IAutomationActionStreamManager>(s => s.GetRequiredService<AutomationActionStreamManager>())
             .AddSingleton<IStackStreamManager>(s => s.GetRequiredService<StackStreamManager>());
 
@@ -209,6 +216,7 @@ public static class ApplicationModule
             .AddHostedService<BackupPolicySchedulerJob>()
             .AddHostedService<BackupRunWorkerJob>()
             .AddHostedService<BackupRestoreRunWorkerJob>()
+            .AddHostedService<BuildRunWorkerJob>()
             .AddHostedService<LicenseTransitionMonitorJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services

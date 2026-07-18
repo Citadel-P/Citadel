@@ -5,6 +5,7 @@ import {
   BackupRunItemStatus,
   BackupRestoreStatus,
   BackupRunStatus,
+  BuildRunStatus,
   BackupRepositoryStatus,
   ContainerStateStatus,
   DeploymentStatus,
@@ -26,12 +27,13 @@ type StateValue =
   | AlertRuleStatus
   | BackupRepositoryStatus
   | BackupRunStatus
+  | BuildRunStatus
   | BackupRunItemStatus
   | BackupRestoreStatus
   | GitReposStatus
   | ActionRunStatus;
 
-type StateIndicatorKind = 'automationActionRun' | 'backupRun' | 'backupRestore' | 'container' | 'platform';
+type StateIndicatorKind = 'automationActionRun' | 'backupRun' | 'backupRestore' | 'buildRun' | 'container' | 'platform';
 
 type StatusStyle = {
   colorClass: string;
@@ -109,6 +111,26 @@ const getBackupRestoreStatusStyle = (value: StateValue): StatusStyle | undefined
   }
 };
 
+const getBuildRunStatusStyle = (value: StateValue): StatusStyle | undefined => {
+  switch (value) {
+    case BuildRunStatus.Queued:
+      return { colorClass: 'bg-yellow-500', tooltip: 'Queued' };
+    case BuildRunStatus.Preparing:
+    case BuildRunStatus.Running:
+      return { colorClass: 'bg-blue-500', tooltip: String(value) };
+    case BuildRunStatus.Succeeded:
+      return { colorClass: 'bg-green-500', tooltip: 'Succeeded' };
+    case BuildRunStatus.Failed:
+    case BuildRunStatus.TimedOut:
+    case BuildRunStatus.Interrupted:
+      return { colorClass: 'bg-red-500', tooltip: String(value) };
+    case BuildRunStatus.Cancelled:
+      return { colorClass: 'bg-gray-500', tooltip: String(value) };
+    default:
+      return undefined;
+  }
+};
+
 const getContainerStatusStyle = (value: StateValue): StatusStyle | undefined => {
   switch (value) {
     case ContainerStateStatus.Unknown:
@@ -162,6 +184,10 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
 
   if (kind === 'backupRestore') {
     return getBackupRestoreStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+  }
+
+  if (kind === 'buildRun') {
+    return getBuildRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
   }
 
   if (kind === 'container') {
@@ -228,6 +254,15 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
     case ActionRunStatus.Cancelled:
     case ActionRunStatus.Rejected:
       return getAutomationActionRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+    case BuildRunStatus.Queued:
+    case BuildRunStatus.Preparing:
+    case BuildRunStatus.Running:
+    case BuildRunStatus.Succeeded:
+    case BuildRunStatus.Failed:
+    case BuildRunStatus.TimedOut:
+    case BuildRunStatus.Cancelled:
+    case BuildRunStatus.Interrupted:
+      return getBuildRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
     // Git Repos
     case GitReposStatus.Unknown:
       return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };

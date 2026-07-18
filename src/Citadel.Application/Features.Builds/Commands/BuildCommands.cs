@@ -1,0 +1,402 @@
+using Application.Features.Builds.Models;
+using Application.Services.Builds;
+using Application.Services.SignalR;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Builds;
+using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Abstraction;
+using Hosting.Common.Attributes;
+using Hosting.Common.ErrorTypes;
+using LightResults;
+using Mediator;
+
+namespace Application.Features.Builds.Commands;
+
+[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+public sealed record CreateBuildProject(BuildProjectInputModel Project) : ICommand<Result<BuildProjectResult>>
+{
+    internal sealed class Validator : AbstractValidator<CreateBuildProject>
+    {
+        public Validator()
+        {
+            RuleFor(x => x.Project.Name).NotEmpty().MaximumLength(128);
+            RuleFor(x => x.Project.Description).MaximumLength(600).When(x => x.Project.Description is not null);
+            RuleFor(x => x.Project.GitRepositoryId).NotEmpty();
+            RuleFor(x => x.Project.PlatformId).NotEmpty();
+            RuleFor(x => x.Project.RegistryId).NotEmpty();
+            RuleFor(x => x.Project.ImageRepository).NotEmpty().MaximumLength(512);
+        }
+    }
+}
+
+[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+public sealed record UpdateBuildProject(
+    Guid ProjectId,
+    UpdateBuildProjectInputModel Project,
+    bool UpdateDescription,
+    bool UpdateBuildArgs,
+    bool UpdateBuildSecrets) : ICommand<Result<BuildProjectResult>>;
+
+[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+public sealed record RenameBuildProject(Guid ProjectId, string Name) : ICommand<Result<BuildProjectResult>>;
+
+[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+public sealed record PatchBuildProjectMetadata(Guid ProjectId, string? Description) : ICommand<Result<BuildProjectResult>>;
+
+[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+public sealed record ArchiveBuildProject(Guid ProjectId) : ICommand<Result>;
+
+[RequirePermission(ResourceType.Build, PermissionLevel.Read, SpecificPermission.Apply)]
+public sealed record QueueBuildRun(Guid ProjectId, QueueBuildRunInputModel Input) : ICommand<Result<BuildRunResult>>;
+
+[RequirePermission(ResourceType.Build, PermissionLevel.Read, SpecificPermission.Apply)]
+public sealed record CancelBuildRun(Guid RunId) : ICommand<Result>;
+
+internal sealed class CreateBuildProjectHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor,
+    IBuildProjectStreamManager buildProjectStreamManager)
+    : ICommandHandler<CreateBuildProject, Result<BuildProjectResult>>
+{
+    public async ValueTask<Result<BuildProjectResult>> Handle(CreateBuildProject command, CancellationToken cancellationToken)
+    {
+        var input = command.Project;
+        var normalizedName = BuildProject.ToNormalizedName(input.Name);
+        if (await unitOfWork.BuildProjects.ExistsByNormalizedNameAsync(normalizedName, cancellationToken))
+            return Result.Failure<BuildProjectResult>(new ConflictError("Build project name already exists."));
+
+        var validation = await ValidateReferencesAsync(input.GitRepositoryId, input.PlatformId, input.RegistryId, input.BuildSecrets, unitOfWork, cancellationToken);
+        if (validation.IsFailure(out var validationError))
+            return Result.Failure<BuildProjectResult>(validationError);
+
+        var repository = await unitOfWork.GitRepositories.GetAsync(input.GitRepositoryId, cancellationToken);
+        var project = new BuildProject(
+            input.Name,
+            input.Description,
+            input.Enabled,
+            input.GitRepositoryId,
+            input.Branch ?? repository?.DefaultBranch ?? "main",
+            input.ContextPath ?? ".",
+            input.DockerfilePath ?? "Dockerfile",
+            input.Target,
+            input.BuildArgs,
+            input.BuildSecrets,
+            input.PlatformId,
+            input.RegistryId,
+            input.ImageRepository,
+            input.TagTemplates,
+            input.TimeoutSeconds ?? BuildProject.DefaultTimeoutSeconds,
+            input.RetentionRunCount ?? BuildProject.DefaultRetentionRunCount,
+            userContextAccessor.Current.ActorId);
+
+        try
+        {
+            project.Validate();
+        }
+        catch (ArgumentException ex)
+        {
+            return Result.Failure<BuildProjectResult>(new BadRequestError(ex.Message));
+        }
+
+        var rows = await unitOfWork.BuildProjects.AddAsync(project, cancellationToken, input.TagIds, userContextAccessor.Current.ActorId);
+        if (rows == 0)
+            return Result.Failure<BuildProjectResult>(new BadRequestError("One or more tags do not exist."));
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        await buildProjectStreamManager.SendBuildProjectInfo(project, "create");
+        return Result.Success(new BuildProjectResult(project));
+    }
+
+    internal static async Task<Result> ValidateReferencesAsync(
+        Guid gitRepositoryId,
+        Guid platformId,
+        Guid registryId,
+        IReadOnlyList<BuildSecretSpec>? buildSecrets,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        if (await unitOfWork.GitRepositories.GetAsync(gitRepositoryId, cancellationToken) is null)
+            return Result.Failure(new NotFoundError("Git repository not found."));
+
+        if (await unitOfWork.Platforms.GetInfoAsync(platformId, cancellationToken) is null)
+            return Result.Failure(new NotFoundError("Platform not found."));
+
+        if (await unitOfWork.Registries.GetAsync(registryId, cancellationToken) is null)
+            return Result.Failure(new NotFoundError("Registry not found."));
+
+        foreach (var secret in buildSecrets ?? [])
+        {
+            if (await unitOfWork.SecretDefinitions.GetAsync(secret.SecretId, cancellationToken) is null)
+                return Result.Failure(new NotFoundError($"Build secret '{secret.Id}' not found."));
+        }
+
+        return Result.Success();
+    }
+}
+
+internal sealed class UpdateBuildProjectHandler(
+    IUnitOfWork unitOfWork,
+    IBuildProjectStreamManager buildProjectStreamManager)
+    : ICommandHandler<UpdateBuildProject, Result<BuildProjectResult>>
+{
+    public async ValueTask<Result<BuildProjectResult>> Handle(UpdateBuildProject command, CancellationToken cancellationToken)
+    {
+        var project = await unitOfWork.BuildProjects.GetAsync(command.ProjectId, cancellationToken);
+        if (project is null)
+            return Result.Failure<BuildProjectResult>(new NotFoundError("Build project not found."));
+
+        var input = command.Project;
+        var validation = await CreateBuildProjectHandler.ValidateReferencesAsync(
+            input.GitRepositoryId ?? project.GitRepositoryId,
+            input.PlatformId ?? project.PlatformId,
+            input.RegistryId ?? project.RegistryId,
+            command.UpdateBuildSecrets ? input.BuildSecrets : project.BuildSecrets,
+            unitOfWork,
+            cancellationToken);
+        if (validation.IsFailure(out var validationError))
+            return Result.Failure<BuildProjectResult>(validationError);
+
+        try
+        {
+            project.Update(
+                input.Description,
+                input.Enabled,
+                input.GitRepositoryId,
+                input.Branch,
+                input.ContextPath,
+                input.DockerfilePath,
+                input.Target,
+                input.BuildArgs,
+                command.UpdateBuildArgs,
+                input.BuildSecrets,
+                command.UpdateBuildSecrets,
+                input.PlatformId,
+                input.RegistryId,
+                input.ImageRepository,
+                input.TagTemplates,
+                input.TimeoutSeconds,
+                input.RetentionRunCount);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return Result.Failure<BuildProjectResult>(new BadRequestError(ex.Message));
+        }
+
+        await unitOfWork.BuildProjects.UpdateAsync(project, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        await buildProjectStreamManager.SendBuildProjectInfo(project);
+        return Result.Success(new BuildProjectResult(project));
+    }
+}
+
+internal sealed class RenameBuildProjectHandler(
+    IUnitOfWork unitOfWork,
+    IBuildProjectStreamManager buildProjectStreamManager)
+    : ICommandHandler<RenameBuildProject, Result<BuildProjectResult>>
+{
+    public async ValueTask<Result<BuildProjectResult>> Handle(RenameBuildProject command, CancellationToken cancellationToken)
+    {
+        var project = await unitOfWork.BuildProjects.GetAsync(command.ProjectId, cancellationToken);
+        if (project is null)
+            return Result.Failure<BuildProjectResult>(new NotFoundError("Build project not found."));
+
+        var normalizedName = BuildProject.ToNormalizedName(command.Name);
+        if (await unitOfWork.BuildProjects.ExistsByNormalizedNameExceptAsync(normalizedName, project.Id, cancellationToken))
+            return Result.Failure<BuildProjectResult>(new ConflictError("Build project name already exists."));
+
+        project.Rename(command.Name);
+        await unitOfWork.BuildProjects.UpdateAsync(project, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        await buildProjectStreamManager.SendBuildProjectInfo(project);
+        return Result.Success(new BuildProjectResult(project));
+    }
+}
+
+internal sealed class PatchBuildProjectMetadataHandler(
+    IUnitOfWork unitOfWork,
+    IBuildProjectStreamManager buildProjectStreamManager)
+    : ICommandHandler<PatchBuildProjectMetadata, Result<BuildProjectResult>>
+{
+    public async ValueTask<Result<BuildProjectResult>> Handle(PatchBuildProjectMetadata command, CancellationToken cancellationToken)
+    {
+        var project = await unitOfWork.BuildProjects.GetAsync(command.ProjectId, cancellationToken);
+        if (project is null)
+            return Result.Failure<BuildProjectResult>(new NotFoundError("Build project not found."));
+
+        project.UpdateDescription(command.Description);
+        await unitOfWork.BuildProjects.UpdateAsync(project, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        await buildProjectStreamManager.SendBuildProjectInfo(project);
+        return Result.Success(new BuildProjectResult(project));
+    }
+}
+
+internal sealed class ArchiveBuildProjectHandler(
+    IUnitOfWork unitOfWork,
+    IBuildProjectStreamManager buildProjectStreamManager)
+    : ICommandHandler<ArchiveBuildProject, Result>
+{
+    public async ValueTask<Result> Handle(ArchiveBuildProject command, CancellationToken cancellationToken)
+    {
+        var project = await unitOfWork.BuildProjects.GetAsync(command.ProjectId, cancellationToken);
+        if (project is null)
+            return Result.Failure(new NotFoundError("Build project not found."));
+
+        if (await unitOfWork.BuildRuns.HasActiveRunAsync(project.Id, cancellationToken))
+            return Result.Failure(new ConflictError("Build project has an active run."));
+
+        await unitOfWork.BuildProjects.ArchiveAsync(project.Id, DateTimeOffset.UtcNow, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        await buildProjectStreamManager.SendBuildProjectInfo(project, "delete");
+        return Result.Success();
+    }
+}
+
+internal sealed class QueueBuildRunHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor,
+    IBuildProjectStreamManager buildProjectStreamManager,
+    IBuildRunStreamManager buildRunStreamManager)
+    : ICommandHandler<QueueBuildRun, Result<BuildRunResult>>
+{
+    public async ValueTask<Result<BuildRunResult>> Handle(QueueBuildRun command, CancellationToken cancellationToken)
+    {
+        var project = await unitOfWork.BuildProjects.GetAsync(command.ProjectId, cancellationToken);
+        if (project is null)
+            return Result.Failure<BuildRunResult>(new NotFoundError("Build project not found."));
+
+        if (!project.Enabled)
+            return Result.Failure<BuildRunResult>(new ConflictError("Build project is disabled."));
+
+        if (await unitOfWork.BuildRuns.HasActiveRunAsync(project.Id, cancellationToken))
+            return Result.Failure<BuildRunResult>(new ConflictError("Build project already has an active run."));
+
+        var repository = await unitOfWork.GitRepositories.GetAsync(project.GitRepositoryId, cancellationToken);
+        if (repository is null)
+            return Result.Failure<BuildRunResult>(new NotFoundError("Git repository not found."));
+
+        var platform = await unitOfWork.Platforms.GetInfoAsync(project.PlatformId, cancellationToken);
+        if (platform is null)
+            return Result.Failure<BuildRunResult>(new NotFoundError("Platform not found."));
+
+        var registry = await unitOfWork.Registries.GetAsync(project.RegistryId, cancellationToken);
+        if (registry is null)
+            return Result.Failure<BuildRunResult>(new NotFoundError("Registry not found."));
+
+        var imageReferences = ResolveImageReferences(registry.RegistryHost, project.ImageRepository, project.TagTemplates, project.Branch, null);
+        var run = new BuildRun(
+            project.Id,
+            project.Name,
+            repository.Id,
+            repository.Name,
+            project.Branch,
+            null,
+            project.ContextPath,
+            project.DockerfilePath,
+            project.Target,
+            project.BuildArgs,
+            [.. project.BuildSecrets.Select(static s => s.Id)],
+            new BuildPlatformSnapshot(platform.Id, platform.Name, platform.Address, platform.ConnectorType),
+            new BuildRegistrySnapshot(registry.Id, registry.Name, registry.RegistryHost),
+            project.ImageRepository,
+            project.TagTemplates,
+            imageReferences,
+            command.Input.Trigger,
+            command.Input.TriggerSourceId,
+            userContextAccessor.Current.ActorId,
+            project.TimeoutSeconds);
+
+        await unitOfWork.BuildRuns.AddAsync(run, cancellationToken);
+        var marked = await unitOfWork.BuildProjects.MarkProcessingAsync(project.Id, run.Id, cancellationToken);
+        if (marked == 0)
+            return Result.Failure<BuildRunResult>(new ConflictError("Build project already has an active run."));
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        await buildRunStreamManager.SendBuildRunInfo(run, "create");
+        var updatedProject = await unitOfWork.BuildProjects.GetAsync(project.Id, cancellationToken);
+        if (updatedProject is not null)
+            await buildProjectStreamManager.SendBuildProjectInfo(updatedProject);
+        return Result.Success(new BuildRunResult(run));
+    }
+
+    internal static IReadOnlyList<string> ResolveImageReferences(
+        string registryHost,
+        string imageRepository,
+        IReadOnlyList<string> tagTemplates,
+        string branch,
+        string? commitSha)
+    {
+        var host = registryHost.Replace("https://", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("http://", "", StringComparison.OrdinalIgnoreCase)
+            .TrimEnd('/');
+        var shortSha = string.IsNullOrWhiteSpace(commitSha) ? "pending" : commitSha[..Math.Min(12, commitSha.Length)];
+        var safeBranch = SanitizeDockerTagPart(branch, "branch");
+        return [.. tagTemplates.Select(template =>
+        {
+            var tag = template
+                .Replace("{branch}", safeBranch, StringComparison.OrdinalIgnoreCase)
+                .Replace("{shortSha}", shortSha, StringComparison.OrdinalIgnoreCase)
+                .Replace("{sha}", commitSha ?? "pending", StringComparison.OrdinalIgnoreCase);
+            return $"{host}/{imageRepository}:{SanitizeDockerTag(tag)}";
+        })];
+    }
+
+    private static string SanitizeDockerTagPart(string value, string fallback)
+    {
+        var sanitized = new string(value
+            .Select(static ch => char.IsLetterOrDigit(ch) || ch is '_' or '.' or '-' ? ch : '-')
+            .ToArray())
+            .Trim('.', '-');
+
+        return string.IsNullOrWhiteSpace(sanitized) ? fallback : sanitized;
+    }
+
+    private static string SanitizeDockerTag(string value)
+    {
+        var tag = SanitizeDockerTagPart(value, "build");
+        if (!char.IsLetterOrDigit(tag[0]) && tag[0] != '_')
+            tag = "b" + tag;
+
+        return tag.Length <= 128 ? tag : tag[..128];
+    }
+}
+
+internal sealed class CancelBuildRunHandler(
+    IUnitOfWork unitOfWork,
+    IBuildRunCoordinator buildRunCoordinator,
+    IBuildProjectStreamManager buildProjectStreamManager,
+    IBuildRunStreamManager buildRunStreamManager)
+    : ICommandHandler<CancelBuildRun, Result>
+{
+    public async ValueTask<Result> Handle(CancelBuildRun command, CancellationToken cancellationToken)
+    {
+        buildRunCoordinator.Cancel(command.RunId);
+
+        var run = await unitOfWork.BuildRuns.CancelQueuedOrRunningAsync(
+            command.RunId,
+            DateTimeOffset.UtcNow,
+            "Build run cancelled.",
+            cancellationToken);
+        if (run is null)
+            return Result.Failure(new ConflictError("Build run is not active or was not found."));
+
+        await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        await buildRunStreamManager.SendBuildRunInfo(run);
+        var project = await unitOfWork.BuildProjects.GetAsync(run.BuildProjectId, cancellationToken);
+        if (project is not null)
+            await buildProjectStreamManager.SendBuildProjectInfo(project);
+        return Result.Success();
+    }
+}
+
+internal sealed class ExecuteQueuedBuildRunHandler(IBuildRunExecutionService executionService)
+    : ICommandHandler<ExecuteQueuedBuildRun, Result>
+{
+    public async ValueTask<Result> Handle(ExecuteQueuedBuildRun command, CancellationToken cancellationToken)
+        => await executionService.ExecuteAsync(command.RunId, cancellationToken);
+}
+
+public sealed record ExecuteQueuedBuildRun(Guid RunId) : ICommand<Result>;

@@ -59,6 +59,11 @@ const MenuItems: IMenuItem[] = [
         label: 'Automation',
         route: '/automation',
       },
+      {
+        icon: renderIcon(CitadelIcons.Build),
+        label: 'Builds',
+        route: '/builds',
+      },
     ],
   },
   {

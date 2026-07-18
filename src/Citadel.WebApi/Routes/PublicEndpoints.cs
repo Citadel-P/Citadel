@@ -9,6 +9,7 @@ using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Automation;
 using WebApi.Routes.Endpoints.Resources.Backups;
+using WebApi.Routes.Endpoints.Resources.Builds;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
@@ -55,6 +56,8 @@ public static class PublicEndpoints
     const string BackupPoliciesName = "BackupPolicies";
     const string BackupRunsName = "BackupRuns";
     const string BackupRestoreRunsName = "BackupRestoreRuns";
+    const string BuildProjectsName = "BuildProjects";
+    const string BuildRunsName = "BuildRuns";
     const string TagsName = nameof(Tags);
     const string AuthenticationName = nameof(Authentication);
     const string ProfileName = "Profile";
@@ -166,6 +169,14 @@ public static class PublicEndpoints
             var backupRestoreRuns = group.MapGroup("/backupRestoreRuns").WithTags(BackupRestoreRunsName).RequireAuthorization();
             {
                 MapBackupRestoreRunEndpoints(backupRestoreRuns);
+            }
+            var buildProjects = group.MapGroup("/buildProjects").WithTags(BuildProjectsName).RequireAuthorization();
+            {
+                MapBuildProjectEndpoints(buildProjects);
+            }
+            var buildRuns = group.MapGroup("/buildRuns").WithTags(BuildRunsName).RequireAuthorization();
+            {
+                MapBuildRunEndpoints(buildRuns);
             }
             var tags = group.MapGroup("/tags").WithTags(TagsName).RequireAuthorization();
             {
@@ -609,6 +620,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getGitRepositoryRefs");
+
+        gitRepositories.MapGet("{id}/branches", GitRepositories.DiscoverBranches)
+            .WithSummary("Discover remote Git repository branches")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("discoverGitRepositoryBranches");
 
         gitRepositories.MapGet("{id}/compose-projects", GitRepositories.DiscoverComposeProjects)
             .WithSummary("Discover compose projects in a Git repository branch")
@@ -1369,6 +1388,137 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("cancelBackupRestoreRun");
+    }
+
+    private static void MapBuildProjectEndpoints(RouteGroupBuilder buildProjects)
+    {
+        buildProjects.MapGet("/", Builds.List)
+            .WithSummary("List build projects")
+            .Produces<BuildProjectsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("listBuildProjects");
+
+        buildProjects.MapGet("{id:guid}", Builds.Get)
+            .WithSummary("Get build project")
+            .Produces<BuildProjectView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBuildProject");
+
+        buildProjects.MapGet("{id:guid}/tags", Tags.GetBuildTags)
+            .WithSummary("Get build project tags")
+            .Produces<ResourceTagsView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBuildTags");
+
+        buildProjects.MapPut("{id:guid}/tags", Tags.ReplaceBuildTags)
+            .WithSummary("Replace build project tags")
+            .Produces<ResourceTagsView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("replaceBuildTags");
+
+        buildProjects.MapPost("/", Builds.Create)
+            .WithSummary("Create build project")
+            .Produces<BuildProjectView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createBuildProject");
+
+        buildProjects.MapPatch("{id:guid}", Builds.Update)
+            .WithSummary("Update build project")
+            .Accepts<UpdateBuildProjectInput>("application/merge-patch+json", "application/json")
+            .Produces<BuildProjectView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateBuildProject");
+
+        buildProjects.MapPost("rename", Builds.Rename)
+            .WithSummary("Rename build project")
+            .Produces<BuildProjectView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameBuild");
+
+        buildProjects.MapPatch("{id:guid}/_metadata", Builds.PatchMetadata)
+            .WithSummary("Update build project metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .Produces<BuildProjectView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateBuildMetadata");
+
+        buildProjects.MapDelete("{id:guid}", Builds.Archive)
+            .WithSummary("Archive build project")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("archiveBuildProject");
+
+        buildProjects.MapPost("{id:guid}/runs", Builds.QueueRun)
+            .WithSummary("Queue build run")
+            .Produces<BuildRunView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("queueBuildRun");
+    }
+
+    private static void MapBuildRunEndpoints(RouteGroupBuilder buildRuns)
+    {
+        buildRuns.MapGet("/", BuildRuns.List)
+            .WithSummary("List build runs")
+            .Produces<BuildRunsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("listBuildRuns");
+
+        buildRuns.MapGet("{id:guid}", BuildRuns.Get)
+            .WithSummary("Get build run")
+            .Produces<BuildRunView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBuildRun");
+
+        buildRuns.MapGet("{id:guid}/logs", BuildRuns.GetLogs)
+            .WithSummary("Get build run logs")
+            .Produces<BuildLogsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBuildRunLogs");
+
+        buildRuns.MapPost("{id:guid}/cancel", BuildRuns.Cancel)
+            .WithSummary("Cancel build run")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("cancelBuildRun");
     }
 
     private static void MapContainerEndpoints(RouteGroupBuilder containers)

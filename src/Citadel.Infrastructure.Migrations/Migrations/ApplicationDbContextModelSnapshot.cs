@@ -1022,7 +1022,7 @@ namespace Infrastructure.Migrations.Migrations
                         {
                             Id = new Guid("41000000-0000-0000-0000-000000000001"),
                             AlertOnFailure = true,
-                            Code = "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet pruned = 0;\nlet reclaimedBytes = 0;\n\nfor (const platform of platforms) {\n  const result = await citadel.platforms.prunePlatform(platform.id, { resource: \"Image\" });\n  const imagesDeleted = result?.imagesDeleted ?? [];\n  const reclaimed = Number(result?.spaceReclaimed ?? 0);\n  reclaimedBytes += reclaimed;\n  pruned += imagesDeleted.length;\n\n  if (imagesDeleted.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);\n}\n\nconsole.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);",
+                            Code = "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet pruned = 0;\nlet reclaimedBytes = 0;\n\nfor (const platform of platforms) {\n  if (platform.status === 'Offline') continue\n  const result = await citadel.platforms.prunePlatform(platform.id, { resource: \"Image\" });\n  const imagesDeleted = result?.imagesDeleted ?? [];\n  const reclaimed = Number(result?.spaceReclaimed ?? 0);\n  reclaimedBytes += reclaimed;\n  pruned += imagesDeleted.length;\n\n  if (imagesDeleted.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);\n}\n\nconsole.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);",
                             ControlState = "Idle",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
@@ -1880,6 +1880,386 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("ix_backupsourceleases_expiresat");
 
                     b.ToTable("backupsourceleases", (string)null);
+                });
+
+            modelBuilder.Entity("BuildProject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archivedat");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("branch");
+
+                    b.Property<string>("BuildArgs")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("buildargs")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<string>("BuildSecrets")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("buildsecrets")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<string>("ContextPath")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasDefaultValue(".")
+                        .HasColumnName("contextpath");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<Guid?>("CurrentRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("currentrunid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DockerfilePath")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Dockerfile")
+                        .HasColumnName("dockerfilepath");
+
+                    b.Property<bool>("Enabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("enabled");
+
+                    b.Property<Guid>("GitRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("gitrepositoryid");
+
+                    b.Property<string>("ImageRepository")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("imagerepository");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("normalizedname");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("platformid");
+
+                    b.Property<Guid>("RegistryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("registryid");
+
+                    b.Property<int>("RetentionRunCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(20)
+                        .HasColumnName("retentionruncount");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("rowversion");
+
+                    b.Property<string>("TagTemplates")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tagtemplates")
+                        .HasDefaultValueSql("'[\"{branch}-{shortSha}\"]'::jsonb");
+
+                    b.Property<string>("Target")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("target");
+
+                    b.Property<int>("TimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1800)
+                        .HasColumnName("timeoutseconds");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id")
+                        .HasName("pk_buildprojects");
+
+                    b.HasIndex("ArchivedAt")
+                        .HasDatabaseName("ix_buildprojects_archivedat");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_buildprojects_createdbyactorid");
+
+                    b.HasIndex("GitRepositoryId")
+                        .HasDatabaseName("ix_buildprojects_gitrepositoryid");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_buildprojects_normalizedname");
+
+                    b.HasIndex("PlatformId")
+                        .HasDatabaseName("ix_buildprojects_platformid");
+
+                    b.HasIndex("RegistryId")
+                        .HasDatabaseName("ix_buildprojects_registryid");
+
+                    b.ToTable("buildprojects", (string)null);
+                });
+
+            modelBuilder.Entity("BuildRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("branch");
+
+                    b.Property<string>("BuildArgsSnapshot")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("buildargssnapshot")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<Guid>("BuildProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("buildprojectid");
+
+                    b.Property<string>("BuildSecretIdsSnapshot")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("buildsecretidssnapshot")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completedat");
+
+                    b.Property<string>("ContextPath")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("contextpath");
+
+                    b.Property<string>("DockerfilePath")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("dockerfilepath");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("errorcode");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1200)
+                        .HasColumnType("text")
+                        .HasColumnName("errormessage");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("exitcode");
+
+                    b.Property<Guid>("GitRepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("gitrepositoryid");
+
+                    b.Property<string>("GitRepositoryNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("gitrepositorynamesnapshot");
+
+                    b.Property<string>("ImageDigest")
+                        .HasMaxLength(256)
+                        .HasColumnType("text")
+                        .HasColumnName("imagedigest");
+
+                    b.Property<string>("ImageReferences")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("imagereferences")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<string>("ImageRepository")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("text")
+                        .HasColumnName("imagerepository");
+
+                    b.Property<string>("PlatformSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("platformsnapshot");
+
+                    b.Property<string>("ProjectNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("projectnamesnapshot");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("queuedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("RegistrySnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("registrysnapshot");
+
+                    b.Property<string>("ResolvedCommitSha")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("resolvedcommitsha");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("startedat");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TagTemplatesSnapshot")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tagtemplatessnapshot")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<string>("Target")
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("target");
+
+                    b.Property<int>("TimeoutSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("timeoutseconds");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("trigger");
+
+                    b.Property<Guid?>("TriggerSourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("triggersourceid");
+
+                    b.Property<Guid>("TriggeredByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("triggeredbyactorid");
+
+                    b.HasKey("Id")
+                        .HasName("pk_buildruns");
+
+                    b.HasIndex("BuildProjectId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_buildruns_active_project")
+                        .HasFilter("status IN ('Queued', 'Preparing', 'Running')");
+
+                    b.HasIndex("GitRepositoryId")
+                        .HasDatabaseName("ix_buildruns_gitrepositoryid");
+
+                    b.HasIndex("QueuedAt")
+                        .HasDatabaseName("ix_buildruns_queuedat");
+
+                    b.HasIndex("TriggeredByActorId")
+                        .HasDatabaseName("ix_buildruns_triggeredbyactorid");
+
+                    b.HasIndex("BuildProjectId", "QueuedAt")
+                        .HasDatabaseName("ix_buildruns_project_queuedat");
+
+                    b.HasIndex("Status", "QueuedAt")
+                        .HasDatabaseName("ix_buildruns_status_queuedat");
+
+                    b.ToTable("buildruns", (string)null);
+                });
+
+            modelBuilder.Entity("BuildRunLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BuildRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("buildrunid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Stream")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("text")
+                        .HasColumnName("stream");
+
+                    b.HasKey("Id")
+                        .HasName("pk_buildrunlogs");
+
+                    b.HasIndex("BuildRunId", "CreatedAt")
+                        .HasDatabaseName("ix_buildrunlogs_run_createdat");
+
+                    b.ToTable("buildrunlogs", (string)null);
                 });
 
             modelBuilder.Entity("CitadelInstanceIdentity", b =>
@@ -3403,6 +3783,30 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("d1af8dbf-ef7d-d81d-33f9-e3be5ee72243"),
+                            PermissionLevel = 4,
+                            ResourceType = 18,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
+                            SpecificPermissions = 4
+                        },
+                        new
+                        {
+                            Id = new Guid("6a2b1742-029b-d0df-1d2a-1d0aa1ed9a3f"),
+                            PermissionLevel = 1,
+                            ResourceType = 18,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("c472d905-c03c-a9a8-0527-c2b540274078"),
+                            PermissionLevel = 2,
+                            ResourceType = 18,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
+                            SpecificPermissions = 4
+                        },
+                        new
+                        {
                             Id = new Guid("677df0f0-2ce5-4b25-76ad-eb4e21f0748d"),
                             PermissionLevel = 4,
                             ResourceType = 17,
@@ -4847,6 +5251,71 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_backuprunlogs_backupruns_backuprunid");
+                });
+
+            modelBuilder.Entity("BuildProject", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_buildprojects_actors_createdbyactorid");
+
+                    b.HasOne("GitRepository", null)
+                        .WithMany()
+                        .HasForeignKey("GitRepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_buildprojects_gitrepositories_gitrepositoryid");
+
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_buildprojects_platforms_platformid");
+
+                    b.HasOne("Registry", null)
+                        .WithMany()
+                        .HasForeignKey("RegistryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_buildprojects_registries_registryid");
+                });
+
+            modelBuilder.Entity("BuildRun", b =>
+                {
+                    b.HasOne("BuildProject", null)
+                        .WithMany()
+                        .HasForeignKey("BuildProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_buildruns_buildprojects_buildprojectid");
+
+                    b.HasOne("GitRepository", null)
+                        .WithMany()
+                        .HasForeignKey("GitRepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_buildruns_gitrepositories_gitrepositoryid");
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("TriggeredByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_buildruns_actors_triggeredbyactorid");
+                });
+
+            modelBuilder.Entity("BuildRunLog", b =>
+                {
+                    b.HasOne("BuildRun", null)
+                        .WithMany()
+                        .HasForeignKey("BuildRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_buildrunlogs_buildruns_buildrunid");
                 });
 
             modelBuilder.Entity("Container", b =>

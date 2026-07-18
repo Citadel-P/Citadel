@@ -8,6 +8,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
 using Domain.Entities.Backups;
+using Domain.Entities.Builds;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
@@ -60,6 +61,11 @@ public interface IApplicationHubDispatcher
     Task SendBackupPolicyInfo(BackupPolicy policy, string action);
     Task SendBackupRunInfo(BackupRun run, string action);
     Task SendBackupRestoreRunInfo(BackupRestoreRun run, Guid backupPolicyId, string action);
+    #endregion
+
+    #region Builds
+    Task SendBuildProjectInfo(BuildProject project, string action);
+    Task SendBuildRunInfo(BuildRun run, string action);
     #endregion
 
     #region Automation

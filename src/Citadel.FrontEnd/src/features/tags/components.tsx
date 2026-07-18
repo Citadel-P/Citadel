@@ -216,6 +216,7 @@ type EditableResourceType =
   | 'Platform'
   | 'Registry'
   | 'AutomationAction'
+  | 'Build'
   | 'BackupPolicy';
 
 const replaceTagEndpoint = {
@@ -225,6 +226,7 @@ const replaceTagEndpoint = {
   Platform: 'replacePlatformTags',
   Registry: 'replaceRegistryTags',
   AutomationAction: 'replaceAutomationActionTags',
+  Build: 'replaceBuildTags',
   BackupPolicy: 'replaceBackupPolicyTags',
 } as const;
 
@@ -348,6 +350,7 @@ const buildReplaceVariables = (resourceType: EditableResourceType, resourceId: s
     case 'Platform':
     case 'Registry':
     case 'AutomationAction':
+    case 'Build':
     case 'BackupPolicy':
       return { id: resourceId, data };
   }

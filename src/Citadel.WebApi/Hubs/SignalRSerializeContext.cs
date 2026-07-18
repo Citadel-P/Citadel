@@ -8,6 +8,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
 using Domain.Entities.Backups;
+using Domain.Entities.Builds;
 using Domain.Entities.Platforms;
 using Nerdbank.MessagePack;
 using PolyType;
@@ -15,6 +16,7 @@ using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Automation;
 using WebApi.Routes.Endpoints.Resources.Backups;
+using WebApi.Routes.Endpoints.Resources.Builds;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
@@ -83,6 +85,17 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<StackBackupSource>]
 [GenerateShapeFor<DeploymentBackupSource>]
 [GenerateShapeFor<BackupWebhookConfig>]
+[GenerateShapeFor<BuildProjectView>]
+[GenerateShapeFor<BuildProjectsView>]
+[GenerateShapeFor<BuildRunView>]
+[GenerateShapeFor<BuildRunsView>]
+[GenerateShapeFor<BuildArgSpec>]
+[GenerateShapeFor<IReadOnlyList<BuildArgSpec>>]
+[GenerateShapeFor<BuildSecretSpec>]
+[GenerateShapeFor<IReadOnlyList<BuildSecretSpec>>]
+[GenerateShapeFor<BuildPlatformSnapshot>]
+[GenerateShapeFor<BuildRegistrySnapshot>]
+[GenerateShapeFor<IReadOnlyList<string>>]
 [GenerateShapeFor<AutomationActionView>]
 [GenerateShapeFor<AutomationActionRunView>]
 [GenerateShapeFor<AutomationWebhookConfig>]

@@ -47,6 +47,32 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
         return Result.Success();
     }
 
+    public async Task<Result<IReadOnlyList<GitRemoteBranchRef>>> ListRemoteBranchesAsync(
+        string url,
+        GitAccount? account = null,
+        CancellationToken ct = default)
+    {
+        var (args, env) = PrepareRemoteCmd(account);
+        args.AddRange(["ls-remote", "--heads", url]);
+
+        var result = await processService.ExecuteAsync(GitExecutable, args, env, null, ct);
+        if (!result.IsSuccess)
+        {
+            return Result.Failure<IReadOnlyList<GitRemoteBranchRef>>(
+                $"Could not discover repository branches. Error: {result.StandardError}");
+        }
+
+        var branches = result.StandardOutput
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(ParseRemoteBranchRef)
+            .Where(branch => branch is not null)
+            .Select(branch => branch!)
+            .OrderBy(branch => branch.Branch, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return Result.Success<IReadOnlyList<GitRemoteBranchRef>>(branches);
+    }
+
     public async Task<Result<string>> ResolveSnapshotCommitAsync(string repoPath, string branch, CancellationToken ct = default)
     {
         var candidates = new[]
@@ -247,6 +273,24 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
         }
 
         return (args, GitEnv);
+    }
+
+    private static GitRemoteBranchRef? ParseRemoteBranchRef(string line)
+    {
+        var parts = line.Split(['\t', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 2)
+            return null;
+
+        const string headPrefix = "refs/heads/";
+        var refName = parts[1];
+        if (!refName.StartsWith(headPrefix, StringComparison.Ordinal))
+            return null;
+
+        var branch = refName[headPrefix.Length..];
+        if (string.IsNullOrWhiteSpace(branch) || string.IsNullOrWhiteSpace(parts[0]))
+            return null;
+
+        return new GitRemoteBranchRef(branch, parts[0]);
     }
 
     private static string GetOrWriteSshKey(Guid accountId, string privateKey)

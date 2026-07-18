@@ -30,6 +30,9 @@ public sealed record GetAutomationActionTags(Guid Id) : IQuery<Result<IReadOnlyL
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
 public sealed record GetBackupPolicyTags(Guid Id) : IQuery<Result<IReadOnlyList<TagSummary>>>;
 
+[RequirePermission(ResourceType.Build, PermissionLevel.Read)]
+public sealed record GetBuildTags(Guid Id) : IQuery<Result<IReadOnlyList<TagSummary>>>;
+
 internal sealed class GetDeploymentTagsHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetDeploymentTags, Result<IReadOnlyList<TagSummary>>>
 {
     public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(GetDeploymentTags query, CancellationToken cancellationToken)
@@ -111,6 +114,18 @@ internal sealed class GetBackupPolicyTagsHandler(IUnitOfWork unitOfWork) : IQuer
             query.Id,
             async () => await unitOfWork.BackupPolicies.GetAsync(query.Id, cancellationToken) is not null,
             "Backup policy",
+            cancellationToken);
+}
+
+internal sealed class GetBuildTagsHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetBuildTags, Result<IReadOnlyList<TagSummary>>>
+{
+    public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(GetBuildTags query, CancellationToken cancellationToken)
+        => await ResourceTagResourceAccess.GetAsync(
+            unitOfWork,
+            TaggableResourceType.Build,
+            query.Id,
+            async () => await unitOfWork.BuildProjects.GetAsync(query.Id, cancellationToken) is not null,
+            "Build project",
             cancellationToken);
 }
 

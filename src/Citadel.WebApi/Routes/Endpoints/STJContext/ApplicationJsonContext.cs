@@ -20,6 +20,7 @@ using Domain.Entities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
 using Domain.Entities.Backups;
+using Domain.Entities.Builds;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Licensing;
@@ -32,6 +33,7 @@ using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Automation;
 using WebApi.Routes.Endpoints.Resources.Backups;
+using WebApi.Routes.Endpoints.Resources.Builds;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;
@@ -102,6 +104,8 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<BackupCoverageStatus>),
         typeof(JsonStringEnumConverter<BackupCoverageResourceType>),
         typeof(JsonStringEnumConverter<BackupRestoreStatus>),
+        typeof(JsonStringEnumConverter<BuildRunTrigger>),
+        typeof(JsonStringEnumConverter<BuildRunStatus>),
         typeof(JsonStringEnumConverter<VolumeFileEntryType>)
     })]
 [JsonSerializable(typeof(string[]))]
@@ -251,6 +255,23 @@ namespace Application.Models;
 [JsonSerializable(typeof(StackBackupVolumeView))]
 [JsonSerializable(typeof(DeploymentBackupSourcePreviewView))]
 [JsonSerializable(typeof(DeploymentBackupVolumeView))]
+[JsonSerializable(typeof(BuildArgSpec))]
+[JsonSerializable(typeof(IReadOnlyList<BuildArgSpec>))]
+[JsonSerializable(typeof(BuildSecretSpec))]
+[JsonSerializable(typeof(IReadOnlyList<BuildSecretSpec>))]
+[JsonSerializable(typeof(BuildPlatformSnapshot))]
+[JsonSerializable(typeof(BuildRegistrySnapshot))]
+[JsonSerializable(typeof(BuildRunTrigger))]
+[JsonSerializable(typeof(BuildRunStatus))]
+[JsonSerializable(typeof(BuildProjectInput))]
+[JsonSerializable(typeof(UpdateBuildProjectInput))]
+[JsonSerializable(typeof(UpdateBuildProjectInputPatchDocument))]
+[JsonSerializable(typeof(QueueBuildRunInput))]
+[JsonSerializable(typeof(BuildProjectView))]
+[JsonSerializable(typeof(BuildProjectsView))]
+[JsonSerializable(typeof(BuildRunView))]
+[JsonSerializable(typeof(BuildRunsView))]
+[JsonSerializable(typeof(BuildLogsView))]
 [JsonSerializable(typeof(StackVolumeKind))]
 [JsonSerializable(typeof(PlatformInput))]
 [JsonSerializable(typeof(CreatePlatformInput))]
@@ -317,6 +338,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(GitRepositoryView))]
 [JsonSerializable(typeof(GitRepositoryRefsView))]
 [JsonSerializable(typeof(GitRepositoryRefView))]
+[JsonSerializable(typeof(GitRepositoryBranchesView))]
+[JsonSerializable(typeof(GitRepositoryBranchView))]
 [JsonSerializable(typeof(GitRepositoryComposeDiscovery))]
 [JsonSerializable(typeof(GitComposeProjectCandidate))]
 [JsonSerializable(typeof(DeleteImagesRequest))]

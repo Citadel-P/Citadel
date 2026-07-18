@@ -19,6 +19,7 @@ export type ResourceType =
   | 'Webhook'
   | 'Automation'
   | 'AutomationAction'
+  | 'Build'
   | 'BackupRepository'
   | 'BackupPolicy'
   | 'Access'
@@ -47,6 +48,7 @@ export const PluralResourceMap = {
   Webhook: 'Webhooks',
   Automation: 'Automation',
   AutomationAction: 'Actions',
+  Build: 'Builds',
   BackupRepository: 'BackupRepositories',
   BackupPolicy: 'BackupPolicies',
   Access: 'Access',

@@ -19,6 +19,7 @@ namespace Domain.Contracts.Interfaces;
 public interface IGitCliRepository
 {
     Task<Result> TestConnectionAsync(string url, GitAccount? account = null, CancellationToken ct = default);
+    Task<Result<IReadOnlyList<GitRemoteBranchRef>>> ListRemoteBranchesAsync(string url, GitAccount? account = null, CancellationToken ct = default);
     Task<Result<string>> ResolveSnapshotCommitAsync(string repoPath, string branch, CancellationToken ct = default);
     Task<Result> CloneAsync(string url, string targetPath, string branch, GitAccount? account, CancellationToken ct = default);
     Task<Result> PullAsync(string repoPath, string branch, GitAccount? account, CancellationToken ct = default);
@@ -29,3 +30,5 @@ public interface IGitCliRepository
     Task<Result> MaterializeSnapshotAsync(string repoPath, string commitSha, string targetPath, CancellationToken ct = default);
     Task<Result> ExecuteShellCommandAsync(string workingDir, string command, CancellationToken ct = default);
 }
+
+public sealed record GitRemoteBranchRef(string Branch, string CommitSha);

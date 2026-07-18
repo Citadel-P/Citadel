@@ -1,0 +1,566 @@
+using System.Data;
+using Dapper;
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Entities.Builds;
+using Domain.Entities.Tags;
+using Hosting.Common;
+using Infrastructure.Persistence.Dtos;
+using Infrastructure.Persistence.Mappers;
+using Infrastructure.TypeHandlers;
+using static Infrastructure.TypeHandlers.FormattingExtensions;
+
+namespace Infrastructure.Persistence;
+
+internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransaction> tx) : IBuildProjectRepository
+{
+    public async Task<int> AddAsync(
+        BuildProject project,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        Guid? tagCreatedByActorId = null)
+    {
+        project.Validate();
+
+        string sql = ResourceTagSql.InputTagsCte + """
+            inserted_project AS (
+                INSERT INTO BuildProjects (
+                    Id, Name, NormalizedName, Description, Enabled, GitRepositoryId, Branch,
+                    ContextPath, DockerfilePath, Target, BuildArgs, BuildSecrets, PlatformId,
+                    RegistryId, ImageRepository, TagTemplates, TimeoutSeconds, RetentionRunCount,
+                    CurrentRunId, CreatedByActorId, CreatedAt, UpdatedAt, ArchivedAt, RowVersion)
+                SELECT
+                    @Id, @Name, @NormalizedName, @Description, @Enabled, @GitRepositoryId, @Branch,
+                    @ContextPath, @DockerfilePath, @Target, @BuildArgs::jsonb, @BuildSecrets::jsonb, @PlatformId,
+                    @RegistryId, @ImageRepository, @TagTemplates::jsonb, @TimeoutSeconds, @RetentionRunCount,
+                    @CurrentRunId, @CreatedByActorId, @CreatedAt, @UpdatedAt, @ArchivedAt, @RowVersion
+                WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
+                RETURNING Id
+            ),
+            """ + ResourceTagSql.InsertTagsCte("inserted_project", "p") + "\n"
+            + ResourceTagSql.InsertResultSelect("inserted_project", "inserted_project", "inserted_tags");
+
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QuerySingleAsync<ResourceInsertWithTagsResult>(
+            sql,
+            new
+            {
+                project.Id,
+                project.Name,
+                project.NormalizedName,
+                project.Description,
+                project.Enabled,
+                project.GitRepositoryId,
+                project.Branch,
+                project.ContextPath,
+                project.DockerfilePath,
+                project.Target,
+                BuildArgs = BuildMappers.SerializeBuildArgs(project.BuildArgs),
+                BuildSecrets = BuildMappers.SerializeBuildSecrets(project.BuildSecrets),
+                project.PlatformId,
+                project.RegistryId,
+                project.ImageRepository,
+                TagTemplates = BuildMappers.SerializeStringList(project.TagTemplates),
+                project.TimeoutSeconds,
+                project.RetentionRunCount,
+                project.CurrentRunId,
+                project.CreatedByActorId,
+                CreatedAt = project.CreatedAt.UtcDateTime,
+                UpdatedAt = project.UpdatedAt.UtcDateTime,
+                ArchivedAt = project.ArchivedAt?.UtcDateTime,
+                project.RowVersion,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Build),
+                TagIds = tagIdArray,
+                TagIdsLength = tagIdArray.Length,
+                TagCreatedByActorId = tagCreatedByActorId ?? project.CreatedByActorId
+            },
+            transaction: tx());
+
+        project.AssignTags(result.TagsJson.ToTagSummaries());
+        return result.AffectedRows;
+    }
+
+    public Task<int> UpdateAsync(BuildProject project, CancellationToken cancellationToken)
+    {
+        project.Validate();
+
+        const string sql = """
+            UPDATE BuildProjects
+            SET Name = @Name,
+                NormalizedName = @NormalizedName,
+                Description = @Description,
+                Enabled = @Enabled,
+                GitRepositoryId = @GitRepositoryId,
+                Branch = @Branch,
+                ContextPath = @ContextPath,
+                DockerfilePath = @DockerfilePath,
+                Target = @Target,
+                BuildArgs = @BuildArgs::jsonb,
+                BuildSecrets = @BuildSecrets::jsonb,
+                PlatformId = @PlatformId,
+                RegistryId = @RegistryId,
+                ImageRepository = @ImageRepository,
+                TagTemplates = @TagTemplates::jsonb,
+                TimeoutSeconds = @TimeoutSeconds,
+                RetentionRunCount = @RetentionRunCount,
+                CurrentRunId = @CurrentRunId,
+                UpdatedAt = @UpdatedAt,
+                ArchivedAt = @ArchivedAt,
+                RowVersion = @RowVersion
+            WHERE Id = @Id
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            ToParameters(project),
+            transaction: tx());
+    }
+
+    public Task<int> ArchiveAsync(Guid id, DateTimeOffset archivedAt, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildProjects
+            SET Enabled = FALSE,
+                ArchivedAt = COALESCE(ArchivedAt, @ArchivedAt),
+                UpdatedAt = @ArchivedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND CurrentRunId IS NULL
+            """;
+
+        return db.ExecuteAsync(sql, new { Id = id, ArchivedAt = archivedAt.UtcDateTime }, transaction: tx());
+    }
+
+    public async Task<BuildProject?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false)
+    {
+        string sql = $$"""
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BuildProjects p
+            WHERE p.Id = @Id
+              AND (@IncludeArchived OR p.ArchivedAt IS NULL)
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<BuildProjectDto>(
+            sql,
+            new
+            {
+                Id = id,
+                IncludeArchived = includeArchived,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Build)
+            },
+            transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<IEnumerable<BuildProject>> GetAllAsync(
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        bool includeArchived = false)
+    {
+        string sql = $$"""
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BuildProjects p
+            WHERE (@IncludeArchived OR p.ArchivedAt IS NULL)
+              AND {{ResourceTagSql.FilterPredicate("p")}}
+            ORDER BY p.Name ASC
+            """;
+
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<BuildProjectDto>(
+            sql,
+            new
+            {
+                IncludeArchived = includeArchived,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Build),
+                TagIds = tagIdArray,
+                TagIdsLength = tagIdArray.Length
+            },
+            transaction: tx());
+        return result.Select(static x => x.ToDomain());
+    }
+
+    public async Task<IEnumerable<BuildProject>> GetAuthorizedAsync(
+        Guid userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null)
+    {
+        string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BuildProjects p
+            WHERE p.ArchivedAt IS NULL
+              AND {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+              AND {{ResourceTagSql.FilterPredicate("p")}}
+            ORDER BY p.Name ASC
+            """;
+
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<BuildProjectDto>(
+            sql,
+            new
+            {
+                UserId = userId,
+                ResourceType = (int)resourceType,
+                GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
+                SpecificPermission = (int)specificPermission,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Build),
+                TagIds = tagIdArray,
+                TagIdsLength = tagIdArray.Length
+            },
+            transaction: tx());
+        return result.Select(static x => x.ToDomain());
+    }
+
+    public Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1 FROM BuildProjects
+                WHERE NormalizedName = @NormalizedName AND ArchivedAt IS NULL)
+            """;
+        return db.ExecuteScalarAsync<bool>(sql, new { NormalizedName = normalizedName }, transaction: tx());
+    }
+
+    public Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1 FROM BuildProjects
+                WHERE NormalizedName = @NormalizedName AND Id <> @Id AND ArchivedAt IS NULL)
+            """;
+        return db.ExecuteScalarAsync<bool>(sql, new { NormalizedName = normalizedName, Id = id }, transaction: tx());
+    }
+
+    public Task<bool> CanAccessAsync(
+        Guid userId,
+        Guid id,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT EXISTS (
+                SELECT 1
+                FROM BuildProjects p
+                WHERE p.Id = @Id
+                  AND p.ArchivedAt IS NULL
+                  AND {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+            )
+            """;
+
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new
+            {
+                Id = id,
+                UserId = userId,
+                ResourceType = (int)resourceType,
+                GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
+                SpecificPermission = (int)specificPermission
+            },
+            transaction: tx());
+    }
+
+    public Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildProjects
+            SET CurrentRunId = @RunId,
+                UpdatedAt = @UpdatedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND ArchivedAt IS NULL
+              AND CurrentRunId IS NULL
+            """;
+
+        return db.ExecuteAsync(sql, new { Id = id, RunId = runId, UpdatedAt = DateTime.UtcNow }, transaction: tx());
+    }
+
+    public Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildProjects
+            SET CurrentRunId = NULL,
+                UpdatedAt = @UpdatedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND CurrentRunId = @RunId
+            """;
+
+        return db.ExecuteAsync(sql, new { Id = id, RunId = runId, UpdatedAt = DateTime.UtcNow }, transaction: tx());
+    }
+
+    private static BuildProjectParameters ToParameters(BuildProject project)
+        => new
+        (
+            project.Id,
+            project.Name,
+            project.NormalizedName,
+            project.Description,
+            project.Enabled,
+            project.GitRepositoryId,
+            project.Branch,
+            project.ContextPath,
+            project.DockerfilePath,
+            project.Target,
+            BuildMappers.SerializeBuildArgs(project.BuildArgs),
+            BuildMappers.SerializeBuildSecrets(project.BuildSecrets),
+            project.PlatformId,
+            project.RegistryId,
+            project.ImageRepository,
+            BuildMappers.SerializeStringList(project.TagTemplates),
+            project.TimeoutSeconds,
+            project.RetentionRunCount,
+            project.CurrentRunId,
+            project.UpdatedAt.UtcDateTime,
+            project.ArchivedAt?.UtcDateTime,
+            project.RowVersion
+        );
+}
+
+internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> tx) : IBuildRunRepository
+{
+    public Task<int> AddAsync(BuildRun run, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT INTO BuildRuns (
+                Id, BuildProjectId, ProjectNameSnapshot, GitRepositoryId, GitRepositoryNameSnapshot, Branch,
+                ResolvedCommitSha, ContextPath, DockerfilePath, Target, BuildArgsSnapshot,
+                BuildSecretIdsSnapshot, PlatformSnapshot, RegistrySnapshot, ImageRepository,
+                TagTemplatesSnapshot, ImageReferences, Trigger, TriggerSourceId, Status, ImageDigest,
+                TimeoutSeconds, QueuedAt, StartedAt, CompletedAt, ExitCode, ErrorCode, ErrorMessage,
+                TriggeredByActorId)
+            VALUES (
+                @Id, @BuildProjectId, @ProjectNameSnapshot, @GitRepositoryId, @GitRepositoryNameSnapshot, @Branch,
+                @ResolvedCommitSha, @ContextPath, @DockerfilePath, @Target, @BuildArgsSnapshot::jsonb,
+                @BuildSecretIdsSnapshot::jsonb, @PlatformSnapshot::jsonb, @RegistrySnapshot::jsonb, @ImageRepository,
+                @TagTemplatesSnapshot::jsonb, @ImageReferences::jsonb, @Trigger, @TriggerSourceId, @Status, @ImageDigest,
+                @TimeoutSeconds, @QueuedAt, @StartedAt, @CompletedAt, @ExitCode, @ErrorCode, @ErrorMessage,
+                @TriggeredByActorId)
+            """;
+
+        return db.ExecuteAsync(sql, ToParameters(run), transaction: tx());
+    }
+
+    public Task<int> UpdateAsync(BuildRun run, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildRuns
+            SET ResolvedCommitSha = @ResolvedCommitSha,
+                ImageReferences = @ImageReferences::jsonb,
+                Status = @Status,
+                ImageDigest = @ImageDigest,
+                StartedAt = @StartedAt,
+                CompletedAt = @CompletedAt,
+                ExitCode = @ExitCode,
+                ErrorCode = @ErrorCode,
+                ErrorMessage = @ErrorMessage
+            WHERE Id = @Id
+            """;
+
+        return db.ExecuteAsync(sql, ToParameters(run), transaction: tx());
+    }
+
+    public async Task<BuildRun?> GetAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT * FROM BuildRuns WHERE Id = @Id LIMIT 1";
+        var result = await db.QuerySingleOrDefaultAsync<BuildRunDto>(sql, new { Id = id }, transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<IEnumerable<BuildRun>> GetByProjectAsync(Guid projectId, int limit, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT * FROM BuildRuns
+            WHERE BuildProjectId = @ProjectId
+            ORDER BY QueuedAt DESC
+            LIMIT @Limit
+            """;
+        var result = await db.QueryAsync<BuildRunDto>(sql, new { ProjectId = projectId, Limit = limit }, transaction: tx());
+        return result.Select(static x => x.ToDomain());
+    }
+
+    public async Task<IEnumerable<BuildRun>> GetPagedAsync(int limit, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT * FROM BuildRuns ORDER BY QueuedAt DESC LIMIT @Limit";
+        var result = await db.QueryAsync<BuildRunDto>(sql, new { Limit = limit }, transaction: tx());
+        return result.Select(static x => x.ToDomain());
+    }
+
+    public async Task<IEnumerable<BuildRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT * FROM BuildRuns
+            WHERE Status = @Status
+            ORDER BY QueuedAt ASC
+            LIMIT @Limit
+            """;
+        var result = await db.QueryAsync<BuildRunDto>(
+            sql,
+            new { Status = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Queued), Limit = limit },
+            transaction: tx());
+        return result.Select(static x => x.ToDomain());
+    }
+
+    public async Task<BuildRun?> TryClaimAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildRuns
+            SET Status = @PreparingStatus,
+                StartedAt = @StartedAt
+            WHERE Id = @Id
+              AND Status = @QueuedStatus
+            RETURNING *
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<BuildRunDto>(
+            sql,
+            new
+            {
+                Id = id,
+                StartedAt = startedAt.UtcDateTime,
+                QueuedStatus = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Queued),
+                PreparingStatus = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Preparing)
+            },
+            transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public Task<bool> HasActiveRunAsync(Guid projectId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1 FROM BuildRuns
+                WHERE BuildProjectId = @ProjectId
+                  AND Status = ANY(@Statuses))
+            """;
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new
+            {
+                ProjectId = projectId,
+                Statuses = new[]
+                {
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Queued),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Preparing),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Running)
+                }
+            },
+            transaction: tx());
+    }
+
+    public async Task<BuildRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildRuns
+            SET Status = @CancelledStatus,
+                CompletedAt = @CancelledAt,
+                ErrorCode = @ErrorCode,
+                ErrorMessage = @Reason
+            WHERE Id = @Id
+              AND Status = ANY(@ActiveStatuses)
+            RETURNING *
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<BuildRunDto>(
+            sql,
+            new
+            {
+                Id = id,
+                CancelledAt = cancelledAt.UtcDateTime,
+                ErrorCode = "build.cancelled",
+                Reason = reason,
+                CancelledStatus = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Cancelled),
+                ActiveStatuses = new[]
+                {
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Queued),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Preparing),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Running)
+                }
+            },
+            transaction: tx());
+        return result?.ToDomain();
+    }
+
+    private static BuildRunParameters ToParameters(BuildRun run)
+        => new
+        (
+            run.Id,
+            run.BuildProjectId,
+            run.ProjectNameSnapshot,
+            run.GitRepositoryId,
+            run.GitRepositoryNameSnapshot,
+            run.Branch,
+            run.ResolvedCommitSha,
+            run.ContextPath,
+            run.DockerfilePath,
+            run.Target,
+            BuildMappers.SerializeBuildArgs(run.BuildArgsSnapshot),
+            BuildMappers.SerializeStringList(run.BuildSecretIdsSnapshot),
+            BuildMappers.SerializePlatformSnapshot(run.PlatformSnapshot),
+            BuildMappers.SerializeRegistrySnapshot(run.RegistrySnapshot),
+            run.ImageRepository,
+            BuildMappers.SerializeStringList(run.TagTemplatesSnapshot),
+            BuildMappers.SerializeStringList(run.ImageReferences),
+            EnumFormatter<BuildRunTrigger>.GetValue(run.Trigger),
+            run.TriggerSourceId,
+            EnumFormatter<BuildRunStatus>.GetValue(run.Status),
+            run.ImageDigest,
+            run.TimeoutSeconds,
+            run.QueuedAt.UtcDateTime,
+            run.StartedAt?.UtcDateTime,
+            run.CompletedAt?.UtcDateTime,
+            run.ExitCode,
+            run.ErrorCode,
+            run.ErrorMessage,
+            run.TriggeredByActorId
+        );
+}
+
+internal sealed class BuildRunLogRepository(IDbConnection db, Func<IDbTransaction> tx) : IBuildRunLogRepository
+{
+    public Task<int> AddAsync(BuildRunLogEntry entry, CancellationToken cancellationToken)
+        => AddRangeAsync([entry], cancellationToken);
+
+    public Task<int> AddRangeAsync(IReadOnlyCollection<BuildRunLogEntry> entries, CancellationToken cancellationToken)
+    {
+        if (entries.Count == 0)
+            return Task.FromResult(0);
+
+        const string sql = """
+            INSERT INTO BuildRunLogs (Id, BuildRunId, CreatedAt, Stream, Message)
+            VALUES (@Id, @BuildRunId, @CreatedAt, @Stream, @Message)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            entries.Select(static entry => new
+            {
+                entry.Id,
+                entry.BuildRunId,
+                CreatedAt = entry.CreatedAt.UtcDateTime,
+                entry.Stream,
+                entry.Message
+            }),
+            transaction: tx());
+    }
+
+    public async Task<IReadOnlyList<BuildRunLogEntry>> GetByRunAsync(Guid buildRunId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT Id, BuildRunId, CreatedAt, Stream, Message
+            FROM BuildRunLogs
+            WHERE BuildRunId = @BuildRunId
+            ORDER BY CreatedAt ASC, Id ASC
+            """;
+        var result = await db.QueryAsync<BuildRunLogDto>(sql, new { BuildRunId = buildRunId }, transaction: tx());
+        return result.Select(static x => x.ToDomain()).ToArray();
+    }
+}

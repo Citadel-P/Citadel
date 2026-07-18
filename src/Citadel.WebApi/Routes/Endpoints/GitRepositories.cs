@@ -52,6 +52,15 @@ public static class GitRepositories
         return EndpointHandlers.HandleResult(result, GitRepositoryRefsView.Map);
     }
 
+    public static async Task<Results<Ok<GitRepositoryBranchesView>, ProblemHttpResult>> DiscoverBranches(
+        IMediator mediator,
+        [Description("Git repository id")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new DiscoverGitRepositoryBranches(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, GitRepositoryBranchesView.Map);
+    }
+
     public static async Task<Results<Ok<GitRepositoryComposeDiscovery>, ProblemHttpResult>> DiscoverComposeProjects(
         IMediator mediator,
         [Description("Git repository id")] Guid id,

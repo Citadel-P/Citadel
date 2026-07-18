@@ -81,6 +81,8 @@ export const GitRepoFormComponents: RequiredFormComponents = {
 };
 
 function GitRepoSubHeader({ latestActivity }: { latestActivity: LatestActivityView | null }) {
+  if (!latestActivity?.info) return null;
+
   if (latestActivity?.status === ActivityStatus.Success && latestActivity.info) {
     return (
       <AlertMessage date={latestActivity?.createdAt} type={'success'}>

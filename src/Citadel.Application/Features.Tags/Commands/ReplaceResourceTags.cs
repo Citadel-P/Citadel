@@ -31,6 +31,9 @@ public sealed record ReplaceAutomationActionTags(Guid Id, IReadOnlyCollection<Gu
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Write)]
 public sealed record ReplaceBackupPolicyTags(Guid Id, IReadOnlyCollection<Guid>? TagIds) : ICommand<Result<IReadOnlyList<TagSummary>>>;
 
+[RequirePermission(ResourceType.Build, PermissionLevel.Write)]
+public sealed record ReplaceBuildTags(Guid Id, IReadOnlyCollection<Guid>? TagIds) : ICommand<Result<IReadOnlyList<TagSummary>>>;
+
 internal sealed class ReplaceDeploymentTagsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<ReplaceDeploymentTags, Result<IReadOnlyList<TagSummary>>>
 {
     public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(ReplaceDeploymentTags command, CancellationToken cancellationToken)
@@ -126,6 +129,20 @@ internal sealed class ReplaceBackupPolicyTagsHandler(IUnitOfWork unitOfWork, IUs
             command.TagIds,
             async () => await unitOfWork.BackupPolicies.GetAsync(command.Id, cancellationToken) is not null,
             "Backup policy",
+            cancellationToken);
+}
+
+internal sealed class ReplaceBuildTagsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<ReplaceBuildTags, Result<IReadOnlyList<TagSummary>>>
+{
+    public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(ReplaceBuildTags command, CancellationToken cancellationToken)
+        => await ResourceTagReplace.ReplaceAsync(
+            unitOfWork,
+            userContext,
+            TaggableResourceType.Build,
+            command.Id,
+            command.TagIds,
+            async () => await unitOfWork.BuildProjects.GetAsync(command.Id, cancellationToken) is not null,
+            "Build project",
             cancellationToken);
 }
 
