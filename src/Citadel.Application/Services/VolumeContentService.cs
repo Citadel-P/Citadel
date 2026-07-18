@@ -21,6 +21,7 @@ internal sealed class VolumeContentService(
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IConnectorFactory<IImageConnector> imageConnectorFactory,
     IVolumeHelperImageResolver helperImageResolver,
+    IAgentRuntimeImageResolver agentRuntimeImageResolver,
     ILogger<VolumeContentService> logger)
     : IVolumeContentService
 {
@@ -294,6 +295,7 @@ internal sealed class VolumeContentService(
         var helperPlan = await ResolveHelperContainerPlanAsync(
             containerConnector,
             platformAddress,
+            platformId,
             connectorType,
             volumeName,
             cancellationToken);
@@ -349,12 +351,28 @@ internal sealed class VolumeContentService(
     private async Task<VolumeHelperContainerPlan> ResolveHelperContainerPlanAsync(
         IContainerConnector containerConnector,
         string platformAddress,
+        Guid platformId,
         PlatformConnectorType connectorType,
         string volumeName,
         CancellationToken cancellationToken)
     {
         var configuredImage = helperImageResolver.Resolve(connectorType);
-        if (helperImageResolver.IsExplicitlyConfigured || connectorType != PlatformConnectorType.Local)
+        if (helperImageResolver.IsExplicitlyConfigured)
+            return VolumeHelperContainerPlan.Create(configuredImage, volumeName);
+
+        if (connectorType is PlatformConnectorType.Agent or PlatformConnectorType.EdgeAgent)
+        {
+            var runtimeImage = await agentRuntimeImageResolver.TryResolveAsync(
+                containerConnector,
+                platformAddress,
+                platformId,
+                connectorType,
+                cancellationToken);
+
+            return VolumeHelperContainerPlan.Create(runtimeImage ?? configuredImage, volumeName);
+        }
+
+        if (connectorType != PlatformConnectorType.Local)
             return VolumeHelperContainerPlan.Create(configuredImage, volumeName);
 
         var currentContainerId = Environment.MachineName;

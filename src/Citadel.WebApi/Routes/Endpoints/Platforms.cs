@@ -17,6 +17,10 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Platforms
 {
+    private const string EdgeAgentPublicGrpcUrlKey = "EdgeAgent:PublicGrpcUrl";
+    private const string KestrelHttpEndpointUrlKey = "Kestrel:Endpoints:Http:Url";
+    private const string KestrelGrpcEndpointUrlKey = "Kestrel:Endpoints:Grpc:Url";
+
     public static async Task<Results<Ok<PlatformsView>, ProblemHttpResult>> List(
         IMediator mediator,
         IPermissionEvaluator permissionEvaluator,
@@ -136,13 +140,52 @@ public static class Platforms
 
     private static string GetEdgeAgentGrpcUrl(HttpContext httpContext, IConfiguration configuration)
     {
-        var configuredUrl = configuration["EdgeAgent:PublicGrpcUrl"];
+        var configuredUrl = configuration[EdgeAgentPublicGrpcUrlKey];
         if (!string.IsNullOrWhiteSpace(configuredUrl))
         {
             return configuredUrl.TrimEnd('/');
         }
 
-        return UriHelper.BuildAbsolute(httpContext.Request.Scheme, httpContext.Request.Host).TrimEnd('/');
+        var requestHost = httpContext.Request.Host;
+        var edgeAgentHost = TryInferEdgeAgentGrpcHost(requestHost, configuration) ?? requestHost;
+
+        return UriHelper.BuildAbsolute(httpContext.Request.Scheme, edgeAgentHost).TrimEnd('/');
+    }
+
+    private static HostString? TryInferEdgeAgentGrpcHost(HostString requestHost, IConfiguration configuration)
+    {
+        var httpPort = GetConfiguredEndpointPort(configuration, KestrelHttpEndpointUrlKey);
+        var grpcPort = GetConfiguredEndpointPort(configuration, KestrelGrpcEndpointUrlKey);
+
+        if (httpPort is null || grpcPort is null || requestHost.Port != httpPort || requestHost.Port == grpcPort)
+        {
+            return null;
+        }
+
+        return new HostString(requestHost.Host, grpcPort.Value);
+    }
+
+    private static int? GetConfiguredEndpointPort(IConfiguration configuration, string key)
+    {
+        var endpointUrl = configuration[key];
+        if (string.IsNullOrWhiteSpace(endpointUrl))
+        {
+            return null;
+        }
+
+        foreach (var candidate in endpointUrl.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var normalized = candidate
+                .Replace("://+:", "://localhost:", StringComparison.Ordinal)
+                .Replace("://*:", "://localhost:", StringComparison.Ordinal);
+
+            if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri) && !uri.IsDefaultPort)
+            {
+                return uri.Port;
+            }
+        }
+
+        return null;
     }
 
 }

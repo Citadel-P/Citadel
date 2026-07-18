@@ -30,22 +30,31 @@ public class EdgeAgentTests(PostgresTestFixture fixture) : IntegrationTestBase(f
     {
         var platformId = await CreateEdgePlatformAsync("edge-platform");
 
-        var enrollmentResponse = await Client.PostAsync(
-            $"/api/v1/platforms/{platformId:D}/edge/enrollments",
-            content: null,
-            cancellationToken: TestContext.Current.CancellationToken);
+        using var enrollmentRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/platforms/{platformId:D}/edge/enrollments");
+        enrollmentRequest.Headers.Host = "localhost:8000";
+        var enrollmentResponse = await Client.SendAsync(
+            enrollmentRequest,
+            TestContext.Current.CancellationToken);
         var enrollmentBody = await enrollmentResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         enrollmentResponse.EnsureSuccessStatusCode();
         using var enrollmentJson = JsonDocument.Parse(enrollmentBody);
         var token = enrollmentJson.RootElement.GetProperty("token").GetString()!;
         var expiresAtUtc = enrollmentJson.RootElement.GetProperty("expiresAtUtc").GetDateTime();
-        var environment = enrollmentJson.RootElement.GetProperty("instructions").GetProperty("environment");
+        var instructions = enrollmentJson.RootElement.GetProperty("instructions");
+        var environment = instructions.GetProperty("environment");
 
         Assert.False(string.IsNullOrWhiteSpace(token));
         Assert.InRange(expiresAtUtc - DateTime.UtcNow, TimeSpan.FromHours(23), TimeSpan.FromHours(24).Add(TimeSpan.FromMinutes(1)));
+        Assert.Equal("http://localhost:8001", instructions.GetProperty("coreUrl").GetString());
         Assert.Equal("edge", environment.GetProperty("CITADEL_AGENT_MODE").GetString());
+        Assert.Equal("http://localhost:8001", environment.GetProperty("CITADEL_CORE_URL").GetString());
         Assert.Equal("/app/data/edge-agent.key", environment.GetProperty("CITADEL_EDGE_AGENT_KEY_PATH").GetString());
+        Assert.Contains(
+            "CITADEL_CORE_URL=\"http://localhost:8001\"",
+            instructions.GetProperty("dockerRunCommand").GetString());
 
         await using (var scope = Services.CreateAsyncScope())
         {

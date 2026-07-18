@@ -65,7 +65,8 @@ public sealed class PlatformResticRunnerTests
         var runner = new PlatformResticRunner(
             containerFactory.Object,
             imageFactory.Object,
-            helperImageResolver.Object);
+            helperImageResolver.Object,
+            Mock.Of<IAgentRuntimeImageResolver>());
 
         var events = new List<ResticProcessEvent>();
         await foreach (var item in runner.RunAsync(
@@ -151,7 +152,8 @@ public sealed class PlatformResticRunnerTests
         var runner = new PlatformResticRunner(
             containerFactory.Object,
             imageFactory.Object,
-            helperImageResolver.Object);
+            helperImageResolver.Object,
+            Mock.Of<IAgentRuntimeImageResolver>());
 
         var events = new List<ResticProcessEvent>();
         await foreach (var item in runner.RunAsync(
@@ -240,7 +242,8 @@ public sealed class PlatformResticRunnerTests
         var runner = new PlatformResticRunner(
             containerFactory.Object,
             imageFactory.Object,
-            helperImageResolver.Object);
+            helperImageResolver.Object,
+            Mock.Of<IAgentRuntimeImageResolver>());
 
         var events = new List<ResticProcessEvent>();
         await foreach (var item in runner.RunAsync(
@@ -265,6 +268,182 @@ public sealed class PlatformResticRunnerTests
 
         Assert.NotNull(createCommand);
         Assert.Equal("citadel.dev:dev", createCommand.ImageId);
+        Assert.Contains(events, item => item.Stream == ResticProcessStream.Exit && item.ExitCode == 0);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldUseEdgeAgentRuntimeImageWhenAvailable()
+    {
+        CreateContainerCommand? createCommand = null;
+        var platformId = Guid.CreateVersion7();
+
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .Setup(connector => connector.CreateAsync(It.IsAny<CreateContainerCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateContainerCommand, CancellationToken>((command, _) => createCommand = command)
+            .ReturnsAsync(Result.Success("restic-helper"));
+        containerConnector
+            .Setup(connector => connector.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        containerConnector
+            .Setup(connector => connector.InspectAsync(It.IsAny<InspectContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((InspectContainerCommand command, CancellationToken _) => Result.Success(RunningContainer(command.ContainerId)));
+        containerConnector
+            .Setup(connector => connector.ExecBinaryAsync(
+                "edge://platform-01",
+                It.IsAny<ContainerBinaryExecRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new ContainerBinaryExecResult
+            {
+                Output = ReadChunksAsync("[]", TestContext.Current.CancellationToken),
+                GetExitCodeAsync = _ => Task.FromResult<int?>(0),
+                CleanupAsync = () => ValueTask.CompletedTask
+            }));
+        containerConnector
+            .Setup(connector => connector.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        var containerFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.EdgeAgent))
+            .Returns(containerConnector.Object);
+
+        var imageFactory = new Mock<IConnectorFactory<IImageConnector>>();
+        imageFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.EdgeAgent))
+            .Returns(Mock.Of<IImageConnector>());
+
+        var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve(PlatformConnectorType.EdgeAgent))
+            .Returns("ghcr.io/citadel-p/citadel.agent:1.0");
+        var agentRuntimeImageResolver = new Mock<IAgentRuntimeImageResolver>();
+        agentRuntimeImageResolver
+            .Setup(resolver => resolver.TryResolveAsync(
+                containerConnector.Object,
+                "edge://platform-01",
+                platformId,
+                PlatformConnectorType.EdgeAgent,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("citadel-agent:dev");
+
+        var runner = new PlatformResticRunner(
+            containerFactory.Object,
+            imageFactory.Object,
+            helperImageResolver.Object,
+            agentRuntimeImageResolver.Object);
+
+        var events = new List<ResticProcessEvent>();
+        await foreach (var item in runner.RunAsync(
+                           new PlatformResticCommand(
+                               platformId,
+                               "edge://platform-01",
+                               PlatformConnectorType.EdgeAgent,
+                               "restic",
+                               ["snapshots", "--json"],
+                               new Dictionary<string, string> { ["RESTIC_REPOSITORY"] = "/repository" },
+                               TimeSpan.FromSeconds(30),
+                               [],
+                               4096,
+                               SourceVolumeName: null,
+                               TargetVolumeName: null,
+                               RepositoryHostPath: null,
+                               NetworkMode: "none"),
+                           CancellationToken.None))
+        {
+            events.Add(item);
+        }
+
+        Assert.NotNull(createCommand);
+        Assert.Equal("citadel-agent:dev", createCommand.ImageId);
+        Assert.Contains(events, item => item.Stream == ResticProcessStream.Exit && item.ExitCode == 0);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldUseAgentRuntimeImageWhenAvailable()
+    {
+        CreateContainerCommand? createCommand = null;
+        var platformId = Guid.CreateVersion7();
+
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .Setup(connector => connector.CreateAsync(It.IsAny<CreateContainerCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateContainerCommand, CancellationToken>((command, _) => createCommand = command)
+            .ReturnsAsync(Result.Success("restic-helper"));
+        containerConnector
+            .Setup(connector => connector.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        containerConnector
+            .Setup(connector => connector.InspectAsync(It.IsAny<InspectContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((InspectContainerCommand command, CancellationToken _) => Result.Success(RunningContainer(command.ContainerId)));
+        containerConnector
+            .Setup(connector => connector.ExecBinaryAsync(
+                "agent://platform-01",
+                It.IsAny<ContainerBinaryExecRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new ContainerBinaryExecResult
+            {
+                Output = ReadChunksAsync("[]", TestContext.Current.CancellationToken),
+                GetExitCodeAsync = _ => Task.FromResult<int?>(0),
+                CleanupAsync = () => ValueTask.CompletedTask
+            }));
+        containerConnector
+            .Setup(connector => connector.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        var containerFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Agent))
+            .Returns(containerConnector.Object);
+
+        var imageFactory = new Mock<IConnectorFactory<IImageConnector>>();
+        imageFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Agent))
+            .Returns(Mock.Of<IImageConnector>());
+
+        var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve(PlatformConnectorType.Agent))
+            .Returns("ghcr.io/citadel-p/citadel.agent:1.0");
+        var agentRuntimeImageResolver = new Mock<IAgentRuntimeImageResolver>();
+        agentRuntimeImageResolver
+            .Setup(resolver => resolver.TryResolveAsync(
+                containerConnector.Object,
+                "agent://platform-01",
+                platformId,
+                PlatformConnectorType.Agent,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("citadel-agent:dev");
+
+        var runner = new PlatformResticRunner(
+            containerFactory.Object,
+            imageFactory.Object,
+            helperImageResolver.Object,
+            agentRuntimeImageResolver.Object);
+
+        var events = new List<ResticProcessEvent>();
+        await foreach (var item in runner.RunAsync(
+                           new PlatformResticCommand(
+                               platformId,
+                               "agent://platform-01",
+                               PlatformConnectorType.Agent,
+                               "restic",
+                               ["snapshots", "--json"],
+                               new Dictionary<string, string> { ["RESTIC_REPOSITORY"] = "/repository" },
+                               TimeSpan.FromSeconds(30),
+                               [],
+                               4096,
+                               SourceVolumeName: null,
+                               TargetVolumeName: null,
+                               RepositoryHostPath: null,
+                               NetworkMode: "none"),
+                           CancellationToken.None))
+        {
+            events.Add(item);
+        }
+
+        Assert.NotNull(createCommand);
+        Assert.Equal("citadel-agent:dev", createCommand.ImageId);
         Assert.Contains(events, item => item.Stream == ResticProcessStream.Exit && item.ExitCode == 0);
     }
 

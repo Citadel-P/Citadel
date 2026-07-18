@@ -13,7 +13,8 @@ public sealed record PlatformResult(
         string? ServerVersion,
         string? AgentVersion,
         PlatformDescriptor? Descriptor,
-        DockerPlatformStat? PlatformStat = null);
+        DockerPlatformStat? PlatformStat = null,
+        string? AgentRuntimeImage = null);
 
 public sealed class DockerPlatformStat(
         long created,

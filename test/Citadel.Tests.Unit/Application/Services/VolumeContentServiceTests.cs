@@ -56,11 +56,21 @@ public sealed class VolumeContentServiceTests
         helperImageResolver
             .Setup(resolver => resolver.Resolve(PlatformConnectorType.EdgeAgent))
             .Returns(VolumeContentService.DevelopmentHelperImage);
+        var agentRuntimeImageResolver = new Mock<IAgentRuntimeImageResolver>();
+        agentRuntimeImageResolver
+            .Setup(resolver => resolver.TryResolveAsync(
+                containerConnector.Object,
+                "edge://platform-1",
+                It.IsAny<Guid>(),
+                PlatformConnectorType.EdgeAgent,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
 
         var service = new VolumeContentService(
             containerConnectorFactory.Object,
             Mock.Of<IConnectorFactory<IImageConnector>>(),
             helperImageResolver.Object,
+            agentRuntimeImageResolver.Object,
             NullLogger<VolumeContentService>.Instance);
 
         var result = await service.ListDirectoryAsync(
@@ -105,6 +115,150 @@ public sealed class VolumeContentServiceTests
     }
 
     [Fact]
+    public async Task ListDirectoryAsync_ShouldUseEdgeAgentRuntimeImageWhenAvailable()
+    {
+        CreateContainerCommand? createCommand = null;
+
+        var platformId = Guid.CreateVersion7();
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .Setup(connector => connector.CreateAsync(It.IsAny<CreateContainerCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateContainerCommand, CancellationToken>((command, _) => createCommand = command)
+            .ReturnsAsync(Result.Success("helper-1"));
+        containerConnector
+            .Setup(connector => connector.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        containerConnector
+            .Setup(connector => connector.InspectAsync(It.IsAny<InspectContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(RunningContainer("helper-1")));
+        containerConnector
+            .Setup(connector => connector.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        containerConnector
+            .Setup(connector => connector.ExecBinaryAsync(
+                "edge://platform-1",
+                It.IsAny<ContainerBinaryExecRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new ContainerBinaryExecResult
+            {
+                Output = ReadChunksAsync("""{"Path":"/","Entries":[],"IsTruncated":false}"""),
+                GetExitCodeAsync = _ => Task.FromResult<int?>(0),
+                CleanupAsync = () => ValueTask.CompletedTask
+            }));
+
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerConnectorFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.EdgeAgent))
+            .Returns(containerConnector.Object);
+
+        var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve(PlatformConnectorType.EdgeAgent))
+            .Returns("ghcr.io/citadel-p/citadel.agent:1.0");
+        var agentRuntimeImageResolver = new Mock<IAgentRuntimeImageResolver>();
+        agentRuntimeImageResolver
+            .Setup(resolver => resolver.TryResolveAsync(
+                containerConnector.Object,
+                "edge://platform-1",
+                platformId,
+                PlatformConnectorType.EdgeAgent,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("citadel-agent:dev");
+
+        var service = new VolumeContentService(
+            containerConnectorFactory.Object,
+            Mock.Of<IConnectorFactory<IImageConnector>>(),
+            helperImageResolver.Object,
+            agentRuntimeImageResolver.Object,
+            NullLogger<VolumeContentService>.Instance);
+
+        var result = await service.ListDirectoryAsync(
+            new ListVolumeDirectoryCommand(
+                "edge://platform-1",
+                platformId,
+                PlatformConnectorType.EdgeAgent,
+                "app-data",
+                new NormalizedVolumePath("/", [])),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess(out _, out var error), error?.Message);
+        Assert.NotNull(createCommand);
+        Assert.Equal("citadel-agent:dev", createCommand.ImageId);
+    }
+
+    [Fact]
+    public async Task ListDirectoryAsync_ShouldUseAgentRuntimeImageWhenAvailable()
+    {
+        CreateContainerCommand? createCommand = null;
+        var platformId = Guid.CreateVersion7();
+
+        var containerConnector = new Mock<IContainerConnector>();
+        containerConnector
+            .Setup(connector => connector.CreateAsync(It.IsAny<CreateContainerCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateContainerCommand, CancellationToken>((command, _) => createCommand = command)
+            .ReturnsAsync(Result.Success("helper-1"));
+        containerConnector
+            .Setup(connector => connector.PatchAsync(It.IsAny<PatchContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        containerConnector
+            .Setup(connector => connector.InspectAsync(It.IsAny<InspectContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(RunningContainer("helper-1")));
+        containerConnector
+            .Setup(connector => connector.DeleteAsync(It.IsAny<DeleteContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        containerConnector
+            .Setup(connector => connector.ExecBinaryAsync(
+                "agent://platform-1",
+                It.IsAny<ContainerBinaryExecRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new ContainerBinaryExecResult
+            {
+                Output = ReadChunksAsync("""{"Path":"/","Entries":[],"IsTruncated":false}"""),
+                GetExitCodeAsync = _ => Task.FromResult<int?>(0),
+                CleanupAsync = () => ValueTask.CompletedTask
+            }));
+
+        var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
+        containerConnectorFactory
+            .Setup(factory => factory.GetConnector(PlatformConnectorType.Agent))
+            .Returns(containerConnector.Object);
+
+        var helperImageResolver = new Mock<IVolumeHelperImageResolver>();
+        helperImageResolver
+            .Setup(resolver => resolver.Resolve(PlatformConnectorType.Agent))
+            .Returns("ghcr.io/citadel-p/citadel.agent:1.0");
+        var agentRuntimeImageResolver = new Mock<IAgentRuntimeImageResolver>();
+        agentRuntimeImageResolver
+            .Setup(resolver => resolver.TryResolveAsync(
+                containerConnector.Object,
+                "agent://platform-1",
+                platformId,
+                PlatformConnectorType.Agent,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("citadel-agent:dev");
+
+        var service = new VolumeContentService(
+            containerConnectorFactory.Object,
+            Mock.Of<IConnectorFactory<IImageConnector>>(),
+            helperImageResolver.Object,
+            agentRuntimeImageResolver.Object,
+            NullLogger<VolumeContentService>.Instance);
+
+        var result = await service.ListDirectoryAsync(
+            new ListVolumeDirectoryCommand(
+                "agent://platform-1",
+                platformId,
+                PlatformConnectorType.Agent,
+                "app-data",
+                new NormalizedVolumePath("/", [])),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess(out _, out var error), error?.Message);
+        Assert.NotNull(createCommand);
+        Assert.Equal("citadel-agent:dev", createCommand.ImageId);
+    }
+
+    [Fact]
     public async Task ListDirectoryAsync_ShouldIncludeHelperLogsWhenHelperExitsBeforeReady()
     {
         var containerConnector = new Mock<IContainerConnector>();
@@ -133,11 +287,21 @@ public sealed class VolumeContentServiceTests
         helperImageResolver
             .Setup(resolver => resolver.Resolve(PlatformConnectorType.EdgeAgent))
             .Returns(VolumeContentService.DevelopmentHelperImage);
+        var agentRuntimeImageResolver = new Mock<IAgentRuntimeImageResolver>();
+        agentRuntimeImageResolver
+            .Setup(resolver => resolver.TryResolveAsync(
+                containerConnector.Object,
+                "edge://platform-1",
+                It.IsAny<Guid>(),
+                PlatformConnectorType.EdgeAgent,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
 
         var service = new VolumeContentService(
             containerConnectorFactory.Object,
             Mock.Of<IConnectorFactory<IImageConnector>>(),
             helperImageResolver.Object,
+            agentRuntimeImageResolver.Object,
             NullLogger<VolumeContentService>.Instance);
 
         var result = await service.ListDirectoryAsync(
@@ -214,6 +378,7 @@ public sealed class VolumeContentServiceTests
             containerConnectorFactory.Object,
             Mock.Of<IConnectorFactory<IImageConnector>>(),
             helperImageResolver.Object,
+            Mock.Of<IAgentRuntimeImageResolver>(),
             NullLogger<VolumeContentService>.Instance);
 
         var result = await service.ListDirectoryAsync(

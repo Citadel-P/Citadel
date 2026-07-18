@@ -73,6 +73,7 @@ public static class ApplicationModule
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IVolumePathNormalizer, VolumePathNormalizer>()
             .AddSingleton<IVolumeHelperImageResolver, VolumeHelperImageResolver>()
+            .AddSingleton<IAgentRuntimeImageResolver, AgentRuntimeImageResolver>()
             .AddSingleton<IVolumeContentService, VolumeContentService>()
             .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()

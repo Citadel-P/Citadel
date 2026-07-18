@@ -49,7 +49,8 @@ internal static class PlatformMappers
                 ServerVersion: platformInfo.ServerVersion,
                 AgentVersion: platformInfo.AgentVersion,
                 Descriptor: descriptor,
-                PlatformStat: platformInfo.PlatformStat.Map()
+                PlatformStat: platformInfo.PlatformStat.Map(),
+                AgentRuntimeImage: platformInfo.AgentRuntimeImage
             );
     }
 
@@ -88,7 +89,8 @@ internal static class PlatformMappers
             ServerVersion: platformInfo.ServerVersion,
             AgentVersion: platformInfo.AgentVersion,
             Descriptor: descriptor,
-            PlatformStat: platformInfo.PlatformStatistics?.Map()
+            PlatformStat: platformInfo.PlatformStatistics?.Map(),
+            AgentRuntimeImage: platformInfo.AgentRuntimeImage
         );
     }
 

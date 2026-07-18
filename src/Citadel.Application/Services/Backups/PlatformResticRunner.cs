@@ -31,7 +31,8 @@ internal sealed record PlatformResticCommand(
 internal sealed partial class PlatformResticRunner(
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IConnectorFactory<IImageConnector> imageConnectorFactory,
-    IVolumeHelperImageResolver helperImageResolver)
+    IVolumeHelperImageResolver helperImageResolver,
+    IAgentRuntimeImageResolver agentRuntimeImageResolver)
     : IPlatformResticRunner
 {
     private const string HelperExecutable = "/bin/sh";
@@ -126,7 +127,20 @@ internal sealed partial class PlatformResticRunner(
         CancellationToken cancellationToken)
     {
         var configuredImage = helperImageResolver.Resolve(command.ConnectorType);
-        if (helperImageResolver.IsExplicitlyConfigured || command.ConnectorType != PlatformConnectorType.Local)
+        if (helperImageResolver.IsExplicitlyConfigured)
+            return configuredImage;
+
+        if (command.ConnectorType is PlatformConnectorType.Agent or PlatformConnectorType.EdgeAgent)
+        {
+            return await agentRuntimeImageResolver.TryResolveAsync(
+                containerConnector,
+                command.PlatformAddress,
+                command.PlatformId,
+                command.ConnectorType,
+                cancellationToken) ?? configuredImage;
+        }
+
+        if (command.ConnectorType != PlatformConnectorType.Local)
             return configuredImage;
 
         var currentContainerId = Environment.MachineName;
