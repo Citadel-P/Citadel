@@ -32,6 +32,7 @@ COPY ["src/Citadel.WebApi/Citadel.WebApi.csproj", "Citadel.WebApi/"]
 COPY ["src/Citadel.Domain/Citadel.Domain.csproj", "Citadel.Domain/"]
 COPY ["src/Citadel.Application/Citadel.Application.csproj", "Citadel.Application/"]
 COPY ["src/Citadel.Infrastructure/Citadel.Infrastructure.csproj", "Citadel.Infrastructure/"]
+COPY ["src/Citadel.VolumeHelper/Citadel.VolumeHelper.csproj", "Citadel.VolumeHelper/"]
 
 COPY ["src/Citadel.Contracts/Directory.Build.props", "Citadel.Contracts/"]
 COPY ["src/Citadel.Contracts/Directory.Packages.props", "Citadel.Contracts/"]
@@ -42,7 +43,8 @@ COPY ["src/Citadel.Contracts/src/Citadel.Hosting.Common/Citadel.Hosting.Common.c
 COPY ["src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Citadel.Hosting.DockerClient.csproj", "Citadel.Contracts/Citadel.Hosting.DockerClient/"]
 
 # Restore
-RUN dotnet restore "Citadel.WebApi/Citadel.WebApi.csproj"
+RUN dotnet restore "Citadel.WebApi/Citadel.WebApi.csproj" \
+    && dotnet restore "Citadel.VolumeHelper/Citadel.VolumeHelper.csproj"
 
 COPY src/ .
 
@@ -50,7 +52,10 @@ WORKDIR /src/Citadel.WebApi
 # Publish
 RUN dotnet publish Citadel.WebApi.csproj -c Release -o /app/publish \
     -r linux-musl-x64 --self-contained true /p:StripSymbols=true \
-    && rm /app/publish/*.dbg
+    && dotnet publish ../Citadel.VolumeHelper/Citadel.VolumeHelper.csproj -c Release -o /app/volume-helper \
+        -r linux-musl-x64 --self-contained true /p:StripSymbols=true \
+    && cp /app/volume-helper/Citadel.VolumeHelper /app/publish/Citadel.VolumeHelper \
+    && rm -f /app/publish/*.dbg /app/volume-helper/*.dbg
 
 COPY --from=frontend-build /src/Citadel.FrontEnd/dist /app/publish/wwwroot
 

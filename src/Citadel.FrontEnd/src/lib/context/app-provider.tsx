@@ -18,7 +18,7 @@ const AppProviderContent: React.FC<{ children?: React.ReactNode }> = ({ children
     const livePlatform = platformsMessage?.find((platform) => platform.id === platformId);
     if (livePlatform) return livePlatform;
 
-    return platformsMessage ? undefined : platformData?.data;
+    return platformData?.data;
   }, [platformId, platformsMessage, platformData]);
 
   const contextValue = useMemo(

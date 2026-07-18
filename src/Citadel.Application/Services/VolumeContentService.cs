@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Application.Configs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -12,6 +13,7 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Application.Services;
 
@@ -22,14 +24,29 @@ internal sealed class VolumeContentService(
     ILogger<VolumeContentService> logger)
     : IVolumeContentService
 {
+    internal const string DevelopmentHelperImage = "citadel.dev";
+
     private const string HelperLauncherExecutable = "/bin/sh";
     private const string HelperLauncherName = "citadel-volume-helper";
     private const string HelperLauncherScript = """
         for executable in \
+          ./Citadel.VolumeHelper \
+          ./publish/Citadel.VolumeHelper \
+          /app/Citadel.VolumeHelper \
+          /app/publish/Citadel.VolumeHelper \
+          /src/src/Citadel.VolumeHelper/bin/Release/net*/linux-*/native/Citadel.VolumeHelper \
+          /src/src/Citadel.VolumeHelper/bin/Release/net*/linux-*/Citadel.VolumeHelper \
+          /src/src/Citadel.VolumeHelper/bin/Debug/net*/Citadel.VolumeHelper \
+          /src/Citadel.VolumeHelper/bin/Release/net*/linux-*/native/Citadel.VolumeHelper \
+          /src/Citadel.VolumeHelper/bin/Release/net*/linux-*/Citadel.VolumeHelper \
+          /src/Citadel.VolumeHelper/bin/Debug/net*/Citadel.VolumeHelper \
           ./Citadel.Agent.VolumeHelper \
           ./publish/Citadel.Agent.VolumeHelper \
           /app/Citadel.Agent.VolumeHelper \
           /app/publish/Citadel.Agent.VolumeHelper \
+          /src/src/Citadel.Agent.VolumeHelper/bin/Release/net*/linux-*/native/Citadel.Agent.VolumeHelper \
+          /src/src/Citadel.Agent.VolumeHelper/bin/Release/net*/linux-*/Citadel.Agent.VolumeHelper \
+          /src/src/Citadel.Agent.VolumeHelper/bin/Debug/net*/Citadel.Agent.VolumeHelper \
           /src/Citadel.Agent.VolumeHelper/bin/Release/net*/linux-*/native/Citadel.Agent.VolumeHelper \
           /src/Citadel.Agent.VolumeHelper/bin/Release/net*/linux-*/Citadel.Agent.VolumeHelper \
           /src/Citadel.Agent.VolumeHelper/bin/Debug/net*/Citadel.Agent.VolumeHelper
@@ -41,10 +58,20 @@ internal sealed class VolumeContentService(
 
         if command -v dotnet >/dev/null 2>&1; then
           for dll in \
+            ./Citadel.VolumeHelper.dll \
+            ./publish/Citadel.VolumeHelper.dll \
+            /app/Citadel.VolumeHelper.dll \
+            /app/publish/Citadel.VolumeHelper.dll \
+            /src/src/Citadel.VolumeHelper/bin/Release/net*/linux-*/Citadel.VolumeHelper.dll \
+            /src/src/Citadel.VolumeHelper/bin/Debug/net*/Citadel.VolumeHelper.dll \
+            /src/Citadel.VolumeHelper/bin/Release/net*/linux-*/Citadel.VolumeHelper.dll \
+            /src/Citadel.VolumeHelper/bin/Debug/net*/Citadel.VolumeHelper.dll \
             ./Citadel.Agent.VolumeHelper.dll \
             ./publish/Citadel.Agent.VolumeHelper.dll \
             /app/Citadel.Agent.VolumeHelper.dll \
             /app/publish/Citadel.Agent.VolumeHelper.dll \
+            /src/src/Citadel.Agent.VolumeHelper/bin/Release/net*/linux-*/Citadel.Agent.VolumeHelper.dll \
+            /src/src/Citadel.Agent.VolumeHelper/bin/Debug/net*/Citadel.Agent.VolumeHelper.dll \
             /src/Citadel.Agent.VolumeHelper/bin/Release/net*/linux-*/Citadel.Agent.VolumeHelper.dll \
             /src/Citadel.Agent.VolumeHelper/bin/Debug/net*/Citadel.Agent.VolumeHelper.dll
           do
@@ -54,7 +81,7 @@ internal sealed class VolumeContentService(
           done
         fi
 
-        echo "Citadel Agent volume helper executable was not found in the helper image. Rebuild the Citadel Agent image." >&2
+        echo "Citadel volume helper executable was not found in the helper image. Rebuild or pull the matching Citadel helper image." >&2
         exit 127
         """;
     private const string HelperRoot = "/data";
@@ -264,15 +291,20 @@ internal sealed class VolumeContentService(
     {
         var containerConnector = containerConnectorFactory.GetConnector(connectorType);
         var imageConnector = imageConnectorFactory.GetConnector(connectorType);
-        var helperImage = helperImageResolver.Resolve();
+        var helperPlan = await ResolveHelperContainerPlanAsync(
+            containerConnector,
+            platformAddress,
+            connectorType,
+            volumeName,
+            cancellationToken);
+        var helperImage = helperPlan.Image;
         var containerName = $"citadel-volume-helper-{Guid.CreateVersion7():N}";
 
         var create = await TryCreateHelperAsync(
             containerConnector,
             platformAddress,
             platformId,
-            volumeName,
-            helperImage,
+            helperPlan,
             containerName,
             cancellationToken);
 
@@ -284,22 +316,21 @@ internal sealed class VolumeContentService(
             if (!CanPullHelperImage(helperImage))
             {
                 return Result.Failure<HelperContainerSession>(
-                    new BadGatewayError($"Volume browser helper image '{helperImage}' is not available on the target platform. Build or load the configured helper image on that Docker daemon before browsing volume contents."));
+                    new BadGatewayError($"Citadel volume helper image '{helperImage}' is not available on the target platform. Build or load the configured helper image on that Docker daemon before browsing volume contents."));
             }
 
             var pull = await PullHelperImageAsync(imageConnector, platformAddress, helperImage, cancellationToken);
             if (pull.IsFailure(out var pullError))
             {
                 return Result.Failure<HelperContainerSession>(
-                    new BadGatewayError($"Volume browser helper image '{helperImage}' is not available on the target platform and could not be pulled: {pullError.Message}"));
+                    new BadGatewayError($"Citadel volume helper image '{helperImage}' is not available on the target platform and could not be pulled: {pullError.Message}"));
             }
 
             create = await TryCreateHelperAsync(
                 containerConnector,
                 platformAddress,
                 platformId,
-                volumeName,
-                helperImage,
+                helperPlan,
                 containerName,
                 cancellationToken);
 
@@ -307,7 +338,7 @@ internal sealed class VolumeContentService(
             {
                 return Result.Failure<HelperContainerSession>(
                     IsMissingHelperImageError(createError)
-                        ? new BadGatewayError($"Volume browser helper image '{helperImage}' is not available on the target platform.")
+                        ? new BadGatewayError($"Citadel volume helper image '{helperImage}' is not available on the target platform.")
                         : createError);
             }
         }
@@ -315,18 +346,53 @@ internal sealed class VolumeContentService(
         return await StartHelperAsync(containerConnector, platformAddress, containerId, cancellationToken);
     }
 
+    private async Task<VolumeHelperContainerPlan> ResolveHelperContainerPlanAsync(
+        IContainerConnector containerConnector,
+        string platformAddress,
+        PlatformConnectorType connectorType,
+        string volumeName,
+        CancellationToken cancellationToken)
+    {
+        var configuredImage = helperImageResolver.Resolve(connectorType);
+        if (helperImageResolver.IsExplicitlyConfigured || connectorType != PlatformConnectorType.Local)
+            return VolumeHelperContainerPlan.Create(configuredImage, volumeName);
+
+        var currentContainerId = Environment.MachineName;
+        if (string.IsNullOrWhiteSpace(currentContainerId))
+            return VolumeHelperContainerPlan.Create(configuredImage, volumeName);
+
+        var currentContainer = await containerConnector.InspectAsync(
+            new InspectContainerCommand(platformAddress, currentContainerId),
+            cancellationToken);
+
+        if (!currentContainer.IsSuccess(out var container))
+            return VolumeHelperContainerPlan.Create(configuredImage, volumeName);
+
+        var image = container.Config?.Image;
+        if (string.IsNullOrWhiteSpace(image))
+            return VolumeHelperContainerPlan.Create(configuredImage, volumeName);
+
+        var sourceMount = container.Mounts.FirstOrDefault(static mount =>
+            string.Equals(mount.Type, "bind", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(mount.Destination, "/src", StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(mount.Source));
+
+        return sourceMount?.Source is not null
+            ? VolumeHelperContainerPlan.CreateWithSourceMount(image, volumeName, sourceMount.Source)
+            : VolumeHelperContainerPlan.Create(image, volumeName);
+    }
+
     private static async Task<Result<string>> TryCreateHelperAsync(
         IContainerConnector containerConnector,
         string platformAddress,
         Guid platformId,
-        string volumeName,
-        string helperImage,
+        VolumeHelperContainerPlan helperPlan,
         string containerName,
         CancellationToken cancellationToken)
         => await containerConnector.CreateAsync(
             new CreateContainerCommand(
                 PlatformAddress: platformAddress,
-                ImageId: helperImage,
+                ImageId: helperPlan.Image,
                 Name: containerName,
                 WorkingDir: "/app",
                 User: "0",
@@ -337,28 +403,18 @@ internal sealed class VolumeContentService(
                 PidsLimit: 64,
                 AutoRemove: false,
                 Privileged: false,
-                ReadonlyRootfs: true,
+                ReadonlyRootfs: helperPlan.ReadonlyRootfs,
                 RestartPolicy: null,
                 Labels: new Dictionary<string, string>
                 {
                     ["citadel.volume-browser"] = "true",
                     ["citadel.platform-id"] = platformId.ToString(),
-                    ["citadel.volume-name"] = volumeName
+                    ["citadel.volume-name"] = helperPlan.VolumeName
                 },
                 EnvVars: null,
                 Ports: null,
                 Volumes: null,
-                Mounts:
-                [
-                    new HostMount(
-                        Target: HelperRoot,
-                        Source: volumeName,
-                        Type: "volume",
-                        ReadOnly: true,
-                        Consistency: null,
-                        BindOptions: null,
-                        VolumeOptions: null)
-                ],
+                Mounts: helperPlan.Mounts,
                 CapAdd: ["DAC_READ_SEARCH"],
                 CapDrop: ["ALL"],
                 SecurityOpt: ["no-new-privileges"],
@@ -413,7 +469,7 @@ internal sealed class VolumeContentService(
         =>
         [
             "-c",
-            HelperLauncherScript,
+            HelperLauncherScript.ReplaceLineEndings("\n"),
             HelperLauncherName,
             .. args
         ];
@@ -597,6 +653,9 @@ internal sealed class VolumeContentService(
 
     internal static bool CanPullHelperImage(string helperImage)
     {
+        if (string.Equals(helperImage, DevelopmentHelperImage, StringComparison.OrdinalIgnoreCase))
+            return false;
+
         var (_, tag) = SplitImageReference(helperImage);
         if (!string.Equals(tag, "dev", StringComparison.OrdinalIgnoreCase))
             return true;
@@ -800,30 +859,67 @@ internal sealed class VolumeContentService(
         long? Size,
         DateTimeOffset? ModifiedAt,
         string? LinkTarget);
+
+    private sealed record VolumeHelperContainerPlan(
+        string Image,
+        string VolumeName,
+        List<HostMount> Mounts,
+        bool ReadonlyRootfs)
+    {
+        public static VolumeHelperContainerPlan Create(string image, string volumeName)
+            => new(image, volumeName, [CreateVolumeMount(volumeName)], ReadonlyRootfs: true);
+
+        public static VolumeHelperContainerPlan CreateWithSourceMount(
+            string image,
+            string volumeName,
+            string sourceRoot)
+            =>
+            new(
+                image,
+                volumeName,
+                [
+                    CreateVolumeMount(volumeName),
+                    new HostMount(
+                        Target: "/src",
+                        Source: sourceRoot,
+                        Type: "bind",
+                        ReadOnly: true,
+                        Consistency: null,
+                        BindOptions: null,
+                        VolumeOptions: null)
+                ],
+                ReadonlyRootfs: true);
+
+        private static HostMount CreateVolumeMount(string volumeName)
+            => new(
+                Target: HelperRoot,
+                Source: volumeName,
+                Type: "volume",
+                ReadOnly: true,
+                Consistency: null,
+                BindOptions: null,
+                VolumeOptions: null);
+    }
 }
 
-internal sealed class VolumeHelperImageResolver(IConfiguration configuration) : IVolumeHelperImageResolver
+internal sealed class VolumeHelperImageResolver(
+    IConfiguration configuration,
+    IOptions<EdgeAgentOptions> edgeAgentOptions) : IVolumeHelperImageResolver
 {
-    private const string DefaultAgentImageRepository = "ghcr.io/citadel-p/citadel.agent";
-    private const string LocalAgentImageRepository = "citadel-agent";
+    private const string DefaultCoreImageRepository = "ghcr.io/citadel-p/citadel";
 
-    public string Resolve()
+    public bool IsExplicitlyConfigured => !string.IsNullOrWhiteSpace(configuration["VolumeBrowser:HelperImage"]);
+
+    public string Resolve(PlatformConnectorType connectorType)
     {
         var explicitImage = configuration["VolumeBrowser:HelperImage"];
         if (!string.IsNullOrWhiteSpace(explicitImage))
             return explicitImage.Trim();
 
-        if (string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
-            return $"{LocalAgentImageRepository}:dev";
+        if (connectorType is PlatformConnectorType.Agent or PlatformConnectorType.EdgeAgent)
+            return edgeAgentOptions.Value.GetAgentImage();
 
-        var agentRepository = configuration["EdgeAgent:AgentImageRepository"];
-        var tag = configuration["EdgeAgent:AgentImageTag"];
-        var normalizedTag = NormalizeDockerTag(string.IsNullOrWhiteSpace(tag) ? Constants.CompatibilityVersion : tag);
-        var remoteAgentRepository = string.IsNullOrWhiteSpace(agentRepository)
-            ? DefaultAgentImageRepository
-            : agentRepository.Trim();
-
-        return $"{remoteAgentRepository}:{normalizedTag}";
+        return $"{DefaultCoreImageRepository}:{NormalizeDockerTag(Constants.CompatibilityVersion)}";
     }
 
     private static string NormalizeDockerTag(string tag)

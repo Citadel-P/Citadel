@@ -1,20 +1,24 @@
+using Application.Configs;
 using Application.Services;
+using Domain;
+using Hosting.Common;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace Tests.Unit.Infrastructure.Connectors;
 
 public sealed class VolumeHelperImageResolverTests
 {
     [Fact]
-    public void Resolve_ShouldUseVersionedAgentImageByDefault()
+    public void Resolve_ShouldUseVersionedCoreImageByDefault()
     {
-        var resolver = new VolumeHelperImageResolver(new ConfigurationBuilder().Build());
+        var resolver = CreateResolver();
 
-        Assert.Equal("ghcr.io/citadel-p/citadel.agent:1.0", resolver.Resolve());
+        Assert.Equal("ghcr.io/citadel-p/citadel:1.0", resolver.Resolve(PlatformConnectorType.Local));
     }
 
     [Fact]
-    public void Resolve_ShouldUseLocalAgentImageInDevelopmentUnlessExplicitlyConfigured()
+    public void Resolve_ShouldUseVersionedCoreImageInHostDevelopmentUnlessExplicitlyConfigured()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -22,9 +26,34 @@ public sealed class VolumeHelperImageResolverTests
                 ["ASPNETCORE_ENVIRONMENT"] = "Development"
             })
             .Build();
-        var resolver = new VolumeHelperImageResolver(configuration);
+        var resolver = CreateResolver(configuration);
 
-        Assert.Equal("citadel-agent:dev", resolver.Resolve());
+        Assert.Equal("ghcr.io/citadel-p/citadel:1.0", resolver.Resolve(PlatformConnectorType.Local));
+    }
+
+    [Fact]
+    public void Resolve_ShouldUseVersionedCoreImageInContainerDevelopmentUnlessExplicitlyConfigured()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                ["DOTNET_RUNNING_IN_CONTAINER"] = "true"
+            })
+            .Build();
+        var resolver = CreateResolver(configuration);
+
+        Assert.Equal("ghcr.io/citadel-p/citadel:1.0", resolver.Resolve(PlatformConnectorType.Local));
+    }
+
+    [Theory]
+    [InlineData(PlatformConnectorType.Agent)]
+    [InlineData(PlatformConnectorType.EdgeAgent)]
+    public void Resolve_ShouldUseVersionedAgentImageForAgentConnectors(PlatformConnectorType connectorType)
+    {
+        var resolver = CreateResolver();
+
+        Assert.Equal($"ghcr.io/citadel-p/citadel.agent:{Constants.CompatibilityVersion}", resolver.Resolve(connectorType));
     }
 
     [Fact]
@@ -33,38 +62,28 @@ public sealed class VolumeHelperImageResolverTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["VolumeBrowser:HelperImage"] = "local/citadel-agent:test"
+                ["VolumeBrowser:HelperImage"] = "local/citadel-helper:test"
             })
             .Build();
-        var resolver = new VolumeHelperImageResolver(configuration);
+        var resolver = CreateResolver(configuration);
 
-        Assert.Equal("local/citadel-agent:test", resolver.Resolve());
-    }
-
-    [Fact]
-    public void Resolve_ShouldUseConfiguredAgentRepositoryAndTag()
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["EdgeAgent:AgentImageRepository"] = "local/citadel-agent",
-                ["EdgeAgent:AgentImageTag"] = "v1.2.3+build"
-            })
-            .Build();
-        var resolver = new VolumeHelperImageResolver(configuration);
-
-        Assert.Equal("local/citadel-agent:1.2.3", resolver.Resolve());
+        Assert.Equal("local/citadel-helper:test", resolver.Resolve(PlatformConnectorType.Agent));
+        Assert.Equal("local/citadel-helper:test", resolver.Resolve(PlatformConnectorType.Local));
     }
 
     [Theory]
-    [InlineData("citadel-agent:dev", false)]
-    [InlineData("local/citadel-agent:dev", false)]
-    [InlineData("ghcr.io/citadel-p/citadel.agent:dev", true)]
-    [InlineData("registry.example.com/citadel-agent:dev", true)]
-    [InlineData("localhost:5000/citadel-agent:dev", true)]
-    [InlineData("citadel-agent:1.0", true)]
+    [InlineData("citadel-helper:dev", false)]
+    [InlineData("local/citadel-helper:dev", false)]
+    [InlineData("citadel.dev", false)]
+    [InlineData("ghcr.io/citadel-p/citadel:dev", true)]
+    [InlineData("registry.example.com/citadel-helper:dev", true)]
+    [InlineData("localhost:5000/citadel-helper:dev", true)]
+    [InlineData("citadel-helper:1.0", true)]
     public void CanPullHelperImage_ShouldNotPullLocalDevelopmentTags(string image, bool expected)
     {
         Assert.Equal(expected, VolumeContentService.CanPullHelperImage(image));
     }
+
+    private static VolumeHelperImageResolver CreateResolver(IConfiguration? configuration = null)
+        => new(configuration ?? new ConfigurationBuilder().Build(), Options.Create(new EdgeAgentOptions()));
 }

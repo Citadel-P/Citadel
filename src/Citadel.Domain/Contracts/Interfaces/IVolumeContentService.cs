@@ -1,3 +1,4 @@
+using Domain;
 using Domain.Contracts.Resources.Volumes;
 using LightResults;
 
@@ -21,5 +22,7 @@ public interface IVolumeContentService
 
 public interface IVolumeHelperImageResolver
 {
-    string Resolve();
+    bool IsExplicitlyConfigured { get; }
+
+    string Resolve(PlatformConnectorType connectorType);
 }

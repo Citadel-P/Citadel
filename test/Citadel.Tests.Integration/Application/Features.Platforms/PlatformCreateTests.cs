@@ -5,6 +5,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
 using Hosting.Common;
@@ -103,6 +104,7 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal(3, containers?.Count());
         // Containers has foreign key on Images table
         Assert.All(containers, c => Assert.Contains(c.ImageId.Value, images.Select(i => i.Id)));
+        AssertPlatformCache(platform, containers!);
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id, PlatformConnectorType.Agent), Times.Once);
         await VerifyJson(responseBody);
     }
@@ -160,6 +162,7 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal(3, containers?.Count());
         // Containers has foreign key on Images table
         Assert.All(containers, c => Assert.Contains(c.ImageId.Value, images.Select(i => i.Id)));
+        AssertPlatformCache(platform, containers);
         healthMonitorMock.Verify(x => x.TrackPlatform(Constants.LocalDockerHostUrl, platform.Id, PlatformConnectorType.Local), Times.Once);
         await VerifyJson(responseBody);
     }
@@ -313,5 +316,22 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
         Assert.Equal(running, docker.ContainersRunning);
         Assert.Equal(paused, docker.ContainersPaused);
         Assert.Equal(stopped, docker.ContainersStopped);
+    }
+
+    private void AssertPlatformCache(Platform platform, IEnumerable<Container> containers)
+    {
+        var cache = Services.GetRequiredService<IPlatformContainerCache>();
+        Assert.True(cache.TryGetCacheEntry(platform.Id, out var cacheEntry, out var error), error?.Message);
+        Assert.Equal(platform.Id, cacheEntry.Id);
+        Assert.Equal(platform.Address, cacheEntry.Address);
+        Assert.Equal(platform.ConnectorType, cacheEntry.ConnectorType);
+
+        var persistedContainers = containers.ToDictionary(c => c.DockerContainerId.ToLowerInvariant(), c => c.Id);
+        Assert.Equal(persistedContainers.Count, cacheEntry.Containers.Count);
+        foreach (var (dockerContainerId, containerId) in persistedContainers)
+        {
+            Assert.True(cacheEntry.Containers.TryGetValue(dockerContainerId, out var cachedContainerId));
+            Assert.Equal(containerId, cachedContainerId);
+        }
     }
 }

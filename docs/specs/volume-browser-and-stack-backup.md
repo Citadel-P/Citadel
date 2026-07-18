@@ -290,14 +290,22 @@ The helper must not expose a generic arbitrary-command interface.
 
 ## 5.2 Helper Image
 
-Use the Citadel Agent image corresponding to the running Citadel release.
+Use the Citadel helper image corresponding to the running Citadel release and the connector that will execute the helper. Local platforms use the Citadel Core image because it contains `Citadel.VolumeHelper` and `restic`. Agent and Edge Agent platforms use the Citadel Agent image because those connectors create the helper container through the Agent and the Agent image contains `Citadel.Agent.VolumeHelper` and `restic`.
+
+Default helper images:
+
+```text
+Local connector:      ghcr.io/citadel-p/citadel:<compatible-version>
+Agent connector:      ghcr.io/citadel-p/citadel.agent:<compatible-version>
+Edge Agent connector: ghcr.io/citadel-p/citadel.agent:<compatible-version>
+```
 
 The helper image must:
 
 * Be version-pinned.
 * Be distributed as part of the Citadel release.
 * Work in offline and air-gapped installations.
-* Contain the `citadel-agent volume-helper` command.
+* Contain the native Citadel volume helper executable.
 * Not require pulling a public utility image at request time.
 
 Do not use:
@@ -314,11 +322,13 @@ Image resolution must be internal to the connector or installation configuration
 
 Do not expose a required environment variable in Slice 1.
 
-A future advanced setting may allow overriding the helper image:
+An advanced setting may override the helper image for all connectors:
 
 ```text
 VolumeBrowser__HelperImage=<version-pinned-image>
 ```
+
+When this override is set, every target Docker daemon must be able to run the configured image.
 
 ## 5.3 Helper Commands
 
