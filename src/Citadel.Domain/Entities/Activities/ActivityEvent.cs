@@ -147,6 +147,12 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.UserPasswordChanged
             or ActivityEventType.UserSessionRevoked
             or ActivityEventType.UserOtherSessionsRevoked
+            or ActivityEventType.UserMfaEnabled
+            or ActivityEventType.UserMfaDisabled
+            or ActivityEventType.UserMfaVerificationFailed
+            or ActivityEventType.UserMfaRecoveryCodeUsed
+            or ActivityEventType.UserMfaRecoveryCodesRegenerated
+            or ActivityEventType.UserMfaResetByAdministrator
                 => ActivityResourceType.User,
 
             ActivityEventType.LicenseInstalled
@@ -288,6 +294,12 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.UserPasswordChanged, UserPasswordChanged) => true,
             (ActivityEventType.UserSessionRevoked, UserSessionRevoked) => true,
             (ActivityEventType.UserOtherSessionsRevoked, UserOtherSessionsRevoked) => true,
+            (ActivityEventType.UserMfaEnabled, UserMfaEnabled) => true,
+            (ActivityEventType.UserMfaDisabled, UserMfaDisabled) => true,
+            (ActivityEventType.UserMfaVerificationFailed, UserMfaVerificationFailed) => true,
+            (ActivityEventType.UserMfaRecoveryCodeUsed, UserMfaRecoveryCodeUsed) => true,
+            (ActivityEventType.UserMfaRecoveryCodesRegenerated, UserMfaRecoveryCodesRegenerated) => true,
+            (ActivityEventType.UserMfaResetByAdministrator, UserMfaResetByAdministrator) => true,
 
             (ActivityEventType.LicenseInstalled, LicenseInstalled) => true,
             (ActivityEventType.LicenseReplaced, LicenseReplaced) => true,

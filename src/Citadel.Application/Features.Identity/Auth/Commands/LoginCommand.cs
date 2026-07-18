@@ -1,6 +1,8 @@
-﻿using Application.Features.Identity.Auth.Models;
+using Application.Configs;
+using Application.Features.Identity.Auth.Models;
+using Application.Features.Identity.Mfa.Services;
 using Application.Services;
-using Application.Services.Identity;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
@@ -8,6 +10,7 @@ using FluentValidation;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Microsoft.Extensions.Options;
 
 namespace Application.Features.Identity.Auth.Commands;
 
@@ -25,58 +28,70 @@ public sealed record LoginCommand(string EmailOrName, string Password) : IComman
 
 internal sealed class LoginCommandHandler(
     IUnitOfWork unitOfWork,
-    IJwtService jwtService,
-    IRoleCache roleCache,
-    IRequestSessionMetadataAccessor requestSessionMetadataAccessor,
-    IRefreshTokenCookieService refreshTokenCookieService) : ICommandHandler<LoginCommand, Result<LoginResponse>>
+    ITotpService totpService,
+    IMfaPolicyService mfaPolicyService,
+    ISecretValueProtector secretValueProtector,
+    IAuthenticationSessionIssuer authenticationSessionIssuer,
+    IMfaChallengeCookieService mfaChallengeCookieService,
+    IMfaSetupCookieService mfaSetupCookieService,
+    IOptions<MfaOptions> options) : ICommandHandler<LoginCommand, Result<LoginResponse>>
 {
     public async ValueTask<Result<LoginResponse>> Handle(LoginCommand query, CancellationToken cancellationToken)
     {
         var userAuthInfo = await unitOfWork.Users.GetUserAuthInfoByEmailOrNameAsync(query.EmailOrName, cancellationToken);
         if (userAuthInfo is null)
-        {
             return Result.Failure<LoginResponse>(new NotFoundError("Invalid credentials"));
-        }
 
         if (!User.IsValidPassword(query.Password, userAuthInfo.Password ?? string.Empty))
-        {
             return Result.Failure<LoginResponse>(new BadRequestError("Invalid credentials"));
-        }
 
-        var (accessToken, _) = await CreateTokens(userAuthInfo, cancellationToken);
+        var now = DateTime.UtcNow;
+        await unitOfWork.MfaChallenges.DeleteExpiredAsync(now, cancellationToken);
+        await unitOfWork.UserMfa.DeleteExpiredSetupSessionsAsync(now, cancellationToken);
 
-        return Result.Success(new LoginResponse(accessToken));
-    }
-
-    private async Task<(string accessToken, string refreshToken)> CreateTokens(UserAuthInfo userAuthInfo, CancellationToken cancellationToken)
-    {
-        var accessToken = jwtService.CreateAccessToken(User.GetJwtClaims(userAuthInfo));
-        var (refreshTokenId, refreshToken, refreshTokenExpiresAt) = jwtService.CreateRefreshToken();
-        var metadata = requestSessionMetadataAccessor.GetCurrent();
-
-        await unitOfWork.RefreshTokens.AddAsync(
-            RefreshToken.Create(
-                refreshTokenId,
-                userAuthInfo.Id,
-                refreshTokenExpiresAt,
-                metadata.UserAgent,
-                metadata.IpAddress),
-            cancellationToken);
-
-        // Limit the number of refresh tokens per userAuthInfo
-        var tokensCount = await unitOfWork.RefreshTokens.CountAsync(userAuthInfo.Id, cancellationToken);
-        var maxTokensPerUser = 10;
-        if (tokensCount > maxTokensPerUser)
+        var settings = await unitOfWork.UserMfa.GetSettingsAsync(userAuthInfo.Id, cancellationToken);
+        if (settings is null && mfaPolicyService.RequiresMfa(userAuthInfo))
         {
-            await unitOfWork.RefreshTokens.DeleteOldestTokensAsync(userAuthInfo.Id, tokensCount - maxTokensPerUser, cancellationToken);
+            var expiresAt = now.AddMinutes(options.Value.SetupLifetimeMinutes);
+            var setup = totpService.CreateSetup("Citadel", GetAccountName(userAuthInfo), expiresAt);
+            var session = new MfaSetupSession(
+                Guid.CreateVersion7(),
+                userAuthInfo.Id,
+                secretValueProtector.Protect(setup.Secret),
+                expiresAt,
+                null,
+                now);
+
+            await unitOfWork.UserMfa.DeleteSetupSessionsAsync(userAuthInfo.Id, cancellationToken);
+            await unitOfWork.UserMfa.AddSetupSessionAsync(session, cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+
+            mfaSetupCookieService.Set(session.Id, session.ExpiresAt);
+            return Result.Success(new LoginResponse(null, LoginNextStep.EnrollMfa));
         }
 
-        await unitOfWork.CommitAsync(cancellationToken);
+        if (settings is not null)
+        {
+            var challenge = new MfaChallenge(
+                Guid.CreateVersion7(),
+                userAuthInfo.Id,
+                now.AddMinutes(options.Value.ChallengeLifetimeMinutes),
+                0,
+                null,
+                now);
 
-        refreshTokenCookieService.Set(refreshToken, refreshTokenExpiresAt);
-        roleCache.SetRoles(userAuthInfo.Id, userAuthInfo.Roles);
+            await unitOfWork.MfaChallenges.DeleteForUserAsync(userAuthInfo.Id, cancellationToken);
+            await unitOfWork.MfaChallenges.AddAsync(challenge, cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
 
-        return (accessToken, refreshToken);
+            mfaChallengeCookieService.Set(challenge.Id, challenge.ExpiresAt);
+            return Result.Success(new LoginResponse(null, LoginNextStep.VerifyMfa));
+        }
+
+        var accessToken = await authenticationSessionIssuer.IssueAsync(userAuthInfo, cancellationToken);
+        return Result.Success(new LoginResponse(accessToken, LoginNextStep.Completed));
     }
 
+    private static string GetAccountName(UserAuthInfo user)
+        => string.IsNullOrWhiteSpace(user.Email) ? user.Name : user.Email;
 }

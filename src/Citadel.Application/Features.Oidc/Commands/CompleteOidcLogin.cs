@@ -107,7 +107,7 @@ internal sealed class CompleteOidcLoginHandler(
         refreshTokenCookieService.Set(refreshToken, refreshTokenExpiresAt);
         roleCache.SetRoles(authInfo.Id, authInfo.Roles);
 
-        return Result.Success(new OidcLoginCompleteResult(new LoginResponse(accessToken), state.ReturnUrl));
+        return Result.Success(new OidcLoginCompleteResult(new LoginResponse(accessToken, LoginNextStep.Completed), state.ReturnUrl));
     }
 
     private async Task<Result<UserAuthInfo>> ResolveUserAsync(

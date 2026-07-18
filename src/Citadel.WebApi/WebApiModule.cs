@@ -51,6 +51,8 @@ internal static class WebApiModule
             .AddSingleton<IAutomationApiEndpointCatalog, EndpointDataSourceAutomationApiEndpointCatalog>()
             .AddScoped<IRequestSessionMetadataAccessor, RequestSessionMetadataAccessor>()
             .AddScoped<IRefreshTokenCookieService, RefreshTokenCookieService>()
+            .AddScoped<IMfaChallengeCookieService, MfaChallengeCookieService>()
+            .AddScoped<IMfaSetupCookieService, MfaSetupCookieService>()
             .AddCors();
 
         services
@@ -270,6 +272,14 @@ internal static class WebApiModule
             .AddOptions<EdgeAgentOptions>()
             .BindConfiguration(EdgeAgentOptions.SectionName)
             .Validate(options => !string.IsNullOrWhiteSpace(options.AgentImageRepository), "EdgeAgent:AgentImageRepository is required.")
+            .ValidateOnStart();
+        builder.Services
+            .AddOptions<MfaOptions>()
+            .BindConfiguration(MfaOptions.SectionName)
+            .Validate(options => options.ChallengeLifetimeMinutes is > 0 and <= 5, "Mfa:ChallengeLifetimeMinutes must be between 1 and 5.")
+            .Validate(options => options.SetupLifetimeMinutes is > 0 and <= 10, "Mfa:SetupLifetimeMinutes must be between 1 and 10.")
+            .Validate(options => options.MaxFailedAttempts > 0, "Mfa:MaxFailedAttempts must be greater than zero.")
+            .Validate(options => options.RecoveryCodeCount > 0, "Mfa:RecoveryCodeCount must be greater than zero.")
             .ValidateOnStart();
         builder.Services
             .AddOptions<AutomationOptions>()

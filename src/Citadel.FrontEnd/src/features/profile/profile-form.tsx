@@ -37,6 +37,7 @@ import { Clock, KeyRound, Laptop, MapPin, ShieldCheck, Users } from 'lucide-reac
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ProfileDateFormatter } from './utils';
+import { ProfileMfaCommand } from './mfa/profile-mfa';
 
 const DATE_TIME_FORMAT_OPTIONS = [
   { value: UserDateTimeFormat.System, label: 'System' },
@@ -61,6 +62,7 @@ type ProfileFormValue = {
   dateTimeFormat: UserDateTimeFormat;
   theme: UserTheme;
   passwordCommands: string;
+  mfaCommands: string;
   sessionCommands: string;
 };
 
@@ -93,6 +95,7 @@ export function ProfileForm({
       dateTimeFormat: preferences?.dateTimeFormat ?? UserDateTimeFormat.System,
       theme: preferences?.theme ?? UserTheme.System,
       passwordCommands: '',
+      mfaCommands: '',
       sessionCommands: '',
     }),
     [preferences, profile],
@@ -206,7 +209,7 @@ export function ProfileForm({
                   <TimezoneSelectField
                     value={value ?? getBrowserTimezone()}
                     onChange={(timeZone) => set({ timeZone })}
-                    className='w-100'
+                    className="w-100"
                   />
                 ),
               }),
@@ -263,6 +266,13 @@ export function ProfileForm({
                   ),
               }),
               defineField({
+                key: 'mfaCommands',
+                label: 'Two-factor authentication',
+                ignoreFormDisabled: true,
+                description: 'Protect local-password sign-in with an authenticator app and recovery codes.',
+                render: () => <ProfileMfaCommand canUseLocalPassword={profile.authentication.canUseLocalPasswordMfa} />,
+              }),
+              defineField({
                 key: 'sessionCommands',
                 label: 'Active Sessions',
                 ignoreFormDisabled: true,
@@ -274,7 +284,13 @@ export function ProfileForm({
         ],
       }),
     }),
-    [formatDate, profile.authentication.canChangePassword, profile.authentication.oidcProviderName, setThemeMode],
+    [
+      formatDate,
+      profile.authentication.canUseLocalPasswordMfa,
+      profile.authentication.canChangePassword,
+      profile.authentication.oidcProviderName,
+      setThemeMode,
+    ],
   );
 
   return (

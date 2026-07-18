@@ -148,6 +148,247 @@
         }
       }
     },
+    "/api/v1/authentication/mfa/verify": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Verify an MFA login challenge",
+        "operationId": "verifyAuthenticationMfa",
+        "parameters": [
+          {
+            "name": "citadel_mfa_challenge",
+            "in": "cookie",
+            "description": "MFA Challenge",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaVerificationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaVerificationView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/authentication/mfa/setup": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get mandatory MFA setup",
+        "operationId": "getAuthenticationMfaSetup",
+        "parameters": [
+          {
+            "name": "citadel_mfa_setup",
+            "in": "cookie",
+            "description": "MFA Setup",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MandatoryMfaSetupView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/authentication/mfa/setup/confirm": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Confirm mandatory MFA setup",
+        "operationId": "confirmAuthenticationMfaSetup",
+        "parameters": [
+          {
+            "name": "citadel_mfa_setup",
+            "in": "cookie",
+            "description": "MFA Setup",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmMandatoryMfaSetupInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MandatoryMfaSetupCompleteView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/authentication/logout": {
       "post": {
         "tags": [
@@ -1023,6 +1264,359 @@
             "description": "Too Many Requests",
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/mfa": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Get current profile MFA status",
+        "operationId": "getProfileMfaStatus",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileMfaStatusView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/mfa/setup": {
+      "post": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Start current profile MFA setup",
+        "operationId": "startProfileMfaSetup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartProfileMfaSetupInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileMfaSetupView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/mfa/setup/confirm": {
+      "post": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Confirm current profile MFA setup",
+        "operationId": "confirmProfileMfaSetup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmProfileMfaSetupInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileMfaRecoveryCodesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/mfa/disable": {
+      "post": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Disable current profile MFA",
+        "operationId": "disableProfileMfa",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisableProfileMfaInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/mfa/recovery-codes": {
+      "post": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Regenerate current profile MFA recovery codes",
+        "operationId": "regenerateProfileMfaRecoveryCodes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateProfileMfaRecoveryCodesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileMfaRecoveryCodesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -2665,6 +3259,97 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{id}/mfa": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Reset user MFA",
+        "operationId": "resetUserMfa",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -26654,6 +27339,24 @@
             "$ref": "#/components/schemas/ActivityEventInfoUserOtherSessionsRevoked"
           },
           {
+            "$ref": "#/components/schemas/ActivityEventInfoUserMfaEnabled"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserMfaDisabled"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserMfaVerificationFailed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserMfaRecoveryCodeUsed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserMfaRecoveryCodesRegenerated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoUserMfaResetByAdministrator"
+          },
+          {
             "$ref": "#/components/schemas/ActivityEventInfoLicenseInstalled"
           },
           {
@@ -26746,6 +27449,12 @@
             "UserPasswordChanged": "#/components/schemas/ActivityEventInfoUserPasswordChanged",
             "UserSessionRevoked": "#/components/schemas/ActivityEventInfoUserSessionRevoked",
             "UserOtherSessionsRevoked": "#/components/schemas/ActivityEventInfoUserOtherSessionsRevoked",
+            "UserMfaEnabled": "#/components/schemas/ActivityEventInfoUserMfaEnabled",
+            "UserMfaDisabled": "#/components/schemas/ActivityEventInfoUserMfaDisabled",
+            "UserMfaVerificationFailed": "#/components/schemas/ActivityEventInfoUserMfaVerificationFailed",
+            "UserMfaRecoveryCodeUsed": "#/components/schemas/ActivityEventInfoUserMfaRecoveryCodeUsed",
+            "UserMfaRecoveryCodesRegenerated": "#/components/schemas/ActivityEventInfoUserMfaRecoveryCodesRegenerated",
+            "UserMfaResetByAdministrator": "#/components/schemas/ActivityEventInfoUserMfaResetByAdministrator",
             "LicenseInstalled": "#/components/schemas/ActivityEventInfoLicenseInstalled",
             "LicenseReplaced": "#/components/schemas/ActivityEventInfoLicenseReplaced",
             "LicenseRemoved": "#/components/schemas/ActivityEventInfoLicenseRemoved",
@@ -28316,6 +29025,73 @@
           }
         }
       },
+      "ActivityEventInfoUserMfaDisabled": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserMfaDisabled"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoUserMfaEnabled": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserMfaEnabled"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoUserMfaRecoveryCodeUsed": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserMfaRecoveryCodeUsed"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoUserMfaRecoveryCodesRegenerated": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserMfaRecoveryCodesRegenerated"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoUserMfaResetByAdministrator": {
+        "required": [
+          "targetUserId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserMfaResetByAdministrator"
+            ],
+            "type": "string"
+          },
+          "targetUserId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ActivityEventInfoUserMfaVerificationFailed": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "UserMfaVerificationFailed"
+            ],
+            "type": "string"
+          }
+        }
+      },
       "ActivityEventInfoUserOtherSessionsRevoked": {
         "required": [
           "count"
@@ -28500,6 +29276,12 @@
           "UserPasswordChanged",
           "UserSessionRevoked",
           "UserOtherSessionsRevoked",
+          "UserMfaEnabled",
+          "UserMfaDisabled",
+          "UserMfaVerificationFailed",
+          "UserMfaRecoveryCodeUsed",
+          "UserMfaRecoveryCodesRegenerated",
+          "UserMfaResetByAdministrator",
           "LicenseInstalled",
           "LicenseReplaced",
           "LicenseRemoved",
@@ -32960,6 +33742,28 @@
           }
         }
       },
+      "ConfirmMandatoryMfaSetupInput": {
+        "required": [
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "ConfirmProfileMfaSetupInput": {
+        "required": [
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        }
+      },
       "ContainerConfiguration": {
         "required": [
           "hostname",
@@ -34691,7 +35495,8 @@
         "required": [
           "type",
           "label",
-          "canChangePassword"
+          "canChangePassword",
+          "canUseLocalPasswordMfa"
         ],
         "type": "object",
         "properties": {
@@ -34702,6 +35507,9 @@
             "type": "string"
           },
           "canChangePassword": {
+            "type": "boolean"
+          },
+          "canUseLocalPasswordMfa": {
             "type": "boolean"
           },
           "oidcProviderId": {
@@ -35651,6 +36459,29 @@
           },
           "capabilities": {
             "$ref": "#/components/schemas/ResourceCapabilities"
+          }
+        }
+      },
+      "DisableProfileMfaInput": {
+        "required": [
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "recoveryCode": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -38740,6 +39571,13 @@
           }
         }
       },
+      "LoginNextStep": {
+        "enum": [
+          "Completed",
+          "VerifyMfa",
+          "EnrollMfa"
+        ]
+      },
       "LoginRequest": {
         "required": [
           "emailOrName",
@@ -38757,12 +39595,19 @@
       },
       "LoginResponse": {
         "required": [
-          "accessToken"
+          "accessToken",
+          "nextStep"
         ],
         "type": "object",
         "properties": {
           "accessToken": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nextStep": {
+            "$ref": "#/components/schemas/LoginNextStep"
           }
         }
       },
@@ -38790,6 +39635,78 @@
           "BackupRepository",
           "BackupPolicy"
         ]
+      },
+      "MandatoryMfaSetupCompleteView": {
+        "required": [
+          "accessToken",
+          "recoveryCodes"
+        ],
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "recoveryCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "MandatoryMfaSetupView": {
+        "required": [
+          "secret",
+          "otpAuthUri",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "secret": {
+            "type": "string"
+          },
+          "otpAuthUri": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "MfaPolicy": {
+        "enum": [
+          "Optional",
+          "RequiredForAdministrators",
+          "RequiredForAllUsers"
+        ]
+      },
+      "MfaVerificationInput": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "recoveryCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "MfaVerificationView": {
+        "required": [
+          "accessToken"
+        ],
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          }
+        }
       },
       "MountPointInfo": {
         "required": [
@@ -40820,6 +41737,71 @@
           }
         }
       },
+      "ProfileMfaRecoveryCodesView": {
+        "required": [
+          "enabled",
+          "recoveryCodes"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "recoveryCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ProfileMfaSetupView": {
+        "required": [
+          "secret",
+          "otpAuthUri",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "secret": {
+            "type": "string"
+          },
+          "otpAuthUri": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "ProfileMfaStatusView": {
+        "required": [
+          "enabled",
+          "remainingRecoveryCodes",
+          "policy",
+          "canDisable"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "remainingRecoveryCodes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/MfaPolicy"
+          },
+          "canDisable": {
+            "type": "boolean"
+          }
+        }
+      },
       "ProfileResourceInfoView": {
         "required": [
           "id",
@@ -41056,6 +42038,21 @@
         "type": "object",
         "properties": {
           "accessToken": {
+            "type": "string"
+          }
+        }
+      },
+      "RegenerateProfileMfaRecoveryCodesInput": {
+        "required": [
+          "password",
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "code": {
             "type": "string"
           }
         }
@@ -43775,6 +44772,17 @@
           },
           "capabilities": {
             "$ref": "#/components/schemas/ResourceCapabilities"
+          }
+        }
+      },
+      "StartProfileMfaSetupInput": {
+        "required": [
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string"
           }
         }
       },

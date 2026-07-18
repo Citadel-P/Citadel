@@ -26,6 +26,10 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .GitRepositoryConfiguration()
             .GitRepositoryRefConfiguration()
             .RefreshTokenConfiguration()
+            .UserMfaSettingsConfiguration()
+            .UserMfaRecoveryCodeConfiguration()
+            .MfaSetupSessionConfiguration()
+            .MfaChallengeConfiguration()
             .UserPreferencesConfiguration()
             .CitadelInstanceIdentityConfiguration()
             .InstalledLicenseConfiguration()
@@ -837,6 +841,113 @@ internal static class Configuration
 
         refreshToken.HasIndex("UserId").HasDatabaseName($"IX_{tableName}_UserId");
         refreshToken.HasIndex("ExpiresAt").HasDatabaseName($"IX_{tableName}_ExpiresAt");
+
+        return builder;
+    }
+
+    public static ModelBuilder UserMfaSettingsConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "UserMfaSettings";
+        var settings = builder.Entity("UserMfaSettings");
+
+        settings.ToTable(tableName);
+
+        settings.Property<Guid>("UserId").IsRequired();
+        settings.HasKey("UserId");
+
+        settings.Property<string>("ProtectedTotpSecret").HasColumnType(Text).IsRequired();
+        settings.Property<long?>("LastAcceptedTimeStep").HasColumnType("bigint").IsRequired(false);
+        settings.Property<DateTime>("EnabledAt").HasColumnType(Timestamp).IsRequired();
+        settings.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+
+        settings
+            .HasOne("User")
+            .WithOne()
+            .HasForeignKey("UserMfaSettings", "UserId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        return builder;
+    }
+
+    public static ModelBuilder UserMfaRecoveryCodeConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "UserMfaRecoveryCodes";
+        var code = builder.Entity("UserMfaRecoveryCode");
+
+        code.ToTable(tableName);
+
+        code.Property<Guid>("Id").IsRequired();
+        code.HasKey("Id");
+
+        code.Property<Guid>("UserId").IsRequired();
+        code.Property<string>("CodeHash").HasColumnType(Text).IsRequired();
+        code.Property<DateTime?>("UsedAt").HasColumnType(Timestamp).IsRequired(false);
+        code.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+
+        code
+            .HasOne("User")
+            .WithMany()
+            .HasForeignKey("UserId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        code.HasIndex("UserId").HasDatabaseName($"IX_{tableName}_UserId");
+        code.HasIndex("UserId", "CodeHash").IsUnique().HasDatabaseName($"IX_{tableName}_UserId_CodeHash");
+
+        return builder;
+    }
+
+    public static ModelBuilder MfaSetupSessionConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "MfaSetupSessions";
+        var session = builder.Entity("MfaSetupSession");
+
+        session.ToTable(tableName);
+
+        session.Property<Guid>("Id").IsRequired();
+        session.HasKey("Id");
+
+        session.Property<Guid>("UserId").IsRequired();
+        session.Property<string>("ProtectedTotpSecret").HasColumnType(Text).IsRequired();
+        session.Property<DateTime>("ExpiresAt").HasColumnType(Timestamp).IsRequired();
+        session.Property<DateTime?>("ConsumedAt").HasColumnType(Timestamp).IsRequired(false);
+        session.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+
+        session
+            .HasOne("User")
+            .WithMany()
+            .HasForeignKey("UserId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        session.HasIndex("UserId").HasDatabaseName($"IX_{tableName}_UserId");
+        session.HasIndex("ExpiresAt").HasDatabaseName($"IX_{tableName}_ExpiresAt");
+
+        return builder;
+    }
+
+    public static ModelBuilder MfaChallengeConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "MfaChallenges";
+        var challenge = builder.Entity("MfaChallenge");
+
+        challenge.ToTable(tableName);
+
+        challenge.Property<Guid>("Id").IsRequired();
+        challenge.HasKey("Id");
+
+        challenge.Property<Guid>("UserId").IsRequired();
+        challenge.Property<DateTime>("ExpiresAt").HasColumnType(Timestamp).IsRequired();
+        challenge.Property<int>("FailedAttempts").HasColumnType("integer").IsRequired().HasDefaultValue(0);
+        challenge.Property<DateTime?>("ConsumedAt").HasColumnType(Timestamp).IsRequired(false);
+        challenge.Property<DateTime>("CreatedAt").HasColumnType(Timestamp).IsRequired();
+
+        challenge
+            .HasOne("User")
+            .WithMany()
+            .HasForeignKey("UserId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        challenge.HasIndex("UserId").HasDatabaseName($"IX_{tableName}_UserId");
+        challenge.HasIndex("ExpiresAt").HasDatabaseName($"IX_{tableName}_ExpiresAt");
 
         return builder;
     }

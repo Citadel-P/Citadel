@@ -82,6 +82,12 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(UserPasswordChanged), nameof(ActivityEventType.UserPasswordChanged))]
 [JsonDerivedType(typeof(UserSessionRevoked), nameof(ActivityEventType.UserSessionRevoked))]
 [JsonDerivedType(typeof(UserOtherSessionsRevoked), nameof(ActivityEventType.UserOtherSessionsRevoked))]
+[JsonDerivedType(typeof(UserMfaEnabled), nameof(ActivityEventType.UserMfaEnabled))]
+[JsonDerivedType(typeof(UserMfaDisabled), nameof(ActivityEventType.UserMfaDisabled))]
+[JsonDerivedType(typeof(UserMfaVerificationFailed), nameof(ActivityEventType.UserMfaVerificationFailed))]
+[JsonDerivedType(typeof(UserMfaRecoveryCodeUsed), nameof(ActivityEventType.UserMfaRecoveryCodeUsed))]
+[JsonDerivedType(typeof(UserMfaRecoveryCodesRegenerated), nameof(ActivityEventType.UserMfaRecoveryCodesRegenerated))]
+[JsonDerivedType(typeof(UserMfaResetByAdministrator), nameof(ActivityEventType.UserMfaResetByAdministrator))]
 [JsonDerivedType(typeof(LicenseInstalled), nameof(ActivityEventType.LicenseInstalled))]
 [JsonDerivedType(typeof(LicenseReplaced), nameof(ActivityEventType.LicenseReplaced))]
 [JsonDerivedType(typeof(LicenseRemoved), nameof(ActivityEventType.LicenseRemoved))]
@@ -262,6 +268,12 @@ public sealed record UserPreferencesUpdated(IReadOnlyCollection<ActivityChangedF
 public sealed record UserPasswordChanged() : ActivityEventInfo;
 public sealed record UserSessionRevoked(Guid SessionId) : ActivityEventInfo;
 public sealed record UserOtherSessionsRevoked(int Count) : ActivityEventInfo;
+public sealed record UserMfaEnabled() : ActivityEventInfo;
+public sealed record UserMfaDisabled() : ActivityEventInfo;
+public sealed record UserMfaVerificationFailed() : ActivityEventInfo;
+public sealed record UserMfaRecoveryCodeUsed() : ActivityEventInfo;
+public sealed record UserMfaRecoveryCodesRegenerated() : ActivityEventInfo;
+public sealed record UserMfaResetByAdministrator(Guid TargetUserId) : ActivityEventInfo;
 
 public sealed record LicenseActivitySnapshot(
     string? LicenseId,

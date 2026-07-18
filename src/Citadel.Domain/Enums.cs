@@ -219,6 +219,13 @@ public enum LicenseStatus
     UnknownSigningKey
 }
 
+public enum MfaPolicy
+{
+    Optional,
+    RequiredForAdministrators,
+    RequiredForAllUsers
+}
+
 public enum PruneResource
 {
     All,
@@ -675,6 +682,12 @@ public enum ActivityEventType
     UserPasswordChanged,
     UserSessionRevoked,
     UserOtherSessionsRevoked,
+    UserMfaEnabled,
+    UserMfaDisabled,
+    UserMfaVerificationFailed,
+    UserMfaRecoveryCodeUsed,
+    UserMfaRecoveryCodesRegenerated,
+    UserMfaResetByAdministrator,
     #endregion
 
     #region License Events

@@ -34,6 +34,8 @@ internal class UnitOfWork : IUnitOfWork
         AlertEvents = new Lazy<IAlertEventRepository>(() => new AlertEventRepository(connection, GetTransaction));
         Deployments = new Lazy<IDeploymentRepository>(() => new DeploymentRepository(connection, GetTransaction));
         RefreshTokens = new Lazy<IRefreshTokenRepository>(() => new RefreshTokenRepository(connection, GetTransaction));
+        UserMfa = new Lazy<IUserMfaRepository>(() => new UserMfaRepository(connection, GetTransaction));
+        MfaChallenges = new Lazy<IMfaChallengeRepository>(() => new MfaChallengeRepository(connection, GetTransaction));
         UserPreferences = new Lazy<IUserPreferencesRepository>(() => new UserPreferencesRepository(connection, GetTransaction));
         InstanceIdentity = new Lazy<IInstanceIdentityRepository>(() => new InstanceIdentityRepository(connection, GetTransaction));
         InstalledLicense = new Lazy<IInstalledLicenseRepository>(() => new InstalledLicenseRepository(connection, GetTransaction));
@@ -102,6 +104,8 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IBackupRepositoryLeaseRepository> BackupRepositoryLeases { get; }
     private Lazy<IBackupSourceLeaseRepository> BackupSourceLeases { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
+    private Lazy<IUserMfaRepository> UserMfa { get; }
+    private Lazy<IMfaChallengeRepository> MfaChallenges { get; }
     private Lazy<IUserPreferencesRepository> UserPreferences { get; }
     private Lazy<IInstanceIdentityRepository> InstanceIdentity { get; }
     private Lazy<IInstalledLicenseRepository> InstalledLicense { get; }
@@ -126,6 +130,8 @@ internal class UnitOfWork : IUnitOfWork
     IDeploymentRepository IUnitOfWork.Deployments => Deployments.Value;
     IPlatformStatRepository IUnitOfWork.PlatformStats => PlatformStats.Value;
     IRefreshTokenRepository IUnitOfWork.RefreshTokens => RefreshTokens.Value;
+    IUserMfaRepository IUnitOfWork.UserMfa => UserMfa.Value;
+    IMfaChallengeRepository IUnitOfWork.MfaChallenges => MfaChallenges.Value;
     IUserPreferencesRepository IUnitOfWork.UserPreferences => UserPreferences.Value;
     IInstanceIdentityRepository IUnitOfWork.InstanceIdentity => InstanceIdentity.Value;
     IInstalledLicenseRepository IUnitOfWork.InstalledLicense => InstalledLicense.Value;

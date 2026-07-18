@@ -1,4 +1,5 @@
 using Application.Permissions;
+using Application.Features.Identity.Mfa.Services;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.Backups;
@@ -100,6 +101,10 @@ public static class ApplicationModule
             .AddSingleton<IStackStoragePathProvider, StackStoragePathProvider>()
             .AddSingleton<IGitStackMaterializer, GitStackMaterializer>()
             .AddSingleton<ISecretValueProtector, SecretValueProtector>()
+            .AddSingleton<ITotpService, TotpService>()
+            .AddSingleton<IRecoveryCodeService, RecoveryCodeService>()
+            .AddSingleton<IMfaPolicyService, MfaPolicyService>()
+            .AddScoped<IAuthenticationSessionIssuer, AuthenticationSessionIssuer>()
             .AddSingleton<ISecretRedactor, SecretRedactor>()
             .AddSingleton<IOidcDiscoveryService, OidcDiscoveryService>()
             .AddSingleton<IOidcAuthenticationService, OidcAuthenticationService>()

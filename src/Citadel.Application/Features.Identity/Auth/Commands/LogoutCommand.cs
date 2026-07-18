@@ -7,12 +7,19 @@ namespace Application.Features.Identity.Auth.Commands;
 
 public sealed record LogoutCommand(): ICommand<Result>;
 
-internal sealed class LogoutCommandHandler(IUnitOfWork unitOfWork, IJwtService jwtService, IRefreshTokenCookieService refreshTokenCookieService)
+internal sealed class LogoutCommandHandler(
+    IUnitOfWork unitOfWork,
+    IJwtService jwtService,
+    IRefreshTokenCookieService refreshTokenCookieService,
+    IMfaChallengeCookieService mfaChallengeCookieService,
+    IMfaSetupCookieService mfaSetupCookieService)
     : ICommandHandler<LogoutCommand, Result>
 {
     public async ValueTask<Result> Handle(LogoutCommand query, CancellationToken cancellationToken)
     {
         var refreshToken = refreshTokenCookieService.GetCurrent();
+        mfaChallengeCookieService.Delete();
+        mfaSetupCookieService.Delete();
 
         if (string.IsNullOrWhiteSpace(refreshToken))
             return Result.Success();

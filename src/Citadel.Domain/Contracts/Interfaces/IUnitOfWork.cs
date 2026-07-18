@@ -65,6 +65,8 @@ public interface IUnitOfWork : IAsyncDisposable
     IBackupRepositoryLeaseRepository BackupRepositoryLeases { get; }
     IBackupSourceLeaseRepository BackupSourceLeases { get; }
     IRefreshTokenRepository RefreshTokens { get; }
+    IUserMfaRepository UserMfa { get; }
+    IMfaChallengeRepository MfaChallenges { get; }
     IUserPreferencesRepository UserPreferences { get; }
     IInstanceIdentityRepository InstanceIdentity { get; }
     IInstalledLicenseRepository InstalledLicense { get; }
@@ -754,6 +756,34 @@ public interface IRefreshTokenRepository
 
     Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
     Task<int> DeleteOldestTokensAsync(Guid userId, int tokensToRemoveCount, CancellationToken cancellationToken);
+    Task<int> DeleteExpiredAsync(DateTime now, CancellationToken cancellationToken);
+}
+
+public interface IUserMfaRepository
+{
+    Task<UserMfaSettings?> GetSettingsAsync(Guid userId, CancellationToken cancellationToken);
+    Task<int> CountUnusedRecoveryCodesAsync(Guid userId, CancellationToken cancellationToken);
+    Task<int> UpsertSettingsAsync(UserMfaSettings settings, CancellationToken cancellationToken);
+    Task<int> TryAcceptTimeStepAsync(Guid userId, long matchedTimeStep, CancellationToken cancellationToken);
+    Task<int> DeleteSettingsAsync(Guid userId, CancellationToken cancellationToken);
+    Task<int> ReplaceRecoveryCodesAsync(Guid userId, IReadOnlyCollection<UserMfaRecoveryCode> codes, CancellationToken cancellationToken);
+    Task<int> DeleteRecoveryCodesAsync(Guid userId, CancellationToken cancellationToken);
+    Task<int> TryUseRecoveryCodeAsync(Guid userId, string codeHash, DateTime usedAt, CancellationToken cancellationToken);
+    Task<int> AddSetupSessionAsync(MfaSetupSession session, CancellationToken cancellationToken);
+    Task<MfaSetupSession?> GetSetupSessionAsync(Guid id, CancellationToken cancellationToken);
+    Task<MfaSetupSession?> GetActiveSetupSessionByUserAsync(Guid userId, DateTime now, CancellationToken cancellationToken);
+    Task<int> TryConsumeSetupSessionAsync(Guid id, DateTime consumedAt, CancellationToken cancellationToken);
+    Task<int> DeleteSetupSessionsAsync(Guid userId, CancellationToken cancellationToken);
+    Task<int> DeleteExpiredSetupSessionsAsync(DateTime now, CancellationToken cancellationToken);
+}
+
+public interface IMfaChallengeRepository
+{
+    Task<int> AddAsync(MfaChallenge challenge, CancellationToken cancellationToken);
+    Task<MfaChallenge?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<int> TryIncrementFailedAttemptsAsync(Guid id, DateTime now, int maxFailedAttempts, CancellationToken cancellationToken);
+    Task<int> TryConsumeAsync(Guid id, DateTime consumedAt, int maxFailedAttempts, CancellationToken cancellationToken);
+    Task<int> DeleteForUserAsync(Guid userId, CancellationToken cancellationToken);
     Task<int> DeleteExpiredAsync(DateTime now, CancellationToken cancellationToken);
 }
 

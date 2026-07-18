@@ -250,6 +250,12 @@ export enum PermissionLevel {
   Execute = "Execute",
 }
 
+export enum MfaPolicy {
+  Optional = "Optional",
+  RequiredForAdministrators = "RequiredForAdministrators",
+  RequiredForAllUsers = "RequiredForAllUsers",
+}
+
 export enum LookupResourceType {
   Platform = "Platform",
   Deployment = "Deployment",
@@ -272,6 +278,12 @@ export enum LookupResourceType {
   License = "License",
   BackupRepository = "BackupRepository",
   BackupPolicy = "BackupPolicy",
+}
+
+export enum LoginNextStep {
+  Completed = "Completed",
+  VerifyMfa = "VerifyMfa",
+  EnrollMfa = "EnrollMfa",
 }
 
 export enum LicenseStatus {
@@ -646,6 +658,12 @@ export enum ActivityEventType {
   UserPasswordChanged = "UserPasswordChanged",
   UserSessionRevoked = "UserSessionRevoked",
   UserOtherSessionsRevoked = "UserOtherSessionsRevoked",
+  UserMfaEnabled = "UserMfaEnabled",
+  UserMfaDisabled = "UserMfaDisabled",
+  UserMfaVerificationFailed = "UserMfaVerificationFailed",
+  UserMfaRecoveryCodeUsed = "UserMfaRecoveryCodeUsed",
+  UserMfaRecoveryCodesRegenerated = "UserMfaRecoveryCodesRegenerated",
+  UserMfaResetByAdministrator = "UserMfaResetByAdministrator",
   LicenseInstalled = "LicenseInstalled",
   LicenseReplaced = "LicenseReplaced",
   LicenseRemoved = "LicenseRemoved",
@@ -1219,6 +1237,30 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoUserOtherSessionsRevoked
       >
     | BaseActivityEventInfoTypeMapping<
+        "UserMfaEnabled",
+        ActivityEventInfoUserMfaEnabled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserMfaDisabled",
+        ActivityEventInfoUserMfaDisabled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserMfaVerificationFailed",
+        ActivityEventInfoUserMfaVerificationFailed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserMfaRecoveryCodeUsed",
+        ActivityEventInfoUserMfaRecoveryCodeUsed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserMfaRecoveryCodesRegenerated",
+        ActivityEventInfoUserMfaRecoveryCodesRegenerated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "UserMfaResetByAdministrator",
+        ActivityEventInfoUserMfaResetByAdministrator
+      >
+    | BaseActivityEventInfoTypeMapping<
         "LicenseInstalled",
         ActivityEventInfoLicenseInstalled
       >
@@ -1712,6 +1754,32 @@ export interface ActivityEventInfoStackWebhookReceived {
   repositoryFullName: null | string;
   dispatchedBranch?: null | string;
   dispatchedCommitSha?: null | string;
+}
+
+export interface ActivityEventInfoUserMfaDisabled {
+  $type?: "UserMfaDisabled";
+}
+
+export interface ActivityEventInfoUserMfaEnabled {
+  $type?: "UserMfaEnabled";
+}
+
+export interface ActivityEventInfoUserMfaRecoveryCodeUsed {
+  $type?: "UserMfaRecoveryCodeUsed";
+}
+
+export interface ActivityEventInfoUserMfaRecoveryCodesRegenerated {
+  $type?: "UserMfaRecoveryCodesRegenerated";
+}
+
+export interface ActivityEventInfoUserMfaResetByAdministrator {
+  $type?: "UserMfaResetByAdministrator";
+  /** @format uuid */
+  targetUserId: string;
+}
+
+export interface ActivityEventInfoUserMfaVerificationFailed {
+  $type?: "UserMfaVerificationFailed";
 }
 
 export interface ActivityEventInfoUserOtherSessionsRevoked {
@@ -2950,6 +3018,14 @@ export interface ConfigFromInput {
   network: string;
 }
 
+export interface ConfirmMandatoryMfaSetupInput {
+  code: string;
+}
+
+export interface ConfirmProfileMfaSetupInput {
+  code: string;
+}
+
 export interface ContainerConfiguration {
   hostname: null | string;
   domainname: null | string;
@@ -3359,6 +3435,7 @@ export interface CurrentProfileAuthenticationView {
   type: CurrentProfileAuthenticationType;
   label: string;
   canChangePassword: boolean;
+  canUseLocalPasswordMfa: boolean;
   /** @format uuid */
   oidcProviderId?: null | string;
   oidcProviderName?: null | string;
@@ -3593,6 +3670,12 @@ export interface DeploymentView {
 export interface DeploymentsView {
   deployments: DeploymentView[];
   capabilities: ResourceCapabilities;
+}
+
+export interface DisableProfileMfaInput {
+  password: string;
+  code?: null | string;
+  recoveryCode?: null | string;
 }
 
 export interface DockerHubImageView {
@@ -4390,6 +4473,28 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
+  accessToken: null | string;
+  nextStep: LoginNextStep;
+}
+
+export interface MandatoryMfaSetupCompleteView {
+  accessToken: string;
+  recoveryCodes: string[];
+}
+
+export interface MandatoryMfaSetupView {
+  secret: string;
+  otpAuthUri: string;
+  /** @format date-time */
+  expiresAt: any;
+}
+
+export interface MfaVerificationInput {
+  code?: null | string;
+  recoveryCode?: null | string;
+}
+
+export interface MfaVerificationView {
   accessToken: string;
 }
 
@@ -4985,6 +5090,29 @@ export interface ProblemDetails {
   instance?: null | string;
 }
 
+export interface ProfileMfaRecoveryCodesView {
+  enabled: boolean;
+  recoveryCodes: string[];
+}
+
+export interface ProfileMfaSetupView {
+  secret: string;
+  otpAuthUri: string;
+  /** @format date-time */
+  expiresAt: any;
+}
+
+export interface ProfileMfaStatusView {
+  enabled: boolean;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  remainingRecoveryCodes: number | string;
+  policy: MfaPolicy;
+  canDisable: boolean;
+}
+
 export interface ProfileResourceInfoView {
   /** @format uuid */
   id: string;
@@ -5048,6 +5176,11 @@ export interface RecreateStackOnNewImageState {
 
 export interface RefreshTokenResponse {
   accessToken: string;
+}
+
+export interface RegenerateProfileMfaRecoveryCodesInput {
+  password: string;
+  code: string;
 }
 
 export interface RegistriesView {
@@ -5653,8 +5786,8 @@ export interface StackStreamItem {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   exitCode?: null | number | string;
-  stackStatus?: null | StackReleaseStatus;
-  severity?: null | "info" | "success" | "warning" | "error";
+  stackStatus?: any;
+  severity?: null | string;
 }
 
 export interface StackUpdateStateGitStackUpdateState {
@@ -5711,6 +5844,10 @@ export interface StackWebhookConfig {
 export interface StacksView {
   stacks: StackView[];
   capabilities: ResourceCapabilities;
+}
+
+export interface StartProfileMfaSetupInput {
+  password: string;
 }
 
 export interface SwarmPeer {
@@ -6533,6 +6670,90 @@ export class Api<
      * No description
      *
      * @tags Authentication
+     * @name VerifyAuthenticationMfa
+     * @summary Verify an MFA login challenge
+     * @request POST:/api/v1/authentication/mfa/verify
+     * @secure
+     * @response `200` `MfaVerificationView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    verifyAuthenticationMfa: (
+      data: MfaVerificationInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        MfaVerificationView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/authentication/mfa/verify`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Authentication
+     * @name GetAuthenticationMfaSetup
+     * @summary Get mandatory MFA setup
+     * @request GET:/api/v1/authentication/mfa/setup
+     * @secure
+     * @response `200` `MandatoryMfaSetupView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAuthenticationMfaSetup: (params: RequestParams = {}) =>
+      this.request<MandatoryMfaSetupView, ProblemDetails>({
+        path: `/api/v1/authentication/mfa/setup`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Authentication
+     * @name ConfirmAuthenticationMfaSetup
+     * @summary Confirm mandatory MFA setup
+     * @request POST:/api/v1/authentication/mfa/setup/confirm
+     * @secure
+     * @response `200` `MandatoryMfaSetupCompleteView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    confirmAuthenticationMfaSetup: (
+      data: ConfirmMandatoryMfaSetupInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        MandatoryMfaSetupCompleteView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/authentication/mfa/setup/confirm`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Authentication
      * @name Logout
      * @summary Log out
      * @request POST:/api/v1/authentication/logout
@@ -6852,6 +7073,148 @@ export class Api<
         path: `/api/v1/profile/sessions/${sessionId}`,
         method: "DELETE",
         secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name GetProfileMfaStatus
+     * @summary Get current profile MFA status
+     * @request GET:/api/v1/profile/mfa
+     * @secure
+     * @response `200` `ProfileMfaStatusView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getProfileMfaStatus: (params: RequestParams = {}) =>
+      this.request<ProfileMfaStatusView, ProblemDetails>({
+        path: `/api/v1/profile/mfa`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name StartProfileMfaSetup
+     * @summary Start current profile MFA setup
+     * @request POST:/api/v1/profile/mfa/setup
+     * @secure
+     * @response `200` `ProfileMfaSetupView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    startProfileMfaSetup: (
+      data: StartProfileMfaSetupInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ProfileMfaSetupView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/profile/mfa/setup`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name ConfirmProfileMfaSetup
+     * @summary Confirm current profile MFA setup
+     * @request POST:/api/v1/profile/mfa/setup/confirm
+     * @secure
+     * @response `200` `ProfileMfaRecoveryCodesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    confirmProfileMfaSetup: (
+      data: ConfirmProfileMfaSetupInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ProfileMfaRecoveryCodesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/profile/mfa/setup/confirm`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name DisableProfileMfa
+     * @summary Disable current profile MFA
+     * @request POST:/api/v1/profile/mfa/disable
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    disableProfileMfa: (
+      data: DisableProfileMfaInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/profile/mfa/disable`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Profile
+     * @name RegenerateProfileMfaRecoveryCodes
+     * @summary Regenerate current profile MFA recovery codes
+     * @request POST:/api/v1/profile/mfa/recovery-codes
+     * @secure
+     * @response `200` `ProfileMfaRecoveryCodesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    regenerateProfileMfaRecoveryCodes: (
+      data: RegenerateProfileMfaRecoveryCodesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ProfileMfaRecoveryCodesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/profile/mfa/recovery-codes`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
 
@@ -7342,6 +7705,30 @@ export class Api<
         secure: true,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name ResetUserMfa
+     * @summary Reset user MFA
+     * @request DELETE:/api/v1/users/{id}/mfa
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    resetUserMfa: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users/${id}/mfa`,
+        method: "DELETE",
+        secure: true,
         ...params,
       }),
 

@@ -7,6 +7,8 @@ import { lazy, Suspense } from 'react';
 import { ResourceForm } from './pages/resource-form';
 
 const Login = lazy(() => import('@/features/auth/login'));
+const MfaVerify = lazy(() => import('@/features/auth/mfa/verify'));
+const MandatoryMfaSetup = lazy(() => import('@/features/auth/mfa/mandatory-setup'));
 const Resources = lazy(() => import('@/pages/resource'));
 const ResourceInfo = lazy(() => import('@/pages/resource-docker-info'));
 const Profile = lazy(() => import('@/features/profile'));
@@ -21,6 +23,8 @@ export const Router = () => {
         <Routes>
           <Route element={<RequireNoAuth />}>
             <Route path="login" element={<Login />} />
+            <Route path="login/mfa" element={<MfaVerify />} />
+            <Route path="login/mfa/setup" element={<MandatoryMfaSetup />} />
           </Route>
 
           <Route element={<RequireAuth />}>

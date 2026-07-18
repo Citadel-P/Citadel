@@ -1,3 +1,10 @@
-﻿namespace Application.Features.Identity.Auth.Models;
+namespace Application.Features.Identity.Auth.Models;
 
-public sealed record LoginResponse(string AccessToken);
+public enum LoginNextStep
+{
+    Completed,
+    VerifyMfa,
+    EnrollMfa
+}
+
+public sealed record LoginResponse(string? AccessToken, LoginNextStep NextStep);

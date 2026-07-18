@@ -2,7 +2,7 @@ import { useEffect, useCallback, useReducer } from 'react';
 import { useApiClientContext } from '@/api/api-client-context';
 import { AuthContext } from './auth-context';
 import { useHTTPErrorHandler, useMutate } from '@/lib/hooks';
-import { LoginRequest, ProblemDetails } from '@/api/generated/api.types';
+import { LoginNextStep, LoginRequest, LoginResponse, ProblemDetails } from '@/api/generated/api.types';
 import { useTokenRefresh } from './hooks/use-token-refresh';
 
 type AuthState = {
@@ -32,7 +32,7 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
   useHTTPErrorHandler();
   const { apiClient } = useApiClientContext();
   const { mutate: requestLogout } = useMutate('logout');
-  const { mutate: requestLogin, isPending, validationErrors } = useMutate('login');
+  const { mutateAsync: requestLogin, isPending, validationErrors } = useMutate('login');
 
   const [authState, dispatch] = useReducer(authReducer, initialState);
 
@@ -60,14 +60,12 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
   );
 
   const login = useCallback(
-    (request: LoginRequest) => {
-      requestLogin(request, {
-        onSuccess: (data) => {
-          if (data?.data?.accessToken) {
-            applyToken(data.data.accessToken);
-          }
-        },
-      });
+    async (request: LoginRequest): Promise<LoginResponse | undefined> => {
+      const response = await requestLogin({ data: request });
+      if (response.data.nextStep === LoginNextStep.Completed && response.data.accessToken) {
+        applyToken(response.data.accessToken);
+      }
+      return response.data;
     },
     [requestLogin, applyToken],
   );
@@ -125,6 +123,7 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
         isAuthenticated,
         isAuthReady,
         login,
+        completeLogin: (accessToken) => applyToken(accessToken),
         logout,
         isPending,
         validationErrors,

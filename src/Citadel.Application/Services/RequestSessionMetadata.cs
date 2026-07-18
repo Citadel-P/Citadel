@@ -13,3 +13,17 @@ public interface IRefreshTokenCookieService
     void Set(string refreshToken, DateTime expiresAt);
     void Delete();
 }
+
+public interface IMfaChallengeCookieService
+{
+    Guid? GetCurrent();
+    void Set(Guid challengeId, DateTime expiresAt);
+    void Delete();
+}
+
+public interface IMfaSetupCookieService
+{
+    Guid? GetCurrent();
+    void Set(Guid setupSessionId, DateTime expiresAt);
+    void Delete();
+}

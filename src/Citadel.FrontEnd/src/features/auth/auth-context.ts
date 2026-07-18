@@ -1,4 +1,4 @@
-import { LoginRequest } from '@/api/generated/api.types';
+import { LoginRequest, LoginResponse } from '@/api/generated/api.types';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext } from 'react';
 
@@ -9,7 +9,8 @@ interface IContext {
   isPending: boolean;
   validationErrors: string | undefined;
   logout: () => void;
-  login: (request: LoginRequest) => void;
+  login: (request: LoginRequest) => Promise<LoginResponse | undefined>;
+  completeLogin: (accessToken: string) => void;
 }
 
 export const AuthContext = createContext<IContext | undefined>(undefined);

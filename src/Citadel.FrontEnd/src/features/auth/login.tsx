@@ -8,10 +8,14 @@ import { useAuthContext } from './auth-context';
 import { Constants } from '@/lib/constants';
 import { useRead } from '@/lib/hooks';
 import { useApiClientContext } from '@/api/api-client-context';
+import { LoginNextStep } from '@/api/generated/api.types';
+import { useNavigate } from 'react-router';
+import { clearMfaFlowStep, markMfaFlowStep } from './mfa/mfa-flow';
 
 const Login = () => {
   const { login, isPending, validationErrors } = useAuthContext();
   const { apiClient } = useApiClientContext();
+  const navigate = useNavigate();
   const { data: oidcProvidersData, isLoading: isLoadingOidcProviders } = useRead('listOidcLoginProviders');
 
   const [formData, setFormData] = useState({ emailOrName: '', password: '' });
@@ -53,17 +57,30 @@ const Login = () => {
     return isValid;
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     if (validateForm()) {
-      login(formData);
+      clearMfaFlowStep();
+      const response = await login(formData);
+      if (response?.nextStep === LoginNextStep.VerifyMfa) {
+        markMfaFlowStep('verify');
+        navigate('/login/mfa');
+      } else if (response?.nextStep === LoginNextStep.EnrollMfa) {
+        markMfaFlowStep('setup');
+        navigate('/login/mfa/setup');
+      } else if (response?.nextStep === LoginNextStep.Completed) {
+        clearMfaFlowStep();
+      }
     }
   };
 
   const beginOidcLogin = (providerId: string) => {
+    clearMfaFlowStep();
     const returnUrl = `${window.location.origin}/login`;
-    window.location.assign(`${apiBaseUrl}/api/v1/authentication/oidc/${providerId}/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+    window.location.assign(
+      `${apiBaseUrl}/api/v1/authentication/oidc/${providerId}/login?returnUrl=${encodeURIComponent(returnUrl)}`,
+    );
   };
 
   return (

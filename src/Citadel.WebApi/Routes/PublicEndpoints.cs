@@ -17,6 +17,7 @@ using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Identity.Profile;
+using WebApi.Routes.Endpoints.Resources.Identity.Mfa;
 using WebApi.Routes.Endpoints.Resources.Licensing;
 using WebApi.Routes.Endpoints.Resources.Oidc;
 using WebApi.Routes.Endpoints.Resources.Platforms;
@@ -253,6 +254,47 @@ public static class PublicEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("revokeOtherProfileSessions");
+
+        profile.MapGet("mfa", Mfa.GetProfileMfaStatus)
+            .WithSummary("Get current profile MFA status")
+            .Produces<ProfileMfaStatusView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getProfileMfaStatus");
+
+        profile.MapPost("mfa/setup", Mfa.StartProfileMfaSetup)
+            .WithSummary("Start current profile MFA setup")
+            .Produces<ProfileMfaSetupView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("strict-auth")
+            .WithName("startProfileMfaSetup");
+
+        profile.MapPost("mfa/setup/confirm", Mfa.ConfirmProfileMfaSetup)
+            .WithSummary("Confirm current profile MFA setup")
+            .Produces<ProfileMfaRecoveryCodesView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("strict-auth")
+            .WithName("confirmProfileMfaSetup");
+
+        profile.MapPost("mfa/disable", Mfa.DisableProfileMfa)
+            .WithSummary("Disable current profile MFA")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("strict-auth")
+            .WithName("disableProfileMfa");
+
+        profile.MapPost("mfa/recovery-codes", Mfa.RegenerateProfileMfaRecoveryCodes)
+            .WithSummary("Regenerate current profile MFA recovery codes")
+            .Produces<ProfileMfaRecoveryCodesView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("strict-auth")
+            .WithName("regenerateProfileMfaRecoveryCodes");
     }
 
     private static void MapLicenseEndpoints(RouteGroupBuilder license)
@@ -398,6 +440,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteUsers");
+
+        users.MapDelete("{id:guid}/mfa", Mfa.ResetUserMfa)
+            .WithSummary("Reset user MFA")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("resetUserMfa");
     }
 
     private static void MapGitAccountEndpoints(RouteGroupBuilder gitAccounts)
@@ -749,11 +799,44 @@ public static class PublicEndpoints
         auth.MapPost("login", Authentication.Login)
             .WithSummary("Check user credentials and issue an access token on successful login")
             .ProduceCookie(Constants.RefreshToken)
+            .ProduceCookie(Constants.MfaChallenge)
+            .ProduceCookie(Constants.MfaSetup)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .RequireRateLimiting("strict-auth")
             .WithName("login");
+
+        auth.MapPost("mfa/verify", Mfa.VerifyAuthenticationMfa)
+            .WithSummary("Verify an MFA login challenge")
+            .WithCookie(Constants.MfaChallenge, "MFA Challenge", true)
+            .ProduceCookie(Constants.RefreshToken)
+            .Produces<MfaVerificationView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("strict-auth")
+            .WithName("verifyAuthenticationMfa");
+
+        auth.MapGet("mfa/setup", Mfa.GetAuthenticationMfaSetup)
+            .WithSummary("Get mandatory MFA setup")
+            .WithCookie(Constants.MfaSetup, "MFA Setup", true)
+            .Produces<MandatoryMfaSetupView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("strict-auth")
+            .WithName("getAuthenticationMfaSetup");
+
+        auth.MapPost("mfa/setup/confirm", Mfa.ConfirmAuthenticationMfaSetup)
+            .WithSummary("Confirm mandatory MFA setup")
+            .WithCookie(Constants.MfaSetup, "MFA Setup", true)
+            .ProduceCookie(Constants.RefreshToken)
+            .Produces<MandatoryMfaSetupCompleteView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("strict-auth")
+            .WithName("confirmAuthenticationMfaSetup");
 
         auth.MapPost("logout", Authentication.Logout)
             .WithSummary("Log out")

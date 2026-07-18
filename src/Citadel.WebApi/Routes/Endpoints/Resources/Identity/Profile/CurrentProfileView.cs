@@ -23,6 +23,7 @@ public sealed record CurrentProfileView(
                 isOidc ? CurrentProfileAuthenticationType.Oidc : CurrentProfileAuthenticationType.Local,
                 isOidc ? $"Managed by {profile.OidcProviderName ?? "identity provider"}" : "Local account",
                 !isOidc,
+                profile.HasLocalPassword,
                 profile.OidcProviderId,
                 profile.OidcProviderName),
             profile.CreatedAt,
@@ -41,6 +42,7 @@ public sealed record CurrentProfileAuthenticationView(
     CurrentProfileAuthenticationType Type,
     string Label,
     bool CanChangePassword,
+    bool CanUseLocalPasswordMfa,
     Guid? OidcProviderId = null,
     string? OidcProviderName = null);
 

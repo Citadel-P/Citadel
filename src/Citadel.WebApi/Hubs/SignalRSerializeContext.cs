@@ -160,6 +160,12 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<UserPasswordChanged>]
 [GenerateShapeFor<UserSessionRevoked>]
 [GenerateShapeFor<UserOtherSessionsRevoked>]
+[GenerateShapeFor<UserMfaEnabled>]
+[GenerateShapeFor<UserMfaDisabled>]
+[GenerateShapeFor<UserMfaVerificationFailed>]
+[GenerateShapeFor<UserMfaRecoveryCodeUsed>]
+[GenerateShapeFor<UserMfaRecoveryCodesRegenerated>]
+[GenerateShapeFor<UserMfaResetByAdministrator>]
 [GenerateShapeFor<VolumeContentDownloaded>]
 [GenerateShapeFor<WebhookAuthenticationFailedAlertInfo>]
 [GenerateShapeFor<WebhookDispatchFailedAlertInfo>]
@@ -266,6 +272,12 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.UserPasswordChanged)] = typeof(UserPasswordChanged),
         [nameof(ActivityEventType.UserSessionRevoked)] = typeof(UserSessionRevoked),
         [nameof(ActivityEventType.UserOtherSessionsRevoked)] = typeof(UserOtherSessionsRevoked),
+        [nameof(ActivityEventType.UserMfaEnabled)] = typeof(UserMfaEnabled),
+        [nameof(ActivityEventType.UserMfaDisabled)] = typeof(UserMfaDisabled),
+        [nameof(ActivityEventType.UserMfaVerificationFailed)] = typeof(UserMfaVerificationFailed),
+        [nameof(ActivityEventType.UserMfaRecoveryCodeUsed)] = typeof(UserMfaRecoveryCodeUsed),
+        [nameof(ActivityEventType.UserMfaRecoveryCodesRegenerated)] = typeof(UserMfaRecoveryCodesRegenerated),
+        [nameof(ActivityEventType.UserMfaResetByAdministrator)] = typeof(UserMfaResetByAdministrator),
         [nameof(ActivityEventType.VolumeContentDownloaded)] = typeof(VolumeContentDownloaded),
     };
 }

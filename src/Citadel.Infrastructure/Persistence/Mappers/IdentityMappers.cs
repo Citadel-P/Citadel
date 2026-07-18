@@ -33,6 +33,7 @@ internal static class IdentityMappers
             dto.CreatedAt,
             [.. ParseResources(dto.Roles)],
             [.. ParseResources(dto.Teams)],
+            dto.HasLocalPassword,
             dto.OidcProviderId,
             dto.OidcProviderName);
 

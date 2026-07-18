@@ -43,6 +43,7 @@ using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Identity;
 using WebApi.Routes.Endpoints.Resources.Identity.Actors;
 using WebApi.Routes.Endpoints.Resources.Identity.Auth;
+using WebApi.Routes.Endpoints.Resources.Identity.Mfa;
 using WebApi.Routes.Endpoints.Resources.Identity.Profile;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Teams;
@@ -83,6 +84,8 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<UserDateTimeFormat>),
         typeof(JsonStringEnumConverter<UserTheme>),
         typeof(JsonStringEnumConverter<CurrentProfileAuthenticationType>),
+        typeof(JsonStringEnumConverter<LoginNextStep>),
+        typeof(JsonStringEnumConverter<MfaPolicy>),
         typeof(JsonStringEnumConverter<LicenseLimit>),
         typeof(JsonStringEnumConverter<LicenseStatus>),
         typeof(JsonStringEnumConverter<BackupSourceType>),
@@ -147,7 +150,21 @@ namespace Application.Models;
 [JsonSerializable(typeof(EndpointSettingsView))]
 [JsonSerializable(typeof(LoginRequest))]
 [JsonSerializable(typeof(LoginResponse))]
+[JsonSerializable(typeof(LoginNextStep))]
 [JsonSerializable(typeof(RefreshTokenResponse))]
+[JsonSerializable(typeof(MfaPolicy))]
+[JsonSerializable(typeof(MfaVerificationInput))]
+[JsonSerializable(typeof(ConfirmMandatoryMfaSetupInput))]
+[JsonSerializable(typeof(StartProfileMfaSetupInput))]
+[JsonSerializable(typeof(ConfirmProfileMfaSetupInput))]
+[JsonSerializable(typeof(DisableProfileMfaInput))]
+[JsonSerializable(typeof(RegenerateProfileMfaRecoveryCodesInput))]
+[JsonSerializable(typeof(MfaVerificationView))]
+[JsonSerializable(typeof(MandatoryMfaSetupView))]
+[JsonSerializable(typeof(MandatoryMfaSetupCompleteView))]
+[JsonSerializable(typeof(ProfileMfaSetupView))]
+[JsonSerializable(typeof(ProfileMfaStatusView))]
+[JsonSerializable(typeof(ProfileMfaRecoveryCodesView))]
 [JsonSerializable(typeof(ApplicationInfoView))]
 [JsonSerializable(typeof(CurrentProfileView))]
 [JsonSerializable(typeof(CurrentProfileAuthenticationView))]

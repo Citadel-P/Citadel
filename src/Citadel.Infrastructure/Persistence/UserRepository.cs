@@ -170,6 +170,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 u.CreatedAt,
                 COALESCE(teams.Teams, '[]') AS Teams,
                 COALESCE(roles.Roles, '[]') AS Roles,
+                (u.Password IS NOT NULL AND btrim(u.Password) <> '') AS HasLocalPassword,
                 oidc.ProviderId AS OidcProviderId,
                 oidc.ProviderName AS OidcProviderName
             FROM Users u

@@ -10,6 +10,7 @@ public sealed record CurrentProfileDetails(
     DateTime CreatedAt,
     IReadOnlyCollection<ResourceInfo> DirectRoles,
     IReadOnlyCollection<ResourceInfo> Teams,
+    bool HasLocalPassword,
     Guid? OidcProviderId,
     string? OidcProviderName);
 
