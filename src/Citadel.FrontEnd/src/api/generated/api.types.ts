@@ -287,12 +287,11 @@ export enum LicenseStatus {
 }
 
 export enum LicenseLimit {
-  OidcProviders = "OidcProviders",
-  EdgeAgentPlatforms = "EdgeAgentPlatforms",
-  SecretProviders = "SecretProviders",
   CustomRoles = "CustomRoles",
   ActiveUsers = "ActiveUsers",
   Platforms = "Platforms",
+  BackupPolicies = "BackupPolicies",
+  AutomationActions = "AutomationActions",
 }
 
 export enum GitTransport {

@@ -38525,12 +38525,11 @@
       },
       "LicenseLimit": {
         "enum": [
-          "OidcProviders",
-          "EdgeAgentPlatforms",
-          "SecretProviders",
           "CustomRoles",
           "ActiveUsers",
-          "Platforms"
+          "Platforms",
+          "BackupPolicies",
+          "AutomationActions"
         ]
       },
       "LicenseLimitView": {

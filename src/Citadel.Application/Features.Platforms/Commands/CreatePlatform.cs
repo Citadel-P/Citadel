@@ -97,8 +97,7 @@ internal sealed class CreatePlatformHandler(
         var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
             new Dictionary<LicenseLimit, int>
             {
-                [LicenseLimit.Platforms] = 1,
-                [LicenseLimit.EdgeAgentPlatforms] = 1
+                [LicenseLimit.Platforms] = 1
             },
             unitOfWork,
             cancellationToken);

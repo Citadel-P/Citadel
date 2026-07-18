@@ -1,6 +1,5 @@
 using Application.Features.Oidc.Models;
 using Application.Services;
-using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
@@ -56,8 +55,7 @@ public sealed record TestOidcProviderDiscovery(Guid? ProviderId, string? Issuer)
 internal sealed class CreateOidcProviderHandler(
     IUnitOfWork unitOfWork,
     ISecretValueProtector secretValueProtector,
-    IUserContextAccessor userContextAccessor,
-    ILicenseQuotaService licenseQuotaService)
+    IUserContextAccessor userContextAccessor)
     : ICommandHandler<CreateOidcProvider, Result<OidcProvider>>
 {
     public async ValueTask<Result<OidcProvider>> Handle(CreateOidcProvider command, CancellationToken cancellationToken)
@@ -68,16 +66,6 @@ internal sealed class CreateOidcProviderHandler(
 
         if (input.DefaultRoleId.HasValue && await unitOfWork.Roles.GetAsync(input.DefaultRoleId.Value, cancellationToken) is null)
             return Result.Failure<OidcProvider>(new BadRequestError("Default role does not exist."));
-
-        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-            new Dictionary<LicenseLimit, int>
-            {
-                [LicenseLimit.OidcProviders] = 1
-            },
-            unitOfWork,
-            cancellationToken);
-        if (quotaResult.IsFailure())
-            return Result.Failure<OidcProvider>(quotaResult.Errors);
 
         var provider = new OidcProvider(
             input.Name,

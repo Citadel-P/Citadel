@@ -66,22 +66,20 @@ public sealed record LicenseVerificationResult(
 }
 
 public sealed record LicenseUsageSnapshot(
-    int OidcProviders,
-    int EdgeAgentPlatforms,
-    int SecretProviders,
     int CustomRoles,
     int ActiveUsers,
-    int Platforms)
+    int Platforms,
+    int BackupPolicies,
+    int AutomationActions)
 {
     public int GetValue(LicenseLimit limit)
         => limit switch
         {
-            LicenseLimit.OidcProviders => OidcProviders,
-            LicenseLimit.EdgeAgentPlatforms => EdgeAgentPlatforms,
-            LicenseLimit.SecretProviders => SecretProviders,
             LicenseLimit.CustomRoles => CustomRoles,
             LicenseLimit.ActiveUsers => ActiveUsers,
             LicenseLimit.Platforms => Platforms,
+            LicenseLimit.BackupPolicies => BackupPolicies,
+            LicenseLimit.AutomationActions => AutomationActions,
             _ => 0
         };
 }
@@ -147,22 +145,20 @@ public static class LicenseConstants
 
 public static class LicenseLimitKeys
 {
-    public const string OidcProviders = "oidc-providers";
-    public const string EdgeAgentPlatforms = "edge-agent-platforms";
-    public const string SecretProviders = "secret-providers";
     public const string CustomRoles = "custom-roles";
     public const string ActiveUsers = "active-users";
     public const string Platforms = "platforms";
+    public const string BackupPolicies = "backup-policies";
+    public const string AutomationActions = "automation-actions";
 
     public static string GetKey(LicenseLimit limit)
         => limit switch
         {
-            LicenseLimit.OidcProviders => OidcProviders,
-            LicenseLimit.EdgeAgentPlatforms => EdgeAgentPlatforms,
-            LicenseLimit.SecretProviders => SecretProviders,
             LicenseLimit.CustomRoles => CustomRoles,
             LicenseLimit.ActiveUsers => ActiveUsers,
             LicenseLimit.Platforms => Platforms,
+            LicenseLimit.BackupPolicies => BackupPolicies,
+            LicenseLimit.AutomationActions => AutomationActions,
             _ => throw new ArgumentOutOfRangeException(nameof(limit), limit, null)
         };
 
@@ -170,16 +166,15 @@ public static class LicenseLimitKeys
     {
         limit = key switch
         {
-            OidcProviders => LicenseLimit.OidcProviders,
-            EdgeAgentPlatforms => LicenseLimit.EdgeAgentPlatforms,
-            SecretProviders => LicenseLimit.SecretProviders,
             CustomRoles => LicenseLimit.CustomRoles,
             ActiveUsers => LicenseLimit.ActiveUsers,
             Platforms => LicenseLimit.Platforms,
+            BackupPolicies => LicenseLimit.BackupPolicies,
+            AutomationActions => LicenseLimit.AutomationActions,
             _ => default
         };
 
-        return key is OidcProviders or EdgeAgentPlatforms or SecretProviders or CustomRoles or ActiveUsers or Platforms;
+        return key is CustomRoles or ActiveUsers or Platforms or BackupPolicies or AutomationActions;
     }
 }
 
@@ -187,11 +182,10 @@ public static class CommunityLicenseLimits
 {
     public static readonly IReadOnlyDictionary<LicenseLimit, int> Values = new Dictionary<LicenseLimit, int>
     {
-        [LicenseLimit.OidcProviders] = 1,
-        [LicenseLimit.EdgeAgentPlatforms] = 1,
-        [LicenseLimit.SecretProviders] = 1,
         [LicenseLimit.CustomRoles] = 0,
         [LicenseLimit.ActiveUsers] = 10,
-        [LicenseLimit.Platforms] = 5
+        [LicenseLimit.Platforms] = 5,
+        [LicenseLimit.BackupPolicies] = 5,
+        [LicenseLimit.AutomationActions] = 15
     };
 }

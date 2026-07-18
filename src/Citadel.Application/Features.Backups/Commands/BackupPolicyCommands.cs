@@ -11,6 +11,7 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Application.Services.Backups;
+using Application.Services.Licensing;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using System.Runtime.CompilerServices;
@@ -215,7 +216,8 @@ internal sealed class CreateBackupPolicyHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
-    IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver)
+    IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
+    ILicenseQuotaService licenseQuotaService)
     : ICommandHandler<CreateBackupPolicy, Result<BackupPolicyResult>>
 {
     public async ValueTask<Result<BackupPolicyResult>> Handle(CreateBackupPolicy command, CancellationToken cancellationToken)
@@ -225,6 +227,16 @@ internal sealed class CreateBackupPolicyHandler(
 
         if (await unitOfWork.BackupPolicies.ExistsByNormalizedNameAsync(normalizedName, cancellationToken))
             return Result.Failure<BackupPolicyResult>(new ConflictError("Backup policy name already exists."));
+
+        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
+            new Dictionary<LicenseLimit, int>
+            {
+                [LicenseLimit.BackupPolicies] = 1
+            },
+            unitOfWork,
+            cancellationToken);
+        if (quotaResult.IsFailure())
+            return Result.Failure<BackupPolicyResult>(quotaResult.Errors);
 
         var repository = await unitOfWork.BackupRepositories.GetAsync(input.BackupRepositoryId, cancellationToken);
         if (repository is null)

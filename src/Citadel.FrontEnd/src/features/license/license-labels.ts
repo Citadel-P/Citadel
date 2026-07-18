@@ -1,12 +1,11 @@
 import { LicenseLimit, LicenseStatus } from '@/api/generated/api.types';
 
 export const LICENSE_LIMIT_LABELS: Record<LicenseLimit, string> = {
-  [LicenseLimit.OidcProviders]: 'OIDC Providers',
-  [LicenseLimit.EdgeAgentPlatforms]: 'Edge Agent Platforms',
-  [LicenseLimit.SecretProviders]: 'Secret Providers',
   [LicenseLimit.CustomRoles]: 'Custom Roles',
   [LicenseLimit.ActiveUsers]: 'Active Users',
   [LicenseLimit.Platforms]: 'Platforms',
+  [LicenseLimit.BackupPolicies]: 'Backup Policies',
+  [LicenseLimit.AutomationActions]: 'Automation Actions',
 };
 
 export const LICENSE_STATUS_LABELS: Record<LicenseStatus, string> = {

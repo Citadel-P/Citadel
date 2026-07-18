@@ -1,6 +1,7 @@
 using Application.Features.Backups.Commands;
 using Application.Features.Backups.Models;
 using Application.Services.Backups;
+using Application.Services.Licensing;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
@@ -9,6 +10,7 @@ using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Backups;
 using Hosting.Common.Abstraction;
+using LightResults;
 using Moq;
 
 namespace Tests.Unit.Application.Features.Backups;
@@ -403,11 +405,22 @@ public sealed class BackupPolicyCommandsTests
             TagIds: []));
 
     private static CreateBackupPolicyHandler CreateCreateHandler(IUnitOfWork unitOfWork)
-        => new(
+    {
+        var licenseQuotaService = new Mock<ILicenseQuotaService>();
+        licenseQuotaService
+            .Setup(x => x.EnsureCanIncreaseAsync(
+                It.IsAny<IReadOnlyDictionary<LicenseLimit, int>>(),
+                unitOfWork,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+
+        return new CreateBackupPolicyHandler(
             unitOfWork,
             CreateUserContextAccessor(),
             Mock.Of<IStackBackupVolumeResolver>(),
-            Mock.Of<IDeploymentBackupVolumeResolver>());
+            Mock.Of<IDeploymentBackupVolumeResolver>(),
+            licenseQuotaService.Object);
+    }
 
     private static UpdateBackupPolicyHandler CreateUpdateHandler(IUnitOfWork unitOfWork)
         => new(

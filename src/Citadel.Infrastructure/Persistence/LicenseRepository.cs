@@ -2,6 +2,7 @@ using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Licensing;
+using Hosting.Common;
 using System.Data;
 
 namespace Infrastructure.Persistence;
@@ -159,12 +160,11 @@ internal sealed class LicenseUsageRepository(IDbConnection db, Func<IDbTransacti
     {
         const string sql = """
             SELECT
-                (SELECT COUNT(*)::int FROM oidcproviders) AS OidcProviders,
-                (SELECT COUNT(*)::int FROM platforms WHERE connectortype = 'EdgeAgent') AS EdgeAgentPlatforms,
-                (SELECT COUNT(*)::int FROM secretproviders WHERE providertype <> 'InternalEncrypted') AS SecretProviders,
                 (SELECT COUNT(*)::int FROM roles WHERE roletype = 'Custom') AS CustomRoles,
                 (SELECT COUNT(*)::int FROM users u JOIN actors a ON a.id = u.actorid WHERE a.isenabled) AS ActiveUsers,
                 (SELECT COUNT(*)::int FROM platforms) AS Platforms,
+                (SELECT COUNT(*)::int FROM backuppolicies WHERE archivedat IS NULL) AS BackupPolicies,
+                (SELECT COUNT(*)::int FROM actions WHERE createdbyactorid <> @SystemActorId) AS AutomationActions,
                 il.rawlicense AS RawLicense,
                 il.fingerprint AS Fingerprint,
                 il.installedat AS InstalledAt,
@@ -176,7 +176,10 @@ internal sealed class LicenseUsageRepository(IDbConnection db, Func<IDbTransacti
             LEFT JOIN installedlicenses il ON il.id = 1
             """;
 
-        var dto = await db.QuerySingleAsync<LicenseReadModelDto>(sql, transaction: tx());
+        var dto = await db.QuerySingleAsync<LicenseReadModelDto>(
+            sql,
+            new { SystemActorId = Constants.SystemId },
+            transaction: tx());
         return dto.ToDomain();
     }
 }
@@ -207,12 +210,11 @@ internal sealed record InstalledLicenseDto(
 }
 
 internal sealed record LicenseReadModelDto(
-    int OidcProviders,
-    int EdgeAgentPlatforms,
-    int SecretProviders,
     int CustomRoles,
     int ActiveUsers,
     int Platforms,
+    int BackupPolicies,
+    int AutomationActions,
     string? RawLicense,
     string? Fingerprint,
     DateTime? InstalledAt,
@@ -224,12 +226,11 @@ internal sealed record LicenseReadModelDto(
     public LicenseReadModel ToDomain()
     {
         var usage = new LicenseUsageSnapshot(
-            OidcProviders,
-            EdgeAgentPlatforms,
-            SecretProviders,
             CustomRoles,
             ActiveUsers,
-            Platforms);
+            Platforms,
+            BackupPolicies,
+            AutomationActions);
 
         var installed = RawLicense is null || Fingerprint is null || InstalledAt is null
             ? null

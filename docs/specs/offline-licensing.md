@@ -34,12 +34,11 @@ Community edition is the default state when no valid license is installed.
 
 | Resource | Community allowance |
 | --- | ---: |
-| OIDC providers | 1 |
-| Edge Agent platforms | 1 |
-| Secret providers | 1 |
 | Custom roles | 0 |
 | Active users | 10 |
 | Total platforms | 5 |
+| Backup policies | 5 |
+| Automation actions | 15 |
 
 Built-in system roles remain free:
 
@@ -54,24 +53,22 @@ Use stable quota identifiers:
 ```csharp
 public enum LicenseLimit
 {
-    OidcProviders,
-    EdgeAgentPlatforms,
-    SecretProviders,
     CustomRoles,
     ActiveUsers,
-    Platforms
+    Platforms,
+    BackupPolicies,
+    AutomationActions
 }
 ```
 
 Signed license payload keys must be stable strings, not numeric enum values:
 
 ```text
-oidc-providers
-edge-agent-platforms
-secret-providers
 custom-roles
 active-users
 platforms
+backup-policies
+automation-actions
 ```
 
 Effective limits are:
@@ -152,12 +149,11 @@ Schema version `1`. `replacedLicenseId` is present only for renewed or rehosted 
   "expiresAt": "2027-07-12T00:00:00Z",
   "graceUntil": "2027-07-26T00:00:00Z",
   "limits": {
-    "oidc-providers": 5,
-    "edge-agent-platforms": 20,
-    "secret-providers": 10,
     "custom-roles": 50,
     "active-users": 100,
-    "platforms": 50
+    "platforms": 50,
+    "backup-policies": 50,
+    "automation-actions": 150
   }
 }
 ```
@@ -368,12 +364,11 @@ Add one repository method that returns the current quota usage directly from the
 Task<LicenseUsageSnapshot> GetLicenseUsageSnapshotAsync(CancellationToken cancellationToken);
 
 public sealed record LicenseUsageSnapshot(
-    int OidcProviders,
-    int EdgeAgentPlatforms,
-    int SecretProviders,
     int CustomRoles,
     int ActiveUsers,
-    int Platforms);
+    int Platforms,
+    int BackupPolicies,
+    int AutomationActions);
 ```
 
 Use a single PostgreSQL query with scalar subqueries or CTEs. This avoids six round trips and gives the license page and quota validator one consistent database state. Specialized existing count methods can remain only where already useful outside licensing.
@@ -382,14 +377,13 @@ Exact mapping:
 
 | Limit | Count source |
 | --- | --- |
-| `OidcProviders` | Rows in `OidcProviders` |
-| `EdgeAgentPlatforms` | `Platforms` where `ConnectorType = EdgeAgent` |
-| `SecretProviders` | Rows in `SecretProviders` for external providers |
 | `CustomRoles` | `Roles` where `RoleType = Custom` |
 | `ActiveUsers` | Users whose actor is enabled |
 | `Platforms` | Rows in `Platforms` |
+| `BackupPolicies` | Non-archived rows in `BackupPolicies` |
+| `AutomationActions` | Rows in `Actions` where `CreatedByActorId` is not the system actor |
 
-Count disabled OIDC providers and disconnected Edge Agent platforms. They are configured capacity and should still count.
+Connector type, OIDC provider count, secret provider count, and parallel worker settings are not license dimensions.
 
 Count active users only. Creating a disabled user does not increase `ActiveUsers`; enabling a disabled user does.
 
@@ -418,14 +412,14 @@ For concurrent create requests, protect check-and-insert with a transaction-scop
 - Validate every requested increase.
 - Keep the transaction and lock active until the resource write is committed or rolled back.
 
-Compound mutations must pass every affected limit at once. For example, Edge Agent platform creation increases both total platforms and Edge Agent platforms:
+Compound mutations must pass every affected limit at once. For example, a command that creates multiple licensed resources must validate every increase in one call:
 
 ```csharp
 await quotaService.EnsureCanIncreaseAsync(
     new Dictionary<LicenseLimit, int>
     {
         [LicenseLimit.Platforms] = 1,
-        [LicenseLimit.EdgeAgentPlatforms] = 1
+        [LicenseLimit.BackupPolicies] = 1
     },
     unitOfWork,
     cancellationToken);
@@ -433,11 +427,9 @@ await quotaService.EnsureCanIncreaseAsync(
 
 Enforcement points:
 
-- `CreateOidcProvider`
-- Any OIDC restore or duplicate flow if added later
 - `CreatePlatform`
-- `PatchPlatform` when changing a non-edge platform to `EdgeAgent`
-- `CreateVaultKvV2SecretProvider`
+- `CreateBackupPolicy`
+- `CreateAutomationAction`
 - `CreateRole` because it creates `RoleType.Custom`
 - `CreateUser` when `IsEnabled = true`
 - `PatchUser` or `PatchActorEnabled` when enabling a disabled user actor
@@ -449,7 +441,7 @@ Operations that do not increase usage must remain allowed even when over quota:
 - Edit existing configuration.
 - Disable resources or users.
 - Delete resources or users.
-- Change an Edge Agent platform to a non-edge connector.
+- Change a platform connector type.
 - Replace an expired or invalid license.
 
 ## Quota Errors
@@ -478,13 +470,13 @@ Problem details extension example:
   "type": "https://citadel.local/problems/license-quota-exceeded",
   "title": "License quota exceeded",
   "status": 403,
-  "detail": "Community edition allows 1 Edge Agent platform.",
+  "detail": "Community edition allows 5 platforms.",
   "violations": [
     {
-      "limit": "EdgeAgentPlatforms",
-      "current": 1,
+      "limit": "Platforms",
+      "current": 5,
       "requested": 1,
-      "maximum": 1
+      "maximum": 5
     }
   ],
   "licenseStatus": "Community",
@@ -717,12 +709,11 @@ citadel-license license issue `
   --request ./customer-license-request.json `
   --customer-id customer-example `
   --customer-name "Example Corp" `
-  --limit oidc-providers=5 `
-  --limit edge-agent-platforms=20 `
-  --limit secret-providers=10 `
   --limit custom-roles=50 `
   --limit active-users=100 `
   --limit platforms=50 `
+  --limit backup-policies=50 `
+  --limit automation-actions=150 `
   --expires 2027-07-12 `
   --grace-days 14 `
   --key-id citadel-license-2026-01 `
@@ -823,14 +814,14 @@ Repository/integration tests:
 - Instance ID is created once and reused.
 - Installed license upsert replaces the previous license atomically.
 - Raw license is persisted but never returned by `GET /api/v1/license`.
-- Usage snapshot counts are database-side and match OIDC, Edge Agent platform, secret provider, custom role, active user, and total platform rows.
+- Usage snapshot counts are database-side and match custom role, active user, platform, backup policy, and automation action rows.
 - Dapper AOT-friendly parameter usage is preserved.
 
 Handler tests:
 
-- Community blocks a second OIDC provider.
-- Community blocks a second Edge Agent platform.
-- Community blocks a second external secret provider.
+- Community blocks the sixth platform.
+- Community blocks the sixth backup policy.
+- Community blocks the sixteenth automation action.
 - Community blocks custom role creation.
 - Community blocks the eleventh enabled user.
 - Creating a disabled user over active-user quota succeeds.

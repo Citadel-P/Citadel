@@ -208,12 +208,11 @@ public sealed class LicenseVerifierTests
             GraceUntil: graceUntil,
             Limits: new Dictionary<string, int>
             {
-                [LicenseLimitKeys.OidcProviders] = 5,
-                [LicenseLimitKeys.EdgeAgentPlatforms] = 5,
-                [LicenseLimitKeys.SecretProviders] = 5,
                 [LicenseLimitKeys.CustomRoles] = 10,
                 [LicenseLimitKeys.ActiveUsers] = 20,
-                [LicenseLimitKeys.Platforms] = 10
+                [LicenseLimitKeys.Platforms] = 10,
+                [LicenseLimitKeys.BackupPolicies] = 25,
+                [LicenseLimitKeys.AutomationActions] = 50
             });
 
     private sealed class LicenseFixture

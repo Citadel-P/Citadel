@@ -199,12 +199,11 @@ public enum PlatformConnectorType
 
 public enum LicenseLimit
 {
-    OidcProviders,
-    EdgeAgentPlatforms,
-    SecretProviders,
     CustomRoles,
     ActiveUsers,
-    Platforms
+    Platforms,
+    BackupPolicies,
+    AutomationActions
 }
 
 public enum LicenseStatus
