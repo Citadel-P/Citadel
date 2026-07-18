@@ -508,6 +508,28 @@ CREATE TABLE resourcetags (
     CONSTRAINT fk_resourcetags_tags_tagid FOREIGN KEY (tagid) REFERENCES tags (id) ON DELETE CASCADE
 );
 
+CREATE TABLE mfachallenges (
+    id uuid NOT NULL,
+    consumedat timestamp with time zone,
+    createdat timestamp with time zone NOT NULL,
+    expiresat timestamp with time zone NOT NULL,
+    failedattempts integer NOT NULL DEFAULT 0,
+    userid uuid NOT NULL,
+    CONSTRAINT pk_mfachallenges PRIMARY KEY (id),
+    CONSTRAINT fk_mfachallenges_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE mfasetupsessions (
+    id uuid NOT NULL,
+    consumedat timestamp with time zone,
+    createdat timestamp with time zone NOT NULL,
+    expiresat timestamp with time zone NOT NULL,
+    protectedtotpsecret text NOT NULL,
+    userid uuid NOT NULL,
+    CONSTRAINT pk_mfasetupsessions PRIMARY KEY (id),
+    CONSTRAINT fk_mfasetupsessions_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
+);
+
 CREATE TABLE refreshtokens (
     id uuid NOT NULL,
     createdat timestamp with time zone NOT NULL,
@@ -518,6 +540,26 @@ CREATE TABLE refreshtokens (
     userid uuid NOT NULL,
     CONSTRAINT pk_refreshtokens PRIMARY KEY (id),
     CONSTRAINT fk_refreshtokens_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE usermfarecoverycodes (
+    id uuid NOT NULL,
+    codehash text NOT NULL,
+    createdat timestamp with time zone NOT NULL,
+    usedat timestamp with time zone,
+    userid uuid NOT NULL,
+    CONSTRAINT pk_usermfarecoverycodes PRIMARY KEY (id),
+    CONSTRAINT fk_usermfarecoverycodes_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE usermfasettings (
+    userid uuid NOT NULL,
+    createdat timestamp with time zone NOT NULL,
+    enabledat timestamp with time zone NOT NULL,
+    lastacceptedtimestep bigint,
+    protectedtotpsecret text NOT NULL,
+    CONSTRAINT pk_usermfasettings PRIMARY KEY (userid),
+    CONSTRAINT fk_usermfasettings_users_userid FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE
 );
 
 CREATE TABLE userpreferences (
@@ -1261,6 +1303,14 @@ CREATE INDEX ix_images_registryid ON images (registryid);
 
 CREATE INDEX ix_installedlicenses_installedbyactorid ON installedlicenses (installedbyactorid);
 
+CREATE INDEX ix_mfachallenges_expiresat ON mfachallenges (expiresat);
+
+CREATE INDEX ix_mfachallenges_userid ON mfachallenges (userid);
+
+CREATE INDEX ix_mfasetupsessions_expiresat ON mfasetupsessions (expiresat);
+
+CREATE INDEX ix_mfasetupsessions_userid ON mfasetupsessions (userid);
+
 CREATE UNIQUE INDEX ix_oidcexternallogins_providerid_subject ON oidcexternallogins (providerid, subject);
 
 CREATE INDEX ix_oidcexternallogins_userid ON oidcexternallogins (userid);
@@ -1343,6 +1393,10 @@ CREATE UNIQUE INDEX ix_tags_normalizedname ON tags (normalizedname);
 
 CREATE UNIQUE INDEX ix_teams_actorid ON teams (actorid);
 
+CREATE INDEX ix_usermfarecoverycodes_userid ON usermfarecoverycodes (userid);
+
+CREATE UNIQUE INDEX ix_usermfarecoverycodes_userid_codehash ON usermfarecoverycodes (userid, codehash);
+
 CREATE UNIQUE INDEX ix_users_actorid ON users (actorid);
 
 CREATE INDEX ix_users_createdbyactorid ON users (createdbyactorid);
@@ -1354,7 +1408,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260717135725_migration0001', '10.0.9');
+VALUES ('20260718135221_migration0001', '10.0.10');
 
 COMMIT;
 

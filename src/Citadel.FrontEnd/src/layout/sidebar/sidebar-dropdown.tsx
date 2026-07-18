@@ -19,7 +19,7 @@ interface ProfileMenu {
 }
 const profileMenu: ProfileMenu[] = [
   {
-    title: 'Your Profile',
+    title: 'My Profile',
     link: '/profile',
     icon: <User width={20} />,
   },
