@@ -98,7 +98,7 @@ public interface IAutomationActionRepository
     Task<bool> TryMarkScheduledAsync(Guid id, DateTime scheduledMinuteUtc, CancellationToken cancellationToken);
     Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
-    Task<IEnumerable<AutomationAction>> GetStuckActionsAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<IEnumerable<AutomationAction>> GetStuckActionsAsync(CancellationToken cancellationToken = default);
     Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? currentRunId, CancellationToken cancellationToken);
 }
 
@@ -185,7 +185,7 @@ public interface IBackupRepositoryRepository
     Task<bool> HasNonArchivedPolicyAsync(Guid id, CancellationToken cancellationToken);
     Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
-    Task<IEnumerable<BackupRepository>> GetStuckRepositoriesAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<IEnumerable<BackupRepository>> GetStuckRepositoriesAsync(int staleAfterSeconds = 3600, CancellationToken cancellationToken = default);
     Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? currentRunId, CancellationToken cancellationToken);
 }
 
@@ -219,7 +219,7 @@ public interface IBackupPolicyRepository
     Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAfterRunAsync(Guid id, Guid runId, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken);
-    Task<IEnumerable<BackupPolicy>> GetStuckPoliciesAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<IEnumerable<BackupPolicy>> GetStuckPoliciesAsync(CancellationToken cancellationToken = default);
     Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? currentRunId, CancellationToken cancellationToken);
 }
 
@@ -307,6 +307,8 @@ public interface IBuildProjectRepository
     Task<bool> CanAccessAsync(Guid userId, Guid id, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<int> MarkProcessingAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
+    Task<IEnumerable<BuildProject>> GetStuckProjectsAsync(int graceSeconds = 300, CancellationToken cancellationToken = default);
+    Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? currentRunId, CancellationToken cancellationToken);
 }
 
 public interface IBuildRunRepository
@@ -320,6 +322,7 @@ public interface IBuildRunRepository
     Task<BuildRun?> TryClaimAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
     Task<bool> HasActiveRunAsync(Guid projectId, CancellationToken cancellationToken);
     Task<BuildRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
+    Task<BuildRun?> InterruptQueuedOrRunningAsync(Guid id, DateTimeOffset interruptedAt, string reason, CancellationToken cancellationToken);
 }
 
 public interface IBuildRunLogRepository
@@ -742,7 +745,7 @@ public interface IStackRepository
     Task<int> UpdateAsync(Stack stack, CancellationToken cancellationToken);
     Task<int> UpdateReleaseStatusAsync(Guid releaseId, StackReleaseStatus status, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
-    Task<IEnumerable<Stack>> GetStuckStacksAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<IEnumerable<Stack>> GetStuckStacksAsync(int staleAfterSeconds = 3600, CancellationToken cancellationToken = default);
     Task<IEnumerable<GitStackBranchSubscription>> GetGitStackBranchSubscriptionsAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetBranchTrackingGitStacksAsync(Guid gitRepositoryId, string branch, CancellationToken cancellationToken);
     Task<bool> UpdateProcessingAsync(Guid id, StackReleaseStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
@@ -761,6 +764,8 @@ public interface IGitReposRepository
     Task<int> AddAsync(GitRepository gitRepository, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
     Task<int> UpdateAsync(GitRepository gitRepository, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<GitRepository>> GetStuckRepositoriesAsync(int staleAfterSeconds = 3600, CancellationToken cancellationToken = default);
+    Task<int> UpdateProcessingAsync(Guid id, GitReposStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
     Task<GitRepositoryRef?> GetRefAsync(Guid gitRepositoryId, string branch, CancellationToken cancellationToken);
     Task<IEnumerable<GitRepositoryRef>> GetRefsByRepositoryIdAsync(Guid gitRepositoryId, CancellationToken cancellationToken);
     Task<int> UpsertRefAsync(GitRepositoryRef gitRepositoryRef, CancellationToken cancellationToken);
@@ -1032,7 +1037,7 @@ public interface IDeploymentRepository
     Task<IEnumerable<ResourceInfo>> GetImageLookupAsync(Guid deploymentId, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
-    Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
+    Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int staleAfterSeconds = 3600, CancellationToken cancellationToken = default);
     Task<bool> ExistsAsync(Guid platformId, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, Guid platformId, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, Guid platformId, CancellationToken cancellationToken);

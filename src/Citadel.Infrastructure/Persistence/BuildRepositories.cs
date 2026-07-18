@@ -28,12 +28,12 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
                     Id, Name, NormalizedName, Description, Enabled, GitRepositoryId, Branch,
                     ContextPath, DockerfilePath, Target, BuildArgs, BuildSecrets, PlatformId,
                     RegistryId, ImageRepository, TagTemplates, TimeoutSeconds, RetentionRunCount,
-                    CurrentRunId, CreatedByActorId, CreatedAt, UpdatedAt, ArchivedAt, RowVersion)
+                    CurrentRunId, ControlState, ControlStartedAt, CreatedByActorId, CreatedAt, UpdatedAt, ArchivedAt, RowVersion)
                 SELECT
                     @Id, @Name, @NormalizedName, @Description, @Enabled, @GitRepositoryId, @Branch,
                     @ContextPath, @DockerfilePath, @Target, @BuildArgs::jsonb, @BuildSecrets::jsonb, @PlatformId,
                     @RegistryId, @ImageRepository, @TagTemplates::jsonb, @TimeoutSeconds, @RetentionRunCount,
-                    @CurrentRunId, @CreatedByActorId, @CreatedAt, @UpdatedAt, @ArchivedAt, @RowVersion
+                    @CurrentRunId, @ControlState, @ControlStartedAt, @CreatedByActorId, @CreatedAt, @UpdatedAt, @ArchivedAt, @RowVersion
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
                 RETURNING Id
             ),
@@ -64,6 +64,8 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
                 project.TimeoutSeconds,
                 project.RetentionRunCount,
                 project.CurrentRunId,
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(project.ControlState),
+                project.ControlStartedAt,
                 project.CreatedByActorId,
                 CreatedAt = project.CreatedAt.UtcDateTime,
                 UpdatedAt = project.UpdatedAt.UtcDateTime,
@@ -104,6 +106,8 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
                 TimeoutSeconds = @TimeoutSeconds,
                 RetentionRunCount = @RetentionRunCount,
                 CurrentRunId = @CurrentRunId,
+                ControlState = @ControlState,
+                ControlStartedAt = @ControlStartedAt,
                 UpdatedAt = @UpdatedAt,
                 ArchivedAt = @ArchivedAt,
                 RowVersion = @RowVersion
@@ -126,9 +130,18 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
                 RowVersion = RowVersion + 1
             WHERE Id = @Id
               AND CurrentRunId IS NULL
+              AND ControlState = @IdleControlState
             """;
 
-        return db.ExecuteAsync(sql, new { Id = id, ArchivedAt = archivedAt.UtcDateTime }, transaction: tx());
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                ArchivedAt = archivedAt.UtcDateTime,
+                IdleControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle)
+            },
+            transaction: tx());
     }
 
     public async Task<BuildProject?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false)
@@ -274,29 +287,130 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
     {
         const string sql = """
             UPDATE BuildProjects
-            SET CurrentRunId = @RunId,
+            SET ControlState = @ControlState,
+                CurrentRunId = @RunId,
+                ControlStartedAt = @ControlStartedAt,
                 UpdatedAt = @UpdatedAt,
                 RowVersion = RowVersion + 1
             WHERE Id = @Id
               AND ArchivedAt IS NULL
               AND CurrentRunId IS NULL
+              AND ControlState = @IdleControlState
             """;
 
-        return db.ExecuteAsync(sql, new { Id = id, RunId = runId, UpdatedAt = DateTime.UtcNow }, transaction: tx());
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                RunId = runId,
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                IdleControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle),
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                UpdatedAt = DateTime.UtcNow
+            },
+            transaction: tx());
     }
 
     public Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE BuildProjects
-            SET CurrentRunId = NULL,
+            SET ControlState = @ControlState,
+                CurrentRunId = NULL,
+                ControlStartedAt = NULL,
                 UpdatedAt = @UpdatedAt,
                 RowVersion = RowVersion + 1
             WHERE Id = @Id
               AND CurrentRunId = @RunId
             """;
 
-        return db.ExecuteAsync(sql, new { Id = id, RunId = runId, UpdatedAt = DateTime.UtcNow }, transaction: tx());
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                RunId = runId,
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle),
+                UpdatedAt = DateTime.UtcNow
+            },
+            transaction: tx());
+    }
+
+    public async Task<IEnumerable<BuildProject>> GetStuckProjectsAsync(int graceSeconds = 300, CancellationToken cancellationToken = default)
+    {
+        string sql = $$"""
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BuildProjects p
+            LEFT JOIN BuildRuns r ON r.Id = p.CurrentRunId
+            WHERE p.ControlState = @ControlState
+              AND p.ArchivedAt IS NULL
+              AND (
+                  p.CurrentRunId IS NULL
+                  OR r.Id IS NULL
+                  OR r.Status <> ALL(@ActiveStatuses)
+                  OR (
+                      r.Status = ANY(@TimedActiveStatuses)
+                      AND r.StartedAt IS NOT NULL
+                      AND EXTRACT(EPOCH FROM r.StartedAt) < @NowEpoch - (r.TimeoutSeconds + @GraceSeconds)
+                  )
+              )
+            ORDER BY p.ControlStartedAt ASC
+            """;
+
+        var queuedStatus = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Queued);
+        var preparingStatus = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Preparing);
+        var runningStatus = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Running);
+
+        var result = await db.QueryAsync<BuildProjectDto>(
+            sql,
+            new
+            {
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ActiveStatuses = new[] { queuedStatus, preparingStatus, runningStatus },
+                TimedActiveStatuses = new[] { preparingStatus, runningStatus },
+                NowEpoch = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                GraceSeconds = graceSeconds,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Build)
+            },
+            transaction: tx());
+        return result.ToDomain();
+    }
+
+    public Task<int> UpdateProcessingAsync(
+        Guid id,
+        ResourceControlState state,
+        long? startedAt,
+        long rowVersion,
+        bool checkRowVersion,
+        Guid? currentRunId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildProjects
+            SET ControlState = @State,
+                CurrentRunId = @CurrentRunId,
+                ControlStartedAt = @StartedAt,
+                UpdatedAt = @UpdatedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND (@CheckRowVersion = false OR RowVersion = @RowVersion)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                State = EnumFormatter<ResourceControlState>.GetValue(state),
+                CurrentRunId = currentRunId,
+                StartedAt = startedAt,
+                UpdatedAt = DateTime.UtcNow,
+                RowVersion = rowVersion,
+                CheckRowVersion = checkRowVersion
+            },
+            transaction: tx());
     }
 
     private static BuildProjectParameters ToParameters(BuildProject project)
@@ -321,6 +435,8 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
             project.TimeoutSeconds,
             project.RetentionRunCount,
             project.CurrentRunId,
+            EnumFormatter<ResourceControlState>.GetValue(project.ControlState),
+            project.ControlStartedAt,
             project.UpdatedAt.UtcDateTime,
             project.ArchivedAt?.UtcDateTime,
             project.RowVersion
@@ -478,6 +594,38 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
                 ErrorCode = "build.cancelled",
                 Reason = reason,
                 CancelledStatus = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Cancelled),
+                ActiveStatuses = new[]
+                {
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Queued),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Preparing),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Running)
+                }
+            },
+            transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<BuildRun?> InterruptQueuedOrRunningAsync(Guid id, DateTimeOffset interruptedAt, string reason, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildRuns
+            SET Status = @InterruptedStatus,
+                CompletedAt = @InterruptedAt,
+                ErrorCode = @ErrorCode,
+                ErrorMessage = @Reason
+            WHERE Id = @Id
+              AND Status = ANY(@ActiveStatuses)
+            RETURNING *
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<BuildRunDto>(
+            sql,
+            new
+            {
+                Id = id,
+                InterruptedAt = interruptedAt.UtcDateTime,
+                ErrorCode = "build.interrupted",
+                Reason = reason,
+                InterruptedStatus = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Interrupted),
                 ActiveStatuses = new[]
                 {
                     EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Queued),

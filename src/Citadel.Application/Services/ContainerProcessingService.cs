@@ -42,6 +42,8 @@ internal sealed class ContainerProcessingService(
     public async Task<ProcessedResources> MarkProcessingAsync(Guid[] containerIds, Guid controlTriggeredBy, CancellationToken ct)
     {
         var updatedContainers = new List<Container>();
+        var candidateDeployments = new Dictionary<Guid, Deployment>();
+        var candidateStacks = new Dictionary<Guid, Stack>();
         var updatedDeployments = new List<Deployment>();
         var updatedStacks = new List<Stack>();
 
@@ -51,25 +53,26 @@ internal sealed class ContainerProcessingService(
 
         foreach (var container in containers)
         {
+            Deployment? deployment = null;
+            Stack? stack = null;
+
             // Deployments
             if (container.DeploymentId != null)
             {
-                var deployment = await uow.Deployments.GetAsync(container.DeploymentId.Value, ct);
+                deployment = await uow.Deployments.GetAsync(container.DeploymentId.Value, ct);
                 if (deployment != null)
                 {
                     deployment.MarkProcessing(controlTriggeredBy);
-                    updatedDeployments.Add(deployment);
                 }
             }
 
             // Stacks
             if (container.StackId != null)
             {
-                var stack = await uow.Stacks.GetAsync(container.StackId.Value, ct);
+                stack = await uow.Stacks.GetAsync(container.StackId.Value, ct);
                 if (stack != null)
                 {
                     stack.MarkProcessing(controlTriggeredBy);
-                    updatedStacks.Add(stack);
                 }
             }
 
@@ -88,7 +91,46 @@ internal sealed class ContainerProcessingService(
             if (affected != 0)
             {
                 updatedContainers.Add(container);
+
+                if (deployment is not null)
+                    candidateDeployments.TryAdd(deployment.Id, deployment);
+
+                if (stack is not null)
+                    candidateStacks.TryAdd(stack.Id, stack);
             }
+        }
+
+        foreach (var deployment in candidateDeployments.Values)
+        {
+            var affected = await uow.Deployments.UpdateProcessingAsync(
+                deployment.Id,
+                deployment.Status,
+                deployment.ControlState,
+                deployment.ControlStartedAt,
+                deployment.RowVersion,
+                checkRowVersion: true,
+                controlTriggeredBy,
+                ct);
+
+            if (affected != 0)
+                updatedDeployments.Add(deployment);
+        }
+
+        foreach (var stack in candidateStacks.Values)
+        {
+            var status = stack.CurrentStackRelease?.Status ?? Domain.StackReleaseStatus.Unknown;
+            var affected = await uow.Stacks.UpdateProcessingAsync(
+                stack.Id,
+                status,
+                stack.ControlState,
+                stack.ControlStartedAt,
+                stack.RowVersion,
+                checkRowVersion: true,
+                controlTriggeredBy,
+                ct);
+
+            if (affected)
+                updatedStacks.Add(stack);
         }
 
         await uow.CommitAsync(ct);

@@ -453,16 +453,21 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
             transaction: tx());
     }
 
-    public async Task<IEnumerable<BackupRepository>> GetStuckRepositoriesAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<BackupRepository>> GetStuckRepositoriesAsync(int staleAfterSeconds = 3600, CancellationToken cancellationToken = default)
     {
         const string sql = """
-            SELECT *
-            FROM BackupRepositories
-            WHERE ArchivedAt IS NULL
-              AND ControlState = @ControlState
-              AND ControlStartedAt IS NOT NULL
-              AND ControlStartedAt < @ControlStartedAt
-            ORDER BY ControlStartedAt ASC
+            SELECT br.*
+            FROM BackupRepositories br
+            LEFT JOIN BackupRuns r ON r.Id = br.CurrentRunId
+            WHERE br.ArchivedAt IS NULL
+              AND br.ControlState = @ControlState
+              AND br.ControlStartedAt IS NOT NULL
+              AND br.ControlStartedAt < @ControlStartedAt
+              AND (
+                  r.Id IS NULL
+                  OR r.Status <> ALL(@ActiveStatuses)
+              )
+            ORDER BY br.ControlStartedAt ASC
             """;
 
         var result = await db.QueryAsync<BackupRepositoryDto>(
@@ -470,7 +475,8 @@ internal sealed class BackupRepositoryRepository(IDbConnection db, Func<IDbTrans
             new
             {
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
-                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - staleAfterSeconds,
+                ActiveStatuses = ActiveBackupStatuses()
             },
             transaction: tx());
         return result.ToDomain();
@@ -1353,16 +1359,20 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
             transaction: tx());
     }
 
-    public async Task<IEnumerable<BackupPolicy>> GetStuckPoliciesAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<BackupPolicy>> GetStuckPoliciesAsync(CancellationToken cancellationToken = default)
     {
         string sql = $$"""
             SELECT p.*,
                 {{ResourceTagSql.TagAggregate("p")}}
             FROM BackupPolicies p
+            LEFT JOIN BackupRuns r ON r.Id = p.CurrentRunId
             WHERE p.ArchivedAt IS NULL
               AND p.ControlState = @ControlState
-              AND p.ControlStartedAt IS NOT NULL
-              AND p.ControlStartedAt < @ControlStartedAt
+              AND (
+                  p.CurrentRunId IS NULL
+                  OR r.Id IS NULL
+                  OR r.Status <> ALL(@ActiveStatuses)
+              )
             ORDER BY p.ControlStartedAt ASC
             """;
 
@@ -1371,7 +1381,7 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
             new
             {
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
-                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
+                ActiveStatuses = ActiveBackupRunStatuses(),
                 TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.BackupPolicy)
             },
             transaction: tx());
@@ -1411,6 +1421,14 @@ internal sealed class BackupPolicyRepository(IDbConnection db, Func<IDbTransacti
             transaction: tx());
     }
 
+    private static string[] ActiveBackupRunStatuses()
+        =>
+        [
+            EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Queued),
+            EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Preparing),
+            EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Running),
+            EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.ApplyingRetention)
+        ];
 }
 
 internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction> tx) : IBackupRunRepository

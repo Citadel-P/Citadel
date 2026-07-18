@@ -1253,6 +1253,66 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "buildprojects",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    archivedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    branch = table.Column<string>(type: "text", maxLength: 256, nullable: false),
+                    buildargs = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    buildsecrets = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    contextpath = table.Column<string>(type: "text", maxLength: 512, nullable: false, defaultValue: "."),
+                    controlstartedat = table.Column<long>(type: "bigint", nullable: true),
+                    controlstate = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Idle"),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    currentrunid = table.Column<Guid>(type: "uuid", nullable: true),
+                    description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
+                    dockerfilepath = table.Column<string>(type: "text", maxLength: 512, nullable: false, defaultValue: "Dockerfile"),
+                    enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    gitrepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    imagerepository = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    name = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    normalizedname = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    registryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    retentionruncount = table.Column<int>(type: "integer", nullable: false, defaultValue: 20),
+                    rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
+                    tagtemplates = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[\"{branch}-{shortSha}\"]'::jsonb"),
+                    target = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    timeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 1800),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_buildprojects", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_buildprojects_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_buildprojects_gitrepositories_gitrepositoryid",
+                        column: x => x.gitrepositoryid,
+                        principalTable: "gitrepositories",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_buildprojects_platforms_platformid",
+                        column: x => x.platformid,
+                        principalTable: "platforms",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_buildprojects_registries_registryid",
+                        column: x => x.registryid,
+                        principalTable: "registries",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "gitrepositoryrefs",
                 columns: table => new
                 {
@@ -1466,6 +1526,63 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "buildruns",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    branch = table.Column<string>(type: "text", maxLength: 256, nullable: false),
+                    buildargssnapshot = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    buildprojectid = table.Column<Guid>(type: "uuid", nullable: false),
+                    buildsecretidssnapshot = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    completedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    contextpath = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    dockerfilepath = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    errorcode = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    errormessage = table.Column<string>(type: "text", maxLength: 1200, nullable: true),
+                    exitcode = table.Column<int>(type: "integer", nullable: true),
+                    gitrepositoryid = table.Column<Guid>(type: "uuid", nullable: false),
+                    gitrepositorynamesnapshot = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    imagedigest = table.Column<string>(type: "text", maxLength: 256, nullable: true),
+                    imagereferences = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    imagerepository = table.Column<string>(type: "text", maxLength: 512, nullable: false),
+                    platformsnapshot = table.Column<string>(type: "jsonb", nullable: false),
+                    projectnamesnapshot = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    queuedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    registrysnapshot = table.Column<string>(type: "jsonb", nullable: false),
+                    resolvedcommitsha = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    startedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    status = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    tagtemplatessnapshot = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    target = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    timeoutseconds = table.Column<int>(type: "integer", nullable: false),
+                    trigger = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    triggersourceid = table.Column<Guid>(type: "uuid", nullable: true),
+                    triggeredbyactorid = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_buildruns", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_buildruns_actors_triggeredbyactorid",
+                        column: x => x.triggeredbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_buildruns_buildprojects_buildprojectid",
+                        column: x => x.buildprojectid,
+                        principalTable: "buildprojects",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_buildruns_gitrepositories_gitrepositoryid",
+                        column: x => x.gitrepositoryid,
+                        principalTable: "gitrepositories",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "containerstats",
                 columns: table => new
                 {
@@ -1539,6 +1656,27 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "backuprepositories",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "buildrunlogs",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    buildrunid = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    message = table.Column<string>(type: "text", nullable: false),
+                    stream = table.Column<string>(type: "text", maxLength: 32, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_buildrunlogs", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_buildrunlogs_buildruns_buildrunid",
+                        column: x => x.buildrunid,
+                        principalTable: "buildruns",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -1698,7 +1836,7 @@ namespace Infrastructure.Migrations.Migrations
                 columns: new[] { "id", "alertonfailure", "code", "controlstartedat", "controlstate", "createdat", "createdbyactorid", "currentrunid", "defaultargsjson", "description", "enabled", "lastscheduledrunat", "name", "runasactorid", "schedulecron", "scheduleenabled", "scheduletimezone", "timeoutseconds", "updatedat", "webhook" },
                 values: new object[,]
                 {
-                    { new Guid("41000000-0000-0000-0000-000000000001"), true, "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet pruned = 0;\nlet reclaimedBytes = 0;\n\nfor (const platform of platforms) {\n  const result = await citadel.platforms.prunePlatform(platform.id, { resource: \"Image\" });\n  const imagesDeleted = result?.imagesDeleted ?? [];\n  const reclaimed = Number(result?.spaceReclaimed ?? 0);\n  reclaimedBytes += reclaimed;\n  pruned += imagesDeleted.length;\n\n  if (imagesDeleted.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);\n}\n\nconsole.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);", null, "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Prunes unused Docker images on every platform.", false, null, "Prune images", new Guid("00000000-0000-0000-0000-000000000002"), "0 12 * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null },
+                    { new Guid("41000000-0000-0000-0000-000000000001"), true, "const platformsResponse = await citadel.platforms.listPlatforms();\nconst platforms = platformsResponse?.platforms ?? [];\nlet pruned = 0;\nlet reclaimedBytes = 0;\n\nfor (const platform of platforms) {\n  if (platform.status === 'Offline') continue\n  const result = await citadel.platforms.prunePlatform(platform.id, { resource: \"Image\" });\n  const imagesDeleted = result?.imagesDeleted ?? [];\n  const reclaimed = Number(result?.spaceReclaimed ?? 0);\n  reclaimedBytes += reclaimed;\n  pruned += imagesDeleted.length;\n\n  if (imagesDeleted.length === 0) {\n    console.log(`No unused images on ${platform.name}.`);\n    continue;\n  }\n\n  console.log(`Pruned ${imagesDeleted.length} image item(s) on ${platform.name}; reclaimed ${reclaimed} bytes.`);\n}\n\nconsole.log(`Pruned ${pruned} image item(s); reclaimed ${reclaimedBytes} bytes.`);", null, "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Prunes unused Docker images on every platform.", false, null, "Prune images", new Guid("00000000-0000-0000-0000-000000000002"), "0 12 * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null },
                     { new Guid("41000000-0000-0000-0000-000000000002"), true, "const stacksResponse = await citadel.stacks.listStacks({ tags: [\"Prod\"] });\nconst stacks = stacksResponse?.stacks ?? [];\nconst unhealthyStacks = stacks.filter(\n  (stack) => stack.status !== \"Healthy\" && stack.controlState !== \"Processing\"\n);\n\nif (unhealthyStacks.length === 0) {\n  console.log(\"No unhealthy Prod stacks found.\");\n} else {\n  const stackIds = unhealthyStacks.map((stack) => stack.id);\n  await citadel.stacks.restartStacks(stackIds);\n  console.log(`Requested restart for ${stackIds.length} Prod stack(s).`);\n}", null, "Idle", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), new Guid("00000000-0000-0000-0000-000000000001"), null, "{}", "Restarts stacks tagged Prod when their current release is not healthy.", false, null, "Restart unhealthy stacks", new Guid("00000000-0000-0000-0000-000000000002"), "*/15 * * * *", true, "UTC", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null }
                 });
 
@@ -1780,6 +1918,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("662623f3-aa3b-220d-546b-971d2947f7cd"), 2, 13, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("672ebf04-40e5-547b-29f2-6daf5c3c3856"), 1, 8, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("677df0f0-2ce5-4b25-76ad-eb4e21f0748d"), 4, 17, new Guid("30000000-0000-0000-0000-000000000001"), 768 },
+                    { new Guid("6a2b1742-029b-d0df-1d2a-1d0aa1ed9a3f"), 1, 18, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("7125b1ec-d593-d356-f559-c4655a392c31"), 2, 1, new Guid("30000000-0000-0000-0000-000000000002"), 55 },
                     { new Guid("7cb0a723-f754-2be2-38fa-8d151c2e1c7f"), 2, 15, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("80aa1c34-79dd-6587-52db-52605326fe77"), 2, 7, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
@@ -1802,6 +1941,8 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("b2298835-c351-7367-ad8d-e5884be235f3"), 2, 12, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("b3abb382-80da-8170-b011-05af044e7908"), 2, 3, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("ba1393e4-1090-990e-aee3-a3e36ede0fee"), 4, 16, new Guid("30000000-0000-0000-0000-000000000001"), 128 },
+                    { new Guid("c472d905-c03c-a9a8-0527-c2b540274078"), 2, 18, new Guid("30000000-0000-0000-0000-000000000002"), 4 },
+                    { new Guid("d1af8dbf-ef7d-d81d-33f9-e3be5ee72243"), 4, 18, new Guid("30000000-0000-0000-0000-000000000001"), 4 },
                     { new Guid("d5fa8563-b0a2-4f11-7e16-7c1877e43dda"), 4, 6, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("dbb104e4-d7e2-5173-b0b2-6d1519c2f682"), 4, 8, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("e04cd0d3-47bf-2d28-e099-c7a9b61e3875"), 1, 3, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
@@ -2170,6 +2311,79 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_backupsourceleases_expiresat",
                 table: "backupsourceleases",
                 column: "expiresat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_archivedat",
+                table: "buildprojects",
+                column: "archivedat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_controlstate_controlstartedat",
+                table: "buildprojects",
+                columns: new[] { "controlstate", "controlstartedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_createdbyactorid",
+                table: "buildprojects",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_gitrepositoryid",
+                table: "buildprojects",
+                column: "gitrepositoryid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_normalizedname",
+                table: "buildprojects",
+                column: "normalizedname",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_platformid",
+                table: "buildprojects",
+                column: "platformid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_registryid",
+                table: "buildprojects",
+                column: "registryid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildrunlogs_run_createdat",
+                table: "buildrunlogs",
+                columns: new[] { "buildrunid", "createdat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildruns_active_project",
+                table: "buildruns",
+                column: "buildprojectid",
+                unique: true,
+                filter: "status IN ('Queued', 'Preparing', 'Running')");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildruns_gitrepositoryid",
+                table: "buildruns",
+                column: "gitrepositoryid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildruns_project_queuedat",
+                table: "buildruns",
+                columns: new[] { "buildprojectid", "queuedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildruns_queuedat",
+                table: "buildruns",
+                column: "queuedat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildruns_status_queuedat",
+                table: "buildruns",
+                columns: new[] { "status", "queuedat" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildruns_triggeredbyactorid",
+                table: "buildruns",
+                column: "triggeredbyactorid");
 
             migrationBuilder.CreateIndex(
                 name: "ix_citadelinstanceidentity_instanceid",
@@ -2656,6 +2870,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "backupsourceleases");
 
             migrationBuilder.DropTable(
+                name: "buildrunlogs");
+
+            migrationBuilder.DropTable(
                 name: "citadelinstanceidentity");
 
             migrationBuilder.DropTable(
@@ -2734,10 +2951,10 @@ namespace Infrastructure.Migrations.Migrations
                 name: "backuprestoreruns");
 
             migrationBuilder.DropTable(
-                name: "containers");
+                name: "buildruns");
 
             migrationBuilder.DropTable(
-                name: "gitrepositories");
+                name: "containers");
 
             migrationBuilder.DropTable(
                 name: "oidcproviders");
@@ -2758,13 +2975,13 @@ namespace Infrastructure.Migrations.Migrations
                 name: "backupruns");
 
             migrationBuilder.DropTable(
+                name: "buildprojects");
+
+            migrationBuilder.DropTable(
                 name: "deployments");
 
             migrationBuilder.DropTable(
                 name: "images");
-
-            migrationBuilder.DropTable(
-                name: "gitaccounts");
 
             migrationBuilder.DropTable(
                 name: "roles");
@@ -2776,6 +2993,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "backuppolicies");
 
             migrationBuilder.DropTable(
+                name: "gitrepositories");
+
+            migrationBuilder.DropTable(
                 name: "platforms");
 
             migrationBuilder.DropTable(
@@ -2785,10 +3005,13 @@ namespace Infrastructure.Migrations.Migrations
                 name: "backuprepositories");
 
             migrationBuilder.DropTable(
-                name: "actors");
+                name: "gitaccounts");
 
             migrationBuilder.DropTable(
                 name: "secretdefinitions");
+
+            migrationBuilder.DropTable(
+                name: "actors");
 
             migrationBuilder.DropTable(
                 name: "secretproviders");

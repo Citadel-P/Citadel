@@ -3093,6 +3093,12 @@ export interface BuildProjectView {
   retentionRunCount: number | string;
   /** @format uuid */
   currentRunId: null | string;
+  controlState: ResourceControlState;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  controlStartedAt: null | number | string;
   /** @format uuid */
   createdByActorId: string;
   /** @format date-time */

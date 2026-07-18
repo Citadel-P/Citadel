@@ -240,6 +240,67 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             transaction: tx());
     }
 
+    public async Task<IEnumerable<GitRepository>> GetStuckRepositoriesAsync(int staleAfterSeconds = 3600, CancellationToken cancellationToken = default)
+    {
+        string sql = $$"""
+            SELECT gr.*,
+                {{ResourceTagSql.TagAggregate("gr")}}
+            FROM GitRepositories gr
+            WHERE gr.ControlState = @ControlState
+              AND gr.ControlStartedAt IS NOT NULL
+              AND gr.ControlStartedAt < @ControlStartedAt
+            ORDER BY gr.ControlStartedAt ASC
+            """;
+
+        var result = await db.QueryAsync<GitRepositoryDto>(
+            sql,
+            new
+            {
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - staleAfterSeconds,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.GitRepository)
+            },
+            transaction: tx());
+
+        return result.ToDomain();
+    }
+
+    public Task<int> UpdateProcessingAsync(
+        Guid id,
+        GitReposStatus status,
+        ResourceControlState state,
+        long? startedAt,
+        long rowVersion,
+        bool checkRowVersion,
+        Guid? controlTriggeredBy,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE GitRepositories
+            SET Status = @Status,
+                ControlState = @State,
+                ControlStartedAt = @StartedAt,
+                ControlTriggeredBy = @ControlTriggeredBy,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND (@CheckRowVersion = false OR RowVersion = @RowVersion)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                Status = EnumFormatter<GitReposStatus>.GetValue(status),
+                State = EnumFormatter<ResourceControlState>.GetValue(state),
+                StartedAt = startedAt,
+                RowVersion = rowVersion,
+                CheckRowVersion = checkRowVersion,
+                ControlTriggeredBy = controlTriggeredBy
+            },
+            transaction: tx());
+    }
+
     public async Task<GitRepositoryRef?> GetRefAsync(Guid gitRepositoryId, string branch, CancellationToken cancellationToken)
     {
         const string sql = """

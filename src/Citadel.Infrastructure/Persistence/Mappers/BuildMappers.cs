@@ -32,6 +32,10 @@ internal static class BuildMappers
             dto.TimeoutSeconds,
             dto.RetentionRunCount,
             dto.CurrentRunId,
+            string.IsNullOrWhiteSpace(dto.ControlState)
+                ? ResourceControlState.Idle
+                : Enum.Parse<ResourceControlState>(dto.ControlState),
+            dto.ControlStartedAt,
             dto.CreatedByActorId,
             ToOffset(dto.CreatedAt),
             ToOffset(dto.UpdatedAt),

@@ -119,7 +119,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return result.ToDomain();
     }
 
-    public async Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int staleAfterSeconds = 3600, CancellationToken cancellationToken = default)
     {
         string sql = BaseSelect + " " + """
             WHERE 
@@ -127,10 +127,10 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 AND d.ControlStartedAt < @ControlStartedAt
             ORDER BY 
                 d.ControlStartedAt ASC
-            """;
+        """;
         var result = await db.QueryAsync<DeploymentDto>(sql, new 
         {
-            ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
+            ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - staleAfterSeconds,
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Deployment)
         }, transaction: tx());
 

@@ -1,3 +1,4 @@
+using Domain.Entities;
 using Domain.Entities.Tags;
 
 namespace Domain.Entities.Builds;
@@ -47,10 +48,12 @@ public sealed class BuildProject(
     int retentionRunCount,
     Guid createdByActorId,
     Guid? currentRunId = null,
+    ResourceControlState controlState = ResourceControlState.Idle,
+    long? controlStartedAt = null,
     DateTimeOffset? createdAt = null,
     DateTimeOffset? updatedAt = null,
     DateTimeOffset? archivedAt = null,
-    long rowVersion = 0)
+    long rowVersion = 0) : IReconcilableResource
 {
     public const int DefaultTimeoutSeconds = 1800;
     public const int DefaultRetentionRunCount = 20;
@@ -74,6 +77,9 @@ public sealed class BuildProject(
     public int TimeoutSeconds { get; private set; } = timeoutSeconds;
     public int RetentionRunCount { get; private set; } = retentionRunCount;
     public Guid? CurrentRunId { get; private set; } = currentRunId;
+    public ResourceControlState ControlState { get; private set; } = controlState;
+    public long? ControlStartedAt { get; private set; } = controlStartedAt;
+    public Guid? ControlTriggeredBy => null;
     public Guid CreatedByActorId { get; private set; } = createdByActorId;
     public DateTimeOffset CreatedAt { get; private set; } = (createdAt ?? DateTimeOffset.UtcNow).ToUniversalTime();
     public DateTimeOffset UpdatedAt { get; private set; } = (updatedAt ?? DateTimeOffset.UtcNow).ToUniversalTime();
@@ -81,7 +87,7 @@ public sealed class BuildProject(
     public long RowVersion { get; private set; } = rowVersion;
     public IReadOnlyList<TagSummary> Tags { get; private set; } = [];
 
-    public bool HasActiveRun => CurrentRunId.HasValue;
+    public bool HasActiveRun => CurrentRunId.HasValue || ControlState == ResourceControlState.Processing;
 
     public void AssignTags(IReadOnlyList<TagSummary> tags) => Tags = tags;
 
@@ -141,6 +147,8 @@ public sealed class BuildProject(
     public void MarkProcessing(Guid runId, DateTimeOffset now)
     {
         CurrentRunId = runId;
+        ControlState = ResourceControlState.Processing;
+        ControlStartedAt = now.ToUniversalTime().ToUnixTimeSeconds();
         Touch(now);
     }
 
@@ -149,6 +157,8 @@ public sealed class BuildProject(
         if (CurrentRunId == runId)
             CurrentRunId = null;
 
+        ControlState = ResourceControlState.Idle;
+        ControlStartedAt = null;
         Touch(now);
     }
 
@@ -198,6 +208,8 @@ public sealed class BuildProject(
         int timeoutSeconds,
         int retentionRunCount,
         Guid? currentRunId,
+        ResourceControlState controlState,
+        long? controlStartedAt,
         Guid createdByActorId,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt,
@@ -222,6 +234,8 @@ public sealed class BuildProject(
             retentionRunCount,
             createdByActorId,
             currentRunId,
+            controlState,
+            controlStartedAt,
             createdAt,
             updatedAt,
             archivedAt,

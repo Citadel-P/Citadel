@@ -703,7 +703,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             transaction: tx());
     }
 
-    public async Task<IEnumerable<Stack>> GetStuckStacksAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<Stack>> GetStuckStacksAsync(int staleAfterSeconds = 3600, CancellationToken cancellationToken = default)
     {
         string sql = InfoSelect + " " + """
             WHERE 
@@ -711,10 +711,10 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 AND s.ControlStartedAt < @ControlStartedAt
             ORDER BY 
                 s.ControlStartedAt ASC
-            """;
+        """;
         var result = await db.QueryAsync<StackDto>(sql, new
         {
-            ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
+            ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - staleAfterSeconds,
             TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.Stack)
         }, transaction: tx());
 

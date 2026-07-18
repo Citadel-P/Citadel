@@ -346,15 +346,19 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
             transaction: tx());
     }
 
-    public async Task<IEnumerable<AutomationAction>> GetStuckActionsAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<AutomationAction>> GetStuckActionsAsync(CancellationToken cancellationToken = default)
     {
         string sql = $$"""
             SELECT a.*,
                 {{ResourceTagSql.TagAggregate("a")}}
             FROM Actions a
+            LEFT JOIN ActionRuns r ON r.Id = a.CurrentRunId
             WHERE a.ControlState = @ControlState
-              AND a.ControlStartedAt IS NOT NULL
-              AND a.ControlStartedAt < @ControlStartedAt
+              AND (
+                  a.CurrentRunId IS NULL
+                  OR r.Id IS NULL
+                  OR r.Status <> ALL(@ActiveStatuses)
+              )
             ORDER BY a.ControlStartedAt ASC
             """;
 
@@ -363,7 +367,11 @@ internal sealed class AutomationActionRepository(IDbConnection db, Func<IDbTrans
             new
             {
                 ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
-                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
+                ActiveStatuses = new[]
+                {
+                    EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Queued),
+                    EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Running)
+                },
                 TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.AutomationAction)
             },
             transaction: tx());

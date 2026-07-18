@@ -2026,6 +2026,8 @@ internal static class Configuration
         project.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(1800);
         project.Property<int>("RetentionRunCount").HasColumnType(Integer).IsRequired().HasDefaultValue(20);
         project.Property<Guid?>("CurrentRunId").IsRequired(false);
+        project.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
+        project.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
         project.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         project.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
         project.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
@@ -2040,6 +2042,7 @@ internal static class Configuration
         project.HasIndex("PlatformId").HasDatabaseName($"IX_{projectTable}_PlatformId");
         project.HasIndex("RegistryId").HasDatabaseName($"IX_{projectTable}_RegistryId");
         project.HasIndex("ArchivedAt").HasDatabaseName($"IX_{projectTable}_ArchivedAt");
+        project.HasIndex("ControlState", "ControlStartedAt").HasDatabaseName($"IX_{projectTable}_ControlState_ControlStartedAt");
 
         var runTable = "BuildRuns";
         var run = builder.Entity("BuildRun");

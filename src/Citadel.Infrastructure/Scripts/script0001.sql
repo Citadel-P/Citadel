@@ -655,6 +655,40 @@ CREATE TABLE resourcebindings (
     CONSTRAINT fk_resourcebindings_secretdefinitions_secretid FOREIGN KEY (secretid) REFERENCES secretdefinitions (id) ON DELETE RESTRICT
 );
 
+CREATE TABLE buildprojects (
+    id uuid NOT NULL,
+    archivedat timestamp with time zone,
+    branch text NOT NULL,
+    buildargs jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    buildsecrets jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    contextpath text NOT NULL DEFAULT '.',
+    controlstartedat bigint,
+    controlstate text NOT NULL DEFAULT 'Idle',
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    currentrunid uuid,
+    description text,
+    dockerfilepath text NOT NULL DEFAULT 'Dockerfile',
+    enabled boolean NOT NULL DEFAULT TRUE,
+    gitrepositoryid uuid NOT NULL,
+    imagerepository text NOT NULL,
+    name text NOT NULL,
+    normalizedname text NOT NULL,
+    platformid uuid NOT NULL,
+    registryid uuid NOT NULL,
+    retentionruncount integer NOT NULL DEFAULT 20,
+    rowversion bigint NOT NULL DEFAULT 0,
+    tagtemplates jsonb NOT NULL DEFAULT ('["{branch}-{shortSha}"]'::jsonb),
+    target text,
+    timeoutseconds integer NOT NULL DEFAULT 1800,
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    CONSTRAINT pk_buildprojects PRIMARY KEY (id),
+    CONSTRAINT fk_buildprojects_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_buildprojects_gitrepositories_gitrepositoryid FOREIGN KEY (gitrepositoryid) REFERENCES gitrepositories (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_buildprojects_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_buildprojects_registries_registryid FOREIGN KEY (registryid) REFERENCES registries (id) ON DELETE RESTRICT
+);
+
 CREATE TABLE gitrepositoryrefs (
     id uuid NOT NULL,
     branch text NOT NULL,
@@ -762,6 +796,42 @@ CREATE TABLE backuprepositoryvalidations (
     CONSTRAINT fk_backuprepositoryvalidations_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE SET NULL
 );
 
+CREATE TABLE buildruns (
+    id uuid NOT NULL,
+    branch text NOT NULL,
+    buildargssnapshot jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    buildprojectid uuid NOT NULL,
+    buildsecretidssnapshot jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    completedat timestamp with time zone,
+    contextpath text NOT NULL,
+    dockerfilepath text NOT NULL,
+    errorcode text,
+    errormessage text,
+    exitcode integer,
+    gitrepositoryid uuid NOT NULL,
+    gitrepositorynamesnapshot text NOT NULL,
+    imagedigest text,
+    imagereferences jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    imagerepository text NOT NULL,
+    platformsnapshot jsonb NOT NULL,
+    projectnamesnapshot text NOT NULL,
+    queuedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    registrysnapshot jsonb NOT NULL,
+    resolvedcommitsha text,
+    startedat timestamp with time zone,
+    status text NOT NULL,
+    tagtemplatessnapshot jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    target text,
+    timeoutseconds integer NOT NULL,
+    trigger text NOT NULL,
+    triggersourceid uuid,
+    triggeredbyactorid uuid NOT NULL,
+    CONSTRAINT pk_buildruns PRIMARY KEY (id),
+    CONSTRAINT fk_buildruns_actors_triggeredbyactorid FOREIGN KEY (triggeredbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_buildruns_buildprojects_buildprojectid FOREIGN KEY (buildprojectid) REFERENCES buildprojects (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_buildruns_gitrepositories_gitrepositoryid FOREIGN KEY (gitrepositoryid) REFERENCES gitrepositories (id) ON DELETE RESTRICT
+);
+
 CREATE TABLE containerstats (
     id uuid NOT NULL,
     containerid uuid NOT NULL,
@@ -804,6 +874,16 @@ CREATE TABLE backupruns (
     CONSTRAINT fk_backupruns_actors_triggeredbyactorid FOREIGN KEY (triggeredbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_backupruns_backuppolicies_backuppolicyid FOREIGN KEY (backuppolicyid) REFERENCES backuppolicies (id) ON DELETE RESTRICT,
     CONSTRAINT fk_backupruns_backuprepositories_backuprepositoryid FOREIGN KEY (backuprepositoryid) REFERENCES backuprepositories (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE buildrunlogs (
+    id uuid NOT NULL,
+    buildrunid uuid NOT NULL,
+    createdat timestamp with time zone NOT NULL,
+    message text NOT NULL,
+    stream text NOT NULL,
+    CONSTRAINT pk_buildrunlogs PRIMARY KEY (id),
+    CONSTRAINT fk_buildrunlogs_buildruns_buildrunid FOREIGN KEY (buildrunid) REFERENCES buildruns (id) ON DELETE CASCADE
 );
 
 CREATE TABLE backuprestoreruns (
@@ -895,6 +975,7 @@ let pruned = 0;
 let reclaimedBytes = 0;
 
 for (const platform of platforms) {
+  if (platform.status === ''Offline'') continue
   const result = await citadel.platforms.prunePlatform(platform.id, { resource: "Image" });
   const imagesDeleted = result?.imagesDeleted ?? [];
   const reclaimed = Number(result?.spaceReclaimed ?? 0);
@@ -1026,6 +1107,8 @@ VALUES ('672ebf04-40e5-547b-29f2-6daf5c3c3856', 1, 8, '30000000-0000-0000-0000-0
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('677df0f0-2ce5-4b25-76ad-eb4e21f0748d', 4, 17, '30000000-0000-0000-0000-000000000001', 768);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('6a2b1742-029b-d0df-1d2a-1d0aa1ed9a3f', 1, 18, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('7125b1ec-d593-d356-f559-c4655a392c31', 2, 1, '30000000-0000-0000-0000-000000000002', 55);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('7cb0a723-f754-2be2-38fa-8d151c2e1c7f', 2, 15, '30000000-0000-0000-0000-000000000002', 0);
@@ -1069,6 +1152,10 @@ INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificperm
 VALUES ('b3abb382-80da-8170-b011-05af044e7908', 2, 3, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('ba1393e4-1090-990e-aee3-a3e36ede0fee', 4, 16, '30000000-0000-0000-0000-000000000001', 128);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('c472d905-c03c-a9a8-0527-c2b540274078', 2, 18, '30000000-0000-0000-0000-000000000002', 4);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('d1af8dbf-ef7d-d81d-33f9-e3be5ee72243', 4, 18, '30000000-0000-0000-0000-000000000001', 4);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('d5fa8563-b0a2-4f11-7e16-7c1877e43dda', 4, 6, '30000000-0000-0000-0000-000000000001', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -1241,6 +1328,34 @@ CREATE INDEX ix_backupruns_triggeredbyactorid ON backupruns (triggeredbyactorid)
 
 CREATE INDEX ix_backupsourceleases_expiresat ON backupsourceleases (expiresat);
 
+CREATE INDEX ix_buildprojects_archivedat ON buildprojects (archivedat);
+
+CREATE INDEX ix_buildprojects_controlstate_controlstartedat ON buildprojects (controlstate, controlstartedat);
+
+CREATE INDEX ix_buildprojects_createdbyactorid ON buildprojects (createdbyactorid);
+
+CREATE INDEX ix_buildprojects_gitrepositoryid ON buildprojects (gitrepositoryid);
+
+CREATE UNIQUE INDEX ix_buildprojects_normalizedname ON buildprojects (normalizedname);
+
+CREATE INDEX ix_buildprojects_platformid ON buildprojects (platformid);
+
+CREATE INDEX ix_buildprojects_registryid ON buildprojects (registryid);
+
+CREATE INDEX ix_buildrunlogs_run_createdat ON buildrunlogs (buildrunid, createdat);
+
+CREATE UNIQUE INDEX ix_buildruns_active_project ON buildruns (buildprojectid) WHERE status IN ('Queued', 'Preparing', 'Running');
+
+CREATE INDEX ix_buildruns_gitrepositoryid ON buildruns (gitrepositoryid);
+
+CREATE INDEX ix_buildruns_project_queuedat ON buildruns (buildprojectid, queuedat);
+
+CREATE INDEX ix_buildruns_queuedat ON buildruns (queuedat);
+
+CREATE INDEX ix_buildruns_status_queuedat ON buildruns (status, queuedat);
+
+CREATE INDEX ix_buildruns_triggeredbyactorid ON buildruns (triggeredbyactorid);
+
 CREATE UNIQUE INDEX ix_citadelinstanceidentity_instanceid ON citadelinstanceidentity (instanceid);
 
 CREATE UNIQUE INDEX ix__containers_dockercontainerid_platformid ON containers (dockercontainerid, platformid);
@@ -1408,7 +1523,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260718135221_migration0001', '10.0.10');
+VALUES ('20260718200529_migration0001', '10.0.10');
 
 COMMIT;
 

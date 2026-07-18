@@ -1921,6 +1921,18 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDefaultValue(".")
                         .HasColumnName("contextpath");
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("controlstartedat");
+
+                    b.Property<string>("ControlState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Idle")
+                        .HasColumnName("controlstate");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -2041,6 +2053,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("RegistryId")
                         .HasDatabaseName("ix_buildprojects_registryid");
+
+                    b.HasIndex("ControlState", "ControlStartedAt")
+                        .HasDatabaseName("ix_buildprojects_controlstate_controlstartedat");
 
                     b.ToTable("buildprojects", (string)null);
                 });

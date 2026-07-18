@@ -1,4 +1,4 @@
-import { BuildProjectView } from '@/api/generated/api.types';
+import { BuildProjectView, BuildRunStatus, ResourceControlState } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
@@ -7,8 +7,9 @@ import { hasCapability } from '@/lib/resource-capabilities';
 import { useRead } from '@/lib/hooks';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { HubConnection } from '@microsoft/signalr';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BuildInfoActions } from '../actions';
+import { isActiveRun } from '../table';
 import { BuildForm } from './form';
 import { BuildRunsTab } from './runs';
 
@@ -25,7 +26,7 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
     Header: {
       Indicator: ({ resource }) => {
         const build = resource as BuildProjectView;
-        return <StateIndicator value={build.enabled} isProcessing={false} enableLabel />;
+        return <BuildHeaderIndicator build={build} />;
       },
       ActionButtons: ({ resource }) => {
         const { edit: _edit, ...actions } = BuildInfoActions;
@@ -105,3 +106,28 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
     },
   },
 };
+
+function BuildHeaderIndicator({ build }: { build: BuildProjectView }) {
+  const readArgs = useMemo(() => ({ query: { projectId: build.id, limit: 1 } }), [build.id]);
+  const { data } = useRead('listBuildRuns', readArgs, {
+    refetchInterval: (query) => {
+      const latestRun = query.state.data?.data.runs[0];
+      return build.currentRunId || (latestRun && isActiveRun(latestRun)) ? 3000 : 10000;
+    },
+  });
+  const latestRun = data?.data.runs[0];
+  const isProjectProcessing = build.controlState === ResourceControlState.Processing || Boolean(build.currentRunId);
+
+  if (!latestRun) {
+    return (
+      <StateIndicator
+        value={isProjectProcessing ? BuildRunStatus.Queued : build.enabled}
+        isProcessing={isProjectProcessing}
+        enableLabel={!isProjectProcessing}
+        kind={isProjectProcessing ? 'buildRun' : undefined}
+      />
+    );
+  }
+
+  return <StateIndicator value={latestRun.status} isProcessing={isActiveRun(latestRun)} kind="buildRun" />;
+}

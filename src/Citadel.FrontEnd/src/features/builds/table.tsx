@@ -1,4 +1,4 @@
-import { BuildProjectView, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
+import { BuildProjectView, BuildRunStatus, BuildRunView, ResourceControlState } from '@/api/generated/api.types';
 import { ContentCard } from '@/components/custom/content-card';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -117,7 +117,16 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
     cell: ({ row }) => {
       const run = latestRuns.get(row.original.id);
-      if (!run) return <span className="text-sm text-muted-foreground">-</span>;
+      if (!run) {
+        return isBuildProjectProcessing(row.original) ? (
+          <span className="inline-flex items-center gap-2 text-sm">
+            <StateIndicator value={BuildRunStatus.Queued} isProcessing kind="buildRun" />
+            In progress
+          </span>
+        ) : (
+          <span className="text-sm text-muted-foreground">-</span>
+        );
+      }
 
       return (
         <span className="inline-flex items-center gap-2 text-sm">
@@ -150,6 +159,8 @@ const BuildNameRow = ({ project, run }: { project: BuildProjectView; run?: Build
   <div className="flex min-w-0 items-center gap-1">
     {run ? (
       <StateIndicator value={run.status} isProcessing={isActiveRun(run)} kind="buildRun" />
+    ) : isBuildProjectProcessing(project) ? (
+      <StateIndicator value={BuildRunStatus.Queued} isProcessing kind="buildRun" />
     ) : (
       <StateIndicator value={project.enabled} enableLabel />
     )}
@@ -178,4 +189,8 @@ export function isActiveRun(run: Pick<BuildRunView, 'status'>) {
     run.status === BuildRunStatus.Preparing ||
     run.status === BuildRunStatus.Running
   );
+}
+
+function isBuildProjectProcessing(project: Pick<BuildProjectView, 'controlState' | 'currentRunId'>) {
+  return project.controlState === ResourceControlState.Processing || Boolean(project.currentRunId);
 }

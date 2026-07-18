@@ -7,7 +7,9 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Domain.Entities.Automation;
 using Domain.Entities.Backups;
+using Domain.Entities.Builds;
 using Domain.Entities.Deployments;
+using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -25,6 +27,9 @@ internal class ReconcilableResourceJob(
     IBackupRepositoryStreamManager backupRepositoryStreamManager,
     IBackupPolicyStreamManager backupPolicyStreamManager,
     IAutomationActionStreamManager automationActionStreamManager,
+    IBuildProjectStreamManager buildProjectStreamManager,
+    IBuildRunStreamManager buildRunStreamManager,
+    IGitRepositoryStreamManager gitRepositoryStreamManager,
     IDockerDaemonStreamManager dockerDaemonHub,
     IDelayWithJitterService delayWithJitterService,
     IContainerEventBroadcaster containerEventBroadcaster,
@@ -59,6 +64,17 @@ internal class ReconcilableResourceJob(
                     if (stuckStacks.Any())
                     {
                         var workItem = new StuckStacksSyncWorkItem(notifQueue, stackHub, stuckStacks);
+                        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                    }
+
+                    // Git repositories
+                    var stuckGitRepositories = (await uow.GitRepositories.GetStuckRepositoriesAsync(cancellationToken: cancellationToken)).ToArray();
+                    if (stuckGitRepositories.Length > 0)
+                    {
+                        var workItem = new StuckGitRepositoriesSyncWorkItem(
+                            notifQueue,
+                            gitRepositoryStreamManager,
+                            stuckGitRepositories);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
 
@@ -108,6 +124,18 @@ internal class ReconcilableResourceJob(
                             notifQueue,
                             automationActionStreamManager,
                             stuckAutomationActions);
+                        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                    }
+
+                    // Build projects
+                    var stuckBuildProjects = (await uow.BuildProjects.GetStuckProjectsAsync(cancellationToken: cancellationToken)).ToArray();
+                    if (stuckBuildProjects.Length > 0)
+                    {
+                        var workItem = new StuckBuildProjectsSyncWorkItem(
+                            notifQueue,
+                            buildProjectStreamManager,
+                            buildRunStreamManager,
+                            stuckBuildProjects);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
                 }
@@ -229,6 +257,45 @@ internal class ReconcilableResourceJob(
             {
                 await notificationQueue.EnqueueAsync(new ContainerNotificationWorkItem(container,
                 new DaemonContainerEventInfo("processing", container.DockerContainerId, null), dockerDaemonHub, containerEventBroadcaster), cancellationToken);
+            }
+        }
+    }
+
+    internal sealed class StuckGitRepositoriesSyncWorkItem(
+        INotificationQueue notificationQueue,
+        IGitRepositoryStreamManager streamManager,
+        IEnumerable<GitRepository> repositories)
+        : IDbWorkItem
+    {
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            var successfullyUpdated = new List<GitRepository>();
+
+            foreach (var repository in repositories)
+            {
+                var rowVersion = repository.RowVersion;
+                repository.ReleaseProcessing(GitReposStatus.Degraded);
+                var row = await uow.GitRepositories.UpdateProcessingAsync(
+                    id: repository.Id,
+                    status: repository.Status,
+                    state: repository.ControlState,
+                    startedAt: repository.ControlStartedAt,
+                    rowVersion: rowVersion,
+                    checkRowVersion: true,
+                    controlTriggeredBy: repository.ControlTriggeredBy,
+                    cancellationToken);
+
+                if (row > 0)
+                    successfullyUpdated.Add(repository);
+            }
+
+            await uow.CommitAsync(cancellationToken);
+
+            foreach (var repository in successfullyUpdated)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new GitRepoNotificationWorkItem(streamManager, repository),
+                    cancellationToken);
             }
         }
     }
@@ -374,6 +441,67 @@ internal class ReconcilableResourceJob(
             {
                 await notificationQueue.EnqueueAsync(
                     new AutomationActionNotificationWorkItem(streamManager, action),
+                    cancellationToken);
+            }
+        }
+    }
+
+    internal sealed class StuckBuildProjectsSyncWorkItem(
+        INotificationQueue notificationQueue,
+        IBuildProjectStreamManager streamManager,
+        IBuildRunStreamManager buildRunStreamManager,
+        IEnumerable<BuildProject> projects) : IDbWorkItem
+    {
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            var successfullyUpdated = new List<BuildProject>();
+            var interruptedRuns = new List<BuildRun>();
+
+            foreach (var project in projects)
+            {
+                var rowVersion = project.RowVersion;
+                var currentRunId = project.CurrentRunId;
+                var now = DateTimeOffset.UtcNow;
+                project.MarkIdle(currentRunId ?? Guid.Empty, now);
+                var row = await uow.BuildProjects.UpdateProcessingAsync(
+                    id: project.Id,
+                    state: project.ControlState,
+                    startedAt: project.ControlStartedAt,
+                    rowVersion: rowVersion,
+                    checkRowVersion: true,
+                    currentRunId: project.CurrentRunId,
+                    cancellationToken);
+
+                if (row > 0)
+                {
+                    successfullyUpdated.Add(project);
+
+                    if (currentRunId.HasValue)
+                    {
+                        var interruptedRun = await uow.BuildRuns.InterruptQueuedOrRunningAsync(
+                            currentRunId.Value,
+                            now,
+                            "Build run was interrupted after the project stayed in processing state for too long.",
+                            cancellationToken);
+                        if (interruptedRun is not null)
+                            interruptedRuns.Add(interruptedRun);
+                    }
+                }
+            }
+
+            await uow.CommitAsync(cancellationToken);
+
+            foreach (var run in interruptedRuns)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new BuildRunNotificationWorkItem(buildRunStreamManager, run),
+                    cancellationToken);
+            }
+
+            foreach (var project in successfullyUpdated)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new BuildProjectNotificationWorkItem(streamManager, project),
                     cancellationToken);
             }
         }
