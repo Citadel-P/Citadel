@@ -3112,6 +3112,7 @@ export interface BuildProjectView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   rowVersion: number | string;
+  latestRun: null | BuildRunView;
   tags: TagSummaryView[];
   capabilities?: null | ResourceCapabilities;
 }

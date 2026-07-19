@@ -318,11 +318,14 @@ public interface IBuildRunRepository
     Task<BuildRun?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<BuildRun>> GetByProjectAsync(Guid projectId, int limit, CancellationToken cancellationToken);
     Task<IEnumerable<BuildRun>> GetPagedAsync(int limit, CancellationToken cancellationToken);
+    Task<BuildRun?> GetLatestByProjectAsync(Guid projectId, CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<Guid, BuildRun>> GetLatestByProjectsAsync(IReadOnlyCollection<Guid> projectIds, CancellationToken cancellationToken);
     Task<IEnumerable<BuildRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken);
     Task<BuildRun?> TryClaimAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
     Task<bool> HasActiveRunAsync(Guid projectId, CancellationToken cancellationToken);
     Task<BuildRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
     Task<BuildRun?> InterruptQueuedOrRunningAsync(Guid id, DateTimeOffset interruptedAt, string reason, CancellationToken cancellationToken);
+    Task<IReadOnlyList<BuildRun>> DeleteTerminalRunsBeyondRetentionAsync(Guid projectId, int keepRunCount, CancellationToken cancellationToken);
 }
 
 public interface IBuildRunLogRepository

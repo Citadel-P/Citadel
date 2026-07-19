@@ -39,6 +39,8 @@ export function DataTable<TData extends Identifiable, TValue>({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [expanded, setExpanded] = useState<ExpandedState>({});
+  const lastSelectionRef = useRef<{ ids?: string; rows?: TData[] }>({});
+  const onSelectionChangeRef = useRef(onSelectionChange);
 
   const table = useReactTable({
     data,
@@ -62,11 +64,25 @@ export function DataTable<TData extends Identifiable, TValue>({
   tableRef.current = table;
 
   useEffect(() => {
-    if (onSelectionChange) {
-      const selectedRows = tableRef.current.getSelectedRowModel().rows.map((r) => r.original);
-      onSelectionChange(selectedRows);
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
+
+  useEffect(() => {
+    const handleSelectionChange = onSelectionChangeRef.current;
+    if (handleSelectionChange) {
+      const selectedModelRows = tableRef.current.getSelectedRowModel().rows;
+      const selectedRowIds = selectedModelRows.map((r) => r.id).join('\u001f');
+      const selectedRows = selectedModelRows.map((r) => r.original);
+      const lastSelection = lastSelectionRef.current;
+      const rowsUnchanged =
+        lastSelection.rows?.length === selectedRows.length &&
+        lastSelection.rows.every((row, index) => row === selectedRows[index]);
+      if (selectedRowIds === lastSelection.ids && rowsUnchanged) return;
+
+      lastSelectionRef.current = { ids: selectedRowIds, rows: selectedRows };
+      handleSelectionChange(selectedRows);
     }
-  }, [rowSelection, data, onSelectionChange]);
+  }, [rowSelection, data]);
 
   return (
     <div className="rounded-none">

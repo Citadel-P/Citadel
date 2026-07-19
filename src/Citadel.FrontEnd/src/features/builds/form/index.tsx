@@ -1,4 +1,4 @@
-import { BuildProjectView, BuildRunStatus, ResourceControlState } from '@/api/generated/api.types';
+import { BuildProjectView, BuildRunStatus } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
@@ -7,9 +7,9 @@ import { hasCapability } from '@/lib/resource-capabilities';
 import { useRead } from '@/lib/hooks';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { HubConnection } from '@microsoft/signalr';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BuildInfoActions } from '../actions';
-import { isActiveRun } from '../table';
+import { isActiveBuildRun, isBuildProjectActive, selectBuildProjectLatestRun } from '../build-run-state';
 import { BuildForm } from './form';
 import { BuildRunsTab } from './runs';
 
@@ -68,16 +68,18 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
       useEffect(() => {
         if (data?.data && data.data !== lastDataRef.current) {
           lastDataRef.current = data.data;
-          setBuild(data.data as BuildFormResource);
+          setBuild((prev) => mergeBuildProjectUpdate(prev, data.data));
         }
       }, [data?.data]);
 
-      const handleBuildProjectInfoUpdated = useCallback((project: BuildProjectView) => {
-        setBuild((prev) => {
-          if (!prev) return project as BuildFormResource;
-          return { ...prev, ...project };
-        });
-      }, []);
+      const handleBuildProjectInfoUpdated = useCallback(
+        (project: BuildProjectView) => {
+          if (project.id !== id) return;
+
+          setBuild((prev) => mergeBuildProjectUpdate(prev, project));
+        },
+        [id],
+      );
 
       const setupEventListeners = useCallback(
         (hubConnection: HubConnection) => {
@@ -108,15 +110,8 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
 };
 
 function BuildHeaderIndicator({ build }: { build: BuildProjectView }) {
-  const readArgs = useMemo(() => ({ query: { projectId: build.id, limit: 1 } }), [build.id]);
-  const { data } = useRead('listBuildRuns', readArgs, {
-    refetchInterval: (query) => {
-      const latestRun = query.state.data?.data.runs[0];
-      return build.currentRunId || (latestRun && isActiveRun(latestRun)) ? 3000 : 10000;
-    },
-  });
-  const latestRun = data?.data.runs[0];
-  const isProjectProcessing = build.controlState === ResourceControlState.Processing || Boolean(build.currentRunId);
+  const latestRun = build.latestRun;
+  const isProjectProcessing = isBuildProjectActive(build);
 
   if (!latestRun) {
     return (
@@ -129,5 +124,14 @@ function BuildHeaderIndicator({ build }: { build: BuildProjectView }) {
     );
   }
 
-  return <StateIndicator value={latestRun.status} isProcessing={isActiveRun(latestRun)} kind="buildRun" />;
+  return (
+    <StateIndicator value={latestRun.status} isProcessing={isProjectProcessing && isActiveBuildRun(latestRun)} kind="buildRun" />
+  );
+}
+
+function mergeBuildProjectUpdate(prev: BuildFormResource | undefined, project: BuildProjectView): BuildFormResource {
+  if (!prev) return project as BuildFormResource;
+
+  const latestRun = selectBuildProjectLatestRun(project, prev.latestRun);
+  return { ...prev, ...project, latestRun } as BuildFormResource;
 }

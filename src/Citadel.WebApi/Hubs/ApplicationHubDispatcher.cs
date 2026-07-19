@@ -159,9 +159,9 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     #endregion
 
     #region Builds
-    public Task SendBuildProjectInfo(BuildProject project, string action)
+    public Task SendBuildProjectInfo(BuildProject project, string action, BuildRun? latestRun = null)
     {
-        var map = BuildProjectView.Map(project);
+        var map = BuildProjectView.Map(project, latestRun);
         return Task.WhenAll(
             hubContext.Clients
                 .Group(WellKnownSignalRGroups.BuildProjectGroup(project.Id))
@@ -181,6 +181,16 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
             hubContext.Clients
                 .Group(WellKnownSignalRGroups.BuildRunsGroup(run.BuildProjectId))
                 .SendAsync("BuildRunInfoUpdated", map, action));
+    }
+
+    public Task SendBuildRunLogs(Guid runId, IReadOnlyList<BuildRunLogEntry> entries)
+    {
+        if (entries.Count == 0)
+            return Task.CompletedTask;
+
+        return hubContext.Clients
+            .Group(WellKnownSignalRGroups.BuildRunGroup(runId))
+            .SendAsync("BuildRunLogsAppended", runId, entries);
     }
     #endregion
 

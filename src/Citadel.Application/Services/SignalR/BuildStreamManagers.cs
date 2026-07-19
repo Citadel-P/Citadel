@@ -7,40 +7,33 @@ namespace Application.Services.SignalR;
 
 public interface IBuildProjectStreamManager : IStreamGroupManager
 {
-    Task SendBuildProjectInfo(BuildProject project, string action = "update");
+    Task SendBuildProjectInfo(BuildProject project, string action = "update", BuildRun? latestRun = null);
 }
 
 public interface IBuildRunStreamManager : IStreamGroupManager
 {
     Task SendBuildRunInfo(BuildRun run, string action = "update");
+    Task SendBuildRunLogs(Guid runId, IReadOnlyList<BuildRunLogEntry> entries);
 }
 
 internal sealed class BuildProjectStreamManager(IApplicationHubDispatcher dispatcher)
     : BaseStreamManager<StreamContext>, IBuildProjectStreamManager
 {
-    public Task SendBuildProjectInfo(BuildProject project, string action = "update")
-    {
-        if (!streams.ContainsKey(WellKnownSignalRGroups.BuildProjectGroup(project.Id)) &&
-            !streams.ContainsKey(WellKnownSignalRGroups.BuildProjectsGroup))
-        {
-            return Task.CompletedTask;
-        }
-
-        return dispatcher.SendBuildProjectInfo(project, action);
-    }
+    public Task SendBuildProjectInfo(BuildProject project, string action = "update", BuildRun? latestRun = null)
+        => dispatcher.SendBuildProjectInfo(project, action, latestRun);
 }
 
 internal sealed class BuildRunStreamManager(IApplicationHubDispatcher dispatcher)
     : BaseStreamManager<StreamContext>, IBuildRunStreamManager
 {
     public Task SendBuildRunInfo(BuildRun run, string action = "update")
-    {
-        if (!streams.ContainsKey(WellKnownSignalRGroups.BuildRunGroup(run.Id)) &&
-            !streams.ContainsKey(WellKnownSignalRGroups.BuildRunsGroup(run.BuildProjectId)))
-        {
-            return Task.CompletedTask;
-        }
+        => dispatcher.SendBuildRunInfo(run, action);
 
-        return dispatcher.SendBuildRunInfo(run, action);
+    public Task SendBuildRunLogs(Guid runId, IReadOnlyList<BuildRunLogEntry> entries)
+    {
+        if (entries.Count == 0 || !streams.ContainsKey(WellKnownSignalRGroups.BuildRunGroup(runId)))
+            return Task.CompletedTask;
+
+        return dispatcher.SendBuildRunLogs(runId, entries);
     }
 }

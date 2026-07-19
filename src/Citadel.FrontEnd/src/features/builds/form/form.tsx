@@ -6,6 +6,7 @@ import {
   BuildProjectView,
   BuildSecretSpec,
   LookupResourceType,
+  PlatformConnectorType,
   UpdateBuildProjectInput,
 } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
@@ -26,7 +27,7 @@ import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { MonacoEditor, type MonacoDiagnostic } from '@/lib/monaco';
 import { useQueryClient } from '@tanstack/react-query';
 import { GitBranch } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 
 type BuildInput = BuildProjectInput | UpdateBuildProjectInput;
@@ -126,6 +127,60 @@ const GitBranchField = ({
   );
 };
 
+const BuildPlatformField = ({
+  value,
+  options,
+  hasLoaded,
+  isLoading,
+  selectedConnectorType,
+  disabled,
+  onChange,
+}: {
+  value?: string | null;
+  options: Array<{ value: string; label: ReactNode }>;
+  hasLoaded: boolean;
+  isLoading?: boolean;
+  selectedConnectorType?: PlatformConnectorType;
+  disabled?: boolean;
+  onChange: (platformId: string) => void;
+}) => {
+  const isSupportedSelection = options.some((option) => option.value === value);
+  const hasUnsupportedSelection = hasLoaded && Boolean(value) && !isSupportedSelection;
+  const message = hasUnsupportedSelection
+    ? `This build uses a ${formatConnectorType(selectedConnectorType)} platform. Select a local Docker platform before saving.`
+    : options.length === 0 && hasLoaded
+      ? 'No local Docker platforms are available. Add a local platform before creating a build.'
+      : 'Builds currently run only on local Docker platforms.';
+
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldSelect
+        value={isSupportedSelection ? (value ?? undefined) : undefined}
+        onChange={onChange}
+        options={options}
+        disabled={disabled || isLoading || options.length === 0}
+        placeholder={isLoading ? 'Loading platforms...' : 'Select local platform'}
+      />
+      <p className={hasUnsupportedSelection ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
+        {message}
+      </p>
+    </div>
+  );
+};
+
+function formatConnectorType(connectorType?: PlatformConnectorType) {
+  switch (connectorType) {
+    case PlatformConnectorType.Agent:
+      return 'agent';
+    case PlatformConnectorType.EdgeAgent:
+      return 'edge-agent';
+    case PlatformConnectorType.Local:
+      return 'local';
+    default:
+      return 'unsupported';
+  }
+}
+
 const JsonArrayEditor = <T,>({
   value,
   filename,
@@ -191,10 +246,29 @@ export const BuildForm = ({
     { id: currentGitRepositoryId ?? '' },
     { enabled: !!currentGitRepositoryId },
   );
+  const { data: platformsData, isLoading: isLoadingPlatforms } = useRead('listPlatforms');
   const gitRefs = useMemo(() => gitRefsData?.data.refs ?? [], [gitRefsData?.data.refs]);
   const gitBranches = useMemo(
     () => mapBranchOptions(gitBranchesData?.data.branches ?? [], gitRefs),
     [gitBranchesData?.data.branches, gitRefs],
+  );
+  const platforms = useMemo(() => platformsData?.data.platforms ?? [], [platformsData?.data.platforms]);
+  const localPlatforms = useMemo(
+    () => platforms.filter((platform) => platform.connectorType === PlatformConnectorType.Local),
+    [platforms],
+  );
+  const platformOptions = useMemo(
+    () =>
+      localPlatforms.map((platform) => ({
+        value: platform.id,
+        label: (
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate">{platform.name}</span>
+            <span className="text-xs text-muted-foreground">Local</span>
+          </span>
+        ),
+      })),
+    [localPlatforms],
   );
 
   const { save: handleSave, isPending } = useSaveResource<BuildInput, any>({
@@ -359,14 +433,22 @@ export const BuildForm = ({
               defineField({
                 key: 'platformId',
                 label: 'Platform',
-                description: 'Docker platform that runs the local build worker for this project.',
+                description:
+                  'Local Docker platform that runs the build. Agent and edge-agent builders are not available until the build helper protocol is implemented.',
                 required: true,
+                validate: (value) =>
+                  platformsData && value && !localPlatforms.some((platform) => platform.id === value)
+                    ? 'Select a local Docker platform. Agent and edge-agent platforms are not supported for builds yet.'
+                    : null,
                 render: (value, set) => (
-                  <ResourceSelectorField
-                    targetType={LookupResourceType.Platform}
-                    selected={value}
-                    onSelect={(item) => set({ platformId: item?.id ?? '' })}
-                    placeholder="Select platform"
+                  <BuildPlatformField
+                    value={value}
+                    options={platformOptions}
+                    hasLoaded={Boolean(platformsData)}
+                    isLoading={isLoadingPlatforms}
+                    selectedConnectorType={platforms.find((platform) => platform.id === value)?.connectorType}
+                    disabled={disabled}
+                    onChange={(platformId) => set({ platformId })}
                   />
                 ),
               }),
@@ -492,7 +574,20 @@ export const BuildForm = ({
         ],
       }),
     }),
-    [currentGitRepositoryId, gitBranches, isFetchingGitBranches, isFetchingGitRefs, isGitBranchesError, mode],
+    [
+      currentGitRepositoryId,
+      disabled,
+      gitBranches,
+      isFetchingGitBranches,
+      isFetchingGitRefs,
+      isGitBranchesError,
+      isLoadingPlatforms,
+      localPlatforms,
+      mode,
+      platformOptions,
+      platforms,
+      platformsData,
+    ],
   );
 
   return (

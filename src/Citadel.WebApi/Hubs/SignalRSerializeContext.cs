@@ -89,6 +89,8 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<BuildProjectsView>]
 [GenerateShapeFor<BuildRunView>]
 [GenerateShapeFor<BuildRunsView>]
+[GenerateShapeFor<BuildRunLogEntry>]
+[GenerateShapeFor<IReadOnlyList<BuildRunLogEntry>>]
 [GenerateShapeFor<BuildArgSpec>]
 [GenerateShapeFor<IReadOnlyList<BuildArgSpec>>]
 [GenerateShapeFor<BuildSecretSpec>]

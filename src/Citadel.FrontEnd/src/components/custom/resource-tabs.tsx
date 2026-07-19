@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { RequiredFormFields, ResourceTabElement } from '@/pages/types';
 import { useSegmentTitle } from '@/lib/atoms';
 import { useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router';
 
 const getTabHash = (label: string) => label.toLowerCase().replace(/\s+/g, '-');
 
@@ -19,6 +20,7 @@ export const ResourceTabs = ({
   metadataChanged?: boolean;
 }) => {
   const [_, setSegmentTitle] = useSegmentTitle();
+  const location = useLocation();
 
   useEffect(() => {
     if (resource?.name) {
@@ -45,20 +47,14 @@ export const ResourceTabs = ({
   }, [activeTab, effectiveActiveTab, setActiveTab]);
 
   useEffect(() => {
-    const applyHash = () => {
-      const hash = window.location.hash.replace(/^#/, '');
-      if (!hash) return;
+    const hash = location.hash.replace(/^#/, '');
+    if (!hash) return;
 
-      const matchingTab = tabs.find((tab) => getTabHash(tab.label) === hash);
-      if (matchingTab && !(matchingTab.disabled?.(resource) ?? false)) {
-        setActiveTab(matchingTab.label);
-      }
-    };
-
-    applyHash();
-    window.addEventListener('hashchange', applyHash);
-    return () => window.removeEventListener('hashchange', applyHash);
-  }, [resource, setActiveTab, tabs]);
+    const matchingTab = tabs.find((tab) => getTabHash(tab.label) === hash);
+    if (matchingTab && !(matchingTab.disabled?.(resource) ?? false)) {
+      setActiveTab(matchingTab.label);
+    }
+  }, [location.hash, resource, setActiveTab, tabs]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);

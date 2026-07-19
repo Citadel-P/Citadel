@@ -36,15 +36,19 @@ public sealed record BuildProjectView(
     DateTimeOffset UpdatedAt,
     DateTimeOffset? ArchivedAt,
     long RowVersion,
+    BuildRunView? LatestRun,
     IReadOnlyList<TagSummaryView> Tags,
     ResourceCapabilities? Capabilities = null)
 {
-    internal static BuildProjectView Map(BuildProjectResult result) => Map(result.Project);
+    internal static BuildProjectView Map(BuildProjectResult result) => Map(result.Project, result.LatestRun);
 
     internal static async Task<BuildProjectView> Map(BuildProjectResult result, IPermissionEvaluator permissionEvaluator)
-        => await Map(result.Project, permissionEvaluator);
+        => await Map(result.Project, permissionEvaluator, result.LatestRun);
 
     internal static BuildProjectView Map(BuildProject project)
+        => Map(project, latestRun: null);
+
+    internal static BuildProjectView Map(BuildProject project, BuildRun? latestRun)
         => new(
             project.Id,
             project.Name,
@@ -72,12 +76,16 @@ public sealed record BuildProjectView(
             project.UpdatedAt,
             project.ArchivedAt,
             project.RowVersion,
+            latestRun is null ? null : BuildRunView.Map(latestRun),
             [.. project.Tags.Select(TagSummaryView.Map)]);
 
-    internal static async Task<BuildProjectView> Map(BuildProject project, IPermissionEvaluator permissionEvaluator)
+    internal static async Task<BuildProjectView> Map(
+        BuildProject project,
+        IPermissionEvaluator permissionEvaluator,
+        BuildRun? latestRun = null)
     {
         var permissions = await permissionEvaluator.EvaluateAsync(project.Id, ResourceType.Build);
-        return Map(project) with { Capabilities = CapabilityMapper.ToResourceCapabilities(permissions) };
+        return Map(project, latestRun) with { Capabilities = CapabilityMapper.ToResourceCapabilities(permissions) };
     }
 }
 
@@ -98,7 +106,7 @@ public sealed record BuildProjectsView(IReadOnlyList<BuildProjectView> Projects,
         {
             var project = projects[i];
             perms.TryGetValue(project.Id, out var meta);
-            views[i] = BuildProjectView.Map(project) with
+            views[i] = BuildProjectView.Map(project, result.LatestRuns.GetValueOrDefault(project.Id)) with
             {
                 Capabilities = CapabilityMapper.ToResourceCapabilities(meta == default ? PermissionMetadata.Empty : meta)
             };

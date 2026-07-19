@@ -35332,6 +35332,7 @@
           "updatedAt",
           "archivedAt",
           "rowVersion",
+          "latestRun",
           "tags"
         ],
         "type": "object",
@@ -35458,6 +35459,16 @@
               "string"
             ],
             "format": "int64"
+          },
+          "latestRun": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildRunView"
+              }
+            ]
           },
           "tags": {
             "type": "array",

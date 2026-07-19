@@ -43,9 +43,11 @@ public sealed record QueueBuildRunInputModel(
     BuildRunTrigger Trigger = BuildRunTrigger.Manual,
     Guid? TriggerSourceId = null);
 
-public sealed record BuildProjectResult(BuildProject Project);
+public sealed record BuildProjectResult(BuildProject Project, BuildRun? LatestRun = null);
 
-public sealed record BuildProjectListResult(IReadOnlyList<BuildProject> Projects);
+public sealed record BuildProjectListResult(
+    IReadOnlyList<BuildProject> Projects,
+    IReadOnlyDictionary<Guid, BuildRun> LatestRuns);
 
 public sealed record BuildRunResult(BuildRun Run);
 

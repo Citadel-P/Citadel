@@ -8,6 +8,8 @@ Use web editor stacks instead when the Compose YAML should be stored directly in
 
 Use Git stacks after the repository has been added and synced. See `docs/user/git-stacks.md`.
 
+Use builds when a Dockerfile in the repository should produce an image pushed to a registry. See `docs/user/builds.md`.
+
 ## Git Accounts
 
 A Git account represents credentials for one Git host or domain.
@@ -115,6 +117,21 @@ After the repository syncs successfully, create or edit a stack and choose:
 - Compose env files from repo: optional `.env` files relative to the repository root
 
 Use **Discover compose projects** in the stack form when you want Citadel to scan the repository branch and pre-fill Compose paths, working directory, env files, and watch paths.
+
+## Using Repositories With Builds
+
+Builds use Git repositories as Docker image sources.
+
+After the repository is added, create a build and choose:
+
+- Repository: the Git repository that contains the Dockerfile.
+- Branch: a discovered branch from that repository.
+- Context: Docker build context path relative to the repository root.
+- Dockerfile: Dockerfile path relative to the repository root.
+
+Builds sync the selected branch before each run and store the resolved commit SHA on the run.
+
+For build setup, see `docs/user/builds.md`.
 
 ## Common Setups
 

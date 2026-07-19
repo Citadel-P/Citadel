@@ -1,6 +1,7 @@
 using Application.Features.Builds.Models;
 using Application.Features.Tags.Queries;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Builds;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
 using Hosting.Common.Attributes;
@@ -34,10 +35,10 @@ internal sealed class GetBuildProjectsHandler(
     {
         var tagFilter = await TagFilterResolver.ResolveAsync(unitOfWork, query.Tags, cancellationToken);
         if (tagFilter.NoMatch)
-            return Result.Success(new BuildProjectListResult([]));
+            return Result.Success(new BuildProjectListResult([], new Dictionary<Guid, BuildRun>()));
 
         var user = userContextAccessor.Current;
-        var projects = user is not null && !user.IsAdmin
+        var projects = (user is not null && !user.IsAdmin
             ? await unitOfWork.BuildProjects.GetAuthorizedAsync(
                 user.UserId,
                 ResourceType.Build,
@@ -45,9 +46,13 @@ internal sealed class GetBuildProjectsHandler(
                 SpecificPermission.None,
                 cancellationToken,
                 tagFilter.TagIds)
-            : await unitOfWork.BuildProjects.GetAllAsync(cancellationToken, tagFilter.TagIds);
+            : await unitOfWork.BuildProjects.GetAllAsync(cancellationToken, tagFilter.TagIds)).ToArray();
 
-        return Result.Success(new BuildProjectListResult([.. projects]));
+        var latestRuns = await unitOfWork.BuildRuns.GetLatestByProjectsAsync(
+            [.. projects.Select(static project => project.Id)],
+            cancellationToken);
+
+        return Result.Success(new BuildProjectListResult(projects, latestRuns));
     }
 }
 
@@ -57,9 +62,11 @@ internal sealed class GetBuildProjectHandler(IUnitOfWork unitOfWork)
     public async ValueTask<Result<BuildProjectResult>> Handle(GetBuildProject query, CancellationToken cancellationToken)
     {
         var project = await unitOfWork.BuildProjects.GetAsync(query.ProjectId, cancellationToken);
-        return project is null
-            ? Result.Failure<BuildProjectResult>(new NotFoundError("Build project not found."))
-            : Result.Success(new BuildProjectResult(project));
+        if (project is null)
+            return Result.Failure<BuildProjectResult>(new NotFoundError("Build project not found."));
+
+        var latestRun = await unitOfWork.BuildRuns.GetLatestByProjectAsync(project.Id, cancellationToken);
+        return Result.Success(new BuildProjectResult(project, latestRun));
     }
 }
 

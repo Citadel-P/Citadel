@@ -1,6 +1,7 @@
 using Application.Features.Builds.Models;
 using Application.Services.Builds;
 using Application.Services.SignalR;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Builds;
@@ -120,8 +121,15 @@ internal sealed class CreateBuildProjectHandler(
         if (await unitOfWork.GitRepositories.GetAsync(gitRepositoryId, cancellationToken) is null)
             return Result.Failure(new NotFoundError("Git repository not found."));
 
-        if (await unitOfWork.Platforms.GetInfoAsync(platformId, cancellationToken) is null)
+        var platform = await unitOfWork.Platforms.GetInfoAsync(platformId, cancellationToken);
+        if (platform is null)
             return Result.Failure(new NotFoundError("Platform not found."));
+
+        if (platform.ConnectorType != PlatformConnectorType.Local)
+        {
+            return Result.Failure(new BadRequestError(
+                "Build projects currently support local Docker platforms only. Agent and edge-agent build runners require the build helper connector protocol."));
+        }
 
         if (await unitOfWork.Registries.GetAsync(registryId, cancellationToken) is null)
             return Result.Failure(new NotFoundError("Registry not found."));
@@ -317,7 +325,7 @@ internal sealed class QueueBuildRunHandler(
         await buildRunStreamManager.SendBuildRunInfo(run, "create");
         var updatedProject = await unitOfWork.BuildProjects.GetAsync(project.Id, cancellationToken);
         if (updatedProject is not null)
-            await buildProjectStreamManager.SendBuildProjectInfo(updatedProject);
+            await buildProjectStreamManager.SendBuildProjectInfo(updatedProject, latestRun: run);
         return Result.Success(new BuildRunResult(run));
     }
 
@@ -367,12 +375,13 @@ internal sealed class CancelBuildRunHandler(
     IUnitOfWork unitOfWork,
     IBuildRunCoordinator buildRunCoordinator,
     IBuildProjectStreamManager buildProjectStreamManager,
-    IBuildRunStreamManager buildRunStreamManager)
+    IBuildRunStreamManager buildRunStreamManager,
+    IBuildRunRetentionService buildRunRetentionService)
     : ICommandHandler<CancelBuildRun, Result>
 {
     public async ValueTask<Result> Handle(CancelBuildRun command, CancellationToken cancellationToken)
     {
-        buildRunCoordinator.Cancel(command.RunId);
+        var wasRegistered = buildRunCoordinator.Cancel(command.RunId);
 
         var run = await unitOfWork.BuildRuns.CancelQueuedOrRunningAsync(
             command.RunId,
@@ -380,14 +389,21 @@ internal sealed class CancelBuildRunHandler(
             "Build run cancelled.",
             cancellationToken);
         if (run is null)
+        {
+            if (!wasRegistered)
+                buildRunCoordinator.Unregister(command.RunId);
             return Result.Failure(new ConflictError("Build run is not active or was not found."));
+        }
+        if (!wasRegistered)
+            buildRunCoordinator.Unregister(command.RunId);
 
         await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
+        await buildRunRetentionService.PruneAsync(run.BuildProjectId, cancellationToken);
         var project = await unitOfWork.BuildProjects.GetAsync(run.BuildProjectId, cancellationToken);
         if (project is not null)
-            await buildProjectStreamManager.SendBuildProjectInfo(project);
+            await buildProjectStreamManager.SendBuildProjectInfo(project, latestRun: run);
         return Result.Success();
     }
 }

@@ -4,8 +4,10 @@ import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Play, Trash2 } from 'lucide-react';
+import { useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
+import { isBuildProjectActive } from './build-run-state';
 
 export const invalidateBuildQueries = async (queryClient: ReturnType<typeof useQueryClient>, id?: string) => {
   await queryClient.invalidateQueries({ queryKey: ['listBuildProjects'] });
@@ -53,23 +55,30 @@ const { dropdown, group, info } = createActionsBuilder<BuildProjectView>()
       const { selected, multiSelect } = singleSelection(resources);
       const queryClient = useQueryClient();
       const queueRun = useMutate('queueBuildRun');
-      const blocked = Boolean(selected?.currentRunId);
+      const navigate = useNavigate();
+      const startPendingRef = useRef(false);
+      const blocked = selected ? isBuildProjectActive(selected) : false;
 
       return {
         canExecute: !!selected && !multiSelect && selected.enabled && !blocked,
         isPending: queueRun.isPending,
         run: async () => {
           if (!selected || multiSelect) return;
+          if (startPendingRef.current) return;
 
           try {
-            await queueRun.mutateAsync({
+            startPendingRef.current = true;
+            const queuedRun = await queueRun.mutateAsync({
               id: selected.id,
               data: { trigger: BuildRunTrigger.Manual },
             } as any);
             await invalidateBuildQueries(queryClient, selected.id);
+            navigate(`/builds/edit/${selected.id}?runId=${queuedRun.data.id}#runs`);
             toast.success(`Build run queued for "${selected.name}"`);
           } catch {
             /** Nope */
+          } finally {
+            startPendingRef.current = false;
           }
         },
       };

@@ -1,11 +1,12 @@
 # Registries
 
-Registries let Citadel pull container images and check image updates for deployments and web editor stacks.
+Registries let Citadel pull container images, check image updates, and push images created by builds.
 
 Use registries when:
 
 - a deployment pulls an external image
 - a web editor stack checks service images for updates
+- a build pushes a generated image
 - you want to pull an image onto a platform from Citadel
 - private registry credentials are required
 
@@ -20,6 +21,8 @@ The registry form supports:
 DockerHub uses `docker.io` as the registry host. GitHub uses `ghcr.io` and displays the selected namespace as part of the host. Custom registries require you to enter the registry host.
 
 Azure, AWS, and GitLab registry configuration types exist in the backend model, but they are not currently exposed in the registry form.
+
+Builds currently use DockerHub, GitHub Container Registry, and Custom registries for pushes.
 
 ## Basic Setup
 
@@ -148,6 +151,35 @@ The registry is used to check service image tags for new digests. Stack deploy s
 
 For web editor stack setup, see `docs/user/web-editor-stacks.md`.
 
+## Using Registries In Builds
+
+Builds use registries as image push targets.
+
+In a build project, select:
+
+- Registry: the registry that owns the image repository.
+- Image repository: repository path under that registry, without the host or tag.
+- Tags: one or more tag templates.
+
+Example with GitHub Container Registry:
+
+```text
+Registry: ghcr.io/acme
+Image repository: platform/api
+Tags: {branch}-{shortSha}, latest
+```
+
+Citadel resolves the final image references during the build run:
+
+```text
+ghcr.io/acme/platform/api:main-a4c8e3c1d420
+ghcr.io/acme/platform/api:latest
+```
+
+For private repositories or pushes, make sure the registry credentials have write permission.
+
+For build setup, see `docs/user/builds.md`.
+
 ## Pulling Images To A Platform
 
 Registries are also used when pulling an image into a platform from the Images page.
@@ -166,9 +198,9 @@ Registry credentials are stored in the registry configuration. Sensitive values 
 
 Use least-privilege tokens:
 
-- DockerHub: token that can read the required repositories
-- GitHub Container Registry: token with package read access
-- Custom registry: read-only credentials when the registry supports them
+- DockerHub: token that can read or write the required repositories, depending on use
+- GitHub Container Registry: token with package read or write access, depending on use
+- Custom registry: read-only credentials for pull-only use, or write credentials for builds
 
 Rotate registry tokens regularly. After updating a registry token, redeploy affected workloads if they need to pull images again.
 

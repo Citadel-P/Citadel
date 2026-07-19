@@ -4,6 +4,7 @@ import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
 import { HubConnection } from '@microsoft/signalr';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { selectBuildProjectLatestRun } from '../build-run-state';
 
 export const useBuildsGroup = () => {
   const { selectedTagNames } = useResourceTagFilter();
@@ -56,7 +57,10 @@ export const useBuildsGroup = () => {
         if (index === -1) return [...prev, project];
 
         const updated = [...prev];
-        updated[index] = project;
+        updated[index] = {
+          ...project,
+          latestRun: selectBuildProjectLatestRun(project, updated[index].latestRun),
+        };
         return updated;
       });
     },

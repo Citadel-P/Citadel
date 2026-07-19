@@ -1,4 +1,4 @@
-import { BuildProjectView, BuildRunStatus, BuildRunView, ResourceControlState } from '@/api/generated/api.types';
+import { BuildProjectView, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
 import { ContentCard } from '@/components/custom/content-card';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -9,13 +9,13 @@ import { DataTable } from '@/components/ui/data-table';
 import { TagChips } from '@/features/tags/components';
 import { useSelectedResources } from '@/lib/atoms';
 import type { DateTimeFormatter } from '@/lib/date-time';
-import { useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData } from '@/pages/types';
 import { ColumnDef } from '@tanstack/react-table';
 import { GitBranch, Server } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
+import { isActiveBuildRun, isBuildProjectActive } from './build-run-state';
 
 type ActionMap = Record<
   string,
@@ -33,8 +33,7 @@ export function BuildsTable({
 }) {
   const [, setSelectedResources] = useSelectedResources<BuildProjectView>('Build');
   const formatDateTime = useProfileDateTimeFormatter();
-  const { data: runsData } = useRead('listBuildRuns', { query: { limit: 100 } }, { refetchInterval: 5000 });
-  const latestRuns = useMemo(() => indexLatestRuns(runsData?.data.runs ?? []), [runsData?.data.runs]);
+  const latestRuns = useMemo(() => indexLatestRuns(items), [items]);
   const cols = useMemo(() => columns(actions ?? {}, latestRuns, formatDateTime), [actions, formatDateTime, latestRuns]);
 
   return (
@@ -117,8 +116,9 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
     cell: ({ row }) => {
       const run = latestRuns.get(row.original.id);
+      const isProjectProcessing = isBuildProjectProcessing(row.original);
       if (!run) {
-        return isBuildProjectProcessing(row.original) ? (
+        return isProjectProcessing ? (
           <span className="inline-flex items-center gap-2 text-sm">
             <StateIndicator value={BuildRunStatus.Queued} isProcessing kind="buildRun" />
             In progress
@@ -130,7 +130,7 @@ const columns = (
 
       return (
         <span className="inline-flex items-center gap-2 text-sm">
-          <StateIndicator value={run.status} isProcessing={isActiveRun(run)} kind="buildRun" />
+          <StateIndicator value={run.status} isProcessing={isProjectProcessing && isActiveRun(run)} kind="buildRun" />
           <TimestampCell value={run.completedAt ?? run.startedAt ?? run.queuedAt} formatDateTime={formatDateTime} />
         </span>
       );
@@ -158,7 +158,7 @@ const columns = (
 const BuildNameRow = ({ project, run }: { project: BuildProjectView; run?: BuildRunView }) => (
   <div className="flex min-w-0 items-center gap-1">
     {run ? (
-      <StateIndicator value={run.status} isProcessing={isActiveRun(run)} kind="buildRun" />
+      <StateIndicator value={run.status} isProcessing={isBuildProjectProcessing(project) && isActiveRun(run)} kind="buildRun" />
     ) : isBuildProjectProcessing(project) ? (
       <StateIndicator value={BuildRunStatus.Queued} isProcessing kind="buildRun" />
     ) : (
@@ -170,27 +170,20 @@ const BuildNameRow = ({ project, run }: { project: BuildProjectView; run?: Build
   </div>
 );
 
-function indexLatestRuns(runs: BuildRunView[]) {
+function indexLatestRuns(projects: BuildProjectView[]) {
   const map = new Map<string, BuildRunView>();
 
-  for (const run of runs) {
-    const current = map.get(run.buildProjectId);
-    if (!current || String(run.queuedAt).localeCompare(String(current.queuedAt)) > 0) {
-      map.set(run.buildProjectId, run);
-    }
+  for (const project of projects) {
+    if (project.latestRun) map.set(project.id, project.latestRun);
   }
 
   return map;
 }
 
 export function isActiveRun(run: Pick<BuildRunView, 'status'>) {
-  return (
-    run.status === BuildRunStatus.Queued ||
-    run.status === BuildRunStatus.Preparing ||
-    run.status === BuildRunStatus.Running
-  );
+  return isActiveBuildRun(run);
 }
 
-function isBuildProjectProcessing(project: Pick<BuildProjectView, 'controlState' | 'currentRunId'>) {
-  return project.controlState === ResourceControlState.Processing || Boolean(project.currentRunId);
+function isBuildProjectProcessing(project: Pick<BuildProjectView, 'controlState' | 'currentRunId' | 'latestRun'>) {
+  return isBuildProjectActive(project);
 }

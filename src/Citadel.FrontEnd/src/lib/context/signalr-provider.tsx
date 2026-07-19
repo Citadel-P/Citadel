@@ -12,7 +12,7 @@ import { startConnectionWithRetry } from '../startConnectionWithRetry';
 import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack';
 
 export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  type GroupState = 'joining' | 'joined';
+  type GroupState = { state: 'joining' | 'joined'; references: number };
   const [connectionState, setConnectionState] = useState<HubConnectionState>(HubConnectionState.Disconnected);
   const [connection, setConnection] = useState<HubConnection | null>(null);
   const { accessToken } = useAuthContext();
@@ -41,11 +41,11 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
     conn.onreconnected(async () => {
       setConnectionState(HubConnectionState.Connected);
       // Rejoin groups on reconnect
-      for (const [groupName, state] of groupStates.current.entries()) {
-        if (state === 'joined' || state === 'joining') {
+      for (const [groupName, group] of groupStates.current.entries()) {
+        if (group.state === 'joined' || group.state === 'joining') {
           try {
             await conn.send('JoinGroup', groupName);
-            groupStates.current.set(groupName, 'joined');
+            groupStates.current.set(groupName, { ...group, state: 'joined' });
           } catch (err) {
             console.error(`Failed to rejoin group ${groupName}:`, err);
           }
@@ -136,10 +136,6 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
     async (groupName: string, setup?: (hub: HubConnection) => void) => {
       if (!groupName) return;
 
-      const state = groupStates.current.get(groupName);
-      if (state === 'joining' || state === 'joined') return;
-
-      groupStates.current.set(groupName, 'joining');
       await ensureConnectionReady();
       const conn = connection!;
 
@@ -149,9 +145,20 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
         console.error('setup callback threw:', err);
       }
 
+      const group = groupStates.current.get(groupName);
+      if (group) {
+        groupStates.current.set(groupName, { ...group, references: group.references + 1 });
+        return;
+      }
+
+      groupStates.current.set(groupName, { state: 'joining', references: 1 });
+
       try {
         await conn.send('JoinGroup', groupName);
-        groupStates.current.set(groupName, 'joined');
+        const current = groupStates.current.get(groupName);
+        if (current) {
+          groupStates.current.set(groupName, { ...current, state: 'joined' });
+        }
       } catch (err) {
         console.error('JoinGroup failed:', err);
         groupStates.current.delete(groupName);
@@ -164,8 +171,21 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
     async (groupName: string, remove?: (hub: HubConnection) => void) => {
       if (!groupName) return;
 
-      const state = groupStates.current.get(groupName);
-      if (!state) return;
+      if (connection) {
+        try {
+          remove?.(connection);
+        } catch (err) {
+          console.error('remove callback threw:', err);
+        }
+      }
+
+      const group = groupStates.current.get(groupName);
+      if (!group) return;
+
+      if (group.references > 1) {
+        groupStates.current.set(groupName, { ...group, references: group.references - 1 });
+        return;
+      }
 
       groupStates.current.delete(groupName);
 
@@ -174,14 +194,6 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
           await connection.send('LeaveGroup', groupName);
         } catch (err) {
           console.warn('LeaveGroup failed:', err);
-        }
-      }
-
-      if (connection) {
-        try {
-          remove?.(connection);
-        } catch (err) {
-          console.error('remove callback threw:', err);
         }
       }
     },

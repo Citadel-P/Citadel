@@ -498,7 +498,7 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
         const string sql = """
             SELECT * FROM BuildRuns
             WHERE BuildProjectId = @ProjectId
-            ORDER BY QueuedAt DESC
+            ORDER BY QueuedAt DESC, Id DESC
             LIMIT @Limit
             """;
         var result = await db.QueryAsync<BuildRunDto>(sql, new { ProjectId = projectId, Limit = limit }, transaction: tx());
@@ -507,9 +507,42 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
 
     public async Task<IEnumerable<BuildRun>> GetPagedAsync(int limit, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM BuildRuns ORDER BY QueuedAt DESC LIMIT @Limit";
+        const string sql = "SELECT * FROM BuildRuns ORDER BY QueuedAt DESC, Id DESC LIMIT @Limit";
         var result = await db.QueryAsync<BuildRunDto>(sql, new { Limit = limit }, transaction: tx());
         return result.Select(static x => x.ToDomain());
+    }
+
+    public async Task<BuildRun?> GetLatestByProjectAsync(Guid projectId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT * FROM BuildRuns
+            WHERE BuildProjectId = @ProjectId
+            ORDER BY QueuedAt DESC, Id DESC
+            LIMIT 1
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<BuildRunDto>(sql, new { ProjectId = projectId }, transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, BuildRun>> GetLatestByProjectsAsync(
+        IReadOnlyCollection<Guid> projectIds,
+        CancellationToken cancellationToken)
+    {
+        if (projectIds.Count == 0)
+            return new Dictionary<Guid, BuildRun>();
+
+        const string sql = """
+            SELECT DISTINCT ON (BuildProjectId) *
+            FROM BuildRuns
+            WHERE BuildProjectId = ANY(@ProjectIds)
+            ORDER BY BuildProjectId, QueuedAt DESC, Id DESC
+            """;
+
+        var result = await db.QueryAsync<BuildRunDto>(
+            sql,
+            new { ProjectIds = projectIds.ToArray() },
+            transaction: tx());
+        return result.Select(static x => x.ToDomain()).ToDictionary(static x => x.BuildProjectId);
     }
 
     public async Task<IEnumerable<BuildRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken)
@@ -517,7 +550,7 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
         const string sql = """
             SELECT * FROM BuildRuns
             WHERE Status = @Status
-            ORDER BY QueuedAt ASC
+            ORDER BY QueuedAt ASC, Id ASC
             LIMIT @Limit
             """;
         var result = await db.QueryAsync<BuildRunDto>(
@@ -635,6 +668,56 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
             },
             transaction: tx());
         return result?.ToDomain();
+    }
+
+    public async Task<IReadOnlyList<BuildRun>> DeleteTerminalRunsBeyondRetentionAsync(
+        Guid projectId,
+        int keepRunCount,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH RankedRuns AS (
+                SELECT Id,
+                       ROW_NUMBER() OVER (
+                           ORDER BY COALESCE(CompletedAt, StartedAt, QueuedAt) DESC,
+                                    QueuedAt DESC,
+                                    Id DESC
+                       ) AS RunRank
+                FROM BuildRuns
+                WHERE BuildProjectId = @ProjectId
+                  AND Status = ANY(@TerminalStatuses)
+            ),
+            DeletedRuns AS (
+                DELETE FROM BuildRuns runs
+                USING RankedRuns ranked
+                WHERE runs.Id = ranked.Id
+                  AND ranked.RunRank > @KeepRunCount
+                RETURNING runs.*
+            )
+            SELECT *
+            FROM DeletedRuns
+            ORDER BY COALESCE(CompletedAt, StartedAt, QueuedAt) ASC,
+                     QueuedAt ASC,
+                     Id ASC
+            """;
+
+        var result = await db.QueryAsync<BuildRunDto>(
+            sql,
+            new
+            {
+                ProjectId = projectId,
+                KeepRunCount = Math.Max(1, keepRunCount),
+                TerminalStatuses = new[]
+                {
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Succeeded),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Failed),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.TimedOut),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Cancelled),
+                    EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Interrupted)
+                }
+            },
+            transaction: tx());
+        return result.Select(static x => x.ToDomain()).ToArray();
     }
 
     private static BuildRunParameters ToParameters(BuildRun run)

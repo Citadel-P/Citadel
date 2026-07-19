@@ -18,6 +18,11 @@ public interface IBuildRunExecutionService
     ValueTask<Result> ExecuteAsync(Guid runId, CancellationToken cancellationToken);
 }
 
+public interface IBuildRunRetentionService
+{
+    Task PruneAsync(Guid projectId, CancellationToken cancellationToken);
+}
+
 public interface IBuildRunCoordinator
 {
     CancellationTokenSource Register(Guid runId);
@@ -27,33 +32,78 @@ public interface IBuildRunCoordinator
 
 internal sealed class BuildRunCoordinator : IBuildRunCoordinator
 {
-    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> runs = new();
+    private readonly ConcurrentDictionary<Guid, CoordinatedRun> runs = new();
 
     public CancellationTokenSource Register(Guid runId)
     {
-        var cts = new CancellationTokenSource();
-        if (!runs.TryAdd(runId, cts))
+        var entry = runs.GetOrAdd(runId, static _ => new CoordinatedRun());
+        if (Interlocked.Exchange(ref entry.Registered, 1) == 1)
         {
-            cts.Dispose();
             throw new InvalidOperationException($"Build run {runId} is already registered.");
         }
 
-        return cts;
+        return entry.Cancellation;
     }
 
     public bool Cancel(Guid runId)
     {
-        if (!runs.TryGetValue(runId, out var cts))
-            return false;
+        PrunePendingCancellations();
 
-        cts.Cancel();
-        return true;
+        var entry = runs.GetOrAdd(runId, static _ => new CoordinatedRun());
+        entry.CancelledAt = DateTime.UtcNow;
+        entry.Cancellation.Cancel();
+        return Volatile.Read(ref entry.Registered) == 1;
     }
 
     public void Unregister(Guid runId)
     {
-        if (runs.TryRemove(runId, out var cts))
-            cts.Dispose();
+        if (runs.TryRemove(runId, out var entry))
+            entry.Cancellation.Dispose();
+    }
+
+    private void PrunePendingCancellations()
+    {
+        var expiredBefore = DateTime.UtcNow.AddMinutes(-10);
+        foreach (var (runId, entry) in runs)
+        {
+            if (Volatile.Read(ref entry.Registered) == 0 &&
+                entry.CancelledAt is { } cancelledAt &&
+                cancelledAt < expiredBefore &&
+                runs.TryRemove(runId, out var removed))
+            {
+                removed.Cancellation.Dispose();
+            }
+        }
+    }
+
+    private sealed class CoordinatedRun
+    {
+        public readonly CancellationTokenSource Cancellation = new();
+        public int Registered;
+        public DateTime? CancelledAt;
+    }
+}
+
+internal sealed class BuildRunRetentionService(
+    IUnitOfWork unitOfWork,
+    IBuildRunStreamManager buildRunStreamManager) : IBuildRunRetentionService
+{
+    public async Task PruneAsync(Guid projectId, CancellationToken cancellationToken)
+    {
+        var project = await unitOfWork.BuildProjects.GetAsync(projectId, cancellationToken, includeArchived: true);
+        if (project is null)
+            return;
+
+        var deletedRuns = await unitOfWork.BuildRuns.DeleteTerminalRunsBeyondRetentionAsync(
+            projectId,
+            project.RetentionRunCount,
+            cancellationToken);
+        if (deletedRuns.Count == 0)
+            return;
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        foreach (var run in deletedRuns)
+            await buildRunStreamManager.SendBuildRunInfo(run, "delete");
     }
 }
 
@@ -65,7 +115,8 @@ internal sealed class BuildRunExecutionService(
     ISecretValueProtector secretValueProtector,
     IExternalSecretProviderClient externalSecretProviderClient,
     IBuildProjectStreamManager buildProjectStreamManager,
-    IBuildRunStreamManager buildRunStreamManager) : IBuildRunExecutionService
+    IBuildRunStreamManager buildRunStreamManager,
+    IBuildRunRetentionService buildRunRetentionService) : IBuildRunExecutionService
 {
     private const int MaxBufferedLogEntries = 25;
 
@@ -77,6 +128,7 @@ internal sealed class BuildRunExecutionService(
 
         await AppendLogAsync(run.Id, "system", "Build run claimed by worker.", cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
+        await SendBuildProjectUpdateAsync(run.BuildProjectId, run, cancellationToken);
         List<BuildRunLogEntry>? bufferedStreamLogs = null;
         var runCancel = runCoordinator.Register(run.Id);
 
@@ -122,7 +174,6 @@ internal sealed class BuildRunExecutionService(
             run.ResolveCommit(sync.Hash, imageReferences);
             await unitOfWork.BuildRuns.UpdateAsync(run, executionToken);
             await unitOfWork.CommitAsync(executionToken);
-            await buildRunStreamManager.SendBuildRunInfo(run);
 
             var repositoryRoot = Path.GetFullPath(buildContext.Repository.GetCachePath());
             var contextPath = ResolveRepoPath(repositoryRoot, run.ContextPath, mustBeDirectory: true);
@@ -151,6 +202,7 @@ internal sealed class BuildRunExecutionService(
             await unitOfWork.BuildRuns.UpdateAsync(run, executionToken);
             await unitOfWork.CommitAsync(executionToken);
             await buildRunStreamManager.SendBuildRunInfo(run);
+            await SendBuildProjectUpdateAsync(run.BuildProjectId, run, executionToken);
 
             var command = new BuildProcessCommand(
                 WorkingDirectory: repositoryRoot,
@@ -191,7 +243,8 @@ internal sealed class BuildRunExecutionService(
                 await unitOfWork.CommitAsync(executionToken);
                 await AppendLogAsync(run.Id, "system", "Build run completed successfully.", executionToken);
                 await buildRunStreamManager.SendBuildRunInfo(run);
-                await SendBuildProjectUpdateAsync(run.BuildProjectId, executionToken);
+                await buildRunRetentionService.PruneAsync(run.BuildProjectId, executionToken);
+                await SendBuildProjectUpdateAsync(run.BuildProjectId, run, executionToken);
                 return Result.Success();
             }
 
@@ -428,7 +481,8 @@ internal sealed class BuildRunExecutionService(
         await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
-        await SendBuildProjectUpdateAsync(run.BuildProjectId, cancellationToken);
+        await buildRunRetentionService.PruneAsync(run.BuildProjectId, cancellationToken);
+        await SendBuildProjectUpdateAsync(run.BuildProjectId, run, cancellationToken);
         return Result.Failure(new BadGatewayError(errorMessage));
     }
 
@@ -440,21 +494,24 @@ internal sealed class BuildRunExecutionService(
         await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
-        await SendBuildProjectUpdateAsync(run.BuildProjectId, cancellationToken);
+        await buildRunRetentionService.PruneAsync(run.BuildProjectId, cancellationToken);
+        await SendBuildProjectUpdateAsync(run.BuildProjectId, run, cancellationToken);
         return Result.Success();
     }
 
-    private async Task SendBuildProjectUpdateAsync(Guid projectId, CancellationToken cancellationToken)
+    private async Task SendBuildProjectUpdateAsync(Guid projectId, BuildRun latestRun, CancellationToken cancellationToken)
     {
         var project = await unitOfWork.BuildProjects.GetAsync(projectId, cancellationToken);
         if (project is not null)
-            await buildProjectStreamManager.SendBuildProjectInfo(project);
+            await buildProjectStreamManager.SendBuildProjectInfo(project, latestRun: latestRun);
     }
 
     private async Task AppendLogAsync(Guid runId, string stream, string message, CancellationToken cancellationToken)
     {
-        await unitOfWork.BuildRunLogs.AddAsync(NewLogEntry(runId, stream, message), cancellationToken);
+        var entry = NewLogEntry(runId, stream, message);
+        await unitOfWork.BuildRunLogs.AddAsync(entry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        await buildRunStreamManager.SendBuildRunLogs(runId, [entry]);
     }
 
     private async Task FlushLogsAsync(List<BuildRunLogEntry>? entries, CancellationToken cancellationToken)
@@ -462,9 +519,11 @@ internal sealed class BuildRunExecutionService(
         if (entries is null || entries.Count == 0)
             return;
 
-        await unitOfWork.BuildRunLogs.AddRangeAsync(entries, cancellationToken);
+        var flushed = entries.ToArray();
+        await unitOfWork.BuildRunLogs.AddRangeAsync(flushed, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         entries.Clear();
+        await buildRunStreamManager.SendBuildRunLogs(flushed[0].BuildRunId, flushed);
     }
 
     private static BuildRunLogEntry NewLogEntry(Guid runId, string stream, string message)
