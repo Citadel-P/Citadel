@@ -153,8 +153,7 @@ public sealed record BuildProcessSecret(string Id, string Value);
 
 public sealed record BuildProcessRegistryCredential(
     string RegistryHost,
-    string UserName,
-    string Password);
+    string RegistryAuth);
 
 public enum BuildProcessStream
 {

@@ -758,30 +758,43 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
 internal sealed class BuildRunLogRepository(IDbConnection db, Func<IDbTransaction> tx) : IBuildRunLogRepository
 {
     public Task<int> AddAsync(BuildRunLogEntry entry, CancellationToken cancellationToken)
-        => AddRangeAsync([entry], cancellationToken);
+        => AddRangeAsync(new[] { entry }, cancellationToken);
 
     public Task<int> AddRangeAsync(IReadOnlyCollection<BuildRunLogEntry> entries, CancellationToken cancellationToken)
     {
         if (entries.Count == 0)
             return Task.FromResult(0);
 
+        var batch = entries.ToArray();
         const string sql = """
             INSERT INTO BuildRunLogs (Id, BuildRunId, CreatedAt, Stream, Message)
-            VALUES (@Id, @BuildRunId, @CreatedAt, @Stream, @Message)
+            SELECT Id, BuildRunId, CreatedAt, Stream, Message
+            FROM unnest(
+                @Ids::uuid[],
+                @BuildRunIds::uuid[],
+                @CreatedAts::timestamptz[],
+                @Streams::text[],
+                @Messages::text[])
+                AS logs(Id, BuildRunId, CreatedAt, Stream, Message)
             """;
 
         return db.ExecuteAsync(
             sql,
-            entries.Select(static entry => new
+            new
             {
-                entry.Id,
-                entry.BuildRunId,
-                CreatedAt = entry.CreatedAt.UtcDateTime,
-                entry.Stream,
-                entry.Message
-            }),
+                Ids = batch.Select(static entry => entry.Id).ToArray(),
+                BuildRunIds = batch.Select(static entry => entry.BuildRunId).ToArray(),
+                CreatedAts = batch.Select(static entry => entry.CreatedAt.UtcDateTime).ToArray(),
+                Streams = batch.Select(static entry => RemovePostgresNullBytes(entry.Stream)).ToArray(),
+                Messages = batch.Select(static entry => RemovePostgresNullBytes(entry.Message)).ToArray()
+            },
             transaction: tx());
     }
+
+    private static string RemovePostgresNullBytes(string value)
+        => value.Contains('\0', StringComparison.Ordinal)
+            ? value.Replace("\0", string.Empty, StringComparison.Ordinal)
+            : value;
 
     public async Task<IReadOnlyList<BuildRunLogEntry>> GetByRunAsync(Guid buildRunId, CancellationToken cancellationToken)
     {

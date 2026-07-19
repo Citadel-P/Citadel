@@ -8,6 +8,7 @@ using Domain.Entities.ResourceBindings;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
+using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 
@@ -116,7 +117,8 @@ internal sealed class BuildRunExecutionService(
     IExternalSecretProviderClient externalSecretProviderClient,
     IBuildProjectStreamManager buildProjectStreamManager,
     IBuildRunStreamManager buildRunStreamManager,
-    IBuildRunRetentionService buildRunRetentionService) : IBuildRunExecutionService
+    IBuildRunRetentionService buildRunRetentionService,
+    ILogger<BuildRunExecutionService> logger) : IBuildRunExecutionService
 {
     private const int MaxBufferedLogEntries = 25;
 
@@ -259,12 +261,14 @@ internal sealed class BuildRunExecutionService(
         }
         catch (OperationCanceledException) when (runCancel.IsCancellationRequested)
         {
-            await FlushLogsAsync(bufferedStreamLogs, CancellationToken.None);
+            await ResetTransactionAsync();
+            await TryFlushLogsForRecoveryAsync(bufferedStreamLogs);
             return await CancelAsync(run, CancellationToken.None);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await FlushLogsAsync(bufferedStreamLogs, CancellationToken.None);
+            await ResetTransactionAsync();
+            await TryFlushLogsForRecoveryAsync(bufferedStreamLogs);
             return await FailAsync(
                 run,
                 BuildRunStatus.Interrupted,
@@ -275,7 +279,8 @@ internal sealed class BuildRunExecutionService(
         }
         catch (OperationCanceledException)
         {
-            await FlushLogsAsync(bufferedStreamLogs, CancellationToken.None);
+            await ResetTransactionAsync();
+            await TryFlushLogsForRecoveryAsync(bufferedStreamLogs);
             return await FailAsync(
                 run,
                 BuildRunStatus.TimedOut,
@@ -286,7 +291,8 @@ internal sealed class BuildRunExecutionService(
         }
         catch (Exception ex)
         {
-            await FlushLogsAsync(bufferedStreamLogs, CancellationToken.None);
+            await ResetTransactionAsync();
+            await TryFlushLogsForRecoveryAsync(bufferedStreamLogs);
             return await FailAsync(
                 run,
                 BuildRunStatus.Failed,
@@ -447,25 +453,34 @@ internal sealed class BuildRunExecutionService(
     }
 
     private static Result<BuildProcessRegistryCredential?> ResolveRegistryCredential(Registry registry, string registryHost)
-        => registry.Configuration switch
+    {
+        var credentialResult = registry.Configuration switch
         {
             GitHubRegistry github when github.GhcrAuthEnabled == true && !string.IsNullOrWhiteSpace(github.PAT)
-                => new BuildProcessRegistryCredential(registryHost, github.NameSpace, github.PAT),
+                => Result.Success<string?>(github.GetRegistryAuth(registryHost)),
             GitHubRegistry
-                => Result.Failure<BuildProcessRegistryCredential?>("GitHub Container Registry pushes require GHCR authentication and a PAT."),
+                => Result.Failure<string?>("GitHub Container Registry pushes require GHCR authentication and a PAT."),
             DockerHubRegistry dockerHub when !string.IsNullOrWhiteSpace(dockerHub.UserName) && !string.IsNullOrWhiteSpace(dockerHub.PAT)
-                => new BuildProcessRegistryCredential(registryHost, dockerHub.UserName, dockerHub.PAT),
+                => Result.Success<string?>(dockerHub.GetRegistryAuth(registryHost)),
             DockerHubRegistry
-                => Result.Failure<BuildProcessRegistryCredential?>("Docker Hub pushes require a username and PAT."),
+                => Result.Failure<string?>("Docker Hub pushes require a username and PAT."),
             CustomRegistry { AuthEnabled: true } custom when !string.IsNullOrWhiteSpace(custom.UserName) && !string.IsNullOrWhiteSpace(custom.Password)
-                => new BuildProcessRegistryCredential(registryHost, custom.UserName, custom.Password),
+                => Result.Success<string?>(custom.GetRegistryAuth(registryHost)),
             CustomRegistry { AuthEnabled: true }
-                => Result.Failure<BuildProcessRegistryCredential?>("Custom registry authentication requires a username and password."),
+                => Result.Failure<string?>("Custom registry authentication requires a username and password."),
             CustomRegistry
-                => Result.Success<BuildProcessRegistryCredential?>(null),
+                => Result.Success<string?>(null),
             _
-                => Result.Failure<BuildProcessRegistryCredential?>($"Registry type '{registry.Configuration.GetType().Name}' does not support Docker CLI pushes yet.")
+                => Result.Failure<string?>($"Registry type '{registry.Configuration.GetType().Name}' does not support Docker image pushes yet.")
         };
+
+        if (!credentialResult.IsSuccess(out var registryAuth, out var error))
+            return Result.Failure<BuildProcessRegistryCredential?>(error!);
+
+        return string.IsNullOrWhiteSpace(registryAuth)
+            ? Result.Success<BuildProcessRegistryCredential?>(null)
+            : new BuildProcessRegistryCredential(registryHost, registryAuth);
+    }
 
     private async Task<Result> FailAsync(
         BuildRun run,
@@ -511,7 +526,7 @@ internal sealed class BuildRunExecutionService(
         var entry = NewLogEntry(runId, stream, message);
         await unitOfWork.BuildRunLogs.AddAsync(entry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
-        await buildRunStreamManager.SendBuildRunLogs(runId, [entry]);
+        await SendBuildRunLogsSafeAsync(runId, new[] { entry });
     }
 
     private async Task FlushLogsAsync(List<BuildRunLogEntry>? entries, CancellationToken cancellationToken)
@@ -523,11 +538,53 @@ internal sealed class BuildRunExecutionService(
         await unitOfWork.BuildRunLogs.AddRangeAsync(flushed, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         entries.Clear();
-        await buildRunStreamManager.SendBuildRunLogs(flushed[0].BuildRunId, flushed);
+        await SendBuildRunLogsSafeAsync(flushed[0].BuildRunId, flushed);
+    }
+
+    private async Task TryFlushLogsForRecoveryAsync(List<BuildRunLogEntry>? entries)
+    {
+        try
+        {
+            await FlushLogsAsync(entries, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to flush buffered build run logs during recovery.");
+            await ResetTransactionAsync();
+        }
+    }
+
+    private async Task ResetTransactionAsync()
+    {
+        try
+        {
+            await unitOfWork.RollbackAsync();
+        }
+        catch (Exception rollbackError)
+        {
+            logger.LogWarning(rollbackError, "Failed to rollback build run transaction before writing recovery state.");
+        }
+    }
+
+    private async Task SendBuildRunLogsSafeAsync(Guid runId, BuildRunLogEntry[] entries)
+    {
+        try
+        {
+            await buildRunStreamManager.SendBuildRunLogs(runId, entries);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to stream build run logs for {BuildRunId}. Persisted logs are still available.", runId);
+        }
     }
 
     private static BuildRunLogEntry NewLogEntry(Guid runId, string stream, string message)
-        => new(Guid.CreateVersion7(), runId, DateTimeOffset.UtcNow, stream, message);
+        => new(Guid.CreateVersion7(), runId, DateTimeOffset.UtcNow, stream, RemovePostgresNullBytes(message));
+
+    private static string RemovePostgresNullBytes(string value)
+        => value.Contains('\0', StringComparison.Ordinal)
+            ? value.Replace("\0", string.Empty, StringComparison.Ordinal)
+            : value;
 
     private static string NormalizeRegistryHost(string registryHost)
         => registryHost

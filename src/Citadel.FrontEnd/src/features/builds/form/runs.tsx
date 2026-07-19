@@ -1,6 +1,6 @@
 import { ActorType, BuildProjectView, BuildRunLogEntry, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
 import { ContentCard } from '@/components/custom/content-card';
-import { LogViewer } from '@/components/custom/common';
+import { LogViewer, type LogEntry } from '@/components/custom/common';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
@@ -33,7 +33,7 @@ import {
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
-import { formatBuildRunLogEntry, mergeBuildRunLogEntries } from '../build-run-logs';
+import { formatBuildRunLogViewerEntry, mergeBuildRunLogEntries } from '../build-run-logs';
 import { isActiveBuildRun, isTerminalBuildRunStatus, pickMostAdvancedBuildRun } from '../build-run-state';
 
 export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
@@ -87,7 +87,7 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
     const liveLogs = liveLogState.runId === logRunId ? liveLogState.entries : [];
     return mergeBuildRunLogEntries(logs.data?.data.logs ?? [], liveLogs);
   }, [liveLogState, logRunId, logs.data?.data.logs]);
-  const logText = useMemo(() => logEntries.map(formatBuildRunLogEntry).join('\n'), [logEntries]);
+  const logViewerEntries = useMemo(() => logEntries.map(formatBuildRunLogViewerEntry), [logEntries]);
 
   const upsertRun = useCallback((run: BuildRunView, action: string) => {
     setRuns((prev) => {
@@ -214,7 +214,7 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
       <BuildRunLogsSheet
         open={Boolean(logRunId)}
         run={selectedRun}
-        logs={logText}
+        logs={logViewerEntries}
         logEntryCount={logEntries.length}
         isLoading={logs.isLoading}
         cancelPending={cancelRun.isPending}
@@ -334,7 +334,7 @@ function BuildRunLogsSheet({
 }: {
   open: boolean;
   run?: BuildRunView;
-  logs: string;
+  logs: LogEntry[];
   logEntryCount: number;
   isLoading: boolean;
   cancelPending: boolean;
@@ -421,8 +421,8 @@ function BuildRunLogsSheet({
             ) : null}
 
             <LogViewer
-              logs={isLoading ? '' : logs}
-              autoScroll={active}
+              logs={isLoading ? [] : logs}
+              autoScroll
               allowWrap
               timeStamps
               className="h-[min(48dvh,440px)] max-h-none bg-background"

@@ -188,9 +188,10 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         if (entries.Count == 0)
             return Task.CompletedTask;
 
+        var payload = entries as BuildRunLogEntry[] ?? entries.ToArray();
         return hubContext.Clients
             .Group(WellKnownSignalRGroups.BuildRunGroup(runId))
-            .SendAsync("BuildRunLogsAppended", runId, entries);
+            .SendAsync("BuildRunLogsAppended", runId, payload);
     }
     #endregion
 

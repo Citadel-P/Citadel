@@ -12,6 +12,7 @@ using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Hosting.Common.Abstraction;
 using LightResults;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Tests.Unit.Application.Features.Builds;
@@ -201,7 +202,8 @@ public sealed class BuildRunStartTests
             Mock.Of<IExternalSecretProviderClient>(),
             Mock.Of<IBuildProjectStreamManager>(),
             Mock.Of<IBuildRunStreamManager>(),
-            Mock.Of<IBuildRunRetentionService>());
+            Mock.Of<IBuildRunRetentionService>(),
+            NullLogger<BuildRunExecutionService>.Instance);
         var runId = Guid.CreateVersion7();
 
         unitOfWork.SetupGet(x => x.BuildRuns).Returns(buildRuns.Object);

@@ -1,187 +1,124 @@
 using Domain.Contracts.Interfaces;
+using Hosting.DockerClient.Models.Images;
 using Hosting.DockerClient.Services;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Text;
 
 namespace Infrastructure.Repositories;
 
-internal sealed partial class BuildProcessRunner(ICommandExecutor commandExecutor) : IBuildProcessRunner
+internal sealed partial class BuildProcessRunner(IImageService imageService) : IBuildProcessRunner
 {
     public async IAsyncEnumerable<BuildProcessEvent> RunAsync(
         BuildProcessCommand command,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), "citadel-builds", Guid.NewGuid().ToString("N"));
-        var dockerConfigDirectory = PrepareDockerConfig(command, tempRoot);
-        var secretFiles = PrepareSecretFiles(command, tempRoot);
-        var environment = new Dictionary<string, string>(StringComparer.Ordinal)
+        if (command.Secrets.Count > 0)
         {
-            ["DOCKER_BUILDKIT"] = "1"
-        };
+            yield return new BuildProcessEvent(
+                BuildProcessStream.StdErr,
+                "Build secrets are not supported by Docker Engine API builds yet. Remove build secrets or use a BuildKit-native builder.");
+            yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 1);
+            yield break;
+        }
 
         using var timeoutCts = new CancellationTokenSource(command.Timeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
         var ct = linkedCts.Token;
+
         string? digest = null;
 
-        try
+        yield return new BuildProcessEvent(BuildProcessStream.StdOut, "Starting Docker build.");
+        var buildFailed = false;
+        await foreach (var message in imageService.StreamBuildImage(ToBuildImageCommand(command), ct))
         {
-            yield return new BuildProcessEvent(BuildProcessStream.StdOut, "Starting Docker build.");
-            var buildExitCode = 0;
-            await foreach (var output in commandExecutor.StreamAsync(
-                               "docker",
-                               BuildArgs(command, secretFiles),
-                               environment,
-                               command.WorkingDirectory,
-                               dockerConfigDirectory,
-                               ct))
+            foreach (var item in MapMessage(message, command))
             {
-                if (output.StdOut is not null)
-                    yield return new BuildProcessEvent(BuildProcessStream.StdOut, Sanitize(output.StdOut, command));
-
-                if (output.StdErr is not null)
-                    yield return new BuildProcessEvent(BuildProcessStream.StdErr, Sanitize(output.StdErr, command));
-
-                if (output.ExitCode.HasValue)
-                    buildExitCode = output.ExitCode.Value;
+                if (item.Stream is BuildProcessStream.StdErr)
+                    buildFailed = true;
+                yield return item;
             }
-
-            if (buildExitCode != 0)
-            {
-                yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: buildExitCode);
-                yield break;
-            }
-
-            foreach (var imageReference in command.ImageReferences)
-            {
-                yield return new BuildProcessEvent(BuildProcessStream.StdOut, $"Pushing {imageReference}.");
-                var pushExitCode = 0;
-                await foreach (var output in commandExecutor.StreamAsync(
-                                   "docker",
-                                   ["push", imageReference],
-                                   environment,
-                                   command.WorkingDirectory,
-                                   dockerConfigDirectory,
-                                   ct))
-                {
-                    if (output.StdOut is not null)
-                    {
-                        var message = Sanitize(output.StdOut, command);
-                        digest ??= TryParseDigest(message);
-                        yield return new BuildProcessEvent(BuildProcessStream.StdOut, message);
-                    }
-
-                    if (output.StdErr is not null)
-                    {
-                        var message = Sanitize(output.StdErr, command);
-                        digest ??= TryParseDigest(message);
-                        yield return new BuildProcessEvent(BuildProcessStream.StdErr, message);
-                    }
-
-                    if (output.ExitCode.HasValue)
-                        pushExitCode = output.ExitCode.Value;
-                }
-
-                if (pushExitCode != 0)
-                {
-                    yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: pushExitCode, Digest: digest);
-                    yield break;
-                }
-            }
-
-            yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: digest);
         }
-        finally
-        {
-            TryDelete(tempRoot);
-        }
-    }
 
-    private static IReadOnlyList<string> BuildArgs(
-        BuildProcessCommand command,
-        IReadOnlyDictionary<string, string> secretFiles)
-    {
-        var args = new List<string>
+        if (buildFailed)
         {
-            "build",
-            "--progress=plain",
-            "-f",
-            command.DockerfilePath
-        };
-
-        if (!string.IsNullOrWhiteSpace(command.Target))
-        {
-            args.Add("--target");
-            args.Add(command.Target);
+            yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 1);
+            yield break;
         }
 
         foreach (var imageReference in command.ImageReferences)
         {
-            args.Add("-t");
-            args.Add(imageReference);
+            yield return new BuildProcessEvent(BuildProcessStream.StdOut, $"Pushing {imageReference}.");
+            var pushFailed = false;
+            await foreach (var message in imageService.StreamPushImage(ToPushImageCommand(command, imageReference), ct))
+            {
+                foreach (var item in MapMessage(message, command))
+                {
+                    if (item.Message is not null)
+                        digest ??= TryParseDigest(item.Message);
+                    if (item.Stream is BuildProcessStream.StdErr)
+                        pushFailed = true;
+                    yield return item;
+                }
+            }
+
+            if (pushFailed)
+            {
+                yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 1, Digest: digest);
+                yield break;
+            }
         }
 
-        foreach (var buildArg in command.BuildArgs)
-        {
-            args.Add("--build-arg");
-            args.Add($"{buildArg.Name}={buildArg.Value}");
-        }
-
-        foreach (var kv in secretFiles)
-        {
-            args.Add("--secret");
-            args.Add($"id={kv.Key},src={kv.Value}");
-        }
-
-        args.Add(command.ContextPath);
-        return args;
+        yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: digest);
     }
 
-    private static string? PrepareDockerConfig(BuildProcessCommand command, string tempRoot)
+    private static BuildImageStreamCommand ToBuildImageCommand(BuildProcessCommand command)
+        => new(
+            command.ContextPath,
+            command.DockerfilePath,
+            command.ImageReferences,
+            command.BuildArgs.ToDictionary(static x => x.Name, static x => x.Value, StringComparer.Ordinal),
+            command.Target,
+            command.RegistryCredential?.RegistryAuth,
+            command.RegistryCredential?.RegistryHost,
+            command.Timeout,
+            command.MaxLineBytes);
+
+    private static PushImageStreamCommand ToPushImageCommand(BuildProcessCommand command, string imageReference)
+        => new(imageReference, command.RegistryCredential?.RegistryAuth);
+
+    private static IEnumerable<BuildProcessEvent> MapMessage(Hosting.DockerClient.HttpClient.JSONMessage message, BuildProcessCommand command)
     {
-        if (command.RegistryCredential is null)
-            return null;
-
-        var credential = command.RegistryCredential;
-        var dockerConfigDirectory = Path.Combine(tempRoot, "docker-config");
-        Directory.CreateDirectory(dockerConfigDirectory);
-        var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{credential.UserName}:{credential.Password}"));
-        var config = "{\"auths\":{\""
-                     + EscapeJson(credential.RegistryHost)
-                     + "\":{\"auth\":\""
-                     + EscapeJson(auth)
-                     + "\"}}}";
-        File.WriteAllText(Path.Combine(dockerConfigDirectory, "config.json"), config);
-        return dockerConfigDirectory;
-    }
-
-    private static IReadOnlyDictionary<string, string> PrepareSecretFiles(BuildProcessCommand command, string tempRoot)
-    {
-        if (command.Secrets.Count == 0)
-            return new Dictionary<string, string>();
-
-        var secretDirectory = Path.Combine(tempRoot, "secrets");
-        Directory.CreateDirectory(secretDirectory);
-        var files = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var secret in command.Secrets)
+        if (!string.IsNullOrWhiteSpace(message.ErrorMessage) || message.Error is not null)
         {
-            var path = Path.Combine(secretDirectory, SanitizeFileName(secret.Id));
-            File.WriteAllText(path, secret.Value);
-            files[secret.Id] = path;
+            yield return new BuildProcessEvent(
+                BuildProcessStream.StdErr,
+                Sanitize(message.ErrorMessage ?? message.Error?.Message ?? "Docker API returned an error.", command));
+            yield break;
         }
 
-        return files;
+        if (!string.IsNullOrWhiteSpace(message.Stream))
+            yield return new BuildProcessEvent(BuildProcessStream.StdOut, Sanitize(message.Stream.TrimEnd(), command));
+
+        if (!string.IsNullOrWhiteSpace(message.Status))
+        {
+            var line = string.IsNullOrWhiteSpace(message.ID)
+                ? message.Status
+                : $"{message.ID}: {message.Status}";
+
+            if (!string.IsNullOrWhiteSpace(message.ProgressMessage))
+                line += $" {message.ProgressMessage}";
+
+            yield return new BuildProcessEvent(BuildProcessStream.StdOut, Sanitize(line, command));
+        }
     }
 
     private static string Sanitize(string value, BuildProcessCommand command)
     {
-        var sanitized = AnsiRegex().Replace(value, string.Empty);
+        var sanitized = AnsiRegex().Replace(value, string.Empty).Replace("\0", string.Empty, StringComparison.Ordinal);
         var redactionValues = command.Secrets
             .Select(static x => x.Value)
             .Concat(command.BuildArgs.Select(static x => x.Value))
-            .Append(command.RegistryCredential?.Password ?? string.Empty)
+            .Append(command.RegistryCredential?.RegistryAuth ?? string.Empty)
             .Where(static x => !string.IsNullOrEmpty(x))
             .Distinct(StringComparer.Ordinal)
             .OrderByDescending(static x => x.Length);
@@ -200,24 +137,6 @@ internal sealed partial class BuildProcessRunner(ICommandExecutor commandExecuto
     {
         var match = DigestRegex().Match(message);
         return match.Success ? match.Value : null;
-    }
-
-    private static string SanitizeFileName(string value)
-        => string.Concat(value.Select(static ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.' ? ch : '_'));
-
-    private static string EscapeJson(string value)
-        => JsonEncodedText.Encode(value).ToString();
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-        }
-        catch
-        {
-        }
     }
 
     [GeneratedRegex(@"\x1B\[[0-?]*[ -/]*[@-~]", RegexOptions.Compiled)]
