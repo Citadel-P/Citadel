@@ -51,6 +51,43 @@ internal class LocalImageConnector(IImageService imageService) : IImageConnector
         }
     }
 
+    public async IAsyncEnumerable<ImageBuildStreamItem> BuildImageProgressStreamAsync(
+        BuildImageCommand buildImageCommand,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var command = new Hosting.DockerClient.Models.Images.BuildImageStreamCommand(
+            ContextDirectory: buildImageCommand.ContextDirectory,
+            DockerfilePath: buildImageCommand.DockerfilePath,
+            Tags: buildImageCommand.Tags,
+            BuildArgs: buildImageCommand.BuildArgs,
+            Target: buildImageCommand.Target,
+            RegistryAuth: buildImageCommand.RegistryAuth,
+            RegistryHost: buildImageCommand.RegistryHost,
+            Timeout: buildImageCommand.Timeout,
+            MaxLineBytes: buildImageCommand.MaxLineBytes,
+            ContextArchive: buildImageCommand.ContextArchive,
+            DockerfileArchivePath: buildImageCommand.DockerfileArchivePath);
+
+        await foreach (var message in imageService.StreamBuildImage(command, cancellationToken))
+        {
+            yield return MapBuildMessage(message);
+        }
+    }
+
+    public async IAsyncEnumerable<ImageBuildStreamItem> PushImageProgressStreamAsync(
+        PushImageCommand pushImageCommand,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var command = new Hosting.DockerClient.Models.Images.PushImageStreamCommand(
+            pushImageCommand.ImageReference,
+            pushImageCommand.RegistryAuth);
+
+        await foreach (var message in imageService.StreamPushImage(command, cancellationToken))
+        {
+            yield return MapBuildMessage(message);
+        }
+    }
+
     public async Task<Result<IEnumerable<HistoryImageResult>>> HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken)
     {
         var result = await imageService.HistoryAsync(command.ImageId, cancellationToken);
@@ -68,4 +105,18 @@ internal class LocalImageConnector(IImageService imageService) : IImageConnector
         var result = await imageService.DistributionInspectAsync(command.ImageName, command.Auth, cancellationToken);
         return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
     }
+
+    private static ImageBuildStreamItem MapBuildMessage(Hosting.DockerClient.HttpClient.JSONMessage message)
+        => new(
+            message.ID,
+            message.Stream,
+            message.Status,
+            message.ErrorMessage,
+            message.ProgressMessage,
+            message.Progress is null ? null : new ImageBuildProgress(
+                message.Progress.Units,
+                message.Progress.Current,
+                message.Progress.Total,
+                message.Progress.Start),
+            message.Error is null ? null : new ImageBuildError(message.Error.Code, message.Error.Message));
 }

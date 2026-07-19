@@ -691,6 +691,17 @@ export enum ActivityEventType {
   LicenseExpired = "LicenseExpired",
   LicenseValidationFailed = "LicenseValidationFailed",
   VolumeContentDownloaded = "VolumeContentDownloaded",
+  BuildCreated = "BuildCreated",
+  BuildUpdated = "BuildUpdated",
+  BuildRenamed = "BuildRenamed",
+  BuildDeleted = "BuildDeleted",
+  BuildRunQueued = "BuildRunQueued",
+  BuildRunStarted = "BuildRunStarted",
+  BuildRunSucceeded = "BuildRunSucceeded",
+  BuildRunFailed = "BuildRunFailed",
+  BuildRunTimedOut = "BuildRunTimedOut",
+  BuildRunCancelled = "BuildRunCancelled",
+  BuildWebhookReceived = "BuildWebhookReceived",
 }
 
 export enum ActionRunTrigger {
@@ -1308,6 +1319,50 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "VolumeContentDownloaded",
         ActivityEventInfoVolumeContentDownloaded
       >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildCreated",
+        ActivityEventInfoBuildCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildUpdated",
+        ActivityEventInfoBuildUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildRenamed",
+        ActivityEventInfoBuildRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildDeleted",
+        ActivityEventInfoBuildDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildRunQueued",
+        ActivityEventInfoBuildRunQueued
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildRunStarted",
+        ActivityEventInfoBuildRunStarted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildRunSucceeded",
+        ActivityEventInfoBuildRunSucceeded
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildRunFailed",
+        ActivityEventInfoBuildRunFailed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildRunTimedOut",
+        ActivityEventInfoBuildRunTimedOut
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildRunCancelled",
+        ActivityEventInfoBuildRunCancelled
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildWebhookReceived",
+        ActivityEventInfoBuildWebhookReceived
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -1443,6 +1498,116 @@ export interface ActivityEventInfoAutomationActionUpdated {
   $type?: "ActionUpdated";
   oldAction: AutomationActionSnapshot;
   newAction: AutomationActionSnapshot;
+}
+
+export interface ActivityEventInfoBuildCreated {
+  $type?: "BuildCreated";
+  build: BuildProjectSnapshot;
+}
+
+export interface ActivityEventInfoBuildDeleted {
+  $type?: "BuildDeleted";
+  build: BuildProjectSnapshot;
+}
+
+export interface ActivityEventInfoBuildRenamed {
+  $type?: "BuildRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoBuildRunCancelled {
+  $type?: "BuildRunCancelled";
+  /** @format uuid */
+  runId: string;
+  trigger: BuildRunTrigger;
+}
+
+export interface ActivityEventInfoBuildRunFailed {
+  $type?: "BuildRunFailed";
+  /** @format uuid */
+  runId: string;
+  trigger: BuildRunTrigger;
+  status: BuildRunStatus;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  durationMs: null | number | string;
+  errorMessage: null | string;
+}
+
+export interface ActivityEventInfoBuildRunQueued {
+  $type?: "BuildRunQueued";
+  /** @format uuid */
+  runId: string;
+  trigger: BuildRunTrigger;
+}
+
+export interface ActivityEventInfoBuildRunStarted {
+  $type?: "BuildRunStarted";
+  /** @format uuid */
+  runId: string;
+  trigger: BuildRunTrigger;
+}
+
+export interface ActivityEventInfoBuildRunSucceeded {
+  $type?: "BuildRunSucceeded";
+  /** @format uuid */
+  runId: string;
+  trigger: BuildRunTrigger;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  durationMs: null | number | string;
+  imageDigest: null | string;
+}
+
+export interface ActivityEventInfoBuildRunTimedOut {
+  $type?: "BuildRunTimedOut";
+  /** @format uuid */
+  runId: string;
+  trigger: BuildRunTrigger;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  durationMs: null | number | string;
+  errorMessage: null | string;
+}
+
+export interface ActivityEventInfoBuildUpdated {
+  $type?: "BuildUpdated";
+  oldBuild: BuildProjectSnapshot;
+  newBuild: BuildProjectSnapshot;
+}
+
+export interface ActivityEventInfoBuildWebhookReceived {
+  $type?: "BuildWebhookReceived";
+  /** @format uuid */
+  requestId: string;
+  authType: string;
+  execution: string;
+  status: string;
+  reason: null | string;
+  eventType: null | string;
+  deliveryId: null | string;
+  branch: null | string;
+  commitSha: null | string;
+  repositoryFullName: null | string;
+  dispatchedBranch?: null | string;
+  dispatchedCommitSha?: null | string;
 }
 
 export interface ActivityEventInfoDeploymentApplied {
@@ -3047,6 +3212,7 @@ export interface BuildProjectInput {
   registryId: string;
   imageRepository: string;
   tagTemplates: null | string[];
+  webhook: null | BuildWebhookConfig;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -3058,6 +3224,37 @@ export interface BuildProjectInput {
    */
   retentionRunCount: null | number | string;
   tagIds: null | string[];
+}
+
+export interface BuildProjectSnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  enabled: boolean;
+  /** @format uuid */
+  gitRepositoryId: string;
+  branch: string;
+  contextPath: string;
+  dockerfilePath: string;
+  target: null | string;
+  /** @format uuid */
+  platformId: string;
+  /** @format uuid */
+  registryId: string;
+  imageRepository: string;
+  tagTemplates: string[];
+  webhook: null | BuildWebhookConfig;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  retentionRunCount: number | string;
 }
 
 export interface BuildProjectView {
@@ -3081,6 +3278,7 @@ export interface BuildProjectView {
   registryId: string;
   imageRepository: string;
   tagTemplates: string[];
+  webhook: null | BuildWebhookConfig;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -3196,6 +3394,15 @@ export interface BuildSecretSpec {
   id: string;
   /** @format uuid */
   secretId: string;
+}
+
+export interface BuildWebhookConfig {
+  /** @default false */
+  enabled?: boolean;
+  provider?: WebhookProvider;
+  authScheme?: WebhookAuthScheme;
+  secret?: null | string;
+  branchFilter?: null | string;
 }
 
 export interface ChangeCurrentPasswordInput {
@@ -6288,6 +6495,7 @@ export interface UpdateBuildProjectInput {
   registryId?: null | string;
   imageRepository?: null | string;
   tagTemplates?: null | string[];
+  webhook?: null | BuildWebhookConfig;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$

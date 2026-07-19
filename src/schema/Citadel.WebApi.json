@@ -28860,6 +28860,39 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoVolumeContentDownloaded"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildRunQueued"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildRunStarted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildRunSucceeded"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildRunFailed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildRunTimedOut"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildRunCancelled"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildWebhookReceived"
           }
         ],
         "discriminator": {
@@ -28945,7 +28978,18 @@
             "LicenseEnteredGracePeriod": "#/components/schemas/ActivityEventInfoLicenseEnteredGracePeriod",
             "LicenseExpired": "#/components/schemas/ActivityEventInfoLicenseExpired",
             "LicenseValidationFailed": "#/components/schemas/ActivityEventInfoLicenseValidationFailed",
-            "VolumeContentDownloaded": "#/components/schemas/ActivityEventInfoVolumeContentDownloaded"
+            "VolumeContentDownloaded": "#/components/schemas/ActivityEventInfoVolumeContentDownloaded",
+            "BuildCreated": "#/components/schemas/ActivityEventInfoBuildCreated",
+            "BuildUpdated": "#/components/schemas/ActivityEventInfoBuildUpdated",
+            "BuildRenamed": "#/components/schemas/ActivityEventInfoBuildRenamed",
+            "BuildDeleted": "#/components/schemas/ActivityEventInfoBuildDeleted",
+            "BuildRunQueued": "#/components/schemas/ActivityEventInfoBuildRunQueued",
+            "BuildRunStarted": "#/components/schemas/ActivityEventInfoBuildRunStarted",
+            "BuildRunSucceeded": "#/components/schemas/ActivityEventInfoBuildRunSucceeded",
+            "BuildRunFailed": "#/components/schemas/ActivityEventInfoBuildRunFailed",
+            "BuildRunTimedOut": "#/components/schemas/ActivityEventInfoBuildRunTimedOut",
+            "BuildRunCancelled": "#/components/schemas/ActivityEventInfoBuildRunCancelled",
+            "BuildWebhookReceived": "#/components/schemas/ActivityEventInfoBuildWebhookReceived"
           }
         }
       },
@@ -29305,6 +29349,362 @@
           },
           "newAction": {
             "$ref": "#/components/schemas/AutomationActionSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBuildCreated": {
+        "required": [
+          "build"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildCreated"
+            ],
+            "type": "string"
+          },
+          "build": {
+            "$ref": "#/components/schemas/BuildProjectSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBuildDeleted": {
+        "required": [
+          "build"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildDeleted"
+            ],
+            "type": "string"
+          },
+          "build": {
+            "$ref": "#/components/schemas/BuildProjectSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBuildRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoBuildRunCancelled": {
+        "required": [
+          "runId",
+          "trigger"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildRunCancelled"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BuildRunTrigger"
+          }
+        }
+      },
+      "ActivityEventInfoBuildRunFailed": {
+        "required": [
+          "runId",
+          "trigger",
+          "status",
+          "exitCode",
+          "durationMs",
+          "errorMessage"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildRunFailed"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BuildRunTrigger"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BuildRunStatus"
+          },
+          "exitCode": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivityEventInfoBuildRunQueued": {
+        "required": [
+          "runId",
+          "trigger"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildRunQueued"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BuildRunTrigger"
+          }
+        }
+      },
+      "ActivityEventInfoBuildRunStarted": {
+        "required": [
+          "runId",
+          "trigger"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildRunStarted"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BuildRunTrigger"
+          }
+        }
+      },
+      "ActivityEventInfoBuildRunSucceeded": {
+        "required": [
+          "runId",
+          "trigger",
+          "exitCode",
+          "durationMs",
+          "imageDigest"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildRunSucceeded"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BuildRunTrigger"
+          },
+          "exitCode": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "imageDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivityEventInfoBuildRunTimedOut": {
+        "required": [
+          "runId",
+          "trigger",
+          "durationMs",
+          "errorMessage"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildRunTimedOut"
+            ],
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BuildRunTrigger"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivityEventInfoBuildUpdated": {
+        "required": [
+          "oldBuild",
+          "newBuild"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildUpdated"
+            ],
+            "type": "string"
+          },
+          "oldBuild": {
+            "$ref": "#/components/schemas/BuildProjectSnapshot"
+          },
+          "newBuild": {
+            "$ref": "#/components/schemas/BuildProjectSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBuildWebhookReceived": {
+        "required": [
+          "requestId",
+          "authType",
+          "execution",
+          "status",
+          "reason",
+          "eventType",
+          "deliveryId",
+          "branch",
+          "commitSha",
+          "repositoryFullName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildWebhookReceived"
+            ],
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authType": {
+            "type": "string"
+          },
+          "execution": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "eventType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deliveryId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "commitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "repositoryFullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dispatchedBranch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dispatchedCommitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -30772,7 +31172,18 @@
           "LicenseEnteredGracePeriod",
           "LicenseExpired",
           "LicenseValidationFailed",
-          "VolumeContentDownloaded"
+          "VolumeContentDownloaded",
+          "BuildCreated",
+          "BuildUpdated",
+          "BuildRenamed",
+          "BuildDeleted",
+          "BuildRunQueued",
+          "BuildRunStarted",
+          "BuildRunSucceeded",
+          "BuildRunFailed",
+          "BuildRunTimedOut",
+          "BuildRunCancelled",
+          "BuildWebhookReceived"
         ]
       },
       "ActivityResourceType": {
@@ -35190,6 +35601,7 @@
           "registryId",
           "imageRepository",
           "tagTemplates",
+          "webhook",
           "timeoutSeconds",
           "retentionRunCount",
           "tagIds"
@@ -35274,6 +35686,16 @@
               "type": "string"
             }
           },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildWebhookConfig"
+              }
+            ]
+          },
           "timeoutSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
@@ -35304,6 +35726,107 @@
           }
         }
       },
+      "BuildProjectSnapshot": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "enabled",
+          "gitRepositoryId",
+          "branch",
+          "contextPath",
+          "dockerfilePath",
+          "target",
+          "platformId",
+          "registryId",
+          "imageRepository",
+          "tagTemplates",
+          "webhook",
+          "timeoutSeconds",
+          "retentionRunCount"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "gitRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "contextPath": {
+            "type": "string"
+          },
+          "dockerfilePath": {
+            "type": "string"
+          },
+          "target": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "registryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "imageRepository": {
+            "type": "string"
+          },
+          "tagTemplates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildWebhookConfig"
+              }
+            ]
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "retentionRunCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "BuildProjectView": {
         "required": [
           "id",
@@ -35322,6 +35845,7 @@
           "registryId",
           "imageRepository",
           "tagTemplates",
+          "webhook",
           "timeoutSeconds",
           "retentionRunCount",
           "currentRunId",
@@ -35403,6 +35927,16 @@
             "items": {
               "type": "string"
             }
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildWebhookConfig"
+              }
+            ]
           },
           "timeoutSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -35771,6 +36305,33 @@
           "secretId": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "BuildWebhookConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "provider": {
+            "$ref": "#/components/schemas/WebhookProvider"
+          },
+          "authScheme": {
+            "$ref": "#/components/schemas/WebhookAuthScheme"
+          },
+          "secret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branchFilter": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -47735,6 +48296,16 @@
             "items": {
               "type": "string"
             }
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildWebhookConfig"
+              }
+            ]
           },
           "timeoutSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",

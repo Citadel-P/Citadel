@@ -98,6 +98,52 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
         }
     }
 
+    public async IAsyncEnumerable<ImageBuildStreamItem> BuildImageProgressStreamAsync(
+        BuildImageCommand command,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var client = clientFactory.GetImageClient(command.PlatformAddress);
+        var request = new BuildImageRequest
+        {
+            ContextDirectory = command.ContextDirectory,
+            DockerfilePath = command.DockerfilePath,
+            Target = command.Target,
+            RegistryAuth = command.RegistryAuth,
+            RegistryHost = command.RegistryHost,
+            TimeoutSeconds = (int)command.Timeout.TotalSeconds,
+            MaxLineBytes = command.MaxLineBytes,
+            DockerfileArchivePath = command.DockerfileArchivePath
+        };
+        request.Tags.AddRange(command.Tags);
+        request.BuildArgs.Add(command.BuildArgs.ToDictionary());
+        if (command.ContextArchive is { Length: > 0 })
+            request.ContextArchive = Google.Protobuf.ByteString.CopyFrom(command.ContextArchive);
+
+        using var stream = client.Build(request, cancellationToken: cancellationToken);
+        await foreach (var reply in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        {
+            yield return reply.Map();
+        }
+    }
+
+    public async IAsyncEnumerable<ImageBuildStreamItem> PushImageProgressStreamAsync(
+        PushImageCommand command,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var client = clientFactory.GetImageClient(command.PlatformAddress);
+        var request = new PushImageRequest
+        {
+            ImageReference = command.ImageReference,
+            RegistryAuth = command.RegistryAuth
+        };
+
+        using var stream = client.Push(request, cancellationToken: cancellationToken);
+        await foreach (var reply in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        {
+            yield return reply.Map();
+        }
+    }
+
     public async Task<Result<IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult>>> HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken)
     {
         try

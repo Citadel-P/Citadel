@@ -42,6 +42,8 @@ import {
   ActivityEventInfoStackRollback,
   ActivityEventInfoGitRepoWebhookReceived,
   ActivityEventInfoStackWebhookReceived,
+  ActivityEventInfoBuildWebhookReceived,
+  BuildProjectSnapshot,
   ApplyStackInput,
   AutomationActionRunStreamItem,
   BackupRunItemStatus,
@@ -474,6 +476,51 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     <SpecViewer spec={info.stack} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
 
+  BuildCreated: (info, activity) => (
+    <SpecViewer
+      spec={stripBuildProjectSecrets(info.build)}
+      resourceId={activity.resourceId}
+      title="Initial configuration"
+    />
+  ),
+
+  BuildUpdated: (info) => (
+    <MonacoDiff
+      original={stripBuildProjectSecrets(info.oldBuild)}
+      modified={stripBuildProjectSecrets(info.newBuild)}
+      format="yaml"
+      title="Configuration changes"
+    />
+  ),
+
+  BuildRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Build renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  BuildDeleted: (info, activity) => (
+    <SpecViewer
+      spec={stripBuildProjectSecrets(info.build)}
+      resourceId={activity.resourceId}
+      title="Deleted configuration"
+    />
+  ),
+
+  BuildRunQueued: (info) => <BuildRunActivityDetails info={info} status="Queued" />,
+
+  BuildRunStarted: (info) => <BuildRunActivityDetails info={info} status="Started" />,
+
+  BuildRunSucceeded: (info) => <BuildRunActivityDetails info={info} status="Succeeded" />,
+
+  BuildRunFailed: (info) => <BuildRunActivityDetails info={info} status="Failed" />,
+
+  BuildRunTimedOut: (info) => <BuildRunActivityDetails info={info} status="Timed out" />,
+
+  BuildRunCancelled: (info) => <BuildRunActivityDetails info={info} status="Cancelled" />,
+
+  BuildWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
+
   AlertRuleUpdated: (info) => (
     <MonacoDiff original={info.oldRule} modified={info.newRule} format="json" title="Configuration changes" />
   ),
@@ -703,6 +750,20 @@ function AutomationRunDetails({ info, status }: { info: any; status: string }) {
   return <KeyValueBlock label="Run details" value={details} />;
 }
 
+function BuildRunActivityDetails({ info, status }: { info: any; status: string }) {
+  const details = [
+    `Status: ${status}`,
+    `Run ID: ${info.runId}`,
+    `Trigger: ${info.trigger}`,
+    info.exitCode !== undefined && info.exitCode !== null ? `Exit code: ${info.exitCode}` : null,
+    info.durationMs !== undefined && info.durationMs !== null ? `Duration: ${formatDurationMs(info.durationMs)}` : null,
+    info.imageDigest ? `Image digest: ${info.imageDigest}` : null,
+    info.errorMessage ? `Error: ${info.errorMessage}` : null,
+  ].filter(Boolean) as string[];
+
+  return <KeyValueBlock label="Run details" value={details} />;
+}
+
 function formatDurationMs(value: unknown) {
   const ms = Number(value);
   if (!Number.isFinite(ms)) return String(value);
@@ -713,7 +774,7 @@ function formatDurationMs(value: unknown) {
 function WebhookActivityDetails({
   info,
 }: {
-  info: ActivityEventInfoGitRepoWebhookReceived | ActivityEventInfoStackWebhookReceived;
+  info: ActivityEventInfoGitRepoWebhookReceived | ActivityEventInfoStackWebhookReceived | ActivityEventInfoBuildWebhookReceived;
 }) {
   const displayReason = formatWebhookReason(info.reason);
   const title =
@@ -733,7 +794,7 @@ function WebhookActivityDetails({
 }
 
 function compactWebhookDetails(
-  info: ActivityEventInfoGitRepoWebhookReceived | ActivityEventInfoStackWebhookReceived,
+  info: ActivityEventInfoGitRepoWebhookReceived | ActivityEventInfoStackWebhookReceived | ActivityEventInfoBuildWebhookReceived,
   message: string,
   reason: string | null | undefined,
 ) {
@@ -777,6 +838,18 @@ function stripStackReleaseSource(stack: StackSnapshot | null | undefined): Stack
   return {
     ...stack,
     stackRelease,
+  };
+}
+
+function stripBuildProjectSecrets(build: BuildProjectSnapshot | null | undefined): BuildProjectSnapshot | null | undefined {
+  if (!build?.webhook?.secret) return build;
+
+  return {
+    ...build,
+    webhook: {
+      ...build.webhook,
+      secret: '********',
+    },
   };
 }
 

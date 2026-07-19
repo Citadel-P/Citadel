@@ -76,7 +76,8 @@ public sealed class BuildRunStartTests
             unitOfWork.Object,
             CreateUserContextAccessor(actorId),
             projectStream.Object,
-            runStream.Object);
+            runStream.Object,
+            Mock.Of<IActivityStreamManager>());
 
         var result = await handler.Handle(
             new QueueBuildRun(project.Id, new QueueBuildRunInputModel(BuildRunTrigger.Manual, null)),
@@ -110,7 +111,8 @@ public sealed class BuildRunStartTests
             unitOfWork.Object,
             CreateUserContextAccessor(actorId),
             Mock.Of<IBuildProjectStreamManager>(),
-            Mock.Of<IBuildRunStreamManager>());
+            Mock.Of<IBuildRunStreamManager>(),
+            Mock.Of<IActivityStreamManager>());
 
         buildProjects
             .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false))
@@ -150,7 +152,8 @@ public sealed class BuildRunStartTests
             unitOfWork.Object,
             CreateUserContextAccessor(actorId),
             projectStream.Object,
-            runStream.Object);
+            runStream.Object,
+            Mock.Of<IActivityStreamManager>());
 
         buildProjects
             .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false))
@@ -202,6 +205,7 @@ public sealed class BuildRunStartTests
             Mock.Of<IExternalSecretProviderClient>(),
             Mock.Of<IBuildProjectStreamManager>(),
             Mock.Of<IBuildRunStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
             Mock.Of<IBuildRunRetentionService>(),
             NullLogger<BuildRunExecutionService>.Instance);
         var runId = Guid.CreateVersion7();
@@ -234,6 +238,16 @@ public sealed class BuildRunStartTests
         unitOfWork.SetupGet(x => x.GitRepositories).Returns(gitRepositories.Object);
         unitOfWork.SetupGet(x => x.Platforms).Returns(platforms.Object);
         unitOfWork.SetupGet(x => x.Registries).Returns(registries.Object);
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents
+            .Setup(x => x.AddAsync(It.IsAny<global::Domain.Entities.Activities.ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        unitOfWork.SetupGet(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        var actors = new Mock<IActorRepository>();
+        actors
+            .Setup(x => x.GetById(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((global::Domain.Entities.Identity.Actor?)null);
+        unitOfWork.SetupGet(x => x.Actors).Returns(actors.Object);
         return unitOfWork;
     }
 
@@ -253,6 +267,7 @@ public sealed class BuildRunStartTests
             Guid.CreateVersion7(),
             "citadel/api",
             ["{branch}-{shortSha}"],
+            null,
             BuildProject.DefaultTimeoutSeconds,
             BuildProject.DefaultRetentionRunCount,
             actorId);

@@ -3,6 +3,7 @@ using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
+using Infrastructure.EdgeAgents;
 using static Citadel.Containers.V1.ContainerService;
 using static Citadel.Images.V1.ImageService;
 using static Citadel.Networks.V1.NetworkService;
@@ -73,6 +74,8 @@ internal class GrpcClientFactory(params Interceptor[] interceptors) : IGrpcClien
     {
         return GrpcChannel.ForAddress(address, new GrpcChannelOptions
         {
+            MaxReceiveMessageSize = EdgeAgentDefaults.MaxEnvelopePayloadBytes,
+            MaxSendMessageSize = EdgeAgentDefaults.MaxEnvelopePayloadBytes,
             ServiceConfig = new ServiceConfig
             {
                 MethodConfigs =

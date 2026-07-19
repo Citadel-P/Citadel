@@ -1,6 +1,7 @@
 import { BuildProjectView, BuildRunStatus } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { ActivitiesTab } from '@/features/activities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { hasCapability } from '@/lib/resource-capabilities';
@@ -58,6 +59,10 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
       {
         label: 'Runs',
         Content: ({ resource }) => <BuildRunsTab resource={resource as BuildProjectView} />,
+      },
+      {
+        label: 'Activities',
+        Content: ({ resource }) => <ActivitiesTab resourceId={(resource as BuildProjectView).id} resourceType="Build" />,
       },
     ],
     useData(id: string) {

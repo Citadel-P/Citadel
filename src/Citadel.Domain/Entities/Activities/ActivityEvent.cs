@@ -166,6 +166,19 @@ public sealed class ActivityEvent : IAuditedEntity
             ActivityEventType.VolumeContentDownloaded
                 => ActivityResourceType.Volume,
 
+            ActivityEventType.BuildCreated
+            or ActivityEventType.BuildUpdated
+            or ActivityEventType.BuildRenamed
+            or ActivityEventType.BuildDeleted
+            or ActivityEventType.BuildRunQueued
+            or ActivityEventType.BuildRunStarted
+            or ActivityEventType.BuildRunSucceeded
+            or ActivityEventType.BuildRunFailed
+            or ActivityEventType.BuildRunTimedOut
+            or ActivityEventType.BuildRunCancelled
+            or ActivityEventType.BuildWebhookReceived
+                => ActivityResourceType.Build,
+
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
         };
@@ -309,6 +322,18 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.LicenseValidationFailed, LicenseValidationFailed) => true,
 
             (ActivityEventType.VolumeContentDownloaded, VolumeContentDownloaded) => true,
+
+            (ActivityEventType.BuildCreated, BuildCreated) => true,
+            (ActivityEventType.BuildUpdated, BuildUpdated) => true,
+            (ActivityEventType.BuildRenamed, BuildRenamed) => true,
+            (ActivityEventType.BuildDeleted, BuildDeleted) => true,
+            (ActivityEventType.BuildRunQueued, BuildRunQueued) => true,
+            (ActivityEventType.BuildRunStarted, BuildRunStarted) => true,
+            (ActivityEventType.BuildRunSucceeded, BuildRunSucceeded) => true,
+            (ActivityEventType.BuildRunFailed, BuildRunFailed) => true,
+            (ActivityEventType.BuildRunTimedOut, BuildRunTimedOut) => true,
+            (ActivityEventType.BuildRunCancelled, BuildRunCancelled) => true,
+            (ActivityEventType.BuildWebhookReceived, BuildWebhookReceived) => true,
 
             _ => false
         };

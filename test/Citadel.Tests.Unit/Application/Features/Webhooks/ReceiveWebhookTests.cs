@@ -8,6 +8,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Backups;
+using Domain.Entities.Builds;
 using Domain.Entities.Git;
 using Domain.Entities.Stacks;
 using Hosting.Common;
@@ -24,6 +25,36 @@ namespace Tests.Unit.Application.Features.Webhooks;
 
 public sealed class ReceiveWebhookTests
 {
+    [Theory]
+    [InlineData("src/Dockerfile", true)]
+    [InlineData("src/app/Program.cs", true)]
+    [InlineData("docs/readme.md", false)]
+    [InlineData("src-old/app.cs", false)]
+    public void BuildWebhookChangeMatcher_ShouldMatchContextOrDockerfileOnly(string changedPath, bool expected)
+    {
+        var project = new BuildProject(
+            name: "api-image",
+            description: null,
+            enabled: true,
+            gitRepositoryId: Guid.CreateVersion7(),
+            branch: "main",
+            contextPath: "src",
+            dockerfilePath: "src/Dockerfile",
+            target: null,
+            buildArgs: [],
+            buildSecrets: [],
+            platformId: Guid.CreateVersion7(),
+            registryId: Guid.CreateVersion7(),
+            imageRepository: "team/api",
+            tagTemplates: ["{branch}-{shortSha}"],
+            webhook: new BuildWebhookConfig(Enabled: true),
+            timeoutSeconds: BuildProject.DefaultTimeoutSeconds,
+            retentionRunCount: BuildProject.DefaultRetentionRunCount,
+            createdByActorId: Constants.SystemId);
+
+        Assert.Equal(expected, BuildWebhookChangeMatcher.HasRelevantChanges(project, [changedPath]));
+    }
+
     [Fact]
     public async Task RepoPull_WithMatchingPush_QueuesWebhookSyncAndMarksRepoProcessing()
     {
@@ -859,6 +890,8 @@ public sealed class ReceiveWebhookTests
             Mock.Of<IActivityStreamManager>(),
             alertService ?? Mock.Of<IAlertService>(),
             applyStackService ?? Mock.Of<IApplyStackService>(),
+            Mock.Of<IBuildProjectStreamManager>(),
+            Mock.Of<IBuildRunStreamManager>(),
             repoCacheManager ?? Mock.Of<IRepoCacheManager>(),
             gitCliRepository ?? Mock.Of<IGitCliRepository>(),
             Mock.Of<IAutomationRunQueueService>(),

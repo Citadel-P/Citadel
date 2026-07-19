@@ -18,6 +18,7 @@ public sealed record BuildProjectInputModel(
     Guid RegistryId,
     string ImageRepository,
     IReadOnlyList<string>? TagTemplates,
+    BuildWebhookConfig? Webhook,
     int? TimeoutSeconds,
     int? RetentionRunCount,
     IReadOnlyCollection<Guid>? TagIds = null);
@@ -36,6 +37,7 @@ public sealed record UpdateBuildProjectInputModel(
     Guid? RegistryId = null,
     string? ImageRepository = null,
     IReadOnlyList<string>? TagTemplates = null,
+    BuildWebhookConfig? Webhook = null,
     int? TimeoutSeconds = null,
     int? RetentionRunCount = null);
 

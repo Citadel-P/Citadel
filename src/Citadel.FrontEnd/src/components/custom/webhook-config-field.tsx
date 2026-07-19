@@ -1,6 +1,7 @@
 import {
   AutomationWebhookConfig,
   BackupWebhookConfig,
+  BuildWebhookConfig,
   RepoWebhookConfig,
   StackWebhookConfig,
   WebhookAuthScheme,
@@ -13,13 +14,18 @@ import { cn } from '@/lib/utils';
 import { CheckCheck, Clipboard, KeyRound } from 'lucide-react';
 import { useState } from 'react';
 
-type WebhookConfigValue = RepoWebhookConfig | StackWebhookConfig | AutomationWebhookConfig | BackupWebhookConfig;
+type WebhookConfigValue =
+  | RepoWebhookConfig
+  | StackWebhookConfig
+  | AutomationWebhookConfig
+  | BackupWebhookConfig
+  | BuildWebhookConfig;
 type WebhookCommonConfig = Pick<RepoWebhookConfig, 'enabled' | 'provider' | 'authScheme' | 'secret' | 'branchFilter'>;
 type NormalizedWebhookConfig = Required<Pick<WebhookCommonConfig, 'enabled' | 'provider' | 'authScheme'>> &
   Pick<WebhookCommonConfig, 'secret' | 'branchFilter'>;
 
 type WebhookConfigFieldProps = {
-  resourceType: 'repo' | 'stack' | 'automation-action' | 'backup-policy';
+  resourceType: 'repo' | 'stack' | 'automation-action' | 'backup-policy' | 'build';
   resourceId?: string;
   execution: 'pull' | 'deploy' | 'run';
   value?: WebhookConfigValue | null;

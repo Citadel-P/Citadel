@@ -61,7 +61,8 @@ public static class Builds
                 input.ToModel(),
                 patchInput.ContainsProperty("description"),
                 patchInput.ContainsProperty("buildArgs"),
-                patchInput.ContainsProperty("buildSecrets")),
+                patchInput.ContainsProperty("buildSecrets"),
+                patchInput.ContainsProperty("webhook")),
             cancellationToken);
 
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, BuildProjectView.Map);

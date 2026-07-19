@@ -202,4 +202,126 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
             }
         }
     }
+
+    public async IAsyncEnumerable<ImageBuildStreamItem> BuildImageProgressStreamAsync(
+        BuildImageCommand buildImageCommand,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (!EdgeConnectorHelpers.TryGetPlatformId(buildImageCommand.PlatformAddress, out var platformId, out _))
+        {
+            yield return new ImageBuildStreamItem(
+                Id: null,
+                Stream: null,
+                Status: "error",
+                ErrorMessage: "Edge Agent platform address is invalid.",
+                ProgressMessage: null,
+                Progress: null,
+                Error: new ImageBuildError(400, "Edge Agent platform address is invalid."));
+            yield break;
+        }
+
+        var request = new BuildImageRequest
+        {
+            ContextDirectory = buildImageCommand.ContextDirectory,
+            DockerfilePath = buildImageCommand.DockerfilePath,
+            Target = buildImageCommand.Target,
+            RegistryAuth = buildImageCommand.RegistryAuth,
+            RegistryHost = buildImageCommand.RegistryHost,
+            TimeoutSeconds = (int)buildImageCommand.Timeout.TotalSeconds,
+            MaxLineBytes = buildImageCommand.MaxLineBytes,
+            DockerfileArchivePath = buildImageCommand.DockerfileArchivePath
+        };
+        request.Tags.AddRange(buildImageCommand.Tags);
+        request.BuildArgs.Add(buildImageCommand.BuildArgs.ToDictionary());
+        if (buildImageCommand.ContextArchive is { Length: > 0 })
+            request.ContextArchive = ByteString.CopyFrom(buildImageCommand.ContextArchive);
+
+        await foreach (var item in commandRouter.SendServerStreamAsync(
+                           platformId,
+                           EdgeAgentCommandKind.ImageBuildStream,
+                           request.ToByteArray(),
+                           buildImageCommand.Timeout,
+                           correlationId: null,
+                           cancellationToken))
+        {
+            if (item.ErrorMessage is not null)
+            {
+                yield return new ImageBuildStreamItem(
+                    Id: null,
+                    Stream: null,
+                    Status: "error",
+                    ErrorMessage: item.ErrorMessage,
+                    ProgressMessage: null,
+                    Progress: null,
+                    Error: new ImageBuildError(500, item.ErrorMessage));
+                yield break;
+            }
+
+            if (item.Completed)
+            {
+                yield break;
+            }
+
+            if (item.Payload is { Length: > 0 })
+            {
+                yield return ImageBuildResponse.Parser.ParseFrom(item.Payload).Map();
+            }
+        }
+    }
+
+    public async IAsyncEnumerable<ImageBuildStreamItem> PushImageProgressStreamAsync(
+        PushImageCommand pushImageCommand,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (!EdgeConnectorHelpers.TryGetPlatformId(pushImageCommand.PlatformAddress, out var platformId, out _))
+        {
+            yield return new ImageBuildStreamItem(
+                Id: null,
+                Stream: null,
+                Status: "error",
+                ErrorMessage: "Edge Agent platform address is invalid.",
+                ProgressMessage: null,
+                Progress: null,
+                Error: new ImageBuildError(400, "Edge Agent platform address is invalid."));
+            yield break;
+        }
+
+        var request = new PushImageRequest
+        {
+            ImageReference = pushImageCommand.ImageReference,
+            RegistryAuth = pushImageCommand.RegistryAuth
+        };
+
+        await foreach (var item in commandRouter.SendServerStreamAsync(
+                           platformId,
+                           EdgeAgentCommandKind.ImagePushStream,
+                           request.ToByteArray(),
+                           TimeSpan.FromHours(1),
+                           correlationId: null,
+                           cancellationToken))
+        {
+            if (item.ErrorMessage is not null)
+            {
+                yield return new ImageBuildStreamItem(
+                    Id: null,
+                    Stream: null,
+                    Status: "error",
+                    ErrorMessage: item.ErrorMessage,
+                    ProgressMessage: null,
+                    Progress: null,
+                    Error: new ImageBuildError(500, item.ErrorMessage));
+                yield break;
+            }
+
+            if (item.Completed)
+            {
+                yield break;
+            }
+
+            if (item.Payload is { Length: > 0 })
+            {
+                yield return ImageBuildResponse.Parser.ParseFrom(item.Payload).Map();
+            }
+        }
+    }
 }

@@ -16,4 +16,6 @@ public interface IImageConnector
     Task<Result<IEnumerable<HistoryImageResult>>> HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken);
     Task<Result<DeleteImageResult>> DeleteImageAsync(DeleteImageCommand deleteImageCommand, CancellationToken cancellationToken);
     IAsyncEnumerable<PullImageStreamItem> PullImageProgressStreamAsync(PullImageCommand pullImageCommand, CancellationToken cancellationToken);
+    IAsyncEnumerable<ImageBuildStreamItem> BuildImageProgressStreamAsync(BuildImageCommand buildImageCommand, CancellationToken cancellationToken);
+    IAsyncEnumerable<ImageBuildStreamItem> PushImageProgressStreamAsync(PushImageCommand pushImageCommand, CancellationToken cancellationToken);
 }

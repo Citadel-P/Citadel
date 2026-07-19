@@ -1,4 +1,5 @@
 using Application.Features.Deployments.Notifications;
+using Application.Features.Builds.Commands;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
@@ -6,6 +7,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
+using Domain.Entities.Builds;
 using Domain.Entities.Automation;
 using Domain.Entities.Backups;
 using Domain.Entities.Git;
@@ -55,6 +57,8 @@ internal sealed class ReceiveWebhookHandler(
     IActivityStreamManager activityStreamManager,
     IAlertService alertService,
     IApplyStackService applyStackService,
+    IBuildProjectStreamManager buildProjectStreamManager,
+    IBuildRunStreamManager buildRunStreamManager,
     IRepoCacheManager repoCacheManager,
     IGitCliRepository gitCliRepository,
     IAutomationRunQueueService automationRunQueueService,
@@ -135,6 +139,7 @@ internal sealed class ReceiveWebhookHandler(
                 GitStack: null,
                 Action: null,
                 BackupPolicy: null,
+                BuildProject: null,
                 Error: null);
         }
 
@@ -163,6 +168,7 @@ internal sealed class ReceiveWebhookHandler(
                 GitStack: gitStack,
                 Action: null,
                 BackupPolicy: null,
+                BuildProject: null,
                 Error: null);
         }
 
@@ -189,6 +195,7 @@ internal sealed class ReceiveWebhookHandler(
                 GitStack: null,
                 Action: action,
                 BackupPolicy: null,
+                BuildProject: null,
                 Error: null);
         }
 
@@ -215,6 +222,35 @@ internal sealed class ReceiveWebhookHandler(
                 GitStack: null,
                 Action: null,
                 BackupPolicy: policy,
+                BuildProject: null,
+                Error: null);
+        }
+
+        if ((command.ResourceType.Equals("build", StringComparison.OrdinalIgnoreCase)
+                || command.ResourceType.Equals("build-project", StringComparison.OrdinalIgnoreCase)
+                || command.ResourceType.Equals("buildProject", StringComparison.OrdinalIgnoreCase))
+            && command.Execution.Equals("run", StringComparison.OrdinalIgnoreCase))
+        {
+            var project = await unitOfWork.BuildProjects.GetAsync(command.ResourceId, cancellationToken);
+            var webhook = project?.Webhook;
+            if (project is null || webhook is null || !webhook.Enabled)
+                return WebhookTarget.NotFound();
+
+            if (webhook.Provider != provider)
+                return WebhookTarget.BadRequest("Webhook auth type does not match build webhook provider.");
+
+            return new WebhookTarget(
+                Provider: webhook.Provider,
+                AuthScheme: webhook.AuthScheme,
+                Execution: WebhookExecution.BuildRun,
+                Secret: webhook.Secret,
+                BranchFilter: webhook.BranchFilter ?? project.Branch,
+                Repository: null,
+                Stack: null,
+                GitStack: null,
+                Action: null,
+                BackupPolicy: null,
+                BuildProject: project,
                 Error: null);
         }
 
@@ -236,6 +272,7 @@ internal sealed class ReceiveWebhookHandler(
             WebhookExecution.StackDeploy => await DispatchStackDeployAsync(target, payload, cancellationToken),
             WebhookExecution.AutomationActionRun => await DispatchAutomationActionRunAsync(command, target, payload, cancellationToken),
             WebhookExecution.BackupPolicyRun => await DispatchBackupPolicyRunAsync(command, target, payload, cancellationToken),
+            WebhookExecution.BuildRun => await DispatchBuildRunAsync(target, payload, cancellationToken),
             _ => WebhookDispatchResult.NoOp("Unsupported execution")
         };
     }
@@ -410,6 +447,97 @@ internal sealed class ReceiveWebhookHandler(
             gitSyncRequest: null,
             dispatchedBranch: branch.Branch,
             dispatchedCommitSha: payload.CommitSha);
+    }
+
+    private async Task<WebhookDispatchResult> DispatchBuildRunAsync(
+        WebhookTarget target,
+        WebhookPayloadInfo payload,
+        CancellationToken cancellationToken)
+    {
+        var project = target.BuildProject;
+        if (project is null)
+            return WebhookDispatchResult.NoOp("Build project not found");
+
+        if (!project.Enabled)
+            return WebhookDispatchResult.NoOp("Build project is disabled");
+
+        var repo = await unitOfWork.GitRepositories.GetAsync(project.GitRepositoryId, cancellationToken);
+        if (repo is null)
+            return WebhookDispatchResult.NoOp("Linked Git repository not found");
+
+        if (!RepositoryMatches(repo, payload))
+            return WebhookDispatchResult.NoOp("Repository identity mismatch");
+
+        var branch = ResolveBranch(target.BranchFilter, payload.Branch, project.Branch);
+        if (branch.NoOpReason is not null)
+            return WebhookDispatchResult.NoOp(branch.NoOpReason);
+
+        var resolvedBranch = branch.Branch ?? project.Branch;
+        if (payload.ChangedPaths.Count > 0 && !BuildWebhookChangeMatcher.HasRelevantChanges(project, payload.ChangedPaths))
+            return WebhookDispatchResult.NoOp("No relevant path changes");
+
+        if (await unitOfWork.BuildRuns.HasActiveRunAsync(project.Id, cancellationToken))
+            return WebhookDispatchResult.NoOp("Build project already has an active run");
+
+        var platform = await unitOfWork.Platforms.GetInfoAsync(project.PlatformId, cancellationToken);
+        if (platform is null)
+            return WebhookDispatchResult.NoOp("Platform not found");
+
+        var registry = await unitOfWork.Registries.GetAsync(project.RegistryId, cancellationToken);
+        if (registry is null)
+            return WebhookDispatchResult.NoOp("Registry not found");
+
+        var imageReferences = QueueBuildRunHandler.ResolveImageReferences(
+            registry.RegistryHost,
+            project.ImageRepository,
+            project.TagTemplates,
+            resolvedBranch,
+            payload.CommitSha);
+
+        var run = new BuildRun(
+            project.Id,
+            project.Name,
+            repo.Id,
+            repo.Name,
+            resolvedBranch,
+            payload.CommitSha,
+            project.ContextPath,
+            project.DockerfilePath,
+            project.Target,
+            project.BuildArgs,
+            [.. project.BuildSecrets.Select(static s => s.Id)],
+            new BuildPlatformSnapshot(platform.Id, platform.Name, platform.Address, platform.ConnectorType),
+            new BuildRegistrySnapshot(registry.Id, registry.Name, registry.RegistryHost),
+            project.ImageRepository,
+            project.TagTemplates,
+            imageReferences,
+            BuildRunTrigger.Webhook,
+            project.Id,
+            Constants.SystemId,
+            project.TimeoutSeconds);
+
+        var marked = await unitOfWork.BuildProjects.MarkProcessingAsync(project.Id, run.Id, cancellationToken);
+        if (marked == 0)
+            return WebhookDispatchResult.NoOp("Build project already has an active run");
+
+        await unitOfWork.BuildRuns.AddAsync(run, cancellationToken);
+        var activity = new ActivityEvent(
+            platformId: project.PlatformId,
+            resourceId: project.Id,
+            actorId: Constants.SystemId,
+            resourceName: project.Name,
+            eventType: ActivityEventType.BuildRunQueued,
+            status: ActivityStatus.Success,
+            info: new BuildRunQueued(run.Id, run.Trigger));
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        await buildRunStreamManager.SendBuildRunInfo(run, "create");
+        var updatedProject = await unitOfWork.BuildProjects.GetAsync(project.Id, cancellationToken);
+        if (updatedProject is not null)
+            await buildProjectStreamManager.SendBuildProjectInfo(updatedProject, latestRun: run);
+        await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
+
+        return WebhookDispatchResult.Queued(null, resolvedBranch, payload.CommitSha);
     }
 
     private async Task<(bool Relevant, string? Reason, string? ResolvedCommitSha)> ResolveStackWebhookChangeRelevanceAsync(
@@ -622,6 +750,24 @@ internal sealed class ReceiveWebhookHandler(
                 payload?.RepositoryFullName);
         }
 
+        if (target.BuildProject is { } buildProject)
+        {
+            return new WebhookAlertSnapshot(
+                buildProject.Id,
+                buildProject.Name,
+                AlertResourceType.Webhook,
+                "build",
+                provider,
+                command.Execution,
+                reason,
+                requestId,
+                payload?.EventType,
+                payload?.DeliveryId,
+                payload?.Branch,
+                payload?.CommitSha,
+                payload?.RepositoryFullName);
+        }
+
         return null;
     }
 
@@ -703,6 +849,35 @@ internal sealed class ReceiveWebhookHandler(
                 actorId: Constants.SystemId,
                 resourceName: target?.Stack?.Name ?? $"stack:{command.ResourceId}",
                 eventType: ActivityEventType.StackWebhookReceived,
+                status: activityStatus,
+                info: info);
+            return true;
+        }
+
+        if (command.ResourceType.Equals("build", StringComparison.OrdinalIgnoreCase)
+            || command.ResourceType.Equals("build-project", StringComparison.OrdinalIgnoreCase)
+            || command.ResourceType.Equals("buildProject", StringComparison.OrdinalIgnoreCase))
+        {
+            var info = new BuildWebhookReceived(
+                requestId,
+                command.AuthType,
+                command.Execution,
+                status,
+                reason,
+                payload?.EventType,
+                payload?.DeliveryId,
+                payload?.Branch,
+                payload?.CommitSha,
+                payload?.RepositoryFullName,
+                dispatchedBranch,
+                dispatchedCommitSha);
+
+            activity = new ActivityEvent(
+                platformId: target?.BuildProject?.PlatformId,
+                resourceId: target?.BuildProject?.Id ?? command.ResourceId,
+                actorId: Constants.SystemId,
+                resourceName: target?.BuildProject?.Name ?? $"build:{command.ResourceId}",
+                eventType: ActivityEventType.BuildWebhookReceived,
                 status: activityStatus,
                 info: info);
             return true;
@@ -996,13 +1171,14 @@ internal sealed class ReceiveWebhookHandler(
         GitStack? GitStack,
         AutomationAction? Action,
         BackupPolicy? BackupPolicy,
+        BuildProject? BuildProject,
         Error? Error)
     {
         public static WebhookTarget NotFound()
-            => new(default, default, default, null, null, null, null, null, null, null, new NotFoundError("Webhook target not found."));
+            => new(default, default, default, null, null, null, null, null, null, null, null, new NotFoundError("Webhook target not found."));
 
         public static WebhookTarget BadRequest(string reason)
-            => new(default, default, default, null, null, null, null, null, null, null, new BadRequestError(reason));
+            => new(default, default, default, null, null, null, null, null, null, null, null, new BadRequestError(reason));
     }
 
     private sealed record WebhookPayloadInfo(
@@ -1031,4 +1207,30 @@ internal sealed class ReceiveWebhookHandler(
 
         public static WebhookDispatchResult NoOp(string reason) => new("noop", reason);
     }
+}
+
+internal static class BuildWebhookChangeMatcher
+{
+    internal static bool HasRelevantChanges(BuildProject project, IReadOnlyList<string> changedPaths)
+    {
+        var contextPath = NormalizePath(project.ContextPath);
+        var dockerfilePath = NormalizePath(project.DockerfilePath);
+
+        return changedPaths.Any(path =>
+        {
+            var normalized = NormalizePath(path);
+            return IsSameOrChild(normalized, contextPath)
+                   || string.Equals(normalized, dockerfilePath, StringComparison.Ordinal);
+        });
+    }
+
+    private static string NormalizePath(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? "."
+            : value.Replace('\\', '/').Trim().TrimStart('/').TrimEnd('/');
+
+    private static bool IsSameOrChild(string path, string directory)
+        => directory is "." or ""
+           || string.Equals(path, directory, StringComparison.Ordinal)
+           || path.StartsWith(directory + "/", StringComparison.Ordinal);
 }

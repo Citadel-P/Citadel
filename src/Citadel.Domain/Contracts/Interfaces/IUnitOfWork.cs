@@ -136,6 +136,8 @@ public interface IBuildProcessRunner
 }
 
 public sealed record BuildProcessCommand(
+    string PlatformAddress,
+    PlatformConnectorType PlatformConnectorType,
     string WorkingDirectory,
     string ContextPath,
     string DockerfilePath,
@@ -325,6 +327,7 @@ public interface IBuildRunRepository
     Task<BuildRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
     Task<BuildRun?> InterruptQueuedOrRunningAsync(Guid id, DateTimeOffset interruptedAt, string reason, CancellationToken cancellationToken);
     Task<IReadOnlyList<BuildRun>> DeleteTerminalRunsBeyondRetentionAsync(Guid projectId, int keepRunCount, CancellationToken cancellationToken);
+    Task<int> RemoveCompletedOlderThanAsync(DateTime completedBefore, CancellationToken cancellationToken);
 }
 
 public interface IBuildRunLogRepository

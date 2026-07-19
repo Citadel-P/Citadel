@@ -1,12 +1,14 @@
+using Domain;
 using Domain.Contracts.Interfaces;
-using Hosting.DockerClient.Models.Images;
+using Domain.Contracts.Resources.Images;
+using Infrastructure.EdgeAgents;
 using Hosting.DockerClient.Services;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 namespace Infrastructure.Repositories;
 
-internal sealed partial class BuildProcessRunner(IImageService imageService) : IBuildProcessRunner
+internal sealed partial class BuildProcessRunner(IConnectorFactory<IImageConnector> imageConnectorFactory) : IBuildProcessRunner
 {
     public async IAsyncEnumerable<BuildProcessEvent> RunAsync(
         BuildProcessCommand command,
@@ -26,10 +28,24 @@ internal sealed partial class BuildProcessRunner(IImageService imageService) : I
         var ct = linkedCts.Token;
 
         string? digest = null;
+        var imageConnector = imageConnectorFactory.GetConnector(command.PlatformConnectorType);
+        (byte[] Archive, DockerBuildContext Context)? contextArchive = null;
+        if (RequiresPackagedContext(command.PlatformConnectorType))
+        {
+            contextArchive = await BuildContextArchive.CreateBytesAsync(command.ContextPath, command.DockerfilePath, ct);
+            if (contextArchive.Value.Archive.Length > EdgeAgentDefaults.MaxEnvelopePayloadBytes)
+            {
+                yield return new BuildProcessEvent(
+                    BuildProcessStream.StdErr,
+                    $"Docker build context is too large for agent transfer ({contextArchive.Value.Archive.Length} bytes, max {EdgeAgentDefaults.MaxEnvelopePayloadBytes} bytes).");
+                yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 1);
+                yield break;
+            }
+        }
 
         yield return new BuildProcessEvent(BuildProcessStream.StdOut, "Starting Docker build.");
         var buildFailed = false;
-        await foreach (var message in imageService.StreamBuildImage(ToBuildImageCommand(command), ct))
+        await foreach (var message in imageConnector.BuildImageProgressStreamAsync(ToBuildImageCommand(command, contextArchive), ct))
         {
             foreach (var item in MapMessage(message, command))
             {
@@ -49,7 +65,7 @@ internal sealed partial class BuildProcessRunner(IImageService imageService) : I
         {
             yield return new BuildProcessEvent(BuildProcessStream.StdOut, $"Pushing {imageReference}.");
             var pushFailed = false;
-            await foreach (var message in imageService.StreamPushImage(ToPushImageCommand(command, imageReference), ct))
+            await foreach (var message in imageConnector.PushImageProgressStreamAsync(ToPushImageCommand(command, imageReference), ct))
             {
                 foreach (var item in MapMessage(message, command))
                 {
@@ -71,8 +87,11 @@ internal sealed partial class BuildProcessRunner(IImageService imageService) : I
         yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: digest);
     }
 
-    private static BuildImageStreamCommand ToBuildImageCommand(BuildProcessCommand command)
+    private static BuildImageCommand ToBuildImageCommand(
+        BuildProcessCommand command,
+        (byte[] Archive, DockerBuildContext Context)? contextArchive)
         => new(
+            command.PlatformAddress,
             command.ContextPath,
             command.DockerfilePath,
             command.ImageReferences,
@@ -81,12 +100,17 @@ internal sealed partial class BuildProcessRunner(IImageService imageService) : I
             command.RegistryCredential?.RegistryAuth,
             command.RegistryCredential?.RegistryHost,
             command.Timeout,
-            command.MaxLineBytes);
+            command.MaxLineBytes,
+            contextArchive?.Archive,
+            contextArchive?.Context.DockerfileEntryName);
 
-    private static PushImageStreamCommand ToPushImageCommand(BuildProcessCommand command, string imageReference)
-        => new(imageReference, command.RegistryCredential?.RegistryAuth);
+    private static bool RequiresPackagedContext(PlatformConnectorType connectorType)
+        => connectorType is PlatformConnectorType.Agent or PlatformConnectorType.EdgeAgent;
 
-    private static IEnumerable<BuildProcessEvent> MapMessage(Hosting.DockerClient.HttpClient.JSONMessage message, BuildProcessCommand command)
+    private static PushImageCommand ToPushImageCommand(BuildProcessCommand command, string imageReference)
+        => new(command.PlatformAddress, imageReference, command.RegistryCredential?.RegistryAuth);
+
+    private static IEnumerable<BuildProcessEvent> MapMessage(ImageBuildStreamItem message, BuildProcessCommand command)
     {
         if (!string.IsNullOrWhiteSpace(message.ErrorMessage) || message.Error is not null)
         {
@@ -101,9 +125,9 @@ internal sealed partial class BuildProcessRunner(IImageService imageService) : I
 
         if (!string.IsNullOrWhiteSpace(message.Status))
         {
-            var line = string.IsNullOrWhiteSpace(message.ID)
+            var line = string.IsNullOrWhiteSpace(message.Id)
                 ? message.Status
-                : $"{message.ID}: {message.Status}";
+                : $"{message.Id}: {message.Status}";
 
             if (!string.IsNullOrWhiteSpace(message.ProgressMessage))
                 line += $" {message.ProgressMessage}";

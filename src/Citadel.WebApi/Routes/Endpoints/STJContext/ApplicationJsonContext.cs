@@ -261,6 +261,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(IReadOnlyList<BuildSecretSpec>))]
 [JsonSerializable(typeof(BuildPlatformSnapshot))]
 [JsonSerializable(typeof(BuildRegistrySnapshot))]
+[JsonSerializable(typeof(BuildWebhookConfig))]
 [JsonSerializable(typeof(BuildRunTrigger))]
 [JsonSerializable(typeof(BuildRunStatus))]
 [JsonSerializable(typeof(BuildProjectInput))]

@@ -1,3 +1,4 @@
+using Domain.Contracts.Resources;
 using Domain.Entities;
 using Domain.Entities.Tags;
 
@@ -44,6 +45,7 @@ public sealed class BuildProject(
     Guid registryId,
     string imageRepository,
     IReadOnlyList<string>? tagTemplates,
+    BuildWebhookConfig? webhook,
     int timeoutSeconds,
     int retentionRunCount,
     Guid createdByActorId,
@@ -74,6 +76,8 @@ public sealed class BuildProject(
     public Guid RegistryId { get; private set; } = registryId;
     public string ImageRepository { get; private set; } = NormalizeImageRepository(imageRepository);
     public IReadOnlyList<string> TagTemplates { get; private set; } = NormalizeTagTemplates(tagTemplates);
+    public BuildWebhookConfig? Webhook { get; private set; } = NormalizeWebhook(webhook);
+    public bool WebhookEnabled => Webhook?.Enabled == true;
     public int TimeoutSeconds { get; private set; } = timeoutSeconds;
     public int RetentionRunCount { get; private set; } = retentionRunCount;
     public Guid? CurrentRunId { get; private set; } = currentRunId;
@@ -120,6 +124,8 @@ public sealed class BuildProject(
         Guid? registryId,
         string? imageRepository,
         IReadOnlyList<string>? tagTemplates,
+        BuildWebhookConfig? webhook,
+        bool updateWebhook,
         int? timeoutSeconds,
         int? retentionRunCount)
     {
@@ -139,6 +145,7 @@ public sealed class BuildProject(
         if (registryId.HasValue && registryId.Value != Guid.Empty) RegistryId = registryId.Value;
         if (imageRepository is not null) ImageRepository = NormalizeImageRepository(imageRepository);
         if (tagTemplates is not null) TagTemplates = NormalizeTagTemplates(tagTemplates);
+        if (updateWebhook) Webhook = NormalizeWebhook(webhook);
         if (timeoutSeconds.HasValue) TimeoutSeconds = timeoutSeconds.Value;
         if (retentionRunCount.HasValue) RetentionRunCount = retentionRunCount.Value;
         Touch();
@@ -186,6 +193,8 @@ public sealed class BuildProject(
         if (TimeoutSeconds is < 60 or > 86_400) throw new ArgumentException("Build timeout must be between 60 and 86400 seconds.", nameof(TimeoutSeconds));
         if (RetentionRunCount is < 1 or > 1000) throw new ArgumentException("Build retention must keep between 1 and 1000 runs.", nameof(RetentionRunCount));
         if (TagTemplates.Count == 0) throw new ArgumentException("At least one tag template is required.", nameof(TagTemplates));
+        if (Webhook?.Secret?.Length > 256) throw new ArgumentException("Build webhook secret cannot exceed 256 characters.", nameof(Webhook));
+        if (Webhook?.BranchFilter?.Length > 256) throw new ArgumentException("Build webhook branch filter cannot exceed 256 characters.", nameof(Webhook));
     }
 
     public static BuildProject FromPersistence(
@@ -205,6 +214,7 @@ public sealed class BuildProject(
         Guid registryId,
         string imageRepository,
         IReadOnlyList<string> tagTemplates,
+        BuildWebhookConfig? webhook,
         int timeoutSeconds,
         int retentionRunCount,
         Guid? currentRunId,
@@ -230,6 +240,7 @@ public sealed class BuildProject(
             registryId,
             imageRepository,
             tagTemplates,
+            webhook,
             timeoutSeconds,
             retentionRunCount,
             createdByActorId,
@@ -281,6 +292,15 @@ public sealed class BuildProject(
             .Where(static value => value.Length > 0)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
+    private static BuildWebhookConfig? NormalizeWebhook(BuildWebhookConfig? value)
+        => value is null
+            ? null
+            : value with
+            {
+                Secret = NormalizeOptional(value.Secret),
+                BranchFilter = NormalizeOptional(value.BranchFilter)
+            };
 
     private static IReadOnlyList<BuildArgSpec> NormalizeBuildArgs(IReadOnlyList<BuildArgSpec>? values)
         => values?.Select(static value => value with
@@ -485,3 +505,10 @@ public sealed record BuildRunLogEntry(
     DateTimeOffset CreatedAt,
     string Stream,
     string Message);
+
+public sealed record BuildWebhookConfig(
+    bool Enabled = false,
+    WebhookProvider Provider = WebhookProvider.GitHub,
+    WebhookAuthScheme AuthScheme = WebhookAuthScheme.GitHubHmacSha256,
+    string? Secret = null,
+    string? BranchFilter = null) : WebhookConfig(Enabled, Provider, AuthScheme, Secret, BranchFilter);

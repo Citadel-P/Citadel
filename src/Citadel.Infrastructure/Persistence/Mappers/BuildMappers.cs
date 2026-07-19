@@ -29,6 +29,7 @@ internal static class BuildMappers
             dto.RegistryId,
             dto.ImageRepository,
             DeserializeStringList(dto.TagTemplates),
+            DeserializeWebhook(dto.Webhook),
             dto.TimeoutSeconds,
             dto.RetentionRunCount,
             dto.CurrentRunId,
@@ -102,6 +103,11 @@ internal static class BuildMappers
     internal static string SerializeRegistrySnapshot(BuildRegistrySnapshot value)
         => JsonSerializer.Serialize(value, BuildJsonContext.Default.BuildRegistrySnapshot);
 
+    internal static string? SerializeWebhook(BuildWebhookConfig? value)
+        => value is null
+            ? null
+            : JsonSerializer.Serialize(value, BuildJsonContext.Default.BuildWebhookConfig);
+
     private static IReadOnlyList<BuildArgSpec> DeserializeBuildArgs(string? json)
         => string.IsNullOrWhiteSpace(json)
             ? []
@@ -128,6 +134,11 @@ internal static class BuildMappers
             ? new BuildRegistrySnapshot(Guid.Empty, string.Empty, string.Empty)
             : JsonSerializer.Deserialize(json, BuildJsonContext.Default.BuildRegistrySnapshot)
               ?? new BuildRegistrySnapshot(Guid.Empty, string.Empty, string.Empty);
+
+    private static BuildWebhookConfig? DeserializeWebhook(string? json)
+        => string.IsNullOrWhiteSpace(json)
+            ? null
+            : JsonSerializer.Deserialize(json, BuildJsonContext.Default.BuildWebhookConfig);
 
     internal static DateTimeOffset ToOffset(DateTime value)
         => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));

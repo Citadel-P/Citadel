@@ -2,6 +2,7 @@ using Application.Features.Builds.Commands;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Activities;
 using Domain.Entities.Builds;
 using Domain.Entities.Registries;
 using Domain.Entities.ResourceBindings;
@@ -117,6 +118,7 @@ internal sealed class BuildRunExecutionService(
     IExternalSecretProviderClient externalSecretProviderClient,
     IBuildProjectStreamManager buildProjectStreamManager,
     IBuildRunStreamManager buildRunStreamManager,
+    IActivityStreamManager activityStreamManager,
     IBuildRunRetentionService buildRunRetentionService,
     ILogger<BuildRunExecutionService> logger) : IBuildRunExecutionService
 {
@@ -142,17 +144,6 @@ internal sealed class BuildRunExecutionService(
             var context = await LoadContextAsync(run, executionToken);
             if (!context.IsSuccess(out var buildContext, out var loadError))
                 return await FailAsync(run, BuildRunStatus.Failed, 1, "build.context_invalid", loadError!.Message, executionToken);
-
-            if (buildContext.PlatformConnectorType != PlatformConnectorType.Local)
-            {
-                return await FailAsync(
-                    run,
-                    BuildRunStatus.Failed,
-                    1,
-                    "build.runner_not_supported",
-                    "Build execution currently supports local Docker platforms. Agent and edge-agent builders require the build connector protocol.",
-                    executionToken);
-            }
 
             await AppendLogAsync(run.Id, "system", $"Synchronizing repository \"{buildContext.Repository.Name}\" on branch \"{run.Branch}\".", executionToken);
             var sync = await repoCacheManager.SynchronizeAsync(buildContext.Repository, buildContext.Repository.GitAccount, run.Branch, executionToken);
@@ -202,11 +193,16 @@ internal sealed class BuildRunExecutionService(
             await AppendLogAsync(run.Id, "system", $"Building {string.Join(", ", imageReferences)}.", executionToken);
             run.MarkRunning(DateTimeOffset.UtcNow);
             await unitOfWork.BuildRuns.UpdateAsync(run, executionToken);
+            var startedActivity = CreateRunActivity(run, ActivityEventType.BuildRunStarted, new BuildRunStarted(run.Id, run.Trigger), ActivityStatus.Success);
+            await unitOfWork.ActivityEventRepository.AddAsync(startedActivity, executionToken);
             await unitOfWork.CommitAsync(executionToken);
             await buildRunStreamManager.SendBuildRunInfo(run);
+            await activityStreamManager.SendActivityInfo(await startedActivity.AssignActor(unitOfWork, executionToken));
             await SendBuildProjectUpdateAsync(run.BuildProjectId, run, executionToken);
 
             var command = new BuildProcessCommand(
+                PlatformAddress: run.PlatformSnapshot.Address,
+                PlatformConnectorType: run.PlatformSnapshot.ConnectorType,
                 WorkingDirectory: repositoryRoot,
                 ContextPath: buildContextPath,
                 DockerfilePath: dockerfile,
@@ -242,9 +238,16 @@ internal sealed class BuildRunExecutionService(
                 run.CompleteSucceeded(digest, imageReferences, exitCode, DateTimeOffset.UtcNow);
                 await unitOfWork.BuildRuns.UpdateAsync(run, executionToken);
                 await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, executionToken);
+                var activity = CreateRunActivity(
+                    run,
+                    ActivityEventType.BuildRunSucceeded,
+                    new BuildRunSucceeded(run.Id, run.Trigger, run.ExitCode, GetDurationMs(run), run.ImageDigest),
+                    ActivityStatus.Success);
+                await unitOfWork.ActivityEventRepository.AddAsync(activity, executionToken);
                 await unitOfWork.CommitAsync(executionToken);
                 await AppendLogAsync(run.Id, "system", "Build run completed successfully.", executionToken);
                 await buildRunStreamManager.SendBuildRunInfo(run);
+                await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, executionToken));
                 await buildRunRetentionService.PruneAsync(run.BuildProjectId, executionToken);
                 await SendBuildProjectUpdateAsync(run.BuildProjectId, run, executionToken);
                 return Result.Success();
@@ -494,8 +497,21 @@ internal sealed class BuildRunExecutionService(
         run.Fail(status, exitCode, errorCode, errorMessage, DateTimeOffset.UtcNow);
         await unitOfWork.BuildRuns.UpdateAsync(run, cancellationToken);
         await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, cancellationToken);
+        var activity = status == BuildRunStatus.TimedOut
+            ? CreateRunActivity(
+                run,
+                ActivityEventType.BuildRunTimedOut,
+                new BuildRunTimedOut(run.Id, run.Trigger, GetDurationMs(run), errorMessage),
+                ActivityStatus.Failure)
+            : CreateRunActivity(
+                run,
+                ActivityEventType.BuildRunFailed,
+                new BuildRunFailed(run.Id, run.Trigger, status, run.ExitCode, GetDurationMs(run), errorMessage),
+                ActivityStatus.Failure);
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
+        await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
         await buildRunRetentionService.PruneAsync(run.BuildProjectId, cancellationToken);
         await SendBuildProjectUpdateAsync(run.BuildProjectId, run, cancellationToken);
         return Result.Failure(new BadGatewayError(errorMessage));
@@ -507,8 +523,15 @@ internal sealed class BuildRunExecutionService(
         run.Cancel(DateTimeOffset.UtcNow);
         await unitOfWork.BuildRuns.UpdateAsync(run, cancellationToken);
         await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, cancellationToken);
+        var activity = CreateRunActivity(
+            run,
+            ActivityEventType.BuildRunCancelled,
+            new BuildRunCancelled(run.Id, run.Trigger),
+            ActivityStatus.Warning);
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
+        await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
         await buildRunRetentionService.PruneAsync(run.BuildProjectId, cancellationToken);
         await SendBuildProjectUpdateAsync(run.BuildProjectId, run, cancellationToken);
         return Result.Success();
@@ -600,6 +623,28 @@ internal sealed class BuildRunExecutionService(
             BuildProcessStream.Exit => "system",
             _ => "stdout"
         };
+
+    private static ActivityEvent CreateRunActivity(
+        BuildRun run,
+        ActivityEventType eventType,
+        ActivityEventInfo info,
+        ActivityStatus status)
+        => new(
+            platformId: run.PlatformSnapshot.Id,
+            resourceId: run.BuildProjectId,
+            actorId: run.TriggeredByActorId,
+            resourceName: run.ProjectNameSnapshot,
+            eventType: eventType,
+            status: status,
+            info: info);
+
+    private static long? GetDurationMs(BuildRun run)
+    {
+        if (run.StartedAt is null || run.CompletedAt is null)
+            return null;
+
+        return Math.Max(0, (long)(run.CompletedAt.Value - run.StartedAt.Value).TotalMilliseconds);
+    }
 
     private static string EnsureTrailingSeparator(string path)
     {

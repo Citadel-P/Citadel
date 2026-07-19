@@ -682,6 +682,7 @@ CREATE TABLE buildprojects (
     target text,
     timeoutseconds integer NOT NULL DEFAULT 1800,
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    webhook jsonb,
     CONSTRAINT pk_buildprojects PRIMARY KEY (id),
     CONSTRAINT fk_buildprojects_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_buildprojects_gitrepositories_gitrepositoryid FOREIGN KEY (gitrepositoryid) REFERENCES gitrepositories (id) ON DELETE RESTRICT,

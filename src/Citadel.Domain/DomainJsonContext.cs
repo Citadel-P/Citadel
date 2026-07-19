@@ -133,6 +133,10 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<ActivityEventType>),
         typeof(JsonStringEnumConverter<ActionRunTrigger>),
         typeof(JsonStringEnumConverter<ActionRunStatus>),
+        typeof(JsonStringEnumConverter<BuildRunTrigger>),
+        typeof(JsonStringEnumConverter<BuildRunStatus>),
+        typeof(JsonStringEnumConverter<WebhookProvider>),
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>),
         typeof(JsonStringEnumConverter<ResourceBindingKind>),
         typeof(JsonStringEnumConverter<ResourceBindingScope>),
         typeof(JsonStringEnumConverter<SecretDeliveryMode>),
@@ -229,6 +233,18 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(LicenseExpired))]
 [JsonSerializable(typeof(LicenseValidationFailed))]
 [JsonSerializable(typeof(VolumeContentDownloaded))]
+[JsonSerializable(typeof(BuildProjectSnapshot))]
+[JsonSerializable(typeof(BuildCreated))]
+[JsonSerializable(typeof(BuildUpdated))]
+[JsonSerializable(typeof(BuildRenamed))]
+[JsonSerializable(typeof(BuildDeleted))]
+[JsonSerializable(typeof(BuildRunQueued))]
+[JsonSerializable(typeof(BuildRunStarted))]
+[JsonSerializable(typeof(BuildRunSucceeded))]
+[JsonSerializable(typeof(BuildRunFailed))]
+[JsonSerializable(typeof(BuildRunTimedOut))]
+[JsonSerializable(typeof(BuildRunCancelled))]
+[JsonSerializable(typeof(BuildWebhookReceived))]
 
 public partial class EventInfoJsonContext : JsonSerializerContext
 {
@@ -475,7 +491,9 @@ public partial class BackupJsonContext : JsonSerializerContext
     {
         typeof(JsonStringEnumConverter<BuildRunTrigger>),
         typeof(JsonStringEnumConverter<BuildRunStatus>),
-        typeof(JsonStringEnumConverter<PlatformConnectorType>)
+        typeof(JsonStringEnumConverter<PlatformConnectorType>),
+        typeof(JsonStringEnumConverter<WebhookProvider>),
+        typeof(JsonStringEnumConverter<WebhookAuthScheme>)
     })]
 [JsonSerializable(typeof(Domain.Entities.Builds.BuildArgSpec))]
 [JsonSerializable(typeof(IReadOnlyList<Domain.Entities.Builds.BuildArgSpec>))]
@@ -483,6 +501,7 @@ public partial class BackupJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(IReadOnlyList<Domain.Entities.Builds.BuildSecretSpec>))]
 [JsonSerializable(typeof(Domain.Entities.Builds.BuildPlatformSnapshot))]
 [JsonSerializable(typeof(Domain.Entities.Builds.BuildRegistrySnapshot))]
+[JsonSerializable(typeof(Domain.Entities.Builds.BuildWebhookConfig))]
 [JsonSerializable(typeof(IReadOnlyList<string>))]
 [JsonSerializable(typeof(string[]))]
 public partial class BuildJsonContext : JsonSerializerContext

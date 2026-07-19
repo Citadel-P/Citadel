@@ -11,6 +11,7 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
     private const int stats_purgeDays = 7;
     private const int activities_purgeDays = 90;
     private const int action_runs_purgeDays = 90;
+    private const int build_runs_purgeDays = 90;
     private const int checkIntervalInHours = 12;
 
     protected override Task ExecuteAsync(CancellationToken cancellationToken)
@@ -44,6 +45,10 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
                 thresholdDate = DateTimeOffset.UtcNow.AddDays(-action_runs_purgeDays);
                 var countActionRuns = await uow.ActionRuns.RemoveCompletedOlderThanAsync(thresholdDate.UtcDateTime, cancellationToken);
 
+                // Remove completed build run history
+                thresholdDate = DateTimeOffset.UtcNow.AddDays(-build_runs_purgeDays);
+                var countBuildRuns = await uow.BuildRuns.RemoveCompletedOlderThanAsync(thresholdDate.UtcDateTime, cancellationToken);
+
                 var countRefreshTokens = await uow.RefreshTokens.DeleteExpiredAsync(DateTime.UtcNow, cancellationToken);
                 var countBackupLeases = await uow.BackupRepositoryLeases.DeleteExpiredAsync(DateTimeOffset.UtcNow, cancellationToken);
                 countBackupLeases += await uow.BackupSourceLeases.DeleteExpiredAsync(DateTimeOffset.UtcNow, cancellationToken);
@@ -58,6 +63,9 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterSer
 
                 if (countActionRuns > 0)
                     logger.LogInformation("Purged {Count} automation action runs older than {PurgeDays} days.", countActionRuns, action_runs_purgeDays);
+
+                if (countBuildRuns > 0)
+                    logger.LogInformation("Purged {Count} build runs older than {PurgeDays} days.", countBuildRuns, build_runs_purgeDays);
 
                 if (countRefreshTokens > 0)
                     logger.LogInformation("Purged {Count} expired refresh tokens.", countRefreshTokens);

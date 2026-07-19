@@ -1,5 +1,6 @@
 import {
   BuildArgSpec,
+  BuildWebhookConfig,
   GitRepositoryBranchView,
   GitRepositoryRefView,
   BuildProjectInput,
@@ -10,6 +11,7 @@ import {
   UpdateBuildProjectInput,
 } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
+import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import {
   FieldInput,
   FieldSelect,
@@ -47,6 +49,7 @@ const defaultBuild: BuildProjectInput = {
   registryId: '',
   imageRepository: '',
   tagTemplates: ['{branch}-{shortSha}'],
+  webhook: { enabled: false },
   timeoutSeconds: 1800,
   retentionRunCount: 20,
   tagIds: [],
@@ -147,10 +150,10 @@ const BuildPlatformField = ({
   const isSupportedSelection = options.some((option) => option.value === value);
   const hasUnsupportedSelection = hasLoaded && Boolean(value) && !isSupportedSelection;
   const message = hasUnsupportedSelection
-    ? `This build uses a ${formatConnectorType(selectedConnectorType)} platform. Select a local Docker platform before saving.`
+    ? `This build uses a ${formatConnectorType(selectedConnectorType)} platform that is no longer available. Select another platform before saving.`
     : options.length === 0 && hasLoaded
-      ? 'No local Docker platforms are available. Add a local platform before creating a build.'
-      : 'Builds currently run only on local Docker platforms.';
+      ? 'No Docker platforms are available. Add a platform before creating a build.'
+      : 'Select the Docker platform that runs this build. Local, agent, and edge-agent connectors are supported.';
 
   return (
     <div className="flex flex-col gap-2">
@@ -159,7 +162,7 @@ const BuildPlatformField = ({
         onChange={onChange}
         options={options}
         disabled={disabled || isLoading || options.length === 0}
-        placeholder={isLoading ? 'Loading platforms...' : 'Select local platform'}
+        placeholder={isLoading ? 'Loading platforms...' : 'Select platform'}
       />
       <p className={hasUnsupportedSelection ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
         {message}
@@ -253,22 +256,18 @@ export const BuildForm = ({
     [gitBranchesData?.data.branches, gitRefs],
   );
   const platforms = useMemo(() => platformsData?.data.platforms ?? [], [platformsData?.data.platforms]);
-  const localPlatforms = useMemo(
-    () => platforms.filter((platform) => platform.connectorType === PlatformConnectorType.Local),
-    [platforms],
-  );
   const platformOptions = useMemo(
     () =>
-      localPlatforms.map((platform) => ({
+      platforms.map((platform) => ({
         value: platform.id,
         label: (
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate">{platform.name}</span>
-            <span className="text-xs text-muted-foreground">Local</span>
+            <span className="text-xs text-muted-foreground">{formatConnectorType(platform.connectorType)}</span>
           </span>
         ),
       })),
-    [localPlatforms],
+    [platforms],
   );
 
   const { save: handleSave, isPending } = useSaveResource<BuildInput, any>({
@@ -304,6 +303,7 @@ export const BuildForm = ({
       registryId: resource.registryId,
       imageRepository: resource.imageRepository,
       tagTemplates: resource.tagTemplates,
+      webhook: resource.webhook ?? { enabled: false },
       timeoutSeconds: resource.timeoutSeconds,
       retentionRunCount: resource.retentionRunCount,
     };
@@ -434,11 +434,11 @@ export const BuildForm = ({
                 key: 'platformId',
                 label: 'Platform',
                 description:
-                  'Local Docker platform that runs the build. Agent and edge-agent builders are not available until the build helper protocol is implemented.',
+                  'Docker platform that runs the build. Local, agent, and edge-agent connectors are supported.',
                 required: true,
                 validate: (value) =>
-                  platformsData && value && !localPlatforms.some((platform) => platform.id === value)
-                    ? 'Select a local Docker platform. Agent and edge-agent platforms are not supported for builds yet.'
+                  platformsData && value && !platforms.some((platform) => platform.id === value)
+                    ? 'Select an available Docker platform.'
                     : null,
                 render: (value, set) => (
                   <BuildPlatformField
@@ -496,6 +496,28 @@ export const BuildForm = ({
                       })
                     }
                     placeholder="{branch}-{shortSha}, latest"
+                  />
+                ),
+              }),
+            ],
+          }),
+          defineGroupField<BuildInput>({
+            id: 'webhook',
+            label: 'Webhook',
+            description: 'Allow a Git provider webhook to queue this build when matching source files change.',
+            items: [
+              defineField<BuildInput, 'webhook'>({
+                key: 'webhook',
+                label: 'Enabled',
+                render: (value, set) => (
+                  <WebhookConfigField
+                    resourceType="build"
+                    resourceId={id}
+                    execution="run"
+                    value={value ?? { enabled: false }}
+                    defaultBranch={(update.branch ?? original.branch) as string | null | undefined}
+                    disabled={disabled}
+                    onChange={(webhook) => set({ webhook: webhook as BuildWebhookConfig })}
                   />
                 ),
               }),
@@ -582,11 +604,12 @@ export const BuildForm = ({
       isFetchingGitRefs,
       isGitBranchesError,
       isLoadingPlatforms,
-      localPlatforms,
       mode,
+      original.branch,
       platformOptions,
       platforms,
       platformsData,
+      update.branch,
     ],
   );
 
@@ -619,6 +642,7 @@ function normalizePayload(payload: BuildInput, mode: 'add' | 'edit') {
     buildArgs: payload.buildArgs ?? [],
     buildSecrets: payload.buildSecrets ?? [],
     tagTemplates: payload.tagTemplates?.filter(Boolean) ?? ['{branch}-{shortSha}'],
+    webhook: normalizeWebhook(payload.webhook),
     timeoutSeconds: Number(payload.timeoutSeconds ?? 1800),
     retentionRunCount: Number(payload.retentionRunCount ?? 20),
   };
@@ -629,6 +653,16 @@ function normalizePayload(payload: BuildInput, mode: 'add' | 'edit') {
   }
 
   return normalized;
+}
+
+function normalizeWebhook(webhook: BuildWebhookConfig | undefined | null): BuildWebhookConfig {
+  if (!webhook || webhook.enabled !== true) return { enabled: false };
+
+  return {
+    ...webhook,
+    secret: webhook.secret?.trim() || null,
+    branchFilter: webhook.branchFilter?.trim() || null,
+  };
 }
 
 function mapBranchOptions(

@@ -187,6 +187,25 @@ internal static class ImageMappers
         Start: jsonProgress.Start
     );
 
+    internal static ImageBuildStreamItem Map(this ImageBuildResponse buildResponse) => new
+    (
+        Id: buildResponse.Id,
+        Stream: buildResponse.Stream,
+        Status: buildResponse.Status,
+        ErrorMessage: buildResponse.ErrorMessage,
+        ProgressMessage: buildResponse.ProgressMessage,
+        Progress: buildResponse.Progress is not null
+            ? new ImageBuildProgress(
+                Units: buildResponse.Progress.Units,
+                Current: buildResponse.Progress.Current,
+                Total: buildResponse.Progress.Total,
+                Start: buildResponse.Progress.Start)
+            : null,
+        Error: buildResponse.Error is not null
+            ? new ImageBuildError(buildResponse.Error.Code, buildResponse.Error.Message)
+            : null
+    );
+
     internal static IReadOnlyList<ImageResult> Map(this IEnumerable<Hosting.DockerClient.ImageSummary> images) 
         => [.. images.Select(Map)];
 

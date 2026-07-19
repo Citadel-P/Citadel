@@ -272,6 +272,8 @@ public enum EdgeAgentCommandKind
     ImageExposedPorts = 35,
     ImageDistributionInspect = 36,
     ImagePullStream = 37,
+    ImageBuildStream = 38,
+    ImagePushStream = 39,
     VolumeList = 50,
     VolumeInspect = 51,
     VolumeCreate = 52,
@@ -548,7 +550,8 @@ public enum WebhookExecution
     RepoPull = 1,
     StackDeploy = 2,
     AutomationActionRun = 3,
-    BackupPolicyRun = 4
+    BackupPolicyRun = 4,
+    BuildRun = 5
 }
 
 public enum DeployedContainerState
@@ -702,6 +705,20 @@ public enum ActivityEventType
 
     #region Volume Events
     VolumeContentDownloaded,
+    #endregion
+
+    #region Build Events
+    BuildCreated,
+    BuildUpdated,
+    BuildRenamed,
+    BuildDeleted,
+    BuildRunQueued,
+    BuildRunStarted,
+    BuildRunSucceeded,
+    BuildRunFailed,
+    BuildRunTimedOut,
+    BuildRunCancelled,
+    BuildWebhookReceived,
     #endregion
 }
 

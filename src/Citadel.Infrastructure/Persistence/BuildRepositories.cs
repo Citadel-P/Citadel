@@ -27,12 +27,12 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
                 INSERT INTO BuildProjects (
                     Id, Name, NormalizedName, Description, Enabled, GitRepositoryId, Branch,
                     ContextPath, DockerfilePath, Target, BuildArgs, BuildSecrets, PlatformId,
-                    RegistryId, ImageRepository, TagTemplates, TimeoutSeconds, RetentionRunCount,
+                    RegistryId, ImageRepository, TagTemplates, Webhook, TimeoutSeconds, RetentionRunCount,
                     CurrentRunId, ControlState, ControlStartedAt, CreatedByActorId, CreatedAt, UpdatedAt, ArchivedAt, RowVersion)
                 SELECT
                     @Id, @Name, @NormalizedName, @Description, @Enabled, @GitRepositoryId, @Branch,
                     @ContextPath, @DockerfilePath, @Target, @BuildArgs::jsonb, @BuildSecrets::jsonb, @PlatformId,
-                    @RegistryId, @ImageRepository, @TagTemplates::jsonb, @TimeoutSeconds, @RetentionRunCount,
+                    @RegistryId, @ImageRepository, @TagTemplates::jsonb, @Webhook::jsonb, @TimeoutSeconds, @RetentionRunCount,
                     @CurrentRunId, @ControlState, @ControlStartedAt, @CreatedByActorId, @CreatedAt, @UpdatedAt, @ArchivedAt, @RowVersion
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
                 RETURNING Id
@@ -61,6 +61,7 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
                 project.RegistryId,
                 project.ImageRepository,
                 TagTemplates = BuildMappers.SerializeStringList(project.TagTemplates),
+                Webhook = BuildMappers.SerializeWebhook(project.Webhook),
                 project.TimeoutSeconds,
                 project.RetentionRunCount,
                 project.CurrentRunId,
@@ -103,6 +104,7 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
                 RegistryId = @RegistryId,
                 ImageRepository = @ImageRepository,
                 TagTemplates = @TagTemplates::jsonb,
+                Webhook = @Webhook::jsonb,
                 TimeoutSeconds = @TimeoutSeconds,
                 RetentionRunCount = @RetentionRunCount,
                 CurrentRunId = @CurrentRunId,
@@ -432,6 +434,7 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
             project.RegistryId,
             project.ImageRepository,
             BuildMappers.SerializeStringList(project.TagTemplates),
+            BuildMappers.SerializeWebhook(project.Webhook),
             project.TimeoutSeconds,
             project.RetentionRunCount,
             project.CurrentRunId,
@@ -718,6 +721,47 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
             },
             transaction: tx());
         return result.Select(static x => x.ToDomain()).ToArray();
+    }
+
+    public async Task<int> RemoveCompletedOlderThanAsync(DateTime completedBefore, CancellationToken cancellationToken)
+    {
+        var activeStatuses = new[]
+        {
+            EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Queued),
+            EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Preparing),
+            EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Running)
+        };
+
+        const string countSql = """
+            SELECT COUNT(*)
+            FROM BuildRuns runs
+            WHERE COALESCE(runs.CompletedAt, runs.StartedAt, runs.QueuedAt) < @CompletedBefore
+              AND runs.Status <> ALL(@ActiveStatuses)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM BuildProjects projects
+                  WHERE projects.CurrentRunId = runs.Id)
+            """;
+
+        const string deleteSql = """
+            DELETE FROM BuildRuns runs
+            WHERE COALESCE(runs.CompletedAt, runs.StartedAt, runs.QueuedAt) < @CompletedBefore
+              AND runs.Status <> ALL(@ActiveStatuses)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM BuildProjects projects
+                  WHERE projects.CurrentRunId = runs.Id)
+            """;
+
+        var parameters = new
+        {
+            CompletedBefore = completedBefore,
+            ActiveStatuses = activeStatuses
+        };
+
+        var totalCount = await db.QuerySingleAsync<int>(countSql, parameters, transaction: tx());
+        await db.ExecuteAsync(deleteSql, parameters, transaction: tx());
+        return totalCount;
     }
 
     private static BuildRunParameters ToParameters(BuildRun run)

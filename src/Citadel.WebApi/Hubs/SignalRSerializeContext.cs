@@ -98,6 +98,19 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<IReadOnlyList<BuildSecretSpec>>]
 [GenerateShapeFor<BuildPlatformSnapshot>]
 [GenerateShapeFor<BuildRegistrySnapshot>]
+[GenerateShapeFor<BuildWebhookConfig>]
+[GenerateShapeFor<BuildProjectSnapshot>]
+[GenerateShapeFor<BuildCreated>]
+[GenerateShapeFor<BuildUpdated>]
+[GenerateShapeFor<BuildRenamed>]
+[GenerateShapeFor<BuildDeleted>]
+[GenerateShapeFor<BuildRunQueued>]
+[GenerateShapeFor<BuildRunStarted>]
+[GenerateShapeFor<BuildRunSucceeded>]
+[GenerateShapeFor<BuildRunFailed>]
+[GenerateShapeFor<BuildRunTimedOut>]
+[GenerateShapeFor<BuildRunCancelled>]
+[GenerateShapeFor<BuildWebhookReceived>]
 [GenerateShapeFor<IReadOnlyList<string>>]
 [GenerateShapeFor<AutomationActionView>]
 [GenerateShapeFor<AutomationActionRunView>]
@@ -283,6 +296,17 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.ActionRunTimedOut)] = typeof(AutomationActionRunTimedOut),
         [nameof(ActivityEventType.ActionRunCancelled)] = typeof(AutomationActionRunCancelled),
         [nameof(ActivityEventType.ActionRunRejected)] = typeof(AutomationActionRunRejected),
+        [nameof(ActivityEventType.BuildCreated)] = typeof(BuildCreated),
+        [nameof(ActivityEventType.BuildUpdated)] = typeof(BuildUpdated),
+        [nameof(ActivityEventType.BuildRenamed)] = typeof(BuildRenamed),
+        [nameof(ActivityEventType.BuildDeleted)] = typeof(BuildDeleted),
+        [nameof(ActivityEventType.BuildRunQueued)] = typeof(BuildRunQueued),
+        [nameof(ActivityEventType.BuildRunStarted)] = typeof(BuildRunStarted),
+        [nameof(ActivityEventType.BuildRunSucceeded)] = typeof(BuildRunSucceeded),
+        [nameof(ActivityEventType.BuildRunFailed)] = typeof(BuildRunFailed),
+        [nameof(ActivityEventType.BuildRunTimedOut)] = typeof(BuildRunTimedOut),
+        [nameof(ActivityEventType.BuildRunCancelled)] = typeof(BuildRunCancelled),
+        [nameof(ActivityEventType.BuildWebhookReceived)] = typeof(BuildWebhookReceived),
         [nameof(ActivityEventType.UserProfileUpdated)] = typeof(UserProfileUpdated),
         [nameof(ActivityEventType.UserPreferencesUpdated)] = typeof(UserPreferencesUpdated),
         [nameof(ActivityEventType.UserPasswordChanged)] = typeof(UserPasswordChanged),

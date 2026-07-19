@@ -5,6 +5,7 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Automation;
+using Domain.Entities.Builds;
 using Domain.Entities.Licensing;
 using Domain.Entities.Stacks;
 using System.Diagnostics.CodeAnalysis;
@@ -95,6 +96,17 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(LicenseExpired), nameof(ActivityEventType.LicenseExpired))]
 [JsonDerivedType(typeof(LicenseValidationFailed), nameof(ActivityEventType.LicenseValidationFailed))]
 [JsonDerivedType(typeof(VolumeContentDownloaded), nameof(ActivityEventType.VolumeContentDownloaded))]
+[JsonDerivedType(typeof(BuildCreated), nameof(ActivityEventType.BuildCreated))]
+[JsonDerivedType(typeof(BuildUpdated), nameof(ActivityEventType.BuildUpdated))]
+[JsonDerivedType(typeof(BuildRenamed), nameof(ActivityEventType.BuildRenamed))]
+[JsonDerivedType(typeof(BuildDeleted), nameof(ActivityEventType.BuildDeleted))]
+[JsonDerivedType(typeof(BuildRunQueued), nameof(ActivityEventType.BuildRunQueued))]
+[JsonDerivedType(typeof(BuildRunStarted), nameof(ActivityEventType.BuildRunStarted))]
+[JsonDerivedType(typeof(BuildRunSucceeded), nameof(ActivityEventType.BuildRunSucceeded))]
+[JsonDerivedType(typeof(BuildRunFailed), nameof(ActivityEventType.BuildRunFailed))]
+[JsonDerivedType(typeof(BuildRunTimedOut), nameof(ActivityEventType.BuildRunTimedOut))]
+[JsonDerivedType(typeof(BuildRunCancelled), nameof(ActivityEventType.BuildRunCancelled))]
+[JsonDerivedType(typeof(BuildWebhookReceived), nameof(ActivityEventType.BuildWebhookReceived))]
 
 public abstract record ActivityEventInfo;
 
@@ -262,6 +274,63 @@ public sealed record AutomationActionRunTimedOut(
     string? ErrorMessage) : ActivityEventInfo;
 public sealed record AutomationActionRunCancelled(Guid RunId, ActionRunTrigger Trigger) : ActivityEventInfo;
 public sealed record AutomationActionRunRejected(Guid RunId, ActionRunTrigger Trigger, string Reason) : ActivityEventInfo;
+
+public sealed record BuildProjectSnapshot(
+    Guid Id,
+    string Name,
+    string? Description,
+    bool Enabled,
+    Guid GitRepositoryId,
+    string Branch,
+    string ContextPath,
+    string DockerfilePath,
+    string? Target,
+    Guid PlatformId,
+    Guid RegistryId,
+    string ImageRepository,
+    IReadOnlyList<string> TagTemplates,
+    BuildWebhookConfig? Webhook,
+    int TimeoutSeconds,
+    int RetentionRunCount);
+
+public sealed record BuildCreated(BuildProjectSnapshot Build) : ActivityEventInfo;
+public sealed record BuildUpdated(BuildProjectSnapshot OldBuild, BuildProjectSnapshot NewBuild) : ActivityEventInfo;
+public sealed record BuildRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record BuildDeleted(BuildProjectSnapshot Build) : ActivityEventInfo;
+public sealed record BuildRunQueued(Guid RunId, BuildRunTrigger Trigger) : ActivityEventInfo;
+public sealed record BuildRunStarted(Guid RunId, BuildRunTrigger Trigger) : ActivityEventInfo;
+public sealed record BuildRunSucceeded(
+    Guid RunId,
+    BuildRunTrigger Trigger,
+    int? ExitCode,
+    long? DurationMs,
+    string? ImageDigest) : ActivityEventInfo;
+public sealed record BuildRunFailed(
+    Guid RunId,
+    BuildRunTrigger Trigger,
+    BuildRunStatus Status,
+    int? ExitCode,
+    long? DurationMs,
+    string? ErrorMessage) : ActivityEventInfo;
+public sealed record BuildRunTimedOut(
+    Guid RunId,
+    BuildRunTrigger Trigger,
+    long? DurationMs,
+    string? ErrorMessage) : ActivityEventInfo;
+public sealed record BuildRunCancelled(Guid RunId, BuildRunTrigger Trigger) : ActivityEventInfo;
+public sealed record BuildWebhookReceived(
+    Guid RequestId,
+    string AuthType,
+    string Execution,
+    string Status,
+    string? Reason,
+    string? EventType,
+    string? DeliveryId,
+    string? Branch,
+    string? CommitSha,
+    string? RepositoryFullName,
+    string? DispatchedBranch = null,
+    string? DispatchedCommitSha = null) : ActivityEventInfo;
 
 public sealed record UserProfileUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;
 public sealed record UserPreferencesUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;

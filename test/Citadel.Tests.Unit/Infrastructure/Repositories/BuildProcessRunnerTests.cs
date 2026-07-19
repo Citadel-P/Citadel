@@ -1,7 +1,6 @@
+using Domain;
 using Domain.Contracts.Interfaces;
-using Hosting.DockerClient.HttpClient;
-using Hosting.DockerClient.Models.Images;
-using Hosting.DockerClient.Services;
+using Domain.Contracts.Resources.Images;
 using Infrastructure.Repositories;
 using Moq;
 using System.Runtime.CompilerServices;
@@ -13,28 +12,34 @@ public sealed class BuildProcessRunnerTests
     [Fact]
     public async Task RunAsync_ShouldBuildAndPushThroughDockerApiStreams()
     {
-        var imageService = new Mock<IImageService>(MockBehavior.Strict);
-        BuildImageStreamCommand? buildCommand = null;
-        PushImageStreamCommand? pushCommand = null;
+        var imageConnector = new Mock<IImageConnector>(MockBehavior.Strict);
+        var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>(MockBehavior.Strict);
+        BuildImageCommand? buildCommand = null;
+        PushImageCommand? pushCommand = null;
         var digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        var runner = new BuildProcessRunner(imageService.Object);
-        var command = CreateCommand();
+        var runner = new BuildProcessRunner(connectorFactory.Object);
+        var command = CreateCommand(connectorType: PlatformConnectorType.Agent);
 
-        imageService
-            .Setup(x => x.StreamBuildImage(It.IsAny<BuildImageStreamCommand>(), It.IsAny<CancellationToken>()))
-            .Callback<BuildImageStreamCommand, CancellationToken>((cmd, _) => buildCommand = cmd)
-            .Returns(Messages(new JSONMessage { Stream = "Step 1/1 : FROM scratch" }));
-        imageService
-            .Setup(x => x.StreamPushImage(It.IsAny<PushImageStreamCommand>(), It.IsAny<CancellationToken>()))
-            .Callback<PushImageStreamCommand, CancellationToken>((cmd, _) => pushCommand = cmd)
-            .Returns(Messages(new JSONMessage { Status = $"latest: digest: {digest} size: 123" }));
+        connectorFactory.Setup(x => x.GetConnector(PlatformConnectorType.Agent)).Returns(imageConnector.Object);
+        imageConnector
+            .Setup(x => x.BuildImageProgressStreamAsync(It.IsAny<BuildImageCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildImageCommand, CancellationToken>((cmd, _) => buildCommand = cmd)
+            .Returns(Messages(new ImageBuildStreamItem(null, "Step 1/1 : FROM scratch", null, null, null, null, null)));
+        imageConnector
+            .Setup(x => x.PushImageProgressStreamAsync(It.IsAny<PushImageCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<PushImageCommand, CancellationToken>((cmd, _) => pushCommand = cmd)
+            .Returns(Messages(new ImageBuildStreamItem(null, null, $"latest: digest: {digest} size: 123", null, null, null, null)));
 
         var events = await runner.RunAsync(command, TestContext.Current.CancellationToken)
             .ToListAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(buildCommand);
+        Assert.Equal(command.PlatformAddress, buildCommand.PlatformAddress);
         Assert.Equal(command.ContextPath, buildCommand.ContextDirectory);
         Assert.Equal(command.DockerfilePath, buildCommand.DockerfilePath);
+        Assert.NotNull(buildCommand.ContextArchive);
+        Assert.NotEmpty(buildCommand.ContextArchive);
+        Assert.Equal("Dockerfile", buildCommand.DockerfileArchivePath);
         Assert.Equal(command.ImageReferences, buildCommand.Tags);
         Assert.Equal("Release", buildCommand.BuildArgs["CONFIGURATION"]);
         Assert.Equal(command.RegistryCredential!.RegistryHost, buildCommand.RegistryHost);
@@ -51,8 +56,9 @@ public sealed class BuildProcessRunnerTests
     [Fact]
     public async Task RunAsync_ShouldRejectBuildSecretsForDockerApiBuilds()
     {
-        var imageService = new Mock<IImageService>(MockBehavior.Strict);
-        var runner = new BuildProcessRunner(imageService.Object);
+        var imageConnector = new Mock<IImageConnector>(MockBehavior.Strict);
+        var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>(MockBehavior.Strict);
+        var runner = new BuildProcessRunner(connectorFactory.Object);
         var command = CreateCommand(secrets: [new BuildProcessSecret("token", "super-secret")]);
 
         var events = await runner.RunAsync(command, TestContext.Current.CancellationToken)
@@ -63,23 +69,26 @@ public sealed class BuildProcessRunnerTests
             e.Message!.Contains("Build secrets are not supported", StringComparison.Ordinal));
         var exit = Assert.Single(events, e => e.Stream == BuildProcessStream.Exit);
         Assert.Equal(1, exit.ExitCode);
-        imageService.Verify(x => x.StreamBuildImage(It.IsAny<BuildImageStreamCommand>(), It.IsAny<CancellationToken>()), Times.Never);
-        imageService.Verify(x => x.StreamPushImage(It.IsAny<PushImageStreamCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        connectorFactory.Verify(x => x.GetConnector(It.IsAny<PlatformConnectorType>()), Times.Never);
+        imageConnector.Verify(x => x.BuildImageProgressStreamAsync(It.IsAny<BuildImageCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        imageConnector.Verify(x => x.PushImageProgressStreamAsync(It.IsAny<PushImageCommand>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task RunAsync_ShouldApplyTimeoutAcrossBuildAndPush()
     {
-        var imageService = new Mock<IImageService>(MockBehavior.Strict);
-        var runner = new BuildProcessRunner(imageService.Object);
+        var imageConnector = new Mock<IImageConnector>(MockBehavior.Strict);
+        var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>(MockBehavior.Strict);
+        var runner = new BuildProcessRunner(connectorFactory.Object);
         var command = CreateCommand(timeout: TimeSpan.FromMilliseconds(20));
 
-        imageService
-            .Setup(x => x.StreamBuildImage(It.IsAny<BuildImageStreamCommand>(), It.IsAny<CancellationToken>()))
-            .Returns(Messages(new JSONMessage { Stream = "Successfully built image" }));
-        imageService
-            .Setup(x => x.StreamPushImage(It.IsAny<PushImageStreamCommand>(), It.IsAny<CancellationToken>()))
-            .Returns((PushImageStreamCommand _, CancellationToken ct) => WaitForCancellation(ct));
+        connectorFactory.Setup(x => x.GetConnector(command.PlatformConnectorType)).Returns(imageConnector.Object);
+        imageConnector
+            .Setup(x => x.BuildImageProgressStreamAsync(It.IsAny<BuildImageCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(Messages(new ImageBuildStreamItem(null, "Successfully built image", null, null, null, null, null)));
+        imageConnector
+            .Setup(x => x.PushImageProgressStreamAsync(It.IsAny<PushImageCommand>(), It.IsAny<CancellationToken>()))
+            .Returns((PushImageCommand _, CancellationToken ct) => WaitForCancellation(ct));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await runner.RunAsync(command, TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken));
@@ -88,15 +97,17 @@ public sealed class BuildProcessRunnerTests
     [Fact]
     public async Task RunAsync_ShouldRemoveNullBytesFromDockerOutput()
     {
-        var imageService = new Mock<IImageService>(MockBehavior.Strict);
-        var runner = new BuildProcessRunner(imageService.Object);
+        var imageConnector = new Mock<IImageConnector>(MockBehavior.Strict);
+        var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>(MockBehavior.Strict);
+        var runner = new BuildProcessRunner(connectorFactory.Object);
         var command = CreateCommand();
 
-        imageService
-            .Setup(x => x.StreamBuildImage(It.IsAny<BuildImageStreamCommand>(), It.IsAny<CancellationToken>()))
-            .Returns(Messages(new JSONMessage { Stream = "hello\0world" }));
-        imageService
-            .Setup(x => x.StreamPushImage(It.IsAny<PushImageStreamCommand>(), It.IsAny<CancellationToken>()))
+        connectorFactory.Setup(x => x.GetConnector(command.PlatformConnectorType)).Returns(imageConnector.Object);
+        imageConnector
+            .Setup(x => x.BuildImageProgressStreamAsync(It.IsAny<BuildImageCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(Messages(new ImageBuildStreamItem(null, "hello\0world", null, null, null, null, null)));
+        imageConnector
+            .Setup(x => x.PushImageProgressStreamAsync(It.IsAny<PushImageCommand>(), It.IsAny<CancellationToken>()))
             .Returns(Messages());
 
         var events = await runner.RunAsync(command, TestContext.Current.CancellationToken)
@@ -106,30 +117,66 @@ public sealed class BuildProcessRunnerTests
         Assert.DoesNotContain(events, e => e.Message?.Contains('\0', StringComparison.Ordinal) == true);
     }
 
+    [Fact]
+    public async Task RunAsync_ShouldNotPackageContextForLocalConnector()
+    {
+        var imageConnector = new Mock<IImageConnector>(MockBehavior.Strict);
+        var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>(MockBehavior.Strict);
+        var runner = new BuildProcessRunner(connectorFactory.Object);
+        var command = CreateCommand(connectorType: PlatformConnectorType.Local);
+        BuildImageCommand? buildCommand = null;
+
+        connectorFactory.Setup(x => x.GetConnector(PlatformConnectorType.Local)).Returns(imageConnector.Object);
+        imageConnector
+            .Setup(x => x.BuildImageProgressStreamAsync(It.IsAny<BuildImageCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildImageCommand, CancellationToken>((cmd, _) => buildCommand = cmd)
+            .Returns(Messages(new ImageBuildStreamItem(null, "Successfully built image", null, null, null, null, null)));
+        imageConnector
+            .Setup(x => x.PushImageProgressStreamAsync(It.IsAny<PushImageCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(Messages());
+
+        await runner.RunAsync(command, TestContext.Current.CancellationToken)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(buildCommand);
+        Assert.Null(buildCommand.ContextArchive);
+        Assert.Null(buildCommand.DockerfileArchivePath);
+    }
+
     private static BuildProcessCommand CreateCommand(
         IReadOnlyList<BuildProcessSecret>? secrets = null,
-        TimeSpan? timeout = null)
-        => new(
-            WorkingDirectory: @"C:\repo",
-            ContextPath: @"C:\repo\src",
-            DockerfilePath: @"C:\repo\src\Dockerfile",
+        TimeSpan? timeout = null,
+        PlatformConnectorType connectorType = PlatformConnectorType.Local)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "citadel-build-runner-tests", Guid.NewGuid().ToString("N"));
+        var contextPath = Path.Combine(root, "src");
+        Directory.CreateDirectory(contextPath);
+        File.WriteAllText(Path.Combine(contextPath, "Dockerfile"), "FROM scratch");
+
+        return new(
+            PlatformAddress: "http://builder.example.com:8001",
+            PlatformConnectorType: connectorType,
+            WorkingDirectory: root,
+            ContextPath: contextPath,
+            DockerfilePath: Path.Combine(contextPath, "Dockerfile"),
             Target: null,
             ImageReferences: ["registry.example.com/citadel/demo:latest"],
             BuildArgs: [new BuildProcessBuildArg("CONFIGURATION", "Release")],
             Secrets: secrets ?? [],
             RegistryCredential: new BuildProcessRegistryCredential("registry.example.com", "registry-auth-token"),
             Timeout: timeout ?? TimeSpan.FromMinutes(5));
+    }
 
-    private static async IAsyncEnumerable<JSONMessage> Messages(params JSONMessage[] messages)
+    private static async IAsyncEnumerable<ImageBuildStreamItem> Messages(params ImageBuildStreamItem[] messages)
     {
         await Task.Yield();
         foreach (var message in messages)
             yield return message;
     }
 
-    private static async IAsyncEnumerable<JSONMessage> WaitForCancellation([EnumeratorCancellation] CancellationToken cancellationToken)
+    private static async IAsyncEnumerable<ImageBuildStreamItem> WaitForCancellation([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
-        yield return new JSONMessage { Status = "unexpected" };
+        yield return new ImageBuildStreamItem(null, null, "unexpected", null, null, null, null);
     }
 }

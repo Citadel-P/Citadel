@@ -19,6 +19,7 @@ public sealed record BuildProjectInput(
     Guid RegistryId,
     string ImageRepository,
     IReadOnlyList<string>? TagTemplates,
+    BuildWebhookConfig? Webhook,
     int? TimeoutSeconds,
     int? RetentionRunCount,
     IReadOnlyCollection<Guid>? TagIds)
@@ -39,6 +40,7 @@ public sealed record BuildProjectInput(
             RegistryId,
             ImageRepository,
             TagTemplates,
+            Webhook,
             TimeoutSeconds,
             RetentionRunCount,
             TagIds);
@@ -58,6 +60,7 @@ public sealed record UpdateBuildProjectInput(
     Guid? RegistryId = null,
     string? ImageRepository = null,
     IReadOnlyList<string>? TagTemplates = null,
+    BuildWebhookConfig? Webhook = null,
     int? TimeoutSeconds = null,
     int? RetentionRunCount = null)
 {
@@ -76,6 +79,7 @@ public sealed record UpdateBuildProjectInput(
             RegistryId,
             ImageRepository,
             TagTemplates,
+            Webhook,
             TimeoutSeconds,
             RetentionRunCount);
 }

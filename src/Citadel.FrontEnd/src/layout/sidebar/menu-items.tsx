@@ -55,14 +55,14 @@ const MenuItems: IMenuItem[] = [
         route: '/stacks',
       },
       {
-        icon: renderIcon(CitadelIcons.AutomationAction),
-        label: 'Automation',
-        route: '/automation',
-      },
-      {
         icon: renderIcon(CitadelIcons.Build),
         label: 'Builds',
         route: '/builds',
+      },
+      {
+        icon: renderIcon(CitadelIcons.AutomationAction),
+        label: 'Automation',
+        route: '/automation',
       },
     ],
   },

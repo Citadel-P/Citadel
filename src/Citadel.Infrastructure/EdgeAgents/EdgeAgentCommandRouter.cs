@@ -434,6 +434,8 @@ internal sealed class EdgeAgentCommandRouter(
             EdgeAgentCommandKind.ImageExposedPorts => ProtoEdgeCommandKind.ImageExposedPorts,
             EdgeAgentCommandKind.ImageDistributionInspect => ProtoEdgeCommandKind.ImageDistributionInspect,
             EdgeAgentCommandKind.ImagePullStream => ProtoEdgeCommandKind.ImagePullStream,
+            EdgeAgentCommandKind.ImageBuildStream => ProtoEdgeCommandKind.ImageBuildStream,
+            EdgeAgentCommandKind.ImagePushStream => ProtoEdgeCommandKind.ImagePushStream,
             EdgeAgentCommandKind.VolumeList => ProtoEdgeCommandKind.VolumeList,
             EdgeAgentCommandKind.VolumeInspect => ProtoEdgeCommandKind.VolumeInspect,
             EdgeAgentCommandKind.VolumeCreate => ProtoEdgeCommandKind.VolumeCreate,

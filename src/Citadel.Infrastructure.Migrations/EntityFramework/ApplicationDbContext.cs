@@ -2023,6 +2023,7 @@ internal static class Configuration
         project.Property<Guid>("RegistryId").IsRequired();
         project.Property<string>("ImageRepository").HasColumnType(Text).HasMaxLength(512).IsRequired();
         project.Property<string>("TagTemplates").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[\"{branch}-{shortSha}\"]'::jsonb");
+        project.Property<string>("Webhook").HasColumnType("jsonb").IsRequired(false);
         project.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(1800);
         project.Property<int>("RetentionRunCount").HasColumnType(Integer).IsRequired().HasDefaultValue(20);
         project.Property<Guid?>("CurrentRunId").IsRequired(false);

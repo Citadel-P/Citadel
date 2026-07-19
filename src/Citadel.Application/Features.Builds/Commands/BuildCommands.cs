@@ -4,6 +4,7 @@ using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Activities;
 using Domain.Entities.Builds;
 using FluentValidation;
 using Hosting.Common;
@@ -38,7 +39,8 @@ public sealed record UpdateBuildProject(
     UpdateBuildProjectInputModel Project,
     bool UpdateDescription,
     bool UpdateBuildArgs,
-    bool UpdateBuildSecrets) : ICommand<Result<BuildProjectResult>>;
+    bool UpdateBuildSecrets,
+    bool UpdateWebhook) : ICommand<Result<BuildProjectResult>>;
 
 [RequirePermission(ResourceType.Build, PermissionLevel.Write)]
 public sealed record RenameBuildProject(Guid ProjectId, string Name) : ICommand<Result<BuildProjectResult>>;
@@ -58,7 +60,8 @@ public sealed record CancelBuildRun(Guid RunId) : ICommand<Result>;
 internal sealed class CreateBuildProjectHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
-    IBuildProjectStreamManager buildProjectStreamManager)
+    IBuildProjectStreamManager buildProjectStreamManager,
+    IActivityStreamManager activityStreamManager)
     : ICommandHandler<CreateBuildProject, Result<BuildProjectResult>>
 {
     public async ValueTask<Result<BuildProjectResult>> Handle(CreateBuildProject command, CancellationToken cancellationToken)
@@ -88,6 +91,7 @@ internal sealed class CreateBuildProjectHandler(
             input.RegistryId,
             input.ImageRepository,
             input.TagTemplates,
+            input.Webhook,
             input.TimeoutSeconds ?? BuildProject.DefaultTimeoutSeconds,
             input.RetentionRunCount ?? BuildProject.DefaultRetentionRunCount,
             userContextAccessor.Current.ActorId);
@@ -105,8 +109,16 @@ internal sealed class CreateBuildProjectHandler(
         if (rows == 0)
             return Result.Failure<BuildProjectResult>(new BadRequestError("One or more tags do not exist."));
 
+        var activity = BuildActivity.Create(
+            project,
+            project.PlatformId,
+            userContextAccessor.Current.ActorId,
+            ActivityEventType.BuildCreated,
+            new BuildCreated(BuildActivity.Snapshot(project)));
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildProjectStreamManager.SendBuildProjectInfo(project, "create");
+        await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
         return Result.Success(new BuildProjectResult(project));
     }
 
@@ -125,12 +137,6 @@ internal sealed class CreateBuildProjectHandler(
         if (platform is null)
             return Result.Failure(new NotFoundError("Platform not found."));
 
-        if (platform.ConnectorType != PlatformConnectorType.Local)
-        {
-            return Result.Failure(new BadRequestError(
-                "Build projects currently support local Docker platforms only. Agent and edge-agent build runners require the build helper connector protocol."));
-        }
-
         if (await unitOfWork.Registries.GetAsync(registryId, cancellationToken) is null)
             return Result.Failure(new NotFoundError("Registry not found."));
 
@@ -146,7 +152,9 @@ internal sealed class CreateBuildProjectHandler(
 
 internal sealed class UpdateBuildProjectHandler(
     IUnitOfWork unitOfWork,
-    IBuildProjectStreamManager buildProjectStreamManager)
+    IBuildProjectStreamManager buildProjectStreamManager,
+    IUserContextAccessor userContextAccessor,
+    IActivityStreamManager activityStreamManager)
     : ICommandHandler<UpdateBuildProject, Result<BuildProjectResult>>
 {
     public async ValueTask<Result<BuildProjectResult>> Handle(UpdateBuildProject command, CancellationToken cancellationToken)
@@ -166,6 +174,7 @@ internal sealed class UpdateBuildProjectHandler(
         if (validation.IsFailure(out var validationError))
             return Result.Failure<BuildProjectResult>(validationError);
 
+        var oldSnapshot = BuildActivity.Snapshot(project);
         try
         {
             project.Update(
@@ -184,6 +193,8 @@ internal sealed class UpdateBuildProjectHandler(
                 input.RegistryId,
                 input.ImageRepository,
                 input.TagTemplates,
+                input.Webhook,
+                command.UpdateWebhook,
                 input.TimeoutSeconds,
                 input.RetentionRunCount);
         }
@@ -192,16 +203,26 @@ internal sealed class UpdateBuildProjectHandler(
             return Result.Failure<BuildProjectResult>(new BadRequestError(ex.Message));
         }
 
+        var activity = BuildActivity.Create(
+            project,
+            project.PlatformId,
+            userContextAccessor.Current.ActorId,
+            ActivityEventType.BuildUpdated,
+            new BuildUpdated(oldSnapshot, BuildActivity.Snapshot(project)));
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.BuildProjects.UpdateAsync(project, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildProjectStreamManager.SendBuildProjectInfo(project);
+        await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
         return Result.Success(new BuildProjectResult(project));
     }
 }
 
 internal sealed class RenameBuildProjectHandler(
     IUnitOfWork unitOfWork,
-    IBuildProjectStreamManager buildProjectStreamManager)
+    IBuildProjectStreamManager buildProjectStreamManager,
+    IUserContextAccessor userContextAccessor,
+    IActivityStreamManager activityStreamManager)
     : ICommandHandler<RenameBuildProject, Result<BuildProjectResult>>
 {
     public async ValueTask<Result<BuildProjectResult>> Handle(RenameBuildProject command, CancellationToken cancellationToken)
@@ -214,10 +235,19 @@ internal sealed class RenameBuildProjectHandler(
         if (await unitOfWork.BuildProjects.ExistsByNormalizedNameExceptAsync(normalizedName, project.Id, cancellationToken))
             return Result.Failure<BuildProjectResult>(new ConflictError("Build project name already exists."));
 
+        var oldName = project.Name;
         project.Rename(command.Name);
+        var activity = BuildActivity.Create(
+            project,
+            project.PlatformId,
+            userContextAccessor.Current.ActorId,
+            ActivityEventType.BuildRenamed,
+            new BuildRenamed(oldName, project.Name));
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.BuildProjects.UpdateAsync(project, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildProjectStreamManager.SendBuildProjectInfo(project);
+        await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
         return Result.Success(new BuildProjectResult(project));
     }
 }
@@ -243,7 +273,9 @@ internal sealed class PatchBuildProjectMetadataHandler(
 
 internal sealed class ArchiveBuildProjectHandler(
     IUnitOfWork unitOfWork,
-    IBuildProjectStreamManager buildProjectStreamManager)
+    IBuildProjectStreamManager buildProjectStreamManager,
+    IUserContextAccessor userContextAccessor,
+    IActivityStreamManager activityStreamManager)
     : ICommandHandler<ArchiveBuildProject, Result>
 {
     public async ValueTask<Result> Handle(ArchiveBuildProject command, CancellationToken cancellationToken)
@@ -255,9 +287,17 @@ internal sealed class ArchiveBuildProjectHandler(
         if (await unitOfWork.BuildRuns.HasActiveRunAsync(project.Id, cancellationToken))
             return Result.Failure(new ConflictError("Build project has an active run."));
 
+        var activity = BuildActivity.Create(
+            project,
+            project.PlatformId,
+            userContextAccessor.Current.ActorId,
+            ActivityEventType.BuildDeleted,
+            new BuildDeleted(BuildActivity.Snapshot(project)));
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.BuildProjects.ArchiveAsync(project.Id, DateTimeOffset.UtcNow, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildProjectStreamManager.SendBuildProjectInfo(project, "delete");
+        await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
         return Result.Success();
     }
 }
@@ -266,7 +306,8 @@ internal sealed class QueueBuildRunHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
     IBuildProjectStreamManager buildProjectStreamManager,
-    IBuildRunStreamManager buildRunStreamManager)
+    IBuildRunStreamManager buildRunStreamManager,
+    IActivityStreamManager activityStreamManager)
     : ICommandHandler<QueueBuildRun, Result<BuildRunResult>>
 {
     public async ValueTask<Result<BuildRunResult>> Handle(QueueBuildRun command, CancellationToken cancellationToken)
@@ -316,16 +357,24 @@ internal sealed class QueueBuildRunHandler(
             userContextAccessor.Current.ActorId,
             project.TimeoutSeconds);
 
-        await unitOfWork.BuildRuns.AddAsync(run, cancellationToken);
         var marked = await unitOfWork.BuildProjects.MarkProcessingAsync(project.Id, run.Id, cancellationToken);
         if (marked == 0)
             return Result.Failure<BuildRunResult>(new ConflictError("Build project already has an active run."));
 
+        await unitOfWork.BuildRuns.AddAsync(run, cancellationToken);
+        var activity = BuildActivity.Create(
+            project,
+            project.PlatformId,
+            userContextAccessor.Current.ActorId,
+            ActivityEventType.BuildRunQueued,
+            new BuildRunQueued(run.Id, run.Trigger));
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run, "create");
         var updatedProject = await unitOfWork.BuildProjects.GetAsync(project.Id, cancellationToken);
         if (updatedProject is not null)
             await buildProjectStreamManager.SendBuildProjectInfo(updatedProject, latestRun: run);
+        await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
         return Result.Success(new BuildRunResult(run));
     }
 
@@ -416,3 +465,45 @@ internal sealed class ExecuteQueuedBuildRunHandler(IBuildRunExecutionService exe
 }
 
 public sealed record ExecuteQueuedBuildRun(Guid RunId) : ICommand<Result>;
+
+internal static class BuildActivity
+{
+    internal static ActivityEvent Create(
+        BuildProject project,
+        Guid? platformId,
+        Guid actorId,
+        ActivityEventType eventType,
+        ActivityEventInfo info)
+        => new(
+            platformId: platformId,
+            resourceId: project.Id,
+            actorId: actorId,
+            resourceName: project.Name,
+            eventType: eventType,
+            status: ActivityStatus.Success,
+            info: info);
+
+    internal static BuildProjectSnapshot Snapshot(BuildProject project)
+        => new(
+            project.Id,
+            project.Name,
+            project.Description,
+            project.Enabled,
+            project.GitRepositoryId,
+            project.Branch,
+            project.ContextPath,
+            project.DockerfilePath,
+            project.Target,
+            project.PlatformId,
+            project.RegistryId,
+            project.ImageRepository,
+            project.TagTemplates,
+            SanitizeWebhook(project.Webhook),
+            project.TimeoutSeconds,
+            project.RetentionRunCount);
+
+    private static BuildWebhookConfig? SanitizeWebhook(BuildWebhookConfig? webhook)
+        => webhook is null || string.IsNullOrEmpty(webhook.Secret)
+            ? webhook
+            : webhook with { Secret = null };
+}
