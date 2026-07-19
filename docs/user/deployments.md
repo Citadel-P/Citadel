@@ -38,7 +38,21 @@ Use local images when:
 - the image is loaded by another process
 - the platform cannot pull the image from a registry
 
+Build images are produced by Citadel build projects.
+
+Use this when the deployment should run the latest successful image from a build:
+
+- Image Source: `Build`
+- Build: the build project that produces the image
+- Redeploy On Build: automatically redeploy this deployment after the selected build succeeds
+
+You can save a deployment before the selected build has a successful run. The form shows whether the build already has a usable latest image. Deploy or redeploy succeeds only after the build has produced an image reference.
+
+For build setup and webhook-triggered builds, see `docs/user/builds.md`.
+
 Auto update is only available for external image sources. It is disabled for local images and for external images pinned by digest, such as `nginx@sha256:...`.
+
+Build images use `Redeploy On Build` instead of registry auto update.
 
 ## Networks
 

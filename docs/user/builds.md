@@ -60,7 +60,6 @@ Set:
 - Registry: registry Citadel pushes tags to.
 - Image repository: repository path under the selected registry, such as `team/api`.
 - Tags: comma-separated tag templates.
-- Update deployments: optional deployments that should use the successful build output.
 - Enabled: whether runs can be queued.
 - Timeout seconds: maximum build and push duration.
 - Run retention: number of recent terminal runs to keep.
@@ -142,13 +141,37 @@ latest, {shortSha}
 
 Citadel resolves the final image references when the run resolves the Git commit.
 
-## Deployment Consumers
+## Using Build Output
 
-Use **Update deployments** when a successful build should move one or more Citadel deployments to the newly built image.
+Build projects produce image references. Deployments and stacks consume those image references from their own forms.
 
-Citadel updates only deployments that use an external image from the same registry configured on the build. On success, Citadel writes the built image reference and digest into the deployment spec, records a `DeploymentUpdated` activity event, and streams the deployment update to connected clients.
+### Deployments
 
-If a selected deployment no longer exists, has no deployment spec, uses a local image, or points at a different registry, the build still succeeds. Citadel writes a warning to the run log and skips that deployment.
+In a deployment, choose:
+
+- Image Source: `Build`
+- Build: the build project that produces the image
+- Redeploy On Build: whether Citadel should redeploy this deployment automatically after a successful build
+
+The deployment form shows whether the selected build already has a latest successful image. You can save the deployment before the first successful build, but the deployment cannot be applied from that build image until a run succeeds.
+
+When a build succeeds, Citadel updates each deployment that uses that build image source with the new image reference and digest, records a `DeploymentUpdated` activity event, streams the deployment update to connected clients, and writes the update to the build run log. If `Redeploy On Build` is enabled, Citadel redeploys the deployment after the build finishes.
+
+### Stacks
+
+In a web editor stack or Git stack, use **Build Images** to map Compose services to build projects.
+
+Each binding contains:
+
+- Compose Service: exact Compose service name, such as `api`
+- Build: the build project that produces that service image
+- Redeploy On Build: whether Citadel should redeploy that service after a successful build
+
+When the stack is applied, Citadel resolves each binding to the latest successful build image. For web editor stacks, Citadel replaces the service image in the generated Compose content. For Git stacks, Citadel writes a generated Compose override file with the resolved image references.
+
+When a build succeeds, Citadel updates matching stack build image bindings with the new image reference and digest, records a `StackUpdated` activity event, streams the stack update to connected clients, and writes the affected service names to the build run log. If `Redeploy On Build` is enabled, Citadel reapplies only the mapped services.
+
+If a mapped build has no successful image yet, save is allowed, but stack apply fails until that build has a successful run.
 
 ## Build Arguments
 
@@ -208,8 +231,9 @@ A run:
 5. resolves build args, validates that build secrets are not configured, and resolves registry credentials
 6. runs the Docker Engine API build on the selected platform
 7. pushes all generated image tags to the registry
-8. updates configured deployment consumers when the build succeeds
-9. stores run status, image references, digest when available, and logs
+8. updates deployment and stack build-image consumers when the build succeeds
+9. redeploys consumers that have `Redeploy On Build` enabled
+10. stores run status, image references, digest when available, and logs
 
 Only one run per build project can be active at a time. If a run is already queued, preparing, or running, Citadel rejects another run for the same project.
 
@@ -304,5 +328,13 @@ If the push fails:
 - confirm the registry host and image repository are correct
 - confirm the registry token has push permission
 - confirm the Citadel host can reach the registry
+
+If a deployment or stack does not update after a successful build:
+
+- confirm the deployment uses Image Source `Build`, not `External` or `Local`
+- confirm the stack has a Build Images binding for the exact Compose service name
+- confirm the selected build project is the one that just succeeded
+- confirm `Redeploy On Build` is enabled if you expected an automatic redeploy
+- check the build run log for consumer update messages
 
 If secrets appear masked in logs, that is expected. Citadel redacts configured secret values before storing or streaming log output.

@@ -88,6 +88,22 @@ Image update checks only work for services with image references that can be res
 
 Use `Notify Only` for production stacks until the stack has been tested. Use auto-deploy modes only when the image tag policy is controlled and rollback expectations are clear.
 
+## Build Images
+
+Use **Build Images** when one or more Compose services should use images produced by Citadel build projects.
+
+For each service binding:
+
+- Compose Service: exact service name from the Compose file
+- Build: build project that produces the service image
+- Redeploy On Build: automatically reapply that service after the selected build succeeds
+
+When the stack is applied, Citadel resolves each binding to the latest successful image from the selected build and injects that image into the generated Compose content. You can save bindings before the first successful build, but apply fails until each selected build has a successful image.
+
+When a mapped build succeeds later, Citadel updates the stored binding with the new image reference and digest. If `Redeploy On Build` is enabled, Citadel reapplies only the mapped service.
+
+For build setup and webhook-triggered builds, see `docs/user/builds.md`.
+
 ## Project Name
 
 Docker Compose uses a project name to group containers, networks, and volumes.

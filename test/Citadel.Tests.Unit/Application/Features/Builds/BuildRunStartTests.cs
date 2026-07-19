@@ -7,12 +7,14 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Builds;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
+using Domain.Entities.Stacks;
 using Hosting.Common.Abstraction;
 using LightResults;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -328,8 +330,79 @@ public sealed class BuildRunStartTests
         var image = Assert.IsType<BuildImage>(deployment.Spec!.Image);
         Assert.Equal("registry.example.test/citadel/api:main-abcdef123456", image.ResolvedImageReference);
         Assert.Equal("sha256:abc", image.ResolvedDigest);
-        Assert.Contains(persistedLogs, log => log.Stream == "system" && log.Message.Contains("Updated deployment", StringComparison.Ordinal));
+        Assert.Contains(persistedLogs, log => log.Stream == "system" && log.Message.Contains("Updated build image source for deployment", StringComparison.Ordinal));
         context.Deployments.Verify(x => x.UpdateAsync(deployment, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedBuildRun_ShouldUpdateAndRedeployStackBuildImageConsumers_WhenBuildSucceeds()
+    {
+        var actorId = Guid.CreateVersion7();
+        var project = CreateProject(actorId);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var platform = CreatePlatform(project.PlatformId);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var stack = CreateBuildImageStack(project.PlatformId, project.Id, actorId, redeployOnBuild: true);
+        var run = CreateRun(project, repository, platform, registry, actorId);
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        PrepareRepositoryCache(repository);
+
+        var context = CreateExecutionContext(project, repository, platform, registry, run);
+        var persistedLogs = new List<BuildRunLogEntry>();
+
+        context.RepoCache
+            .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+        context.Runner
+            .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
+        context.BuildRuns
+            .Setup(x => x.UpdateAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        context.Stacks
+            .Setup(x => x.GetBuildImageConsumerStacksAsync(project.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([stack]);
+        context.Stacks
+            .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        context.ApplyStack
+            .Setup(x => x.ApplyAsync(
+                stack.Id,
+                actorId,
+                It.Is<IReadOnlyList<string>>(services => services.Count == 1 && services[0] == "api"),
+                true,
+                false,
+                false,
+                StackApplyOperation.Apply,
+                null,
+                It.IsAny<CancellationToken>()))
+            .Returns((Guid _, Guid _, IReadOnlyList<string>? _, bool _, bool _, bool _, StackApplyOperation _, StackSnapshot? _, CancellationToken ct) => SuccessfulStackApply(ct));
+        CaptureLogs(context.BuildRunLogs, persistedLogs);
+
+        var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        var binding = Assert.Single(stack.CurrentStackRelease!.Spec.BuildImageBindings!);
+        Assert.Equal("registry.example.test/citadel/api:main-abcdef123456", binding.ResolvedImageReference);
+        Assert.Equal("sha256:abc", binding.ResolvedDigest);
+        Assert.Contains(persistedLogs, log => log.Stream == "system" && log.Message.Contains("Updated build image binding for stack", StringComparison.Ordinal));
+        context.Stacks.Verify(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()), Times.Once);
+        context.ApplyStack.Verify(x => x.ApplyAsync(
+            stack.Id,
+            actorId,
+            It.Is<IReadOnlyList<string>>(services => services.Count == 1 && services[0] == "api"),
+            true,
+            false,
+            false,
+            StackApplyOperation.Apply,
+            null,
+            It.IsAny<CancellationToken>()), Times.Once);
+        context.StackStream.Verify(x => x.SendStackInfo(stack, "update"), Times.Once);
+        context.BuildRunStream.Verify(x => x.SendBuildRunLogs(
+            run.Id,
+            It.Is<IReadOnlyList<BuildRunLogEntry>>(entries =>
+                entries.Any(entry => entry.Message.Contains("Updated build image binding for stack", StringComparison.Ordinal)))),
+            Times.Once);
     }
 
     [Fact]
@@ -490,6 +563,7 @@ public sealed class BuildRunStartTests
         var runStream = new Mock<IBuildRunStreamManager>(MockBehavior.Strict);
         var activityStream = new Mock<IActivityStreamManager>(MockBehavior.Strict);
         var deploymentStream = new Mock<IDeploymentStreamManager>(MockBehavior.Strict);
+        var stackStream = new Mock<IStackStreamManager>(MockBehavior.Strict);
         var applyDeployment = new Mock<IApplyDeploymentService>(MockBehavior.Strict);
         var applyStack = new Mock<IApplyStackService>(MockBehavior.Strict);
         var retention = new Mock<IBuildRunRetentionService>(MockBehavior.Strict);
@@ -540,6 +614,9 @@ public sealed class BuildRunStartTests
         deploymentStream
             .Setup(x => x.SendDeploymentInfo(It.IsAny<Deployment>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
+        stackStream
+            .Setup(x => x.SendStackInfo(It.IsAny<Stack>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
         retention
             .Setup(x => x.PruneAsync(project.Id, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -555,7 +632,7 @@ public sealed class BuildRunStartTests
             runStream.Object,
             activityStream.Object,
             deploymentStream.Object,
-            Mock.Of<IStackStreamManager>(),
+            stackStream.Object,
             applyDeployment.Object,
             applyStack.Object,
             retention.Object,
@@ -567,10 +644,12 @@ public sealed class BuildRunStartTests
             buildRuns,
             buildRunLogs,
             deployments,
+            stacks,
             repoCache,
             runner,
             projectStream,
             runStream,
+            stackStream,
             applyDeployment,
             applyStack,
             retention,
@@ -677,6 +756,29 @@ public sealed class BuildRunStartTests
                 new BuildImage(buildProjectId, redeployOnBuild),
                 UpdateBehavior.Disabled));
 
+    private static Stack CreateBuildImageStack(Guid platformId, Guid buildProjectId, Guid actorId, bool redeployOnBuild)
+        => Stack.Create(
+            "api-stack",
+            actorId,
+            StackSource.WebEditor,
+            platformId,
+            new ManualStack(
+                ComposeFile: """
+                             services:
+                               api:
+                                 image: registry.example.test/citadel/api:old
+                             """,
+                UpdateBehavior: StackUpdateBehavior.Disabled,
+                BuildImageBindings:
+                [
+                    new StackBuildImageBinding(
+                        ServiceName: "api",
+                        BuildProjectId: buildProjectId,
+                        RedeployOnBuild: redeployOnBuild,
+                        ResolvedImageReference: "registry.example.test/citadel/api:old",
+                        ResolvedDigest: "sha256:old")
+                ]));
+
     private static BuildRun CreateRun(
         BuildProject project,
         GitRepository repository,
@@ -782,6 +884,14 @@ public sealed class BuildRunStartTests
         throw new InvalidOperationException("redeploy failed");
     }
 
+    private static async IAsyncEnumerable<StackStreamItem> SuccessfulStackApply(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        yield return StackStreamItem.Finished(0);
+    }
+
     private static IUserContextAccessor CreateUserContextAccessor(Guid actorId)
     {
         var user = new Mock<IUserContext>();
@@ -802,10 +912,12 @@ public sealed class BuildRunStartTests
         Mock<IBuildRunRepository> BuildRuns,
         Mock<IBuildRunLogRepository> BuildRunLogs,
         Mock<IDeploymentRepository> Deployments,
+        Mock<IStackRepository> Stacks,
         Mock<IRepoCacheManager> RepoCache,
         Mock<IBuildProcessRunner> Runner,
         Mock<IBuildProjectStreamManager> ProjectStream,
         Mock<IBuildRunStreamManager> BuildRunStream,
+        Mock<IStackStreamManager> StackStream,
         Mock<IApplyDeploymentService> ApplyDeployment,
         Mock<IApplyStackService> ApplyStack,
         Mock<IBuildRunRetentionService> Retention,

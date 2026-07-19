@@ -12,6 +12,7 @@ import {
   GitComposeProjectCandidate,
   BuildProjectView,
   StackBuildImageBinding,
+  BuildRunStatus,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -442,33 +443,61 @@ const StackBuildImageBindingsField = ({
 
       {bindings.map((binding, index) => {
         const hasProjectSelection = projectOptions.some((option) => option.value === binding.buildProjectId);
+        const selectedProject = projects.find((project) => project.id === binding.buildProjectId);
+        const latestRun = selectedProject?.latestRun;
+        const latestImageReference = latestRun?.imageReferences?.[0];
+        const hasSuccessfulImage = latestRun?.status === BuildRunStatus.Succeeded && !!latestImageReference;
         return (
-          <div key={`${binding.serviceName}:${index}`} className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
-            <FieldInput
-              value={binding.serviceName}
-              disabled={disabled}
-              onChange={(serviceName) => setBinding(index, { serviceName })}
-              placeholder="compose service name"
-              className="w-full max-w-full"
-            />
-            <FieldSelect
-              value={hasProjectSelection ? binding.buildProjectId : undefined}
-              options={projectOptions}
-              disabled={disabled || isLoading || projectOptions.length === 0}
-              placeholder={isLoading ? 'Loading builds...' : 'Select build'}
-              onChange={(buildProjectId) => setBinding(index, { buildProjectId })}
-              className="w-full max-w-full"
-            />
-            <FieldSwitch
-              id={`stack-build-redeploy-${index}`}
-              checked={binding.redeployOnBuild ?? false}
-              disabled={disabled}
-              onChange={(redeployOnBuild) => setBinding(index, { redeployOnBuild })}
-            />
+          <div
+            key={`${binding.serviceName}:${index}`}
+            className="grid gap-3 border-b pb-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto_auto]">
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">Compose Service</span>
+              <FieldInput
+                value={binding.serviceName}
+                disabled={disabled}
+                onChange={(serviceName) => setBinding(index, { serviceName })}
+                placeholder="e.g. api"
+                className="w-full max-w-full"
+              />
+            </div>
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">Build</span>
+              <FieldSelect
+                value={hasProjectSelection ? binding.buildProjectId : undefined}
+                options={projectOptions}
+                disabled={disabled || isLoading || projectOptions.length === 0}
+                placeholder={isLoading ? 'Loading builds...' : 'Select build'}
+                onChange={(buildProjectId) => setBinding(index, { buildProjectId })}
+                className="w-full max-w-full"
+              />
+              <BuildBindingStatus
+                buildProjectId={binding.buildProjectId}
+                isLoading={isLoading}
+                project={selectedProject}
+                hasProjects={projectOptions.length > 0}
+                hasSuccessfulImage={hasSuccessfulImage}
+                latestStatus={latestRun?.status}
+                latestImageReference={latestImageReference}
+              />
+            </div>
+            <div className="flex min-w-32 flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">Redeploy</span>
+              <label className="flex h-10 items-center gap-2 text-sm">
+                <FieldSwitch
+                  id={`stack-build-redeploy-${index}`}
+                  checked={binding.redeployOnBuild ?? false}
+                  disabled={disabled}
+                  onChange={(redeployOnBuild) => setBinding(index, { redeployOnBuild })}
+                />
+                <span className="text-muted-foreground">On success</span>
+              </label>
+            </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
+              className="mt-5"
               disabled={disabled}
               onClick={() => removeBinding(index)}
               title="Remove build image binding">
@@ -498,6 +527,44 @@ const StackBuildImageBindingsField = ({
       </Button>
     </div>
   );
+};
+
+const BuildBindingStatus = ({
+  buildProjectId,
+  isLoading,
+  project,
+  hasProjects,
+  hasSuccessfulImage,
+  latestStatus,
+  latestImageReference,
+}: {
+  buildProjectId?: string | null;
+  isLoading?: boolean;
+  project?: BuildProjectView;
+  hasProjects: boolean;
+  hasSuccessfulImage: boolean;
+  latestStatus?: BuildRunStatus;
+  latestImageReference?: string;
+}) => {
+  if (isLoading) return null;
+  if (!hasProjects) return <p className="text-xs text-amber-600">Create a build project before mapping services.</p>;
+  if (buildProjectId && !project) return <p className="text-xs text-amber-600">Selected build is no longer available.</p>;
+  if (!project) return <p className="text-xs text-muted-foreground">Select the build that produces this service image.</p>;
+  if (hasSuccessfulImage) {
+    return (
+      <p className="truncate text-xs text-emerald-600" title={latestImageReference}>
+        Latest image: <span className="font-mono">{latestImageReference}</span>
+      </p>
+    );
+  }
+  if (latestStatus) {
+    return (
+      <p className="text-xs text-amber-600">
+        Latest run {latestStatus}; this service can deploy after a successful run.
+      </p>
+    );
+  }
+  return <p className="text-xs text-muted-foreground">No build image yet; run this build before applying the stack.</p>;
 };
 
 function validateStackBuildImageBindings(value?: StackBuildImageBinding[] | null): string | null {

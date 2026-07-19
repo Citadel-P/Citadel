@@ -13,6 +13,7 @@ import {
   DeploymentConfigView,
   PatchDeploymentInput,
   LookupResourceType,
+  BuildRunStatus,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -480,29 +481,62 @@ export const DeploymentForm = ({
                         label: 'Build',
                         required: true,
                         description: 'Build project whose latest successful image will be deployed.',
-                        validate: (v) => (!v ? 'Build is required' : null),
+                        validate: (v) => {
+                          if (!v) return 'Build is required';
+                          if (!buildProjectsLoading && !buildProjects.some((project) => project.id === v)) {
+                            return 'Selected build is no longer available';
+                          }
+                          return null;
+                        },
                         render: (val, set) => {
                           const hasSelection = buildProjectOptions.some((option) => option.value === val);
+                          const selectedProject = buildProjects.find((project) => project.id === val);
+                          const latestRun = selectedProject?.latestRun;
+                          const latestImageReference = latestRun?.imageReferences?.[0];
+                          const hasSuccessfulImage = latestRun?.status === BuildRunStatus.Succeeded && !!latestImageReference;
                           return (
-                            <FieldSelect
-                              value={hasSelection ? val : undefined}
-                              options={buildProjectOptions}
-                              disabled={disabled || buildProjectsLoading || buildProjectOptions.length === 0}
-                              placeholder={buildProjectsLoading ? 'Loading builds...' : 'Select build'}
-                              onChange={(buildProjectId) =>
-                                set((prev) => ({
-                                  spec: {
-                                    ...prev.spec!,
-                                    image: {
-                                      $type: 'Build',
-                                      ...((prev.spec?.image as DeploymentImageInfoBuildImage) ?? {}),
-                                      buildProjectId,
-                                    } satisfies DeploymentImageInfoBuildImage,
-                                    updateBehavior: UpdateBehavior.Disabled,
-                                  },
-                                }))
-                              }
-                            />
+                            <div className="flex flex-col gap-2">
+                              <FieldSelect
+                                value={hasSelection ? val : undefined}
+                                options={buildProjectOptions}
+                                disabled={disabled || buildProjectsLoading || buildProjectOptions.length === 0}
+                                placeholder={buildProjectsLoading ? 'Loading builds...' : 'Select build'}
+                                onChange={(buildProjectId) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...prev.spec!,
+                                      image: {
+                                        $type: 'Build',
+                                        ...((prev.spec?.image as DeploymentImageInfoBuildImage) ?? {}),
+                                        buildProjectId,
+                                      } satisfies DeploymentImageInfoBuildImage,
+                                      updateBehavior: UpdateBehavior.Disabled,
+                                    },
+                                  }))
+                                }
+                              />
+                              {!buildProjectsLoading && buildProjectOptions.length === 0 ? (
+                                <AlertMessage type="warning" title="No builds available">
+                                  Create a build project before using a build image source.
+                                </AlertMessage>
+                              ) : val && !selectedProject && !buildProjectsLoading ? (
+                                <AlertMessage type="warning" title="Build unavailable">
+                                  The selected build no longer exists. Select another build before saving.
+                                </AlertMessage>
+                              ) : selectedProject && hasSuccessfulImage ? (
+                                <AlertMessage type="success" title="Latest image">
+                                  <span className="font-mono text-xs">{latestImageReference}</span>
+                                </AlertMessage>
+                              ) : selectedProject && latestRun ? (
+                                <AlertMessage type="warning" title={`Latest run ${latestRun.status}`}>
+                                  Deployment can be saved, but it cannot apply this build image until a run succeeds.
+                                </AlertMessage>
+                              ) : selectedProject ? (
+                                <AlertMessage type="info" title="No build image yet">
+                                  Deployment can be saved, but it cannot apply this build image until the first build succeeds.
+                                </AlertMessage>
+                              ) : null}
+                            </div>
                           );
                         },
                       }),
@@ -893,6 +927,7 @@ export const DeploymentForm = ({
       id,
       effectiveConfigurationNames,
       disabled,
+      buildProjects,
       buildProjectOptions,
       buildProjectsLoading,
     ],
