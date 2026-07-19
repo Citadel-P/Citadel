@@ -55,7 +55,18 @@ internal class HttpClientsContext
         serializerOptions.TypeInfoResolverChain.Add(VaultKvV2Context.Default);
 
         // Converters
-        serializerOptions.Converters.Add(new JsonStringEnumConverter());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<Infrastructure.DockerHub.Type>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<Role>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<SortOrder>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<ImageStatus>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<TagStatus>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<Scim_schema_attributeType>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<UserType>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<Org_memberRole>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<Group_memberType>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<Body3Role>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<Type2>());
+        serializerOptions.Converters.Add(new JsonStringEnumConverter<Permission>());
 
         return serializerOptions;
     }

@@ -56,6 +56,7 @@ const defaultBuild: BuildProjectInput = {
 };
 
 const shortSha = (value?: string | null) => (value ? value.slice(0, 12) : '-');
+const agentContextLimitLabel = '16 MB';
 
 type GitBranchOption = {
   branch: string;
@@ -153,7 +154,9 @@ const BuildPlatformField = ({
     ? `This build uses a ${formatConnectorType(selectedConnectorType)} platform that is no longer available. Select another platform before saving.`
     : options.length === 0 && hasLoaded
       ? 'No Docker platforms are available. Add a platform before creating a build.'
-      : 'Select the Docker platform that runs this build. Local, agent, and edge-agent connectors are supported.';
+      : isAgentConnector(selectedConnectorType)
+        ? `Agent builds package the selected context and transfer it to the agent. Keep it below ${agentContextLimitLabel} after .dockerignore filtering.`
+        : 'Select the Docker platform that runs this build. Local, agent, and edge-agent connectors are supported.';
 
   return (
     <div className="flex flex-col gap-2">
@@ -182,6 +185,10 @@ function formatConnectorType(connectorType?: PlatformConnectorType) {
     default:
       return 'unsupported';
   }
+}
+
+function isAgentConnector(connectorType?: PlatformConnectorType) {
+  return connectorType === PlatformConnectorType.Agent || connectorType === PlatformConnectorType.EdgeAgent;
 }
 
 const JsonArrayEditor = <T,>({
@@ -256,6 +263,11 @@ export const BuildForm = ({
     [gitBranchesData?.data.branches, gitRefs],
   );
   const platforms = useMemo(() => platformsData?.data.platforms ?? [], [platformsData?.data.platforms]);
+  const currentPlatformId = update.platformId ?? resource?.platformId ?? defaultBuild.platformId;
+  const selectedPlatform = useMemo(
+    () => platforms.find((platform) => platform.id === currentPlatformId),
+    [currentPlatformId, platforms],
+  );
   const platformOptions = useMemo(
     () =>
       platforms.map((platform) => ({
@@ -395,8 +407,16 @@ export const BuildForm = ({
                 label: 'Context',
                 description: 'Directory, relative to the repository root, sent to Docker as the build context.',
                 required: true,
+                validate: validateRepoRelativePath,
                 render: (value, set) => (
-                  <FieldInput value={value ?? ''} onChange={(v) => set({ contextPath: v })} placeholder="." />
+                  <div className="flex flex-col gap-2">
+                    <FieldInput value={value ?? ''} onChange={(v) => set({ contextPath: v })} placeholder="." />
+                    <p className="text-xs text-muted-foreground">
+                      {isAgentConnector(selectedPlatform?.connectorType)
+                        ? `Agent and edge-agent builds upload this directory to the runner. Use .dockerignore to keep the transferred context under ${agentContextLimitLabel}.`
+                        : 'Docker receives this directory as the build context. Use .dockerignore to keep builds fast.'}
+                    </p>
+                  </div>
                 ),
               }),
               defineField({
@@ -404,6 +424,7 @@ export const BuildForm = ({
                 label: 'Dockerfile',
                 description: 'Dockerfile path, relative to the repository root.',
                 required: true,
+                validate: validateRepoRelativePath,
                 render: (value, set) => (
                   <FieldInput
                     value={value ?? ''}
@@ -572,7 +593,7 @@ export const BuildForm = ({
                   <JsonArrayEditor<BuildArgSpec>
                     value={value ?? []}
                     filename="build-arguments.json"
-                    helperText="Each item becomes a Docker --build-arg entry."
+                    helperText="Each item becomes a Docker build arg. Do not put secrets here; Docker can expose build args in image metadata."
                     onChange={(buildArgs) => set({ buildArgs })}
                   />
                 ),
@@ -586,7 +607,7 @@ export const BuildForm = ({
                   <JsonArrayEditor<BuildSecretSpec>
                     value={value ?? []}
                     filename="build-secrets.json"
-                    helperText="Each item maps a BuildKit secret id to a Citadel secret."
+                    helperText="Reserved for BuildKit-native builders. The current Docker Engine API runner rejects configured build secrets."
                     onChange={(buildSecrets) => set({ buildSecrets })}
                   />
                 ),
@@ -609,6 +630,7 @@ export const BuildForm = ({
       platformOptions,
       platforms,
       platformsData,
+      selectedPlatform?.connectorType,
       update.branch,
     ],
   );
@@ -722,4 +744,17 @@ function parseJsonArrayWithDiagnostics<T>(value: string): { value?: T[]; diagnos
 
 function validateJsonArray(value: unknown) {
   return Array.isArray(value) ? null : 'Must be a JSON array';
+}
+
+function validateRepoRelativePath(value: unknown) {
+  const path = String(value ?? '').trim();
+  if (!path) return 'Path is required.';
+  if (path.includes('\0')) return 'Path is invalid.';
+  if (/^[a-zA-Z]:[\\/]/.test(path) || path.startsWith('/') || path.startsWith('\\')) {
+    return 'Use a path relative to the repository root.';
+  }
+
+  const segments = path.replace(/\\/g, '/').split('/');
+  if (segments.some((segment) => segment === '..')) return 'Path cannot leave the repository.';
+  return null;
 }

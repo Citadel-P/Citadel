@@ -1,6 +1,6 @@
 # Webhooks
 
-Webhooks let external systems notify Citadel through a public listener URL. Citadel uses webhooks to trigger resource-owned actions such as syncing a Git repository, deploying a Git stack, running an automation action, or queuing a backup policy.
+Webhooks let external systems notify Citadel through a public listener URL. Citadel uses webhooks to trigger resource-owned actions such as syncing a Git repository, deploying a Git stack, queuing a build, running an automation action, or queuing a backup policy.
 
 Citadel does not have a separate "Webhook" resource page. Webhook settings live on the resource that will be triggered.
 
@@ -18,6 +18,7 @@ Supported URL segments:
 | --- | --- | --- | --- |
 | Git repository | `repo` | `pull` | Queue repository sync |
 | Git stack | `stack` | `deploy` | Queue or run Git stack update/deploy behavior |
+| Build project | `build` | `run` | Queue a build run |
 | Automation action | `automation-action` | `run` | Queue an automation action run |
 | Backup policy | `backup-policy` | `run` | Queue a backup run |
 
@@ -33,8 +34,9 @@ Examples:
 ```text
 https://citadel.example.com/listener/github/repo/019f0000-0000-7000-9000-000000000001/pull
 https://citadel.example.com/listener/github/stack/019f0000-0000-7000-9000-000000000002/deploy
-https://citadel.example.com/listener/gitlab/automation-action/019f0000-0000-7000-9000-000000000003/run
-https://citadel.example.com/listener/github/backup-policy/019f0000-0000-7000-9000-000000000004/run
+https://citadel.example.com/listener/github/build/019f0000-0000-7000-9000-000000000003/run
+https://citadel.example.com/listener/gitlab/automation-action/019f0000-0000-7000-9000-000000000004/run
+https://citadel.example.com/listener/github/backup-policy/019f0000-0000-7000-9000-000000000005/run
 ```
 
 The listener is outside `/api/v1` and is intentionally public. Only `/listener/*` needs to be reachable by the external provider.
@@ -95,6 +97,7 @@ Defaults:
 
 - Git repository webhook: repository default branch
 - Git stack webhook: stack webhook branch filter, or the stack branch when the filter is empty
+- Build project webhook: build branch
 - Automation action webhook: no default branch unless you configure one
 - Backup policy webhook: no default branch unless you configure one
 
@@ -155,6 +158,26 @@ For Git stack setup, see `docs/user/git-stacks.md`.
 
 For Git repository and account setup, see `docs/user/git-repositories.md`.
 
+## Build Webhooks
+
+Build webhooks queue a build project run.
+
+Use this when a Git provider should build and push an image after a branch update.
+
+Behavior:
+
+1. Citadel validates the provider, secret, branch, and repository identity.
+2. Citadel checks that the build project is enabled and has no active run.
+3. Citadel checks changed paths against the build context and Dockerfile path.
+4. Citadel queues a build run with trigger `Webhook`.
+5. The run resolves the configured repository branch to an exact commit, packages the build context, builds on the configured platform, and pushes the configured tags.
+
+Build webhooks use the same one-active-run-per-project rule as manual builds. If a build is already queued, preparing, or running, Citadel rejects the delivery instead of starting a second run.
+
+For monorepos, keep the build context scoped to the service directory. If the provider payload includes changed files, unrelated path changes are accepted as no-op deliveries. If the payload omits changed files, Citadel syncs the repository and diffs the latest successful build commit against the new branch head before deciding.
+
+For build project setup, see `docs/user/builds.md`.
+
 ## Automation Action Webhooks
 
 Automation action webhooks queue an action run.
@@ -204,7 +227,7 @@ Git repository and Git stack webhooks write webhook activity events:
 
 Activities can include request id, provider event type, delivery id, branch, commit SHA, repository name, dispatch status, and no-op reason.
 
-Automation action webhooks appear in action run history. Backup policy webhooks appear in backup run history.
+Build webhooks appear in build activities and build run history. Automation action webhooks appear in action run history. Backup policy webhooks appear in backup run history.
 
 Webhook alerts are reserved for failures that need attention:
 

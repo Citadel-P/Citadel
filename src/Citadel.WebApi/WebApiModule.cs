@@ -291,6 +291,11 @@ internal static class WebApiModule
             .Validate(IsValidAutomationInternalBaseUrl, "Automations:InternalBaseUrl must be an absolute HTTP or HTTPS URL.")
             .ValidateOnStart();
         builder.Services
+            .AddOptions<BuildOptions>()
+            .BindConfiguration(BuildOptions.SectionName)
+            .Validate(options => options.RunRetentionDays > 0, "Builds:RunRetentionDays must be greater than zero.")
+            .ValidateOnStart();
+        builder.Services
             .AddOptions<BackupOptions>()
             .BindConfiguration(BackupOptions.SectionName)
             .Validate(options => !string.IsNullOrWhiteSpace(options.ResticPath), "Backups:ResticPath is required.")

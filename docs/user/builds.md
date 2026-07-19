@@ -13,18 +13,24 @@ Builds are not automation actions. Automation actions may call the Build API, bu
 
 ## Current Runner Support
 
-Builds currently run only on `Local` Docker platforms.
+Builds can run on Docker platforms connected through:
 
-Agent and edge-agent platforms can manage deployments, stacks, and Docker resources, but build execution on those connectors requires the build helper connector protocol. Citadel rejects build projects that select an agent or edge-agent platform until that support is implemented.
+- `Local`
+- `Agent`
+- `EdgeAgent`
+
+Local builds stream the build context from Citadel Core to the local Docker daemon.
+
+Agent and edge-agent builds package the resolved build context in Citadel Core, send that archive to the selected agent, and let the agent stream it to its Docker daemon. The transferred archive must fit within the current agent message envelope limit of `16 MB`.
 
 ## Prerequisites
 
 Before creating a build, configure:
 
 - a Git repository that contains the Dockerfile and build context
-- a local Docker platform where the build can run
+- a Docker platform where the build can run
 - a registry where Citadel can push the built image
-- optional Citadel secrets for BuildKit secret mounts
+- optional Citadel secrets for future BuildKit secret mounts
 
 For repository setup, see `docs/user/git-repositories.md`.
 
@@ -50,7 +56,7 @@ Set:
 - Context: directory relative to the repository root sent to Docker as the build context.
 - Dockerfile: Dockerfile path relative to the repository root.
 - Target stage: optional Dockerfile stage for multi-stage builds.
-- Platform: local Docker platform that runs the build.
+- Platform: Docker platform that runs the build.
 - Registry: registry Citadel pushes tags to.
 - Image repository: repository path under the selected registry, such as `team/api`.
 - Tags: comma-separated tag templates.
@@ -58,7 +64,7 @@ Set:
 - Timeout seconds: maximum build and push duration.
 - Run retention: number of recent terminal runs to keep.
 - Build arguments: optional JSON array of Docker build args.
-- Build secrets: optional JSON array of BuildKit secret mounts.
+- Build secrets: reserved JSON array of future BuildKit secret mounts.
 
 Save the build before queueing a run.
 
@@ -83,6 +89,30 @@ Dockerfile: services/api/Dockerfile
 ```
 
 Paths must stay inside the repository. Absolute paths and path traversal are rejected.
+
+## Build Context Size
+
+The build context is the directory sent to Docker. Keep it small and explicit.
+
+For local builds, a large context slows the Docker API upload and can make logs appear delayed.
+
+For agent and edge-agent builds, Citadel first packages the context and transfers it to the agent. The packaged context must be under `16 MB`. If it is larger, the run fails before Docker starts.
+
+Add a `.dockerignore` file in the context directory to exclude files that are not needed by the Dockerfile.
+
+Common exclusions:
+
+```text
+.git
+node_modules
+bin
+obj
+dist
+coverage
+*.log
+```
+
+In monorepos, prefer the smallest service directory as the context instead of using the repository root.
 
 ## Image Repository And Tags
 
@@ -128,7 +158,7 @@ Example:
 
 Do not put passwords, tokens, or private keys in build arguments. Docker build args can leak into image history or metadata.
 
-Use build secrets for sensitive values.
+Use build secrets for sensitive values once BuildKit secret sessions are supported by the runner.
 
 ## Build Secrets
 
@@ -154,6 +184,8 @@ RUN --mount=type=secret,id=npmrc \
 
 Secret values are resolved only when a run starts. Citadel does not store secret values in build project snapshots, run snapshots, logs, or image references.
 
+Current limitation: the Docker Engine API runner does not support BuildKit secret sessions yet. If build secrets are configured, the run is rejected before Docker starts. Use build arguments only for non-sensitive values.
+
 ## Run A Build
 
 Use **Build** from the build list or build detail page.
@@ -164,12 +196,26 @@ A run:
 2. syncs the Git repository branch
 3. resolves the exact commit SHA
 4. validates the context and Dockerfile paths
-5. resolves build args, build secrets, and registry credentials
-6. runs Docker BuildKit on the local platform
+5. resolves build args, validates that build secrets are not configured, and resolves registry credentials
+6. runs the Docker Engine API build on the selected platform
 7. pushes all generated image tags to the registry
 8. stores run status, image references, digest when available, and logs
 
 Only one run per build project can be active at a time. If a run is already queued, preparing, or running, Citadel rejects another run for the same project.
+
+## Webhooks
+
+Enable webhooks on a build project when a Git provider should queue a build after a push.
+
+Build webhook runs use the same configured repository, branch, context, Dockerfile, platform, registry, and tag templates as manual runs. Citadel validates the provider secret, branch, and repository identity, then queues the build with trigger `Webhook`.
+
+Citadel uses changed paths from the webhook payload when the provider includes them. A build is queued only when a changed path is inside the configured build context or exactly matches the configured Dockerfile path.
+
+If the payload does not include changed paths, Citadel syncs the repository branch, diffs the latest successful build commit against the new branch head, and applies the same path decision. This keeps monorepo builds from running when only unrelated services changed.
+
+Only one run per build project can be active at a time. If a webhook arrives while a run is already queued, preparing, or running, Citadel rejects the delivery instead of starting another build.
+
+For the shared listener URL format and provider setup, see `docs/user/webhooks.md`.
 
 ## Logs And History
 
@@ -206,6 +252,13 @@ Each build project keeps its most recent terminal runs according to **Run retent
 
 When a new terminal run is recorded, Citadel deletes older terminal runs beyond the retention count. Persisted logs for deleted runs are removed with the run.
 
+Citadel also uses the existing cleanup job to remove old terminal build runs. By default, completed build runs older than `90` days are deleted during the normal cleanup cycle. Administrators can configure this with:
+
+```text
+Builds:RunCleanupEnabled
+Builds:RunRetentionDays
+```
+
 Retention does not delete:
 
 - pushed registry images
@@ -217,9 +270,9 @@ Retention does not delete:
 
 If no platform appears in the build form:
 
-- create a local Docker platform
+- create a Docker platform
 - confirm the platform is accessible from Citadel Core
-- agent and edge-agent platforms are not supported for builds yet
+- for agent and edge-agent platforms, confirm the agent is running a build-capable version
 
 If branch discovery is empty:
 
@@ -232,8 +285,9 @@ If the build fails before Docker starts:
 - check that Context exists in the repository
 - check that Dockerfile exists
 - confirm paths are relative to the repository root
+- for agent and edge-agent builds, reduce the context below `16 MB` with `.dockerignore`
 - confirm the selected registry has push credentials when required
-- confirm configured build secrets still exist
+- remove build secrets until BuildKit secret sessions are supported by the runner
 
 If the push fails:
 

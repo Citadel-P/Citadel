@@ -2046,7 +2046,7 @@ namespace Infrastructure.DockerHub
         /// </summary>
 
         [JsonPropertyName("status")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<ImageStatus>))]
         public ImageStatus Status { get; set; }
 
         /// <summary>
@@ -2148,7 +2148,7 @@ namespace Infrastructure.DockerHub
         /// </summary>
 
         [JsonPropertyName("status")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<TagStatus>))]
         public TagStatus Status { get; set; }
 
         /// <summary>
@@ -2228,7 +2228,7 @@ namespace Infrastructure.DockerHub
         public string Name { get; set; }
 
         [JsonPropertyName("type")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<Scim_schema_attributeType>))]
         public Scim_schema_attributeType Type { get; set; }
 
         [JsonPropertyName("multiValued")]
@@ -2428,7 +2428,7 @@ namespace Infrastructure.DockerHub
         public string Profile_url { get; set; }
 
         [JsonPropertyName("type")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<UserType>))]
         public UserType Type { get; set; }
 
         [JsonPropertyName("username")]
@@ -2460,7 +2460,7 @@ namespace Infrastructure.DockerHub
         /// </summary>
 
         [JsonPropertyName("role")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<Org_memberRole>))]
         public Org_memberRole Role { get; set; }
 
         /// <summary>
@@ -2610,7 +2610,7 @@ namespace Infrastructure.DockerHub
         public string Profile_url { get; set; }
 
         [JsonPropertyName("type")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<Group_memberType>))]
         public Group_memberType Type { get; set; }
 
         [JsonPropertyName("username")]
@@ -2992,7 +2992,7 @@ namespace Infrastructure.DockerHub
 
         [JsonPropertyName("role")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<Body3Role>))]
         public Body3Role Role { get; set; }
 
         private IDictionary<string, object> _additionalProperties;
@@ -3125,7 +3125,7 @@ namespace Infrastructure.DockerHub
 
         [JsonPropertyName("Type")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<Type2>))]
         public Type2 Type { get; set; }
 
         /// <summary>
@@ -3133,7 +3133,7 @@ namespace Infrastructure.DockerHub
         /// </summary>
 
         [JsonPropertyName("Permission")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(JsonStringEnumConverter<Permission>))]
         public Permission Permission { get; set; }
 
         /// <summary>

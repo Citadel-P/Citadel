@@ -31,6 +31,16 @@ Before installing the Agent, confirm that the Docker host has:
 
 The Citadel Agent version should match the Citadel Core version. Citadel generates the installation command using the expected image tag.
 
+## Builds
+
+Regular Agent platforms can run Citadel build projects.
+
+For builds, Citadel Core resolves the configured Git repository and branch, packages the selected build context, and sends that archive to the Agent. The Agent streams the archive to its local Docker daemon and pushes the configured image tags to the selected registry.
+
+Keep build contexts small. Agent build context archives must fit within the current `16 MB` message envelope. Use `.dockerignore` in the context directory to exclude `.git`, dependency folders, build outputs, and logs.
+
+The Agent version should be updated together with Citadel Core when build protocol fields change.
+
 ## Create the platform
 
 In Citadel, open:

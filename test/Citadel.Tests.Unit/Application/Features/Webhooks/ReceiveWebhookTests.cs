@@ -5,11 +5,13 @@ using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Backups;
 using Domain.Entities.Builds;
 using Domain.Entities.Git;
+using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
@@ -779,6 +781,148 @@ public sealed class ReceiveWebhookTests
     }
 
     [Fact]
+    public async Task BuildRun_WithOnlyUnrelatedPayloadPaths_ReturnsNoOpAndDoesNotQueue()
+    {
+        var repo = CreateRepository();
+        var project = CreateBuildProject(repo.Id, contextPath: "services/api", dockerfilePath: "services/api/Dockerfile");
+        var buildProjects = new Mock<IBuildProjectRepository>();
+        buildProjects.Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false)).ReturnsAsync(project);
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var buildRuns = new Mock<IBuildRunRepository>();
+        buildRuns.Setup(x => x.HasActiveRunAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        List<ActivityEvent> activities = [];
+
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            buildProjects: buildProjects.Object,
+            buildRuns: buildRuns.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateBuildRunCommand(
+                project.Id,
+                branch: "main",
+                repositoryUrl: repo.Url,
+                changedPaths: ["docs/readme.md", "services/web/package.json"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("No relevant path changes", response.Reason);
+        buildRuns.Verify(x => x.AddAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()), Times.Never);
+        var activity = Assert.Single(activities);
+        Assert.Equal(ActivityEventType.BuildWebhookReceived, activity.EventType);
+        Assert.Equal(ActivityStatus.Information, activity.Status);
+        var info = Assert.IsType<BuildWebhookReceived>(activity.Info);
+        Assert.Equal("noop", info.Status);
+        Assert.Equal("No relevant path changes", info.Reason);
+    }
+
+    [Fact]
+    public async Task BuildRun_WithoutPayloadPaths_UsesRepositoryDiffAndSkipsUnrelatedChanges()
+    {
+        var repo = CreateRepository();
+        var project = CreateBuildProject(repo.Id, contextPath: "services/api", dockerfilePath: "services/api/Dockerfile");
+        var latestRun = CreateSucceededBuildRun(project, repo, "old-commit");
+        var buildProjects = new Mock<IBuildProjectRepository>();
+        buildProjects.Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false)).ReturnsAsync(project);
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var buildRuns = new Mock<IBuildRunRepository>();
+        buildRuns.Setup(x => x.HasActiveRunAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        buildRuns.Setup(x => x.GetLatestByProjectAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(latestRun);
+        var repoCacheManager = new Mock<IRepoCacheManager>();
+        repoCacheManager
+            .Setup(x => x.SynchronizeAsync(repo, repo.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Hash: "new-commit", Success: true));
+        var gitCliRepository = new Mock<IGitCliRepository>();
+        gitCliRepository
+            .Setup(x => x.GetChangedPathsAsync(repo.GetCachePath(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["services/web/package.json", "README.md"]));
+        List<ActivityEvent> activities = [];
+
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            buildProjects: buildProjects.Object,
+            buildRuns: buildRuns.Object,
+            repoCacheManager: repoCacheManager.Object,
+            gitCliRepository: gitCliRepository.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateBuildRunCommand(project.Id, branch: "main", repositoryUrl: repo.Url),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("No relevant path changes", response.Reason);
+        buildRuns.Verify(x => x.AddAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()), Times.Never);
+        var info = Assert.IsType<BuildWebhookReceived>(Assert.Single(activities).Info);
+        Assert.Equal("No relevant path changes", info.Reason);
+    }
+
+    [Fact]
+    public async Task BuildRun_WithoutPayloadPaths_UsesRepositoryDiffAndQueuesRelevantChanges()
+    {
+        var repo = CreateRepository();
+        var project = CreateBuildProject(repo.Id, contextPath: "services/api", dockerfilePath: "services/api/Dockerfile");
+        var latestRun = CreateSucceededBuildRun(project, repo, "old-commit");
+        var platform = new PlatformConnectionInfo(project.PlatformId, "local", "unix:///var/run/docker.sock", PlatformConnectorType.Local);
+        var registry = CreateRegistry(project.RegistryId);
+        var queuedRuns = new List<BuildRun>();
+        var buildProjects = new Mock<IBuildProjectRepository>();
+        buildProjects.Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false)).ReturnsAsync(project);
+        buildProjects.Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), true)).ReturnsAsync(project);
+        buildProjects.Setup(x => x.MarkProcessingAsync(project.Id, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var buildRuns = new Mock<IBuildRunRepository>();
+        buildRuns.Setup(x => x.HasActiveRunAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        buildRuns.Setup(x => x.GetLatestByProjectAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(latestRun);
+        buildRuns
+            .Setup(x => x.AddAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildRun, CancellationToken>((run, _) => queuedRuns.Add(run))
+            .ReturnsAsync(1);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms.Setup(x => x.GetInfoAsync(project.PlatformId, It.IsAny<CancellationToken>())).ReturnsAsync(platform);
+        var registries = new Mock<IRegistryRepository>();
+        registries.Setup(x => x.GetAsync(project.RegistryId, It.IsAny<CancellationToken>())).ReturnsAsync(registry);
+        var repoCacheManager = new Mock<IRepoCacheManager>();
+        repoCacheManager
+            .Setup(x => x.SynchronizeAsync(repo, repo.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Hash: "new-commit", Success: true));
+        var gitCliRepository = new Mock<IGitCliRepository>();
+        gitCliRepository
+            .Setup(x => x.GetChangedPathsAsync(repo.GetCachePath(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["services/api/Program.cs"]));
+        List<ActivityEvent> activities = [];
+
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            buildProjects: buildProjects.Object,
+            buildRuns: buildRuns.Object,
+            platforms: platforms.Object,
+            registries: registries.Object,
+            repoCacheManager: repoCacheManager.Object,
+            gitCliRepository: gitCliRepository.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateBuildRunCommand(project.Id, branch: "main", repositoryUrl: repo.Url),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("queued", response.Status);
+        Assert.Equal("main", Assert.IsType<BuildWebhookReceived>(activities.Last().Info).DispatchedBranch);
+        Assert.Equal("new-commit", Assert.IsType<BuildWebhookReceived>(activities.Last().Info).DispatchedCommitSha);
+        var run = Assert.Single(queuedRuns);
+        Assert.Equal(BuildRunTrigger.Webhook, run.Trigger);
+        Assert.Equal("new-commit", run.ResolvedCommitSha);
+        Assert.Equal("registry.example.test/team/api:main-new-commit", Assert.Single(run.ImageReferences));
+    }
+
+    [Fact]
     public async Task BackupPolicyRun_WithMatchingPush_QueuesWebhookBackupRunAsPolicyActor()
     {
         var policy = CreateBackupPolicy();
@@ -853,6 +997,10 @@ public sealed class ReceiveWebhookTests
         IStackRepository? stacks = null,
         IBackupPolicyRepository? backupPolicies = null,
         IBackupRunRepository? backupRuns = null,
+        IBuildProjectRepository? buildProjects = null,
+        IBuildRunRepository? buildRuns = null,
+        IPlatformRepository? platforms = null,
+        IRegistryRepository? registries = null,
         ChannelWriter<GitRepoSyncRequest>? gitSyncWriter = null,
         INotificationQueue? notificationQueue = null,
         IApplyStackService? applyStackService = null,
@@ -872,12 +1020,28 @@ public sealed class ReceiveWebhookTests
         actors
             .Setup(x => x.GetById(Constants.SystemId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((global::Domain.Entities.Identity.Actor?)null);
+        var buildProjectStream = new Mock<IBuildProjectStreamManager>();
+        buildProjectStream
+            .Setup(x => x.SendBuildProjectInfo(It.IsAny<BuildProject>(), It.IsAny<string>(), It.IsAny<BuildRun?>()))
+            .Returns(Task.CompletedTask);
+        var buildRunStream = new Mock<IBuildRunStreamManager>();
+        buildRunStream
+            .Setup(x => x.SendBuildRunInfo(It.IsAny<BuildRun>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+        var activityStream = new Mock<IActivityStreamManager>();
+        activityStream
+            .Setup(x => x.SendActivityInfo(It.IsAny<ActivityEvent>()))
+            .Returns(Task.CompletedTask);
 
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.Setup(x => x.GitRepositories).Returns(gitRepos ?? Mock.Of<IGitReposRepository>());
         unitOfWork.Setup(x => x.Stacks).Returns(stacks ?? Mock.Of<IStackRepository>());
         unitOfWork.Setup(x => x.BackupPolicies).Returns(backupPolicies ?? Mock.Of<IBackupPolicyRepository>());
         unitOfWork.Setup(x => x.BackupRuns).Returns(backupRuns ?? Mock.Of<IBackupRunRepository>());
+        unitOfWork.Setup(x => x.BuildProjects).Returns(buildProjects ?? Mock.Of<IBuildProjectRepository>());
+        unitOfWork.Setup(x => x.BuildRuns).Returns(buildRuns ?? Mock.Of<IBuildRunRepository>());
+        unitOfWork.Setup(x => x.Platforms).Returns(platforms ?? Mock.Of<IPlatformRepository>());
+        unitOfWork.Setup(x => x.Registries).Returns(registries ?? Mock.Of<IRegistryRepository>());
         unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
         unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
         unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
@@ -887,11 +1051,11 @@ public sealed class ReceiveWebhookTests
             gitSyncWriter ?? Channel.CreateUnbounded<GitRepoSyncRequest>().Writer,
             notificationQueue ?? new TestNotificationQueue(),
             Mock.Of<IGitRepositoryStreamManager>(),
-            Mock.Of<IActivityStreamManager>(),
+            activityStream.Object,
             alertService ?? Mock.Of<IAlertService>(),
             applyStackService ?? Mock.Of<IApplyStackService>(),
-            Mock.Of<IBuildProjectStreamManager>(),
-            Mock.Of<IBuildRunStreamManager>(),
+            buildProjectStream.Object,
+            buildRunStream.Object,
             repoCacheManager ?? Mock.Of<IRepoCacheManager>(),
             gitCliRepository ?? Mock.Of<IGitCliRepository>(),
             Mock.Of<IAutomationRunQueueService>(),
@@ -907,6 +1071,68 @@ public sealed class ReceiveWebhookTests
             gitAccountId: null,
             createdByActorId: Constants.SystemId,
             webhook: webhook ?? new RepoWebhookConfig(Enabled: true));
+
+    private static BuildProject CreateBuildProject(Guid gitRepositoryId, string contextPath = ".", string dockerfilePath = "Dockerfile")
+        => new(
+            name: "api-image",
+            description: "Webhook build",
+            enabled: true,
+            gitRepositoryId: gitRepositoryId,
+            branch: "main",
+            contextPath: contextPath,
+            dockerfilePath: dockerfilePath,
+            target: null,
+            buildArgs: [],
+            buildSecrets: [],
+            platformId: Guid.CreateVersion7(),
+            registryId: Guid.CreateVersion7(),
+            imageRepository: "team/api",
+            tagTemplates: ["{branch}-{shortSha}"],
+            webhook: new BuildWebhookConfig(Enabled: true),
+            timeoutSeconds: BuildProject.DefaultTimeoutSeconds,
+            retentionRunCount: BuildProject.DefaultRetentionRunCount,
+            createdByActorId: Constants.SystemId);
+
+    private static BuildRun CreateSucceededBuildRun(BuildProject project, GitRepository repository, string commitSha)
+    {
+        var run = new BuildRun(
+            project.Id,
+            project.Name,
+            repository.Id,
+            repository.Name,
+            project.Branch,
+            commitSha,
+            project.ContextPath,
+            project.DockerfilePath,
+            project.Target,
+            project.BuildArgs,
+            [.. project.BuildSecrets.Select(static secret => secret.Id)],
+            new BuildPlatformSnapshot(project.PlatformId, "local", "unix:///var/run/docker.sock", PlatformConnectorType.Local),
+            new BuildRegistrySnapshot(project.RegistryId, "registry", "registry.example.test"),
+            project.ImageRepository,
+            project.TagTemplates,
+            [$"registry.example.test/{project.ImageRepository}:main-{commitSha}"],
+            BuildRunTrigger.Webhook,
+            project.Id,
+            Constants.SystemId,
+            project.TimeoutSeconds);
+
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        run.MarkRunning(DateTimeOffset.UtcNow);
+        run.CompleteSucceeded("sha256:old", run.ImageReferences, 0, DateTimeOffset.UtcNow);
+        return run;
+    }
+
+    private static Registry CreateRegistry(Guid id)
+        => Registry.FromPersistence(
+            id,
+            "registry",
+            null,
+            RegistryStatus.Active,
+            "registry.example.test",
+            DateTime.UtcNow,
+            Constants.SystemId,
+            new CustomRegistry());
 
     private static BackupPolicy CreateBackupPolicy(bool enabled = true)
         => new(
@@ -958,6 +1184,19 @@ public sealed class ReceiveWebhookTests
             Execution: "run",
             Headers: Headers(("X-GitHub-Event", "push")),
             Body: PushPayload(branch, "https://github.com/octocat/Hello-World.git", "octocat/Hello-World"));
+
+    private static ReceiveWebhook CreateBuildRunCommand(
+        Guid projectId,
+        string branch,
+        string repositoryUrl,
+        IReadOnlyList<string>? changedPaths = null)
+        => new(
+            AuthType: "github",
+            ResourceType: "build",
+            ResourceId: projectId,
+            Execution: "run",
+            Headers: Headers(("X-GitHub-Event", "push")),
+            Body: PushPayload(branch, repositoryUrl, "octocat/Hello-World", changedPaths));
 
     private static Dictionary<string, string[]> Headers(params (string Name, string Value)[] headers)
         => headers.ToDictionary(

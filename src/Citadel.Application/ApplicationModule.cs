@@ -130,6 +130,7 @@ public static class ApplicationModule
             .AddSingleton<IBackupRestoreRunCoordinator, BackupRestoreRunCoordinator>()
             .AddSingleton<IBackupRestoreRunExecutionService, BackupRestoreRunExecutionService>()
             .AddSingleton<IBuildRunCoordinator, BuildRunCoordinator>()
+            .AddSingleton<IBuildRunCleanupService, BuildRunCleanupService>()
             .AddScoped<IBuildRunRetentionService, BuildRunRetentionService>()
             .AddScoped<IBuildRunExecutionService, BuildRunExecutionService>()
             .AddSingleton<IApplyStackService, ApplyStackService>();

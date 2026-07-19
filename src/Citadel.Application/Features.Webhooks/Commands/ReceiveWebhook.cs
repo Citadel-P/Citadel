@@ -473,11 +473,14 @@ internal sealed class ReceiveWebhookHandler(
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
         var resolvedBranch = branch.Branch ?? project.Branch;
-        if (payload.ChangedPaths.Count > 0 && !BuildWebhookChangeMatcher.HasRelevantChanges(project, payload.ChangedPaths))
-            return WebhookDispatchResult.NoOp("No relevant path changes");
-
         if (await unitOfWork.BuildRuns.HasActiveRunAsync(project.Id, cancellationToken))
             return WebhookDispatchResult.NoOp("Build project already has an active run");
+
+        var relevance = await ResolveBuildWebhookChangeRelevanceAsync(project, repo, resolvedBranch, payload, cancellationToken);
+        if (!relevance.Relevant)
+            return WebhookDispatchResult.NoOp(relevance.Reason ?? "No relevant path changes");
+
+        var dispatchedCommit = relevance.ResolvedCommitSha ?? payload.CommitSha;
 
         var platform = await unitOfWork.Platforms.GetInfoAsync(project.PlatformId, cancellationToken);
         if (platform is null)
@@ -492,7 +495,7 @@ internal sealed class ReceiveWebhookHandler(
             project.ImageRepository,
             project.TagTemplates,
             resolvedBranch,
-            payload.CommitSha);
+            dispatchedCommit);
 
         var run = new BuildRun(
             project.Id,
@@ -500,7 +503,7 @@ internal sealed class ReceiveWebhookHandler(
             repo.Id,
             repo.Name,
             resolvedBranch,
-            payload.CommitSha,
+            dispatchedCommit,
             project.ContextPath,
             project.DockerfilePath,
             project.Target,
@@ -537,7 +540,46 @@ internal sealed class ReceiveWebhookHandler(
             await buildProjectStreamManager.SendBuildProjectInfo(updatedProject, latestRun: run);
         await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
 
-        return WebhookDispatchResult.Queued(null, resolvedBranch, payload.CommitSha);
+        return WebhookDispatchResult.Queued(null, resolvedBranch, dispatchedCommit);
+    }
+
+    private async Task<(bool Relevant, string? Reason, string? ResolvedCommitSha)> ResolveBuildWebhookChangeRelevanceAsync(
+        BuildProject project,
+        GitRepository repo,
+        string branch,
+        WebhookPayloadInfo payload,
+        CancellationToken cancellationToken)
+    {
+        if (payload.ChangedPaths.Count > 0)
+        {
+            return BuildWebhookChangeMatcher.HasRelevantChanges(project, payload.ChangedPaths)
+                ? (true, null, payload.CommitSha)
+                : (false, "No relevant path changes", null);
+        }
+
+        var latestRun = await unitOfWork.BuildRuns.GetLatestByProjectAsync(project.Id, cancellationToken);
+        if (latestRun?.Status != BuildRunStatus.Succeeded || string.IsNullOrWhiteSpace(latestRun.ResolvedCommitSha))
+            return (true, null, payload.CommitSha);
+
+        var sync = await repoCacheManager.SynchronizeAsync(repo, repo.GitAccount, branch, cancellationToken);
+        if (sync.Success != true || string.IsNullOrWhiteSpace(sync.Hash))
+            return (false, sync.Error ?? "Repository sync did not resolve a commit", null);
+
+        if (string.Equals(latestRun.ResolvedCommitSha, sync.Hash, StringComparison.OrdinalIgnoreCase))
+            return (false, "No new commit", null);
+
+        var pathsResult = await gitCliRepository.GetChangedPathsAsync(
+            repo.GetCachePath(),
+            latestRun.ResolvedCommitSha,
+            sync.Hash,
+            cancellationToken);
+
+        if (pathsResult.IsFailure(out _, out var changedPaths))
+            return (true, null, sync.Hash);
+
+        return BuildWebhookChangeMatcher.HasRelevantChanges(project, changedPaths)
+            ? (true, null, sync.Hash)
+            : (false, "No relevant path changes", null);
     }
 
     private async Task<(bool Relevant, string? Reason, string? ResolvedCommitSha)> ResolveStackWebhookChangeRelevanceAsync(

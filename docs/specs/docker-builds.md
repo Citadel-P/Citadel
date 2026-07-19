@@ -40,11 +40,12 @@ Slice 1 implements only:
 - build project CRUD
 - Git repository source
 - local, regular-agent, and edge-agent platform execution
-- Dockerfile builds through a Citadel build helper
+- Dockerfile builds through the Docker Engine image-build API
 - literal or variable-backed build arguments
-- BuildKit secret mounts from existing Citadel secrets
+- build-secret configuration validation, with BuildKit secret sessions deferred
 - registry push
 - manual runs
+- webhook-triggered runs
 - live and persisted logs
 - cancellation and timeout
 - run history
@@ -56,7 +57,6 @@ Slice 1 implements only:
 Slice 1 does **not** implement:
 
 - schedules
-- webhooks
 - deployment or stack updates
 - dedicated build agents or builder pools
 - Citadel-managed AWS/VM provisioning
@@ -90,7 +90,6 @@ Frontend routes:
 /builds
 /builds/add
 /builds/edit/{id}
-/builds/{id}/runs/{runId}
 ```
 
 ## Builds List
@@ -122,7 +121,7 @@ Tabs:
 - **Runs**
 - **Activities**
 
-## Run Page
+## Run Sheet
 
 Show:
 
@@ -138,6 +137,8 @@ Show:
 - duration
 - exit code and error message
 - live/persisted logs
+
+Run details are shown in the same bottom progress sheet pattern used by stack and deployment operations. Do not add a separate run details page in Slice 1.
 - cancel action while active
 
 ---
@@ -197,11 +198,13 @@ A `BuildRun` is an immutable execution attempt.
 
 A run snapshots all non-secret information required to understand what happened, even if the project, repository, platform, or registry is later changed.
 
-## Build Helper
+## Build Execution
 
-A versioned Citadel build-helper image performs the actual BuildKit build and registry push on the selected platform.
+Citadel uses the Docker Engine image-build API on the selected platform.
 
-The helper is an internal implementation detail. Users do not select its image, network mode, extra hosts, privileges, or command-line flags in Slice 1.
+For local platforms, Core streams the build context to the local Docker daemon. For regular-agent and edge-agent platforms, Core packages the context and sends it to the agent, then the agent streams it to its local Docker daemon.
+
+There is no build helper container in Slice 1.
 
 ---
 
@@ -294,7 +297,7 @@ Rules:
 - exactly one of `LiteralValue` or `ResourceBindingId` is set
 - binding-backed args may resolve only non-secret variables
 - build arguments are not treated as secret because Docker build args can leak into image history or metadata
-- sensitive values must use BuildKit secrets instead
+- sensitive values must not be placed in build args
 
 ### Build Secrets
 
@@ -311,10 +314,14 @@ RUN --mount=type=secret,id=npmrc \
     cp /run/secrets/npmrc ~/.npmrc && npm ci
 ```
 
-Rules:
+Current Slice 1 rule:
+
+- configured build secrets are rejected before Docker execution because the Docker Engine API runner does not yet support BuildKit secret sessions
+
+Future rules, once BuildKit secret sessions are implemented:
 
 - secret values are resolved only when the run starts
-- values are materialized as temporary files inside the helper
+- values are materialized through Docker build secret sessions
 - values are never stored in project snapshots, run snapshots, logs, activities, or image labels
 - only the configured secret ids and BuildKit mount ids may be stored
 - duplicate secret mount ids are rejected
@@ -401,13 +408,28 @@ Do not create a persisted `Rejected` run for validation, permission, disabled-pr
 public enum BuildRunTrigger
 {
     Manual,
-    Automation
+    Automation,
+    Webhook
 }
 ```
 
 The server determines the trigger. Clients cannot choose an arbitrary trigger value.
 
-Future slices may append `Schedule` and `Webhook`.
+Future slices may append `Schedule`.
+
+### Webhook Path Filtering
+
+Webhook-triggered builds use the shared listener route:
+
+```text
+/listener/{github|gitlab}/build/{id}/run
+```
+
+For push payloads that include changed paths, queue a build only when at least one path is inside `ContextPath` or exactly equals `DockerfilePath`.
+
+For push payloads that omit changed paths, sync the linked repository branch, diff the latest successful build commit against the new branch head, and apply the same path decision. If there is no latest successful build commit, queue the build.
+
+Unrelated changes return a no-op webhook result and record webhook activity; they do not create a build run.
 
 ## 6.3 BuildRunLog
 
@@ -466,17 +488,17 @@ Use `git archive` or the existing equivalent snapshot service so that:
 - the build contains committed files from the resolved commit
 - `.git` is not included
 - uncommitted Core filesystem changes are not included
-- the helper does not receive Git credentials
+- the selected Docker platform does not receive Git credentials
 
-The helper must never clone the repository itself in Slice 1.
+The selected Docker platform must never clone the repository itself in Slice 1.
 
 This gives local, regular-agent, and edge-agent builds the same source behavior and keeps Git credentials inside the existing Citadel Git integration.
 
 ## Context Rules
 
-- archive only the selected context when the current Git materializer supports it safely; otherwise archive the commit and extract the validated context inside the helper
-- honor `.dockerignore` through BuildKit
-- reject missing context or Dockerfile paths before starting BuildKit
+- archive only the selected context after applying `.dockerignore`
+- honor `.dockerignore` when packaging the Docker build context
+- reject missing context or Dockerfile paths before starting Docker
 - submodules and Git LFS follow the current Git repository capability; do not add new submodule/LFS behavior solely for Builds
 - enforce the existing transfer limit, or add one narrow `Builds:MaxContextBytes` setting if no suitable limit exists
 
@@ -490,75 +512,38 @@ Slice 1 stores `PlatformId` directly on `BuildProject`.
 
 Do not introduce a polymorphic builder hierarchy until a second builder kind is actually implemented.
 
-## Helper Image
+## Docker Engine API Runner
 
-Use a server-configured, versioned Citadel build-helper image, following the same pull/version pattern as existing backup or volume helpers.
+Use the Docker Engine image-build endpoint on the selected platform connector. Do not shell out to `docker build`, and do not require the Docker buildx CLI plugin on the Core or Agent host.
 
-Example configuration key:
+Registry authentication is passed through the Docker API auth mechanism using the selected Citadel registry resource. Registry credentials are never persisted on the project or run snapshot.
 
-```text
-Builds:HelperImage
-```
-
-Do not expose a per-project helper image override in Slice 1.
-
-The helper contains:
-
-- BuildKit
-- source archive extraction tools
-- the small Citadel helper entrypoint
-- registry authentication support
-- structured result output
-
-BuildKit is mandatory in Slice 1. Do not implement a separate legacy `docker build` path.
+BuildKit may be enabled by the Docker daemon, but Slice 1 does not require or configure BuildKit sessions.
 
 ## Execution Flow
 
 1. Resolve and snapshot the source.
-2. Resolve build args and secrets.
+2. Resolve build args and validate that build secrets are not configured.
 3. Resolve registry login material through the existing registry service.
-4. Create the helper container on the selected platform through `IContainerConnector`.
-5. Transfer the source archive and temporary secret/authentication files.
-6. Start the BuildKit build and push all resolved tags.
-7. Stream stdout, stderr, and system messages to Core.
-8. Read a structured helper result containing exit code, image references, and digest.
+4. Package the Docker context using `.dockerignore`.
+5. For agent and edge-agent platforms, transfer the package through the agent command stream.
+6. Start the Docker Engine image-build request with `push=true`.
+7. Stream stdout, stderr, aux, and system messages to Core.
+8. Capture the pushed digest when the Docker daemon reports it.
 9. Persist the output snapshot.
-10. Remove the helper container and temporary material in `finally`.
+10. Clear temporary packaged context material in `finally`.
 
-The helper pushes directly to the registry. It does not need to import the image into the selected platform Docker daemon.
+The selected platform's Docker daemon performs the build and push.
 
 Do not add the pushed image to platform-local image inventory unless the image is actually present in that daemon.
 
-## Helper Result
+## Build Result
 
 Do not parse the image digest from human-readable console text.
 
-The helper must return structured result data, for example:
+Use structured Docker Engine API stream records, especially `aux` digest payloads, for digest capture. Human-readable log lines are only persisted and displayed.
 
-```json
-{
-  "exitCode": 0,
-  "digest": "sha256:...",
-  "references": [
-    "ghcr.io/acme/api:main-a4c8e3c1"
-  ]
-}
-```
-
-The transport may use the existing connector result channel or a known result file copied back from the helper.
-
-## Helper Identification And Cleanup
-
-Label helper containers with at least:
-
-```text
-io.citadel.managed=true
-io.citadel.resource=build-run
-io.citadel.build-run-id={runId}
-io.citadel.build-project-id={buildProjectId}
-```
-
-Cancellation, timeout, failure, and Core startup recovery use these labels to find and remove orphaned helpers.
+Cancellation and timeout cancel the active Docker API stream. For agent and edge-agent builds, Core cancellation closes the active command stream and the agent cancels the Docker request.
 
 ---
 
@@ -614,7 +599,7 @@ Rules:
 - credentials come only from the selected registry resource
 - registry credentials are never copied into project or run snapshots
 
-Use the digest reported by BuildKit after the push. A digest may be absent only when the selected registry/build output cannot return one; the run may still succeed, but the UI must show that no digest was reported.
+Use the digest reported by the Docker API after the push. A digest may be absent only when the selected registry/build output cannot return one; the run may still succeed, but the UI must show that no digest was reported.
 
 ---
 
@@ -659,7 +644,7 @@ Cancellation:
 
 - records the user request
 - cancels the execution token
-- stops and removes the helper container
+- cancels the active Docker build stream
 - keeps existing logs and snapshots
 - finishes the run as `Cancelled`
 - clears `CurrentRunId` only when it still points to that run
@@ -667,7 +652,7 @@ Cancellation:
 ## Timeout
 
 - enforce the project timeout across preparation, transfer, build, and push
-- on timeout, cancel and remove the helper
+- on timeout, cancel the active Docker build stream
 - finish as `TimedOut`
 
 ## Core Restart Recovery
@@ -677,7 +662,6 @@ On startup:
 - queued runs remain queued and may resume normally
 - runs left in `Preparing` or `Running` become `Interrupted`
 - clear stale `CurrentRunId` references
-- attempt best-effort cleanup of helper containers identified by Citadel labels
 - record an activity describing the interruption
 
 Do not silently mark an unknown interrupted build as succeeded.
@@ -691,9 +675,9 @@ Do not silently mark an unknown interrupted build as succeeded.
 - Git credentials stay inside the existing Git repository integration
 - registry credentials are resolved only for the active run
 - secret values are resolved only for the active run
-- pass registry authentication through a temporary Docker configuration or the existing safe equivalent
+- pass registry authentication through the existing safe Docker API auth channel
 - never include secrets in command-line arguments when a file or environment channel is available
-- remove all temporary credential and secret files with the helper container
+- remove temporary packaged context material in `finally`
 
 If the current registry model cannot produce generic login material, add one narrow application service such as:
 
@@ -714,7 +698,7 @@ Reuse the existing secret redactor.
 
 Redact at least:
 
-- selected BuildKit secret values
+- selected future BuildKit secret values
 - registry passwords and tokens
 - temporary generated tokens
 - any resolved value marked secret by the existing secret system
@@ -726,7 +710,7 @@ Apply redaction before:
 - activity/error persistence
 - structured application logging
 
-BuildKit secrets reduce accidental exposure, but a malicious Dockerfile may still print a secret. Exact-value redaction remains required.
+BuildKit secrets will reduce accidental exposure once supported, but a malicious Dockerfile may still print a secret. Exact-value redaction remains required.
 
 ## Access Boundary
 
@@ -734,7 +718,7 @@ Automation Actions may queue a build and read its status through the public API.
 
 They must not receive APIs for:
 
-- starting arbitrary helper containers
+- starting arbitrary containers
 - mounting Docker sockets
 - resolving raw registry credentials
 - resolving raw Git credentials
@@ -781,11 +765,11 @@ Validate dependency access:
 
 - when creating or updating the project
 - before queueing a manual run
-- again in the worker before resolving credentials or starting the helper
+- again in the worker before resolving credentials or starting Docker
 
-If access was lost after queueing, fail the run before helper execution with a safe error message.
+If access was lost after queueing, fail the run before Docker execution with a safe error message.
 
-For Slice 1, the execution actor is the actor who queued the run. A future schedule/webhook slice may add a configured execution actor.
+For manual runs, the execution actor is the actor who queued the run. For webhook runs, use the resource's configured webhook execution actor when available, following the same listener pattern as stacks and automation actions.
 
 ---
 
@@ -887,6 +871,7 @@ Defaults:
 ```text
 20 runs
 minimum 1
+age cleanup: 90 days
 ```
 
 After a run becomes terminal:
@@ -894,6 +879,8 @@ After a run becomes terminal:
 1. determine runs older than the retained count
 2. delete their persisted log chunks
 3. delete their run rows according to existing resource deletion conventions
+
+The existing cleanup job also deletes terminal runs older than `Builds:RunRetentionDays`. It must not delete queued, preparing, or running runs, and it must not delete a run still referenced by `BuildProjects.CurrentRunId`.
 
 Retention does not delete:
 
@@ -921,7 +908,7 @@ Use four small sections.
 ## Build Inputs
 
 - build arguments: name + literal or variable binding
-- BuildKit secrets: mount id + secret selector
+- future BuildKit secrets: mount id + secret selector
 
 Explain in the UI that build arguments are not secret and may be visible in image metadata.
 
@@ -941,7 +928,7 @@ Show a preview using placeholder sample values.
 - enabled
 - tags
 
-Do not expose helper-image, network, privilege, extra-host, or raw BuildKit flags in Slice 1.
+Do not expose network, privilege, extra-host, or raw BuildKit flags in Slice 1.
 
 ---
 
@@ -955,10 +942,10 @@ Return clear errors for:
 - invalid or missing context/Dockerfile
 - context exceeds configured transfer limit
 - inaccessible platform
-- helper image pull/start failure
+- Docker build start failure
 - registry authentication failure
 - invalid resolved tag
-- BuildKit failure
+- Docker build failure
 - registry push failure
 - timeout
 - cancellation
@@ -968,7 +955,7 @@ Persist only a safe user-facing error message on the run.
 
 Detailed exceptions may go to structured server logs after redaction, following current Citadel logging conventions.
 
-Always clean up helper resources in `finally`.
+Always clean up temporary build resources in `finally`.
 
 ---
 
@@ -997,7 +984,7 @@ Add tests consistent with the current test architecture.
 
 ## Execution
 
-Use a fake connector/helper contract where practical.
+Use a fake Docker build runner or connector contract where practical.
 
 Cover:
 
@@ -1008,7 +995,7 @@ Cover:
 - failed push
 - cancellation
 - timeout
-- helper cleanup
+- temporary build resource cleanup
 - startup interruption recovery
 - current run claim is cleared safely
 - queued work survives worker restart semantics
@@ -1018,7 +1005,7 @@ Cover:
 - secret values never appear in project/run snapshots
 - secret values are redacted from stdout, stderr, errors, and application logs
 - persisted log cap marks truncation while live logs continue
-- digest and references come from structured helper output, not log parsing
+- digest and references come from structured Docker API output, not log parsing
 
 ## Frontend
 
@@ -1037,14 +1024,14 @@ Slice 1 is complete when:
 
 1. A permitted user can create a build project from an existing Git repository.
 2. The user can select a branch, context, Dockerfile, platform, registry, repository path, and tag templates.
-3. The user can configure non-secret build args and BuildKit secrets.
+3. The user can configure non-secret build args; configured build secrets are rejected until BuildKit secret sessions are supported.
 4. The user can manually queue one run when the project has no active run.
 5. Citadel resolves and records the exact commit before execution.
-6. Core sends the immutable source archive to a helper on the selected local, regular-agent, or edge-agent platform without relying on shared host paths.
-7. The helper builds with BuildKit and pushes every resolved image tag.
+6. Core sends the immutable source archive to the selected local, regular-agent, or edge-agent platform without relying on shared host paths.
+7. The selected platform's Docker daemon builds through the Engine API and pushes every resolved image tag.
 8. The run records status, timestamps, logs, source snapshot, platform snapshot, output references, digest when available, and safe failure information.
 9. Logs are visible live and after reconnect.
-10. Cancellation and timeout stop and remove the helper.
+10. Cancellation and timeout stop the active Docker build stream and clear the active project claim.
 11. Core restart marks unknown active runs interrupted and clears stale claims.
 12. No Git, registry, or secret value is persisted or exposed to Automation Actions.
 13. Activities, tags, permissions, API generation, migrations, backend tests, and frontend build checks pass.
@@ -1055,12 +1042,10 @@ Slice 1 is complete when:
 
 Future slices are intentionally described only at product level. Specify them in detail when implementation begins.
 
-## Slice 2: Webhooks, Scheduling, And Failure Alerts
+## Slice 2: Scheduling And Failure Alerts
 
 Add:
 
-- shared listener-based GitHub/GitLab webhooks
-- repository, branch, and path filtering
 - one optional cron/timezone schedule
 - configured execution actor for non-interactive runs
 - build failure/timeout alerts
@@ -1118,11 +1103,11 @@ The following questions are resolved for this specification:
 
 - Resource type: use **Build**, not **Builder**. A builder is an execution target, while a build is the user resource.
 - Slice 1 builder model: store `PlatformId` directly; do not add a polymorphic builder abstraction yet.
-- Build engine: BuildKit is mandatory.
-- Secret build args: not supported; use BuildKit secrets.
+- Build engine: use Docker Engine API image build; do not shell out to the Docker CLI.
+- Secret build args: not supported; BuildKit secret sessions are deferred.
 - Tags: use one ordered `TagTemplates` list; users add `latest` explicitly instead of a separate `PushLatest` flag.
-- Source checkout: Core resolves/materializes the exact Git commit and transfers an archive; the helper never clones Git.
+- Source checkout: Core resolves/materializes the exact Git commit and transfers an archive; the selected Docker platform never clones Git.
 - Logs: store bounded database chunks and stream them through SignalR; object storage is unnecessary for Slice 1.
-- Image digest: obtain it from structured helper output, not console-log parsing.
+- Image digest: obtain it from structured Docker API output, not console-log parsing.
 - Project status: derive it from current/last runs; do not duplicate it on `BuildProject`.
 - External builders: prefer dedicated outbound build agents; do not start with AWS-specific EC2 provisioning.
