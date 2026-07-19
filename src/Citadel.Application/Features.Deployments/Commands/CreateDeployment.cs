@@ -54,20 +54,10 @@ internal class CreateDeploymentHandler(
             return Result.Failure<Deployment>(new ConflictError("Name already exists"));
         }
 
-        if (command.Spec.Image is not ExternalImage)
+        var imageValidation = await DeploymentImageValidation.ValidateAsync(command.Spec, unitOfWork, cancellationToken);
+        if (imageValidation.IsFailure(out var imageError))
         {
-            if (command.Spec.UpdateBehavior != UpdateBehavior.Disabled)
-            {
-                return Result.Failure<Deployment>(new BadRequestError("Auto-update requires an external image source."));
-            }
-        }
-
-        if (command.Spec.Image is ExternalImage extImage && extImage.ImageTag.Contains('@'))
-        {
-            if (command.Spec.UpdateBehavior != UpdateBehavior.Disabled)
-            {
-                return Result.Failure<Deployment>(new BadRequestError("Cannot enable Auto-update for an image pinned by digest (contains '@')."));
-            }
+            return Result.Failure<Deployment>(imageError);
         }
 
         var duplicateSourceResult = await GetValidDuplicateSourceAsync(command.DuplicateSource, cancellationToken);
@@ -142,5 +132,40 @@ internal class CreateDeploymentHandler(
             ActivityResourceType.Deployment,
             sourceDeployment.Id,
             sourceDeployment.Name));
+    }
+}
+
+internal static class DeploymentImageValidation
+{
+    internal static async Task<Result> ValidateAsync(
+        DeploymentSpec spec,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        if (spec.Image is BuildImage buildImage)
+        {
+            if (spec.UpdateBehavior != UpdateBehavior.Disabled)
+                return Result.Failure(new BadRequestError("Build images use Redeploy on build instead of registry auto-update."));
+
+            if (buildImage.BuildProjectId == Guid.Empty)
+                return Result.Failure(new BadRequestError("Build project is required."));
+
+            if (await unitOfWork.BuildProjects.GetAsync(buildImage.BuildProjectId, cancellationToken, includeArchived: true) is null)
+                return Result.Failure(new NotFoundError("Build project not found."));
+
+            return Result.Success();
+        }
+
+        if (spec.Image is not ExternalImage)
+        {
+            return spec.UpdateBehavior == UpdateBehavior.Disabled
+                ? Result.Success()
+                : Result.Failure(new BadRequestError("Auto-update requires an external image source."));
+        }
+
+        if (spec.Image is ExternalImage extImage && extImage.ImageTag.Contains('@') && spec.UpdateBehavior != UpdateBehavior.Disabled)
+            return Result.Failure(new BadRequestError("Cannot enable Auto-update for an image pinned by digest (contains '@')."));
+
+        return Result.Success();
     }
 }

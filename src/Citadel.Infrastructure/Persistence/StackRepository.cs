@@ -225,6 +225,51 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         return result.ToDomain();
     }
 
+    public async Task<IEnumerable<Stack>> GetBuildImageConsumerStacksAsync(Guid buildProjectId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                s.Id,
+                s.CurrentStackReleaseId,
+                s.Name,
+                s.Description,
+                s.StackSource,
+                s.StackUpdateState,
+                s.DriftPolicy,
+                s.CreatedAt,
+                s.CreatedByActorId,
+                s.ControlState,
+                s.ControlStartedAt,
+                s.RowVersion,
+                s.ControlTriggeredBy,
+                sr.Id AS CurrentRelease_Id,
+                sr.StackId AS CurrentRelease_StackId,
+                sr.PlatformId AS CurrentRelease_PlatformId,
+                sr.Status AS CurrentRelease_Status,
+                sr.Version AS CurrentRelease_Version,
+                sr.Spec AS CurrentRelease_Spec,
+                sr.Source AS CurrentRelease_Source,
+                sr.ResourceBindings AS CurrentRelease_ResourceBindings,
+                sr.CreatedAt AS CurrentRelease_CreatedAt,
+                sr.CreatedByActorId AS CurrentRelease_CreatedByActorId,
+                p.Name AS Platform_Name,
+                p.Status AS Platform_Status
+            FROM Stacks s
+            INNER JOIN StackReleases sr
+                ON s.CurrentStackReleaseId = sr.Id
+            LEFT JOIN Platforms p
+                ON sr.PlatformId = p.Id
+            WHERE sr.Spec -> 'BuildImageBindings' @> @BuildImageBindingFilter::jsonb
+            ORDER BY s.CreatedAt DESC, s.Name ASC
+            """;
+
+        var result = await db.QueryAsync<StackDto>(
+            sql,
+            new { BuildImageBindingFilter = $$"""[{"BuildProjectId":"{{buildProjectId}}"}]""" },
+            transaction: tx());
+        return result.ToDomain();
+    }
+
     public async Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null)
     {
         string sql = InfoSelect + " WHERE " + ResourceTagSql.FilterPredicate("s")

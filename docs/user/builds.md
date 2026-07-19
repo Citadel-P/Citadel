@@ -60,6 +60,7 @@ Set:
 - Registry: registry Citadel pushes tags to.
 - Image repository: repository path under the selected registry, such as `team/api`.
 - Tags: comma-separated tag templates.
+- Update deployments: optional deployments that should use the successful build output.
 - Enabled: whether runs can be queued.
 - Timeout seconds: maximum build and push duration.
 - Run retention: number of recent terminal runs to keep.
@@ -141,6 +142,14 @@ latest, {shortSha}
 
 Citadel resolves the final image references when the run resolves the Git commit.
 
+## Deployment Consumers
+
+Use **Update deployments** when a successful build should move one or more Citadel deployments to the newly built image.
+
+Citadel updates only deployments that use an external image from the same registry configured on the build. On success, Citadel writes the built image reference and digest into the deployment spec, records a `DeploymentUpdated` activity event, and streams the deployment update to connected clients.
+
+If a selected deployment no longer exists, has no deployment spec, uses a local image, or points at a different registry, the build still succeeds. Citadel writes a warning to the run log and skips that deployment.
+
 ## Build Arguments
 
 Build arguments are passed to Docker with `--build-arg`.
@@ -199,7 +208,8 @@ A run:
 5. resolves build args, validates that build secrets are not configured, and resolves registry credentials
 6. runs the Docker Engine API build on the selected platform
 7. pushes all generated image tags to the registry
-8. stores run status, image references, digest when available, and logs
+8. updates configured deployment consumers when the build succeeds
+9. stores run status, image references, digest when available, and logs
 
 Only one run per build project can be active at a time. If a run is already queued, preparing, or running, Citadel rejects another run for the same project.
 

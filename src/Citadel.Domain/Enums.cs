@@ -417,7 +417,8 @@ public enum ScalingStrategy
 public enum ImageSource
 {
     Local,
-    External
+    External,
+    Build
 }
 
 public enum StopSignal {     

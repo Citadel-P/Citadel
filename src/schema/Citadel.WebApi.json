@@ -38761,13 +38761,50 @@
           },
           {
             "$ref": "#/components/schemas/DeploymentImageInfoExternalImage"
+          },
+          {
+            "$ref": "#/components/schemas/DeploymentImageInfoBuildImage"
           }
         ],
         "discriminator": {
           "propertyName": "$type",
           "mapping": {
             "Local": "#/components/schemas/DeploymentImageInfoLocalImage",
-            "External": "#/components/schemas/DeploymentImageInfoExternalImage"
+            "External": "#/components/schemas/DeploymentImageInfoExternalImage",
+            "Build": "#/components/schemas/DeploymentImageInfoBuildImage"
+          }
+        }
+      },
+      "DeploymentImageInfoBuildImage": {
+        "required": [
+          "buildProjectId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Build"
+            ],
+            "type": "string"
+          },
+          "buildProjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "redeployOnBuild": {
+            "type": "boolean",
+            "default": false
+          },
+          "resolvedImageReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resolvedDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -46120,6 +46157,38 @@
           }
         }
       },
+      "StackBuildImageBinding": {
+        "required": [
+          "serviceName",
+          "buildProjectId"
+        ],
+        "type": "object",
+        "properties": {
+          "serviceName": {
+            "type": "string"
+          },
+          "buildProjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "redeployOnBuild": {
+            "type": "boolean",
+            "default": false
+          },
+          "resolvedImageReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resolvedDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "StackCapabilities": {
         "required": [
           "canViewLogs",
@@ -47155,6 +47224,15 @@
           "destroyBeforeDeploy": {
             "type": "boolean",
             "default": true
+          },
+          "buildImageBindings": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/StackBuildImageBinding"
+            }
           }
         }
       },
@@ -47218,6 +47296,15 @@
           "destroyBeforeDeploy": {
             "type": "boolean",
             "default": true
+          },
+          "buildImageBindings": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/StackBuildImageBinding"
+            }
           }
         }
       },

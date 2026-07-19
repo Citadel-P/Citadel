@@ -228,6 +228,25 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return result.ToDomain();
     }
 
+    public async Task<IEnumerable<Deployment>> GetBuildImageConsumersAsync(Guid buildProjectId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                d.*,
+                c.Id AS Container_ContainerId,
+                c.DockerImageId AS Container_DockerImageId
+            FROM Deployments d
+            LEFT JOIN Containers c
+                ON c.DeploymentId = d.Id
+            WHERE d.Spec -> 'Image' @> @BuildImageFilter::jsonb
+            """;
+        var result = await db.QueryAsync<DeploymentDto>(
+            sql,
+            new { BuildImageFilter = $$"""{"$type":"Build","BuildProjectId":"{{buildProjectId}}"}""" },
+            transaction: tx());
+        return result.ToDomain();
+    }
+
     public async Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null)
     {
         string sql = $$"""

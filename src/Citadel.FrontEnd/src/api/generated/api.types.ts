@@ -835,6 +835,7 @@ export type DeploymentImageInfo = BaseDeploymentImageInfo &
         "External",
         DeploymentImageInfoExternalImage
       >
+    | BaseDeploymentImageInfoTypeMapping<"Build", DeploymentImageInfoBuildImage>
   );
 
 export type BackupSourceSpec = BaseBackupSourceSpec &
@@ -4003,6 +4004,16 @@ export interface DeploymentDuplicateDraftView {
   warnings: DuplicateDraftWarningView[];
 }
 
+export interface DeploymentImageInfoBuildImage {
+  $type?: "Build";
+  /** @format uuid */
+  buildProjectId: string;
+  /** @default false */
+  redeployOnBuild?: boolean;
+  resolvedImageReference?: null | string;
+  resolvedDigest?: null | string;
+}
+
 export interface DeploymentImageInfoExternalImage {
   $type?: "External";
   /** @format uuid */
@@ -5956,6 +5967,16 @@ export interface StackBackupVolumeView {
   hasBackupCoverage: boolean;
 }
 
+export interface StackBuildImageBinding {
+  serviceName: string;
+  /** @format uuid */
+  buildProjectId: string;
+  /** @default false */
+  redeployOnBuild?: boolean;
+  resolvedImageReference?: null | string;
+  resolvedDigest?: null | string;
+}
+
 export interface StackCapabilities {
   canViewLogs: boolean;
   canInspect: boolean;
@@ -6187,6 +6208,7 @@ export interface StackSpecGitStack {
   registryId?: null | string;
   /** @default true */
   destroyBeforeDeploy?: boolean;
+  buildImageBindings?: null | StackBuildImageBinding[];
 }
 
 export interface StackSpecManualStack {
@@ -6201,6 +6223,7 @@ export interface StackSpecManualStack {
   registryId?: null | string;
   /** @default true */
   destroyBeforeDeploy?: boolean;
+  buildImageBindings?: null | StackBuildImageBinding[];
 }
 
 export interface StackStatsView {

@@ -1,4 +1,5 @@
 using Application.Features.Deployments.Notifications;
+using Application.Services.Builds;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
@@ -37,7 +38,8 @@ internal sealed partial class ApplyDeploymentService(
     IDeploymentStreamManager deploymentHub,
     IActivityStreamManager activityHub,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
-    IConnectorFactory<IDeploymentConnector> deploymentConnectorFactory) : IApplyDeploymentService
+    IConnectorFactory<IDeploymentConnector> deploymentConnectorFactory,
+    IBuildImageResolver buildImageResolver) : IApplyDeploymentService
 {
     public async IAsyncEnumerable<DeploymentStreamItem> ApplyAsync(Guid deploymentId, Guid actorId, bool recreate, [EnumeratorCancellation] CancellationToken ct)
     {
@@ -67,6 +69,9 @@ internal sealed partial class ApplyDeploymentService(
 
         string? imageId = null;
         string? digest = null;
+        string? resolvedBuildImageReference = null;
+
+        ExternalImage? pulledExternalImage = null;
 
         if (deployment.Spec.Image is LocalImage local)
         {
@@ -74,14 +79,38 @@ internal sealed partial class ApplyDeploymentService(
         }
         else if (deployment.Spec.Image is ExternalImage external)
         {
+            pulledExternalImage = external;
+        }
+        else if (deployment.Spec.Image is BuildImage buildImage)
+        {
+            var resolvedBuild = await buildImageResolver.ResolveLatestAsync(buildImage.BuildProjectId, ct);
+            if (resolvedBuild.IsFailure(out var resolvedBuildError, out var resolved))
+            {
+                var message = resolvedBuildError.Message;
+                await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, ct: ct);
+                yield return Error(400, message);
+                yield break;
+            }
+
+            pulledExternalImage = new ExternalImage(
+                resolved.RegistryId,
+                resolved.ImageReference,
+                resolved.Digest);
+            resolvedBuildImageReference = resolved.ImageReference;
+
+            yield return Info($"Resolved build \"{resolved.ProjectName}\" from run {resolved.RunId}.");
+        }
+
+        if (pulledExternalImage is not null)
+        {
             yield return new DeploymentStreamItem(
-                ProgressMessage: $"Pulling image {external.ImageTag}");
+                ProgressMessage: $"Pulling image {pulledExternalImage.ImageTag}");
 
             await foreach (var item in pullImageService.PullAsync(
                 new PullImageService.PullImageInput(
                     PlatformId: platform.Id,
-                    ImageTag: external.ImageTag,
-                    RegistryId: external.RegistryId),
+                    ImageTag: pulledExternalImage.ImageTag,
+                    RegistryId: pulledExternalImage.RegistryId),
                 ct))
             {
                 yield return new DeploymentStreamItem(
@@ -190,6 +219,7 @@ internal sealed partial class ApplyDeploymentService(
                 deploymentResult.ContainerId,
                 digest ?? "",
                 autoUpdateState,
+                resolvedBuildImageReference,
                 deploymentHub,
                 activityHub,
                 notificationQueue,
@@ -483,7 +513,8 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
 }
 
 internal sealed class DeploymentSucceededWorkItem(
-    Guid deploymentId, Guid actorId, string containerId, string imageDigest, AutoUpdateState? autoUpdateState, 
+    Guid deploymentId, Guid actorId, string containerId, string imageDigest, AutoUpdateState? autoUpdateState,
+    string? resolvedBuildImageReference,
     IDeploymentStreamManager deploymentHub, IActivityStreamManager activityHub, 
     INotificationQueue notificationQueue,
     IReadOnlyList<ResourceBindingSnapshot>? resourceBindings) : IDbWorkItem
@@ -505,6 +536,18 @@ internal sealed class DeploymentSucceededWorkItem(
                     RegistryId: extImage.RegistryId,
                     ImageTag: extImage.ImageTag,
                     ResolvedDigest: imageDigest)
+                });
+        }
+        else if (!string.IsNullOrEmpty(imageDigest) && deployment.Spec?.Image is BuildImage buildImage)
+        {
+            deployment.PartialUpdate(
+                spec: deployment.Spec with
+                {
+                    Image = buildImage with
+                    {
+                        ResolvedImageReference = resolvedBuildImageReference ?? buildImage.ResolvedImageReference,
+                        ResolvedDigest = imageDigest
+                    }
                 });
         }
 

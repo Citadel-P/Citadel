@@ -1,4 +1,5 @@
 using Application.Features.Deployments.Notifications;
+using Application.Services.Builds;
 using Application.Mappers;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
@@ -51,7 +52,8 @@ internal class ApplyStackService(
     IGitStackMaterializer gitStackMaterializer,
     IResourceBindingResolver resourceBinderResolver,
     ISecretRedactor secretRedactor,
-    IAlertService alertService) : IApplyStackService
+    IAlertService alertService,
+    IStackBuildImageBindingResolver stackBuildImageBindingResolver) : IApplyStackService
 {
     public async IAsyncEnumerable<StackStreamItem> ApplyAsync(
         Guid stackId,
@@ -169,6 +171,18 @@ internal class ApplyStackService(
         stack = markResult.Stack!;
         currentRelease = stack.CurrentStackRelease!;
         var stackSpec = currentRelease.Spec;
+        var buildImageBindings = await stackBuildImageBindingResolver.ResolveAsync(stackSpec.BuildImageBindings, ct);
+        if (buildImageBindings.IsFailure(out var buildBindingError, out var resolvedBuildBindings))
+        {
+            var message = buildBindingError.Message;
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            yield return StackStreamItem.FromStdErr(message, 1);
+            yield break;
+        }
+
+        foreach (var message in resolvedBuildBindings.Messages)
+            yield return StackStreamItem.SystemMessage(message, 0);
+
         string? composeFileContent;
         string? environmentFilePath;
         IReadOnlyList<string>? environmentVariables;
@@ -194,7 +208,10 @@ internal class ApplyStackService(
 
         if (stackSpec is ManualStack currentManualStack)
         {
-            composeFileContent = StackComposeLabelInjector.Inject(currentManualStack.ComposeFile, stack.Id, currentRelease.Id);
+            var composeWithBuildImages = stackBuildImageBindingResolver.ApplyToComposeContent(
+                currentManualStack.ComposeFile,
+                resolvedBuildBindings.Bindings);
+            composeFileContent = StackComposeLabelInjector.Inject(composeWithBuildImages, stack.Id, currentRelease.Id);
             environmentFilePath = currentManualStack.EnvFilePath;
             environmentVariables = [];
             secretTargetServiceNames = StackComposeParser
@@ -231,6 +248,18 @@ internal class ApplyStackService(
             sourceEnvFilePaths = payload.SourceEnvFilePaths;
             labelsOverrideFilePath = payload.LabelsOverrideFilePath;
             generatedFilesDirectory = payload.GeneratedFilesDirectory;
+            if (resolvedBuildBindings.Bindings.Count > 0)
+            {
+                generatedFilesDirectory ??= Path.Combine(sourceWorkingDirectory ?? Path.GetTempPath(), ".citadel");
+                Directory.CreateDirectory(generatedFilesDirectory);
+                var buildOverrideFilePath = Path.Combine(generatedFilesDirectory, "build-images.override.yml");
+                await File.WriteAllTextAsync(
+                    buildOverrideFilePath,
+                    stackBuildImageBindingResolver.CreateComposeOverride(resolvedBuildBindings.Bindings),
+                    ct);
+                sourceComposeFilePaths = [.. sourceComposeFilePaths, buildOverrideFilePath];
+            }
+
             gitSnapshotRoot = payload.SnapshotRoot;
             secretTargetServiceNames = StackComposeParser
                 .ParseServices(stack.Id, currentRelease.Id, [.. payload.SourceComposeFilePaths.Select(File.ReadAllText)])

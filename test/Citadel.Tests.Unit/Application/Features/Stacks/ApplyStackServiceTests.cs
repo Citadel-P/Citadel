@@ -5,6 +5,7 @@ using Process = System.Diagnostics.Process;
 using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Builds;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -200,7 +201,8 @@ public class ApplyStackServiceTests
                     ]
                 }),
                 new PassThroughSecretRedactor(),
-                Mock.Of<IAlertService>());
+                Mock.Of<IAlertService>(),
+            Mock.Of<IStackBuildImageBindingResolver>());
 
             var items = new List<StackStreamItem>();
             await foreach (var item in service.ApplyAsync(
@@ -438,7 +440,8 @@ public class ApplyStackServiceTests
             gitStackMaterializer.Object,
             new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
-            Mock.Of<IAlertService>());
+            Mock.Of<IAlertService>(),
+            Mock.Of<IStackBuildImageBindingResolver>());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -584,7 +587,8 @@ public class ApplyStackServiceTests
                 ]
             }),
             new PassThroughSecretRedactor(),
-            Mock.Of<IAlertService>());
+            Mock.Of<IAlertService>(),
+            Mock.Of<IStackBuildImageBindingResolver>());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -734,7 +738,8 @@ public class ApplyStackServiceTests
             gitStackMaterializer.Object,
             new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
-            Mock.Of<IAlertService>());
+            Mock.Of<IAlertService>(),
+            Mock.Of<IStackBuildImageBindingResolver>());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -833,7 +838,8 @@ public class ApplyStackServiceTests
             Mock.Of<IGitStackMaterializer>(),
             new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
-            Mock.Of<IAlertService>());
+            Mock.Of<IAlertService>(),
+            Mock.Of<IStackBuildImageBindingResolver>());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -942,7 +948,8 @@ public class ApplyStackServiceTests
             Mock.Of<IGitStackMaterializer>(),
             new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
-            Mock.Of<IAlertService>());
+            Mock.Of<IAlertService>(),
+            Mock.Of<IStackBuildImageBindingResolver>());
 
         await foreach (var _ in service.ApplyAsync(
             stack.Id,
@@ -1102,7 +1109,8 @@ public class ApplyStackServiceTests
                 ]
             }),
             new PassThroughSecretRedactor(),
-            Mock.Of<IAlertService>());
+            Mock.Of<IAlertService>(),
+            Mock.Of<IStackBuildImageBindingResolver>());
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(

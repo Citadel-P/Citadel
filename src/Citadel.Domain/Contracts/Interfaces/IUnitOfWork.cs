@@ -320,6 +320,7 @@ public interface IBuildRunRepository
     Task<IEnumerable<BuildRun>> GetByProjectAsync(Guid projectId, int limit, CancellationToken cancellationToken);
     Task<IEnumerable<BuildRun>> GetPagedAsync(int limit, CancellationToken cancellationToken);
     Task<BuildRun?> GetLatestByProjectAsync(Guid projectId, CancellationToken cancellationToken);
+    Task<BuildRun?> GetLatestSuccessfulByProjectAsync(Guid projectId, CancellationToken cancellationToken);
     Task<IReadOnlyDictionary<Guid, BuildRun>> GetLatestByProjectsAsync(IReadOnlyCollection<Guid> projectIds, CancellationToken cancellationToken);
     Task<IEnumerable<BuildRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken);
     Task<BuildRun?> TryClaimAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
@@ -730,6 +731,7 @@ public interface IStackRepository
     Task<IEnumerable<StackDriftStack>> GetDriftMonitorStacksAsync(CancellationToken cancellationToken);
     Task<IEnumerable<string>> GetContainerIdsAsync(Guid stackId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Stack>> GetBuildImageConsumerStacksAsync(Guid buildProjectId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null);
     Task<IEnumerable<Container>> GetContainersAsync(Guid stackId, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null);
@@ -1032,6 +1034,7 @@ public interface IDeploymentRepository
     Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Deployment?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Deployment>> GetBuildImageConsumersAsync(Guid buildProjectId, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? platformId = null);
     Task<string?> GetContainerIdAsync(Guid deploymentId, CancellationToken cancellationToken);
     Task<PlatformConnectionInfo?> GetPlatformByDeploymentIdAsync(Guid id, CancellationToken cancellationToken);

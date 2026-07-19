@@ -2,6 +2,7 @@ import {
   CreateDeploymentInput,
   PlatformView,
   ImageView,
+  DeploymentImageInfoBuildImage,
   DeploymentImageInfoExternalImage,
   DeploymentImageInfoLocalImage,
   DockerNetworkResultView,
@@ -23,6 +24,8 @@ import {
   defineRowField,
   PortMappingField,
   ItemSelector,
+  FieldSelect,
+  FieldSwitch,
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -36,6 +39,7 @@ import { ResourceTagSelector } from '@/features/tags/components';
 const enum ImageSource {
   local = 'Local',
   external = 'External',
+  build = 'Build',
 }
 
 const enum ResourceProfile {
@@ -70,6 +74,10 @@ const image_source = {
   [ImageSource.external]: {
     label: 'External',
     description: 'Pull an image from a remote registry (Docker Hub, GitHub, etc.)',
+  },
+  [ImageSource.build]: {
+    label: 'Build',
+    description: 'Use the latest successful image produced by a Citadel build.',
   },
 };
 
@@ -190,6 +198,7 @@ export const DeploymentForm = ({
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
   const { data: deploymentCfg } = useRead('getDeploymentConfig', { deploymentId: id });
+  const { data: buildProjectsData, isFetching: buildProjectsLoading } = useRead('listBuildProjects');
   const { data: duplicateDraftData, isFetching: isDuplicateDraftLoading } = useRead(
     'getDeploymentDuplicateDraft',
     { deploymentId: duplicateFrom ?? '' },
@@ -215,6 +224,22 @@ export const DeploymentForm = ({
   const currentSpec = { ...original.spec, ...update.spec };
   const currentImage = update.spec?.image ?? original.spec?.image;
   const provider = currentImage?.$type;
+  const buildProjects = useMemo(() => buildProjectsData?.data.projects ?? [], [buildProjectsData?.data.projects]);
+  const buildProjectOptions = useMemo(
+    () =>
+      buildProjects.map((project) => ({
+        value: project.id,
+        label: (
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate">{project.name}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {project.imageRepository}:{project.branch}
+            </span>
+          </span>
+        ),
+      })),
+    [buildProjects],
+  );
   const effectiveResourceBindings = resourceBindingLookupData?.data ?? EMPTY_RESOURCE_BINDING_LOOKUP;
   const effectiveConfigurationNames = useMemo(
     () => [...new Set(effectiveResourceBindings.map((entry) => entry.name))].sort(),
@@ -367,7 +392,12 @@ export const DeploymentForm = ({
                         set((prev) => ({
                           spec: {
                             ...(prev.spec as DeploymentInput['spec']),
-                            image: { $type: v } as any,
+                            image:
+                              v === ImageSource.build
+                                ? ({ $type: 'Build', buildProjectId: '', redeployOnBuild: false } as any)
+                                : ({ $type: v } as any),
+                            updateBehavior:
+                              v === ImageSource.build ? UpdateBehavior.Disabled : prev.spec?.updateBehavior,
                             ports: [],
                           },
                         }))
@@ -377,101 +407,164 @@ export const DeploymentForm = ({
                 },
               }),
 
-              provider === ImageSource.external
-                ? defineRowField({
-                    id: 'imageRow',
-                    gap: 'gap-8',
-                    fields: [
-                      defineField({
-                        key: 'spec.image.registryId',
-                        label: 'Registry',
+              ...(provider === ImageSource.external
+                ? [
+                    defineRowField<DeploymentInput>({
+                      id: 'imageRow',
+                      gap: 'gap-8',
+                      fields: [
+                        defineField<DeploymentInput, 'spec.image.registryId'>({
+                          key: 'spec.image.registryId',
+                          label: 'Registry',
+                          required: true,
+                          description: 'Select the registry to pull the image from.',
+                          render: (val, set) => {
+                            return (
+                              <ResourceSelectorField
+                                sourceType={LookupResourceType.Deployment}
+                                targetType={LookupResourceType.Registry}
+                                sourceResourceId={id}
+                                selected={val}
+                                onSelect={(v: ImageView | undefined) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...prev.spec!,
+                                      image: {
+                                        $type: 'External',
+                                        ...((prev.spec?.image as DeploymentImageInfoExternalImage) ?? {}),
+                                        registryId: v?.id ?? '',
+                                      } satisfies DeploymentImageInfoExternalImage,
+                                    },
+                                  }))
+                                }
+                                placeholder="Select Registry"
+                                className="sm:min-w-100"
+                              />
+                            );
+                          },
+                        }),
+                        defineField<DeploymentInput, 'spec.image.imageTag'>({
+                          key: 'spec.image.imageTag',
+                          label: ' ',
+                          required: true,
+                          description: 'Enter the image reference.',
+                          render: (val, set) => {
+                            return (
+                              <FieldInput
+                                value={val}
+                                onChange={(v) =>
+                                  set((prev) => ({
+                                    spec: {
+                                      ...prev.spec!,
+                                      image: {
+                                        $type: 'External',
+                                        ...((prev.spec?.image as DeploymentImageInfoExternalImage) ?? {}),
+                                        imageTag: v,
+                                      } satisfies DeploymentImageInfoExternalImage,
+                                    },
+                                  }))
+                                }
+                                placeholder="e.g. nginx:latest "
+                                className="w-full max-w-full"
+                              />
+                            );
+                          },
+                        }),
+                      ],
+                    }),
+                  ]
+                : provider === ImageSource.build
+                  ? [
+                      defineField<DeploymentInput, 'spec.image.buildProjectId'>({
+                        key: 'spec.image.buildProjectId',
+                        label: 'Build',
                         required: true,
-                        description: 'Select the registry to pull the image from.',
+                        description: 'Build project whose latest successful image will be deployed.',
+                        validate: (v) => (!v ? 'Build is required' : null),
                         render: (val, set) => {
+                          const hasSelection = buildProjectOptions.some((option) => option.value === val);
                           return (
-                            <ResourceSelectorField
-                              sourceType={LookupResourceType.Deployment}
-                              targetType={LookupResourceType.Registry}
-                              sourceResourceId={id}
-                              selected={val}
-                              onSelect={(v: ImageView | undefined) =>
+                            <FieldSelect
+                              value={hasSelection ? val : undefined}
+                              options={buildProjectOptions}
+                              disabled={disabled || buildProjectsLoading || buildProjectOptions.length === 0}
+                              placeholder={buildProjectsLoading ? 'Loading builds...' : 'Select build'}
+                              onChange={(buildProjectId) =>
                                 set((prev) => ({
                                   spec: {
                                     ...prev.spec!,
                                     image: {
-                                      $type: 'External',
-                                      ...((prev.spec?.image as DeploymentImageInfoExternalImage) ?? {}),
-                                      registryId: v?.id ?? '',
-                                    } satisfies DeploymentImageInfoExternalImage,
+                                      $type: 'Build',
+                                      ...((prev.spec?.image as DeploymentImageInfoBuildImage) ?? {}),
+                                      buildProjectId,
+                                    } satisfies DeploymentImageInfoBuildImage,
+                                    updateBehavior: UpdateBehavior.Disabled,
                                   },
                                 }))
                               }
-                              placeholder="Select Registry"
-                              className="sm:min-w-100"
                             />
                           );
                         },
                       }),
-                      defineField({
-                        key: 'spec.image.imageTag',
-                        label: ' ',
+                      defineField<DeploymentInput, 'spec.image.redeployOnBuild'>({
+                        key: 'spec.image.redeployOnBuild',
+                        label: 'Redeploy On Build',
+                        description: 'Automatically redeploy this deployment after the selected build succeeds.',
+                        render: (val, set) => (
+                          <FieldSwitch
+                            id="deployment-redeploy-on-build"
+                            checked={val ?? false}
+                            disabled={disabled}
+                            onChange={(redeployOnBuild) =>
+                              set((prev) => ({
+                                spec: {
+                                  ...prev.spec!,
+                                  image: {
+                                    $type: 'Build',
+                                    ...((prev.spec?.image as DeploymentImageInfoBuildImage) ?? {}),
+                                    redeployOnBuild,
+                                  } satisfies DeploymentImageInfoBuildImage,
+                                  updateBehavior: UpdateBehavior.Disabled,
+                                },
+                              }))
+                            }
+                          />
+                        ),
+                      }),
+                    ]
+                  : [
+                      defineField<DeploymentInput, 'spec.image.imageId'>({
+                        key: 'spec.image.imageId',
+                        label: `Local Image`,
                         required: true,
-                        description: 'Enter the image reference.',
-                        render: (val, set) => {
-                          return (
-                            <FieldInput
-                              value={val}
-                              onChange={(v) =>
-                                set((prev) => ({
-                                  spec: {
-                                    ...prev.spec!,
-                                    image: {
-                                      $type: 'External',
-                                      ...((prev.spec?.image as DeploymentImageInfoExternalImage) ?? {}),
-                                      imageTag: v,
-                                    } satisfies DeploymentImageInfoExternalImage,
-                                  },
-                                }))
-                              }
-                              placeholder="e.g. nginx:latest "
-                              className="w-full max-w-full"
-                            />
-                          );
-                        },
+                        description: 'These images are immediately available for deployment without a remote pull.',
+                        render: (val, set) => (
+                          <ResourceSelectorField
+                            sourceType={id ? LookupResourceType.Deployment : LookupResourceType.Platform}
+                            targetType={LookupResourceType.Image}
+                            sourceResourceId={id ?? currentPlatformId}
+                            platformId={currentPlatformId}
+                            queryEnabled={!!currentPlatformId}
+                            selected={val}
+                            onSelect={(v: ImageView | undefined) => {
+                              lastAppliedServerPortsRef.current = null;
+                              set((prev) => ({
+                                spec: {
+                                  ...prev.spec!,
+                                  image: {
+                                    $type: 'Local',
+                                    ...((prev.spec?.image as DeploymentImageInfoLocalImage) ?? {}),
+                                    imageId: v?.id ?? '',
+                                  } satisfies DeploymentImageInfoLocalImage,
+                                  ports: [],
+                                },
+                              }));
+                            }}
+                            placeholder="Select Image"
+                          />
+                        ),
                       }),
-                    ],
-                  })
-                : defineField({
-                    key: 'spec.image.imageId',
-                    label: `Local Image`,
-                    required: true,
-                    description: 'These images are immediately available for deployment without a remote pull.',
-                    render: (val, set) => (
-                      <ResourceSelectorField
-                        sourceType={id ? LookupResourceType.Deployment : LookupResourceType.Platform}
-                        targetType={LookupResourceType.Image}
-                        sourceResourceId={id ?? currentPlatformId}
-                        platformId={currentPlatformId}
-                        queryEnabled={!!currentPlatformId}
-                        selected={val}
-                        onSelect={(v: ImageView | undefined) => {
-                          lastAppliedServerPortsRef.current = null;
-                          set((prev) => ({
-                            spec: {
-                              ...prev.spec!,
-                              image: {
-                                $type: 'Local',
-                                ...((prev.spec?.image as DeploymentImageInfoLocalImage) ?? {}),
-                                imageId: v?.id ?? '',
-                              } satisfies DeploymentImageInfoLocalImage,
-                              ports: [],
-                            },
-                          }));
-                        }}
-                        placeholder="Select Image"
-                      />
-                    ),
-                  }),
+                    ]),
             ],
           }),
           defineGroupField<DeploymentInput>({
@@ -599,8 +692,12 @@ export const DeploymentForm = ({
             label: 'Auto Update',
             description: 'Define how the platform handles new image versions.',
             render: (value, set) => {
-              let disabled = provider === ImageSource.local;
+              let disabled = provider !== ImageSource.external;
               let warningMsg = 'Auto update requires an external image source.';
+
+              if (provider === ImageSource.build) {
+                warningMsg = 'Build images use Redeploy On Build instead of registry auto-update.';
+              }
 
               if (
                 provider === ImageSource.external &&
@@ -788,7 +885,17 @@ export const DeploymentForm = ({
         ],
       }),
     }),
-    [provider, currentPlatformId, currentSpec.image, mode, id, effectiveConfigurationNames, disabled],
+    [
+      provider,
+      currentPlatformId,
+      currentSpec.image,
+      mode,
+      id,
+      effectiveConfigurationNames,
+      disabled,
+      buildProjectOptions,
+      buildProjectsLoading,
+    ],
   );
 
   return (

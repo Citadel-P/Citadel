@@ -311,6 +311,7 @@ public sealed class BuildProject(
 
     private static IReadOnlyList<BuildSecretSpec> NormalizeBuildSecrets(IReadOnlyList<BuildSecretSpec>? values)
         => values?.Select(static value => value with { Id = NormalizeName(value.Id) }).ToArray() ?? [];
+
 }
 
 public sealed class BuildRun(

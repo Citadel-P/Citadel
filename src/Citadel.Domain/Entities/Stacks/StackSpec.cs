@@ -20,7 +20,8 @@ public abstract record StackSpec(
     StackCommand? PostDeploy,
     string? EnvFilePath = null,
     Guid? RegistryId = null,
-    bool DestroyBeforeDeploy = true
+    bool DestroyBeforeDeploy = true,
+    IReadOnlyList<StackBuildImageBinding>? BuildImageBindings = null
     );
 
 public sealed record ManualStack(
@@ -31,8 +32,9 @@ public sealed record ManualStack(
     StackCommand? PreDeploy = null,
     StackCommand? PostDeploy = null,
     Guid? RegistryId = null,
-    bool DestroyBeforeDeploy = true
-) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvFilePath, RegistryId, DestroyBeforeDeploy);
+    bool DestroyBeforeDeploy = true,
+    IReadOnlyList<StackBuildImageBinding>? BuildImageBindings = null
+) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvFilePath, RegistryId, DestroyBeforeDeploy, BuildImageBindings);
 
 /// <param name="GitRepoId">Reference to an existing Repo to attach to, <see cref="Git.GitRepository"/></param>
 /// <param name="ProjectName"></param>
@@ -62,7 +64,15 @@ public sealed record GitStack(
     List<string>? AdditionalEnvFileFromRepo = null,
     string? EnvFilePath = null,
     Guid? RegistryId = null,
-    bool DestroyBeforeDeploy = true) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvFilePath, RegistryId, DestroyBeforeDeploy);
+    bool DestroyBeforeDeploy = true,
+    IReadOnlyList<StackBuildImageBinding>? BuildImageBindings = null) : StackSpec(ProjectName, PreDeploy, PostDeploy, EnvFilePath, RegistryId, DestroyBeforeDeploy, BuildImageBindings);
+
+public sealed record StackBuildImageBinding(
+    string ServiceName,
+    Guid BuildProjectId,
+    bool RedeployOnBuild = false,
+    string? ResolvedImageReference = null,
+    string? ResolvedDigest = null);
 
 public sealed record StackWebhookConfig(
     bool Enabled = false,

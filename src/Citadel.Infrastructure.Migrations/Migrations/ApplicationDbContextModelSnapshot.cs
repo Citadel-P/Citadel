@@ -406,6 +406,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnName("updatedat")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("Webhook")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("webhook");
+
                     b.HasKey("Id")
                         .HasName("pk_alertevents");
 

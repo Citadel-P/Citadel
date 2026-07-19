@@ -71,7 +71,13 @@ internal sealed class CreateBuildProjectHandler(
         if (await unitOfWork.BuildProjects.ExistsByNormalizedNameAsync(normalizedName, cancellationToken))
             return Result.Failure<BuildProjectResult>(new ConflictError("Build project name already exists."));
 
-        var validation = await ValidateReferencesAsync(input.GitRepositoryId, input.PlatformId, input.RegistryId, input.BuildSecrets, unitOfWork, cancellationToken);
+        var validation = await ValidateReferencesAsync(
+            input.GitRepositoryId,
+            input.PlatformId,
+            input.RegistryId,
+            input.BuildSecrets,
+            unitOfWork,
+            cancellationToken);
         if (validation.IsFailure(out var validationError))
             return Result.Failure<BuildProjectResult>(validationError);
 

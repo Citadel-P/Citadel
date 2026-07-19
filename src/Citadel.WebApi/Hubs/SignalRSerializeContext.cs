@@ -9,7 +9,9 @@ using Domain.Entities.Alerts;
 using Domain.Entities.Automation;
 using Domain.Entities.Backups;
 using Domain.Entities.Builds;
+using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
+using Domain.Entities.Stacks;
 using Nerdbank.MessagePack;
 using PolyType;
 using WebApi.Routes.Endpoints.Resources.Activities;
@@ -57,8 +59,17 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<DockerVolumeResult>]
 [GenerateShapeFor<DeploymentsView>]
 [GenerateShapeFor<DeploymentView>]
+[GenerateShapeFor<DeploymentSpec>]
+[GenerateShapeFor<LocalImage>]
+[GenerateShapeFor<ExternalImage>]
+[GenerateShapeFor<BuildImage>]
 [GenerateShapeFor<StacksView>]
 [GenerateShapeFor<StackView>]
+[GenerateShapeFor<StackSpec>]
+[GenerateShapeFor<ManualStack>]
+[GenerateShapeFor<GitStack>]
+[GenerateShapeFor<StackBuildImageBinding>]
+[GenerateShapeFor<IReadOnlyList<StackBuildImageBinding>>]
 [GenerateShapeFor<ActivityView>]
 [GenerateShapeFor<AlertEventView>]
 [GenerateShapeFor<List<AlertEventView>>]

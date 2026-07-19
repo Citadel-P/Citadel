@@ -1,11 +1,16 @@
 using Application.Features.Builds.Commands;
+using Application.Services;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Deployments;
+using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Builds;
+using Domain.Entities.Deployments;
 using Domain.Entities.Registries;
 using Domain.Entities.ResourceBindings;
+using Domain.Entities.Stacks;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -119,6 +124,10 @@ internal sealed class BuildRunExecutionService(
     IBuildProjectStreamManager buildProjectStreamManager,
     IBuildRunStreamManager buildRunStreamManager,
     IActivityStreamManager activityStreamManager,
+    IDeploymentStreamManager deploymentStreamManager,
+    IStackStreamManager stackStreamManager,
+    IApplyDeploymentService applyDeploymentService,
+    IApplyStackService applyStackService,
     IBuildRunRetentionService buildRunRetentionService,
     ILogger<BuildRunExecutionService> logger) : IBuildRunExecutionService
 {
@@ -238,6 +247,7 @@ internal sealed class BuildRunExecutionService(
                 run.CompleteSucceeded(digest, imageReferences, exitCode, DateTimeOffset.UtcNow);
                 await unitOfWork.BuildRuns.UpdateAsync(run, executionToken);
                 await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, executionToken);
+                var buildImageConsumers = await ApplyBuildImageConsumersAsync(buildContext.Project, run, executionToken);
                 var activity = CreateRunActivity(
                     run,
                     ActivityEventType.BuildRunSucceeded,
@@ -245,9 +255,24 @@ internal sealed class BuildRunExecutionService(
                     ActivityStatus.Success);
                 await unitOfWork.ActivityEventRepository.AddAsync(activity, executionToken);
                 await unitOfWork.CommitAsync(executionToken);
+
                 await AppendLogAsync(run.Id, "system", "Build run completed successfully.", executionToken);
                 await buildRunStreamManager.SendBuildRunInfo(run);
                 await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, executionToken));
+                foreach (var notification in buildImageConsumers.DeploymentNotifications)
+                {
+                    await deploymentStreamManager.SendDeploymentInfo(notification.Deployment);
+                    await activityStreamManager.SendActivityInfo(await notification.Activity.AssignActor(unitOfWork, executionToken));
+                }
+
+                foreach (var notification in buildImageConsumers.StackNotifications)
+                {
+                    await stackStreamManager.SendStackInfo(notification.Stack);
+                    await activityStreamManager.SendActivityInfo(await notification.Activity.AssignActor(unitOfWork, executionToken));
+                }
+
+                await TryRedeployBuildImageConsumersAsync(run.Id, buildImageConsumers, run.TriggeredByActorId, executionToken);
+
                 await buildRunRetentionService.PruneAsync(run.BuildProjectId, executionToken);
                 await SendBuildProjectUpdateAsync(run.BuildProjectId, run, executionToken);
                 return Result.Success();
@@ -544,6 +569,180 @@ internal sealed class BuildRunExecutionService(
             await buildProjectStreamManager.SendBuildProjectInfo(project, latestRun: latestRun);
     }
 
+    private async Task<BuildImageConsumerUpdateResult> ApplyBuildImageConsumersAsync(
+        BuildProject project,
+        BuildRun run,
+        CancellationToken cancellationToken)
+    {
+        var imageReference = run.ImageReferences.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(imageReference))
+            return new BuildImageConsumerUpdateResult([], [], [], []);
+
+        var deploymentNotifications = new List<DeploymentConsumerNotification>();
+        var stackNotifications = new List<StackConsumerNotification>();
+        var deploymentsToRedeploy = new List<Guid>();
+        var stacksToRedeploy = new List<StackRedeployRequest>();
+
+        var deployments = await unitOfWork.Deployments.GetBuildImageConsumersAsync(project.Id, cancellationToken);
+        foreach (var deployment in deployments)
+        {
+            if (deployment.Spec?.Image is not BuildImage buildImage || buildImage.BuildProjectId != project.Id)
+                continue;
+
+            var oldSnapshot = deployment.ToSnapshot();
+            deployment.PartialUpdate(
+                spec: deployment.Spec with
+                {
+                    Image = buildImage with
+                    {
+                        ResolvedImageReference = imageReference,
+                        ResolvedDigest = run.ImageDigest
+                    }
+                });
+
+            var activity = new ActivityEvent(
+                platformId: deployment.PlatformId,
+                resourceId: deployment.Id,
+                actorId: run.TriggeredByActorId,
+                resourceName: deployment.Name,
+                eventType: ActivityEventType.DeploymentUpdated,
+                status: ActivityStatus.Success,
+                info: new DeploymentUpdated(oldSnapshot, deployment.ToSnapshot()));
+
+            await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);
+            await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+            await unitOfWork.BuildRunLogs.AddAsync(NewLogEntry(run.Id, "system", $"Updated build image source for deployment \"{deployment.Name}\" to {imageReference}."), cancellationToken);
+            deploymentNotifications.Add(new DeploymentConsumerNotification(deployment, activity));
+
+            if (buildImage.RedeployOnBuild)
+                deploymentsToRedeploy.Add(deployment.Id);
+        }
+
+        var stacks = await unitOfWork.Stacks.GetBuildImageConsumerStacksAsync(project.Id, cancellationToken);
+        foreach (var stack in stacks)
+        {
+            var release = stack.CurrentStackRelease;
+            var bindings = release?.Spec?.BuildImageBindings;
+            if (release?.Spec is null || bindings is not { Count: > 0 })
+                continue;
+
+            var changed = false;
+            var redeployServices = new List<string>();
+            var nextBindings = bindings.Select(binding =>
+            {
+                if (binding.BuildProjectId != project.Id)
+                    return binding;
+
+                changed = true;
+                if (binding.RedeployOnBuild)
+                    redeployServices.Add(binding.ServiceName);
+
+                return binding with
+                {
+                    ResolvedImageReference = imageReference,
+                    ResolvedDigest = run.ImageDigest
+                };
+            }).ToArray();
+
+            if (!changed)
+                continue;
+
+            var oldSnapshot = stack.ToSnapshot();
+            release.UpdateSpec(SetBuildImageBindings(release.Spec, nextBindings));
+            var activity = new ActivityEvent(
+                platformId: release.PlatformId,
+                resourceId: stack.Id,
+                actorId: run.TriggeredByActorId,
+                resourceName: stack.Name,
+                eventType: ActivityEventType.StackUpdated,
+                status: ActivityStatus.Success,
+                info: new StackUpdated(oldSnapshot, stack.ToSnapshot()));
+
+            await unitOfWork.Stacks.UpdateAsync(stack, cancellationToken);
+            await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+            await unitOfWork.BuildRunLogs.AddAsync(NewLogEntry(run.Id, "system", $"Updated build image binding for stack \"{stack.Name}\" to {imageReference}."), cancellationToken);
+            stackNotifications.Add(new StackConsumerNotification(stack, activity));
+
+            if (redeployServices.Count > 0)
+                stacksToRedeploy.Add(new StackRedeployRequest(stack.Id, [.. redeployServices.Distinct(StringComparer.OrdinalIgnoreCase)]));
+        }
+
+        return new BuildImageConsumerUpdateResult(
+            deploymentNotifications,
+            stackNotifications,
+            deploymentsToRedeploy,
+            stacksToRedeploy);
+    }
+
+    private async Task TryRedeployBuildImageConsumersAsync(
+        Guid runId,
+        BuildImageConsumerUpdateResult consumers,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
+        foreach (var deploymentId in consumers.DeploymentsToRedeploy)
+        {
+            try
+            {
+                await foreach (var _ in applyDeploymentService.ApplyAsync(deploymentId, actorId, recreate: false, ct: cancellationToken))
+                {
+                }
+            }
+            catch (OperationCanceledException ex)
+            {
+                logger.LogWarning(ex, "Deployment redeploy for {DeploymentId} was cancelled after build run {BuildRunId} completed.", deploymentId, runId);
+                await AppendPostBuildRedeployLogAsync(runId, $"Deployment redeploy was cancelled for {deploymentId}.");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Failed to redeploy deployment {DeploymentId} after build run {BuildRunId}.", deploymentId, runId);
+                await AppendPostBuildRedeployLogAsync(runId, $"Deployment redeploy failed for {deploymentId}: {ex.Message}");
+            }
+        }
+
+        foreach (var request in consumers.StacksToRedeploy)
+        {
+            try
+            {
+                await foreach (var _ in applyStackService.ApplyAsync(
+                    request.StackId,
+                    actorId,
+                    request.ServiceNames,
+                    pullImages: true,
+                    recreate: false,
+                    waitForCompletion: false,
+                    operation: StackApplyOperation.Apply,
+                    previousStackSnapshot: null,
+                    ct: cancellationToken))
+                {
+                }
+            }
+            catch (OperationCanceledException ex)
+            {
+                logger.LogWarning(ex, "Stack redeploy for {StackId} was cancelled after build run {BuildRunId} completed.", request.StackId, runId);
+                await AppendPostBuildRedeployLogAsync(runId, $"Stack redeploy was cancelled for {request.StackId}.");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Failed to redeploy stack {StackId} after build run {BuildRunId}.", request.StackId, runId);
+                await AppendPostBuildRedeployLogAsync(runId, $"Stack redeploy failed for {request.StackId}: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task AppendPostBuildRedeployLogAsync(Guid runId, string message)
+    {
+        await SendBuildRunLogsSafeAsync(runId, new[] { NewLogEntry(runId, "stderr", message) });
+    }
+
+    private static StackSpec SetBuildImageBindings(StackSpec spec, IReadOnlyList<StackBuildImageBinding> bindings)
+        => spec switch
+        {
+            ManualStack manual => manual with { BuildImageBindings = bindings },
+            GitStack git => git with { BuildImageBindings = bindings },
+            _ => spec
+        };
+
     private async Task AppendLogAsync(Guid runId, string stream, string message, CancellationToken cancellationToken)
     {
         var entry = NewLogEntry(runId, stream, message);
@@ -657,6 +856,18 @@ internal sealed class BuildRunExecutionService(
     private static bool IsBuildKitSecretId(string value)
         => !string.IsNullOrWhiteSpace(value)
            && value.All(static ch => char.IsLetterOrDigit(ch) || ch is '.' or '_' or '-');
+
+    private sealed record DeploymentConsumerNotification(Deployment Deployment, ActivityEvent Activity);
+
+    private sealed record BuildImageConsumerUpdateResult(
+        IReadOnlyList<DeploymentConsumerNotification> DeploymentNotifications,
+        IReadOnlyList<StackConsumerNotification> StackNotifications,
+        IReadOnlyList<Guid> DeploymentsToRedeploy,
+        IReadOnlyList<StackRedeployRequest> StacksToRedeploy);
+
+    private sealed record StackConsumerNotification(Stack Stack, ActivityEvent Activity);
+
+    private sealed record StackRedeployRequest(Guid StackId, IReadOnlyList<string> ServiceNames);
 
     private sealed record BuildExecutionContext(
         BuildProject Project,

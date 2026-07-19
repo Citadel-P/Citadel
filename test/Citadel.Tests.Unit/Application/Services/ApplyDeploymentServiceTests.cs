@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Threading.Channels;
 using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Builds;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -139,7 +140,8 @@ public sealed class ApplyDeploymentServiceTests
             Mock.Of<IDeploymentStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
             Mock.Of<IConnectorFactory<IContainerConnector>>(),
-            deploymentConnectorFactory.Object);
+            deploymentConnectorFactory.Object,
+            Mock.Of<IBuildImageResolver>());
 
         var items = new List<DeploymentStreamItem>();
         await foreach (var item in service.ApplyAsync(deployment.Id, actorId, recreate: false, TestContext.Current.CancellationToken))

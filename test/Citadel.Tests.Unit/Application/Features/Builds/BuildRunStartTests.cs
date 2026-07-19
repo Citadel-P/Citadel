@@ -5,9 +5,11 @@ using Application.Services.Builds;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Deployments;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Activities;
 using Domain.Entities.Builds;
+using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
@@ -34,6 +36,7 @@ public sealed class BuildRunStartTests
         var gitRepositories = new Mock<IGitReposRepository>(MockBehavior.Strict);
         var platforms = new Mock<IPlatformRepository>(MockBehavior.Strict);
         var registries = new Mock<IRegistryRepository>(MockBehavior.Strict);
+        var deployments = new Mock<IDeploymentRepository>(MockBehavior.Strict);
         var unitOfWork = CreateUnitOfWork(buildProjects, buildRuns, gitRepositories, platforms, registries);
         var runStream = new Mock<IBuildRunStreamManager>(MockBehavior.Strict);
         var projectStream = new Mock<IBuildProjectStreamManager>(MockBehavior.Strict);
@@ -209,6 +212,10 @@ public sealed class BuildRunStartTests
             Mock.Of<IBuildProjectStreamManager>(),
             Mock.Of<IBuildRunStreamManager>(),
             Mock.Of<IActivityStreamManager>(),
+            Mock.Of<IDeploymentStreamManager>(),
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IApplyDeploymentService>(),
+            Mock.Of<IApplyStackService>(),
             Mock.Of<IBuildRunRetentionService>(),
             NullLogger<BuildRunExecutionService>.Instance);
         var runId = Guid.CreateVersion7();
@@ -280,6 +287,91 @@ public sealed class BuildRunStartTests
         context.Retention.Verify(x => x.PruneAsync(project.Id, It.IsAny<CancellationToken>()), Times.Once);
         context.BuildRunStream.Verify(x => x.SendBuildRunInfo(It.IsAny<BuildRun>(), It.IsAny<string>()), Times.AtLeast(2));
         context.ProjectStream.Verify(x => x.SendBuildProjectInfo(project, "update", It.IsAny<BuildRun?>()), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedBuildRun_ShouldUpdateBuildImageDeploymentConsumers_WhenBuildSucceeds()
+    {
+        var actorId = Guid.CreateVersion7();
+        var project = CreateProject(actorId);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var platform = CreatePlatform(project.PlatformId);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var deployment = CreateBuildImageDeployment(Guid.CreateVersion7(), project.PlatformId, project.Id, actorId);
+        var run = CreateRun(project, repository, platform, registry, actorId);
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        PrepareRepositoryCache(repository);
+
+        var context = CreateExecutionContext(project, repository, platform, registry, run);
+        var persistedLogs = new List<BuildRunLogEntry>();
+
+        context.RepoCache
+            .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+        context.Runner
+            .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
+        context.BuildRuns
+            .Setup(x => x.UpdateAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        context.Deployments
+            .Setup(x => x.GetBuildImageConsumersAsync(project.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([deployment]);
+        context.Deployments
+            .Setup(x => x.UpdateAsync(deployment, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        CaptureLogs(context.BuildRunLogs, persistedLogs);
+
+        var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        var image = Assert.IsType<BuildImage>(deployment.Spec!.Image);
+        Assert.Equal("registry.example.test/citadel/api:main-abcdef123456", image.ResolvedImageReference);
+        Assert.Equal("sha256:abc", image.ResolvedDigest);
+        Assert.Contains(persistedLogs, log => log.Stream == "system" && log.Message.Contains("Updated deployment", StringComparison.Ordinal));
+        context.Deployments.Verify(x => x.UpdateAsync(deployment, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedBuildRun_ShouldRemainSucceeded_WhenBuildImageRedeployFails()
+    {
+        var actorId = Guid.CreateVersion7();
+        var project = CreateProject(actorId);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var platform = CreatePlatform(project.PlatformId);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var deployment = CreateBuildImageDeployment(Guid.CreateVersion7(), project.PlatformId, project.Id, actorId, redeployOnBuild: true);
+        var run = CreateRun(project, repository, platform, registry, actorId);
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        PrepareRepositoryCache(repository);
+
+        var context = CreateExecutionContext(project, repository, platform, registry, run);
+
+        context.RepoCache
+            .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+        context.Runner
+            .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
+        context.BuildRuns
+            .Setup(x => x.UpdateAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        context.Deployments
+            .Setup(x => x.GetBuildImageConsumersAsync(project.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([deployment]);
+        context.Deployments
+            .Setup(x => x.UpdateAsync(deployment, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        context.ApplyDeployment
+            .Setup(x => x.ApplyAsync(deployment.Id, actorId, false, It.IsAny<CancellationToken>()))
+            .Returns((Guid _, Guid _, bool _, CancellationToken ct) => FailingDeploymentApply(ct));
+
+        var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        Assert.Equal(BuildRunStatus.Succeeded, run.Status);
+        context.BuildProjects.Verify(x => x.MarkIdleAsync(project.Id, run.Id, It.IsAny<CancellationToken>()), Times.Once);
+        context.Retention.Verify(x => x.PruneAsync(project.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -389,17 +481,24 @@ public sealed class BuildRunStartTests
         var gitRepositories = new Mock<IGitReposRepository>(MockBehavior.Strict);
         var platforms = new Mock<IPlatformRepository>(MockBehavior.Strict);
         var registries = new Mock<IRegistryRepository>(MockBehavior.Strict);
+        var deployments = new Mock<IDeploymentRepository>(MockBehavior.Strict);
+        var stacks = new Mock<IStackRepository>(MockBehavior.Strict);
         var unitOfWork = CreateUnitOfWork(buildProjects, buildRuns, gitRepositories, platforms, registries);
         var repoCache = new Mock<IRepoCacheManager>(MockBehavior.Strict);
         var runner = new Mock<IBuildProcessRunner>(MockBehavior.Strict);
         var projectStream = new Mock<IBuildProjectStreamManager>(MockBehavior.Strict);
         var runStream = new Mock<IBuildRunStreamManager>(MockBehavior.Strict);
         var activityStream = new Mock<IActivityStreamManager>(MockBehavior.Strict);
+        var deploymentStream = new Mock<IDeploymentStreamManager>(MockBehavior.Strict);
+        var applyDeployment = new Mock<IApplyDeploymentService>(MockBehavior.Strict);
+        var applyStack = new Mock<IApplyStackService>(MockBehavior.Strict);
         var retention = new Mock<IBuildRunRetentionService>(MockBehavior.Strict);
         var secretDefinitions = new Mock<ISecretDefinitionRepository>(MockBehavior.Strict);
 
         unitOfWork.SetupGet(x => x.BuildRunLogs).Returns(buildRunLogs.Object);
         unitOfWork.SetupGet(x => x.SecretDefinitions).Returns(secretDefinitions.Object);
+        unitOfWork.SetupGet(x => x.Deployments).Returns(deployments.Object);
+        unitOfWork.SetupGet(x => x.Stacks).Returns(stacks.Object);
         unitOfWork
             .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -421,8 +520,14 @@ public sealed class BuildRunStartTests
             .ReturnsAsync(registry);
         buildProjects
             .Setup(x => x.MarkIdleAsync(project.Id, run.Id, It.IsAny<CancellationToken>()))
-            .Callback<Guid, Guid, CancellationToken>((_, runId, _) => project.ReleaseProcessing(runId))
+            .Callback<Guid, Guid, CancellationToken>((_, runId, _) => project.MarkIdle(runId, DateTimeOffset.UtcNow))
             .ReturnsAsync(1);
+        deployments
+            .Setup(x => x.GetBuildImageConsumersAsync(project.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        stacks
+            .Setup(x => x.GetBuildImageConsumerStacksAsync(project.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
         runStream
             .Setup(x => x.SendBuildRunInfo(It.IsAny<BuildRun>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
@@ -431,6 +536,9 @@ public sealed class BuildRunStartTests
             .Returns(Task.CompletedTask);
         activityStream
             .Setup(x => x.SendActivityInfo(It.IsAny<ActivityEvent>()))
+            .Returns(Task.CompletedTask);
+        deploymentStream
+            .Setup(x => x.SendDeploymentInfo(It.IsAny<Deployment>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
         retention
             .Setup(x => x.PruneAsync(project.Id, It.IsAny<CancellationToken>()))
@@ -446,6 +554,10 @@ public sealed class BuildRunStartTests
             projectStream.Object,
             runStream.Object,
             activityStream.Object,
+            deploymentStream.Object,
+            Mock.Of<IStackStreamManager>(),
+            applyDeployment.Object,
+            applyStack.Object,
             retention.Object,
             NullLogger<BuildRunExecutionService>.Instance);
 
@@ -454,10 +566,13 @@ public sealed class BuildRunStartTests
             buildProjects,
             buildRuns,
             buildRunLogs,
+            deployments,
             repoCache,
             runner,
             projectStream,
             runStream,
+            applyDeployment,
+            applyStack,
             retention,
             service);
     }
@@ -524,6 +639,43 @@ public sealed class BuildRunStartTests
             DateTime.UtcNow,
             actorId,
             new CustomRegistry());
+
+    private static Deployment CreateExternalImageDeployment(Guid id, Guid platformId, Guid registryId, Guid actorId)
+        => Deployment.FromPersistence(
+            id,
+            "api",
+            platformId,
+            rowVersion: 0,
+            controlStartedAt: null,
+            controlState: ResourceControlState.Idle,
+            status: DeploymentStatus.Created,
+            createdAt: DateTime.UtcNow,
+            createdByActorId: actorId,
+            controlTriggeredBy: null,
+            spec: new DeploymentSpec(
+                new ExternalImage(registryId, "citadel/api:old", "sha256:old"),
+                UpdateBehavior.Disabled));
+
+    private static Deployment CreateBuildImageDeployment(
+        Guid id,
+        Guid platformId,
+        Guid buildProjectId,
+        Guid actorId,
+        bool redeployOnBuild = false)
+        => Deployment.FromPersistence(
+            id,
+            "api",
+            platformId,
+            rowVersion: 0,
+            controlStartedAt: null,
+            controlState: ResourceControlState.Idle,
+            status: DeploymentStatus.Created,
+            createdAt: DateTime.UtcNow,
+            createdByActorId: actorId,
+            controlTriggeredBy: null,
+            spec: new DeploymentSpec(
+                new BuildImage(buildProjectId, redeployOnBuild),
+                UpdateBehavior.Disabled));
 
     private static BuildRun CreateRun(
         BuildProject project,
@@ -618,6 +770,16 @@ public sealed class BuildRunStartTests
             cancelled.SetResult();
             throw;
         }
+
+        yield break;
+    }
+
+    private static async IAsyncEnumerable<DeploymentStreamItem> FailingDeploymentApply(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new InvalidOperationException("redeploy failed");
     }
 
     private static IUserContextAccessor CreateUserContextAccessor(Guid actorId)
@@ -639,10 +801,13 @@ public sealed class BuildRunStartTests
         Mock<IBuildProjectRepository> BuildProjects,
         Mock<IBuildRunRepository> BuildRuns,
         Mock<IBuildRunLogRepository> BuildRunLogs,
+        Mock<IDeploymentRepository> Deployments,
         Mock<IRepoCacheManager> RepoCache,
         Mock<IBuildProcessRunner> Runner,
         Mock<IBuildProjectStreamManager> ProjectStream,
         Mock<IBuildRunStreamManager> BuildRunStream,
+        Mock<IApplyDeploymentService> ApplyDeployment,
+        Mock<IApplyStackService> ApplyStack,
         Mock<IBuildRunRetentionService> Retention,
         BuildRunExecutionService Service);
 }

@@ -174,6 +174,7 @@ const BuildPlatformField = ({
   );
 };
 
+
 function formatConnectorType(connectorType?: PlatformConnectorType) {
   switch (connectorType) {
     case PlatformConnectorType.Agent:

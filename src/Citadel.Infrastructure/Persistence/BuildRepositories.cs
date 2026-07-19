@@ -527,6 +527,26 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
         return result?.ToDomain();
     }
 
+    public async Task<BuildRun?> GetLatestSuccessfulByProjectAsync(Guid projectId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT * FROM BuildRuns
+            WHERE BuildProjectId = @ProjectId
+              AND Status = @Status
+            ORDER BY CompletedAt DESC NULLS LAST, QueuedAt DESC, Id DESC
+            LIMIT 1
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<BuildRunDto>(
+            sql,
+            new
+            {
+                ProjectId = projectId,
+                Status = EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Succeeded)
+            },
+            transaction: tx());
+        return result?.ToDomain();
+    }
+
     public async Task<IReadOnlyDictionary<Guid, BuildRun>> GetLatestByProjectsAsync(
         IReadOnlyCollection<Guid> projectIds,
         CancellationToken cancellationToken)

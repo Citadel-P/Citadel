@@ -131,6 +131,8 @@ public static class ApplicationModule
             .AddSingleton<IBackupRestoreRunExecutionService, BackupRestoreRunExecutionService>()
             .AddSingleton<IBuildRunCoordinator, BuildRunCoordinator>()
             .AddSingleton<IBuildRunCleanupService, BuildRunCleanupService>()
+            .AddSingleton<IBuildImageResolver, BuildImageResolver>()
+            .AddSingleton<IStackBuildImageBindingResolver, StackBuildImageBindingResolver>()
             .AddScoped<IBuildRunRetentionService, BuildRunRetentionService>()
             .AddScoped<IBuildRunExecutionService, BuildRunExecutionService>()
             .AddSingleton<IApplyStackService, ApplyStackService>();

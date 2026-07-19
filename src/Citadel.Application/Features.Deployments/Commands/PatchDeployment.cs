@@ -57,19 +57,12 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
 
         var patchedDeployment = command.Patch.ApplyTo(deployment, DeploymentJsonContext.Default.Deployment);
         
-        if (patchedDeployment.Spec?.Image is not ExternalImage)
+        if (patchedDeployment.Spec is not null)
         {
-            if (patchedDeployment.Spec?.UpdateBehavior != UpdateBehavior.Disabled)
+            var imageValidation = await DeploymentImageValidation.ValidateAsync(patchedDeployment.Spec, unitOfWork, cancellationToken);
+            if (imageValidation.IsFailure(out var imageError))
             {
-                return Result.Failure<Deployment>(new BadRequestError("Auto-update requires an external image source."));
-            }
-        }
-
-        if (patchedDeployment.Spec?.Image is ExternalImage extImage && extImage.ImageTag.Contains('@'))
-        {
-            if (patchedDeployment.Spec?.UpdateBehavior != UpdateBehavior.Disabled)
-            {
-                return Result.Failure<Deployment>(new BadRequestError("Cannot enable Auto-update for an image pinned by digest (contains '@')."));
+                return Result.Failure<Deployment>(imageError);
             }
         }
 

@@ -20,10 +20,16 @@ public sealed record DeploymentSpec(
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 [JsonDerivedType(typeof(LocalImage), nameof(ImageSource.Local))]
 [JsonDerivedType(typeof(ExternalImage), nameof(ImageSource.External))]
+[JsonDerivedType(typeof(BuildImage), nameof(ImageSource.Build))]
 public abstract record DeploymentImageInfo;
 
 public sealed record LocalImage(string ImageId) : DeploymentImageInfo;
 public sealed record ExternalImage(Guid RegistryId, string ImageTag, string? ResolvedDigest = null) : DeploymentImageInfo;
+public sealed record BuildImage(
+    Guid BuildProjectId,
+    bool RedeployOnBuild = false,
+    string? ResolvedImageReference = null,
+    string? ResolvedDigest = null) : DeploymentImageInfo;
 public sealed record ResourceSpec(
     float? NanoCpus,
     float? MemoryLimit

@@ -10,6 +10,8 @@ import {
   StackDriftPolicy,
   GitRepositoryRefView,
   GitComposeProjectCandidate,
+  BuildProjectView,
+  StackBuildImageBinding,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -32,7 +34,7 @@ import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { GitBranch, Loader2, Search } from 'lucide-react';
+import { GitBranch, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as monaco from 'monaco-editor';
 import { ResourceTagSelector } from '@/features/tags/components';
@@ -74,6 +76,7 @@ const EMPTY_STACK_CONFIG = {} as StackConfigView;
 const EMPTY_GIT_REFS: GitRepositoryRefView[] = [];
 const EMPTY_COMPOSE_PROJECTS: GitComposeProjectCandidate[] = [];
 const EMPTY_RESOURCE_BINDING_LOOKUP: { name: string }[] = [];
+const EMPTY_BUILD_PROJECTS: BuildProjectView[] = [];
 
 const DEFAULT_DRIFT_POLICY: StackDriftPolicy = {
   mode: StackDriftMode.DetectOnly,
@@ -383,6 +386,140 @@ const GitSourceStateHint = ({
   </div>
 );
 
+const StackBuildImageBindingsField = ({
+  value,
+  projects,
+  isLoading,
+  disabled,
+  onChange,
+}: {
+  value?: StackBuildImageBinding[] | null;
+  projects: BuildProjectView[];
+  isLoading?: boolean;
+  disabled?: boolean;
+  onChange: (value: StackBuildImageBinding[]) => void;
+}) => {
+  const bindings = value ?? [];
+  const projectOptions = useMemo(
+    () =>
+      projects.map((project) => ({
+        value: project.id,
+        label: (
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate">{project.name}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {project.imageRepository}:{project.branch}
+            </span>
+          </span>
+        ),
+      })),
+    [projects],
+  );
+
+  const setBinding = (index: number, patch: Partial<StackBuildImageBinding>) => {
+    const next = bindings.map((binding, currentIndex) =>
+      currentIndex === index
+        ? {
+            ...binding,
+            ...patch,
+          }
+        : binding,
+    );
+    onChange(next);
+  };
+
+  const removeBinding = (index: number) => {
+    onChange(bindings.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {bindings.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Add a row only for Compose services whose image should come from a Citadel build.
+        </p>
+      ) : null}
+
+      {bindings.map((binding, index) => {
+        const hasProjectSelection = projectOptions.some((option) => option.value === binding.buildProjectId);
+        return (
+          <div key={`${binding.serviceName}:${index}`} className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
+            <FieldInput
+              value={binding.serviceName}
+              disabled={disabled}
+              onChange={(serviceName) => setBinding(index, { serviceName })}
+              placeholder="compose service name"
+              className="w-full max-w-full"
+            />
+            <FieldSelect
+              value={hasProjectSelection ? binding.buildProjectId : undefined}
+              options={projectOptions}
+              disabled={disabled || isLoading || projectOptions.length === 0}
+              placeholder={isLoading ? 'Loading builds...' : 'Select build'}
+              onChange={(buildProjectId) => setBinding(index, { buildProjectId })}
+              className="w-full max-w-full"
+            />
+            <FieldSwitch
+              id={`stack-build-redeploy-${index}`}
+              checked={binding.redeployOnBuild ?? false}
+              disabled={disabled}
+              onChange={(redeployOnBuild) => setBinding(index, { redeployOnBuild })}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled={disabled}
+              onClick={() => removeBinding(index)}
+              title="Remove build image binding">
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        );
+      })}
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-fit"
+        disabled={disabled}
+        onClick={() =>
+          onChange([
+            ...bindings,
+            {
+              serviceName: '',
+              buildProjectId: '',
+              redeployOnBuild: false,
+            },
+          ])
+        }>
+        <Plus className="size-4" />
+        Add Service Binding
+      </Button>
+    </div>
+  );
+};
+
+function validateStackBuildImageBindings(value?: StackBuildImageBinding[] | null): string | null {
+  const bindings = value ?? [];
+  const serviceNames = new Set<string>();
+
+  for (const binding of bindings) {
+    const serviceName = binding.serviceName?.trim();
+    if (!serviceName) return 'Service name is required for each build image binding';
+    if (!binding.buildProjectId) return `Build is required for service "${serviceName}"`;
+
+    const normalizedServiceName = serviceName.toLowerCase();
+    if (serviceNames.has(normalizedServiceName)) {
+      return `Service "${serviceName}" is mapped more than once`;
+    }
+
+    serviceNames.add(normalizedServiceName);
+  }
+
+  return null;
+}
+
 const GitDiscoveredPathsField = ({
   canDiscover,
   discoveredPaths,
@@ -513,6 +650,7 @@ export const StackForm = ({
   const { mutateAsync: createStack } = useMutate('createStack');
   const { mutateAsync: updateStack } = useMutate('updateStack');
   const { data: stackCfg } = useRead('getStackConfig', { stackId: id });
+  const { data: buildProjectsData, isFetching: buildProjectsLoading } = useRead('listBuildProjects');
   const { data: duplicateDraftData, isFetching: isDuplicateDraftLoading } = useRead(
     'getStackDuplicateDraft',
     { stackId: duplicateFrom ?? '' },
@@ -559,6 +697,7 @@ export const StackForm = ({
     { enabled: canDiscoverGitPaths },
   );
   const gitComposeProjects = gitComposeDiscoveryData?.data.projects ?? EMPTY_COMPOSE_PROJECTS;
+  const buildProjects = buildProjectsData?.data.projects ?? EMPTY_BUILD_PROJECTS;
   const discoveredComposePaths = useMemo(
     () => [...new Set(gitComposeProjects.flatMap((project) => project.composePaths.map(normalizeGitPath)))],
     [gitComposeProjects],
@@ -1022,6 +1161,38 @@ export const StackForm = ({
                     );
                   },
                 }),
+                defineGroupField<StackInput>({
+                  id: 'build_image_bindings',
+                  label: 'Build Images',
+                  title: 'Build Images',
+                  description:
+                    'Map Compose services to Citadel builds. When a mapped build succeeds, Citadel updates the service image reference and can redeploy that service.',
+                  items: [
+                    defineField<StackInput, 'spec.buildImageBindings'>({
+                      key: 'spec.buildImageBindings',
+                      label: 'Service Bindings',
+                      description:
+                        'Use the exact Compose service name, then select the build that produces its image.',
+                      validate: validateStackBuildImageBindings,
+                      render: (value, set) => (
+                        <StackBuildImageBindingsField
+                          value={value}
+                          projects={buildProjects}
+                          isLoading={buildProjectsLoading}
+                          disabled={disabled}
+                          onChange={(buildImageBindings) =>
+                            set((prev) => ({
+                              spec: {
+                                ...prev.spec!,
+                                buildImageBindings,
+                              },
+                            }))
+                          }
+                        />
+                      ),
+                    }),
+                  ],
+                }),
               ]
             : []),
         ],
@@ -1401,6 +1572,8 @@ export const StackForm = ({
       patchDriftPolicy,
       original.spec,
       gitRefs,
+      buildProjects,
+      buildProjectsLoading,
       selectedBranchRef?.resolvedCommitSha,
       stackView?.source?.resolvedCommitSha,
       effectiveConfigurationNames,
