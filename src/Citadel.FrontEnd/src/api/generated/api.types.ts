@@ -3256,6 +3256,7 @@ export interface BuildProjectSnapshot {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   retentionRunCount: number | string;
+  buildSecrets?: null | BuildSecretSpec[];
 }
 
 export interface BuildProjectView {

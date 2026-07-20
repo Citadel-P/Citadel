@@ -54,24 +54,66 @@ public sealed class BuildProcessRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_ShouldRejectBuildSecretsForDockerApiBuilds()
+    public async Task RunAsync_ShouldForwardBuildSecretsAndRedactOutput()
     {
         var imageConnector = new Mock<IImageConnector>(MockBehavior.Strict);
         var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>(MockBehavior.Strict);
         var runner = new BuildProcessRunner(connectorFactory.Object);
         var command = CreateCommand(secrets: [new BuildProcessSecret("token", "super-secret")]);
+        BuildImageCommand? buildCommand = null;
+
+        connectorFactory.Setup(x => x.GetConnector(command.PlatformConnectorType)).Returns(imageConnector.Object);
+        imageConnector
+            .Setup(x => x.BuildImageProgressStreamAsync(It.IsAny<BuildImageCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildImageCommand, CancellationToken>((cmd, _) => buildCommand = cmd)
+            .Returns(Messages(new ImageBuildStreamItem(null, "using super-secret", null, null, null, null, null)));
+        imageConnector
+            .Setup(x => x.PushImageProgressStreamAsync(It.IsAny<PushImageCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(Messages());
 
         var events = await runner.RunAsync(command, TestContext.Current.CancellationToken)
             .ToListAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains(events, e =>
-            e.Stream == BuildProcessStream.StdErr &&
-            e.Message!.Contains("Build secrets are not supported", StringComparison.Ordinal));
+        Assert.NotNull(buildCommand);
+        var secret = Assert.Single(buildCommand.Secrets!);
+        Assert.Equal("token", secret.Id);
+        Assert.Equal("super-secret", secret.Value);
+        Assert.Contains(events, e => e.Stream == BuildProcessStream.StdOut && e.Message == "using ********");
+        Assert.DoesNotContain(events, e => e.Message?.Contains("super-secret", StringComparison.Ordinal) == true);
         var exit = Assert.Single(events, e => e.Stream == BuildProcessStream.Exit);
-        Assert.Equal(1, exit.ExitCode);
-        connectorFactory.Verify(x => x.GetConnector(It.IsAny<PlatformConnectorType>()), Times.Never);
-        imageConnector.Verify(x => x.BuildImageProgressStreamAsync(It.IsAny<BuildImageCommand>(), It.IsAny<CancellationToken>()), Times.Never);
-        imageConnector.Verify(x => x.PushImageProgressStreamAsync(It.IsAny<PushImageCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal(0, exit.ExitCode);
+        imageConnector.Verify(x => x.BuildImageProgressStreamAsync(It.IsAny<BuildImageCommand>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldNotRedactShortSecretsInsideLargerWords()
+    {
+        var imageConnector = new Mock<IImageConnector>(MockBehavior.Strict);
+        var connectorFactory = new Mock<IConnectorFactory<IImageConnector>>(MockBehavior.Strict);
+        var runner = new BuildProcessRunner(connectorFactory.Object);
+        var command = CreateCommand(secrets: [new BuildProcessSecret("placeholder", "test")]);
+
+        connectorFactory.Setup(x => x.GetConnector(command.PlatformConnectorType)).Returns(imageConnector.Object);
+        imageConnector
+            .Setup(x => x.BuildImageProgressStreamAsync(It.IsAny<BuildImageCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(Messages(new ImageBuildStreamItem(
+                null,
+                null,
+                "busybox:latest: failed to resolve source metadata. test/test should be hidden.",
+                null,
+                null,
+                null,
+                null)));
+        imageConnector
+            .Setup(x => x.PushImageProgressStreamAsync(It.IsAny<PushImageCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(Messages());
+
+        var events = await runner.RunAsync(command, TestContext.Current.CancellationToken)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains(events, e => e.Stream == BuildProcessStream.StdOut
+                                     && e.Message == "busybox:latest: failed to resolve source metadata. ********/******** should be hidden.");
+        Assert.DoesNotContain(events, e => e.Message?.Contains("busybox:la********", StringComparison.Ordinal) == true);
     }
 
     [Fact]

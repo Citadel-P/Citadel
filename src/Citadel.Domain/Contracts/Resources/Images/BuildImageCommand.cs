@@ -12,7 +12,10 @@ public sealed record BuildImageCommand(
     TimeSpan Timeout,
     int MaxLineBytes = 16_384,
     byte[]? ContextArchive = null,
-    string? DockerfileArchivePath = null);
+    string? DockerfileArchivePath = null,
+    IReadOnlyList<BuildImageSecret>? Secrets = null);
+
+public sealed record BuildImageSecret(string Id, string Value);
 
 public sealed record PushImageCommand(
     string PlatformAddress,

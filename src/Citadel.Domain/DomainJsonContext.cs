@@ -237,6 +237,8 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(LicenseValidationFailed))]
 [JsonSerializable(typeof(VolumeContentDownloaded))]
 [JsonSerializable(typeof(BuildProjectSnapshot))]
+[JsonSerializable(typeof(Domain.Entities.Builds.BuildSecretSpec))]
+[JsonSerializable(typeof(IReadOnlyList<Domain.Entities.Builds.BuildSecretSpec>))]
 [JsonSerializable(typeof(BuildCreated))]
 [JsonSerializable(typeof(BuildUpdated))]
 [JsonSerializable(typeof(BuildRenamed))]

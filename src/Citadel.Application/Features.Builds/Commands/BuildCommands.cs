@@ -29,6 +29,13 @@ public sealed record CreateBuildProject(BuildProjectInputModel Project) : IComma
             RuleFor(x => x.Project.PlatformId).NotEmpty();
             RuleFor(x => x.Project.RegistryId).NotEmpty();
             RuleFor(x => x.Project.ImageRepository).NotEmpty().MaximumLength(512);
+            RuleForEach(x => x.Project.BuildSecrets!)
+                .SetValidator(new BuildSecretSpecValidator())
+                .When(x => x.Project.BuildSecrets is not null);
+            RuleFor(x => x.Project.BuildSecrets)
+                .Must(BuildProjectCommandValidation.HaveUniqueBuildSecretIds)
+                .WithMessage("BuildKit secret ids must be unique.")
+                .When(x => x.Project.BuildSecrets is not null);
         }
     }
 }
@@ -40,7 +47,25 @@ public sealed record UpdateBuildProject(
     bool UpdateDescription,
     bool UpdateBuildArgs,
     bool UpdateBuildSecrets,
-    bool UpdateWebhook) : ICommand<Result<BuildProjectResult>>;
+    bool UpdateWebhook) : ICommand<Result<BuildProjectResult>>
+{
+    internal sealed class Validator : AbstractValidator<UpdateBuildProject>
+    {
+        public Validator()
+        {
+            RuleFor(x => x.ProjectId).NotEmpty();
+            RuleFor(x => x.Project.Description).MaximumLength(600).When(x => x.Project.Description is not null);
+            RuleFor(x => x.Project.ImageRepository).MaximumLength(512).When(x => x.Project.ImageRepository is not null);
+            RuleForEach(x => x.Project.BuildSecrets!)
+                .SetValidator(new BuildSecretSpecValidator())
+                .When(x => x.UpdateBuildSecrets && x.Project.BuildSecrets is not null);
+            RuleFor(x => x.Project.BuildSecrets)
+                .Must(BuildProjectCommandValidation.HaveUniqueBuildSecretIds)
+                .WithMessage("BuildKit secret ids must be unique.")
+                .When(x => x.UpdateBuildSecrets && x.Project.BuildSecrets is not null);
+        }
+    }
+}
 
 [RequirePermission(ResourceType.Build, PermissionLevel.Write)]
 public sealed record RenameBuildProject(Guid ProjectId, string Name) : ICommand<Result<BuildProjectResult>>;
@@ -56,6 +81,38 @@ public sealed record QueueBuildRun(Guid ProjectId, QueueBuildRunInputModel Input
 
 [RequirePermission(ResourceType.Build, PermissionLevel.Read, SpecificPermission.Apply)]
 public sealed record CancelBuildRun(Guid RunId) : ICommand<Result>;
+
+internal sealed class BuildSecretSpecValidator : AbstractValidator<BuildSecretSpec>
+{
+    public BuildSecretSpecValidator()
+    {
+        RuleFor(x => x.Id)
+            .Must(BuildProject.IsBuildKitSecretId)
+            .WithMessage("BuildKit secret id must use only letters, numbers, '.', '_' or '-'.");
+        RuleFor(x => x.SecretId).NotEmpty();
+    }
+}
+
+file static class BuildProjectCommandValidation
+{
+    public static bool HaveUniqueBuildSecretIds(IReadOnlyList<BuildSecretSpec>? secrets)
+    {
+        if (secrets is null || secrets.Count == 0)
+            return true;
+
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var secret in secrets)
+        {
+            if (!BuildProject.IsBuildKitSecretId(secret.Id))
+                continue;
+
+            if (!ids.Add(secret.Id.Trim()))
+                return false;
+        }
+
+        return true;
+    }
+}
 
 internal sealed class CreateBuildProjectHandler(
     IUnitOfWork unitOfWork,
@@ -506,7 +563,8 @@ internal static class BuildActivity
             project.TagTemplates,
             SanitizeWebhook(project.Webhook),
             project.TimeoutSeconds,
-            project.RetentionRunCount);
+            project.RetentionRunCount,
+            project.BuildSecrets);
 
     private static BuildWebhookConfig? SanitizeWebhook(BuildWebhookConfig? webhook)
         => webhook is null || string.IsNullOrEmpty(webhook.Secret)

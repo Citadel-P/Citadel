@@ -406,10 +406,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnName("updatedat")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("Webhook")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("webhook");
-
                     b.HasKey("Id")
                         .HasName("pk_alertevents");
 
@@ -2036,6 +2032,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnName("updatedat")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("Webhook")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("webhook");
+
                     b.HasKey("Id")
                         .HasName("pk_buildprojects");
 
@@ -2545,7 +2545,7 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("Spec")
                         .IsRequired()
-                        .HasColumnType("json")
+                        .HasColumnType("jsonb")
                         .HasColumnName("spec");
 
                     b.Property<string>("Status")
@@ -4594,7 +4594,7 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("Spec")
                         .IsRequired()
-                        .HasColumnType("json")
+                        .HasColumnType("jsonb")
                         .HasColumnName("spec");
 
                     b.Property<Guid>("StackId")

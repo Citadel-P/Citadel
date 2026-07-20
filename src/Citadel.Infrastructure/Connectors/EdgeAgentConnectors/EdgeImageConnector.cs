@@ -233,6 +233,11 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
         };
         request.Tags.AddRange(buildImageCommand.Tags);
         request.BuildArgs.Add(buildImageCommand.BuildArgs.ToDictionary());
+        request.BuildSecrets.AddRange(buildImageCommand.Secrets?.Select(static secret => new Citadel.Images.V1.BuildImageSecret
+        {
+            Id = secret.Id,
+            Value = secret.Value
+        }) ?? []);
         if (buildImageCommand.ContextArchive is { Length: > 0 })
             request.ContextArchive = ByteString.CopyFrom(buildImageCommand.ContextArchive);
 

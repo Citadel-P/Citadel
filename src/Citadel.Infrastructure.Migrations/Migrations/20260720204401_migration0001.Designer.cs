@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260718200529_migration0001")]
+    [Migration("20260720204401_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -2035,6 +2035,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnName("updatedat")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("Webhook")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("webhook");
+
                     b.HasKey("Id")
                         .HasName("pk_buildprojects");
 
@@ -2544,7 +2548,7 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("Spec")
                         .IsRequired()
-                        .HasColumnType("json")
+                        .HasColumnType("jsonb")
                         .HasColumnName("spec");
 
                     b.Property<string>("Status")
@@ -4593,7 +4597,7 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("Spec")
                         .IsRequired()
-                        .HasColumnType("json")
+                        .HasColumnType("jsonb")
                         .HasColumnName("spec");
 
                     b.Property<Guid>("StackId")

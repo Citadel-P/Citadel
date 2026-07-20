@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { RequiredFormFields, ResourceTabElement } from '@/pages/types';
 import { useSegmentTitle } from '@/lib/atoms';
 import { useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 const getTabHash = (label: string) => label.toLowerCase().replace(/\s+/g, '-');
 
@@ -21,12 +21,14 @@ export const ResourceTabs = ({
 }) => {
   const [_, setSegmentTitle] = useSegmentTitle();
   const location = useLocation();
+  const navigate = useNavigate();
+  const firstTabLabel = tabs[0]?.label;
 
   useEffect(() => {
     if (resource?.name) {
-      setSegmentTitle({ action: tabs[0]?.label, name: resource?.name });
+      setSegmentTitle({ action: firstTabLabel, name: resource?.name });
     }
-  }, [resource?.name, setSegmentTitle]);
+  }, [firstTabLabel, resource?.name, setSegmentTitle]);
 
   const [activeTab, setActiveTab] = useLocalStorage(localKey, tabs[0]?.label ?? 'default');
   const { sentinelRef, isStuck } = useStickySentinel();
@@ -34,11 +36,17 @@ export const ResourceTabs = ({
     () => tabs.filter((tab) => !(tab.disabled?.(resource) ?? false)),
     [tabs, resource],
   );
+  const hashTab = useMemo(() => {
+    const hash = (location.hash || window.location.hash).replace(/^#/, '');
+    if (!hash) return undefined;
+
+    return tabs.find((tab) => getTabHash(tab.label) === hash && !(tab.disabled?.(resource) ?? false));
+  }, [location.hash, resource, tabs]);
   const currentTabEnabled = useMemo(
     () => tabs.some((tab) => tab.label === activeTab && !(tab.disabled?.(resource) ?? false)),
     [activeTab, resource, tabs],
   );
-  const effectiveActiveTab = currentTabEnabled ? activeTab : (enabledTabs[0]?.label ?? activeTab);
+  const effectiveActiveTab = hashTab?.label ?? (currentTabEnabled ? activeTab : (enabledTabs[0]?.label ?? activeTab));
 
   useEffect(() => {
     if (effectiveActiveTab !== activeTab) {
@@ -46,19 +54,9 @@ export const ResourceTabs = ({
     }
   }, [activeTab, effectiveActiveTab, setActiveTab]);
 
-  useEffect(() => {
-    const hash = location.hash.replace(/^#/, '');
-    if (!hash) return;
-
-    const matchingTab = tabs.find((tab) => getTabHash(tab.label) === hash);
-    if (matchingTab && !(matchingTab.disabled?.(resource) ?? false)) {
-      setActiveTab(matchingTab.label);
-    }
-  }, [location.hash, resource, setActiveTab, tabs]);
-
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${getTabHash(tab)}`);
+    navigate(`${location.pathname}${location.search}#${getTabHash(tab)}`, { replace: true });
   };
 
   return (

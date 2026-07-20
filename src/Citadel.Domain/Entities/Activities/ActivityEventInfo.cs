@@ -291,7 +291,8 @@ public sealed record BuildProjectSnapshot(
     IReadOnlyList<string> TagTemplates,
     BuildWebhookConfig? Webhook,
     int TimeoutSeconds,
-    int RetentionRunCount);
+    int RetentionRunCount,
+    IReadOnlyList<BuildSecretSpec>? BuildSecrets = null);
 
 public sealed record BuildCreated(BuildProjectSnapshot Build) : ActivityEventInfo;
 public sealed record BuildUpdated(BuildProjectSnapshot OldBuild, BuildProjectSnapshot NewBuild) : ActivityEventInfo;

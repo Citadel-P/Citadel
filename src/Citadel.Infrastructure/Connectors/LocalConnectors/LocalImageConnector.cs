@@ -66,7 +66,8 @@ internal class LocalImageConnector(IImageService imageService) : IImageConnector
             Timeout: buildImageCommand.Timeout,
             MaxLineBytes: buildImageCommand.MaxLineBytes,
             ContextArchive: buildImageCommand.ContextArchive,
-            DockerfileArchivePath: buildImageCommand.DockerfileArchivePath);
+            DockerfileArchivePath: buildImageCommand.DockerfileArchivePath,
+            Secrets: buildImageCommand.Secrets?.Select(static secret => new Hosting.DockerClient.Models.Images.BuildImageSecret(secret.Id, secret.Value)).ToArray());
 
         await foreach (var message in imageService.StreamBuildImage(command, cancellationToken))
         {

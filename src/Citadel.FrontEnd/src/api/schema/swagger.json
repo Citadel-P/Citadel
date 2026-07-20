@@ -35824,6 +35824,15 @@
               "string"
             ],
             "format": "int32"
+          },
+          "buildSecrets": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BuildSecretSpec"
+            }
           }
         }
       },

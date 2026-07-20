@@ -452,7 +452,7 @@ namespace Infrastructure.Migrations.Migrations
                     name = table.Column<string>(type: "text", nullable: false),
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
                     rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
-                    spec = table.Column<string>(type: "json", nullable: false),
+                    spec = table.Column<string>(type: "jsonb", nullable: false),
                     status = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
@@ -903,7 +903,7 @@ namespace Infrastructure.Migrations.Migrations
                     platformid = table.Column<Guid>(type: "uuid", nullable: false),
                     resourcebindings = table.Column<string>(type: "json", nullable: true),
                     source = table.Column<string>(type: "json", nullable: true),
-                    spec = table.Column<string>(type: "json", nullable: false),
+                    spec = table.Column<string>(type: "jsonb", nullable: false),
                     stackid = table.Column<Guid>(type: "uuid", nullable: false),
                     status = table.Column<string>(type: "text", nullable: false),
                     version = table.Column<string>(type: "text", nullable: false)
@@ -1281,7 +1281,8 @@ namespace Infrastructure.Migrations.Migrations
                     tagtemplates = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[\"{branch}-{shortSha}\"]'::jsonb"),
                     target = table.Column<string>(type: "text", maxLength: 128, nullable: true),
                     timeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 1800),
-                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    webhook = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {

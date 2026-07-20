@@ -255,7 +255,7 @@ CREATE TABLE deployments (
     name text NOT NULL,
     platformid uuid NOT NULL,
     rowversion bigint NOT NULL DEFAULT 0,
-    spec json NOT NULL,
+    spec jsonb NOT NULL,
     status text NOT NULL,
     CONSTRAINT pk_deployments PRIMARY KEY (id),
     CONSTRAINT fk_deployments_actors_controltriggeredby FOREIGN KEY (controltriggeredby) REFERENCES actors (id) ON DELETE RESTRICT,
@@ -487,7 +487,7 @@ CREATE TABLE stackreleases (
     platformid uuid NOT NULL,
     resourcebindings json,
     source json,
-    spec json NOT NULL,
+    spec jsonb NOT NULL,
     stackid uuid NOT NULL,
     status text NOT NULL,
     version text NOT NULL,
@@ -1524,7 +1524,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260718200529_migration0001', '10.0.10');
+VALUES ('20260720204401_migration0001', '10.0.10');
 
 COMMIT;
 

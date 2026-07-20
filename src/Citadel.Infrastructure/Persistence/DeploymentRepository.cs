@@ -164,7 +164,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                     AutoUpdateState_RemoteDigest, AutoUpdateState_LastError
                 )
                 SELECT
-                     @Id, @Name, @Description, @PlatformId, @Status, @CreatedAt, @CreatedByActorId, @Spec::json,
+                     @Id, @Name, @Description, @PlatformId, @Status, @CreatedAt, @CreatedByActorId, @Spec::jsonb,
                      @AutoUpdateState_LastCheckedAt, @AutoUpdateState_Status, @AutoUpdateState_CurrentDigest,
                      @AutoUpdateState_RemoteDigest, @AutoUpdateState_LastError
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
@@ -238,7 +238,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             FROM Deployments d
             LEFT JOIN Containers c
                 ON c.DeploymentId = d.Id
-            WHERE d.Spec -> 'Image' @> @BuildImageFilter::jsonb
+            WHERE d.Spec::jsonb -> 'Image' @> @BuildImageFilter::jsonb
             """;
         var result = await db.QueryAsync<DeploymentDto>(
             sql,
@@ -447,7 +447,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
     {
         const string sql = """
             UPDATE Deployments
-            SET Name = @Name, Description = @Description, PlatformId = @PlatformId, Status = @Status, Spec = @Spec::json,
+            SET Name = @Name, Description = @Description, PlatformId = @PlatformId, Status = @Status, Spec = @Spec::jsonb,
                 AutoUpdateState_LastCheckedAt = @AutoUpdateState_LastCheckedAt, AutoUpdateState_Status = @AutoUpdateState_Status, 
                 AutoUpdateState_CurrentDigest = @AutoUpdateState_CurrentDigest, AutoUpdateState_RemoteDigest = @AutoUpdateState_RemoteDigest, 
                 AutoUpdateState_LastError = @AutoUpdateState_LastError

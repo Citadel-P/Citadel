@@ -116,6 +116,11 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
         };
         request.Tags.AddRange(command.Tags);
         request.BuildArgs.Add(command.BuildArgs.ToDictionary());
+        request.BuildSecrets.AddRange(command.Secrets?.Select(static secret => new Citadel.Images.V1.BuildImageSecret
+        {
+            Id = secret.Id,
+            Value = secret.Value
+        }) ?? []);
         if (command.ContextArchive is { Length: > 0 })
             request.ContextArchive = Google.Protobuf.ByteString.CopyFrom(command.ContextArchive);
 

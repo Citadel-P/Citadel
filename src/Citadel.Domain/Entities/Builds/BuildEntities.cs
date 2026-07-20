@@ -195,6 +195,7 @@ public sealed class BuildProject(
         if (TagTemplates.Count == 0) throw new ArgumentException("At least one tag template is required.", nameof(TagTemplates));
         if (Webhook?.Secret?.Length > 256) throw new ArgumentException("Build webhook secret cannot exceed 256 characters.", nameof(Webhook));
         if (Webhook?.BranchFilter?.Length > 256) throw new ArgumentException("Build webhook branch filter cannot exceed 256 characters.", nameof(Webhook));
+        ValidateBuildSecrets();
     }
 
     public static BuildProject FromPersistence(
@@ -265,6 +266,9 @@ public sealed class BuildProject(
     public static string NormalizeName(string value) => value.Trim();
     public static string ToNormalizedName(string value) => NormalizeName(value).ToUpperInvariant();
     public static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    public static bool IsBuildKitSecretId(string? value)
+        => !string.IsNullOrWhiteSpace(value)
+           && value.All(static ch => char.IsLetterOrDigit(ch) || ch is '.' or '_' or '-');
 
     public static void ValidateName(string value, string label)
     {
@@ -310,7 +314,23 @@ public sealed class BuildProject(
             }).ToArray() ?? [];
 
     private static IReadOnlyList<BuildSecretSpec> NormalizeBuildSecrets(IReadOnlyList<BuildSecretSpec>? values)
-        => values?.Select(static value => value with { Id = NormalizeName(value.Id) }).ToArray() ?? [];
+        => values?.Select(static value => value with { Id = NormalizeOptional(value.Id) ?? string.Empty }).ToArray() ?? [];
+
+    private void ValidateBuildSecrets()
+    {
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var secret in BuildSecrets)
+        {
+            if (!IsBuildKitSecretId(secret.Id))
+                throw new ArgumentException($"Build secret id '{secret.Id}' is invalid. Use letters, numbers, '.', '_' or '-'.", nameof(BuildSecrets));
+
+            if (secret.SecretId == Guid.Empty)
+                throw new ArgumentException($"Build secret '{secret.Id}' must reference a Citadel secret.", nameof(BuildSecrets));
+
+            if (!ids.Add(secret.Id.Trim()))
+                throw new ArgumentException($"Build secret id '{secret.Id}' is mapped more than once.", nameof(BuildSecrets));
+        }
+    }
 
 }
 

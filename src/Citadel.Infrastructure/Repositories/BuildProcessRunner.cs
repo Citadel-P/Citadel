@@ -10,19 +10,12 @@ namespace Infrastructure.Repositories;
 
 internal sealed partial class BuildProcessRunner(IConnectorFactory<IImageConnector> imageConnectorFactory) : IBuildProcessRunner
 {
+    private const int MinUnboundedRedactionLength = 8;
+
     public async IAsyncEnumerable<BuildProcessEvent> RunAsync(
         BuildProcessCommand command,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (command.Secrets.Count > 0)
-        {
-            yield return new BuildProcessEvent(
-                BuildProcessStream.StdErr,
-                "Build secrets are not supported by Docker Engine API builds yet. Remove build secrets or use a BuildKit-native builder.");
-            yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 1);
-            yield break;
-        }
-
         using var timeoutCts = new CancellationTokenSource(command.Timeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
         var ct = linkedCts.Token;
@@ -102,7 +95,8 @@ internal sealed partial class BuildProcessRunner(IConnectorFactory<IImageConnect
             command.Timeout,
             command.MaxLineBytes,
             contextArchive?.Archive,
-            contextArchive?.Context.DockerfileEntryName);
+            contextArchive?.Context.DockerfileEntryName,
+            [.. command.Secrets.Select(static secret => new BuildImageSecret(secret.Id, secret.Value))]);
 
     private static bool RequiresPackagedContext(PlatformConnectorType connectorType)
         => connectorType is PlatformConnectorType.Agent or PlatformConnectorType.EdgeAgent;
@@ -149,12 +143,47 @@ internal sealed partial class BuildProcessRunner(IConnectorFactory<IImageConnect
 
         foreach (var secret in redactionValues)
         {
-            sanitized = sanitized.Replace(secret, "********", StringComparison.Ordinal);
+            sanitized = RedactValue(sanitized, secret);
         }
 
         return sanitized.Length <= command.MaxLineBytes
             ? sanitized
             : sanitized[..command.MaxLineBytes] + "...";
+    }
+
+    private static string RedactValue(string value, string secret)
+    {
+        if (secret.Length >= MinUnboundedRedactionLength)
+            return value.Replace(secret, "********", StringComparison.Ordinal);
+
+        var result = value;
+        var searchStart = 0;
+        while (searchStart < result.Length)
+        {
+            var index = result.IndexOf(secret, searchStart, StringComparison.Ordinal);
+            if (index < 0)
+                return result;
+
+            var end = index + secret.Length;
+            if (IsDelimited(result, index, end))
+            {
+                result = result[..index] + "********" + result[end..];
+                searchStart = index + "********".Length;
+            }
+            else
+            {
+                searchStart = end;
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsDelimited(string value, int start, int end)
+    {
+        var beforeDelimited = start == 0 || !char.IsLetterOrDigit(value[start - 1]);
+        var afterDelimited = end >= value.Length || !char.IsLetterOrDigit(value[end]);
+        return beforeDelimited && afterDelimited;
     }
 
     private static string? TryParseDigest(string message)

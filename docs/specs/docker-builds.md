@@ -42,7 +42,7 @@ Slice 1 implements only:
 - local, regular-agent, and edge-agent platform execution
 - Dockerfile builds through the Docker Engine image-build API
 - literal or variable-backed build arguments
-- build-secret configuration validation, with BuildKit secret sessions deferred
+- Citadel-backed BuildKit secret sessions for build secrets
 - registry push
 - manual runs
 - webhook-triggered runs
@@ -314,17 +314,12 @@ RUN --mount=type=secret,id=npmrc \
     cp /run/secrets/npmrc ~/.npmrc && npm ci
 ```
 
-Current Slice 1 rule:
-
-- configured build secrets are rejected before Docker execution because the Docker Engine API runner does not yet support BuildKit secret sessions
-
-Future rules, once BuildKit secret sessions are implemented:
-
 - secret values are resolved only when the run starts
 - values are materialized through Docker build secret sessions
 - values are never stored in project snapshots, run snapshots, logs, activities, or image labels
 - only the configured secret ids and BuildKit mount ids may be stored
 - duplicate secret mount ids are rejected
+- each resolved secret value is capped at `60 KiB`
 
 ## 6.2 BuildRun
 
@@ -518,20 +513,21 @@ Use the Docker Engine image-build endpoint on the selected platform connector. D
 
 Registry authentication is passed through the Docker API auth mechanism using the selected Citadel registry resource. Registry credentials are never persisted on the project or run snapshot.
 
-BuildKit may be enabled by the Docker daemon, but Slice 1 does not require or configure BuildKit sessions.
+BuildKit may be enabled by the Docker daemon. Build projects can store mappings from Dockerfile BuildKit secret ids to Citadel secrets. When build secrets are configured, the runner starts a Docker `/session` h2c connection and serves `moby.buildkit.secrets.v1.Secrets/GetSecret` over that session, then passes the session id to the Docker Engine `/build` request.
 
 ## Execution Flow
 
 1. Resolve and snapshot the source.
-2. Resolve build args and validate that build secrets are not configured.
+2. Resolve build args and Citadel-backed build secret mappings.
 3. Resolve registry login material through the existing registry service.
 4. Package the Docker context using `.dockerignore`.
-5. For agent and edge-agent platforms, transfer the package through the agent command stream.
-6. Start the Docker Engine image-build request with `push=true`.
-7. Stream stdout, stderr, aux, and system messages to Core.
-8. Capture the pushed digest when the Docker daemon reports it.
-9. Persist the output snapshot.
-10. Clear temporary packaged context material in `finally`.
+5. Validate that the selected runner supports the configured build inputs and that resolved build secrets fit the Citadel BuildKit session size limit.
+6. For agent and edge-agent platforms, transfer the package through the agent command stream.
+7. Start the Docker Engine image-build request with `push=true`.
+8. Stream stdout, stderr, aux, and system messages to Core.
+9. Capture the pushed digest when the Docker daemon reports it.
+10. Persist the output snapshot.
+11. Clear temporary packaged context material in `finally`.
 
 The selected platform's Docker daemon performs the build and push.
 
@@ -698,7 +694,7 @@ Reuse the existing secret redactor.
 
 Redact at least:
 
-- selected future BuildKit secret values
+- selected Citadel-backed BuildKit secret values
 - registry passwords and tokens
 - temporary generated tokens
 - any resolved value marked secret by the existing secret system
@@ -908,7 +904,7 @@ Use four small sections.
 ## Build Inputs
 
 - build arguments: name + literal or variable binding
-- future BuildKit secrets: mount id + secret selector
+- BuildKit secrets: mount id + Citadel secret selector
 
 Explain in the UI that build arguments are not secret and may be visible in image metadata.
 
@@ -1024,7 +1020,7 @@ Slice 1 is complete when:
 
 1. A permitted user can create a build project from an existing Git repository.
 2. The user can select a branch, context, Dockerfile, platform, registry, repository path, and tag templates.
-3. The user can configure non-secret build args; configured build secrets are rejected until BuildKit secret sessions are supported.
+3. The user can configure non-secret build args and Citadel-backed BuildKit secret mappings.
 4. The user can manually queue one run when the project has no active run.
 5. Citadel resolves and records the exact commit before execution.
 6. Core sends the immutable source archive to the selected local, regular-agent, or edge-agent platform without relying on shared host paths.
@@ -1104,7 +1100,7 @@ The following questions are resolved for this specification:
 - Resource type: use **Build**, not **Builder**. A builder is an execution target, while a build is the user resource.
 - Slice 1 builder model: store `PlatformId` directly; do not add a polymorphic builder abstraction yet.
 - Build engine: use Docker Engine API image build; do not shell out to the Docker CLI.
-- Secret build args: not supported; BuildKit secret sessions are deferred.
+- Secret build args: not supported; use Citadel-backed BuildKit secret mappings instead.
 - Tags: use one ordered `TagTemplates` list; users add `latest` explicitly instead of a separate `PushLatest` flag.
 - Source checkout: Core resolves/materializes the exact Git commit and transfers an archive; the selected Docker platform never clones Git.
 - Logs: store bounded database chunks and stream them through SignalR; object storage is unnecessary for Slice 1.

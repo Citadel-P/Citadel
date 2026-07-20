@@ -259,7 +259,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                 ON s.CurrentStackReleaseId = sr.Id
             LEFT JOIN Platforms p
                 ON sr.PlatformId = p.Id
-            WHERE sr.Spec -> 'BuildImageBindings' @> @BuildImageBindingFilter::jsonb
+            WHERE sr.Spec::jsonb -> 'BuildImageBindings' @> @BuildImageBindingFilter::jsonb
             ORDER BY s.CreatedAt DESC, s.Name ASC
             """;
 
@@ -596,7 +596,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
                     Id, StackId, PlatformId, Status, Version, Spec, Source, ResourceBindings, CreatedAt, CreatedByActorId
                 )
                 SELECT
-                    @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
+                    @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::jsonb, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
                 FROM inserted_stack
                 RETURNING Id
             ),
@@ -646,7 +646,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             INSERT INTO StackReleases (
                 Id, StackId, PlatformId, Status, Version, Spec, Source, ResourceBindings, CreatedAt, CreatedByActorId
             ) VALUES (
-                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
+                @ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::jsonb, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId
             )
         """;
 
@@ -685,7 +685,7 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
             INSERT INTO StackReleases (
                 Id, StackId, PlatformId, Status, Version, Spec, Source, ResourceBindings, CreatedAt, CreatedByActorId
             )
-            VALUES (@ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::json, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId)
+            VALUES (@ReleaseId, @ReleaseStackId, @ReleasePlatformId, @ReleaseStatus, @ReleaseVersion, @ReleaseSpec::jsonb, @ReleaseSource::json, @ReleaseResourceBindings::json, @ReleaseCreatedAt, @ReleaseCreatedByActorId)
             ON CONFLICT (Id) DO UPDATE
             SET PlatformId = EXCLUDED.PlatformId,
                 Status = EXCLUDED.Status,

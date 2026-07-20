@@ -428,6 +428,7 @@ internal static class Configuration
 {
     private const string Text = "text";
     private const string Json = "json";
+    private const string JsonB = "jsonb";
     private const string Integer = "integer";
     private const string BigInt = "bigint";
     private const string Double = "double precision";
@@ -1469,7 +1470,7 @@ internal static class Configuration
         deployment.Property<string>("Name").HasColumnType(Text).IsRequired();
         deployment.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
         deployment.Property<string>("Status").HasColumnType(Text).IsRequired();
-        deployment.Property<string>("Spec").HasColumnType(Json).IsRequired();
+        deployment.Property<string>("Spec").HasColumnType(JsonB).IsRequired();
         deployment.Property<Guid>("PlatformId").IsRequired();
 
         deployment.Property<DateTime?>("AutoUpdateState_LastCheckedAt").HasColumnType(Timestamp).HasDefaultValue(null).IsRequired(false);
@@ -2214,7 +2215,7 @@ internal static class Configuration
         release.Property<Guid>("PlatformId").IsRequired();
         release.Property<string>("Status").HasColumnType(Text).IsRequired();
         release.Property<string>("Version").HasColumnType(Text).IsRequired();
-        release.Property<string>("Spec").HasColumnType(Json).IsRequired();
+        release.Property<string>("Spec").HasColumnType(JsonB).IsRequired();
         release.Property<string>("Source").HasColumnType(Json).IsRequired(false);
         release.Property<string>("ResourceBindings").HasColumnType(Json).IsRequired(false);
 

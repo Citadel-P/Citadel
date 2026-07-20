@@ -30,7 +30,7 @@ Before creating a build, configure:
 - a Git repository that contains the Dockerfile and build context
 - a Docker platform where the build can run
 - a registry where Citadel can push the built image
-- optional Citadel secrets for future BuildKit secret mounts
+- optional Citadel secrets when your Dockerfile uses BuildKit secret mounts
 
 For repository setup, see `docs/user/git-repositories.md`.
 
@@ -63,8 +63,8 @@ Set:
 - Enabled: whether runs can be queued.
 - Timeout seconds: maximum build and push duration.
 - Run retention: number of recent terminal runs to keep.
-- Build arguments: optional JSON array of Docker build args.
-- Build secrets: reserved JSON array of future BuildKit secret mounts.
+- Build arguments: optional Docker build args for non-sensitive values.
+- Build secrets: optional mappings from Dockerfile BuildKit secret ids to Citadel secrets.
 
 Save the build before queueing a run.
 
@@ -190,22 +190,13 @@ Example:
 
 Do not put passwords, tokens, or private keys in build arguments. Docker build args can leak into image history or metadata.
 
-Use build secrets for sensitive values once BuildKit secret sessions are supported by the runner.
+Store sensitive values as Citadel secrets and reference them from Build secrets instead of typing raw secret values in the build form.
 
 ## Build Secrets
 
-Build secrets map a BuildKit secret id to an existing Citadel secret.
+Build secrets map a BuildKit secret id to an existing Citadel secret. The BuildKit id must match the `id` used by the Dockerfile, and the value must come from a Citadel secret.
 
-Example:
-
-```json
-[
-  {
-    "id": "npmrc",
-    "secretId": "019f0000-0000-7000-9000-000000000000"
-  }
-]
-```
+Build secrets are not raw `name/value` pairs. Configure them by selecting an existing Citadel secret from the build form. The text id you enter is only the Dockerfile mount id, for example `npmrc`, `pip_index_url`, or `github_token`.
 
 The Dockerfile consumes the secret with BuildKit syntax:
 
@@ -214,9 +205,9 @@ RUN --mount=type=secret,id=npmrc \
     cp /run/secrets/npmrc ~/.npmrc && npm ci
 ```
 
-Secret values are resolved only when a run starts. Citadel does not store secret values in build project snapshots, run snapshots, logs, or image references.
+Secret values are resolved only when a run starts and are served to the Docker daemon through a BuildKit session. Citadel does not store secret values in build project snapshots, run snapshots, logs, or image references.
 
-Current limitation: the Docker Engine API runner does not support BuildKit secret sessions yet. If build secrets are configured, the run is rejected before Docker starts. Use build arguments only for non-sensitive values.
+Each resolved build secret must be no larger than `60 KiB`. Larger values are rejected before Docker starts. Do not move sensitive values to build arguments as a workaround.
 
 ## Run A Build
 
@@ -228,7 +219,7 @@ A run:
 2. syncs the Git repository branch
 3. resolves the exact commit SHA
 4. validates the context and Dockerfile paths
-5. resolves build args, validates that build secrets are not configured, and resolves registry credentials
+5. resolves build args, resolves Citadel-backed build secret mappings, and resolves registry credentials
 6. runs the Docker Engine API build on the selected platform
 7. pushes all generated image tags to the registry
 8. updates deployment and stack build-image consumers when the build succeeds
@@ -321,7 +312,10 @@ If the build fails before Docker starts:
 - confirm paths are relative to the repository root
 - for agent and edge-agent builds, reduce the context below `16 MB` with `.dockerignore`
 - confirm the selected registry has push credentials when required
-- remove build secrets until BuildKit secret sessions are supported by the runner
+- if build secrets are configured, confirm each BuildKit id maps to an existing Citadel secret selected in the build form
+- if build secrets are configured, confirm each resolved secret is no larger than `60 KiB`
+
+If Docker reports `NotFound: secret not found` while resolving the build graph, one of the Dockerfile `RUN --mount=type=secret,id=...` entries does not have a matching build secret mapping, or the selected Citadel secret is no longer available to the run.
 
 If the push fails:
 

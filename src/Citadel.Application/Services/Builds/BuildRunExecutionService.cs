@@ -416,7 +416,7 @@ internal sealed class BuildRunExecutionService(
 
         foreach (var buildSecret in buildSecrets)
         {
-            if (!IsBuildKitSecretId(buildSecret.Id))
+            if (!BuildProject.IsBuildKitSecretId(buildSecret.Id))
                 return Result.Failure<IReadOnlyList<BuildProcessSecret>>($"Build secret id '{buildSecret.Id}' is invalid. Use letters, numbers, '.', '_' or '-'.");
 
             if (!materialById.TryGetValue(buildSecret.SecretId, out var material))
@@ -865,10 +865,6 @@ internal sealed class BuildRunExecutionService(
 
         return path + Path.DirectorySeparatorChar;
     }
-
-    private static bool IsBuildKitSecretId(string value)
-        => !string.IsNullOrWhiteSpace(value)
-           && value.All(static ch => char.IsLetterOrDigit(ch) || ch is '.' or '_' or '-');
 
     private sealed record DeploymentConsumerNotification(Deployment Deployment, ActivityEvent Activity);
 

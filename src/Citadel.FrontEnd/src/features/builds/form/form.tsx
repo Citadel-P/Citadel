@@ -8,6 +8,7 @@ import {
   BuildSecretSpec,
   LookupResourceType,
   PlatformConnectorType,
+  SecretDefinitionView,
   UpdateBuildProjectInput,
 } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
@@ -27,10 +28,12 @@ import { ResourceTagSelector } from '@/features/tags/components';
 import { Constants } from '@/lib/constants';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { MonacoEditor, type MonacoDiagnostic } from '@/lib/monaco';
+import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
-import { GitBranch } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { GitBranch, Plus, Trash2 } from 'lucide-react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
+import { useBuildRunQuery } from '../hooks/useBuildRunQuery';
 
 type BuildInput = BuildProjectInput | UpdateBuildProjectInput;
 
@@ -57,6 +60,7 @@ const defaultBuild: BuildProjectInput = {
 
 const shortSha = (value?: string | null) => (value ? value.slice(0, 12) : '-');
 const agentContextLimitLabel = '16 MB';
+const buildKitSecretIdPattern = /^[A-Za-z0-9._-]+$/;
 
 type GitBranchOption = {
   branch: string;
@@ -226,6 +230,135 @@ const JsonArrayEditor = <T,>({
   );
 };
 
+const BuildSecretsField = ({
+  value,
+  secrets,
+  isLoading,
+  disabled,
+  onChange,
+}: {
+  value?: BuildSecretSpec[] | null;
+  secrets: SecretDefinitionView[];
+  isLoading?: boolean;
+  disabled?: boolean;
+  onChange: (value: BuildSecretSpec[]) => void;
+}) => {
+  const buildSecrets = value ?? [];
+  const secretOptions = useMemo(
+    () =>
+      secrets.map((secret) => ({
+        value: secret.id,
+        label: (
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate">{secret.name}</span>
+            <span className="truncate text-xs text-muted-foreground">{secret.providerType}</span>
+          </span>
+        ),
+      })),
+    [secrets],
+  );
+
+  const setSecret = (index: number, patch: Partial<BuildSecretSpec>) => {
+    onChange(
+      buildSecrets.map((secret, currentIndex) =>
+        currentIndex === index
+          ? {
+              ...secret,
+              ...patch,
+            }
+          : secret,
+      ),
+    );
+  };
+
+  const removeSecret = (index: number) => {
+    onChange(buildSecrets.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {buildSecrets.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Add secrets only when your Dockerfile uses BuildKit secret mounts such as
+          {' '}
+          <span className="font-mono">RUN --mount=type=secret,id=npmrc</span>.
+        </p>
+      ) : null}
+
+      {buildSecrets.map((secret, index) => {
+        const hasSecretSelection = secretOptions.some((option) => option.value === secret.secretId);
+        return (
+          <div
+            key={`build-secret-${index}`}
+            className="grid gap-3 border-b pb-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto]">
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">BuildKit ID</span>
+              <FieldInput
+                value={secret.id}
+                disabled={disabled}
+                onChange={(id) => setSecret(index, { id })}
+                placeholder="e.g. npmrc"
+                className="w-full max-w-full"
+              />
+              {secret.id && !buildKitSecretIdPattern.test(secret.id) ? (
+                <p className="text-xs text-destructive">Use letters, numbers, dot, underscore, or dash.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">This must match the id used in the Dockerfile.</p>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">Citadel Secret</span>
+              <FieldSelect
+                value={hasSecretSelection ? secret.secretId : undefined}
+                options={secretOptions}
+                disabled={disabled || isLoading || secretOptions.length === 0}
+                placeholder={isLoading ? 'Loading secrets...' : 'Select secret'}
+                onChange={(secretId) => setSecret(index, { secretId })}
+                className="w-full max-w-full"
+              />
+              {!isLoading && secretOptions.length === 0 ? (
+                <p className="text-xs text-amber-600">Create a Citadel secret before adding build secrets.</p>
+              ) : secret.secretId && !hasSecretSelection ? (
+                <p className="text-xs text-amber-600">Selected secret is no longer available.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Secret value is resolved only when the run starts.</p>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="mt-5"
+              disabled={disabled}
+              onClick={() => removeSecret(index)}
+              title="Remove build secret">
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        );
+      })}
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-fit"
+        disabled={disabled}
+        onClick={() =>
+          onChange([
+            ...buildSecrets,
+            {
+              id: '',
+              secretId: '',
+            },
+          ])
+        }>
+        <Plus className="size-4" />
+        Add Build Secret
+      </Button>
+    </div>
+  );
+};
+
 export const BuildForm = ({
   mode,
   resource,
@@ -240,6 +373,7 @@ export const BuildForm = ({
   const id = useParams().id;
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<BuildInput>>({});
+  const { runId: urlRunId, hash: urlHash, clearRunId } = useBuildRunQuery();
   const createBuild = useMutate('createBuildProject');
   const updateBuild = useMutate('updateBuildProject');
   const currentGitRepositoryId = update.gitRepositoryId ?? resource?.gitRepositoryId ?? defaultBuild.gitRepositoryId;
@@ -258,12 +392,14 @@ export const BuildForm = ({
     { enabled: !!currentGitRepositoryId },
   );
   const { data: platformsData, isLoading: isLoadingPlatforms } = useRead('listPlatforms');
+  const { data: secretsData, isLoading: isLoadingSecrets } = useRead('listSecretDefinitions');
   const gitRefs = useMemo(() => gitRefsData?.data.refs ?? [], [gitRefsData?.data.refs]);
   const gitBranches = useMemo(
     () => mapBranchOptions(gitBranchesData?.data.branches ?? [], gitRefs),
     [gitBranchesData?.data.branches, gitRefs],
   );
   const platforms = useMemo(() => platformsData?.data.platforms ?? [], [platformsData?.data.platforms]);
+  const secrets = useMemo(() => secretsData?.data.secrets ?? [], [secretsData?.data.secrets]);
   const currentPlatformId = update.platformId ?? resource?.platformId ?? defaultBuild.platformId;
   const selectedPlatform = useMemo(
     () => platforms.find((platform) => platform.id === currentPlatformId),
@@ -298,6 +434,16 @@ export const BuildForm = ({
     extractName: (payload, response) =>
       response?.data?.name ?? ('name' in payload ? payload.name : undefined) ?? resource?.name ?? 'Build',
   });
+  const handleConfigSave = useCallback(
+    async (payload: BuildInput) => {
+      if (urlRunId || urlHash === '#runs') {
+        clearRunId({ hash: urlHash === '#runs' ? '#config' : undefined });
+      }
+
+      await handleSave(payload);
+    },
+    [clearRunId, handleSave, urlHash, urlRunId],
+  );
 
   const original = useMemo<BuildInput>(() => {
     if (!resource) return defaultBuild;
@@ -602,13 +748,15 @@ export const BuildForm = ({
               defineField({
                 key: 'buildSecrets',
                 label: 'Build secrets',
-                description: 'JSON array of secret mounts, for example [{"id":"npm_token","secretId":"..."}].',
-                validate: validateJsonArray,
+                description:
+                  'Map BuildKit secret ids to existing Citadel secrets. Do not put raw secret values in build arguments.',
+                validate: (value) => validateBuildSecrets(value, secrets, isLoadingSecrets),
                 render: (value, set) => (
-                  <JsonArrayEditor<BuildSecretSpec>
+                  <BuildSecretsField
                     value={value ?? []}
-                    filename="build-secrets.json"
-                    helperText="Reserved for BuildKit-native builders. The current Docker Engine API runner rejects configured build secrets."
+                    secrets={secrets}
+                    isLoading={isLoadingSecrets}
+                    disabled={disabled}
                     onChange={(buildSecrets) => set({ buildSecrets })}
                   />
                 ),
@@ -622,15 +770,18 @@ export const BuildForm = ({
       currentGitRepositoryId,
       disabled,
       gitBranches,
+      id,
       isFetchingGitBranches,
       isFetchingGitRefs,
       isGitBranchesError,
       isLoadingPlatforms,
+      isLoadingSecrets,
       mode,
       original.branch,
       platformOptions,
       platforms,
       platformsData,
+      secrets,
       selectedPlatform?.connectorType,
       update.branch,
     ],
@@ -644,7 +795,7 @@ export const BuildForm = ({
       original={original}
       update={update}
       setUpdate={setUpdate}
-      onSave={handleSave}
+      onSave={handleConfigSave}
       disabled={disabled}
       pending={isPending}
       mode={mode}
@@ -663,7 +814,13 @@ function normalizePayload(payload: BuildInput, mode: 'add' | 'edit') {
     dockerfilePath: payload.dockerfilePath || 'Dockerfile',
     target: payload.target || null,
     buildArgs: payload.buildArgs ?? [],
-    buildSecrets: payload.buildSecrets ?? [],
+    buildSecrets:
+      payload.buildSecrets
+        ?.map((secret) => ({
+          id: secret.id.trim(),
+          secretId: secret.secretId,
+        }))
+        .filter((secret) => secret.id || secret.secretId) ?? [],
     tagTemplates: payload.tagTemplates?.filter(Boolean) ?? ['{branch}-{shortSha}'],
     webhook: normalizeWebhook(payload.webhook),
     timeoutSeconds: Number(payload.timeoutSeconds ?? 1800),
@@ -745,6 +902,27 @@ function parseJsonArrayWithDiagnostics<T>(value: string): { value?: T[]; diagnos
 
 function validateJsonArray(value: unknown) {
   return Array.isArray(value) ? null : 'Must be a JSON array';
+}
+
+function validateBuildSecrets(value: unknown, secrets: SecretDefinitionView[], isLoadingSecrets: boolean) {
+  if (!Array.isArray(value)) return 'Build secrets must be a list.';
+
+  const usedIds = new Set<string>();
+  for (const entry of value as BuildSecretSpec[]) {
+    const id = entry.id?.trim();
+    if (!id) return 'BuildKit secret id is required.';
+    if (!buildKitSecretIdPattern.test(id)) return `BuildKit secret id "${id}" is invalid.`;
+    const normalizedId = id.toLowerCase();
+    if (usedIds.has(normalizedId)) return `BuildKit secret id "${id}" is mapped more than once.`;
+    usedIds.add(normalizedId);
+
+    if (!entry.secretId) return `Select a Citadel secret for "${id}".`;
+    if (!isLoadingSecrets && !secrets.some((secret) => secret.id === entry.secretId)) {
+      return `Citadel secret for "${id}" is no longer available.`;
+    }
+  }
+
+  return null;
 }
 
 function validateRepoRelativePath(value: unknown) {

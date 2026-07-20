@@ -31,14 +31,14 @@ import {
   User,
 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { formatBuildRunLogViewerEntry, mergeBuildRunLogEntries } from '../build-run-logs';
 import { isActiveBuildRun, isTerminalBuildRunStatus, pickMostAdvancedBuildRun } from '../build-run-state';
+import { useBuildRunQuery } from '../hooks/useBuildRunQuery';
 
 export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
   const [logRunId, setLogRunId] = useState<string | undefined>();
-  const [searchParams] = useSearchParams();
+  const { runId: requestedRunId, clearRunId } = useBuildRunQuery();
   const queryClient = useQueryClient();
   const cancelRun = useMutate('cancelBuildRun');
   const formatDateTime = useProfileDateTimeFormatter();
@@ -54,12 +54,16 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
   });
 
   useEffect(() => {
-    const requestedRunId = searchParams.get('runId') ?? undefined;
-    if (!requestedRunId || consumedRunIdRef.current === requestedRunId) return;
+    if (!requestedRunId) {
+      consumedRunIdRef.current = undefined;
+      return;
+    }
+
+    if (consumedRunIdRef.current === requestedRunId) return;
 
     consumedRunIdRef.current = requestedRunId;
     setLogRunId(requestedRunId);
-  }, [searchParams]);
+  }, [requestedRunId]);
 
   useEffect(() => {
     if (!data) return;
@@ -221,7 +225,11 @@ export function BuildRunsTab({ resource }: { resource: BuildProjectView }) {
         formatDateTime={formatDateTime}
         onCancel={handleCancel}
         onOpenChange={(open) => {
-          if (!open) setLogRunId(undefined);
+          if (!open) {
+            consumedRunIdRef.current = undefined;
+            setLogRunId(undefined);
+            clearRunId();
+          }
         }}
       />
     </div>
