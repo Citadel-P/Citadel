@@ -1,12 +1,20 @@
+using Application.Services.Licensing;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Hosting.Common;
+using Microsoft.Extensions.DependencyInjection;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Identity.Roles;
 
 public class RolePermissionMatrixTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
+        services.ReplaceService<ILicenseQuotaService>(new PermissiveLicenseQuotaService());
+    }
+
     [Fact]
     public async Task Get_Permission_Matrix_Returns_Ok()
     {

@@ -8,6 +8,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Domain.Entities.Stacks;
+using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -182,7 +183,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
     {
         var stack = Stack.Create(
             name: "stack-sync-app",
-            createdByActorId: Guid.CreateVersion7(),
+            createdByActorId: Constants.SystemId,
             StackSource: StackSource.WebEditor,
             platformId: platformId,
             spec: new ManualStack(
@@ -249,7 +250,7 @@ public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTes
     {
         var stack = Stack.Create(
             name: "daemon-stack",
-            createdByActorId: Guid.CreateVersion7(),
+            createdByActorId: Constants.SystemId,
             StackSource: StackSource.WebEditor,
             platformId: platformId,
             spec: new ManualStack(

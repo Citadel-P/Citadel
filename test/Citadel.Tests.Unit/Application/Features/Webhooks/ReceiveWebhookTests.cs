@@ -923,6 +923,89 @@ public sealed class ReceiveWebhookTests
     }
 
     [Fact]
+    public async Task BuildRun_WhenProjectAlreadyHasActiveRun_ReturnsNoOpAndDoesNotQueue()
+    {
+        var repo = CreateRepository();
+        var project = CreateBuildProject(repo.Id, contextPath: "services/api", dockerfilePath: "services/api/Dockerfile");
+        var buildProjects = new Mock<IBuildProjectRepository>();
+        buildProjects.Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false)).ReturnsAsync(project);
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var buildRuns = new Mock<IBuildRunRepository>();
+        buildRuns.Setup(x => x.HasActiveRunAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        List<ActivityEvent> activities = [];
+
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            buildProjects: buildProjects.Object,
+            buildRuns: buildRuns.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateBuildRunCommand(
+                project.Id,
+                branch: "main",
+                repositoryUrl: repo.Url,
+                changedPaths: ["services/api/Program.cs"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("Build project already has an active run", response.Reason);
+        buildRuns.Verify(x => x.AddAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()), Times.Never);
+        buildProjects.Verify(x => x.MarkProcessingAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        var info = Assert.IsType<BuildWebhookReceived>(Assert.Single(activities).Info);
+        Assert.Equal("noop", info.Status);
+        Assert.Equal("Build project already has an active run", info.Reason);
+    }
+
+    [Fact]
+    public async Task BuildRun_WhenMarkProcessingLosesRace_ReturnsNoOpAndDoesNotPersistRun()
+    {
+        var repo = CreateRepository();
+        var project = CreateBuildProject(repo.Id, contextPath: "services/api", dockerfilePath: "services/api/Dockerfile");
+        var platform = new PlatformConnectionInfo(project.PlatformId, "local", "unix:///var/run/docker.sock", PlatformConnectorType.Local);
+        var registry = CreateRegistry(project.RegistryId);
+        var buildProjects = new Mock<IBuildProjectRepository>();
+        buildProjects.Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false)).ReturnsAsync(project);
+        buildProjects.Setup(x => x.MarkProcessingAsync(project.Id, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
+        var gitRepos = new Mock<IGitReposRepository>();
+        gitRepos.Setup(x => x.GetAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(repo);
+        var buildRuns = new Mock<IBuildRunRepository>();
+        buildRuns.Setup(x => x.HasActiveRunAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        var platforms = new Mock<IPlatformRepository>();
+        platforms.Setup(x => x.GetInfoAsync(project.PlatformId, It.IsAny<CancellationToken>())).ReturnsAsync(platform);
+        var registries = new Mock<IRegistryRepository>();
+        registries.Setup(x => x.GetAsync(project.RegistryId, It.IsAny<CancellationToken>())).ReturnsAsync(registry);
+        List<ActivityEvent> activities = [];
+
+        var handler = CreateHandler(
+            gitRepos: gitRepos.Object,
+            buildProjects: buildProjects.Object,
+            buildRuns: buildRuns.Object,
+            platforms: platforms.Object,
+            registries: registries.Object,
+            activities: activities);
+
+        var result = await handler.Handle(
+            CreateBuildRunCommand(
+                project.Id,
+                branch: "main",
+                repositoryUrl: repo.Url,
+                changedPaths: ["services/api/Program.cs"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var response, out var error), error?.Message);
+        Assert.Equal("noop", response.Status);
+        Assert.Equal("Build project already has an active run", response.Reason);
+        buildRuns.Verify(x => x.AddAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()), Times.Never);
+        buildProjects.Verify(x => x.MarkProcessingAsync(project.Id, It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Once);
+        var info = Assert.IsType<BuildWebhookReceived>(Assert.Single(activities).Info);
+        Assert.Equal("noop", info.Status);
+        Assert.Equal("Build project already has an active run", info.Reason);
+    }
+
+    [Fact]
     public async Task BackupPolicyRun_WithMatchingPush_QueuesWebhookBackupRunAsPolicyActor()
     {
         var policy = CreateBackupPolicy();

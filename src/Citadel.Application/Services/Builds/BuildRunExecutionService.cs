@@ -745,7 +745,19 @@ internal sealed class BuildRunExecutionService(
 
     private async Task AppendPostBuildRedeployLogAsync(Guid runId, string message)
     {
-        await SendBuildRunLogsSafeAsync(runId, new[] { NewLogEntry(runId, "stderr", message) });
+        var entry = NewLogEntry(runId, "stderr", message);
+        try
+        {
+            await unitOfWork.BuildRunLogs.AddAsync(entry, CancellationToken.None);
+            await unitOfWork.CommitAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to persist post-build redeploy log for build run {BuildRunId}.", runId);
+            await ResetTransactionAsync();
+        }
+
+        await SendBuildRunLogsSafeAsync(runId, [entry]);
     }
 
     private static StackSpec SetBuildImageBindings(StackSpec spec, IReadOnlyList<StackBuildImageBinding> bindings)

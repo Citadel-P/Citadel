@@ -1,14 +1,21 @@
+using Application.Services.Licensing;
 using System.Text;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Identity.Roles;
 
 public class RoleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
+        services.ReplaceService<ILicenseQuotaService>(new PermissiveLicenseQuotaService());
+    }
+
     [Fact]
     public async Task Create_Role_ReturnsSuccess()
     {

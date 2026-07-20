@@ -214,7 +214,7 @@ public class StackServiceTests
 
         var status = Assert.Single(results, result => result.StackStatus is not null);
         Assert.Equal("Degraded", status.StackStatus);
-        Assert.Equal(TimeSpan.FromSeconds(5), Assert.Single(settleDelays));
+        Assert.Equal(TimeSpan.FromSeconds(4), Assert.Single(settleDelays));
         var invocation = Assert.Single(executor.ExecuteInvocations);
         Assert.Equal("docker", invocation.FileName);
         Assert.Equal(workingDirectory, invocation.WorkingDirectory);

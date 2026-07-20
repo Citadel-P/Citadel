@@ -167,10 +167,14 @@ public sealed class BackupEntitiesTests
     public void BackupRun_ShouldAllowMultiItemSuccessWithoutParentSnapshot()
     {
         var run = CreateRun(new StackBackupSource(Guid.NewGuid()));
+        var item = new BackupRunItem(run.Id, Guid.NewGuid(), "postgres-data");
         var now = DateTimeOffset.UtcNow;
 
         run.MarkPreparing(now);
         run.MarkRunning(now.AddSeconds(1));
+        item.MarkRunning(now.AddSeconds(1));
+        item.CompleteSucceeded("snapshot-volume-1", null, 4, 2048, 512, now.AddSeconds(2));
+        run.AssignItems([item]);
         run.CompleteSucceeded(null, null, 4, 2048, 512, [], now.AddSeconds(2));
 
         Assert.Equal(BackupRunStatus.Succeeded, run.Status);

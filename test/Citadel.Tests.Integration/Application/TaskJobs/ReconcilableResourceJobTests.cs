@@ -22,7 +22,14 @@ namespace Tests.Integration.Application.TaskJobs;
 
 public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    private const int StaleResourceAgeSeconds = 3_700;
     private readonly Mock<IDeploymentStreamManager> streamManagerMock = new();
+    private readonly Mock<IStackStreamManager> stackStreamManagerMock = new();
+    private readonly Mock<IDockerDaemonStreamManager> dockerDaemonStreamManagerMock = new();
+    private readonly Mock<IContainerEventBroadcaster> containerEventBroadcasterMock = new();
+    private readonly Mock<IBackupRepositoryStreamManager> backupRepositoryStreamManagerMock = new();
+    private readonly Mock<IBackupPolicyStreamManager> backupPolicyStreamManagerMock = new();
+    private readonly Mock<IAutomationActionStreamManager> automationActionStreamManagerMock = new();
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<INotificationQueue> notificationMock = new();
     private Guid platformId;
@@ -35,11 +42,13 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
         services.RemoveAll<IHostedService>();
         services.RemoveAll<IDelayWithJitterService>();
 
-        services
-            .AddHostedService<DbWriteWorker>()
-            .AddHostedService<ReconcilableResourceJob>();
-
         services.AddSingleton(streamManagerMock.Object);
+        services.AddSingleton(stackStreamManagerMock.Object);
+        services.AddSingleton(dockerDaemonStreamManagerMock.Object);
+        services.AddSingleton(containerEventBroadcasterMock.Object);
+        services.AddSingleton(backupRepositoryStreamManagerMock.Object);
+        services.AddSingleton(backupPolicyStreamManagerMock.Object);
+        services.AddSingleton(automationActionStreamManagerMock.Object);
         services.AddSingleton(notificationMock.Object);
         services.AddSingleton(_ => _delayWithJitter.Object);
 
@@ -47,11 +56,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
          .Setup(x => x.DelayWithJitterForAsync(It.IsAny<Func<CancellationToken, Task>>(),
                                                It.IsAny<TimeSpan>(),
                                                It.IsAny<CancellationToken>()))
-         .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>(async (func, _, ct) =>
-         {
-             await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
-             await func(ct);
-         });
+         .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>((_, _, ct) => Task.Delay(Timeout.InfiniteTimeSpan, ct));
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -167,15 +172,12 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     public async Task RunPeriodicJanitor_Clean_Stuck_Deployment()
     {
         // Arrange
-        await MarkDeploymentAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+        await MarkDeploymentAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - StaleResourceAgeSeconds);
+        await RunJanitorOnceAsync();
 
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
-
-        // Assert
-        await using var scope = Services.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        var deployment = (await uow.Deployments.GetInfoAsync(TestContext.Current.CancellationToken)).First();
+        var deployment = await WaitForAsync(
+            async uow => (await uow.Deployments.GetInfoAsync(TestContext.Current.CancellationToken)).First(),
+            deployment => deployment.ControlState == ResourceControlState.Idle);
         Assert.Equal(ResourceControlState.Idle, deployment.ControlState);
 
         notificationMock.Verify(
@@ -187,15 +189,12 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     public async Task RunPeriodicJanitor_Clean_Stuck_Stack()
     {
         // Arrange
-        await MarkStackAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+        await MarkStackAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - StaleResourceAgeSeconds);
+        await RunJanitorOnceAsync();
 
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
-
-        // Assert
-        await using var scope = Services.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        var stack = (await uow.Stacks.GetAllAsync(TestContext.Current.CancellationToken)).First();
+        var stack = await WaitForAsync(
+            async uow => (await uow.Stacks.GetAllAsync(TestContext.Current.CancellationToken)).First(),
+            stack => stack.ControlState == ResourceControlState.Idle);
         Assert.Equal(ResourceControlState.Idle, stack.ControlState);
 
         notificationMock.Verify(
@@ -208,7 +207,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     {
         // Arrange
         await MarkContainerAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        await RunJanitorOnceAsync();
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -227,8 +226,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     {
         // Arrange
         await MarkImageAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
-
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        await RunJanitorOnceAsync();
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -245,13 +243,12 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     [Fact]
     public async Task RunPeriodicJanitor_Clean_Stuck_BackupRepository()
     {
-        await MarkBackupRepositoryAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+        await MarkBackupRepositoryAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - StaleResourceAgeSeconds);
+        await RunJanitorOnceAsync();
 
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
-
-        await using var scope = Services.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var repository = await uow.BackupRepositories.GetAsync(backupRepositoryId, TestContext.Current.CancellationToken);
+        var repository = await WaitForAsync(
+            uow => uow.BackupRepositories.GetAsync(backupRepositoryId, TestContext.Current.CancellationToken),
+            repository => repository?.ControlState == ResourceControlState.Idle);
 
         Assert.NotNull(repository);
         Assert.Equal(ResourceControlState.Idle, repository.ControlState);
@@ -262,13 +259,12 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     [Fact]
     public async Task RunPeriodicJanitor_Clean_Stuck_BackupPolicy()
     {
-        await MarkBackupPolicyAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+        await MarkBackupPolicyAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - StaleResourceAgeSeconds);
+        await RunJanitorOnceAsync();
 
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
-
-        await using var scope = Services.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var policy = await uow.BackupPolicies.GetAsync(backupPolicyId, TestContext.Current.CancellationToken);
+        var policy = await WaitForAsync(
+            uow => uow.BackupPolicies.GetAsync(backupPolicyId, TestContext.Current.CancellationToken),
+            policy => policy?.ControlState == ResourceControlState.Idle);
 
         Assert.NotNull(policy);
         Assert.Equal(ResourceControlState.Idle, policy.ControlState);
@@ -280,8 +276,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     public async Task RunPeriodicJanitor_Clean_Stuck_AutomationAction()
     {
         await MarkAutomationActionAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
-
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        await RunJanitorOnceAsync();
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -298,8 +293,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     {
         // Arrange
         await MarkDeploymentAsync(ResourceControlState.Idle, null);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken); 
+        await RunJanitorOnceAsync();
 
         // Assert
         notificationMock.Verify(
@@ -312,8 +306,7 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     {
         // Arrange
         await MarkContainerAsync(ResourceControlState.Idle, null);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken); 
+        await RunJanitorOnceAsync();
 
         // Assert
         notificationMock.Verify(
@@ -326,13 +319,104 @@ public class ReconcilableResourceJobTests(PostgresTestFixture fixture) : Integra
     {
         // Arrange
         await MarkImageAsync(ResourceControlState.Idle, null);
-
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await RunJanitorOnceAsync();
 
         // Assert
         notificationMock.Verify(
            nq => nq.EnqueueAsync(It.IsAny<ImageNotificationWorkItem>(), It.IsAny<CancellationToken>()),
            Times.Never);
+    }
+
+    private async Task RunJanitorOnceAsync()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        var stuckDeployments = (await uow.Deployments.GetStuckDeploymentsAsync(cancellationToken: cancellationToken)).ToArray();
+        if (stuckDeployments.Length > 0)
+        {
+            await new ReconcilableResourceJob.StuckDeploymentsSyncWorkItem(
+                streamManagerMock.Object,
+                notificationMock.Object,
+                stuckDeployments).ExecuteAsync(uow, cancellationToken);
+        }
+
+        var stuckStacks = (await uow.Stacks.GetStuckStacksAsync(cancellationToken: cancellationToken)).ToArray();
+        if (stuckStacks.Length > 0)
+        {
+            await new ReconcilableResourceJob.StuckStacksSyncWorkItem(
+                notificationMock.Object,
+                stackStreamManagerMock.Object,
+                stuckStacks).ExecuteAsync(uow, cancellationToken);
+        }
+
+        var stuckContainers = (await uow.Containers.GetStuckContainersAsync(cancellationToken: cancellationToken)).ToArray();
+        if (stuckContainers.Length > 0)
+        {
+            await new ReconcilableResourceJob.StuckContainersSyncWorkItem(
+                notificationMock.Object,
+                dockerDaemonStreamManagerMock.Object,
+                containerEventBroadcasterMock.Object,
+                stuckContainers).ExecuteAsync(uow, cancellationToken);
+        }
+
+        var stuckImages = (await uow.Images.GetStuckImagesAsync(cancellationToken: cancellationToken)).ToArray();
+        if (stuckImages.Length > 0)
+        {
+            await new ReconcilableResourceJob.StuckImagesSyncWorkItem(
+                notificationMock.Object,
+                dockerDaemonStreamManagerMock.Object,
+                stuckImages).ExecuteAsync(uow, cancellationToken);
+        }
+
+        var stuckBackupRepositories = (await uow.BackupRepositories.GetStuckRepositoriesAsync(cancellationToken: cancellationToken)).ToArray();
+        if (stuckBackupRepositories.Length > 0)
+        {
+            await new ReconcilableResourceJob.StuckBackupRepositoriesSyncWorkItem(
+                notificationMock.Object,
+                backupRepositoryStreamManagerMock.Object,
+                stuckBackupRepositories).ExecuteAsync(uow, cancellationToken);
+        }
+
+        var stuckBackupPolicies = (await uow.BackupPolicies.GetStuckPoliciesAsync(cancellationToken: cancellationToken)).ToArray();
+        if (stuckBackupPolicies.Length > 0)
+        {
+            await new ReconcilableResourceJob.StuckBackupPoliciesSyncWorkItem(
+                notificationMock.Object,
+                backupPolicyStreamManagerMock.Object,
+                stuckBackupPolicies).ExecuteAsync(uow, cancellationToken);
+        }
+
+        var stuckAutomationActions = (await uow.AutomationActions.GetStuckActionsAsync(cancellationToken: cancellationToken)).ToArray();
+        if (stuckAutomationActions.Length > 0)
+        {
+            await new ReconcilableResourceJob.StuckAutomationActionsSyncWorkItem(
+                notificationMock.Object,
+                automationActionStreamManagerMock.Object,
+                stuckAutomationActions).ExecuteAsync(uow, cancellationToken);
+        }
+    }
+
+    private async Task<T> WaitForAsync<T>(Func<IUnitOfWork, Task<T>> getValue, Func<T, bool> isReady)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+        T value = default!;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+
+            await using var scope = Services.CreateAsyncScope();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            value = await getValue(uow);
+
+            if (isReady(value))
+                return value;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
+        }
+
+        return value;
     }
 
     private async Task MarkDeploymentAsync(ResourceControlState state, long? startedAt)

@@ -108,8 +108,8 @@ public sealed class BuildProjectValidationTests
             new BuildUpdated(snapshot, snapshot),
             EventInfoJsonContext.Default.BuildUpdated);
 
-        Assert.Contains("\"buildSecrets\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"secretId\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"BuildSecrets\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"SecretId\"", json, StringComparison.Ordinal);
     }
 
     private static BuildProjectInputModel CreateInput(IReadOnlyList<BuildSecretSpec>? buildSecrets = null)

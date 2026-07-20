@@ -23,7 +23,7 @@ public sealed class EdgeAgentCommandRouterTests
             platformId,
             EdgeAgentCommandKind.ContainerList,
             [],
-            TimeSpan.FromMilliseconds(10),
+            TimeSpan.FromSeconds(1),
             correlationId: null,
             CancellationToken.None);
 

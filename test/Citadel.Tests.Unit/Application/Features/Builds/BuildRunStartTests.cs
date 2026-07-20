@@ -274,7 +274,7 @@ public sealed class BuildRunStartTests
 
         Assert.True(result.IsSuccess());
         Assert.NotNull(processCommand);
-        Assert.Equal(repository.GetCachePath(), processCommand.WorkingDirectory);
+        Assert.Equal(Path.GetFullPath(repository.GetCachePath()), processCommand.WorkingDirectory);
         Assert.Equal(Path.GetFullPath(repository.GetCachePath()), Path.GetFullPath(processCommand.ContextPath));
         Assert.Equal(Path.Combine(Path.GetFullPath(repository.GetCachePath()), "Dockerfile"), processCommand.DockerfilePath);
         Assert.Equal(PlatformConnectorType.Local, processCommand.PlatformConnectorType);
@@ -419,6 +419,8 @@ public sealed class BuildRunStartTests
         PrepareRepositoryCache(repository);
 
         var context = CreateExecutionContext(project, repository, platform, registry, run);
+        var persistedLogs = new List<BuildRunLogEntry>();
+        CaptureLogs(context.BuildRunLogs, persistedLogs);
 
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
@@ -443,6 +445,7 @@ public sealed class BuildRunStartTests
 
         Assert.True(result.IsSuccess());
         Assert.Equal(BuildRunStatus.Succeeded, run.Status);
+        Assert.Contains(persistedLogs, log => log.Stream == "stderr" && log.Message.Contains("Deployment redeploy failed", StringComparison.Ordinal));
         context.BuildProjects.Verify(x => x.MarkIdleAsync(project.Id, run.Id, It.IsAny<CancellationToken>()), Times.Once);
         context.Retention.Verify(x => x.PruneAsync(project.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -873,7 +876,7 @@ public sealed class BuildRunStartTests
             throw;
         }
 
-        yield break;
+        yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0);
     }
 
     private static async IAsyncEnumerable<DeploymentStreamItem> FailingDeploymentApply(
@@ -882,6 +885,9 @@ public sealed class BuildRunStartTests
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
         throw new InvalidOperationException("redeploy failed");
+#pragma warning disable CS0162
+        yield return new DeploymentStreamItem();
+#pragma warning restore CS0162
     }
 
     private static async IAsyncEnumerable<StackStreamItem> SuccessfulStackApply(

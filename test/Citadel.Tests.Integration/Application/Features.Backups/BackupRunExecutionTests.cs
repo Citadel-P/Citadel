@@ -5,8 +5,10 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities.Backups;
+using Domain.Entities.Platforms;
 using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -75,8 +77,9 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
             stdout: """
                 {"message_type":"summary","snapshot_id":"local-s3-snapshot","total_files_processed":2,"total_bytes_processed":512,"data_added":128}
                 """);
+        containerConnector.EnqueueExec(exitCode: 0, stdout: "[]");
 
-        var setup = await CreateRemoteVolumeRepositoryPolicyAndRunAsync(platformId, keepLastSuccessful: 0);
+        var setup = await CreateRemoteVolumeRepositoryPolicyAndRunAsync(platformId, keepLastSuccessful: 1);
 
         var service = Services.GetRequiredService<IBackupRunExecutionService>();
         await foreach (var _ in service.ExecuteQueuedAsync(setup.Run.Id, TestContext.Current.CancellationToken))
@@ -85,7 +88,8 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
 
         Assert.Empty(restic.Calls);
 
-        var create = Assert.Single(containerConnector.CreateCommands);
+        Assert.Equal(2, containerConnector.CreateCommands.Count);
+        var create = containerConnector.CreateCommands[0];
         Assert.Equal(Constants.LocalDockerHostUrl, create.PlatformAddress);
         Assert.Contains(create.Mounts ?? [], mount =>
             mount.Type == "volume"
@@ -94,7 +98,8 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
             && mount.ReadOnly == true);
         Assert.Null(create.NetworkMode);
 
-        var exec = Assert.Single(containerConnector.ExecRequests);
+        Assert.Equal(2, containerConnector.ExecRequests.Count);
+        var exec = containerConnector.ExecRequests[0];
         Assert.Equal("restic", exec.Request.Command[0]);
         Assert.Contains("backup", exec.Request.Command);
         Assert.Contains("/source", exec.Request.Command);
@@ -136,8 +141,9 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
             stdout: """
                 {"message_type":"summary","snapshot_id":"remote-snapshot","total_files_processed":2,"total_bytes_processed":512,"data_added":128}
                 """);
+        containerConnector.EnqueueExec(exitCode: 0, stdout: "[]");
 
-        var setup = await CreateRemoteVolumeRepositoryPolicyAndRunAsync(platformId, keepLastSuccessful: 0);
+        var setup = await CreateRemoteVolumeRepositoryPolicyAndRunAsync(platformId, keepLastSuccessful: 1);
 
         var service = Services.GetRequiredService<IBackupRunExecutionService>();
         await foreach (var _ in service.ExecuteQueuedAsync(setup.Run.Id, TestContext.Current.CancellationToken))
@@ -146,7 +152,8 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
 
         Assert.Empty(restic.Calls);
 
-        var create = Assert.Single(containerConnector.CreateCommands);
+        Assert.Equal(2, containerConnector.CreateCommands.Count);
+        var create = containerConnector.CreateCommands[0];
         Assert.Equal("agent://platform-01", create.PlatformAddress);
         Assert.Contains(create.Mounts ?? [], mount =>
             mount.Type == "volume"
@@ -155,7 +162,8 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
             && mount.ReadOnly == true);
         Assert.Null(create.NetworkMode);
 
-        var exec = Assert.Single(containerConnector.ExecRequests);
+        Assert.Equal(2, containerConnector.ExecRequests.Count);
+        var exec = containerConnector.ExecRequests[0];
         Assert.Equal("restic", exec.Request.Command[0]);
         Assert.Contains("backup", exec.Request.Command);
         Assert.Contains("/source", exec.Request.Command);
@@ -424,6 +432,23 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
         var passwordSecretId = await CreateInternalSecretAsync("REMOTE_VOLUME_RESTIC_PASSWORD", "restic-password");
         var accessKeySecretId = await CreateInternalSecretAsync("REMOTE_VOLUME_RESTIC_ACCESS_KEY", "access-key");
         var secretKeySecretId = await CreateInternalSecretAsync("REMOTE_VOLUME_RESTIC_SECRET_KEY", "secret-key");
+        var platform = Platform.FromPersistence(
+            id: platformId,
+            name: "remote-volume-platform",
+            address: "test-platform",
+            networkCount: 0,
+            volumeCount: 1,
+            imageCount: 0,
+            cpuCount: 1,
+            memTotal: 1024,
+            status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Agent,
+            platformDescriptor: new DockerPlatformDescriptor(
+                DaemonId: "test-daemon",
+                ContainerCount: 0,
+                ContainersRunning: 0,
+                ContainersPaused: 0,
+                ContainersStopped: 0));
         var repository = new BackupRepository(
             "remote-volume-repository",
             null,
@@ -455,6 +480,7 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.BackupRepositories.AddAsync(repository, TestContext.Current.CancellationToken);
         await uow.BackupPolicies.AddAsync(policy, TestContext.Current.CancellationToken);
         var queue = await uow.BackupRuns.QueueAsync(
@@ -659,6 +685,18 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
         public Task<Result<DeleteImageResult>> DeleteImageAsync(DeleteImageCommand deleteImageCommand, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public async IAsyncEnumerable<PullImageStreamItem> PullImageProgressStreamAsync(PullImageCommand pullImageCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public async IAsyncEnumerable<ImageBuildStreamItem> BuildImageProgressStreamAsync(BuildImageCommand buildImageCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public async IAsyncEnumerable<ImageBuildStreamItem> PushImageProgressStreamAsync(PushImageCommand pushImageCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
             yield break;

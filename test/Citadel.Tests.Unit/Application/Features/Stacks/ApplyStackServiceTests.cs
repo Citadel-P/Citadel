@@ -202,7 +202,7 @@ public class ApplyStackServiceTests
                 }),
                 new PassThroughSecretRedactor(),
                 Mock.Of<IAlertService>(),
-            Mock.Of<IStackBuildImageBindingResolver>());
+            EmptyStackBuildImageBindingResolver.Instance);
 
             var items = new List<StackStreamItem>();
             await foreach (var item in service.ApplyAsync(
@@ -441,7 +441,7 @@ public class ApplyStackServiceTests
             new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>(),
-            Mock.Of<IStackBuildImageBindingResolver>());
+            EmptyStackBuildImageBindingResolver.Instance);
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -588,7 +588,7 @@ public class ApplyStackServiceTests
             }),
             new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>(),
-            Mock.Of<IStackBuildImageBindingResolver>());
+            EmptyStackBuildImageBindingResolver.Instance);
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -739,7 +739,7 @@ public class ApplyStackServiceTests
             new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>(),
-            Mock.Of<IStackBuildImageBindingResolver>());
+            EmptyStackBuildImageBindingResolver.Instance);
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -839,7 +839,7 @@ public class ApplyStackServiceTests
             new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>(),
-            Mock.Of<IStackBuildImageBindingResolver>());
+            EmptyStackBuildImageBindingResolver.Instance);
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -874,7 +874,8 @@ public class ApplyStackServiceTests
             platformId: platformId,
             spec: new ManualStack(
                 ComposeFile: "services:\n  minio:\n    image: minio/minio\n  minio-init:\n    image: minio/mc\n",
-                UpdateBehavior: StackUpdateBehavior.Disabled));
+                UpdateBehavior: StackUpdateBehavior.Disabled,
+                DestroyBeforeDeploy: false));
 
         var runningContainer = new DockerContainer(
             Name: "/minio-stack-minio-1",
@@ -902,6 +903,9 @@ public class ApplyStackServiceTests
                     [runningContainer.Id] = runningContainer,
                     [exitedContainer.Id] = exitedContainer
                 }));
+        containerConnector
+            .Setup(x => x.InspectAsync(It.IsAny<InspectContainerCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(InspectionWithLabels(new Dictionary<string, string>())));
 
         var containerConnectorFactory = new Mock<IConnectorFactory<IContainerConnector>>();
         containerConnectorFactory
@@ -927,7 +931,12 @@ public class ApplyStackServiceTests
             defaultBranch: "main",
             gitAccountId: null,
             createdByActorId: actorId);
-        var unitOfWork = CreateApplyUnitOfWork(stack, repository, platformId, actorId);
+        var unitOfWork = CreateApplyUnitOfWork(
+            stack,
+            repository,
+            platformId,
+            actorId,
+            [runningContainer.Id, exitedContainer.Id]);
         var services = new ServiceCollection()
             .AddSingleton(unitOfWork.Object)
             .BuildServiceProvider();
@@ -949,7 +958,7 @@ public class ApplyStackServiceTests
             new EmptyResourceBindingResolver(),
             new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>(),
-            Mock.Of<IStackBuildImageBindingResolver>());
+            EmptyStackBuildImageBindingResolver.Instance);
 
         await foreach (var _ in service.ApplyAsync(
             stack.Id,
@@ -1110,7 +1119,7 @@ public class ApplyStackServiceTests
             }),
             new PassThroughSecretRedactor(),
             Mock.Of<IAlertService>(),
-            Mock.Of<IStackBuildImageBindingResolver>());
+            EmptyStackBuildImageBindingResolver.Instance);
 
         var items = new List<StackStreamItem>();
         await foreach (var item in service.ApplyAsync(
@@ -1754,6 +1763,54 @@ public class ApplyStackServiceTests
         await Task.CompletedTask;
     }
 
+    private static ContainerInspectionInfo InspectionWithLabels(IReadOnlyDictionary<string, string> labels)
+        => new(
+            Id: "container-id",
+            Created: string.Empty,
+            Path: null,
+            Args: [],
+            State: null,
+            Image: null,
+            ResolvConfPath: null,
+            HostnamePath: null,
+            HostsPath: null,
+            LogPath: null,
+            Name: null,
+            RestartCount: null,
+            Driver: null,
+            Platform: null,
+            MountLabel: null,
+            ProcessLabel: null,
+            AppArmorProfile: null,
+            ExecIDs: [],
+            HostConfig: null,
+            GraphDriver: null,
+            SizeRw: null,
+            SizeRootFs: null,
+            Mounts: [],
+            Config: new ContainerConfiguration(
+                Hostname: null,
+                Domainname: null,
+                User: null,
+                AttachStdin: null,
+                AttachStdout: null,
+                AttachStderr: null,
+                ExposedPorts: null,
+                Tty: null,
+                OpenStdin: null,
+                StdinOnce: null,
+                Env: [],
+                Cmd: [],
+                Image: null,
+                Volumes: null,
+                WorkingDir: null,
+                Entrypoint: [],
+                NetworkDisabled: null,
+                MacAddress: null,
+                OnBuild: [],
+                Labels: labels),
+            NetworkSettings: null);
+
     private static void DeleteDirectoryIfExists(string path)
     {
         if (!Directory.Exists(path))
@@ -1805,7 +1862,8 @@ public class ApplyStackServiceTests
         Stack stack,
         GitRepository repository,
         Guid platformId,
-        Guid actorId)
+        Guid actorId,
+        IReadOnlyCollection<string>? stackContainerIds = null)
     {
         var stacks = new Mock<IStackRepository>();
         stacks
@@ -1813,7 +1871,7 @@ public class ApplyStackServiceTests
             .ReturnsAsync(stack);
         stacks
             .Setup(x => x.GetContainerIdsAsync(stack.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
+            .ReturnsAsync(stackContainerIds ?? []);
         stacks
             .Setup(x => x.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => [stack.CurrentStackRelease!]);
@@ -2008,6 +2066,22 @@ public class ApplyStackServiceTests
     private sealed class PassThroughSecretRedactor : ISecretRedactor
     {
         public string Redact(string? value, IEnumerable<string> secrets) => value ?? string.Empty;
+    }
+
+    private sealed class EmptyStackBuildImageBindingResolver : IStackBuildImageBindingResolver
+    {
+        public static EmptyStackBuildImageBindingResolver Instance { get; } = new();
+
+        public Task<Result<ResolvedStackBuildImageBindings>> ResolveAsync(
+            IReadOnlyList<StackBuildImageBinding>? bindings,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result.Success(new ResolvedStackBuildImageBindings([], [])));
+
+        public string ApplyToComposeContent(string composeContent, IReadOnlyList<ResolvedStackBuildImageBinding> bindings)
+            => composeContent;
+
+        public string CreateComposeOverride(IReadOnlyList<ResolvedStackBuildImageBinding> bindings)
+            => "services: {}\n";
     }
 
     private sealed class TempDirectory : IDisposable

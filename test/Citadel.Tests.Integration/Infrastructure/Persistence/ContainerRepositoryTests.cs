@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Stacks;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Infrastructure.Persistence;
@@ -64,10 +65,9 @@ public sealed class ContainerRepositoryTests(PostgresTestFixture fixture) : Inte
     public async Task UpdateAsync_Should_Clear_Stale_StackId_When_Stack_Was_Deleted()
     {
         var platform = CreatePlatform();
-        var actorId = Guid.CreateVersion7();
         var stack = Stack.Create(
             name: $"container-stale-stack-{Guid.CreateVersion7():N}",
-            createdByActorId: actorId,
+            createdByActorId: Constants.SystemId,
             StackSource: StackSource.WebEditor,
             platformId: platform.Id,
             spec: new ManualStack(

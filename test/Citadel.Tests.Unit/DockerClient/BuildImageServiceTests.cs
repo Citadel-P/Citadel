@@ -6,6 +6,7 @@ using Hosting.DockerClient.Models.Images;
 using Hosting.DockerClient.HttpClient;
 using Hosting.DockerClient.Services;
 using Moq;
+using IDockerClient = Hosting.DockerClient.IDockerClient;
 
 namespace Tests.Unit.DockerClient;
 
@@ -311,7 +312,11 @@ public sealed class BuildImageServiceTests
                 if (!source.IsEmpty)
                 {
                     var length = (int)Math.Min(buffer.Length, source.Length);
-                    source.Slice(0, length).CopyTo(buffer.Span);
+                    foreach (var segment in source.Slice(0, length))
+                    {
+                        segment.Span.CopyTo(buffer.Span);
+                        buffer = buffer[segment.Length..];
+                    }
                     reader.AdvanceTo(source.GetPosition(length));
                     return length;
                 }

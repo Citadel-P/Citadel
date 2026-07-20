@@ -118,8 +118,10 @@ public class StackSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
 
         Assert.Equal(ResourceControlState.Processing, persisted?.ControlState);
         Assert.Equal(StackReleaseStatus.Applying, persisted?.CurrentStackRelease?.Status);
-        notificationQueue.Verify(
-            q => q.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()),
+        stackStreamManager.Verify(
+            manager => manager.SendStackInfo(
+                It.Is<Stack>(stack => stack.Id == healthyStackId),
+                It.IsAny<string>()),
             Times.Never);
     }
 
@@ -146,8 +148,10 @@ public class StackSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
 
         Assert.Equal(ResourceControlState.Idle, persisted?.ControlState);
         Assert.Equal(StackReleaseStatus.Degraded, persisted?.CurrentStackRelease?.Status);
-        notificationQueue.Verify(
-            q => q.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()),
+        stackStreamManager.Verify(
+            manager => manager.SendStackInfo(
+                It.Is<Stack>(stack => stack.Id == healthyStackId),
+                It.IsAny<string>()),
             Times.Once);
     }
 
@@ -156,7 +160,8 @@ public class StackSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBas
         notificationQueue.Reset();
         notificationQueue
             .Setup(q => q.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.CompletedTask);
+            .Returns<INotificationWorkItem, CancellationToken>((workItem, cancellationToken) =>
+                new ValueTask(workItem.ExecuteAsync(cancellationToken)));
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();

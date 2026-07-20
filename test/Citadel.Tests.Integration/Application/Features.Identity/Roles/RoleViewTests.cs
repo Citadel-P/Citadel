@@ -1,13 +1,20 @@
+using Application.Services.Licensing;
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text;
 using System.Text.Json;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Identity.Roles;
 
 public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
+        services.ReplaceService<ILicenseQuotaService>(new PermissiveLicenseQuotaService());
+    }
+
     [Fact]
     public async Task List_Roles_Should_Return_All_Roles_For_Admin()
     {
