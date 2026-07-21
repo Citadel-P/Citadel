@@ -5,6 +5,8 @@ import {
   GitRepositoryRefView,
   BuildProjectInput,
   BuildProjectView,
+  BuildAgentPoolView,
+  BuildProjectBuilderKind,
   BuildSecretSpec,
   LookupResourceType,
   PlatformConnectorType,
@@ -48,7 +50,9 @@ const defaultBuild: BuildProjectInput = {
   target: null,
   buildArgs: [],
   buildSecrets: [],
+  builderKind: BuildProjectBuilderKind.Platform,
   platformId: '',
+  buildAgentPoolId: null,
   registryId: '',
   imageRepository: '',
   tagTemplates: ['{branch}-{shortSha}'],
@@ -173,6 +177,53 @@ const BuildPlatformField = ({
       />
       <p className={hasUnsupportedSelection ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
         {message}
+      </p>
+    </div>
+  );
+};
+
+const BuildPoolField = ({
+  value,
+  pools,
+  isLoading,
+  disabled,
+  onChange,
+}: {
+  value?: string | null;
+  pools: BuildAgentPoolView[];
+  isLoading?: boolean;
+  disabled?: boolean;
+  onChange: (poolId: string) => void;
+}) => {
+  const enabledPools = pools.filter((pool) => pool.enabled);
+  const selected = pools.find((pool) => pool.id === value);
+  const options = enabledPools.map((pool) => ({
+    value: pool.id,
+    label: (
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate">{pool.name}</span>
+        <span className="truncate text-xs text-muted-foreground">{pool.provider}</span>
+      </span>
+    ),
+  }));
+  const hasValidSelection = options.some((option) => option.value === value);
+  const hasArchivedSelection = Boolean(value) && !hasValidSelection && Boolean(selected);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldSelect
+        value={hasValidSelection ? (value ?? undefined) : undefined}
+        options={options}
+        disabled={disabled || isLoading || options.length === 0}
+        placeholder={isLoading ? 'Loading build pools...' : 'Select build pool'}
+        onChange={onChange}
+      />
+      <p className={hasArchivedSelection ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
+        {hasArchivedSelection
+          ? 'This build pool is no longer enabled. Select another pool before saving.'
+          : options.length === 0 && !isLoading
+            ? 'No enabled build pools are available. Add a Build Pool before selecting this runner.'
+            : 'External builder pool that will run this build when the pool runtime is enabled.'}
       </p>
     </div>
   );
@@ -392,6 +443,7 @@ export const BuildForm = ({
     { enabled: !!currentGitRepositoryId },
   );
   const { data: platformsData, isLoading: isLoadingPlatforms } = useRead('listPlatforms');
+  const { data: buildPoolsData, isLoading: isLoadingBuildPools } = useRead('listBuildAgentPools');
   const { data: secretsData, isLoading: isLoadingSecrets } = useRead('listSecretDefinitions');
   const gitRefs = useMemo(() => gitRefsData?.data.refs ?? [], [gitRefsData?.data.refs]);
   const gitBranches = useMemo(
@@ -399,8 +451,11 @@ export const BuildForm = ({
     [gitBranchesData?.data.branches, gitRefs],
   );
   const platforms = useMemo(() => platformsData?.data.platforms ?? [], [platformsData?.data.platforms]);
+  const buildPools = useMemo(() => buildPoolsData?.data.pools ?? [], [buildPoolsData?.data.pools]);
   const secrets = useMemo(() => secretsData?.data.secrets ?? [], [secretsData?.data.secrets]);
+  const currentBuilderKind = update.builderKind ?? resource?.builderKind ?? defaultBuild.builderKind;
   const currentPlatformId = update.platformId ?? resource?.platformId ?? defaultBuild.platformId;
+  const fallbackPlatformId = currentPlatformId || resource?.platformId || platforms[0]?.id || '';
   const selectedPlatform = useMemo(
     () => platforms.find((platform) => platform.id === currentPlatformId),
     [currentPlatformId, platforms],
@@ -459,6 +514,8 @@ export const BuildForm = ({
       buildArgs: resource.buildArgs,
       buildSecrets: resource.buildSecrets,
       platformId: resource.platformId,
+      builderKind: resource.builderKind ?? BuildProjectBuilderKind.Platform,
+      buildAgentPoolId: resource.buildAgentPoolId ?? null,
       registryId: resource.registryId,
       imageRepository: resource.imageRepository,
       tagTemplates: resource.tagTemplates,
@@ -599,6 +656,55 @@ export const BuildForm = ({
             label: 'Runner and Registry',
             items: [
               defineField({
+                key: 'builderKind',
+                label: 'Builder',
+                description: 'Choose where Docker builds are executed.',
+                required: true,
+                render: (value, set) => (
+                  <FieldSelect
+                    value={value ?? BuildProjectBuilderKind.Platform}
+                    disabled={disabled}
+                    onChange={(builderKind) =>
+                      set({
+                        builderKind: builderKind as BuildProjectBuilderKind,
+                        platformId: builderKind === BuildProjectBuilderKind.Platform ? fallbackPlatformId : null,
+                        buildAgentPoolId:
+                          builderKind === BuildProjectBuilderKind.BuildAgentPool
+                            ? (update.buildAgentPoolId ?? resource?.buildAgentPoolId ?? null)
+                            : null,
+                      } as any)
+                    }
+                    options={[
+                      { value: BuildProjectBuilderKind.Platform, label: 'Docker platform' },
+                      { value: BuildProjectBuilderKind.BuildAgentPool, label: 'Build pool' },
+                    ]}
+                  />
+                ),
+              }),
+              ...(currentBuilderKind === BuildProjectBuilderKind.BuildAgentPool
+                ? [
+                    defineField<BuildInput, 'buildAgentPoolId'>({
+                      key: 'buildAgentPoolId',
+                      label: 'Build pool',
+                      description: 'External builder pool that will run this build.',
+                      required: true,
+                      validate: (value) =>
+                        value && buildPools.some((pool) => pool.enabled && pool.id === value)
+                          ? null
+                          : 'Select an enabled build pool.',
+                      render: (value, set) => (
+                        <BuildPoolField
+                          value={value}
+                          pools={buildPools}
+                          isLoading={isLoadingBuildPools}
+                          disabled={disabled}
+                          onChange={(buildAgentPoolId) => set({ buildAgentPoolId })}
+                        />
+                      ),
+                    }),
+                  ]
+                : [
+                    defineField<BuildInput, 'platformId'>({
                 key: 'platformId',
                 label: 'Platform',
                 description:
@@ -620,6 +726,7 @@ export const BuildForm = ({
                   />
                 ),
               }),
+                  ]),
               defineField({
                 key: 'registryId',
                 label: 'Registry',
@@ -768,9 +875,13 @@ export const BuildForm = ({
     }),
     [
       currentGitRepositoryId,
+      currentBuilderKind,
+      fallbackPlatformId,
       disabled,
+      buildPools,
       gitBranches,
       id,
+      isLoadingBuildPools,
       isFetchingGitBranches,
       isFetchingGitRefs,
       isGitBranchesError,
@@ -783,7 +894,9 @@ export const BuildForm = ({
       platformsData,
       secrets,
       selectedPlatform?.connectorType,
+      resource?.buildAgentPoolId,
       update.branch,
+      update.buildAgentPoolId,
     ],
   );
 
@@ -806,9 +919,13 @@ export const BuildForm = ({
 };
 
 function normalizePayload(payload: BuildInput, mode: 'add' | 'edit') {
+  const builderKind = payload.builderKind ?? BuildProjectBuilderKind.Platform;
   const normalized = {
     ...payload,
     description: payload.description ?? null,
+    builderKind,
+    platformId: builderKind === BuildProjectBuilderKind.Platform ? payload.platformId : null,
+    buildAgentPoolId: builderKind === BuildProjectBuilderKind.BuildAgentPool ? payload.buildAgentPoolId : null,
     branch: payload.branch || 'main',
     contextPath: payload.contextPath || '.',
     dockerfilePath: payload.dockerfilePath || 'Dockerfile',

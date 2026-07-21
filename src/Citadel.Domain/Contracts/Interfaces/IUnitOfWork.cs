@@ -66,6 +66,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IBackupRepositoryLeaseRepository BackupRepositoryLeases { get; }
     IBackupSourceLeaseRepository BackupSourceLeases { get; }
     IBuildProjectRepository BuildProjects { get; }
+    IBuildAgentPoolRepository BuildAgentPools { get; }
     IBuildRunRepository BuildRuns { get; }
     IBuildRunLogRepository BuildRunLogs { get; }
     IRefreshTokenRepository RefreshTokens { get; }
@@ -310,6 +311,19 @@ public interface IBuildProjectRepository
     Task<int> MarkIdleAsync(Guid id, Guid runId, CancellationToken cancellationToken);
     Task<IEnumerable<BuildProject>> GetStuckProjectsAsync(int graceSeconds = 300, CancellationToken cancellationToken = default);
     Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? currentRunId, CancellationToken cancellationToken);
+}
+
+public interface IBuildAgentPoolRepository
+{
+    Task<int> AddAsync(BuildAgentPool pool, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
+    Task<int> UpdateAsync(BuildAgentPool pool, CancellationToken cancellationToken);
+    Task<int> ArchiveAsync(Guid id, DateTimeOffset archivedAt, CancellationToken cancellationToken);
+    Task<BuildAgentPool?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false);
+    Task<IEnumerable<BuildAgentPool>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, bool includeArchived = false);
+    Task<IEnumerable<BuildAgentPool>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
+    Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
+    Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
+    Task<bool> CanAccessAsync(Guid userId, Guid id, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
 }
 
 public interface IBuildRunRepository

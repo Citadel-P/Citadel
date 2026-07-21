@@ -198,4 +198,23 @@ public static class Tags
         var result = await mediator.Send(new ReplaceBuildTags(id, input.TagIds), cancellationToken);
         return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
     }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> GetBuildAgentPoolTags(
+        IMediator mediator,
+        [FromRoute][Description("Build pool ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetBuildAgentPoolTags(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
+
+    public static async Task<Results<Ok<ResourceTagsView>, ProblemHttpResult>> ReplaceBuildAgentPoolTags(
+        IMediator mediator,
+        [FromRoute][Description("Build pool ID")] Guid id,
+        [FromBody] ReplaceResourceTagsInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ReplaceBuildAgentPoolTags(id, input.TagIds), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ResourceTagsView.Map);
+    }
 }

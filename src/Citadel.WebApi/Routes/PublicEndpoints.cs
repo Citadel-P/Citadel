@@ -57,6 +57,7 @@ public static class PublicEndpoints
     const string BackupRunsName = "BackupRuns";
     const string BackupRestoreRunsName = "BackupRestoreRuns";
     const string BuildProjectsName = "BuildProjects";
+    const string BuildAgentPoolsName = "BuildAgentPools";
     const string BuildRunsName = "BuildRuns";
     const string TagsName = nameof(Tags);
     const string AuthenticationName = nameof(Authentication);
@@ -173,6 +174,10 @@ public static class PublicEndpoints
             var buildProjects = group.MapGroup("/buildProjects").WithTags(BuildProjectsName).RequireAuthorization();
             {
                 MapBuildProjectEndpoints(buildProjects);
+            }
+            var buildAgentPools = group.MapGroup("/buildAgentPools").WithTags(BuildAgentPoolsName).RequireAuthorization();
+            {
+                MapBuildAgentPoolEndpoints(buildAgentPools);
             }
             var buildRuns = group.MapGroup("/buildRuns").WithTags(BuildRunsName).RequireAuthorization();
             {
@@ -1519,6 +1524,93 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("cancelBuildRun");
+    }
+
+    private static void MapBuildAgentPoolEndpoints(RouteGroupBuilder buildAgentPools)
+    {
+        buildAgentPools.MapGet("/", BuildAgentPools.List)
+            .WithSummary("List build pools")
+            .Produces<BuildAgentPoolsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("listBuildAgentPools");
+
+        buildAgentPools.MapGet("{id:guid}", BuildAgentPools.Get)
+            .WithSummary("Get build pool")
+            .Produces<BuildAgentPoolView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBuildAgentPool");
+
+        buildAgentPools.MapGet("{id:guid}/tags", Tags.GetBuildAgentPoolTags)
+            .WithSummary("Get build pool tags")
+            .Produces<ResourceTagsView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBuildAgentPoolTags");
+
+        buildAgentPools.MapPut("{id:guid}/tags", Tags.ReplaceBuildAgentPoolTags)
+            .WithSummary("Replace build pool tags")
+            .Produces<ResourceTagsView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("replaceBuildAgentPoolTags");
+
+        buildAgentPools.MapPost("/", BuildAgentPools.Create)
+            .WithSummary("Create build pool")
+            .Produces<BuildAgentPoolView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createBuildAgentPool");
+
+        buildAgentPools.MapPatch("{id:guid}", BuildAgentPools.Update)
+            .WithSummary("Update build pool")
+            .Accepts<UpdateBuildAgentPoolInput>("application/merge-patch+json", "application/json")
+            .Produces<BuildAgentPoolView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateBuildAgentPool");
+
+        buildAgentPools.MapPost("rename", BuildAgentPools.Rename)
+            .WithSummary("Rename build pool")
+            .Produces<BuildAgentPoolView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameBuildAgentPool");
+
+        buildAgentPools.MapPatch("{id:guid}/_metadata", BuildAgentPools.PatchMetadata)
+            .WithSummary("Update build pool metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .Produces<BuildAgentPoolView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateBuildAgentPoolMetadata");
+
+        buildAgentPools.MapDelete("{id:guid}", BuildAgentPools.Archive)
+            .WithSummary("Archive build pool")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("archiveBuildAgentPool");
     }
 
     private static void MapContainerEndpoints(RouteGroupBuilder containers)

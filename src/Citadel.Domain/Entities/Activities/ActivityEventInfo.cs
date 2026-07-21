@@ -107,6 +107,11 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(BuildRunTimedOut), nameof(ActivityEventType.BuildRunTimedOut))]
 [JsonDerivedType(typeof(BuildRunCancelled), nameof(ActivityEventType.BuildRunCancelled))]
 [JsonDerivedType(typeof(BuildWebhookReceived), nameof(ActivityEventType.BuildWebhookReceived))]
+[JsonDerivedType(typeof(BuildAgentPoolCreated), nameof(ActivityEventType.BuildAgentPoolCreated))]
+[JsonDerivedType(typeof(BuildAgentPoolUpdated), nameof(ActivityEventType.BuildAgentPoolUpdated))]
+[JsonDerivedType(typeof(BuildAgentPoolRenamed), nameof(ActivityEventType.BuildAgentPoolRenamed))]
+[JsonDerivedType(typeof(BuildAgentPoolDeleted), nameof(ActivityEventType.BuildAgentPoolDeleted))]
+[JsonDerivedType(typeof(BuildAgentPoolTested), nameof(ActivityEventType.BuildAgentPoolTested))]
 
 public abstract record ActivityEventInfo;
 
@@ -285,7 +290,9 @@ public sealed record BuildProjectSnapshot(
     string ContextPath,
     string DockerfilePath,
     string? Target,
-    Guid PlatformId,
+    BuildProjectBuilderKind BuilderKind,
+    Guid? PlatformId,
+    Guid? BuildAgentPoolId,
     Guid RegistryId,
     string ImageRepository,
     IReadOnlyList<string> TagTemplates,
@@ -332,6 +339,12 @@ public sealed record BuildWebhookReceived(
     string? RepositoryFullName,
     string? DispatchedBranch = null,
     string? DispatchedCommitSha = null) : ActivityEventInfo;
+
+public sealed record BuildAgentPoolCreated(BuildAgentPoolSnapshot Pool) : ActivityEventInfo;
+public sealed record BuildAgentPoolUpdated(BuildAgentPoolSnapshot OldPool, BuildAgentPoolSnapshot NewPool) : ActivityEventInfo;
+public sealed record BuildAgentPoolRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record BuildAgentPoolDeleted(BuildAgentPoolSnapshot Pool) : ActivityEventInfo;
+public sealed record BuildAgentPoolTested(BuildAgentPoolSnapshot Pool, BuildAgentPoolValidationStatus Status, string? Message) : ActivityEventInfo;
 
 public sealed record UserProfileUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;
 public sealed record UserPreferencesUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;

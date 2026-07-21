@@ -104,6 +104,10 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<BackupCoverageStatus>),
         typeof(JsonStringEnumConverter<BackupCoverageResourceType>),
         typeof(JsonStringEnumConverter<BackupRestoreStatus>),
+        typeof(JsonStringEnumConverter<BuildProjectBuilderKind>),
+        typeof(JsonStringEnumConverter<BuildAgentPoolProvider>),
+        typeof(JsonStringEnumConverter<CpuArchitecture>),
+        typeof(JsonStringEnumConverter<BuildAgentPoolValidationStatus>),
         typeof(JsonStringEnumConverter<BuildRunTrigger>),
         typeof(JsonStringEnumConverter<BuildRunStatus>),
         typeof(JsonStringEnumConverter<VolumeFileEntryType>)
@@ -264,12 +268,25 @@ namespace Application.Models;
 [JsonSerializable(typeof(BuildWebhookConfig))]
 [JsonSerializable(typeof(BuildRunTrigger))]
 [JsonSerializable(typeof(BuildRunStatus))]
+[JsonSerializable(typeof(BuildProjectBuilderKind))]
+[JsonSerializable(typeof(BuildProjectBuilderKind?))]
+[JsonSerializable(typeof(BuildAgentPoolProvider))]
+[JsonSerializable(typeof(BuildAgentPoolProviderSpec))]
+[JsonSerializable(typeof(AwsEc2BuildAgentPoolProviderSpec))]
+[JsonSerializable(typeof(SelfManagedVmBuildAgentPoolProviderSpec))]
+[JsonSerializable(typeof(CpuArchitecture))]
+[JsonSerializable(typeof(BuildAgentPoolValidationStatus))]
 [JsonSerializable(typeof(BuildProjectInput))]
 [JsonSerializable(typeof(UpdateBuildProjectInput))]
 [JsonSerializable(typeof(UpdateBuildProjectInputPatchDocument))]
+[JsonSerializable(typeof(BuildAgentPoolInput))]
+[JsonSerializable(typeof(UpdateBuildAgentPoolInput))]
+[JsonSerializable(typeof(UpdateBuildAgentPoolInputPatchDocument))]
 [JsonSerializable(typeof(QueueBuildRunInput))]
 [JsonSerializable(typeof(BuildProjectView))]
 [JsonSerializable(typeof(BuildProjectsView))]
+[JsonSerializable(typeof(BuildAgentPoolView))]
+[JsonSerializable(typeof(BuildAgentPoolsView))]
 [JsonSerializable(typeof(BuildRunView))]
 [JsonSerializable(typeof(BuildRunsView))]
 [JsonSerializable(typeof(BuildLogsView))]

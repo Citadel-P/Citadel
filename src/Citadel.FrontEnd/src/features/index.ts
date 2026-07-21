@@ -33,6 +33,8 @@ import { AutomationActionComponents } from './automation-actions';
 import { AutomationActionFormComponents } from './automation-actions/form';
 import { BuildComponents } from './builds';
 import { BuildFormComponents } from './builds/form';
+import { BuildPoolComponents } from './build-pools';
+import { BuildPoolFormComponents } from './build-pools/form';
 import { BackupRepositoryComponents } from './backup-repositories';
 import { BackupRepositoryFormComponents } from './backup-repositories/form';
 import { BackupPolicyComponents } from './backup-policies';
@@ -64,6 +66,7 @@ export const ResourceComponents: {
   Automation: AutomationActionComponents,
   AutomationAction: AutomationActionComponents,
   Build: BuildComponents,
+  BuildAgentPool: BuildPoolComponents,
   BackupRepository: BackupRepositoryComponents,
   BackupPolicy: BackupPolicyComponents,
 };
@@ -96,6 +99,7 @@ export const ResourceFormComponents: {
   Automation: undefined,
   AutomationAction: AutomationActionFormComponents,
   Build: BuildFormComponents,
+  BuildAgentPool: BuildPoolFormComponents,
   BackupRepository: BackupRepositoryFormComponents,
   BackupPolicy: BackupPolicyFormComponents,
 };

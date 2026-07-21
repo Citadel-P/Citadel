@@ -1,4 +1,4 @@
-import { BuildProjectView, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
+import { BuildProjectBuilderKind, BuildProjectView, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
 import { ContentCard } from '@/components/custom/content-card';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -86,14 +86,16 @@ const columns = (
   },
   {
     accessorKey: 'platformId',
-    header: ({ column }) => <SortableCell cellName="Platform" column={column} />,
+    header: ({ column }) => <SortableCell cellName="Runner" column={column} />,
     cell: ({ row }) => {
       const run = latestRuns.get(row.original.id);
+      const isPoolBuild = row.original.builderKind === BuildProjectBuilderKind.BuildAgentPool;
+      const label = isPoolBuild ? row.original.buildAgentPoolId : (run?.platformSnapshot.name ?? row.original.platformId);
       return (
         <span className="inline-flex min-w-0 max-w-72 items-center gap-2 text-sm">
           <Server className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate" title={run?.platformSnapshot.name ?? row.original.platformId}>
-            {run?.platformSnapshot.name ?? row.original.platformId}
+          <span className="truncate" title={label ?? undefined}>
+            {isPoolBuild ? 'Build pool' : (label ?? '-')}
           </span>
         </span>
       );

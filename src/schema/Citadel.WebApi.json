@@ -25679,6 +25679,919 @@
         ]
       }
     },
+    "/api/v1/buildAgentPools": {
+      "get": {
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "summary": "List build pools",
+        "operationId": "listBuildAgentPools",
+        "parameters": [
+          {
+            "name": "tags",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildAgentPoolsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "summary": "Create build pool",
+        "operationId": "createBuildAgentPool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildAgentPoolInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildAgentPoolView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/buildAgentPools/{id}": {
+      "get": {
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "summary": "Get build pool",
+        "operationId": "getBuildAgentPool",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Build pool ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildAgentPoolView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "summary": "Update build pool",
+        "operationId": "updateBuildAgentPool",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Build pool ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBuildAgentPoolInput"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBuildAgentPoolInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildAgentPoolView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "summary": "Archive build pool",
+        "operationId": "archiveBuildAgentPool",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Build pool ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/buildAgentPools/{id}/tags": {
+      "get": {
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "summary": "Get build pool tags",
+        "operationId": "getBuildAgentPoolTags",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Build pool ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceTagsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "summary": "Replace build pool tags",
+        "operationId": "replaceBuildAgentPoolTags",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Build pool ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceResourceTagsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceTagsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/buildAgentPools/rename": {
+      "post": {
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "summary": "Rename build pool",
+        "operationId": "renameBuildAgentPool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildAgentPoolView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/buildAgentPools/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "summary": "Update build pool metadata",
+        "operationId": "updateBuildAgentPoolMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Build pool ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildAgentPoolView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/buildRuns": {
       "get": {
         "tags": [
@@ -28893,6 +29806,21 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoBuildWebhookReceived"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildAgentPoolCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildAgentPoolUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildAgentPoolRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildAgentPoolDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBuildAgentPoolTested"
           }
         ],
         "discriminator": {
@@ -28989,7 +29917,12 @@
             "BuildRunFailed": "#/components/schemas/ActivityEventInfoBuildRunFailed",
             "BuildRunTimedOut": "#/components/schemas/ActivityEventInfoBuildRunTimedOut",
             "BuildRunCancelled": "#/components/schemas/ActivityEventInfoBuildRunCancelled",
-            "BuildWebhookReceived": "#/components/schemas/ActivityEventInfoBuildWebhookReceived"
+            "BuildWebhookReceived": "#/components/schemas/ActivityEventInfoBuildWebhookReceived",
+            "BuildAgentPoolCreated": "#/components/schemas/ActivityEventInfoBuildAgentPoolCreated",
+            "BuildAgentPoolUpdated": "#/components/schemas/ActivityEventInfoBuildAgentPoolUpdated",
+            "BuildAgentPoolRenamed": "#/components/schemas/ActivityEventInfoBuildAgentPoolRenamed",
+            "BuildAgentPoolDeleted": "#/components/schemas/ActivityEventInfoBuildAgentPoolDeleted",
+            "BuildAgentPoolTested": "#/components/schemas/ActivityEventInfoBuildAgentPoolTested"
           }
         }
       },
@@ -29349,6 +30282,105 @@
           },
           "newAction": {
             "$ref": "#/components/schemas/AutomationActionSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBuildAgentPoolCreated": {
+        "required": [
+          "pool"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildAgentPoolCreated"
+            ],
+            "type": "string"
+          },
+          "pool": {
+            "$ref": "#/components/schemas/BuildAgentPoolSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBuildAgentPoolDeleted": {
+        "required": [
+          "pool"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildAgentPoolDeleted"
+            ],
+            "type": "string"
+          },
+          "pool": {
+            "$ref": "#/components/schemas/BuildAgentPoolSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBuildAgentPoolRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildAgentPoolRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoBuildAgentPoolTested": {
+        "required": [
+          "pool",
+          "status",
+          "message"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildAgentPoolTested"
+            ],
+            "type": "string"
+          },
+          "pool": {
+            "$ref": "#/components/schemas/BuildAgentPoolSnapshot"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BuildAgentPoolValidationStatus"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivityEventInfoBuildAgentPoolUpdated": {
+        "required": [
+          "oldPool",
+          "newPool"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildAgentPoolUpdated"
+            ],
+            "type": "string"
+          },
+          "oldPool": {
+            "$ref": "#/components/schemas/BuildAgentPoolSnapshot"
+          },
+          "newPool": {
+            "$ref": "#/components/schemas/BuildAgentPoolSnapshot"
           }
         }
       },
@@ -31183,7 +32215,12 @@
           "BuildRunFailed",
           "BuildRunTimedOut",
           "BuildRunCancelled",
-          "BuildWebhookReceived"
+          "BuildWebhookReceived",
+          "BuildAgentPoolCreated",
+          "BuildAgentPoolUpdated",
+          "BuildAgentPoolRenamed",
+          "BuildAgentPoolDeleted",
+          "BuildAgentPoolTested"
         ]
       },
       "ActivityResourceType": {
@@ -31199,6 +32236,7 @@
           "User",
           "License",
           "Build",
+          "BuildAgentPool",
           "Volume"
         ]
       },
@@ -35518,6 +36556,620 @@
           }
         }
       },
+      "BuildAgentPoolInput": {
+        "required": [
+          "name",
+          "description",
+          "enabled",
+          "providerSpec",
+          "maxActiveBuilders",
+          "queueTimeoutSeconds",
+          "provisioningTimeoutSeconds",
+          "registrationTimeoutSeconds",
+          "heartbeatTimeoutSeconds",
+          "cleanupTimeoutSeconds",
+          "maximumInstanceLifetimeSeconds",
+          "failureRetentionMinutes",
+          "tagIds"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "providerSpec": {
+            "$ref": "#/components/schemas/BuildAgentPoolProviderSpec"
+          },
+          "maxActiveBuilders": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "queueTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "provisioningTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "registrationTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "heartbeatTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cleanupTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maximumInstanceLifetimeSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "failureRetentionMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "tagIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "BuildAgentPoolProvider": {
+        "enum": [
+          "AwsEc2",
+          "SelfManagedVm"
+        ]
+      },
+      "BuildAgentPoolProviderSpec": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec"
+          },
+          {
+            "$ref": "#/components/schemas/BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "AwsEc2": "#/components/schemas/BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec",
+            "SelfManagedVm": "#/components/schemas/BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec"
+          }
+        }
+      },
+      "BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec": {
+        "required": [
+          "region",
+          "instanceType",
+          "architecture",
+          "amiId",
+          "rootVolumeSizeGb",
+          "subnetId",
+          "securityGroupIds",
+          "instanceProfileName",
+          "assignPublicIp",
+          "awsCredentialSecretId",
+          "assumeRoleArn",
+          "keyPairName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "AwsEc2"
+            ],
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "instanceType": {
+            "type": "string"
+          },
+          "architecture": {
+            "$ref": "#/components/schemas/CpuArchitecture"
+          },
+          "amiId": {
+            "type": "string"
+          },
+          "rootVolumeSizeGb": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "subnetId": {
+            "type": "string"
+          },
+          "securityGroupIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "instanceProfileName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "assignPublicIp": {
+            "type": "boolean"
+          },
+          "awsCredentialSecretId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "assumeRoleArn": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "keyPairName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tags": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/BuildAgentPoolProvider"
+          }
+        }
+      },
+      "BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec": {
+        "required": [
+          "endpoint",
+          "architecture",
+          "maxWorkers"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SelfManagedVm"
+            ],
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "architecture": {
+            "$ref": "#/components/schemas/CpuArchitecture"
+          },
+          "maxWorkers": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "registrationSecretId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "labels": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/BuildAgentPoolProvider"
+          }
+        }
+      },
+      "BuildAgentPoolSnapshot": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "enabled",
+          "provider",
+          "providerSpec",
+          "architecture",
+          "region",
+          "instanceType",
+          "maxActiveBuilders",
+          "queueTimeoutSeconds",
+          "provisioningTimeoutSeconds",
+          "registrationTimeoutSeconds",
+          "heartbeatTimeoutSeconds",
+          "cleanupTimeoutSeconds",
+          "maximumInstanceLifetimeSeconds",
+          "failureRetentionMinutes",
+          "lastValidationStatus",
+          "lastValidationMessage",
+          "lastValidatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/BuildAgentPoolProvider"
+          },
+          "providerSpec": {
+            "$ref": "#/components/schemas/BuildAgentPoolProviderSpec"
+          },
+          "architecture": {
+            "$ref": "#/components/schemas/CpuArchitecture"
+          },
+          "region": {
+            "type": "string"
+          },
+          "instanceType": {
+            "type": "string"
+          },
+          "maxActiveBuilders": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "queueTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "provisioningTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "registrationTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "heartbeatTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cleanupTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maximumInstanceLifetimeSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "failureRetentionMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "lastValidationStatus": {
+            "$ref": "#/components/schemas/BuildAgentPoolValidationStatus"
+          },
+          "lastValidationMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastValidatedAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "BuildAgentPoolValidationStatus": {
+        "enum": [
+          "NotTested",
+          "Ready",
+          "Invalid",
+          "Degraded"
+        ]
+      },
+      "BuildAgentPoolView": {
+        "required": [
+          "id",
+          "name",
+          "normalizedName",
+          "description",
+          "enabled",
+          "provider",
+          "providerSpec",
+          "maxActiveBuilders",
+          "queueTimeoutSeconds",
+          "provisioningTimeoutSeconds",
+          "registrationTimeoutSeconds",
+          "heartbeatTimeoutSeconds",
+          "cleanupTimeoutSeconds",
+          "maximumInstanceLifetimeSeconds",
+          "failureRetentionMinutes",
+          "lastValidationStatus",
+          "lastValidationMessage",
+          "lastValidatedAt",
+          "createdByActorId",
+          "createdAt",
+          "updatedAt",
+          "archivedAt",
+          "rowVersion",
+          "tags"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "normalizedName": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/BuildAgentPoolProvider"
+          },
+          "providerSpec": {
+            "$ref": "#/components/schemas/BuildAgentPoolProviderSpec"
+          },
+          "maxActiveBuilders": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "queueTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "provisioningTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "registrationTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "heartbeatTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cleanupTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maximumInstanceLifetimeSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "failureRetentionMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "lastValidationStatus": {
+            "$ref": "#/components/schemas/BuildAgentPoolValidationStatus"
+          },
+          "lastValidationMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastValidatedAt": {
+            "format": "date-time"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "format": "date-time"
+          },
+          "archivedAt": {
+            "format": "date-time"
+          },
+          "rowVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagSummaryView"
+            }
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceCapabilities"
+              }
+            ]
+          }
+        }
+      },
+      "BuildAgentPoolsView": {
+        "required": [
+          "pools",
+          "capabilities"
+        ],
+        "type": "object",
+        "properties": {
+          "pools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuildAgentPoolView"
+            }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilities"
+          }
+        }
+      },
       "BuildArgSpec": {
         "required": [
           "name"
@@ -35585,6 +37237,12 @@
           }
         }
       },
+      "BuildProjectBuilderKind": {
+        "enum": [
+          "Platform",
+          "BuildAgentPool"
+        ]
+      },
       "BuildProjectInput": {
         "required": [
           "name",
@@ -35603,8 +37261,7 @@
           "tagTemplates",
           "webhook",
           "timeoutSeconds",
-          "retentionRunCount",
-          "tagIds"
+          "retentionRunCount"
         ],
         "type": "object",
         "properties": {
@@ -35667,7 +37324,10 @@
             }
           },
           "platformId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           },
           "registryId": {
@@ -35723,6 +37383,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "builderKind": {
+            "$ref": "#/components/schemas/BuildProjectBuilderKind"
+          },
+          "buildAgentPoolId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -35737,7 +37407,9 @@
           "contextPath",
           "dockerfilePath",
           "target",
+          "builderKind",
           "platformId",
+          "buildAgentPoolId",
           "registryId",
           "imageRepository",
           "tagTemplates",
@@ -35782,8 +37454,21 @@
               "string"
             ]
           },
+          "builderKind": {
+            "$ref": "#/components/schemas/BuildProjectBuilderKind"
+          },
           "platformId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "buildAgentPoolId": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           },
           "registryId": {
@@ -35850,7 +37535,9 @@
           "target",
           "buildArgs",
           "buildSecrets",
+          "builderKind",
           "platformId",
+          "buildAgentPoolId",
           "registryId",
           "imageRepository",
           "tagTemplates",
@@ -35920,8 +37607,21 @@
               "$ref": "#/components/schemas/BuildSecretSpec"
             }
           },
+          "builderKind": {
+            "$ref": "#/components/schemas/BuildProjectBuilderKind"
+          },
           "platformId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "buildAgentPoolId": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           },
           "registryId": {
@@ -37512,6 +39212,12 @@
             "$ref": "#/components/schemas/PlatformCapabilities"
           }
         }
+      },
+      "CpuArchitecture": {
+        "enum": [
+          "Amd64",
+          "Arm64"
+        ]
       },
       "CreateAlertRuleInput": {
         "required": [
@@ -42421,7 +44127,8 @@
           "ResourceBinding",
           "License",
           "BackupRepository",
-          "BackupPolicy"
+          "BackupPolicy",
+          "BuildAgentPool"
         ]
       },
       "MandatoryMfaSetupCompleteView": {
@@ -45745,7 +47452,8 @@
           "BackupRepository",
           "BackupPolicy",
           "Volume",
-          "Build"
+          "Build",
+          "BuildAgentPool"
         ]
       },
       "RestartPolicy": {
@@ -48300,6 +50008,105 @@
           "AutoDeploy"
         ]
       },
+      "UpdateBuildAgentPoolInput": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "providerSpec": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildAgentPoolProviderSpec"
+              }
+            ]
+          },
+          "maxActiveBuilders": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "queueTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "provisioningTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "registrationTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "heartbeatTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cleanupTimeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maximumInstanceLifetimeSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "failureRetentionMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "UpdateBuildProjectInput": {
         "type": "object",
         "properties": {
@@ -48364,7 +50171,15 @@
               "$ref": "#/components/schemas/BuildSecretSpec"
             }
           },
+          "builderKind": { },
           "platformId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "buildAgentPoolId": {
             "type": [
               "null",
               "string"
@@ -49372,6 +51187,9 @@
     },
     {
       "name": "BuildProjects"
+    },
+    {
+      "name": "BuildAgentPools"
     },
     {
       "name": "BuildRuns"

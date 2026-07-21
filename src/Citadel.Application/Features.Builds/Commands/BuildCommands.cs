@@ -26,7 +26,8 @@ public sealed record CreateBuildProject(BuildProjectInputModel Project) : IComma
             RuleFor(x => x.Project.Name).NotEmpty().MaximumLength(128);
             RuleFor(x => x.Project.Description).MaximumLength(600).When(x => x.Project.Description is not null);
             RuleFor(x => x.Project.GitRepositoryId).NotEmpty();
-            RuleFor(x => x.Project.PlatformId).NotEmpty();
+            RuleFor(x => x.Project.PlatformId).NotEmpty().When(x => x.Project.BuilderKind == BuildProjectBuilderKind.Platform);
+            RuleFor(x => x.Project.BuildAgentPoolId).NotEmpty().When(x => x.Project.BuilderKind == BuildProjectBuilderKind.BuildAgentPool);
             RuleFor(x => x.Project.RegistryId).NotEmpty();
             RuleFor(x => x.Project.ImageRepository).NotEmpty().MaximumLength(512);
             RuleForEach(x => x.Project.BuildSecrets!)
@@ -130,11 +131,14 @@ internal sealed class CreateBuildProjectHandler(
 
         var validation = await ValidateReferencesAsync(
             input.GitRepositoryId,
+            input.BuilderKind,
             input.PlatformId,
+            input.BuildAgentPoolId,
             input.RegistryId,
             input.BuildSecrets,
             unitOfWork,
-            cancellationToken);
+            cancellationToken,
+            requireBuildPoolEnabled: true);
         if (validation.IsFailure(out var validationError))
             return Result.Failure<BuildProjectResult>(validationError);
 
@@ -150,14 +154,16 @@ internal sealed class CreateBuildProjectHandler(
             input.Target,
             input.BuildArgs,
             input.BuildSecrets,
-            input.PlatformId,
+            input.PlatformId ?? Guid.Empty,
             input.RegistryId,
             input.ImageRepository,
             input.TagTemplates,
             input.Webhook,
             input.TimeoutSeconds ?? BuildProject.DefaultTimeoutSeconds,
             input.RetentionRunCount ?? BuildProject.DefaultRetentionRunCount,
-            userContextAccessor.Current.ActorId);
+            userContextAccessor.Current.ActorId,
+            input.BuilderKind,
+            input.BuildAgentPoolId);
 
         try
         {
@@ -174,7 +180,7 @@ internal sealed class CreateBuildProjectHandler(
 
         var activity = BuildActivity.Create(
             project,
-            project.PlatformId,
+            project.PlatformId == Guid.Empty ? null : project.PlatformId,
             userContextAccessor.Current.ActorId,
             ActivityEventType.BuildCreated,
             new BuildCreated(BuildActivity.Snapshot(project)));
@@ -187,18 +193,39 @@ internal sealed class CreateBuildProjectHandler(
 
     internal static async Task<Result> ValidateReferencesAsync(
         Guid gitRepositoryId,
-        Guid platformId,
+        BuildProjectBuilderKind builderKind,
+        Guid? platformId,
+        Guid? buildAgentPoolId,
         Guid registryId,
         IReadOnlyList<BuildSecretSpec>? buildSecrets,
         IUnitOfWork unitOfWork,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireBuildPoolEnabled)
     {
         if (await unitOfWork.GitRepositories.GetAsync(gitRepositoryId, cancellationToken) is null)
             return Result.Failure(new NotFoundError("Git repository not found."));
 
-        var platform = await unitOfWork.Platforms.GetInfoAsync(platformId, cancellationToken);
-        if (platform is null)
-            return Result.Failure(new NotFoundError("Platform not found."));
+        if (builderKind == BuildProjectBuilderKind.Platform)
+        {
+            if (!platformId.HasValue || platformId.Value == Guid.Empty)
+                return Result.Failure(new BadRequestError("Platform is required."));
+
+            var platform = await unitOfWork.Platforms.GetInfoAsync(platformId.Value, cancellationToken);
+            if (platform is null)
+                return Result.Failure(new NotFoundError("Platform not found."));
+        }
+        else
+        {
+            if (!buildAgentPoolId.HasValue || buildAgentPoolId.Value == Guid.Empty)
+                return Result.Failure(new BadRequestError("Build pool is required."));
+
+            var pool = await unitOfWork.BuildAgentPools.GetAsync(buildAgentPoolId.Value, cancellationToken);
+            if (pool is null)
+                return Result.Failure(new NotFoundError("Build pool not found."));
+
+            if (requireBuildPoolEnabled && !pool.Enabled)
+                return Result.Failure(new ConflictError("Build pool is disabled."));
+        }
 
         if (await unitOfWork.Registries.GetAsync(registryId, cancellationToken) is null)
             return Result.Failure(new NotFoundError("Registry not found."));
@@ -227,13 +254,21 @@ internal sealed class UpdateBuildProjectHandler(
             return Result.Failure<BuildProjectResult>(new NotFoundError("Build project not found."));
 
         var input = command.Project;
+        var targetBuilderKind = input.BuilderKind ?? project.BuilderKind;
+        var targetBuildAgentPoolId = input.BuildAgentPoolId ?? project.BuildAgentPoolId;
         var validation = await CreateBuildProjectHandler.ValidateReferencesAsync(
             input.GitRepositoryId ?? project.GitRepositoryId,
+            targetBuilderKind,
             input.PlatformId ?? project.PlatformId,
+            targetBuildAgentPoolId,
             input.RegistryId ?? project.RegistryId,
             command.UpdateBuildSecrets ? input.BuildSecrets : project.BuildSecrets,
             unitOfWork,
-            cancellationToken);
+            cancellationToken,
+            requireBuildPoolEnabled:
+                targetBuilderKind == BuildProjectBuilderKind.BuildAgentPool
+                && targetBuildAgentPoolId.HasValue
+                && (project.BuilderKind != BuildProjectBuilderKind.BuildAgentPool || targetBuildAgentPoolId.Value != project.BuildAgentPoolId));
         if (validation.IsFailure(out var validationError))
             return Result.Failure<BuildProjectResult>(validationError);
 
@@ -253,6 +288,8 @@ internal sealed class UpdateBuildProjectHandler(
                 input.BuildSecrets,
                 command.UpdateBuildSecrets,
                 input.PlatformId,
+                input.BuilderKind,
+                input.BuildAgentPoolId,
                 input.RegistryId,
                 input.ImageRepository,
                 input.TagTemplates,
@@ -268,7 +305,7 @@ internal sealed class UpdateBuildProjectHandler(
 
         var activity = BuildActivity.Create(
             project,
-            project.PlatformId,
+            project.PlatformId == Guid.Empty ? null : project.PlatformId,
             userContextAccessor.Current.ActorId,
             ActivityEventType.BuildUpdated,
             new BuildUpdated(oldSnapshot, BuildActivity.Snapshot(project)));
@@ -302,7 +339,7 @@ internal sealed class RenameBuildProjectHandler(
         project.Rename(command.Name);
         var activity = BuildActivity.Create(
             project,
-            project.PlatformId,
+            project.PlatformId == Guid.Empty ? null : project.PlatformId,
             userContextAccessor.Current.ActorId,
             ActivityEventType.BuildRenamed,
             new BuildRenamed(oldName, project.Name));
@@ -352,7 +389,7 @@ internal sealed class ArchiveBuildProjectHandler(
 
         var activity = BuildActivity.Create(
             project,
-            project.PlatformId,
+            project.PlatformId == Guid.Empty ? null : project.PlatformId,
             userContextAccessor.Current.ActorId,
             ActivityEventType.BuildDeleted,
             new BuildDeleted(BuildActivity.Snapshot(project)));
@@ -388,6 +425,9 @@ internal sealed class QueueBuildRunHandler(
         var repository = await unitOfWork.GitRepositories.GetAsync(project.GitRepositoryId, cancellationToken);
         if (repository is null)
             return Result.Failure<BuildRunResult>(new NotFoundError("Git repository not found."));
+
+        if (project.BuilderKind == BuildProjectBuilderKind.BuildAgentPool)
+            return Result.Failure<BuildRunResult>(new ConflictError("Build Pool execution is not implemented yet. Use a Docker Platform builder until the external builder runtime slice is installed."));
 
         var platform = await unitOfWork.Platforms.GetInfoAsync(project.PlatformId, cancellationToken);
         if (platform is null)
@@ -427,7 +467,7 @@ internal sealed class QueueBuildRunHandler(
         await unitOfWork.BuildRuns.AddAsync(run, cancellationToken);
         var activity = BuildActivity.Create(
             project,
-            project.PlatformId,
+            project.PlatformId == Guid.Empty ? null : project.PlatformId,
             userContextAccessor.Current.ActorId,
             ActivityEventType.BuildRunQueued,
             new BuildRunQueued(run.Id, run.Trigger));
@@ -557,7 +597,9 @@ internal static class BuildActivity
             project.ContextPath,
             project.DockerfilePath,
             project.Target,
-            project.PlatformId,
+            project.BuilderKind,
+            project.BuilderKind == BuildProjectBuilderKind.Platform ? project.PlatformId : null,
+            project.BuilderKind == BuildProjectBuilderKind.BuildAgentPool ? project.BuildAgentPoolId : null,
             project.RegistryId,
             project.ImageRepository,
             project.TagTemplates,

@@ -25,13 +25,17 @@ internal static class BuildMappers
             dto.Target,
             DeserializeBuildArgs(dto.BuildArgs),
             DeserializeBuildSecrets(dto.BuildSecrets),
-            dto.PlatformId,
+            dto.PlatformId ?? Guid.Empty,
             dto.RegistryId,
             dto.ImageRepository,
             DeserializeStringList(dto.TagTemplates),
             DeserializeWebhook(dto.Webhook),
             dto.TimeoutSeconds,
             dto.RetentionRunCount,
+            string.IsNullOrWhiteSpace(dto.BuilderKind)
+                ? BuildProjectBuilderKind.Platform
+                : Enum.Parse<BuildProjectBuilderKind>(dto.BuilderKind),
+            dto.BuildAgentPoolId,
             dto.CurrentRunId,
             string.IsNullOrWhiteSpace(dto.ControlState)
                 ? ResourceControlState.Idle
@@ -88,6 +92,41 @@ internal static class BuildMappers
     internal static BuildRunLogEntry ToDomain(this BuildRunLogDto dto)
         => new(dto.Id, dto.BuildRunId, ToOffset(dto.CreatedAt), dto.Stream, dto.Message);
 
+    internal static IEnumerable<BuildAgentPool> ToDomain(this IEnumerable<BuildAgentPoolDto> dtos)
+        => dtos.Select(static dto => dto.ToDomain());
+
+    internal static BuildAgentPool ToDomain(this BuildAgentPoolDto dto)
+    {
+        var pool = BuildAgentPool.FromPersistence(
+            dto.Id,
+            dto.Name,
+            dto.NormalizedName,
+            dto.Description,
+            dto.Enabled,
+            DeserializeProviderSpec(dto.ProviderSpec),
+            dto.MaxActiveBuilders,
+            dto.QueueTimeoutSeconds,
+            dto.ProvisioningTimeoutSeconds,
+            dto.RegistrationTimeoutSeconds,
+            dto.HeartbeatTimeoutSeconds,
+            dto.CleanupTimeoutSeconds,
+            dto.MaximumInstanceLifetimeSeconds,
+            dto.FailureRetentionMinutes,
+            string.IsNullOrWhiteSpace(dto.LastValidationStatus)
+                ? BuildAgentPoolValidationStatus.NotTested
+                : Enum.Parse<BuildAgentPoolValidationStatus>(dto.LastValidationStatus),
+            dto.LastValidationMessage,
+            ToOffset(dto.LastValidatedAt),
+            dto.CreatedByActorId,
+            ToOffset(dto.CreatedAt),
+            ToOffset(dto.UpdatedAt),
+            ToOffset(dto.ArchivedAt),
+            dto.RowVersion);
+
+        pool.AssignTags(dto.TagsJson.ToTagSummaries());
+        return pool;
+    }
+
     internal static string SerializeBuildArgs(IReadOnlyList<BuildArgSpec> values)
         => JsonSerializer.Serialize(values, BuildJsonContext.Default.IReadOnlyListBuildArgSpec);
 
@@ -107,6 +146,9 @@ internal static class BuildMappers
         => value is null
             ? null
             : JsonSerializer.Serialize(value, BuildJsonContext.Default.BuildWebhookConfig);
+
+    internal static string SerializeProviderSpec(BuildAgentPoolProviderSpec value)
+        => JsonSerializer.Serialize(value, BuildJsonContext.Default.BuildAgentPoolProviderSpec);
 
     private static IReadOnlyList<BuildArgSpec> DeserializeBuildArgs(string? json)
         => string.IsNullOrWhiteSpace(json)
@@ -139,6 +181,38 @@ internal static class BuildMappers
         => string.IsNullOrWhiteSpace(json)
             ? null
             : JsonSerializer.Deserialize(json, BuildJsonContext.Default.BuildWebhookConfig);
+
+    private static BuildAgentPoolProviderSpec DeserializeProviderSpec(string? json)
+        => string.IsNullOrWhiteSpace(json)
+            ? new AwsEc2BuildAgentPoolProviderSpec(
+                string.Empty,
+                string.Empty,
+                CpuArchitecture.Amd64,
+                string.Empty,
+                8,
+                string.Empty,
+                [],
+                null,
+                false,
+                null,
+                null,
+                null,
+                null)
+            : JsonSerializer.Deserialize(json, BuildJsonContext.Default.BuildAgentPoolProviderSpec)
+              ?? new AwsEc2BuildAgentPoolProviderSpec(
+                  string.Empty,
+                  string.Empty,
+                  CpuArchitecture.Amd64,
+                  string.Empty,
+                  8,
+                  string.Empty,
+                  [],
+                  null,
+                  false,
+                  null,
+                  null,
+                  null,
+                  null);
 
     internal static DateTimeOffset ToOffset(DateTime value)
         => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));

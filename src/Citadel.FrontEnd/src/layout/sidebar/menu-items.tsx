@@ -55,14 +55,25 @@ const MenuItems: IMenuItem[] = [
         route: '/stacks',
       },
       {
-        icon: renderIcon(CitadelIcons.Build),
-        label: 'Builds',
-        route: '/builds',
-      },
-      {
         icon: renderIcon(CitadelIcons.AutomationAction),
         label: 'Automation',
         route: '/automation',
+      },
+    ],
+  },
+  {
+    group: 'Builds',
+    separator: false,
+    items: [
+      {
+        icon: renderIcon(CitadelIcons.Build),
+        label: 'Build Projects',
+        route: '/builds',
+      },
+      {
+        icon: renderIcon(CitadelIcons.BuildAgentPool),
+        label: 'Build Pools',
+        route: '/build-pools',
       },
     ],
   },

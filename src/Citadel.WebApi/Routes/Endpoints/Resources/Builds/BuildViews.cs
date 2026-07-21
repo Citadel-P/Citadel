@@ -22,7 +22,9 @@ public sealed record BuildProjectView(
     string? Target,
     IReadOnlyList<BuildArgSpec> BuildArgs,
     IReadOnlyList<BuildSecretSpec> BuildSecrets,
-    Guid PlatformId,
+    BuildProjectBuilderKind BuilderKind,
+    Guid? PlatformId,
+    Guid? BuildAgentPoolId,
     Guid RegistryId,
     string ImageRepository,
     IReadOnlyList<string> TagTemplates,
@@ -63,7 +65,9 @@ public sealed record BuildProjectView(
             project.Target,
             project.BuildArgs,
             project.BuildSecrets,
-            project.PlatformId,
+            project.BuilderKind,
+            project.BuilderKind == BuildProjectBuilderKind.Platform ? project.PlatformId : null,
+            project.BuildAgentPoolId,
             project.RegistryId,
             project.ImageRepository,
             project.TagTemplates,
@@ -193,4 +197,97 @@ public sealed record BuildRunsView(IReadOnlyList<BuildRunView> Runs)
 public sealed record BuildLogsView(Guid RunId, IReadOnlyList<BuildRunLogEntry> Logs)
 {
     internal static BuildLogsView Map(BuildRunLogResult result) => new(result.RunId, result.Logs);
+}
+
+public sealed record BuildAgentPoolView(
+    Guid Id,
+    string Name,
+    string NormalizedName,
+    string? Description,
+    bool Enabled,
+    BuildAgentPoolProvider Provider,
+    BuildAgentPoolProviderSpec ProviderSpec,
+    int MaxActiveBuilders,
+    int QueueTimeoutSeconds,
+    int ProvisioningTimeoutSeconds,
+    int RegistrationTimeoutSeconds,
+    int HeartbeatTimeoutSeconds,
+    int CleanupTimeoutSeconds,
+    int MaximumInstanceLifetimeSeconds,
+    int FailureRetentionMinutes,
+    BuildAgentPoolValidationStatus LastValidationStatus,
+    string? LastValidationMessage,
+    DateTimeOffset? LastValidatedAt,
+    Guid CreatedByActorId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? ArchivedAt,
+    long RowVersion,
+    IReadOnlyList<TagSummaryView> Tags,
+    ResourceCapabilities? Capabilities = null)
+{
+    internal static BuildAgentPoolView Map(BuildAgentPoolResult result) => Map(result.Pool);
+
+    internal static async Task<BuildAgentPoolView> Map(BuildAgentPoolResult result, IPermissionEvaluator permissionEvaluator)
+        => await Map(result.Pool, permissionEvaluator);
+
+    internal static BuildAgentPoolView Map(BuildAgentPool pool)
+        => new(
+            pool.Id,
+            pool.Name,
+            pool.NormalizedName,
+            pool.Description,
+            pool.Enabled,
+            pool.Provider,
+            pool.ProviderSpec,
+            pool.MaxActiveBuilders,
+            pool.QueueTimeoutSeconds,
+            pool.ProvisioningTimeoutSeconds,
+            pool.RegistrationTimeoutSeconds,
+            pool.HeartbeatTimeoutSeconds,
+            pool.CleanupTimeoutSeconds,
+            pool.MaximumInstanceLifetimeSeconds,
+            pool.FailureRetentionMinutes,
+            pool.LastValidationStatus,
+            pool.LastValidationMessage,
+            pool.LastValidatedAt,
+            pool.CreatedByActorId,
+            pool.CreatedAt,
+            pool.UpdatedAt,
+            pool.ArchivedAt,
+            pool.RowVersion,
+            [.. pool.Tags.Select(TagSummaryView.Map)]);
+
+    internal static async Task<BuildAgentPoolView> Map(BuildAgentPool pool, IPermissionEvaluator permissionEvaluator)
+    {
+        var permissions = await permissionEvaluator.EvaluateAsync(pool.Id, ResourceType.BuildAgentPool);
+        return Map(pool) with { Capabilities = CapabilityMapper.ToResourceCapabilities(permissions) };
+    }
+}
+
+public sealed record BuildAgentPoolsView(IReadOnlyList<BuildAgentPoolView> Pools, ResourceCapabilities Capabilities)
+{
+    internal static async Task<BuildAgentPoolsView> Map(BuildAgentPoolListResult result, IPermissionEvaluator permissionEvaluator)
+    {
+        var pools = result.Pools;
+        var resourcesPerms = await permissionEvaluator.EvaluateAsync(ResourceType.BuildAgentPool);
+        if (pools.Count == 0)
+            return new BuildAgentPoolsView([], CapabilityMapper.ToResourceCapabilities(resourcesPerms));
+
+        var ids = pools.Select(static x => x.Id).ToArray();
+        var perms = await permissionEvaluator.EvaluateAsync(ids, ResourceType.BuildAgentPool);
+        var views = new BuildAgentPoolView[pools.Count];
+
+        for (var i = 0; i < pools.Count; i++)
+        {
+            var pool = pools[i];
+            perms.TryGetValue(pool.Id, out var meta);
+            views[i] = BuildAgentPoolView.Map(pool) with
+            {
+                Capabilities = CapabilityMapper.ToResourceCapabilities(meta == default ? PermissionMetadata.Empty : meta)
+            };
+        }
+
+        return new BuildAgentPoolsView(views, CapabilityMapper.ToResourceCapabilities(resourcesPerms));
+    }
 }

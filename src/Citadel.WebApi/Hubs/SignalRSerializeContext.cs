@@ -98,6 +98,8 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<BackupWebhookConfig>]
 [GenerateShapeFor<BuildProjectView>]
 [GenerateShapeFor<BuildProjectsView>]
+[GenerateShapeFor<BuildAgentPoolView>]
+[GenerateShapeFor<BuildAgentPoolsView>]
 [GenerateShapeFor<BuildRunView>]
 [GenerateShapeFor<BuildRunsView>]
 [GenerateShapeFor<BuildRunLogEntry>]
@@ -111,6 +113,10 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<BuildRegistrySnapshot>]
 [GenerateShapeFor<BuildWebhookConfig>]
 [GenerateShapeFor<BuildProjectSnapshot>]
+[GenerateShapeFor<BuildAgentPoolProviderSpec>]
+[GenerateShapeFor<AwsEc2BuildAgentPoolProviderSpec>]
+[GenerateShapeFor<SelfManagedVmBuildAgentPoolProviderSpec>]
+[GenerateShapeFor<BuildAgentPoolSnapshot>]
 [GenerateShapeFor<BuildCreated>]
 [GenerateShapeFor<BuildUpdated>]
 [GenerateShapeFor<BuildRenamed>]
@@ -122,7 +128,13 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<BuildRunTimedOut>]
 [GenerateShapeFor<BuildRunCancelled>]
 [GenerateShapeFor<BuildWebhookReceived>]
+[GenerateShapeFor<BuildAgentPoolCreated>]
+[GenerateShapeFor<BuildAgentPoolUpdated>]
+[GenerateShapeFor<BuildAgentPoolRenamed>]
+[GenerateShapeFor<BuildAgentPoolDeleted>]
+[GenerateShapeFor<BuildAgentPoolTested>]
 [GenerateShapeFor<IReadOnlyList<string>>]
+[GenerateShapeFor<IReadOnlyDictionary<string, string>>]
 [GenerateShapeFor<AutomationActionView>]
 [GenerateShapeFor<AutomationActionRunView>]
 [GenerateShapeFor<AutomationWebhookConfig>]
@@ -242,6 +254,12 @@ internal static class DerivedTypesMapping
         [nameof(BackupSourceType.Deployment)] = typeof(DeploymentBackupSource),
     };
 
+    internal static DerivedTypeMapping<BuildAgentPoolProviderSpec> BuildAgentPoolProviderSpecMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
+    {
+        [nameof(BuildAgentPoolProvider.AwsEc2)] = typeof(AwsEc2BuildAgentPoolProviderSpec),
+        [nameof(BuildAgentPoolProvider.SelfManagedVm)] = typeof(SelfManagedVmBuildAgentPoolProviderSpec),
+    };
+
     internal static DerivedTypeMapping<ActivityEventInfo> ActivityEventInfoMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
     {
         [nameof(ActivityEventType.StackCreated)] = typeof(StackCreated),
@@ -318,6 +336,11 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.BuildRunTimedOut)] = typeof(BuildRunTimedOut),
         [nameof(ActivityEventType.BuildRunCancelled)] = typeof(BuildRunCancelled),
         [nameof(ActivityEventType.BuildWebhookReceived)] = typeof(BuildWebhookReceived),
+        [nameof(ActivityEventType.BuildAgentPoolCreated)] = typeof(BuildAgentPoolCreated),
+        [nameof(ActivityEventType.BuildAgentPoolUpdated)] = typeof(BuildAgentPoolUpdated),
+        [nameof(ActivityEventType.BuildAgentPoolRenamed)] = typeof(BuildAgentPoolRenamed),
+        [nameof(ActivityEventType.BuildAgentPoolDeleted)] = typeof(BuildAgentPoolDeleted),
+        [nameof(ActivityEventType.BuildAgentPoolTested)] = typeof(BuildAgentPoolTested),
         [nameof(ActivityEventType.UserProfileUpdated)] = typeof(UserProfileUpdated),
         [nameof(ActivityEventType.UserPreferencesUpdated)] = typeof(UserPreferencesUpdated),
         [nameof(ActivityEventType.UserPasswordChanged)] = typeof(UserPasswordChanged),

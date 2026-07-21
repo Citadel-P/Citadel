@@ -34,6 +34,9 @@ public sealed record ReplaceBackupPolicyTags(Guid Id, IReadOnlyCollection<Guid>?
 [RequirePermission(ResourceType.Build, PermissionLevel.Write)]
 public sealed record ReplaceBuildTags(Guid Id, IReadOnlyCollection<Guid>? TagIds) : ICommand<Result<IReadOnlyList<TagSummary>>>;
 
+[RequirePermission(ResourceType.BuildAgentPool, PermissionLevel.Write)]
+public sealed record ReplaceBuildAgentPoolTags(Guid Id, IReadOnlyCollection<Guid>? TagIds) : ICommand<Result<IReadOnlyList<TagSummary>>>;
+
 internal sealed class ReplaceDeploymentTagsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<ReplaceDeploymentTags, Result<IReadOnlyList<TagSummary>>>
 {
     public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(ReplaceDeploymentTags command, CancellationToken cancellationToken)
@@ -143,6 +146,20 @@ internal sealed class ReplaceBuildTagsHandler(IUnitOfWork unitOfWork, IUserConte
             command.TagIds,
             async () => await unitOfWork.BuildProjects.GetAsync(command.Id, cancellationToken) is not null,
             "Build project",
+            cancellationToken);
+}
+
+internal sealed class ReplaceBuildAgentPoolTagsHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext) : ICommandHandler<ReplaceBuildAgentPoolTags, Result<IReadOnlyList<TagSummary>>>
+{
+    public async ValueTask<Result<IReadOnlyList<TagSummary>>> Handle(ReplaceBuildAgentPoolTags command, CancellationToken cancellationToken)
+        => await ResourceTagReplace.ReplaceAsync(
+            unitOfWork,
+            userContext,
+            TaggableResourceType.BuildAgentPool,
+            command.Id,
+            command.TagIds,
+            async () => await unitOfWork.BuildAgentPools.GetAsync(command.Id, cancellationToken) is not null,
+            "Build pool",
             cancellationToken);
 }
 

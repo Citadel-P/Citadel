@@ -521,6 +521,31 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
 
   BuildWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
 
+  BuildAgentPoolCreated: (info, activity) => (
+    <SpecViewer spec={info.pool} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+
+  BuildAgentPoolUpdated: (info) => (
+    <MonacoDiff original={info.oldPool} modified={info.newPool} format="yaml" title="Configuration changes" />
+  ),
+
+  BuildAgentPoolRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Build pool renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  BuildAgentPoolDeleted: (info, activity) => (
+    <SpecViewer spec={info.pool} resourceId={activity.resourceId} title="Deleted configuration" />
+  ),
+
+  BuildAgentPoolTested: (info) => (
+    <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+      <KeyValueBlock label="Status" value={info.status} />
+      {info.message ? <KeyValueBlock label="Message" value={info.message} /> : null}
+    </div>
+  ),
+
   AlertRuleUpdated: (info) => (
     <MonacoDiff original={info.oldRule} modified={info.newRule} format="json" title="Configuration changes" />
   ),

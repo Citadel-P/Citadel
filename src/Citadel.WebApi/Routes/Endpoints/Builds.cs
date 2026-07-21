@@ -152,3 +152,88 @@ public static class BuildRuns
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 }
+
+public static class BuildAgentPools
+{
+    public static async Task<Results<Ok<BuildAgentPoolsView>, ProblemHttpResult>> List(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromQuery] string[]? tags = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await mediator.Send(new GetBuildAgentPools(tags), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, BuildAgentPoolsView.Map);
+    }
+
+    public static async Task<Results<Ok<BuildAgentPoolView>, ProblemHttpResult>> Get(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromRoute][Description("Build pool ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetBuildAgentPool(id), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, BuildAgentPoolView.Map);
+    }
+
+    public static async Task<Results<Ok<BuildAgentPoolView>, ProblemHttpResult>> Create(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromBody] BuildAgentPoolInput input,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new CreateBuildAgentPool(input.ToModel()), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, BuildAgentPoolView.Map);
+    }
+
+    public static async Task<Results<Ok<BuildAgentPoolView>, ProblemHttpResult>> Update(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromRoute][Description("Build pool ID")] Guid id,
+        UpdateBuildAgentPoolInputPatchDocument patchInput,
+        CancellationToken cancellationToken)
+    {
+        var input = patchInput.ApplyTo(
+            new UpdateBuildAgentPoolInput(),
+            ApplicationJsonContext.Default.UpdateBuildAgentPoolInput);
+
+        var result = await mediator.Send(
+            new UpdateBuildAgentPool(id, input.ToModel(), patchInput.ContainsProperty("description")),
+            cancellationToken);
+
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, BuildAgentPoolView.Map);
+    }
+
+    public static async Task<Results<Ok<BuildAgentPoolView>, ProblemHttpResult>> Rename(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromBody] RenameResource renameResource,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new RenameBuildAgentPool(renameResource.Id, renameResource.Name), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, BuildAgentPoolView.Map);
+    }
+
+    public static async Task<Results<Ok<BuildAgentPoolView>, ProblemHttpResult>> PatchMetadata(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [FromRoute][Description("Build pool ID")] Guid id,
+        PatchResourceMetadataDocument patchInput,
+        CancellationToken cancellationToken)
+    {
+        var input = patchInput.ApplyTo(
+            new PatchResourceMetadata(string.Empty, []),
+            ApplicationJsonContext.Default.PatchResourceMetadata);
+
+        var result = await mediator.Send(new PatchBuildAgentPoolMetadata(id, input.Description), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, BuildAgentPoolView.Map);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Archive(
+        IMediator mediator,
+        [FromRoute][Description("Build pool ID")] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ArchiveBuildAgentPool(id), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+}

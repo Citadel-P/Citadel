@@ -1882,6 +1882,154 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("backupsourceleases", (string)null);
                 });
 
+            modelBuilder.Entity("BuildAgentPool", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archivedat");
+
+                    b.Property<int>("CleanupTimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(600)
+                        .HasColumnName("cleanuptimeoutseconds");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("createdbyactorid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("Enabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("enabled");
+
+                    b.Property<int>("FailureRetentionMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("failureretentionminutes");
+
+                    b.Property<int>("HeartbeatTimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(90)
+                        .HasColumnName("heartbeattimeoutseconds");
+
+                    b.Property<DateTime?>("LastValidatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lastvalidatedat");
+
+                    b.Property<string>("LastValidationMessage")
+                        .HasMaxLength(1200)
+                        .HasColumnType("text")
+                        .HasColumnName("lastvalidationmessage");
+
+                    b.Property<string>("LastValidationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("NotTested")
+                        .HasColumnName("lastvalidationstatus");
+
+                    b.Property<int>("MaxActiveBuilders")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("maxactivebuilders");
+
+                    b.Property<int>("MaximumInstanceLifetimeSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(7200)
+                        .HasColumnName("maximuminstancelifetimeseconds");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("text")
+                        .HasColumnName("normalizedname");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderSpec")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("providerspec");
+
+                    b.Property<int>("ProvisioningTimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(600)
+                        .HasColumnName("provisioningtimeoutseconds");
+
+                    b.Property<int>("QueueTimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3600)
+                        .HasColumnName("queuetimeoutseconds");
+
+                    b.Property<int>("RegistrationTimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(300)
+                        .HasColumnName("registrationtimeoutseconds");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("rowversion");
+
+                    b.HasKey("Id")
+                        .HasName("pk_buildagentpools");
+
+                    b.HasIndex("ArchivedAt")
+                        .HasDatabaseName("ix_buildagentpools_archivedat");
+
+                    b.HasIndex("CreatedByActorId")
+                        .HasDatabaseName("ix_buildagentpools_createdbyactorid");
+
+                    b.HasIndex("Enabled")
+                        .HasDatabaseName("ix_buildagentpools_enabled");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_buildagentpools_normalizedname");
+
+                    b.HasIndex("Provider")
+                        .HasDatabaseName("ix_buildagentpools_provider");
+
+                    b.ToTable("buildagentpools", (string)null);
+                });
+
             modelBuilder.Entity("BuildProject", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1899,6 +2047,10 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("branch");
 
+                    b.Property<Guid?>("BuildAgentPoolId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("buildagentpoolid");
+
                     b.Property<string>("BuildArgs")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1912,6 +2064,14 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("buildsecrets")
                         .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<string>("BuilderKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Platform")
+                        .HasColumnName("builderkind");
 
                     b.Property<string>("ContextPath")
                         .IsRequired()
@@ -1988,7 +2148,7 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("text")
                         .HasColumnName("normalizedname");
 
-                    b.Property<Guid>("PlatformId")
+                    b.Property<Guid?>("PlatformId")
                         .HasColumnType("uuid")
                         .HasColumnName("platformid");
 
@@ -2042,6 +2202,12 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("ArchivedAt")
                         .HasDatabaseName("ix_buildprojects_archivedat");
 
+                    b.HasIndex("BuildAgentPoolId")
+                        .HasDatabaseName("ix_buildprojects_buildagentpoolid");
+
+                    b.HasIndex("BuilderKind")
+                        .HasDatabaseName("ix_buildprojects_builderkind");
+
                     b.HasIndex("CreatedByActorId")
                         .HasDatabaseName("ix_buildprojects_createdbyactorid");
 
@@ -2061,7 +2227,10 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("ControlState", "ControlStartedAt")
                         .HasDatabaseName("ix_buildprojects_controlstate_controlstartedat");
 
-                    b.ToTable("buildprojects", (string)null);
+                    b.ToTable("buildprojects", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BuildProjects_Builder_Target", "(\"builderkind\" = 'Platform' AND \"platformid\" IS NOT NULL AND \"buildagentpoolid\" IS NULL) OR (\"builderkind\" = 'BuildAgentPool' AND \"platformid\" IS NULL AND \"buildagentpoolid\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("BuildRun", b =>
@@ -3826,6 +3995,30 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("f5794228-f6b6-84fa-4fa3-7324decd3402"),
+                            PermissionLevel = 4,
+                            ResourceType = 19,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
+                            SpecificPermissions = 4
+                        },
+                        new
+                        {
+                            Id = new Guid("077b64cb-9dc8-4ac2-be0a-81550b977042"),
+                            PermissionLevel = 1,
+                            ResourceType = 19,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
+                            SpecificPermissions = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("611400ed-eed0-2a88-49d3-02354e25f43c"),
+                            PermissionLevel = 2,
+                            ResourceType = 19,
+                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
+                            SpecificPermissions = 4
+                        },
+                        new
+                        {
                             Id = new Guid("677df0f0-2ce5-4b25-76ad-eb4e21f0748d"),
                             PermissionLevel = 4,
                             ResourceType = 17,
@@ -5272,8 +5465,24 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_backuprunlogs_backupruns_backuprunid");
                 });
 
+            modelBuilder.Entity("BuildAgentPool", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_buildagentpools_actors_createdbyactorid");
+                });
+
             modelBuilder.Entity("BuildProject", b =>
                 {
+                    b.HasOne("BuildAgentPool", null)
+                        .WithMany()
+                        .HasForeignKey("BuildAgentPoolId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_buildprojects_buildagentpools_buildagentpoolid");
+
                     b.HasOne("Actor", null)
                         .WithMany()
                         .HasForeignKey("CreatedByActorId")
@@ -5292,7 +5501,6 @@ namespace Infrastructure.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("PlatformId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_buildprojects_platforms_platformid");
 
                     b.HasOne("Registry", null)

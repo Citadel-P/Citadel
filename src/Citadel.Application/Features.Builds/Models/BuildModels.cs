@@ -14,14 +14,16 @@ public sealed record BuildProjectInputModel(
     string? Target,
     IReadOnlyList<BuildArgSpec>? BuildArgs,
     IReadOnlyList<BuildSecretSpec>? BuildSecrets,
-    Guid PlatformId,
+    Guid? PlatformId,
     Guid RegistryId,
     string ImageRepository,
     IReadOnlyList<string>? TagTemplates,
     BuildWebhookConfig? Webhook,
     int? TimeoutSeconds,
     int? RetentionRunCount,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    BuildProjectBuilderKind BuilderKind = BuildProjectBuilderKind.Platform,
+    Guid? BuildAgentPoolId = null);
 
 public sealed record UpdateBuildProjectInputModel(
     string? Description = null,
@@ -33,7 +35,9 @@ public sealed record UpdateBuildProjectInputModel(
     string? Target = null,
     IReadOnlyList<BuildArgSpec>? BuildArgs = null,
     IReadOnlyList<BuildSecretSpec>? BuildSecrets = null,
+    BuildProjectBuilderKind? BuilderKind = null,
     Guid? PlatformId = null,
+    Guid? BuildAgentPoolId = null,
     Guid? RegistryId = null,
     string? ImageRepository = null,
     IReadOnlyList<string>? TagTemplates = null,
@@ -56,3 +60,35 @@ public sealed record BuildRunResult(BuildRun Run);
 public sealed record BuildRunListResult(IReadOnlyList<BuildRun> Runs);
 
 public sealed record BuildRunLogResult(Guid RunId, IReadOnlyList<BuildRunLogEntry> Logs);
+
+public sealed record BuildAgentPoolInputModel(
+    string Name,
+    string? Description,
+    bool Enabled,
+    BuildAgentPoolProviderSpec ProviderSpec,
+    int? MaxActiveBuilders,
+    int? QueueTimeoutSeconds,
+    int? ProvisioningTimeoutSeconds,
+    int? RegistrationTimeoutSeconds,
+    int? HeartbeatTimeoutSeconds,
+    int? CleanupTimeoutSeconds,
+    int? MaximumInstanceLifetimeSeconds,
+    int? FailureRetentionMinutes,
+    IReadOnlyCollection<Guid>? TagIds = null);
+
+public sealed record UpdateBuildAgentPoolInputModel(
+    string? Description = null,
+    bool? Enabled = null,
+    BuildAgentPoolProviderSpec? ProviderSpec = null,
+    int? MaxActiveBuilders = null,
+    int? QueueTimeoutSeconds = null,
+    int? ProvisioningTimeoutSeconds = null,
+    int? RegistrationTimeoutSeconds = null,
+    int? HeartbeatTimeoutSeconds = null,
+    int? CleanupTimeoutSeconds = null,
+    int? MaximumInstanceLifetimeSeconds = null,
+    int? FailureRetentionMinutes = null);
+
+public sealed record BuildAgentPoolResult(BuildAgentPool Pool);
+
+public sealed record BuildAgentPoolListResult(IReadOnlyList<BuildAgentPool> Pools);

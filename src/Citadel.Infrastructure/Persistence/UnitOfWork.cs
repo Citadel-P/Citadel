@@ -66,6 +66,7 @@ internal class UnitOfWork : IUnitOfWork
         BackupRepositoryLeases = new Lazy<IBackupRepositoryLeaseRepository>(() => new BackupRepositoryLeaseRepository(connection, GetTransaction));
         BackupSourceLeases = new Lazy<IBackupSourceLeaseRepository>(() => new BackupSourceLeaseRepository(connection, GetTransaction));
         BuildProjects = new Lazy<IBuildProjectRepository>(() => new BuildProjectRepository(connection, GetTransaction));
+        BuildAgentPools = new Lazy<IBuildAgentPoolRepository>(() => new BuildAgentPoolRepository(connection, GetTransaction));
         BuildRuns = new Lazy<IBuildRunRepository>(() => new BuildRunRepository(connection, GetTransaction));
         BuildRunLogs = new Lazy<IBuildRunLogRepository>(() => new BuildRunLogRepository(connection, GetTransaction));
     }
@@ -107,6 +108,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IBackupRepositoryLeaseRepository> BackupRepositoryLeases { get; }
     private Lazy<IBackupSourceLeaseRepository> BackupSourceLeases { get; }
     private Lazy<IBuildProjectRepository> BuildProjects { get; }
+    private Lazy<IBuildAgentPoolRepository> BuildAgentPools { get; }
     private Lazy<IBuildRunRepository> BuildRuns { get; }
     private Lazy<IBuildRunLogRepository> BuildRunLogs { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
@@ -167,6 +169,7 @@ internal class UnitOfWork : IUnitOfWork
     IBackupRepositoryLeaseRepository IUnitOfWork.BackupRepositoryLeases => BackupRepositoryLeases.Value;
     IBackupSourceLeaseRepository IUnitOfWork.BackupSourceLeases => BackupSourceLeases.Value;
     IBuildProjectRepository IUnitOfWork.BuildProjects => BuildProjects.Value;
+    IBuildAgentPoolRepository IUnitOfWork.BuildAgentPools => BuildAgentPools.Value;
     IBuildRunRepository IUnitOfWork.BuildRuns => BuildRuns.Value;
     IBuildRunLogRepository IUnitOfWork.BuildRunLogs => BuildRunLogs.Value;
 

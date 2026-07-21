@@ -131,6 +131,33 @@ CREATE TABLE alertrules (
     CONSTRAINT fk_alertrules_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT
 );
 
+CREATE TABLE buildagentpools (
+    id uuid NOT NULL,
+    archivedat timestamp with time zone,
+    cleanuptimeoutseconds integer NOT NULL DEFAULT 600,
+    createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    description text,
+    enabled boolean NOT NULL DEFAULT TRUE,
+    failureretentionminutes integer NOT NULL DEFAULT 0,
+    heartbeattimeoutseconds integer NOT NULL DEFAULT 90,
+    lastvalidatedat timestamp with time zone,
+    lastvalidationmessage text,
+    lastvalidationstatus text NOT NULL DEFAULT 'NotTested',
+    maxactivebuilders integer NOT NULL DEFAULT 1,
+    maximuminstancelifetimeseconds integer NOT NULL DEFAULT 7200,
+    name text NOT NULL,
+    normalizedname text NOT NULL,
+    provider text NOT NULL,
+    providerspec jsonb NOT NULL,
+    provisioningtimeoutseconds integer NOT NULL DEFAULT 600,
+    queuetimeoutseconds integer NOT NULL DEFAULT 3600,
+    registrationtimeoutseconds integer NOT NULL DEFAULT 300,
+    rowversion bigint NOT NULL DEFAULT 0,
+    CONSTRAINT pk_buildagentpools PRIMARY KEY (id),
+    CONSTRAINT fk_buildagentpools_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT
+);
+
 CREATE TABLE gitaccounts (
     id uuid NOT NULL,
     authtype text NOT NULL,
@@ -659,8 +686,10 @@ CREATE TABLE buildprojects (
     id uuid NOT NULL,
     archivedat timestamp with time zone,
     branch text NOT NULL,
+    buildagentpoolid uuid,
     buildargs jsonb NOT NULL DEFAULT ('[]'::jsonb),
     buildsecrets jsonb NOT NULL DEFAULT ('[]'::jsonb),
+    builderkind text NOT NULL DEFAULT 'Platform',
     contextpath text NOT NULL DEFAULT '.',
     controlstartedat bigint,
     controlstate text NOT NULL DEFAULT 'Idle',
@@ -674,7 +703,7 @@ CREATE TABLE buildprojects (
     imagerepository text NOT NULL,
     name text NOT NULL,
     normalizedname text NOT NULL,
-    platformid uuid NOT NULL,
+    platformid uuid,
     registryid uuid NOT NULL,
     retentionruncount integer NOT NULL DEFAULT 20,
     rowversion bigint NOT NULL DEFAULT 0,
@@ -684,7 +713,9 @@ CREATE TABLE buildprojects (
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     webhook jsonb,
     CONSTRAINT pk_buildprojects PRIMARY KEY (id),
+    CONSTRAINT "CK_BuildProjects_Builder_Target" CHECK (("builderkind" = 'Platform' AND "platformid" IS NOT NULL AND "buildagentpoolid" IS NULL) OR ("builderkind" = 'BuildAgentPool' AND "platformid" IS NULL AND "buildagentpoolid" IS NOT NULL)),
     CONSTRAINT fk_buildprojects_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_buildprojects_buildagentpools_buildagentpoolid FOREIGN KEY (buildagentpoolid) REFERENCES buildagentpools (id) ON DELETE RESTRICT,
     CONSTRAINT fk_buildprojects_gitrepositories_gitrepositoryid FOREIGN KEY (gitrepositoryid) REFERENCES gitrepositories (id) ON DELETE RESTRICT,
     CONSTRAINT fk_buildprojects_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE RESTRICT,
     CONSTRAINT fk_buildprojects_registries_registryid FOREIGN KEY (registryid) REFERENCES registries (id) ON DELETE RESTRICT
@@ -1072,6 +1103,8 @@ VALUES ('019d0000-0001-7000-8001-000000000022', 300, TIMESTAMPTZ '2026-01-01T00:
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('030c8f34-4447-d6b0-bc28-62b9626999c7', 1, 1, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('077b64cb-9dc8-4ac2-be0a-81550b977042', 1, 19, '30000000-0000-0000-0000-000000000003', 0);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('07b143ad-6b02-c7ff-3d7d-48af137b2bbc', 2, 0, '30000000-0000-0000-0000-000000000002', 27);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('102eae03-0582-a53c-2287-ce55c2f222a8', 2, 16, '30000000-0000-0000-0000-000000000002', 128);
@@ -1095,6 +1128,8 @@ INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificperm
 VALUES ('44debca1-5d97-b691-196c-8e421143e307', 2, 8, '30000000-0000-0000-0000-000000000002', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('51ac9abd-9f17-8530-e1a4-8fe69e44ac1d', 4, 1, '30000000-0000-0000-0000-000000000001', 55);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('611400ed-eed0-2a88-49d3-02354e25f43c', 2, 19, '30000000-0000-0000-0000-000000000002', 4);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('6128787e-901d-f15b-c094-054be267a6c8', 1, 16, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -1173,6 +1208,8 @@ INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificperm
 VALUES ('f1633935-71e7-32f3-4264-d7120dcf22f1', 1, 13, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('f2552404-ef60-5f22-0eaf-fd7db21f2579', 2, 17, '30000000-0000-0000-0000-000000000002', 768);
+INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
+VALUES ('f5794228-f6b6-84fa-4fa3-7324decd3402', 4, 19, '30000000-0000-0000-0000-000000000001', 4);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
 VALUES ('fb710f21-c146-e381-00f0-820f58ecb69a', 1, 9, '30000000-0000-0000-0000-000000000003', 0);
 INSERT INTO permissions (id, permissionlevel, resourcetype, roleid, specificpermissions)
@@ -1329,7 +1366,21 @@ CREATE INDEX ix_backupruns_triggeredbyactorid ON backupruns (triggeredbyactorid)
 
 CREATE INDEX ix_backupsourceleases_expiresat ON backupsourceleases (expiresat);
 
+CREATE INDEX ix_buildagentpools_archivedat ON buildagentpools (archivedat);
+
+CREATE INDEX ix_buildagentpools_createdbyactorid ON buildagentpools (createdbyactorid);
+
+CREATE INDEX ix_buildagentpools_enabled ON buildagentpools (enabled);
+
+CREATE UNIQUE INDEX ix_buildagentpools_normalizedname ON buildagentpools (normalizedname);
+
+CREATE INDEX ix_buildagentpools_provider ON buildagentpools (provider);
+
 CREATE INDEX ix_buildprojects_archivedat ON buildprojects (archivedat);
+
+CREATE INDEX ix_buildprojects_buildagentpoolid ON buildprojects (buildagentpoolid);
+
+CREATE INDEX ix_buildprojects_builderkind ON buildprojects (builderkind);
 
 CREATE INDEX ix_buildprojects_controlstate_controlstartedat ON buildprojects (controlstate, controlstartedat);
 
@@ -1524,7 +1575,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260720204401_migration0001', '10.0.10');
+VALUES ('20260721115316_migration0001', '10.0.10');
 
 COMMIT;
 

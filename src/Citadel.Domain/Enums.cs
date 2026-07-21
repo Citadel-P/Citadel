@@ -197,6 +197,56 @@ public enum PlatformConnectorType
     EdgeAgent
 }
 
+public enum BuildProjectBuilderKind
+{
+    Platform,
+    BuildAgentPool
+}
+
+public enum BuildAgentPoolProvider
+{
+    AwsEc2,
+    SelfManagedVm
+}
+
+public enum CpuArchitecture
+{
+    Amd64,
+    Arm64
+}
+
+public enum BuildAgentPoolValidationStatus
+{
+    NotTested,
+    Ready,
+    Invalid,
+    Degraded
+}
+
+public enum BuildAgentLeaseStatus
+{
+    Pending,
+    Provisioning,
+    WaitingForWorker,
+    Registered,
+    Assigned,
+    Running,
+    Completed,
+    Failed,
+    Cancelled,
+    TimedOut,
+    Interrupted
+}
+
+public enum BuildAgentLeaseCleanupStatus
+{
+    NotRequired,
+    Pending,
+    Running,
+    Succeeded,
+    Failed
+}
+
 public enum LicenseLimit
 {
     CustomRoles,
@@ -589,6 +639,7 @@ public enum ActivityResourceType
     User,
     License,
     Build,
+    BuildAgentPool,
     Volume
 }
 
@@ -720,6 +771,11 @@ public enum ActivityEventType
     BuildRunTimedOut,
     BuildRunCancelled,
     BuildWebhookReceived,
+    BuildAgentPoolCreated,
+    BuildAgentPoolUpdated,
+    BuildAgentPoolRenamed,
+    BuildAgentPoolDeleted,
+    BuildAgentPoolTested,
     #endregion
 }
 
@@ -916,6 +972,7 @@ public enum LookupResourceType
     License,
     BackupRepository,
     BackupPolicy,
+    BuildAgentPool,
 }
 
 public enum StackApplyEventType
@@ -954,7 +1011,8 @@ public enum TaggableResourceType
     Registry,
     AutomationAction,
     BackupPolicy,
-    Build
+    Build,
+    BuildAgentPool
 }
 
 public enum SecretDeliveryMode

@@ -55,6 +55,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .AutomationActionConfiguration()
             .ActionRunConfiguration()
             .BackupConfiguration()
+            .BuildAgentPoolConfiguration()
             .BuildConfiguration()
             .ActivityEventConfiguration()
             .AlertRuleConfiguration()
@@ -2020,7 +2021,9 @@ internal static class Configuration
         project.Property<string>("Target").HasColumnType(Text).HasMaxLength(128).IsRequired(false);
         project.Property<string>("BuildArgs").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
         project.Property<string>("BuildSecrets").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[]'::jsonb");
-        project.Property<Guid>("PlatformId").IsRequired();
+        project.Property<string>("BuilderKind").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue("Platform");
+        project.Property<Guid?>("PlatformId").IsRequired(false);
+        project.Property<Guid?>("BuildAgentPoolId").IsRequired(false);
         project.Property<Guid>("RegistryId").IsRequired();
         project.Property<string>("ImageRepository").HasColumnType(Text).HasMaxLength(512).IsRequired();
         project.Property<string>("TagTemplates").HasColumnType("jsonb").IsRequired().HasDefaultValueSql("'[\"{branch}-{shortSha}\"]'::jsonb");
@@ -2037,14 +2040,20 @@ internal static class Configuration
 
         project.HasOne("GitRepository").WithMany().HasForeignKey("GitRepositoryId").OnDelete(DeleteBehavior.Restrict);
         project.HasOne("Platform").WithMany().HasForeignKey("PlatformId").OnDelete(DeleteBehavior.Restrict);
+        project.HasOne("BuildAgentPool").WithMany().HasForeignKey("BuildAgentPoolId").OnDelete(DeleteBehavior.Restrict);
         project.HasOne("Registry").WithMany().HasForeignKey("RegistryId").OnDelete(DeleteBehavior.Restrict);
 
         project.HasIndex("NormalizedName").IsUnique().HasDatabaseName($"IX_{projectTable}_NormalizedName");
         project.HasIndex("GitRepositoryId").HasDatabaseName($"IX_{projectTable}_GitRepositoryId");
+        project.HasIndex("BuilderKind").HasDatabaseName($"IX_{projectTable}_BuilderKind");
         project.HasIndex("PlatformId").HasDatabaseName($"IX_{projectTable}_PlatformId");
+        project.HasIndex("BuildAgentPoolId").HasDatabaseName($"IX_{projectTable}_BuildAgentPoolId");
         project.HasIndex("RegistryId").HasDatabaseName($"IX_{projectTable}_RegistryId");
         project.HasIndex("ArchivedAt").HasDatabaseName($"IX_{projectTable}_ArchivedAt");
         project.HasIndex("ControlState", "ControlStartedAt").HasDatabaseName($"IX_{projectTable}_ControlState_ControlStartedAt");
+        project.ToTable(t => t.HasCheckConstraint(
+            $"CK_{projectTable}_Builder_Target",
+            "(\"builderkind\" = 'Platform' AND \"platformid\" IS NOT NULL AND \"buildagentpoolid\" IS NULL) OR (\"builderkind\" = 'BuildAgentPool' AND \"platformid\" IS NULL AND \"buildagentpoolid\" IS NOT NULL)"));
 
         var runTable = "BuildRuns";
         var run = builder.Entity("BuildRun");
@@ -2100,6 +2109,42 @@ internal static class Configuration
         runLog.Property<string>("Message").HasColumnType(Text).IsRequired();
         runLog.HasOne("BuildRun").WithMany().HasForeignKey("BuildRunId").OnDelete(DeleteBehavior.Cascade);
         runLog.HasIndex("BuildRunId", "CreatedAt").HasDatabaseName($"IX_{runLogTable}_Run_CreatedAt");
+
+        return builder;
+    }
+
+    public static ModelBuilder BuildAgentPoolConfiguration(this ModelBuilder builder)
+    {
+        var table = "BuildAgentPools";
+        var pool = builder.Entity("BuildAgentPool");
+        pool.ToTable(table);
+        pool.Property<Guid>("Id").IsRequired();
+        pool.HasKey("Id");
+        pool.Property<string>("Name").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        pool.Property<string>("NormalizedName").HasColumnType(Text).HasMaxLength(128).IsRequired();
+        pool.Property<string>("Description").HasColumnType(Text).HasMaxLength(600).IsRequired(false);
+        pool.Property<bool>("Enabled").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
+        pool.Property<string>("Provider").HasColumnType(Text).HasMaxLength(64).IsRequired();
+        pool.Property<string>("ProviderSpec").HasColumnType("jsonb").IsRequired();
+        pool.Property<int>("MaxActiveBuilders").HasColumnType(Integer).IsRequired().HasDefaultValue(1);
+        pool.Property<int>("QueueTimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(3600);
+        pool.Property<int>("ProvisioningTimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(600);
+        pool.Property<int>("RegistrationTimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(300);
+        pool.Property<int>("HeartbeatTimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(90);
+        pool.Property<int>("CleanupTimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(600);
+        pool.Property<int>("MaximumInstanceLifetimeSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(7200);
+        pool.Property<int>("FailureRetentionMinutes").HasColumnType(Integer).IsRequired().HasDefaultValue(0);
+        pool.Property<string>("LastValidationStatus").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue("NotTested");
+        pool.Property<string>("LastValidationMessage").HasColumnType(Text).HasMaxLength(1200).IsRequired(false);
+        pool.Property<DateTime?>("LastValidatedAt").HasColumnType(Timestamp).IsRequired(false);
+        pool.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
+        pool.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
+        pool.AddAuditedMemebers();
+
+        pool.HasIndex("NormalizedName").IsUnique().HasDatabaseName($"IX_{table}_NormalizedName");
+        pool.HasIndex("Provider").HasDatabaseName($"IX_{table}_Provider");
+        pool.HasIndex("Enabled").HasDatabaseName($"IX_{table}_Enabled");
+        pool.HasIndex("ArchivedAt").HasDatabaseName($"IX_{table}_ArchivedAt");
 
         return builder;
     }

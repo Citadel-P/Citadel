@@ -222,6 +222,44 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "buildagentpools",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    archivedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    cleanuptimeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 600),
+                    createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
+                    enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    failureretentionminutes = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    heartbeattimeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 90),
+                    lastvalidatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastvalidationmessage = table.Column<string>(type: "text", maxLength: 1200, nullable: true),
+                    lastvalidationstatus = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "NotTested"),
+                    maxactivebuilders = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
+                    maximuminstancelifetimeseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 7200),
+                    name = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    normalizedname = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    provider = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    providerspec = table.Column<string>(type: "jsonb", nullable: false),
+                    provisioningtimeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 600),
+                    queuetimeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 3600),
+                    registrationtimeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 300),
+                    rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_buildagentpools", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_buildagentpools_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "gitaccounts",
                 columns: table => new
                 {
@@ -1259,8 +1297,10 @@ namespace Infrastructure.Migrations.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     archivedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     branch = table.Column<string>(type: "text", maxLength: 256, nullable: false),
+                    buildagentpoolid = table.Column<Guid>(type: "uuid", nullable: true),
                     buildargs = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
                     buildsecrets = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    builderkind = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Platform"),
                     contextpath = table.Column<string>(type: "text", maxLength: 512, nullable: false, defaultValue: "."),
                     controlstartedat = table.Column<long>(type: "bigint", nullable: true),
                     controlstate = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Idle"),
@@ -1274,7 +1314,7 @@ namespace Infrastructure.Migrations.Migrations
                     imagerepository = table.Column<string>(type: "text", maxLength: 512, nullable: false),
                     name = table.Column<string>(type: "text", maxLength: 128, nullable: false),
                     normalizedname = table.Column<string>(type: "text", maxLength: 128, nullable: false),
-                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: true),
                     registryid = table.Column<Guid>(type: "uuid", nullable: false),
                     retentionruncount = table.Column<int>(type: "integer", nullable: false, defaultValue: 20),
                     rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
@@ -1287,10 +1327,17 @@ namespace Infrastructure.Migrations.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_buildprojects", x => x.id);
+                    table.CheckConstraint("CK_BuildProjects_Builder_Target", "(\"builderkind\" = 'Platform' AND \"platformid\" IS NOT NULL AND \"buildagentpoolid\" IS NULL) OR (\"builderkind\" = 'BuildAgentPool' AND \"platformid\" IS NULL AND \"buildagentpoolid\" IS NOT NULL)");
                     table.ForeignKey(
                         name: "fk_buildprojects_actors_createdbyactorid",
                         column: x => x.createdbyactorid,
                         principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_buildprojects_buildagentpools_buildagentpoolid",
+                        column: x => x.buildagentpoolid,
+                        principalTable: "buildagentpools",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
@@ -1901,6 +1948,7 @@ namespace Infrastructure.Migrations.Migrations
                 values: new object[,]
                 {
                     { new Guid("030c8f34-4447-d6b0-bc28-62b9626999c7"), 1, 1, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
+                    { new Guid("077b64cb-9dc8-4ac2-be0a-81550b977042"), 1, 19, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("07b143ad-6b02-c7ff-3d7d-48af137b2bbc"), 2, 0, new Guid("30000000-0000-0000-0000-000000000002"), 27 },
                     { new Guid("102eae03-0582-a53c-2287-ce55c2f222a8"), 2, 16, new Guid("30000000-0000-0000-0000-000000000002"), 128 },
                     { new Guid("197f429f-cbe9-0e6c-239b-2f24196ec817"), 2, 2, new Guid("30000000-0000-0000-0000-000000000002"), 103 },
@@ -1913,6 +1961,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("440deb9d-ace8-5e15-ef80-3a42f11a0c42"), 4, 10, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("44debca1-5d97-b691-196c-8e421143e307"), 2, 8, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("51ac9abd-9f17-8530-e1a4-8fe69e44ac1d"), 4, 1, new Guid("30000000-0000-0000-0000-000000000001"), 55 },
+                    { new Guid("611400ed-eed0-2a88-49d3-02354e25f43c"), 2, 19, new Guid("30000000-0000-0000-0000-000000000002"), 4 },
                     { new Guid("6128787e-901d-f15b-c094-054be267a6c8"), 1, 16, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("645b4c54-7937-2180-7186-be24ac6bf330"), 4, 5, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("656ccf45-65a9-33b3-de65-d18d5988151a"), 4, 12, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
@@ -1952,6 +2001,7 @@ namespace Infrastructure.Migrations.Migrations
                     { new Guid("ee9254c3-9b59-15a0-aa85-898f5974a603"), 2, 6, new Guid("30000000-0000-0000-0000-000000000002"), 0 },
                     { new Guid("f1633935-71e7-32f3-4264-d7120dcf22f1"), 1, 13, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("f2552404-ef60-5f22-0eaf-fd7db21f2579"), 2, 17, new Guid("30000000-0000-0000-0000-000000000002"), 768 },
+                    { new Guid("f5794228-f6b6-84fa-4fa3-7324decd3402"), 4, 19, new Guid("30000000-0000-0000-0000-000000000001"), 4 },
                     { new Guid("fb710f21-c146-e381-00f0-820f58ecb69a"), 1, 9, new Guid("30000000-0000-0000-0000-000000000003"), 0 },
                     { new Guid("fbb8ef70-2ec3-134f-0c18-1533173d5849"), 4, 9, new Guid("30000000-0000-0000-0000-000000000001"), 0 },
                     { new Guid("fd0c028a-8225-0f65-8a7b-cb058f29c740"), 4, 2, new Guid("30000000-0000-0000-0000-000000000001"), 103 }
@@ -2314,9 +2364,45 @@ namespace Infrastructure.Migrations.Migrations
                 column: "expiresat");
 
             migrationBuilder.CreateIndex(
+                name: "ix_buildagentpools_archivedat",
+                table: "buildagentpools",
+                column: "archivedat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildagentpools_createdbyactorid",
+                table: "buildagentpools",
+                column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildagentpools_enabled",
+                table: "buildagentpools",
+                column: "enabled");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildagentpools_normalizedname",
+                table: "buildagentpools",
+                column: "normalizedname",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildagentpools_provider",
+                table: "buildagentpools",
+                column: "provider");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_buildprojects_archivedat",
                 table: "buildprojects",
                 column: "archivedat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_buildagentpoolid",
+                table: "buildprojects",
+                column: "buildagentpoolid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_builderkind",
+                table: "buildprojects",
+                column: "builderkind");
 
             migrationBuilder.CreateIndex(
                 name: "ix_buildprojects_controlstate_controlstartedat",
@@ -2992,6 +3078,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "backuppolicies");
+
+            migrationBuilder.DropTable(
+                name: "buildagentpools");
 
             migrationBuilder.DropTable(
                 name: "gitrepositories");

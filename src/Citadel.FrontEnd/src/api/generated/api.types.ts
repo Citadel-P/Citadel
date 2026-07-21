@@ -185,6 +185,7 @@ export enum ResourceType {
   BackupPolicy = "BackupPolicy",
   Volume = "Volume",
   Build = "Build",
+  BuildAgentPool = "BuildAgentPool",
 }
 
 export enum ResourceControlState {
@@ -279,6 +280,7 @@ export enum LookupResourceType {
   License = "License",
   BackupRepository = "BackupRepository",
   BackupPolicy = "BackupPolicy",
+  BuildAgentPool = "BuildAgentPool",
 }
 
 export enum LoginNextStep {
@@ -363,6 +365,11 @@ export enum DayOfWeek {
   Saturday = "Saturday",
 }
 
+export enum CpuArchitecture {
+  Amd64 = "Amd64",
+  Arm64 = "Arm64",
+}
+
 export enum ContainerStateStatus {
   Unknown = "Unknown",
   Created = "Created",
@@ -398,6 +405,23 @@ export enum BuildRunStatus {
   TimedOut = "TimedOut",
   Cancelled = "Cancelled",
   Interrupted = "Interrupted",
+}
+
+export enum BuildProjectBuilderKind {
+  Platform = "Platform",
+  BuildAgentPool = "BuildAgentPool",
+}
+
+export enum BuildAgentPoolValidationStatus {
+  NotTested = "NotTested",
+  Ready = "Ready",
+  Invalid = "Invalid",
+  Degraded = "Degraded",
+}
+
+export enum BuildAgentPoolProvider {
+  AwsEc2 = "AwsEc2",
+  SelfManagedVm = "SelfManagedVm",
 }
 
 export enum BackupSourceType {
@@ -606,6 +630,7 @@ export enum ActivityResourceType {
   User = "User",
   License = "License",
   Build = "Build",
+  BuildAgentPool = "BuildAgentPool",
   Volume = "Volume",
 }
 
@@ -702,6 +727,11 @@ export enum ActivityEventType {
   BuildRunTimedOut = "BuildRunTimedOut",
   BuildRunCancelled = "BuildRunCancelled",
   BuildWebhookReceived = "BuildWebhookReceived",
+  BuildAgentPoolCreated = "BuildAgentPoolCreated",
+  BuildAgentPoolUpdated = "BuildAgentPoolUpdated",
+  BuildAgentPoolRenamed = "BuildAgentPoolRenamed",
+  BuildAgentPoolDeleted = "BuildAgentPoolDeleted",
+  BuildAgentPoolTested = "BuildAgentPoolTested",
 }
 
 export enum ActionRunTrigger {
@@ -836,6 +866,18 @@ export type DeploymentImageInfo = BaseDeploymentImageInfo &
         DeploymentImageInfoExternalImage
       >
     | BaseDeploymentImageInfoTypeMapping<"Build", DeploymentImageInfoBuildImage>
+  );
+
+export type BuildAgentPoolProviderSpec = BaseBuildAgentPoolProviderSpec &
+  (
+    | BaseBuildAgentPoolProviderSpecTypeMapping<
+        "AwsEc2",
+        BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec
+      >
+    | BaseBuildAgentPoolProviderSpecTypeMapping<
+        "SelfManagedVm",
+        BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec
+      >
   );
 
 export type BackupSourceSpec = BaseBackupSourceSpec &
@@ -1364,6 +1406,26 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "BuildWebhookReceived",
         ActivityEventInfoBuildWebhookReceived
       >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildAgentPoolCreated",
+        ActivityEventInfoBuildAgentPoolCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildAgentPoolUpdated",
+        ActivityEventInfoBuildAgentPoolUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildAgentPoolRenamed",
+        ActivityEventInfoBuildAgentPoolRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildAgentPoolDeleted",
+        ActivityEventInfoBuildAgentPoolDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BuildAgentPoolTested",
+        ActivityEventInfoBuildAgentPoolTested
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -1499,6 +1561,35 @@ export interface ActivityEventInfoAutomationActionUpdated {
   $type?: "ActionUpdated";
   oldAction: AutomationActionSnapshot;
   newAction: AutomationActionSnapshot;
+}
+
+export interface ActivityEventInfoBuildAgentPoolCreated {
+  $type?: "BuildAgentPoolCreated";
+  pool: BuildAgentPoolSnapshot;
+}
+
+export interface ActivityEventInfoBuildAgentPoolDeleted {
+  $type?: "BuildAgentPoolDeleted";
+  pool: BuildAgentPoolSnapshot;
+}
+
+export interface ActivityEventInfoBuildAgentPoolRenamed {
+  $type?: "BuildAgentPoolRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoBuildAgentPoolTested {
+  $type?: "BuildAgentPoolTested";
+  pool: BuildAgentPoolSnapshot;
+  status: BuildAgentPoolValidationStatus;
+  message: null | string;
+}
+
+export interface ActivityEventInfoBuildAgentPoolUpdated {
+  $type?: "BuildAgentPoolUpdated";
+  oldPool: BuildAgentPoolSnapshot;
+  newPool: BuildAgentPoolSnapshot;
 }
 
 export interface ActivityEventInfoBuildCreated {
@@ -3174,6 +3265,224 @@ export interface BindOptions {
   readOnlyForceRecursive: null | boolean;
 }
 
+export interface BuildAgentPoolInput {
+  name: string;
+  description: null | string;
+  enabled: boolean;
+  providerSpec: BuildAgentPoolProviderSpec;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maxActiveBuilders: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  queueTimeoutSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  provisioningTimeoutSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  registrationTimeoutSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  heartbeatTimeoutSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cleanupTimeoutSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maximumInstanceLifetimeSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  failureRetentionMinutes: null | number | string;
+  tagIds: null | string[];
+}
+
+export interface BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec {
+  $type?: "AwsEc2";
+  region: string;
+  instanceType: string;
+  architecture: CpuArchitecture;
+  amiId: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  rootVolumeSizeGb: number | string;
+  subnetId: string;
+  securityGroupIds: string[];
+  instanceProfileName: null | string;
+  assignPublicIp: boolean;
+  /** @format uuid */
+  awsCredentialSecretId: null | string;
+  assumeRoleArn: null | string;
+  keyPairName: null | string;
+  tags?: null | Record<string, string>;
+  provider?: BuildAgentPoolProvider;
+}
+
+export interface BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec {
+  $type?: "SelfManagedVm";
+  endpoint: string;
+  architecture: CpuArchitecture;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maxWorkers: number | string;
+  /** @format uuid */
+  registrationSecretId?: null | string;
+  labels?: null | string[];
+  provider?: BuildAgentPoolProvider;
+}
+
+export interface BuildAgentPoolSnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  enabled: boolean;
+  provider: BuildAgentPoolProvider;
+  providerSpec: BuildAgentPoolProviderSpec;
+  architecture: CpuArchitecture;
+  region: string;
+  instanceType: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maxActiveBuilders: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  queueTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  provisioningTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  registrationTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  heartbeatTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cleanupTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maximumInstanceLifetimeSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  failureRetentionMinutes: number | string;
+  lastValidationStatus: BuildAgentPoolValidationStatus;
+  lastValidationMessage: null | string;
+  /** @format date-time */
+  lastValidatedAt: any;
+}
+
+export interface BuildAgentPoolView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  normalizedName: string;
+  description: null | string;
+  enabled: boolean;
+  provider: BuildAgentPoolProvider;
+  providerSpec: BuildAgentPoolProviderSpec;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maxActiveBuilders: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  queueTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  provisioningTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  registrationTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  heartbeatTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cleanupTimeoutSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maximumInstanceLifetimeSeconds: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  failureRetentionMinutes: number | string;
+  lastValidationStatus: BuildAgentPoolValidationStatus;
+  lastValidationMessage: null | string;
+  /** @format date-time */
+  lastValidatedAt: any;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+  /** @format date-time */
+  archivedAt: any;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  rowVersion: number | string;
+  tags: TagSummaryView[];
+  capabilities?: null | ResourceCapabilities;
+}
+
+export interface BuildAgentPoolsView {
+  pools: BuildAgentPoolView[];
+  capabilities: ResourceCapabilities;
+}
+
 export interface BuildArgSpec {
   name: string;
   value?: null | string;
@@ -3208,7 +3517,7 @@ export interface BuildProjectInput {
   buildArgs: null | BuildArgSpec[];
   buildSecrets: null | BuildSecretSpec[];
   /** @format uuid */
-  platformId: string;
+  platformId: null | string;
   /** @format uuid */
   registryId: string;
   imageRepository: string;
@@ -3224,7 +3533,10 @@ export interface BuildProjectInput {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   retentionRunCount: null | number | string;
-  tagIds: null | string[];
+  tagIds?: null | string[];
+  builderKind?: BuildProjectBuilderKind;
+  /** @format uuid */
+  buildAgentPoolId?: null | string;
 }
 
 export interface BuildProjectSnapshot {
@@ -3239,8 +3551,11 @@ export interface BuildProjectSnapshot {
   contextPath: string;
   dockerfilePath: string;
   target: null | string;
+  builderKind: BuildProjectBuilderKind;
   /** @format uuid */
-  platformId: string;
+  platformId: null | string;
+  /** @format uuid */
+  buildAgentPoolId: null | string;
   /** @format uuid */
   registryId: string;
   imageRepository: string;
@@ -3274,8 +3589,11 @@ export interface BuildProjectView {
   target: null | string;
   buildArgs: BuildArgSpec[];
   buildSecrets: BuildSecretSpec[];
+  builderKind: BuildProjectBuilderKind;
   /** @format uuid */
-  platformId: string;
+  platformId: null | string;
+  /** @format uuid */
+  buildAgentPoolId: null | string;
   /** @format uuid */
   registryId: string;
   imageRepository: string;
@@ -6502,6 +6820,52 @@ export interface UpdateBackupRepositoryInput {
   spec?: null | BackupRepositorySpec;
 }
 
+export interface UpdateBuildAgentPoolInput {
+  description?: null | string;
+  enabled?: null | boolean;
+  providerSpec?: null | BuildAgentPoolProviderSpec;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maxActiveBuilders?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  queueTimeoutSeconds?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  provisioningTimeoutSeconds?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  registrationTimeoutSeconds?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  heartbeatTimeoutSeconds?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cleanupTimeoutSeconds?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maximumInstanceLifetimeSeconds?: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  failureRetentionMinutes?: null | number | string;
+}
+
 export interface UpdateBuildProjectInput {
   description?: null | string;
   enabled?: null | boolean;
@@ -6513,8 +6877,11 @@ export interface UpdateBuildProjectInput {
   target?: null | string;
   buildArgs?: null | BuildArgSpec[];
   buildSecrets?: null | BuildSecretSpec[];
+  builderKind?: any;
   /** @format uuid */
   platformId?: null | string;
+  /** @format uuid */
+  buildAgentPoolId?: null | string;
   /** @format uuid */
   registryId?: null | string;
   imageRepository?: null | string;
@@ -6806,6 +7173,12 @@ type BaseGitAuthConfigurationTypeMapping<Key, Type> = {
 type BaseDeploymentImageInfo = object;
 
 type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseBuildAgentPoolProviderSpec = object;
+
+type BaseBuildAgentPoolProviderSpecTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -14919,6 +15292,277 @@ export class Api<
           ...params,
         },
       ),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name ListBuildAgentPools
+     * @summary List build pools
+     * @request GET:/api/v1/buildAgentPools
+     * @secure
+     * @response `200` `BuildAgentPoolsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listBuildAgentPools: (
+      query?: {
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<BuildAgentPoolsView, ProblemDetails>({
+        path: `/api/v1/buildAgentPools`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name CreateBuildAgentPool
+     * @summary Create build pool
+     * @request POST:/api/v1/buildAgentPools
+     * @secure
+     * @response `200` `BuildAgentPoolView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createBuildAgentPool: (
+      data: BuildAgentPoolInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BuildAgentPoolView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildAgentPools`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name GetBuildAgentPool
+     * @summary Get build pool
+     * @request GET:/api/v1/buildAgentPools/{id}
+     * @secure
+     * @response `200` `BuildAgentPoolView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBuildAgentPool: (id: string, params: RequestParams = {}) =>
+      this.request<BuildAgentPoolView, ProblemDetails>({
+        path: `/api/v1/buildAgentPools/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name UpdateBuildAgentPool
+     * @summary Update build pool
+     * @request PATCH:/api/v1/buildAgentPools/{id}
+     * @secure
+     * @response `200` `BuildAgentPoolView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateBuildAgentPool: (
+      id: string,
+      data: UpdateBuildAgentPoolInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BuildAgentPoolView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildAgentPools/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name ArchiveBuildAgentPool
+     * @summary Archive build pool
+     * @request DELETE:/api/v1/buildAgentPools/{id}
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    archiveBuildAgentPool: (id: string, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/buildAgentPools/${id}`,
+        method: "DELETE",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name GetBuildAgentPoolTags
+     * @summary Get build pool tags
+     * @request GET:/api/v1/buildAgentPools/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBuildAgentPoolTags: (id: string, params: RequestParams = {}) =>
+      this.request<
+        ResourceTagsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildAgentPools/${id}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name ReplaceBuildAgentPoolTags
+     * @summary Replace build pool tags
+     * @request PUT:/api/v1/buildAgentPools/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    replaceBuildAgentPoolTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceTagsView, ProblemDetails>({
+        path: `/api/v1/buildAgentPools/${id}/tags`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name RenameBuildAgentPool
+     * @summary Rename build pool
+     * @request POST:/api/v1/buildAgentPools/rename
+     * @secure
+     * @response `200` `BuildAgentPoolView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameBuildAgentPool: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<
+        BuildAgentPoolView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildAgentPools/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name UpdateBuildAgentPoolMetadata
+     * @summary Update build pool metadata
+     * @request PATCH:/api/v1/buildAgentPools/{id}/_metadata
+     * @secure
+     * @response `200` `BuildAgentPoolView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateBuildAgentPoolMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        BuildAgentPoolView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildAgentPools/${id}/_metadata`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
 
     /**
      * No description

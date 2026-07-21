@@ -152,6 +152,7 @@ internal static class WebApiModule
                 DerivedTypesMapping.PlatformDescriptorMappings,
                 DerivedTypesMapping.BackupRepositorySpecMappings,
                 DerivedTypesMapping.BackupSourceSpecMappings,
+                DerivedTypesMapping.BuildAgentPoolProviderSpecMappings,
                 DerivedTypesMapping.ActivityEventInfoMappings
             ],
         }

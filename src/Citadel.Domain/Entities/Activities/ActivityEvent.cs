@@ -179,6 +179,13 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.BuildWebhookReceived
                 => ActivityResourceType.Build,
 
+            ActivityEventType.BuildAgentPoolCreated
+            or ActivityEventType.BuildAgentPoolUpdated
+            or ActivityEventType.BuildAgentPoolRenamed
+            or ActivityEventType.BuildAgentPoolDeleted
+            or ActivityEventType.BuildAgentPoolTested
+                => ActivityResourceType.BuildAgentPool,
+
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
         };
@@ -334,6 +341,12 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.BuildRunTimedOut, BuildRunTimedOut) => true,
             (ActivityEventType.BuildRunCancelled, BuildRunCancelled) => true,
             (ActivityEventType.BuildWebhookReceived, BuildWebhookReceived) => true,
+
+            (ActivityEventType.BuildAgentPoolCreated, BuildAgentPoolCreated) => true,
+            (ActivityEventType.BuildAgentPoolUpdated, BuildAgentPoolUpdated) => true,
+            (ActivityEventType.BuildAgentPoolRenamed, BuildAgentPoolRenamed) => true,
+            (ActivityEventType.BuildAgentPoolDeleted, BuildAgentPoolDeleted) => true,
+            (ActivityEventType.BuildAgentPoolTested, BuildAgentPoolTested) => true,
 
             _ => false
         };

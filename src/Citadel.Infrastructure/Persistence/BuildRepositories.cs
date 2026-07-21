@@ -26,12 +26,12 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
             inserted_project AS (
                 INSERT INTO BuildProjects (
                     Id, Name, NormalizedName, Description, Enabled, GitRepositoryId, Branch,
-                    ContextPath, DockerfilePath, Target, BuildArgs, BuildSecrets, PlatformId,
+                    ContextPath, DockerfilePath, Target, BuildArgs, BuildSecrets, BuilderKind, PlatformId, BuildAgentPoolId,
                     RegistryId, ImageRepository, TagTemplates, Webhook, TimeoutSeconds, RetentionRunCount,
                     CurrentRunId, ControlState, ControlStartedAt, CreatedByActorId, CreatedAt, UpdatedAt, ArchivedAt, RowVersion)
                 SELECT
                     @Id, @Name, @NormalizedName, @Description, @Enabled, @GitRepositoryId, @Branch,
-                    @ContextPath, @DockerfilePath, @Target, @BuildArgs::jsonb, @BuildSecrets::jsonb, @PlatformId,
+                    @ContextPath, @DockerfilePath, @Target, @BuildArgs::jsonb, @BuildSecrets::jsonb, @BuilderKind, @PlatformId, @BuildAgentPoolId,
                     @RegistryId, @ImageRepository, @TagTemplates::jsonb, @Webhook::jsonb, @TimeoutSeconds, @RetentionRunCount,
                     @CurrentRunId, @ControlState, @ControlStartedAt, @CreatedByActorId, @CreatedAt, @UpdatedAt, @ArchivedAt, @RowVersion
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
@@ -57,7 +57,9 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
                 project.Target,
                 BuildArgs = BuildMappers.SerializeBuildArgs(project.BuildArgs),
                 BuildSecrets = BuildMappers.SerializeBuildSecrets(project.BuildSecrets),
-                project.PlatformId,
+                BuilderKind = EnumFormatter<BuildProjectBuilderKind>.GetValue(project.BuilderKind),
+                PlatformId = project.BuilderKind == BuildProjectBuilderKind.Platform ? project.PlatformId : (Guid?)null,
+                project.BuildAgentPoolId,
                 project.RegistryId,
                 project.ImageRepository,
                 TagTemplates = BuildMappers.SerializeStringList(project.TagTemplates),
@@ -100,7 +102,9 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
                 Target = @Target,
                 BuildArgs = @BuildArgs::jsonb,
                 BuildSecrets = @BuildSecrets::jsonb,
+                BuilderKind = @BuilderKind,
                 PlatformId = @PlatformId,
+                BuildAgentPoolId = @BuildAgentPoolId,
                 RegistryId = @RegistryId,
                 ImageRepository = @ImageRepository,
                 TagTemplates = @TagTemplates::jsonb,
@@ -430,7 +434,9 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
             project.Target,
             BuildMappers.SerializeBuildArgs(project.BuildArgs),
             BuildMappers.SerializeBuildSecrets(project.BuildSecrets),
-            project.PlatformId,
+            EnumFormatter<BuildProjectBuilderKind>.GetValue(project.BuilderKind),
+            project.BuilderKind == BuildProjectBuilderKind.Platform ? project.PlatformId : (Guid?)null,
+            project.BuildAgentPoolId,
             project.RegistryId,
             project.ImageRepository,
             BuildMappers.SerializeStringList(project.TagTemplates),
@@ -444,6 +450,288 @@ internal sealed class BuildProjectRepository(IDbConnection db, Func<IDbTransacti
             project.ArchivedAt?.UtcDateTime,
             project.RowVersion
         );
+}
+
+internal sealed class BuildAgentPoolRepository(IDbConnection db, Func<IDbTransaction> tx) : IBuildAgentPoolRepository
+{
+    public async Task<int> AddAsync(
+        BuildAgentPool pool,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        Guid? tagCreatedByActorId = null)
+    {
+        pool.Validate();
+
+        string sql = ResourceTagSql.InputTagsCte + """
+            inserted_pool AS (
+                INSERT INTO BuildAgentPools (
+                    Id, Name, NormalizedName, Description, Enabled, Provider, ProviderSpec,
+                    MaxActiveBuilders, QueueTimeoutSeconds, ProvisioningTimeoutSeconds, RegistrationTimeoutSeconds,
+                    HeartbeatTimeoutSeconds, CleanupTimeoutSeconds, MaximumInstanceLifetimeSeconds, FailureRetentionMinutes,
+                    LastValidationStatus, LastValidationMessage, LastValidatedAt, CreatedByActorId, CreatedAt, UpdatedAt,
+                    ArchivedAt, RowVersion)
+                SELECT
+                    @Id, @Name, @NormalizedName, @Description, @Enabled, @Provider, @ProviderSpec::jsonb,
+                    @MaxActiveBuilders, @QueueTimeoutSeconds, @ProvisioningTimeoutSeconds, @RegistrationTimeoutSeconds,
+                    @HeartbeatTimeoutSeconds, @CleanupTimeoutSeconds, @MaximumInstanceLifetimeSeconds, @FailureRetentionMinutes,
+                    @LastValidationStatus, @LastValidationMessage, @LastValidatedAt, @CreatedByActorId, @CreatedAt, @UpdatedAt,
+                    @ArchivedAt, @RowVersion
+                WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
+                RETURNING Id
+            ),
+            """ + ResourceTagSql.InsertTagsCte("inserted_pool", "p") + "\n"
+            + ResourceTagSql.InsertResultSelect("inserted_pool", "inserted_pool", "inserted_tags");
+
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QuerySingleAsync<ResourceInsertWithTagsResult>(
+            sql,
+            new
+            {
+                pool.Id,
+                pool.Name,
+                pool.NormalizedName,
+                pool.Description,
+                pool.Enabled,
+                Provider = EnumFormatter<BuildAgentPoolProvider>.GetValue(pool.Provider),
+                ProviderSpec = BuildMappers.SerializeProviderSpec(pool.ProviderSpec),
+                pool.MaxActiveBuilders,
+                pool.QueueTimeoutSeconds,
+                pool.ProvisioningTimeoutSeconds,
+                pool.RegistrationTimeoutSeconds,
+                pool.HeartbeatTimeoutSeconds,
+                pool.CleanupTimeoutSeconds,
+                pool.MaximumInstanceLifetimeSeconds,
+                pool.FailureRetentionMinutes,
+                LastValidationStatus = EnumFormatter<BuildAgentPoolValidationStatus>.GetValue(pool.LastValidationStatus),
+                pool.LastValidationMessage,
+                LastValidatedAt = pool.LastValidatedAt?.UtcDateTime,
+                pool.CreatedByActorId,
+                CreatedAt = pool.CreatedAt.UtcDateTime,
+                UpdatedAt = pool.UpdatedAt.UtcDateTime,
+                ArchivedAt = pool.ArchivedAt?.UtcDateTime,
+                pool.RowVersion,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.BuildAgentPool),
+                TagIds = tagIdArray,
+                TagIdsLength = tagIdArray.Length,
+                TagCreatedByActorId = tagCreatedByActorId ?? pool.CreatedByActorId
+            },
+            transaction: tx());
+
+        pool.AssignTags(result.TagsJson.ToTagSummaries());
+        return result.AffectedRows;
+    }
+
+    public Task<int> UpdateAsync(BuildAgentPool pool, CancellationToken cancellationToken)
+    {
+        pool.Validate();
+
+        const string sql = """
+            UPDATE BuildAgentPools
+            SET Name = @Name,
+                NormalizedName = @NormalizedName,
+                Description = @Description,
+                Enabled = @Enabled,
+                Provider = @Provider,
+                ProviderSpec = @ProviderSpec::jsonb,
+                MaxActiveBuilders = @MaxActiveBuilders,
+                QueueTimeoutSeconds = @QueueTimeoutSeconds,
+                ProvisioningTimeoutSeconds = @ProvisioningTimeoutSeconds,
+                RegistrationTimeoutSeconds = @RegistrationTimeoutSeconds,
+                HeartbeatTimeoutSeconds = @HeartbeatTimeoutSeconds,
+                CleanupTimeoutSeconds = @CleanupTimeoutSeconds,
+                MaximumInstanceLifetimeSeconds = @MaximumInstanceLifetimeSeconds,
+                FailureRetentionMinutes = @FailureRetentionMinutes,
+                LastValidationStatus = @LastValidationStatus,
+                LastValidationMessage = @LastValidationMessage,
+                LastValidatedAt = @LastValidatedAt,
+                UpdatedAt = @UpdatedAt,
+                ArchivedAt = @ArchivedAt,
+                RowVersion = @RowVersion
+            WHERE Id = @Id
+            """;
+
+        return db.ExecuteAsync(sql, ToParameters(pool), transaction: tx());
+    }
+
+    public Task<int> ArchiveAsync(Guid id, DateTimeOffset archivedAt, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildAgentPools
+            SET Enabled = FALSE,
+                ArchivedAt = COALESCE(ArchivedAt, @ArchivedAt),
+                UpdatedAt = @ArchivedAt,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new { Id = id, ArchivedAt = archivedAt.UtcDateTime },
+            transaction: tx());
+    }
+
+    public async Task<BuildAgentPool?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false)
+    {
+        string sql = $$"""
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BuildAgentPools p
+            WHERE p.Id = @Id
+              AND (@IncludeArchived OR p.ArchivedAt IS NULL)
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<BuildAgentPoolDto>(
+            sql,
+            new
+            {
+                Id = id,
+                IncludeArchived = includeArchived,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.BuildAgentPool)
+            },
+            transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<IEnumerable<BuildAgentPool>> GetAllAsync(
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        bool includeArchived = false)
+    {
+        string sql = $$"""
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BuildAgentPools p
+            WHERE (@IncludeArchived OR p.ArchivedAt IS NULL)
+              AND {{ResourceTagSql.FilterPredicate("p")}}
+            ORDER BY p.Name ASC
+            """;
+
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<BuildAgentPoolDto>(
+            sql,
+            new
+            {
+                IncludeArchived = includeArchived,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.BuildAgentPool),
+                TagIds = tagIdArray,
+                TagIdsLength = tagIdArray.Length
+            },
+            transaction: tx());
+        return result.Select(static x => x.ToDomain());
+    }
+
+    public async Task<IEnumerable<BuildAgentPool>> GetAuthorizedAsync(
+        Guid userId,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? tagIds = null)
+    {
+        string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BuildAgentPools p
+            WHERE p.ArchivedAt IS NULL
+              AND {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+              AND {{ResourceTagSql.FilterPredicate("p")}}
+            ORDER BY p.Name ASC
+            """;
+
+        var tagIdArray = ResourceTagSql.NormalizeTagIds(tagIds);
+        var result = await db.QueryAsync<BuildAgentPoolDto>(
+            sql,
+            new
+            {
+                UserId = userId,
+                ResourceType = (int)resourceType,
+                GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
+                SpecificPermission = (int)specificPermission,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.BuildAgentPool),
+                TagIds = tagIdArray,
+                TagIdsLength = tagIdArray.Length
+            },
+            transaction: tx());
+        return result.Select(static x => x.ToDomain());
+    }
+
+    public Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1 FROM BuildAgentPools
+                WHERE NormalizedName = @NormalizedName AND ArchivedAt IS NULL)
+            """;
+        return db.ExecuteScalarAsync<bool>(sql, new { NormalizedName = normalizedName }, transaction: tx());
+    }
+
+    public Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1 FROM BuildAgentPools
+                WHERE NormalizedName = @NormalizedName AND Id <> @Id AND ArchivedAt IS NULL)
+            """;
+        return db.ExecuteScalarAsync<bool>(sql, new { NormalizedName = normalizedName, Id = id }, transaction: tx());
+    }
+
+    public Task<bool> CanAccessAsync(
+        Guid userId,
+        Guid id,
+        ResourceType resourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken)
+    {
+        const string sql = $$"""
+            WITH {{AuthorizationSql.ActorScopeCte}}, {{AuthorizationSql.GlobalAccessCte}}
+            SELECT EXISTS (
+                SELECT 1
+                FROM BuildAgentPools p
+                WHERE p.Id = @Id
+                  AND p.ArchivedAt IS NULL
+                  AND {{AuthorizationSql.ResourcePredicatePrefix}}p.Id{{AuthorizationSql.ResourcePredicateSuffix}}
+            )
+            """;
+
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new
+            {
+                Id = id,
+                UserId = userId,
+                ResourceType = (int)resourceType,
+                GrantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel),
+                SpecificPermission = (int)specificPermission
+            },
+            transaction: tx());
+    }
+
+    private static BuildAgentPoolParameters ToParameters(BuildAgentPool pool)
+        => new(
+            pool.Id,
+            pool.Name,
+            pool.NormalizedName,
+            pool.Description,
+            pool.Enabled,
+            EnumFormatter<BuildAgentPoolProvider>.GetValue(pool.Provider),
+            BuildMappers.SerializeProviderSpec(pool.ProviderSpec),
+            pool.MaxActiveBuilders,
+            pool.QueueTimeoutSeconds,
+            pool.ProvisioningTimeoutSeconds,
+            pool.RegistrationTimeoutSeconds,
+            pool.HeartbeatTimeoutSeconds,
+            pool.CleanupTimeoutSeconds,
+            pool.MaximumInstanceLifetimeSeconds,
+            pool.FailureRetentionMinutes,
+            EnumFormatter<BuildAgentPoolValidationStatus>.GetValue(pool.LastValidationStatus),
+            pool.LastValidationMessage,
+            pool.LastValidatedAt?.UtcDateTime,
+            pool.UpdatedAt.UtcDateTime,
+            pool.ArchivedAt?.UtcDateTime,
+            pool.RowVersion);
 }
 
 internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> tx) : IBuildRunRepository

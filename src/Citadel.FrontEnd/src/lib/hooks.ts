@@ -172,6 +172,7 @@ export const useResourceParamType = (): { type: ResourceType; tab?: ResourceType
   if (type === 'oidc-providers') return { type: 'OidcProvider' };
   if (type === 'backup-repositories') return { type: 'BackupRepository' };
   if (type === 'backup-policies') return { type: 'BackupPolicy' };
+  if (type === 'build-pools') return { type: 'BuildAgentPool' };
   if (type === 'access') return { type: 'Access' };
 
   const typePlural = matchPlural(type);

@@ -23,6 +23,7 @@ const activityResourceIcons = {
   [ActivityResourceType.User]: CitadelIcons.User,
   [ActivityResourceType.License]: CitadelIcons.License,
   [ActivityResourceType.Volume]: CitadelIcons.Volume,
+  [ActivityResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
 } satisfies Record<ActivityResourceType, any>;
 
 const activityEventPrefixes = {
@@ -37,6 +38,7 @@ const activityEventPrefixes = {
   [ActivityResourceType.User]: 'User',
   [ActivityResourceType.License]: 'License',
   [ActivityResourceType.Volume]: 'Volume',
+  [ActivityResourceType.BuildAgentPool]: 'BuildAgentPool',
 } satisfies Record<ActivityResourceType, string>;
 
 const activityLookupTargets = {
@@ -51,6 +53,7 @@ const activityLookupTargets = {
   [ActivityResourceType.User]: LookupResourceType.User,
   [ActivityResourceType.License]: LookupResourceType.License,
   [ActivityResourceType.Volume]: LookupResourceType.Platform,
+  [ActivityResourceType.BuildAgentPool]: LookupResourceType.BuildAgentPool,
 } satisfies Record<ActivityResourceType, LookupResourceType>;
 
 export const ActivityComponents: RequiredComponents = {

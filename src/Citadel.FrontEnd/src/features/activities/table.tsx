@@ -140,6 +140,15 @@ function getActivitySummary(info: ActivityEventInfo | null | undefined): string 
     case 'DeploymentDuplicated':
     case 'StackDuplicated':
       return `from ${info.source.resourceName}`;
+    case 'BuildAgentPoolCreated':
+    case 'BuildAgentPoolDeleted':
+      return `${info.pool.provider} - ${info.pool.region} - ${info.pool.instanceType}`;
+    case 'BuildAgentPoolUpdated':
+      return `${info.oldPool.provider} - ${info.oldPool.region} - ${info.oldPool.instanceType}`;
+    case 'BuildAgentPoolRenamed':
+      return `${info.oldName} -> ${info.newName}`;
+    case 'BuildAgentPoolTested':
+      return [info.status, info.message].filter(Boolean).join(' - ');
     default:
       return null;
   }

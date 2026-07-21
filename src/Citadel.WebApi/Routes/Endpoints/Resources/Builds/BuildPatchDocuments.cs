@@ -15,3 +15,15 @@ public sealed class UpdateBuildProjectInputPatchDocument : JsonMergePatchDocumen
         return new UpdateBuildProjectInputPatchDocument { Patch = doc.RootElement.Clone() };
     }
 }
+
+public sealed class UpdateBuildAgentPoolInputPatchDocument : JsonMergePatchDocument<UpdateBuildAgentPoolInput>
+{
+    public bool ContainsProperty(string propertyName)
+        => Patch.ValueKind == JsonValueKind.Object && Patch.TryGetProperty(propertyName, out _);
+
+    public static async ValueTask<UpdateBuildAgentPoolInputPatchDocument?> BindAsync(HttpContext context, ParameterInfo _)
+    {
+        using var doc = await JsonDocument.ParseAsync(context.Request.Body);
+        return new UpdateBuildAgentPoolInputPatchDocument { Patch = doc.RootElement.Clone() };
+    }
+}
