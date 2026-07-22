@@ -37421,6 +37421,9 @@
           "lastValidationStatus",
           "lastValidationMessage",
           "lastValidatedAt",
+          "controlState",
+          "controlTriggeredBy",
+          "controlStartedAt",
           "createdByActorId",
           "createdAt",
           "updatedAt",
@@ -37530,6 +37533,25 @@
           },
           "lastValidatedAt": {
             "format": "date-time"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "controlTriggeredBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "controlStartedAt": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "createdByActorId": {
             "type": "string",

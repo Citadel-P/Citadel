@@ -65,6 +65,7 @@ public interface IApplicationHubDispatcher
 
     #region Builds
     Task SendBuildProjectInfo(BuildProject project, string action, BuildRun? latestRun = null);
+    Task SendBuildAgentPoolInfo(BuildAgentPool pool, string action);
     Task SendBuildRunInfo(BuildRun run, string action);
     Task SendBuildRunLogs(Guid runId, IReadOnlyList<BuildRunLogEntry> entries);
     #endregion

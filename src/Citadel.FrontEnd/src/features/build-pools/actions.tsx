@@ -1,4 +1,9 @@
-import { BuildAgentPoolProvider, BuildAgentPoolValidationStatus, BuildAgentPoolView } from '@/api/generated/api.types';
+import {
+  BuildAgentPoolProvider,
+  BuildAgentPoolValidationStatus,
+  BuildAgentPoolView,
+  ResourceControlState,
+} from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
@@ -50,12 +55,13 @@ const { dropdown, group, info } = createActionsBuilder<BuildAgentPoolView>()
       const { selected, multiSelect } = singleSelection(resources);
       const queryClient = useQueryClient();
       const testPool = useMutate('testBuildAgentPool');
+      const isProcessing = selected?.controlState === ResourceControlState.Processing;
 
       return {
-        canExecute: !!selected && !multiSelect && selected.provider === BuildAgentPoolProvider.SelfManagedVm,
-        isPending: testPool.isPending,
+        canExecute: !!selected && !multiSelect && !isProcessing && selected.provider === BuildAgentPoolProvider.SelfManagedVm,
+        isPending: testPool.isPending || isProcessing,
         run: async () => {
-          if (!selected || multiSelect || selected.provider !== BuildAgentPoolProvider.SelfManagedVm) return;
+          if (!selected || multiSelect || isProcessing || selected.provider !== BuildAgentPoolProvider.SelfManagedVm) return;
 
           try {
             const result = await testPool.mutateAsync({ id: selected.id });

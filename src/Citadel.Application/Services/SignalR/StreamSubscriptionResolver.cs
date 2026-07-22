@@ -37,6 +37,8 @@ internal sealed class StreamSubscriptionResolver(IServiceProvider provider) : IS
         ["backup-restore-runs"] = typeof(BackupRestoreRunStreamManager),
         ["build-project"] = typeof(BuildProjectStreamManager),
         ["build-projects"] = typeof(BuildProjectStreamManager),
+        ["build-agent-pool"] = typeof(BuildAgentPoolStreamManager),
+        ["build-agent-pools"] = typeof(BuildAgentPoolStreamManager),
         ["build-run"] = typeof(BuildRunStreamManager),
         ["build-runs"] = typeof(BuildRunStreamManager),
         ["automation-action"] = typeof(AutomationActionStreamManager),

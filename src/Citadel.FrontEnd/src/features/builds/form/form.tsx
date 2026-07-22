@@ -626,7 +626,8 @@ export const BuildForm = ({
               defineField({
                 key: 'dockerfilePath',
                 label: 'Dockerfile',
-                description: 'Dockerfile path, relative to the repository root.',
+                description:
+                  'Dockerfile path. Use a repository-relative path, or use Dockerfile when it is inside the selected context.',
                 required: true,
                 validate: validateRepoRelativePath,
                 render: (value, set) => (

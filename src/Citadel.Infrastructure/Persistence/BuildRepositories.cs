@@ -468,13 +468,15 @@ internal sealed class BuildAgentPoolRepository(IDbConnection db, Func<IDbTransac
                     Id, Name, NormalizedName, Description, Enabled, Provider, ProviderSpec,
                     MaxActiveBuilders, QueueTimeoutSeconds, ProvisioningTimeoutSeconds, RegistrationTimeoutSeconds,
                     HeartbeatTimeoutSeconds, CleanupTimeoutSeconds, MaximumInstanceLifetimeSeconds, FailureRetentionMinutes,
-                    LastValidationStatus, LastValidationMessage, LastValidatedAt, CreatedByActorId, CreatedAt, UpdatedAt,
+                    LastValidationStatus, LastValidationMessage, LastValidatedAt, ControlState, ControlTriggeredBy, ControlStartedAt,
+                    CreatedByActorId, CreatedAt, UpdatedAt,
                     ArchivedAt, RowVersion)
                 SELECT
                     @Id, @Name, @NormalizedName, @Description, @Enabled, @Provider, @ProviderSpec::jsonb,
                     @MaxActiveBuilders, @QueueTimeoutSeconds, @ProvisioningTimeoutSeconds, @RegistrationTimeoutSeconds,
                     @HeartbeatTimeoutSeconds, @CleanupTimeoutSeconds, @MaximumInstanceLifetimeSeconds, @FailureRetentionMinutes,
-                    @LastValidationStatus, @LastValidationMessage, @LastValidatedAt, @CreatedByActorId, @CreatedAt, @UpdatedAt,
+                    @LastValidationStatus, @LastValidationMessage, @LastValidatedAt, @ControlState, @ControlTriggeredBy, @ControlStartedAt,
+                    @CreatedByActorId, @CreatedAt, @UpdatedAt,
                     @ArchivedAt, @RowVersion
                 WHERE NOT EXISTS (SELECT 1 FROM missing_tags)
                 RETURNING Id
@@ -505,6 +507,9 @@ internal sealed class BuildAgentPoolRepository(IDbConnection db, Func<IDbTransac
                 LastValidationStatus = EnumFormatter<BuildAgentPoolValidationStatus>.GetValue(pool.LastValidationStatus),
                 pool.LastValidationMessage,
                 LastValidatedAt = pool.LastValidatedAt?.UtcDateTime,
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(pool.ControlState),
+                pool.ControlTriggeredBy,
+                pool.ControlStartedAt,
                 pool.CreatedByActorId,
                 CreatedAt = pool.CreatedAt.UtcDateTime,
                 UpdatedAt = pool.UpdatedAt.UtcDateTime,
@@ -544,6 +549,9 @@ internal sealed class BuildAgentPoolRepository(IDbConnection db, Func<IDbTransac
                 LastValidationStatus = @LastValidationStatus,
                 LastValidationMessage = @LastValidationMessage,
                 LastValidatedAt = @LastValidatedAt,
+                ControlState = @ControlState,
+                ControlTriggeredBy = @ControlTriggeredBy,
+                ControlStartedAt = @ControlStartedAt,
                 UpdatedAt = @UpdatedAt,
                 ArchivedAt = @ArchivedAt,
                 RowVersion = @RowVersion
@@ -619,6 +627,88 @@ internal sealed class BuildAgentPoolRepository(IDbConnection db, Func<IDbTransac
             },
             transaction: tx());
         return result.Select(static x => x.ToDomain());
+    }
+
+    public async Task<IEnumerable<BuildAgentPool>> GetEnabledSelfManagedAsync(CancellationToken cancellationToken)
+    {
+        string sql = $$"""
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BuildAgentPools p
+            WHERE p.ArchivedAt IS NULL
+              AND p.Enabled = TRUE
+              AND p.Provider = @Provider
+            ORDER BY p.Name ASC
+            """;
+
+        var result = await db.QueryAsync<BuildAgentPoolDto>(
+            sql,
+            new
+            {
+                Provider = EnumFormatter<BuildAgentPoolProvider>.GetValue(BuildAgentPoolProvider.SelfManagedVm),
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.BuildAgentPool)
+            },
+            transaction: tx());
+        return result.Select(static x => x.ToDomain());
+    }
+
+    public async Task<IEnumerable<BuildAgentPool>> GetStuckPoolsAsync(int staleAfterSeconds = 300, CancellationToken cancellationToken = default)
+    {
+        string sql = $$"""
+            SELECT p.*,
+                {{ResourceTagSql.TagAggregate("p")}}
+            FROM BuildAgentPools p
+            WHERE p.ArchivedAt IS NULL
+              AND p.ControlState = @ControlState
+              AND p.ControlStartedAt < @ControlStartedAt
+            ORDER BY p.ControlStartedAt ASC
+            """;
+
+        var result = await db.QueryAsync<BuildAgentPoolDto>(
+            sql,
+            new
+            {
+                ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+                ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - staleAfterSeconds,
+                TagResourceType = ResourceTagSql.GetResourceTypeValue(TaggableResourceType.BuildAgentPool)
+            },
+            transaction: tx());
+        return result.Select(static x => x.ToDomain());
+    }
+
+    public Task<int> UpdateProcessingAsync(
+        Guid id,
+        ResourceControlState state,
+        long? startedAt,
+        long rowVersion,
+        bool checkRowVersion,
+        Guid? controlTriggeredBy,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE BuildAgentPools
+            SET ControlState = @State,
+                ControlTriggeredBy = @ControlTriggeredBy,
+                ControlStartedAt = @StartedAt,
+                RowVersion = RowVersion + 1,
+                UpdatedAt = @UpdatedAt
+            WHERE Id = @Id
+              AND (@CheckRowVersion = FALSE OR RowVersion = @RowVersion)
+            """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                State = EnumFormatter<ResourceControlState>.GetValue(state),
+                ControlTriggeredBy = controlTriggeredBy,
+                StartedAt = startedAt,
+                RowVersion = rowVersion,
+                CheckRowVersion = checkRowVersion,
+                UpdatedAt = DateTime.UtcNow
+            },
+            transaction: tx());
     }
 
     public async Task<IEnumerable<BuildAgentPool>> GetAuthorizedAsync(
@@ -729,6 +819,9 @@ internal sealed class BuildAgentPoolRepository(IDbConnection db, Func<IDbTransac
             EnumFormatter<BuildAgentPoolValidationStatus>.GetValue(pool.LastValidationStatus),
             pool.LastValidationMessage,
             pool.LastValidatedAt?.UtcDateTime,
+            EnumFormatter<ResourceControlState>.GetValue(pool.ControlState),
+            pool.ControlTriggeredBy,
+            pool.ControlStartedAt,
             pool.UpdatedAt.UtcDateTime,
             pool.ArchivedAt?.UtcDateTime,
             pool.RowVersion);

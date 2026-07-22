@@ -28,6 +28,7 @@ internal class ReconcilableResourceJob(
     IBackupPolicyStreamManager backupPolicyStreamManager,
     IAutomationActionStreamManager automationActionStreamManager,
     IBuildProjectStreamManager buildProjectStreamManager,
+    IBuildAgentPoolStreamManager buildAgentPoolStreamManager,
     IBuildRunStreamManager buildRunStreamManager,
     IGitRepositoryStreamManager gitRepositoryStreamManager,
     IDockerDaemonStreamManager dockerDaemonHub,
@@ -136,6 +137,17 @@ internal class ReconcilableResourceJob(
                             buildProjectStreamManager,
                             buildRunStreamManager,
                             stuckBuildProjects);
+                        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                    }
+
+                    // Build agent pools
+                    var stuckBuildAgentPools = (await uow.BuildAgentPools.GetStuckPoolsAsync(cancellationToken: cancellationToken)).ToArray();
+                    if (stuckBuildAgentPools.Length > 0)
+                    {
+                        var workItem = new StuckBuildAgentPoolsSyncWorkItem(
+                            notifQueue,
+                            buildAgentPoolStreamManager,
+                            stuckBuildAgentPools);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
                 }
@@ -502,6 +514,43 @@ internal class ReconcilableResourceJob(
             {
                 await notificationQueue.EnqueueAsync(
                     new BuildProjectNotificationWorkItem(streamManager, project),
+                    cancellationToken);
+            }
+        }
+    }
+
+    internal sealed class StuckBuildAgentPoolsSyncWorkItem(
+        INotificationQueue notificationQueue,
+        IBuildAgentPoolStreamManager streamManager,
+        IEnumerable<BuildAgentPool> pools) : IDbWorkItem
+    {
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            var successfullyUpdated = new List<BuildAgentPool>();
+
+            foreach (var pool in pools)
+            {
+                var rowVersion = pool.RowVersion;
+                pool.MarkIdle(DateTimeOffset.UtcNow);
+                var row = await uow.BuildAgentPools.UpdateProcessingAsync(
+                    id: pool.Id,
+                    state: pool.ControlState,
+                    startedAt: pool.ControlStartedAt,
+                    rowVersion: rowVersion,
+                    checkRowVersion: true,
+                    controlTriggeredBy: pool.ControlTriggeredBy,
+                    cancellationToken);
+
+                if (row > 0)
+                    successfullyUpdated.Add(pool);
+            }
+
+            await uow.CommitAsync(cancellationToken);
+
+            foreach (var pool in successfullyUpdated)
+            {
+                await notificationQueue.EnqueueAsync(
+                    new BuildAgentPoolNotificationWorkItem(streamManager, pool),
                     cancellationToken);
             }
         }

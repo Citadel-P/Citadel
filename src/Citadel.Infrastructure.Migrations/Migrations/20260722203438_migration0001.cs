@@ -256,6 +256,9 @@ namespace Infrastructure.Migrations.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     archivedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     cleanuptimeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 600),
+                    controlstartedat = table.Column<long>(type: "bigint", nullable: true),
+                    controlstate = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Idle"),
+                    controltriggeredby = table.Column<Guid>(type: "uuid", nullable: true),
                     createdat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
                     description = table.Column<string>(type: "text", maxLength: 600, nullable: true),
@@ -280,6 +283,12 @@ namespace Infrastructure.Migrations.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_buildagentpools", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_buildagentpools_actors_controltriggeredby",
+                        column: x => x.controltriggeredby,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "fk_buildagentpools_actors_createdbyactorid",
                         column: x => x.createdbyactorid,
@@ -2360,6 +2369,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_buildagentpools_archivedat",
                 table: "buildagentpools",
                 column: "archivedat");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildagentpools_controltriggeredby",
+                table: "buildagentpools",
+                column: "controltriggeredby");
 
             migrationBuilder.CreateIndex(
                 name: "ix_buildagentpools_createdbyactorid",

@@ -157,6 +157,9 @@ CREATE TABLE buildagentpools (
     id uuid NOT NULL,
     archivedat timestamp with time zone,
     cleanuptimeoutseconds integer NOT NULL DEFAULT 600,
+    controlstartedat bigint,
+    controlstate text NOT NULL DEFAULT 'Idle',
+    controltriggeredby uuid,
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     createdbyactorid uuid NOT NULL,
     description text,
@@ -178,6 +181,7 @@ CREATE TABLE buildagentpools (
     rowversion bigint NOT NULL DEFAULT 0,
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     CONSTRAINT pk_buildagentpools PRIMARY KEY (id),
+    CONSTRAINT fk_buildagentpools_actors_controltriggeredby FOREIGN KEY (controltriggeredby) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_buildagentpools_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT
 );
 
@@ -1371,6 +1375,8 @@ CREATE INDEX ix_backupsourceleases_expiresat ON backupsourceleases (expiresat);
 
 CREATE INDEX ix_buildagentpools_archivedat ON buildagentpools (archivedat);
 
+CREATE INDEX ix_buildagentpools_controltriggeredby ON buildagentpools (controltriggeredby);
+
 CREATE INDEX ix_buildagentpools_createdbyactorid ON buildagentpools (createdbyactorid);
 
 CREATE INDEX ix_buildagentpools_enabled ON buildagentpools (enabled);
@@ -1580,7 +1586,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260722145424_migration0001', '10.0.10');
+VALUES ('20260722203438_migration0001', '10.0.10');
 
 COMMIT;
 

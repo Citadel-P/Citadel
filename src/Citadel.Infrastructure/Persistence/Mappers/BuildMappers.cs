@@ -117,6 +117,11 @@ internal static class BuildMappers
                 : Enum.Parse<BuildAgentPoolValidationStatus>(dto.LastValidationStatus),
             dto.LastValidationMessage,
             ToOffset(dto.LastValidatedAt),
+            string.IsNullOrWhiteSpace(dto.ControlState)
+                ? ResourceControlState.Idle
+                : Enum.Parse<ResourceControlState>(dto.ControlState),
+            dto.ControlTriggeredBy,
+            dto.ControlStartedAt,
             dto.CreatedByActorId,
             ToOffset(dto.CreatedAt),
             ToOffset(dto.UpdatedAt),

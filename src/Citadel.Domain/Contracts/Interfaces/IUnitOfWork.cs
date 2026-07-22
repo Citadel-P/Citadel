@@ -320,10 +320,13 @@ public interface IBuildAgentPoolRepository
     Task<int> ArchiveAsync(Guid id, DateTimeOffset archivedAt, CancellationToken cancellationToken);
     Task<BuildAgentPool?> GetAsync(Guid id, CancellationToken cancellationToken, bool includeArchived = false);
     Task<IEnumerable<BuildAgentPool>> GetAllAsync(CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, bool includeArchived = false);
+    Task<IEnumerable<BuildAgentPool>> GetEnabledSelfManagedAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<BuildAgentPool>> GetStuckPoolsAsync(int staleAfterSeconds = 300, CancellationToken cancellationToken = default);
     Task<IEnumerable<BuildAgentPool>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null);
     Task<bool> ExistsByNormalizedNameAsync(string normalizedName, CancellationToken cancellationToken);
     Task<bool> ExistsByNormalizedNameExceptAsync(string normalizedName, Guid id, CancellationToken cancellationToken);
     Task<bool> CanAccessAsync(Guid userId, Guid id, ResourceType resourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
+    Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
 }
 
 public interface IBuildRunRepository

@@ -5,6 +5,7 @@ import {
   BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec,
   BuildAgentPoolValidationStatus,
   BuildAgentPoolView,
+  ResourceControlState,
 } from '@/api/generated/api.types';
 import { ContentCard } from '@/components/custom/content-card';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
@@ -156,7 +157,11 @@ const ValidationCell = ({
 
   return (
     <span className="inline-flex min-w-0 max-w-72 items-center gap-2 text-sm" title={title}>
-      <StateIndicator value={pool.lastValidationStatus} kind="buildAgentPoolValidation" />
+      <StateIndicator
+        value={pool.lastValidationStatus}
+        kind="buildAgentPoolValidation"
+        isProcessing={pool.controlState === ResourceControlState.Processing}
+      />
       <ShieldCheck className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 truncate">
         <span>{validationLabel(pool.lastValidationStatus)}</span>

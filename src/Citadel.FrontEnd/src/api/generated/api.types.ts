@@ -3468,6 +3468,14 @@ export interface BuildAgentPoolView {
   lastValidationMessage: null | string;
   /** @format date-time */
   lastValidatedAt: any;
+  controlState: ResourceControlState;
+  /** @format uuid */
+  controlTriggeredBy: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  controlStartedAt: null | number | string;
   /** @format uuid */
   createdByActorId: string;
   /** @format date-time */

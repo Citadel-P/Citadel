@@ -528,6 +528,44 @@ public sealed class BuildRunStartTests
     }
 
     [Fact]
+    public async Task ExecuteQueuedBuildRun_ShouldResolveDockerfileRelativeToContext_WhenRepoRootPathDoesNotExist()
+    {
+        var actorId = Guid.CreateVersion7();
+        var project = CreateProject(actorId, contextPath: "vote", dockerfilePath: "Dockerfile");
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var platform = CreatePlatform(project.PlatformId);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var run = CreateRun(project, repository, platform, registry, actorId);
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        PrepareRepositoryCache(repository);
+        var repositoryRoot = Path.GetFullPath(repository.GetCachePath());
+        File.Delete(Path.Combine(repositoryRoot, "Dockerfile"));
+        Directory.CreateDirectory(Path.Combine(repositoryRoot, "vote"));
+        File.WriteAllText(Path.Combine(repositoryRoot, "vote", "Dockerfile"), "FROM scratch");
+
+        var context = CreateExecutionContext(project, repository, platform, registry, run);
+        BuildProcessCommand? processCommand = null;
+        context.RepoCache
+            .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+        context.Runner
+            .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildProcessCommand, CancellationToken>((command, _) => processCommand = command)
+            .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
+        context.BuildRuns
+            .Setup(x => x.UpdateAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        CaptureLogs(context.BuildRunLogs, []);
+
+        var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        Assert.NotNull(processCommand);
+        Assert.Equal(Path.Combine(repositoryRoot, "vote"), processCommand.ContextPath);
+        Assert.Equal(Path.Combine(repositoryRoot, "vote", "Dockerfile"), processCommand.DockerfilePath);
+    }
+
+    [Fact]
     public async Task ExecuteQueuedBuildRun_ShouldPersistPoolRunFailureActivityWithoutPlatform()
     {
         var actorId = Guid.CreateVersion7();
@@ -1034,15 +1072,17 @@ public sealed class BuildRunStartTests
     private static BuildProject CreateProject(
         Guid actorId,
         BuildProjectBuilderKind builderKind = BuildProjectBuilderKind.Platform,
-        Guid? buildAgentPoolId = null)
+        Guid? buildAgentPoolId = null,
+        string contextPath = ".",
+        string dockerfilePath = "Dockerfile")
         => new(
             "api-image",
             null,
             true,
             Guid.CreateVersion7(),
             "main",
-            ".",
-            "Dockerfile",
+            contextPath,
+            dockerfilePath,
             null,
             [],
             [],

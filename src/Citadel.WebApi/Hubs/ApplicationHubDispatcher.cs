@@ -171,6 +171,18 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
                 .SendAsync("BuildProjectInfoUpdated", map, action));
     }
 
+    public Task SendBuildAgentPoolInfo(BuildAgentPool pool, string action)
+    {
+        var map = BuildAgentPoolView.Map(pool);
+        return Task.WhenAll(
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BuildAgentPoolGroup(pool.Id))
+                .SendAsync("BuildAgentPoolInfoUpdated", map, action),
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.BuildAgentPoolsGroup)
+                .SendAsync("BuildAgentPoolInfoUpdated", map, action));
+    }
+
     public Task SendBuildRunInfo(BuildRun run, string action)
     {
         var map = BuildRunView.Map(run);

@@ -59,6 +59,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<DockerVolumeResult>]
 [GenerateShapeFor<DeploymentsView>]
 [GenerateShapeFor<DeploymentView>]
+[GenerateShapeFor<ResourceControlState>]
 [GenerateShapeFor<DeploymentSpec>]
 [GenerateShapeFor<LocalImage>]
 [GenerateShapeFor<ExternalImage>]

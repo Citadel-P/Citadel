@@ -182,7 +182,7 @@ internal sealed class BuildRunExecutionService(
             if (!contextPath.IsSuccess(out var buildContextPath, out var contextPathError))
                 return await FailAsync(run, BuildRunStatus.Failed, 1, "build.context_path_invalid", contextPathError!.Message, executionToken);
 
-            var dockerfilePath = ResolveRepoPath(repositoryRoot, run.DockerfilePath, mustBeDirectory: false);
+            var dockerfilePath = ResolveDockerfilePath(repositoryRoot, buildContextPath, run.DockerfilePath);
             if (!dockerfilePath.IsSuccess(out var dockerfile, out var dockerfileError))
                 return await FailAsync(run, BuildRunStatus.Failed, 1, "build.dockerfile_path_invalid", dockerfileError!.Message, executionToken);
 
@@ -387,7 +387,7 @@ internal sealed class BuildRunExecutionService(
         var root = EnsureTrailingSeparator(Path.GetFullPath(repositoryRoot));
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
-        if (!EnsureTrailingSeparator(fullPath).StartsWith(root, comparison) && !fullPath.Equals(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), comparison))
+        if (!IsInsideOrEqual(fullPath, root, comparison))
             return Result.Failure<string>("Build path must stay inside the repository cache.");
 
         if (mustBeDirectory)
@@ -402,6 +402,33 @@ internal sealed class BuildRunExecutionService(
 
         return fullPath;
     }
+
+    private static Result<string> ResolveDockerfilePath(string repositoryRoot, string contextDirectory, string dockerfilePath)
+    {
+        if (string.IsNullOrWhiteSpace(dockerfilePath) || dockerfilePath.Contains('\0'))
+            return Result.Failure<string>("Build path is invalid.");
+
+        var root = EnsureTrailingSeparator(Path.GetFullPath(repositoryRoot));
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var repoRelativePath = Path.GetFullPath(Path.Combine(repositoryRoot, dockerfilePath));
+        if (!IsInsideOrEqual(repoRelativePath, root, comparison))
+            return Result.Failure<string>("Build path must stay inside the repository cache.");
+
+        if (File.Exists(repoRelativePath))
+            return repoRelativePath;
+
+        var contextRelativePath = Path.GetFullPath(Path.Combine(contextDirectory, dockerfilePath));
+        if (!IsInsideOrEqual(contextRelativePath, root, comparison))
+            return Result.Failure<string>("Build path must stay inside the repository cache.");
+
+        return File.Exists(contextRelativePath)
+            ? contextRelativePath
+            : Result.Failure<string>($"Dockerfile path '{dockerfilePath}' does not exist.");
+    }
+
+    private static bool IsInsideOrEqual(string path, string root, StringComparison comparison)
+        => EnsureTrailingSeparator(path).StartsWith(root, comparison) ||
+           path.Equals(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), comparison);
 
     private static Result<IReadOnlyList<BuildProcessBuildArg>> ResolveBuildArgs(IReadOnlyList<BuildArgSpec> buildArgs)
     {

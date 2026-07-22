@@ -133,6 +133,7 @@ public static class ApplicationModule
             .AddSingleton<IBuildRunCleanupService, BuildRunCleanupService>()
             .AddSingleton<IBuildImageResolver, BuildImageResolver>()
             .AddSingleton<IStackBuildImageBindingResolver, StackBuildImageBindingResolver>()
+            .AddScoped<IBuildAgentPoolValidationService, BuildAgentPoolValidationService>()
             .AddScoped<IBuildRunRetentionService, BuildRunRetentionService>()
             .AddScoped<IBuildRunExecutionService, BuildRunExecutionService>()
             .AddSingleton<IApplyStackService, ApplyStackService>();
@@ -185,8 +186,10 @@ public static class ApplicationModule
             .AddSingleton<IBackupRestoreRunStreamManager>(s => s.GetRequiredService<BackupRestoreRunStreamManager>())
             .AddSingleton<BuildProjectStreamManager>()
             .AddSingleton<BuildRunStreamManager>()
+            .AddSingleton<BuildAgentPoolStreamManager>()
             .AddSingleton<IBuildProjectStreamManager>(s => s.GetRequiredService<BuildProjectStreamManager>())
             .AddSingleton<IBuildRunStreamManager>(s => s.GetRequiredService<BuildRunStreamManager>())
+            .AddSingleton<IBuildAgentPoolStreamManager>(s => s.GetRequiredService<BuildAgentPoolStreamManager>())
             .AddSingleton<IAutomationActionStreamManager>(s => s.GetRequiredService<AutomationActionStreamManager>())
             .AddSingleton<IStackStreamManager>(s => s.GetRequiredService<StackStreamManager>());
 
@@ -221,6 +224,7 @@ public static class ApplicationModule
             .AddHostedService<BackupRunWorkerJob>()
             .AddHostedService<BackupRestoreRunWorkerJob>()
             .AddHostedService<BuildRunWorkerJob>()
+            .AddHostedService<BuildAgentPoolHealthMonitorJob>()
             .AddHostedService<LicenseTransitionMonitorJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services

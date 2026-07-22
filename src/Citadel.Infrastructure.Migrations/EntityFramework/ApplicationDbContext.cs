@@ -1592,13 +1592,12 @@ internal static class Configuration
         action.Property<bool>("AlertOnFailure").HasColumnType("boolean").IsRequired();
         action.Property<Guid>("RunAsActorId").IsRequired();
         action.Property<DateTime?>("LastScheduledRunAt").HasColumnType(Timestamp).IsRequired(false);
-        action.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
         action.Property<Guid?>("CurrentRunId").IsRequired(false);
-        action.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
-        action.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
         action.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-        action.AddAuditedMemebers();
+        action
+            .AddReconcilableMember(includeControlTriggeredBy: false, requireControlState: true)
+            .AddAuditedMemebers();
 
         action
             .HasOne("Actor")
@@ -1684,15 +1683,14 @@ internal static class Configuration
         repository.Property<string>("Spec").HasColumnType("jsonb").IsRequired();
         repository.Property<Guid>("PasswordSecretId").IsRequired();
         repository.Property<string>("Status").HasColumnType(Text).HasMaxLength(64).IsRequired();
-        repository.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
         repository.Property<Guid?>("CurrentRunId").IsRequired(false);
-        repository.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
         repository.Property<DateTime?>("LastPrunedAt").HasColumnType(Timestamp).IsRequired(false);
         repository.Property<DateTime?>("LastCheckedAt").HasColumnType(Timestamp).IsRequired(false);
         repository.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         repository.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
-        repository.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
-        repository.AddAuditedMemebers();
+        repository
+            .AddReconcilableMember(includeControlTriggeredBy: false, requireControlState: true)
+            .AddAuditedMemebers();
 
         repository
             .HasOne("SecretDefinition")
@@ -1754,15 +1752,14 @@ internal static class Configuration
         policy.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(14400);
         policy.Property<bool>("AlertOnFailure").HasColumnType("boolean").IsRequired().HasDefaultValue(true);
         policy.Property<Guid>("RunAsActorId").IsRequired();
-        policy.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
         policy.Property<Guid?>("CurrentRunId").IsRequired(false);
-        policy.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
         policy.Property<DateTime?>("LastScheduledRunAt").HasColumnType(Timestamp).IsRequired(false);
         policy.Property<DateTime?>("FirstSuccessfulRunAt").HasColumnType(Timestamp).IsRequired(false);
         policy.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         policy.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
-        policy.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
-        policy.AddAuditedMemebers();
+        policy
+            .AddReconcilableMember(includeControlTriggeredBy: false, requireControlState: true)
+            .AddAuditedMemebers();
 
         policy
             .HasOne("BackupRepository")
@@ -2024,12 +2021,11 @@ internal static class Configuration
         project.Property<int>("TimeoutSeconds").HasColumnType(Integer).IsRequired().HasDefaultValue(1800);
         project.Property<int>("RetentionRunCount").HasColumnType(Integer).IsRequired().HasDefaultValue(20);
         project.Property<Guid?>("CurrentRunId").IsRequired(false);
-        project.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue(ResourceControlState.Idle.ToString());
-        project.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
         project.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         project.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
-        project.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
-        project.AddAuditedMemebers();
+        project
+            .AddReconcilableMember(includeControlTriggeredBy: false, requireControlState: true)
+            .AddAuditedMemebers();
 
         project.HasOne("GitRepository").WithMany().HasForeignKey("GitRepositoryId").OnDelete(DeleteBehavior.Restrict);
         project.HasOne("Platform").WithMany().HasForeignKey("PlatformId").OnDelete(DeleteBehavior.Restrict);
@@ -2132,8 +2128,9 @@ internal static class Configuration
         pool.Property<DateTime?>("LastValidatedAt").HasColumnType(Timestamp).IsRequired(false);
         pool.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         pool.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
-        pool.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
-        pool.AddAuditedMemebers();
+        pool
+            .AddReconcilableMember(requireControlState: true)
+            .AddAuditedMemebers();
 
         pool.HasIndex("NormalizedName").IsUnique().HasDatabaseName($"IX_{table}_NormalizedName");
         pool.HasIndex("Provider").HasDatabaseName($"IX_{table}_Provider");
@@ -2379,18 +2376,27 @@ internal static class Configuration
         return builder;
     }
 
-    private static EntityTypeBuilder AddReconcilableMember(this EntityTypeBuilder builder)
+    private static EntityTypeBuilder AddReconcilableMember(
+        this EntityTypeBuilder builder,
+        bool includeControlTriggeredBy = true,
+        bool requireControlState = false)
     {
-        builder.Property<long>("RowVersion").HasColumnType(BigInt).HasDefaultValue(0L);
+        builder.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
         builder.Property<long?>("ControlStartedAt").HasColumnType(BigInt).HasDefaultValue(null);
-        builder.Property<Guid?>("ControlTriggeredBy").IsRequired(false);
-        builder.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).HasDefaultValue(ResourceControlState.Idle.ToString());
+        var controlState = builder.Property<string>("ControlState").HasColumnType(Text).HasMaxLength(64).HasDefaultValue(ResourceControlState.Idle.ToString());
+        if (requireControlState)
+            controlState.IsRequired();
 
-        builder
-            .HasOne("Actor")
-            .WithMany()
-            .HasForeignKey("ControlTriggeredBy")
-            .OnDelete(DeleteBehavior.Restrict);
+        if (includeControlTriggeredBy)
+        {
+            builder.Property<Guid?>("ControlTriggeredBy").HasColumnType("uuid").IsRequired(false);
+
+            builder
+                .HasOne("Actor")
+                .WithMany()
+                .HasForeignKey("ControlTriggeredBy")
+                .OnDelete(DeleteBehavior.Restrict);
+        }
 
         return builder;
     }

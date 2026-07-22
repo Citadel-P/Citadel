@@ -21,3 +21,12 @@ internal sealed class BuildRunNotificationWorkItem(
     public Task ExecuteAsync(CancellationToken cancellationToken)
         => streamManager.SendBuildRunInfo(run, action);
 }
+
+internal sealed class BuildAgentPoolNotificationWorkItem(
+    IBuildAgentPoolStreamManager streamManager,
+    BuildAgentPool pool,
+    string action = "update") : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+        => streamManager.SendBuildAgentPoolInfo(pool, action);
+}

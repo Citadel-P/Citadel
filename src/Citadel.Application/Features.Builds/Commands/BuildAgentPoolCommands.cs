@@ -1,6 +1,7 @@
 using Application.Features.Builds.Models;
 using Application.Features.Deployments.Notifications;
 using Application.Services;
+using Application.Services.Builds;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -86,6 +87,7 @@ public sealed record RevokeBuildAgentPoolEdgeAgent(Guid PoolId) : ICommand<Resul
 internal sealed class CreateBuildAgentPoolHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
+    IBuildAgentPoolStreamManager buildAgentPoolStreamManager,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue)
     : ICommandHandler<CreateBuildAgentPool, Result<BuildAgentPoolResult>>
@@ -130,6 +132,7 @@ internal sealed class CreateBuildAgentPoolHandler(
             return Result.Failure<BuildAgentPoolResult>(new BadRequestError("One or more tags do not exist."));
 
         await unitOfWork.CommitAsync(cancellationToken);
+        await buildAgentPoolStreamManager.SendBuildAgentPoolInfo(pool, "create");
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return Result.Success(new BuildAgentPoolResult(pool));
     }
@@ -138,6 +141,7 @@ internal sealed class CreateBuildAgentPoolHandler(
 internal sealed class UpdateBuildAgentPoolHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
+    IBuildAgentPoolStreamManager buildAgentPoolStreamManager,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue)
     : ICommandHandler<UpdateBuildAgentPool, Result<BuildAgentPoolResult>>
@@ -180,6 +184,7 @@ internal sealed class UpdateBuildAgentPoolHandler(
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.BuildAgentPools.UpdateAsync(pool, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        await buildAgentPoolStreamManager.SendBuildAgentPoolInfo(pool);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return Result.Success(new BuildAgentPoolResult(pool));
     }
@@ -188,6 +193,7 @@ internal sealed class UpdateBuildAgentPoolHandler(
 internal sealed class RenameBuildAgentPoolHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
+    IBuildAgentPoolStreamManager buildAgentPoolStreamManager,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue)
     : ICommandHandler<RenameBuildAgentPool, Result<BuildAgentPoolResult>>
@@ -222,6 +228,7 @@ internal sealed class RenameBuildAgentPoolHandler(
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.BuildAgentPools.UpdateAsync(pool, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        await buildAgentPoolStreamManager.SendBuildAgentPoolInfo(pool);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return Result.Success(new BuildAgentPoolResult(pool));
     }
@@ -230,6 +237,7 @@ internal sealed class RenameBuildAgentPoolHandler(
 internal sealed class ArchiveBuildAgentPoolHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
+    IBuildAgentPoolStreamManager buildAgentPoolStreamManager,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue)
     : ICommandHandler<ArchiveBuildAgentPool, Result>
@@ -251,6 +259,7 @@ internal sealed class ArchiveBuildAgentPoolHandler(
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.BuildAgentPools.UpdateAsync(pool, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        await buildAgentPoolStreamManager.SendBuildAgentPoolInfo(pool, "delete");
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return Result.Success();
     }
@@ -289,6 +298,7 @@ internal sealed class RevokeBuildAgentPoolEdgeAgentHandler(IEdgeAgentManagementS
 internal sealed class PatchBuildAgentPoolMetadataHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
+    IBuildAgentPoolStreamManager buildAgentPoolStreamManager,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue)
     : ICommandHandler<PatchBuildAgentPoolMetadata, Result<BuildAgentPoolResult>>
@@ -330,6 +340,7 @@ internal sealed class PatchBuildAgentPoolMetadataHandler(
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.BuildAgentPools.UpdateAsync(pool, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        await buildAgentPoolStreamManager.SendBuildAgentPoolInfo(pool);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return Result.Success(new BuildAgentPoolResult(pool));
     }
@@ -338,7 +349,8 @@ internal sealed class PatchBuildAgentPoolMetadataHandler(
 internal sealed class TestBuildAgentPoolHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
-    IConnectorFactory<IImageConnector> imageConnectorFactory,
+    IBuildAgentPoolValidationService validationService,
+    IBuildAgentPoolStreamManager buildAgentPoolStreamManager,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue)
     : ICommandHandler<TestBuildAgentPool, Result<BuildAgentPoolResult>>
@@ -349,16 +361,33 @@ internal sealed class TestBuildAgentPoolHandler(
         if (pool is null)
             return Result.Failure<BuildAgentPoolResult>(new NotFoundError("Build pool not found."));
 
-        if (pool.ProviderSpec is not SelfManagedVmBuildAgentPoolProviderSpec vm)
+        if (pool.ProviderSpec is not SelfManagedVmBuildAgentPoolProviderSpec)
             return Result.Failure<BuildAgentPoolResult>(new ConflictError("Only self-managed Citadel Agent build pools can be tested."));
 
-        var target = ResolveSelfManagedVmTarget(pool, vm);
-        if (!target.IsSuccess(out var checkTarget, out var targetError))
-            return Result.Failure<BuildAgentPoolResult>(targetError!);
+        if (pool.ControlState == ResourceControlState.Processing)
+            return Result.Failure<BuildAgentPoolResult>(new ConflictError("Build pool test is already running."));
 
-        var validation = await TestSelfManagedVmAsync(checkTarget.Address, checkTarget.ConnectorType, imageConnectorFactory, cancellationToken);
         var now = DateTimeOffset.UtcNow;
+        var rowVersion = pool.RowVersion;
+        pool.MarkProcessing(userContextAccessor.Current.ActorId, now);
+        var marked = await unitOfWork.BuildAgentPools.UpdateProcessingAsync(
+            pool.Id,
+            pool.ControlState,
+            pool.ControlStartedAt,
+            rowVersion,
+            checkRowVersion: true,
+            pool.ControlTriggeredBy,
+            cancellationToken);
+        if (marked == 0)
+            return Result.Failure<BuildAgentPoolResult>(new ConflictError("Build pool test is already running."));
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        await buildAgentPoolStreamManager.SendBuildAgentPoolInfo(pool);
+
+        var validation = await validationService.ValidateAsync(pool, cancellationToken);
+        now = DateTimeOffset.UtcNow;
         pool.ApplyValidation(validation.Status, validation.Message, now);
+        pool.MarkIdle(now);
 
         var activity = BuildAgentPoolActivity.Create(
             pool,
@@ -369,67 +398,9 @@ internal sealed class TestBuildAgentPoolHandler(
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.BuildAgentPools.UpdateAsync(pool, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        await buildAgentPoolStreamManager.SendBuildAgentPoolInfo(pool);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return Result.Success(new BuildAgentPoolResult(pool));
-    }
-
-    private static Result<SelfManagedVmCheckTarget> ResolveSelfManagedVmTarget(
-        BuildAgentPool pool,
-        SelfManagedVmBuildAgentPoolProviderSpec vm)
-    {
-        if (vm.ConnectionMode == BuildAgentPoolConnectionMode.EdgeAgent)
-        {
-            return new SelfManagedVmCheckTarget($"edge-build-pool://{pool.Id:D}", PlatformConnectorType.EdgeAgent);
-        }
-
-        if (string.IsNullOrWhiteSpace(vm.Endpoint))
-            return Result.Failure<SelfManagedVmCheckTarget>(new BadRequestError("Self-managed VM endpoint is required for this build pool."));
-
-        return new SelfManagedVmCheckTarget(vm.Endpoint, PlatformConnectorType.Agent);
-    }
-
-    private static async Task<(BuildAgentPoolValidationStatus Status, string Message)> TestSelfManagedVmAsync(
-        string endpoint,
-        PlatformConnectorType connectorType,
-        IConnectorFactory<IImageConnector> imageConnectorFactory,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var connector = imageConnectorFactory.GetConnector(connectorType);
-            var result = await connector.CheckBuildHostAsync(endpoint, cancellationToken);
-            if (!result.IsSuccess(out var capabilities, out var error))
-                return (BuildAgentPoolValidationStatus.Invalid, $"Citadel Agent build capability check failed: {error?.Message ?? "Unknown error."}");
-
-            if (!capabilities.Available)
-                return (BuildAgentPoolValidationStatus.Invalid, "Citadel Agent can be reached, but Docker build capabilities are not available.");
-
-            return (BuildAgentPoolValidationStatus.Ready, BuildCapabilityMessage(capabilities));
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return (BuildAgentPoolValidationStatus.Invalid, $"Citadel Agent build capability check failed: {ex.Message}");
-        }
-    }
-
-    private sealed record SelfManagedVmCheckTarget(string Address, PlatformConnectorType ConnectorType);
-
-    private static string BuildCapabilityMessage(BuildHostCapabilitiesResult capabilities)
-    {
-        var docker = string.IsNullOrWhiteSpace(capabilities.DockerVersion) ? "Docker" : $"Docker {capabilities.DockerVersion}";
-        var api = string.IsNullOrWhiteSpace(capabilities.ApiVersion) ? null : $"API {capabilities.ApiVersion}";
-        var platform = string.Join(
-            "/",
-            new[] { capabilities.OperatingSystem, capabilities.Architecture }.Where(static value => !string.IsNullOrWhiteSpace(value)));
-        var buildKit = string.IsNullOrWhiteSpace(capabilities.BuildKitVersion)
-            ? null
-            : $"BuildKit {capabilities.BuildKitVersion}";
-
-        return string.Join(" - ", new[] { docker, api, string.IsNullOrWhiteSpace(platform) ? null : platform, buildKit }.Where(static value => !string.IsNullOrWhiteSpace(value)));
     }
 }
 

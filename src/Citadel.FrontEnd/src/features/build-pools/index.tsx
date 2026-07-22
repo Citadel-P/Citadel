@@ -1,13 +1,10 @@
 import { BuildAgentPoolView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
-import { useResourceTagFilter } from '@/features/tags/components';
 import { CitadelIcons } from '@/lib/icons';
-import { useRead } from '@/lib/hooks';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { BuildPoolDropdownActions, BuildPoolGroupActions } from './actions';
 import { BuildPoolsTable } from './table';
-
-const EMPTY_BUILD_POOLS: never[] = [];
+import { useBuildPoolsGroup } from './useBuildPoolsGroup';
 
 export const BuildPoolComponents: RequiredComponents<BuildAgentPoolView> = {
   Icon: CitadelIcons.BuildAgentPool,
@@ -25,11 +22,8 @@ export const BuildPoolComponents: RequiredComponents<BuildAgentPoolView> = {
     <ActionBar type="BuildAgentPool" items={items} actions={Object.values(BuildPoolGroupActions)} />
   ),
   useData(): ResourceDataHookResult<BuildAgentPoolView> {
-    const { selectedTagNames } = useResourceTagFilter();
-    const { data, isLoading } = useRead('listBuildAgentPools', {
-      query: selectedTagNames.length > 0 ? { tags: selectedTagNames } : undefined,
-    });
-    return { items: data?.data?.pools ?? EMPTY_BUILD_POOLS, isLoading, capabilities: data?.data?.capabilities };
+    const { pools, isLoading, capabilities } = useBuildPoolsGroup();
+    return { items: pools, isLoading, capabilities };
   },
   filterItems: filterBuildPools,
 };

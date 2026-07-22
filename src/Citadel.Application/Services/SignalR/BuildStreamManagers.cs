@@ -16,6 +16,11 @@ public interface IBuildRunStreamManager : IStreamGroupManager
     Task SendBuildRunLogs(Guid runId, IReadOnlyList<BuildRunLogEntry> entries);
 }
 
+public interface IBuildAgentPoolStreamManager : IStreamGroupManager
+{
+    Task SendBuildAgentPoolInfo(BuildAgentPool pool, string action = "update");
+}
+
 internal sealed class BuildProjectStreamManager(IApplicationHubDispatcher dispatcher)
     : BaseStreamManager<StreamContext>, IBuildProjectStreamManager
 {
@@ -36,4 +41,11 @@ internal sealed class BuildRunStreamManager(IApplicationHubDispatcher dispatcher
 
         return dispatcher.SendBuildRunLogs(runId, entries);
     }
+}
+
+internal sealed class BuildAgentPoolStreamManager(IApplicationHubDispatcher dispatcher)
+    : BaseStreamManager<StreamContext>, IBuildAgentPoolStreamManager
+{
+    public Task SendBuildAgentPoolInfo(BuildAgentPool pool, string action = "update")
+        => dispatcher.SendBuildAgentPoolInfo(pool, action);
 }

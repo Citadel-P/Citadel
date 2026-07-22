@@ -1,5 +1,6 @@
 using Application.Features.Builds.Commands;
 using Application.Services;
+using Application.Services.Builds;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -37,13 +38,25 @@ public sealed class BuildAgentPoolCommandTests
         Assert.Equal(BuildAgentPoolValidationStatus.Ready, tested.Pool.LastValidationStatus);
         Assert.Equal("Docker 28.0.0 - API 1.49 - linux/amd64 - BuildKit v0.20.2", tested.Pool.LastValidationMessage);
         Assert.NotNull(tested.Pool.LastValidatedAt);
+        Assert.Equal(ResourceControlState.Idle, tested.Pool.ControlState);
         context.BuildAgentPools.Verify(x => x.UpdateAsync(pool, It.IsAny<CancellationToken>()), Times.Once);
+        context.BuildAgentPools.Verify(
+            x => x.UpdateProcessingAsync(
+                pool.Id,
+                ResourceControlState.Processing,
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                true,
+                actorId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
         context.ActivityEvents.Verify(
             x => x.AddAsync(
                 It.Is<ActivityEvent>(activity => ActivityIsReadyBuildPoolTest(activity)),
                 It.IsAny<CancellationToken>()),
             Times.Once);
-        context.UnitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        context.UnitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        context.StreamManager.Verify(x => x.SendBuildAgentPoolInfo(pool, "update"), Times.Exactly(2));
         context.NotificationQueue.Verify(x => x.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -87,7 +100,7 @@ public sealed class BuildAgentPoolCommandTests
         Assert.Equal("Citadel Agent build capability check failed: Docker ping failed", tested.Pool.LastValidationMessage);
         Assert.NotNull(tested.Pool.LastValidatedAt);
         context.BuildAgentPools.Verify(x => x.UpdateAsync(pool, It.IsAny<CancellationToken>()), Times.Once);
-        context.UnitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        context.UnitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -106,7 +119,7 @@ public sealed class BuildAgentPoolCommandTests
         Assert.Equal(BuildAgentPoolValidationStatus.Invalid, tested.Pool.LastValidationStatus);
         Assert.Equal("Citadel Agent build capability check failed: connection refused", tested.Pool.LastValidationMessage);
         context.BuildAgentPools.Verify(x => x.UpdateAsync(pool, It.IsAny<CancellationToken>()), Times.Once);
-        context.UnitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        context.UnitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -150,6 +163,16 @@ public sealed class BuildAgentPoolCommandTests
         Assert.True(result.IsFailure(out var error));
         Assert.Contains("Only self-managed", error.Message, StringComparison.OrdinalIgnoreCase);
         context.BuildAgentPools.Verify(x => x.UpdateAsync(It.IsAny<BuildAgentPool>(), It.IsAny<CancellationToken>()), Times.Never);
+        context.BuildAgentPools.Verify(
+            x => x.UpdateProcessingAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                It.IsAny<bool>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
         context.UnitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
         context.NotificationQueue.Verify(x => x.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -166,6 +189,16 @@ public sealed class BuildAgentPoolCommandTests
             .ReturnsAsync(pool);
         buildAgentPools
             .Setup(x => x.UpdateAsync(pool, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        buildAgentPools
+            .Setup(x => x.UpdateProcessingAsync(
+                pool.Id,
+                ResourceControlState.Processing,
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                true,
+                actorId,
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
         var activityEvents = new Mock<IActivityEventRepository>(MockBehavior.Strict);
@@ -199,11 +232,16 @@ public sealed class BuildAgentPoolCommandTests
         notificationQueue
             .Setup(x => x.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()))
             .Returns(ValueTask.CompletedTask);
+        var streamManager = new Mock<IBuildAgentPoolStreamManager>(MockBehavior.Strict);
+        streamManager
+            .Setup(x => x.SendBuildAgentPoolInfo(pool, "update"))
+            .Returns(Task.CompletedTask);
 
         var handler = new TestBuildAgentPoolHandler(
             unitOfWork.Object,
             CreateUserContextAccessor(actorId),
-            imageConnectorFactory.Object,
+            new BuildAgentPoolValidationService(imageConnectorFactory.Object),
+            streamManager.Object,
             Mock.Of<IActivityStreamManager>(),
             notificationQueue.Object);
 
@@ -214,6 +252,7 @@ public sealed class BuildAgentPoolCommandTests
             activityEvents,
             imageConnector,
             imageConnectorFactory,
+            streamManager,
             notificationQueue);
     }
 
@@ -291,5 +330,6 @@ public sealed class BuildAgentPoolCommandTests
         Mock<IActivityEventRepository> ActivityEvents,
         Mock<IImageConnector> ImageConnector,
         Mock<IConnectorFactory<IImageConnector>> ImageConnectorFactory,
+        Mock<IBuildAgentPoolStreamManager> StreamManager,
         Mock<INotificationQueue> NotificationQueue);
 }

@@ -1899,6 +1899,22 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDefaultValue(600)
                         .HasColumnName("cleanuptimeoutseconds");
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("controlstartedat");
+
+                    b.Property<string>("ControlState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Idle")
+                        .HasColumnName("controlstate");
+
+                    b.Property<Guid?>("ControlTriggeredBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("controltriggeredby");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -2019,6 +2035,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("ArchivedAt")
                         .HasDatabaseName("ix_buildagentpools_archivedat");
+
+                    b.HasIndex("ControlTriggeredBy")
+                        .HasDatabaseName("ix_buildagentpools_controltriggeredby");
 
                     b.HasIndex("CreatedByActorId")
                         .HasDatabaseName("ix_buildagentpools_createdbyactorid");
@@ -5500,6 +5519,12 @@ namespace Infrastructure.Migrations.Migrations
 
             modelBuilder.Entity("BuildAgentPool", b =>
                 {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("ControlTriggeredBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_buildagentpools_actors_controltriggeredby");
+
                     b.HasOne("Actor", null)
                         .WithMany()
                         .HasForeignKey("CreatedByActorId")
