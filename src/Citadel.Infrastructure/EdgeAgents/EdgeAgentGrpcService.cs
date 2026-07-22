@@ -1,4 +1,5 @@
 using Citadel.Edge.V1;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Google.Protobuf;
@@ -18,6 +19,12 @@ internal sealed class EdgeAgentGrpcService(
 {
     private const int NonceSize = 32;
     private const int SupportedProtocolVersion = EdgeAgentDefaults.ProtocolVersion;
+    private static readonly string[] RequiredBuildAgentPoolCommands =
+    [
+        "images.build",
+        "images.push",
+        "images.checkBuildHost"
+    ];
     private static readonly SignatureAlgorithm SignatureAlgorithm = SignatureAlgorithm.Ed25519;
 
     public override async Task Connect(
@@ -46,13 +53,16 @@ internal sealed class EdgeAgentGrpcService(
             }
 
             session = sessionRegistry.Register(new EdgeAgentSession(
+                authentication.ResourceType,
+                authentication.ResourceId,
                 authentication.PlatformId,
                 authentication.AgentId,
                 authentication.AgentFingerprint,
                 Guid.CreateVersion7().ToString("D")));
 
             await edgeAgentManagementService.MarkConnectedAsync(
-                authentication.PlatformId,
+                authentication.ResourceType,
+                authentication.ResourceId,
                 authentication.Hostname,
                 authentication.AgentVersion,
                 authentication.CapabilitiesJson,
@@ -60,8 +70,9 @@ internal sealed class EdgeAgentGrpcService(
                 context.CancellationToken);
 
             logger.LogInformation(
-                "Edge Agent session accepted for platform {PlatformId} agent {AgentId}",
-                authentication.PlatformId,
+                "Edge Agent session accepted for {ResourceType} {ResourceId} agent {AgentId}",
+                authentication.ResourceType,
+                authentication.ResourceId,
                 authentication.AgentId);
 
             session.Enqueue(new CoreEnvelope
@@ -72,7 +83,9 @@ internal sealed class EdgeAgentGrpcService(
                 {
                     PlatformId = session.PlatformId.ToString("D"),
                     AgentId = session.AgentId.ToString("D"),
-                    SessionId = session.SessionId
+                    SessionId = session.SessionId,
+                    ResourceType = MapResourceType(session.ResourceType),
+                    ResourceId = session.ResourceId.ToString("D")
                 }
             });
 
@@ -99,10 +112,11 @@ internal sealed class EdgeAgentGrpcService(
                 sessionRegistry.Remove(session);
                 session.Complete();
                 await edgeAgentManagementService.MarkDisconnectedAsync(
-                    session.PlatformId,
+                    session.ResourceType,
+                    session.ResourceId,
                     DateTime.UtcNow,
                     CancellationToken.None);
-                logger.LogInformation("Edge Agent session disconnected for platform {PlatformId}", session.PlatformId);
+                logger.LogInformation("Edge Agent session disconnected for {ResourceType} {ResourceId}", session.ResourceType, session.ResourceId);
             }
         }
     }
@@ -172,6 +186,8 @@ internal sealed class EdgeAgentGrpcService(
 
         return new EdgeAgentAuthentication(
             enrollment.PlatformId,
+            enrollment.ResourceType,
+            enrollment.ResourceId ?? enrollment.PlatformId,
             enrollment.AgentId,
             fingerprint,
             request.Hostname,
@@ -185,10 +201,13 @@ internal sealed class EdgeAgentGrpcService(
         IServerStreamWriter<CoreEnvelope> responseStream,
         CancellationToken cancellationToken)
     {
+        var resourceType = MapResourceType(hello.ResourceType);
+        var resourceIdText = string.IsNullOrWhiteSpace(hello.ResourceId) ? hello.PlatformId : hello.ResourceId;
         if (!Guid.TryParse(hello.PlatformId, out var platformId) ||
+            !Guid.TryParse(resourceIdText, out var resourceId) ||
             !Guid.TryParse(hello.AgentId, out var agentId))
         {
-            await RejectAsync(responseStream, "Edge Agent hello contains an invalid platform or agent id.");
+            await RejectAsync(responseStream, "Edge Agent hello contains an invalid target, platform, or agent id.");
             return null;
         }
 
@@ -204,8 +223,16 @@ internal sealed class EdgeAgentGrpcService(
             return null;
         }
 
+        if (resourceType == Domain.EdgeAgentResourceType.BuildAgentPool &&
+            !EdgeAgentCapabilities.HasRequiredCommands(capabilitiesJson, RequiredBuildAgentPoolCommands, out var missingCommand))
+        {
+            await RejectAsync(responseStream, $"Build pool Edge Agent must advertise capability '{missingCommand}'.");
+            return null;
+        }
+
         var bindingResult = await edgeAgentManagementService.GetReconnectBindingAsync(
-            platformId,
+            resourceType,
+            resourceId,
             agentId,
             hello.AgentFingerprint,
             cancellationToken);
@@ -258,6 +285,8 @@ internal sealed class EdgeAgentGrpcService(
 
         return new EdgeAgentAuthentication(
             platformId,
+            binding.NormalizedResourceType,
+            binding.NormalizedResourceId,
             agentId,
             hello.AgentFingerprint,
             hello.Hostname,
@@ -278,11 +307,12 @@ internal sealed class EdgeAgentGrpcService(
                 var capabilitiesJson = EdgeAgentCapabilities.NormalizeHeartbeatCapabilities(heartbeat.CapabilitiesJson);
                 if (capabilitiesJson is null)
                 {
-                    logger.LogWarning("Ignoring invalid Edge Agent heartbeat capabilities for platform {PlatformId}", session.PlatformId);
+                    logger.LogWarning("Ignoring invalid Edge Agent heartbeat capabilities for {ResourceType} {ResourceId}", session.ResourceType, session.ResourceId);
                 }
 
                 await edgeAgentManagementService.MarkHeartbeatAsync(
-                    session.PlatformId,
+                    session.ResourceType,
+                    session.ResourceId,
                     new EdgeAgentHeartbeatSnapshot(
                         heartbeat.DockerReachable,
                         NullIfEmpty(heartbeat.DockerVersion),
@@ -381,9 +411,21 @@ internal sealed class EdgeAgentGrpcService(
 
     private sealed record EdgeAgentAuthentication(
         Guid PlatformId,
+        Domain.EdgeAgentResourceType ResourceType,
+        Guid ResourceId,
         Guid AgentId,
         string AgentFingerprint,
         string Hostname,
         string AgentVersion,
         string CapabilitiesJson);
+
+    private static Domain.EdgeAgentResourceType MapResourceType(Citadel.Edge.V1.EdgeAgentResourceType resourceType)
+        => resourceType == Citadel.Edge.V1.EdgeAgentResourceType.BuildAgentPool
+            ? Domain.EdgeAgentResourceType.BuildAgentPool
+            : Domain.EdgeAgentResourceType.Platform;
+
+    private static Citadel.Edge.V1.EdgeAgentResourceType MapResourceType(Domain.EdgeAgentResourceType resourceType)
+        => resourceType == Domain.EdgeAgentResourceType.BuildAgentPool
+            ? Citadel.Edge.V1.EdgeAgentResourceType.BuildAgentPool
+            : Citadel.Edge.V1.EdgeAgentResourceType.Platform;
 }

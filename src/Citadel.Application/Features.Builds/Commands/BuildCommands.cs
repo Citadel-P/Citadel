@@ -426,12 +426,19 @@ internal sealed class QueueBuildRunHandler(
         if (repository is null)
             return Result.Failure<BuildRunResult>(new NotFoundError("Git repository not found."));
 
-        if (project.BuilderKind == BuildProjectBuilderKind.BuildAgentPool)
-            return Result.Failure<BuildRunResult>(new ConflictError("Build Pool execution is not implemented yet. Use a Docker Platform builder until the external builder runtime slice is installed."));
+        var buildTargetResult = await ResolveBuildTargetAsync(project, unitOfWork, cancellationToken);
+        if (!buildTargetResult.IsSuccess(out var buildTarget, out var platformSnapshotError))
+            return Result.Failure<BuildRunResult>(platformSnapshotError!);
 
-        var platform = await unitOfWork.Platforms.GetInfoAsync(project.PlatformId, cancellationToken);
-        if (platform is null)
-            return Result.Failure<BuildRunResult>(new NotFoundError("Platform not found."));
+        if (buildTarget.MaxActiveBuilders.HasValue)
+        {
+            var activePoolRuns = await unitOfWork.BuildRuns.CountActiveByBuildAgentPoolAsync(buildTarget.PlatformSnapshot.Id, cancellationToken);
+            if (activePoolRuns >= buildTarget.MaxActiveBuilders.Value)
+            {
+                return Result.Failure<BuildRunResult>(
+                    new ConflictError($"Build pool \"{buildTarget.PlatformSnapshot.Name}\" has no available builders."));
+            }
+        }
 
         var registry = await unitOfWork.Registries.GetAsync(project.RegistryId, cancellationToken);
         if (registry is null)
@@ -450,7 +457,7 @@ internal sealed class QueueBuildRunHandler(
             project.Target,
             project.BuildArgs,
             [.. project.BuildSecrets.Select(static s => s.Id)],
-            new BuildPlatformSnapshot(platform.Id, platform.Name, platform.Address, platform.ConnectorType),
+            buildTarget.PlatformSnapshot,
             new BuildRegistrySnapshot(registry.Id, registry.Name, registry.RegistryHost),
             project.ImageRepository,
             project.TagTemplates,
@@ -480,6 +487,71 @@ internal sealed class QueueBuildRunHandler(
         await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
         return Result.Success(new BuildRunResult(run));
     }
+
+    private static async Task<Result<BuildTarget>> ResolveBuildTargetAsync(
+        BuildProject project,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        if (project.BuilderKind == BuildProjectBuilderKind.Platform)
+        {
+            var platform = await unitOfWork.Platforms.GetInfoAsync(project.PlatformId, cancellationToken);
+            return platform is null
+                ? Result.Failure<BuildTarget>(new NotFoundError("Platform not found."))
+                : new BuildTarget(
+                    new BuildPlatformSnapshot(platform.Id, platform.Name, platform.Address, platform.ConnectorType),
+                    MaxActiveBuilders: null);
+        }
+
+        if (project.BuildAgentPoolId is null || project.BuildAgentPoolId.Value == Guid.Empty)
+            return Result.Failure<BuildTarget>(new BadRequestError("Build pool is required."));
+
+        var pool = await unitOfWork.BuildAgentPools.GetAsync(project.BuildAgentPoolId.Value, cancellationToken);
+        if (pool is null)
+            return Result.Failure<BuildTarget>(new NotFoundError("Build pool not found."));
+
+        if (!pool.Enabled)
+            return Result.Failure<BuildTarget>(new ConflictError("Build pool is disabled."));
+
+        return pool.ProviderSpec switch
+        {
+            SelfManagedVmBuildAgentPoolProviderSpec vm => await ResolveSelfManagedBuildTargetAsync(pool, vm, unitOfWork, cancellationToken),
+            AwsEc2BuildAgentPoolProviderSpec => Result.Failure<BuildTarget>(
+                new ConflictError("AWS EC2 build pool execution is not implemented yet. Use a self-managed Citadel Agent build pool for this runtime slice.")),
+            _ => Result.Failure<BuildTarget>(new ConflictError("Build pool provider is unsupported."))
+        };
+    }
+
+    private static async Task<Result<BuildTarget>> ResolveSelfManagedBuildTargetAsync(
+        BuildAgentPool pool,
+        SelfManagedVmBuildAgentPoolProviderSpec vm,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        if (vm.ConnectionMode == BuildAgentPoolConnectionMode.EdgeAgent)
+        {
+            return new BuildTarget(
+                new BuildPlatformSnapshot(
+                    pool.Id,
+                    pool.Name,
+                    $"edge-build-pool://{pool.Id:D}",
+                    PlatformConnectorType.EdgeAgent),
+                pool.MaxActiveBuilders);
+        }
+
+        if (string.IsNullOrWhiteSpace(vm.Endpoint))
+            return Result.Failure<BuildTarget>(new BadRequestError("Self-managed VM endpoint is required for this build pool."));
+
+        return new BuildTarget(
+            new BuildPlatformSnapshot(
+                pool.Id,
+                pool.Name,
+                vm.Endpoint,
+                PlatformConnectorType.Agent),
+            pool.MaxActiveBuilders);
+    }
+
+    private sealed record BuildTarget(BuildPlatformSnapshot PlatformSnapshot, int? MaxActiveBuilders);
 
     internal static IReadOnlyList<string> ResolveImageReferences(
         string registryHost,

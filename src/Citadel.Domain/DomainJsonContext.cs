@@ -140,6 +140,7 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<BuildRunStatus>),
         typeof(JsonStringEnumConverter<BuildProjectBuilderKind>),
         typeof(JsonStringEnumConverter<BuildAgentPoolProvider>),
+        typeof(JsonStringEnumConverter<BuildAgentPoolConnectionMode>),
         typeof(JsonStringEnumConverter<BuildAgentPoolValidationStatus>),
         typeof(JsonStringEnumConverter<CpuArchitecture>),
         typeof(JsonStringEnumConverter<WebhookProvider>),
@@ -257,6 +258,7 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(Domain.Entities.Builds.BuildAgentPoolProviderSpec))]
 [JsonSerializable(typeof(Domain.Entities.Builds.AwsEc2BuildAgentPoolProviderSpec))]
 [JsonSerializable(typeof(Domain.Entities.Builds.SelfManagedVmBuildAgentPoolProviderSpec))]
+[JsonSerializable(typeof(BuildAgentPoolConnectionMode))]
 [JsonSerializable(typeof(Domain.Entities.Builds.BuildAgentPoolSnapshot))]
 [JsonSerializable(typeof(IReadOnlyDictionary<string, string>))]
 [JsonSerializable(typeof(IReadOnlyList<string>))]
@@ -515,6 +517,7 @@ public partial class BackupJsonContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<BuildRunStatus>),
         typeof(JsonStringEnumConverter<BuildProjectBuilderKind>),
         typeof(JsonStringEnumConverter<BuildAgentPoolProvider>),
+        typeof(JsonStringEnumConverter<BuildAgentPoolConnectionMode>),
         typeof(JsonStringEnumConverter<CpuArchitecture>),
         typeof(JsonStringEnumConverter<BuildAgentPoolValidationStatus>),
         typeof(JsonStringEnumConverter<PlatformConnectorType>),

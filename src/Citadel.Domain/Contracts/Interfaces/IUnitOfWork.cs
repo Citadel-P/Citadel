@@ -339,6 +339,7 @@ public interface IBuildRunRepository
     Task<IEnumerable<BuildRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken);
     Task<BuildRun?> TryClaimAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
     Task<bool> HasActiveRunAsync(Guid projectId, CancellationToken cancellationToken);
+    Task<int> CountActiveByBuildAgentPoolAsync(Guid buildAgentPoolId, CancellationToken cancellationToken);
     Task<BuildRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
     Task<BuildRun?> InterruptQueuedOrRunningAsync(Guid id, DateTimeOffset interruptedAt, string reason, CancellationToken cancellationToken);
     Task<IReadOnlyList<BuildRun>> DeleteTerminalRunsBeyondRetentionAsync(Guid projectId, int keepRunCount, CancellationToken cancellationToken);
@@ -977,20 +978,36 @@ public interface IEdgeAgentRepository
 {
     Task<int> AddEnrollmentAsync(EdgeAgentEnrollment enrollment, CancellationToken cancellationToken);
     Task<EdgeAgentEnrollment?> GetActiveEnrollmentAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken);
+    Task<EdgeAgentEnrollment?> GetActiveEnrollmentAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime utcNow, CancellationToken cancellationToken);
     Task<EdgeAgentEnrollment?> GetEnrollmentByTokenHashAsync(string tokenHash, CancellationToken cancellationToken);
     Task<int> MarkEnrollmentUsedAsync(Guid enrollmentId, DateTime usedAtUtc, CancellationToken cancellationToken);
     Task<EdgeAgentBinding?> GetBindingByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<EdgeAgentBinding?> GetBindingByResourceAsync(EdgeAgentResourceType resourceType, Guid resourceId, CancellationToken cancellationToken);
     Task<EdgeAgentPlatformState?> GetPlatformStateByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<EdgeAgentBinding?> GetBindingByAgentAsync(Guid platformId, Guid agentId, CancellationToken cancellationToken);
+    Task<EdgeAgentBinding?> GetBindingByAgentAsync(EdgeAgentResourceType resourceType, Guid resourceId, Guid agentId, CancellationToken cancellationToken);
     Task<int> AddBindingAsync(EdgeAgentBinding binding, CancellationToken cancellationToken);
     Task<int> UpdateBindingConnectedAsync(Guid platformId, DateTime connectedAtUtc, string hostname, string agentVersion, string capabilitiesJson, CancellationToken cancellationToken);
+    Task<int> UpdateBindingConnectedAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime connectedAtUtc, string hostname, string agentVersion, string capabilitiesJson, CancellationToken cancellationToken);
     Task<int> UpdateBindingHeartbeatAsync(Guid platformId, DateTime heartbeatAtUtc, string? hostname, string? agentVersion, string? capabilitiesJson, CancellationToken cancellationToken);
+    Task<int> UpdateBindingHeartbeatAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime heartbeatAtUtc, string? hostname, string? agentVersion, string? capabilitiesJson, CancellationToken cancellationToken);
     Task<int> UpdateBindingDisconnectedAsync(Guid platformId, DateTime disconnectedAtUtc, CancellationToken cancellationToken);
+    Task<int> UpdateBindingDisconnectedAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime disconnectedAtUtc, CancellationToken cancellationToken);
     Task<int> RevokeBindingAsync(Guid platformId, DateTime revokedAtUtc, CancellationToken cancellationToken);
+    Task<int> RevokeBindingAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime revokedAtUtc, CancellationToken cancellationToken);
 }
 
 public interface IEdgeAgentCommandRouter
 {
+    Task<EdgeAgentCommandRouterResult> SendUnaryAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken);
+
     Task<EdgeAgentCommandRouterResult> SendUnaryAsync(
         Guid platformId,
         EdgeAgentCommandKind kind,
@@ -1000,7 +1017,25 @@ public interface IEdgeAgentCommandRouter
         CancellationToken cancellationToken);
 
     IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken);
+
+    IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
         Guid platformId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken);
+
+    Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
         EdgeAgentCommandKind kind,
         byte[] payload,
         TimeSpan timeout,

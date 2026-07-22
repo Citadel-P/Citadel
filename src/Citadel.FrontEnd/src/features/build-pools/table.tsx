@@ -1,7 +1,9 @@
 import {
   BuildAgentPoolProvider,
+  BuildAgentPoolConnectionMode,
   BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec,
   BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec,
+  BuildAgentPoolValidationStatus,
   BuildAgentPoolView,
 } from '@/api/generated/api.types';
 import { ContentCard } from '@/components/custom/content-card';
@@ -12,9 +14,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
 import { TagChips } from '@/features/tags/components';
 import { useSelectedResources } from '@/lib/atoms';
+import type { DateTimeFormatter } from '@/lib/date-time';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData } from '@/pages/types';
 import { ColumnDef } from '@tanstack/react-table';
-import { Cpu, Server } from 'lucide-react';
+import { Cpu, ShieldCheck, Server } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -33,7 +37,8 @@ export function BuildPoolsTable({
   actions: ActionMap;
 }) {
   const [, setSelectedResources] = useSelectedResources<BuildAgentPoolView>('BuildAgentPool');
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const formatDateTime = useProfileDateTimeFormatter();
+  const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
   return (
     <ContentCard>
@@ -42,7 +47,7 @@ export function BuildPoolsTable({
   );
 }
 
-const columns = (actions: ActionMap): ColumnDef<BuildAgentPoolView>[] => [
+const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnDef<BuildAgentPoolView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -86,6 +91,12 @@ const columns = (actions: ActionMap): ColumnDef<BuildAgentPoolView>[] => [
     sortingFn: (rowA, rowB) => Number(rowA.original.maxActiveBuilders) - Number(rowB.original.maxActiveBuilders),
   },
   {
+    accessorKey: 'lastValidationStatus',
+    header: ({ column }) => <SortableCell cellName="Validation" column={column} />,
+    cell: ({ row }) => <ValidationCell pool={row.original} formatDateTime={formatDateTime} />,
+    sortingFn: (rowA, rowB) => rowA.original.lastValidationStatus.localeCompare(rowB.original.lastValidationStatus),
+  },
+  {
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
@@ -117,7 +128,10 @@ const ProviderCell = ({ pool }: { pool: BuildAgentPoolView }) => {
     ? (pool.providerSpec as BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec)
     : undefined;
   const label = aws ? 'AWS EC2' : vm ? 'Self-managed VM' : pool.provider;
-  const details = aws ? `${aws.region} - ${aws.instanceType}` : vm ? `${vm.endpoint} - ${vm.maxWorkers} worker(s)` : '';
+  const vmTarget = vm?.connectionMode === BuildAgentPoolConnectionMode.EdgeAgent
+    ? 'Edge Agent'
+    : vm?.endpoint;
+  const details = aws ? `${aws.region} - ${aws.instanceType}` : vm ? `${vmTarget ?? 'Unconfigured'} - ${vm.maxWorkers} worker(s)` : '';
 
   return (
     <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
@@ -129,3 +143,40 @@ const ProviderCell = ({ pool }: { pool: BuildAgentPoolView }) => {
     </span>
   );
 };
+
+const ValidationCell = ({
+  pool,
+  formatDateTime,
+}: {
+  pool: BuildAgentPoolView;
+  formatDateTime: DateTimeFormatter;
+}) => {
+  const testedAt = pool.lastValidatedAt ? formatDateTime(pool.lastValidatedAt) : 'Not tested yet';
+  const title = [validationLabel(pool.lastValidationStatus), testedAt, pool.lastValidationMessage].filter(Boolean).join(' - ');
+
+  return (
+    <span className="inline-flex min-w-0 max-w-72 items-center gap-2 text-sm" title={title}>
+      <StateIndicator value={pool.lastValidationStatus} kind="buildAgentPoolValidation" />
+      <ShieldCheck className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 truncate">
+        <span>{validationLabel(pool.lastValidationStatus)}</span>
+        <span className="ml-2 text-xs text-muted-foreground">{testedAt}</span>
+      </span>
+    </span>
+  );
+};
+
+function validationLabel(status: BuildAgentPoolValidationStatus) {
+  switch (status) {
+    case BuildAgentPoolValidationStatus.NotTested:
+      return 'Not tested';
+    case BuildAgentPoolValidationStatus.Ready:
+      return 'Ready';
+    case BuildAgentPoolValidationStatus.Invalid:
+      return 'Invalid';
+    case BuildAgentPoolValidationStatus.Degraded:
+      return 'Degraded';
+    default:
+      return String(status);
+  }
+}

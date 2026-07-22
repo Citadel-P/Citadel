@@ -424,6 +424,12 @@ export enum BuildAgentPoolProvider {
   SelfManagedVm = "SelfManagedVm",
 }
 
+/** @default "InboundAgent" */
+export enum BuildAgentPoolConnectionMode {
+  InboundAgent = "InboundAgent",
+  EdgeAgent = "EdgeAgent",
+}
+
 export enum BackupSourceType {
   DockerVolume = "DockerVolume",
   CitadelSystem = "CitadelSystem",
@@ -3338,7 +3344,7 @@ export interface BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec {
 
 export interface BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec {
   $type?: "SelfManagedVm";
-  endpoint: string;
+  endpoint: null | string;
   architecture: CpuArchitecture;
   /**
    * @format int32
@@ -3348,6 +3354,7 @@ export interface BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSp
   /** @format uuid */
   registrationSecretId?: null | string;
   labels?: null | string[];
+  connectionMode?: BuildAgentPoolConnectionMode;
   provider?: BuildAgentPoolProvider;
 }
 
@@ -15561,6 +15568,113 @@ export class Api<
         secure: true,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name TestBuildAgentPool
+     * @summary Test build pool
+     * @request POST:/api/v1/buildAgentPools/{id}/test
+     * @secure
+     * @response `200` `BuildAgentPoolView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    testBuildAgentPool: (id: string, params: RequestParams = {}) =>
+      this.request<
+        BuildAgentPoolView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/buildAgentPools/${id}/test`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name CreateBuildAgentPoolEdgeEnrollment
+     * @summary Create build pool Edge Agent enrollment
+     * @request POST:/api/v1/buildAgentPools/{id}/edge/enrollments
+     * @secure
+     * @response `200` `EdgeAgentEnrollmentView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createBuildAgentPoolEdgeEnrollment: (
+      id: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<EdgeAgentEnrollmentView, ProblemDetails>({
+        path: `/api/v1/buildAgentPools/${id}/edge/enrollments`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name GetBuildAgentPoolEdgeStatus
+     * @summary Get build pool Edge Agent status
+     * @request GET:/api/v1/buildAgentPools/{id}/edge/status
+     * @secure
+     * @response `200` `EdgeAgentStatusView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getBuildAgentPoolEdgeStatus: (id: string, params: RequestParams = {}) =>
+      this.request<EdgeAgentStatusView, ProblemDetails>({
+        path: `/api/v1/buildAgentPools/${id}/edge/status`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name RevokeBuildAgentPoolEdgeAgent
+     * @summary Revoke build pool Edge Agent
+     * @request POST:/api/v1/buildAgentPools/{id}/edge/revoke
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    revokeBuildAgentPoolEdgeAgent: (id: string, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/buildAgentPools/${id}/edge/revoke`,
+        method: "POST",
+        secure: true,
         ...params,
       }),
 

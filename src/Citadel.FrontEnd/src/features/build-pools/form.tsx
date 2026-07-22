@@ -1,10 +1,14 @@
 import {
   BuildAgentPoolInput,
+  BuildAgentPoolConnectionMode,
   BuildAgentPoolProvider,
   BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec,
   BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec,
+  BuildAgentPoolValidationStatus,
   BuildAgentPoolView,
   CpuArchitecture,
+  EdgeAgentEnrollmentView,
+  EdgeAgentStatusView,
   UpdateBuildAgentPoolInput,
 } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
@@ -20,13 +24,17 @@ import {
   defineSection,
 } from '@/components/custom/form-builder';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { Button } from '@/components/ui/button';
 import { ActivitiesTab } from '@/features/activities';
 import { ResourceHeaderTagsEditor, ResourceTagSelector } from '@/features/tags/components';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { Constants } from '@/lib/constants';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
+import { MonacoEditor } from '@/lib/monaco';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { useQueryClient } from '@tanstack/react-query';
+import { CheckCheck, Clipboard, KeyRound, Loader2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { BuildPoolInfoActions, invalidateBuildPoolQueries } from './actions';
@@ -65,6 +73,7 @@ const defaultSelfManagedVmSpec: SelfManagedVmProviderSpec = {
   maxWorkers: 1,
   registrationSecretId: null,
   labels: [],
+  connectionMode: BuildAgentPoolConnectionMode.InboundAgent,
 };
 
 const defaultBuildPool: BuildAgentPoolInput = {
@@ -92,7 +101,7 @@ export const BuildPoolFormComponents: RequiredFormComponents<BuildPoolFormResour
   },
   EditForm: {
     Header: {
-      Indicator: ({ resource }) => <StateIndicator value={(resource as BuildAgentPoolView).enabled} enableLabel />,
+      Indicator: ({ resource }) => <BuildPoolHeaderIndicator pool={resource as BuildAgentPoolView} />,
       ActionButtons: ({ resource }) => {
         const { edit: _edit, ...actions } = BuildPoolInfoActions;
         return <GenericActionBarButtons resource={resource} actions={Object.values(actions)} />;
@@ -143,8 +152,10 @@ function BuildPoolForm({
   const id = useParams().id;
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<BuildPoolInput>>({});
+  const [enrollment, setEnrollment] = useState<EdgeAgentEnrollmentView | undefined>();
   const createPool = useMutate('createBuildAgentPool');
   const updatePool = useMutate('updateBuildAgentPool');
+  const createEdgeEnrollment = useMutate('createBuildAgentPoolEdgeEnrollment');
 
   const { save, isPending } = useSaveResource<BuildPoolInput, any>({
     mode,
@@ -186,7 +197,21 @@ function BuildPoolForm({
   const provider = getProvider(providerSpec);
   const awsSpec = useMemo(() => normalizeAwsSpec(providerSpec), [providerSpec]);
   const vmSpec = useMemo(() => normalizeSelfManagedVmSpec(providerSpec), [providerSpec]);
-
+  const isEdgePool =
+    provider === BuildAgentPoolProvider.SelfManagedVm &&
+    vmSpec.connectionMode === BuildAgentPoolConnectionMode.EdgeAgent;
+  const { data: edgeStatusData, isLoading: isEdgeStatusLoading } = useRead(
+    'getBuildAgentPoolEdgeStatus',
+    { id: id ?? '' },
+    { enabled: mode === 'edit' && Boolean(id) && isEdgePool },
+  );
+  const edgeStatus = edgeStatusData?.data;
+  const regenerateEnrollment = useCallback(async () => {
+    if (!id) return;
+    const result = await createEdgeEnrollment.mutateAsync({ id });
+    setEnrollment(result.data);
+    await queryClient.invalidateQueries({ queryKey: ['getBuildAgentPoolEdgeStatus'] });
+  }, [createEdgeEnrollment, id, queryClient]);
   const setProviderSpec = useCallback(
     (spec: BuildPoolProviderSpec) => setUpdate((prev) => ({ ...prev, providerSpec: spec })),
     [],
@@ -269,7 +294,9 @@ function BuildPoolForm({
             description: 'Choose the infrastructure type that supplies builders for this pool.',
             items: [
               defineField({
+                id: 'provider-type',
                 key: 'providerSpec',
+                dirtyKey: 'providerSpec.provider',
                 label: 'Type',
                 required: true,
                 description: 'AWS EC2 provisions temporary builders. Self-managed VM uses pre-provisioned builder hosts.',
@@ -294,7 +321,18 @@ function BuildPoolForm({
             ],
           }),
           provider === BuildAgentPoolProvider.SelfManagedVm
-            ? selfManagedVmFields(vmSpec, setVmSpec, disabled)
+            ? selfManagedVmFields(
+                vmSpec,
+                setVmSpec,
+                mode,
+                resource?.id,
+                enrollment,
+                edgeStatus,
+                isEdgeStatusLoading,
+                createEdgeEnrollment.isPending,
+                regenerateEnrollment,
+                disabled,
+              )
             : awsEc2Fields(awsSpec, setAwsSpec, disabled),
         ],
       }),
@@ -318,7 +356,22 @@ function BuildPoolForm({
         ],
       }),
     }),
-    [awsSpec, disabled, mode, provider, setAwsSpec, setProviderSpec, setVmSpec, vmSpec],
+    [
+      awsSpec,
+      createEdgeEnrollment.isPending,
+      disabled,
+      edgeStatus,
+      enrollment,
+      isEdgeStatusLoading,
+      mode,
+      provider,
+      regenerateEnrollment,
+      resource?.id,
+      setAwsSpec,
+      setProviderSpec,
+      setVmSpec,
+      vmSpec,
+    ],
   );
 
   return (
@@ -338,6 +391,31 @@ function BuildPoolForm({
   );
 }
 
+function BuildPoolHeaderIndicator({ pool }: { pool: BuildAgentPoolView }) {
+  const title = [validationLabel(pool.lastValidationStatus), pool.lastValidationMessage].filter(Boolean).join(' - ');
+
+  return (
+    <span className="inline-flex items-center" title={title}>
+      <StateIndicator value={pool.lastValidationStatus} kind="buildAgentPoolValidation" />
+    </span>
+  );
+}
+
+function validationLabel(status: BuildAgentPoolValidationStatus) {
+  switch (status) {
+    case BuildAgentPoolValidationStatus.NotTested:
+      return 'Not tested';
+    case BuildAgentPoolValidationStatus.Ready:
+      return 'Ready';
+    case BuildAgentPoolValidationStatus.Invalid:
+      return 'Invalid';
+    case BuildAgentPoolValidationStatus.Degraded:
+      return 'Degraded';
+    default:
+      return String(status);
+  }
+}
+
 function awsEc2Fields(
   awsSpec: AwsEc2ProviderSpec,
   setAwsSpec: (patch: Partial<AwsEc2ProviderSpec>) => void,
@@ -349,14 +427,18 @@ function awsEc2Fields(
     description: 'Settings used when Citadel provisions temporary EC2 builder instances.',
     items: [
       defineField({
+        id: 'aws-region',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.region',
         label: 'Region',
         required: true,
         description: 'AWS region where builder instances are launched.',
         render: () => <FieldInput value={awsSpec.region} disabled={disabled} onChange={(region) => setAwsSpec({ region })} />,
       }),
       defineField({
+        id: 'aws-instance-type',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.instanceType',
         label: 'Instance type',
         required: true,
         description: 'EC2 instance shape used for each builder.',
@@ -370,7 +452,9 @@ function awsEc2Fields(
         ),
       }),
       defineField({
+        id: 'aws-architecture',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.architecture',
         label: 'Architecture',
         required: true,
         description: 'CPU architecture expected by the builder AMI.',
@@ -384,14 +468,18 @@ function awsEc2Fields(
         ),
       }),
       defineField({
+        id: 'aws-ami-id',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.amiId',
         label: 'AMI ID',
         required: true,
         description: 'AMI that boots the Citadel builder runtime.',
         render: () => <FieldInput value={awsSpec.amiId} disabled={disabled} onChange={(amiId) => setAwsSpec({ amiId })} />,
       }),
       defineField({
+        id: 'aws-root-volume-size-gb',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.rootVolumeSizeGb',
         label: 'Root volume GB',
         required: true,
         description: 'Ephemeral disk size used for checkout, Docker cache, and image layers.',
@@ -405,14 +493,18 @@ function awsEc2Fields(
         ),
       }),
       defineField({
+        id: 'aws-subnet-id',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.subnetId',
         label: 'Subnet ID',
         required: true,
         description: 'Subnet where builders are launched.',
         render: () => <FieldInput value={awsSpec.subnetId} disabled={disabled} onChange={(subnetId) => setAwsSpec({ subnetId })} />,
       }),
       defineField({
+        id: 'aws-security-group-ids',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.securityGroupIds',
         label: 'Security group IDs',
         required: true,
         description: 'Comma-separated security group IDs attached to builder instances.',
@@ -430,7 +522,9 @@ function awsEc2Fields(
         className: 'flex flex-col gap-6',
         fields: [
           defineField({
+            id: 'aws-instance-profile',
             key: 'providerSpec',
+            dirtyKey: 'providerSpec.instanceProfileName',
             label: 'Instance profile',
             description: 'Optional IAM instance profile attached to builders.',
             render: () => (
@@ -442,7 +536,9 @@ function awsEc2Fields(
             ),
           }),
           defineField({
+            id: 'aws-assume-role-arn',
             key: 'providerSpec',
+            dirtyKey: 'providerSpec.assumeRoleArn',
             label: 'Assume role ARN',
             description: 'Optional AWS role Citadel assumes before provisioning builders.',
             render: () => (
@@ -456,7 +552,9 @@ function awsEc2Fields(
         ],
       }),
       defineField({
+        id: 'aws-assign-public-ip',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.assignPublicIp',
         label: 'Assign public IP',
         description: 'Attach a public IP when the subnet does not provide outbound NAT.',
         render: () => (
@@ -468,7 +566,9 @@ function awsEc2Fields(
         ),
       }),
       defineField({
+        id: 'aws-key-pair',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.keyPairName',
         label: 'Key pair',
         description: 'Optional EC2 key pair for emergency access.',
         render: () => (
@@ -486,29 +586,94 @@ function awsEc2Fields(
 function selfManagedVmFields(
   vmSpec: SelfManagedVmProviderSpec,
   setVmSpec: (patch: Partial<SelfManagedVmProviderSpec>) => void,
+  mode: 'add' | 'edit',
+  poolId?: string,
+  enrollment?: EdgeAgentEnrollmentView,
+  edgeStatus?: EdgeAgentStatusView,
+  isEdgeStatusLoading?: boolean,
+  isEnrollmentPending?: boolean,
+  onRegenerateEnrollment?: () => void,
   disabled?: boolean,
 ) {
+  const connectionMode = vmSpec.connectionMode ?? BuildAgentPoolConnectionMode.InboundAgent;
+  const isEdge = connectionMode === BuildAgentPoolConnectionMode.EdgeAgent;
+
   return defineGroupField<BuildPoolInput>({
     id: 'self-managed-vm',
     label: 'Self-managed VM Settings',
     description: 'Settings for static builder hosts that are provisioned outside Citadel.',
     items: [
       defineField({
+        id: 'self-managed-connection-mode',
         key: 'providerSpec',
-        label: 'Endpoint',
+        dirtyKey: 'providerSpec.connectionMode',
+        label: 'Connection mode',
         required: true,
-        description: 'Stable URL or address used by Citadel to identify or reach this builder pool.',
+        description: 'Inbound Agent requires Core to reach the builder. Edge Agent uses the outbound Edge Agent channel.',
         render: () => (
-          <FieldInput
-            value={vmSpec.endpoint}
+          <FieldSelect
+            value={connectionMode}
             disabled={disabled}
-            onChange={(endpoint) => setVmSpec({ endpoint })}
-            placeholder="https://builder-01.example.com"
+            onChange={(next) =>
+              setVmSpec({
+                connectionMode: next as BuildAgentPoolConnectionMode,
+                endpoint: next === BuildAgentPoolConnectionMode.EdgeAgent ? null : (vmSpec.endpoint ?? ''),
+              })
+            }
+            options={[
+              { value: BuildAgentPoolConnectionMode.InboundAgent, label: 'Inbound Agent endpoint' },
+              { value: BuildAgentPoolConnectionMode.EdgeAgent, label: 'Edge Agent' },
+            ]}
           />
         ),
       }),
+      ...(isEdge
+        ? [
+            defineField<BuildPoolInput>({
+              id: 'self-managed-edge-enrollment',
+              key: 'providerSpec',
+              dirtyKey: 'providerSpec.__edgeEnrollment',
+              label: 'Edge Agent enrollment',
+              description:
+                mode === 'add'
+                  ? 'Save the build pool first, then generate the Edge Agent command from this pool.'
+                  : 'This pool uses its own outbound Edge Agent connection. Generate or rotate the agent command from the saved pool.',
+              render: () => (
+                <EdgeBuildPoolEnrollmentPanel
+                  poolId={poolId}
+                  enrollment={enrollment}
+                  edgeStatus={edgeStatus}
+                  isEdgeStatusLoading={isEdgeStatusLoading}
+                  isPending={isEnrollmentPending}
+                  onRegenerate={onRegenerateEnrollment}
+                  disabled={disabled}
+                  mode={mode}
+                />
+              ),
+            }),
+          ]
+        : [
+            defineField<BuildPoolInput>({
+              id: 'self-managed-endpoint',
+              key: 'providerSpec',
+              dirtyKey: 'providerSpec.endpoint',
+              label: 'Endpoint',
+              required: true,
+              description: 'Stable URL used by Citadel Core to reach the inbound build agent.',
+              render: () => (
+                <FieldInput
+                  value={vmSpec.endpoint ?? ''}
+                  disabled={disabled}
+                  onChange={(endpoint) => setVmSpec({ endpoint })}
+                  placeholder="https://builder-01.example.com"
+                />
+              ),
+            }),
+          ]),
       defineField({
+        id: 'self-managed-architecture',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.architecture',
         label: 'Architecture',
         required: true,
         description: 'CPU architecture supported by the self-managed builders.',
@@ -522,7 +687,9 @@ function selfManagedVmFields(
         ),
       }),
       defineField({
+        id: 'self-managed-max-workers',
         key: 'providerSpec',
+        dirtyKey: 'providerSpec.maxWorkers',
         label: 'Max workers',
         required: true,
         description: 'Maximum workers available across this static builder pool.',
@@ -539,7 +706,9 @@ function selfManagedVmFields(
         id: 'self-managed-vm-optional',
         fields: [
           defineField({
+            id: 'self-managed-registration-secret-id',
             key: 'providerSpec',
+            dirtyKey: 'providerSpec.registrationSecretId',
             label: 'Registration secret ID',
             description: 'Optional Citadel secret ID used by future builder registration flows.',
             render: () => (
@@ -552,7 +721,9 @@ function selfManagedVmFields(
             ),
           }),
           defineField({
+            id: 'self-managed-labels',
             key: 'providerSpec',
+            dirtyKey: 'providerSpec.labels',
             label: 'Labels',
             description: 'Comma-separated labels used to describe builder capabilities.',
             render: () => (
@@ -578,6 +749,112 @@ function defineNumberField(key: keyof BuildAgentPoolInput, label: string, descri
     required: true,
     render: (value, set) => <FieldInput type="number" value={value ?? 0} onChange={(v) => set({ [key]: v } as any)} />,
   });
+}
+
+function EdgeBuildPoolEnrollmentPanel({
+  poolId,
+  enrollment,
+  edgeStatus,
+  isEdgeStatusLoading,
+  isPending,
+  onRegenerate,
+  disabled,
+  mode,
+}: {
+  poolId?: string;
+  enrollment?: EdgeAgentEnrollmentView;
+  edgeStatus?: EdgeAgentStatusView;
+  isEdgeStatusLoading?: boolean;
+  isPending?: boolean;
+  onRegenerate?: () => void;
+  disabled?: boolean;
+  mode: 'add' | 'edit';
+}) {
+  const dockerCommand = enrollment?.instructions.dockerRunCommand ?? '';
+  const isSaved = mode === 'edit' && Boolean(poolId);
+  const connectionStatus = edgeStatus?.connectionStatus;
+  const isRevoked = connectionStatus === 'Revoked';
+  const hasBinding = connectionStatus ? connectionStatus !== 'PendingEnrollment' : false;
+
+  if (!isSaved) {
+    return (
+      <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+        Save this build pool to generate its Edge Agent enrollment command.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <KeyRound className="mt-0.5 size-4 text-primary" />
+          <div className="grid gap-1 text-sm">
+            <div className="font-medium">
+              {edgeStatus?.connectionStatus ?? (isEdgeStatusLoading ? 'Loading status...' : 'Pending enrollment')}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {enrollment
+                ? `Token expires ${formatDate(enrollment.expiresAtUtc)}. It is shown once.`
+                : isRevoked
+                  ? 'This build pool Edge Agent binding was revoked. Create a new build pool to enroll a fresh agent.'
+                : edgeStatus?.enrollmentExpiresAtUtc
+                  ? `Active token expires ${formatDate(edgeStatus.enrollmentExpiresAtUtc)}. Generate a new token to show a fresh value.`
+                  : hasBinding
+                    ? `Target address: edge-build-pool://${poolId}`
+                    : 'Generate a one-time token and run the Docker command on the builder host.'}
+            </div>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          className="w-fit"
+          variant={enrollment ? 'outline' : 'default'}
+          disabled={disabled || isPending || isEdgeStatusLoading || isRevoked}
+          onClick={onRegenerate}>
+          {(isPending || isEdgeStatusLoading) && <Loader2 className="size-4 animate-spin" />}
+          {isRevoked ? 'Binding Revoked' : hasBinding ? 'Rotate Enrollment Token' : enrollment ? 'Generate New Token' : 'Generate Enrollment Token'}
+        </Button>
+      </div>
+
+      {dockerCommand && <SetupCommandEditor value={dockerCommand} filename="citadel-edge-build-agent.sh" />}
+    </div>
+  );
+}
+
+function SetupCommandEditor({ value, filename }: { value: string; filename: string }) {
+  const [copied, copy] = useCopyToClipboard(3000);
+  const isCopied = copied === value;
+
+  return (
+    <div className="relative max-w-full">
+      <Button
+        type="button"
+        size="icon-xs"
+        variant="outline"
+        className="absolute right-5 top-4 z-10 bg-background/80"
+        onClick={() => value && copy(value)}
+        disabled={!value}>
+        {isCopied ? <CheckCheck className="size-3 text-green-500" /> : <Clipboard className="size-3" />}
+        <span className="sr-only">Copy docker command</span>
+      </Button>
+      <MonacoEditor
+        value={value}
+        language="shell"
+        filename={filename}
+        readOnly
+        minHeight={180}
+        className="mx-0 my-0"
+        fontSize={12}
+      />
+    </div>
+  );
+}
+
+function formatDate(value: unknown) {
+  if (!value) return '-';
+  return new Date(value as string).toLocaleString();
 }
 
 function normalizePoolPayload(payload: BuildPoolInput, mode: 'add' | 'edit') {
@@ -635,10 +912,11 @@ function normalizeSelfManagedVmSpec(value: unknown): SelfManagedVmProviderSpec {
     ...spec,
     $type: 'SelfManagedVm',
     provider: BuildAgentPoolProvider.SelfManagedVm,
-    endpoint: spec.endpoint ?? '',
+    endpoint: spec.connectionMode === BuildAgentPoolConnectionMode.EdgeAgent ? null : (spec.endpoint ?? ''),
     maxWorkers: Number(spec.maxWorkers ?? 1),
     registrationSecretId: spec.registrationSecretId || null,
     labels: Array.isArray(spec.labels) ? spec.labels : [],
+    connectionMode: spec.connectionMode ?? BuildAgentPoolConnectionMode.InboundAgent,
   };
 }
 

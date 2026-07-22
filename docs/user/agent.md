@@ -41,6 +41,80 @@ Keep build contexts small. Agent build context archives must fit within the curr
 
 The Agent version should be updated together with Citadel Core when build protocol fields change.
 
+## Self-Managed Build Pool Agent
+
+A self-managed Build Pool uses the same Citadel Agent runtime, but it is dedicated to builds instead of being configured as a general Docker platform.
+
+Use this when you want builds to run on a separate builder host or in a separate local Agent container.
+
+### Inbound build Agent
+
+Use inbound mode when Citadel Core can reach the builder host over the network.
+
+Start a dedicated build Agent with its own container name and host port:
+
+```bash
+docker run -d \
+  --name citadel-agent-build \
+  --restart=always \
+  -p 9001:9000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e HUB_PUBLIC_KEY="..." \
+  ghcr.io/citadel-p/citadel.agent:1.2.3
+```
+
+Then create a Build Pool in Citadel:
+
+```text
+Build Pools -> Add Build Pool
+Provider: Self-managed VM / Static VM
+Connection mode: Inbound Agent endpoint
+Endpoint: http://<builder-host>:9001
+```
+
+If Citadel Core is running in Docker on the same host as the build Agent, use:
+
+```text
+http://host.docker.internal:9001
+```
+
+### Edge build Agent
+
+Use edge mode when the builder host must not expose an inbound port to Citadel Core.
+
+Create the Build Pool in Citadel first:
+
+```text
+Build Pools -> Add Build Pool
+Provider: Self-managed VM / Static VM
+Connection mode: Edge Agent
+```
+
+Save the pool, then use the pool's **Edge Agent enrollment** section to generate the Docker command. Run that generated command on the builder host. It will look similar to:
+
+```bash
+docker run -d \
+  --name edge-build-agent \
+  --restart=always \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v edge_build_agent_data:/app/data \
+  -e CITADEL_AGENT_MODE="edge" \
+  -e CITADEL_EDGE_AGENT_PROFILE="edge-build-agent" \
+  -e CITADEL_CORE_URL="http://<citadel-core-host>:8001" \
+  -e CITADEL_EDGE_ENROLLMENT_TOKEN="..." \
+  -e CITADEL_EDGE_AGENT_KEY_PATH="/app/data/edge-build-agent.key" \
+  -e CITADEL_EDGE_IDENTITY_PATH="/app/data/edge-build-agent.identity.json" \
+  ghcr.io/citadel-p/citadel.agent:1.2.3
+```
+
+The Edge build Agent is scoped directly to the Build Pool. It is not an Edge Agent platform, and it does not require a Platform resource to exist.
+
+The generated command is authoritative. It includes the correct container name, data volume, token, identity path, and `CITADEL_CORE_URL`.
+
+For local Docker testing, `CITADEL_CORE_URL` should point to the Edge Agent gRPC endpoint, usually port `8001`. Port `8000` is the normal Citadel HTTP API and UI endpoint.
+
+Before selecting the pool in a build project, click **Test** on the Build Pool. A ready result confirms the Agent is connected, advertises build capabilities, and can reach Docker.
+
 ## Create the platform
 
 In Citadel, open:

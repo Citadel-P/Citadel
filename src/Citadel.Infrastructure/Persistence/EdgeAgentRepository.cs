@@ -15,15 +15,17 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     {
         const string sql = """
             INSERT INTO EdgeAgentEnrollments (
-                Id, PlatformId, TokenHash, ExpiresAtUtc, UsedAtUtc, RevokedAtUtc, CreatedByActorId, CreatedAtUtc)
+                Id, PlatformId, ResourceType, ResourceId, TokenHash, ExpiresAtUtc, UsedAtUtc, RevokedAtUtc, CreatedByActorId, CreatedAtUtc)
             VALUES (
-                @Id, @PlatformId, @TokenHash, @ExpiresAtUtc, @UsedAtUtc, @RevokedAtUtc, @CreatedByActorId, @CreatedAtUtc)
+                @Id, @PlatformId, @ResourceType, @ResourceId, @TokenHash, @ExpiresAtUtc, @UsedAtUtc, @RevokedAtUtc, @CreatedByActorId, @CreatedAtUtc)
         """;
 
         return db.ExecuteAsync(sql, new
         {
             enrollment.Id,
             enrollment.PlatformId,
+            ResourceType = EnumFormatter<EdgeAgentResourceType>.GetValue(enrollment.NormalizedResourceType),
+            ResourceId = enrollment.NormalizedResourceId,
             enrollment.TokenHash,
             enrollment.ExpiresAtUtc,
             enrollment.UsedAtUtc,
@@ -34,11 +36,15 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     }
 
     public async Task<EdgeAgentEnrollment?> GetActiveEnrollmentAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken)
+        => await GetActiveEnrollmentAsync(EdgeAgentResourceType.Platform, platformId, utcNow, cancellationToken);
+
+    public async Task<EdgeAgentEnrollment?> GetActiveEnrollmentAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime utcNow, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT Id, PlatformId, TokenHash, ExpiresAtUtc, UsedAtUtc, RevokedAtUtc, CreatedByActorId, CreatedAtUtc
+            SELECT Id, PlatformId, ResourceType, ResourceId, TokenHash, ExpiresAtUtc, UsedAtUtc, RevokedAtUtc, CreatedByActorId, CreatedAtUtc
             FROM EdgeAgentEnrollments
-            WHERE PlatformId = @PlatformId
+            WHERE ResourceType = @ResourceType
+              AND ResourceId = @ResourceId
               AND UsedAtUtc IS NULL
               AND RevokedAtUtc IS NULL
               AND ExpiresAtUtc > @UtcNow
@@ -50,7 +56,8 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
             sql,
             new
             {
-                PlatformId = platformId,
+                ResourceType = EnumFormatter<EdgeAgentResourceType>.GetValue(resourceType),
+                ResourceId = resourceId,
                 UtcNow = utcNow
             },
             transaction: tx());
@@ -60,7 +67,7 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     public async Task<EdgeAgentEnrollment?> GetEnrollmentByTokenHashAsync(string tokenHash, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT Id, PlatformId, TokenHash, ExpiresAtUtc, UsedAtUtc, RevokedAtUtc, CreatedByActorId, CreatedAtUtc
+            SELECT Id, PlatformId, ResourceType, ResourceId, TokenHash, ExpiresAtUtc, UsedAtUtc, RevokedAtUtc, CreatedByActorId, CreatedAtUtc
             FROM EdgeAgentEnrollments
             WHERE TokenHash = @TokenHash
             LIMIT 1
@@ -94,14 +101,18 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     }
 
     public async Task<EdgeAgentBinding?> GetBindingByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken)
+        => await GetBindingByResourceAsync(EdgeAgentResourceType.Platform, platformId, cancellationToken);
+
+    public async Task<EdgeAgentBinding?> GetBindingByResourceAsync(EdgeAgentResourceType resourceType, Guid resourceId, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT Id, PlatformId, AgentId, AgentPublicKey, AgentFingerprint, ConnectionStatus,
+            SELECT Id, PlatformId, ResourceType, ResourceId, AgentId, AgentPublicKey, AgentFingerprint, ConnectionStatus,
                    LastConnectedAtUtc, LastDisconnectedAtUtc, LastHeartbeatAtUtc,
                    LastSeenVersion, LastSeenHostname, CapabilitiesJson, ProtocolVersion,
                    RevokedAtUtc, CreatedAtUtc, UpdatedAtUtc
             FROM EdgeAgentBindings
-            WHERE PlatformId = @PlatformId
+            WHERE ResourceType = @ResourceType
+              AND ResourceId = @ResourceId
             LIMIT 1
         """;
 
@@ -109,7 +120,8 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
             sql,
             new
             {
-                PlatformId = platformId
+                ResourceType = EnumFormatter<EdgeAgentResourceType>.GetValue(resourceType),
+                ResourceId = resourceId
             },
             transaction: tx());
         return dto?.ToDomain();
@@ -135,6 +147,8 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
                 p.Description AS PlatformDescription,
                 e.Id AS BindingId,
                 e.PlatformId AS BindingPlatformId,
+                e.ResourceType AS BindingResourceType,
+                e.ResourceId AS BindingResourceId,
                 e.AgentId AS BindingAgentId,
                 e.AgentPublicKey AS BindingAgentPublicKey,
                 e.AgentFingerprint AS BindingAgentFingerprint,
@@ -150,7 +164,9 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
                 e.CreatedAtUtc AS BindingCreatedAtUtc,
                 e.UpdatedAtUtc AS BindingUpdatedAtUtc
             FROM Platforms p
-            LEFT JOIN EdgeAgentBindings e ON e.PlatformId = p.Id
+            LEFT JOIN EdgeAgentBindings e
+              ON e.ResourceType = 'Platform'
+             AND e.ResourceId = p.Id
             WHERE p.Id = @PlatformId
             LIMIT 1
         """;
@@ -166,14 +182,19 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     }
 
     public async Task<EdgeAgentBinding?> GetBindingByAgentAsync(Guid platformId, Guid agentId, CancellationToken cancellationToken)
+        => await GetBindingByAgentAsync(EdgeAgentResourceType.Platform, platformId, agentId, cancellationToken);
+
+    public async Task<EdgeAgentBinding?> GetBindingByAgentAsync(EdgeAgentResourceType resourceType, Guid resourceId, Guid agentId, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT Id, PlatformId, AgentId, AgentPublicKey, AgentFingerprint, ConnectionStatus,
+            SELECT Id, PlatformId, ResourceType, ResourceId, AgentId, AgentPublicKey, AgentFingerprint, ConnectionStatus,
                    LastConnectedAtUtc, LastDisconnectedAtUtc, LastHeartbeatAtUtc,
                    LastSeenVersion, LastSeenHostname, CapabilitiesJson, ProtocolVersion,
                    RevokedAtUtc, CreatedAtUtc, UpdatedAtUtc
             FROM EdgeAgentBindings
-            WHERE PlatformId = @PlatformId AND AgentId = @AgentId
+            WHERE ResourceType = @ResourceType
+              AND ResourceId = @ResourceId
+              AND AgentId = @AgentId
             LIMIT 1
         """;
 
@@ -181,7 +202,8 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
             sql,
             new
             {
-                PlatformId = platformId,
+                ResourceType = EnumFormatter<EdgeAgentResourceType>.GetValue(resourceType),
+                ResourceId = resourceId,
                 AgentId = agentId
             },
             transaction: tx());
@@ -192,12 +214,12 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     {
         const string sql = """
             INSERT INTO EdgeAgentBindings (
-                Id, PlatformId, AgentId, AgentPublicKey, AgentFingerprint, ConnectionStatus,
+                Id, PlatformId, ResourceType, ResourceId, AgentId, AgentPublicKey, AgentFingerprint, ConnectionStatus,
                 LastConnectedAtUtc, LastDisconnectedAtUtc, LastHeartbeatAtUtc,
                 LastSeenVersion, LastSeenHostname, CapabilitiesJson, ProtocolVersion,
                 RevokedAtUtc, CreatedAtUtc, UpdatedAtUtc)
             VALUES (
-                @Id, @PlatformId, @AgentId, @AgentPublicKey, @AgentFingerprint, @ConnectionStatus,
+                @Id, @PlatformId, @ResourceType, @ResourceId, @AgentId, @AgentPublicKey, @AgentFingerprint, @ConnectionStatus,
                 @LastConnectedAtUtc, @LastDisconnectedAtUtc, @LastHeartbeatAtUtc,
                 @LastSeenVersion, @LastSeenHostname, @CapabilitiesJson::json, @ProtocolVersion,
                 @RevokedAtUtc, @CreatedAtUtc, @UpdatedAtUtc)
@@ -209,6 +231,8 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
             {
                 binding.Id,
                 binding.PlatformId,
+                ResourceType = EnumFormatter<EdgeAgentResourceType>.GetValue(binding.NormalizedResourceType),
+                ResourceId = binding.NormalizedResourceId,
                 binding.AgentId,
                 binding.AgentPublicKey,
                 binding.AgentFingerprint,
@@ -228,6 +252,9 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     }
 
     public Task<int> UpdateBindingConnectedAsync(Guid platformId, DateTime connectedAtUtc, string hostname, string agentVersion, string capabilitiesJson, CancellationToken cancellationToken)
+        => UpdateBindingConnectedAsync(EdgeAgentResourceType.Platform, platformId, connectedAtUtc, hostname, agentVersion, capabilitiesJson, cancellationToken);
+
+    public Task<int> UpdateBindingConnectedAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime connectedAtUtc, string hostname, string agentVersion, string capabilitiesJson, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE EdgeAgentBindings
@@ -239,14 +266,17 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
                 LastSeenVersion = @AgentVersion,
                 CapabilitiesJson = @CapabilitiesJson::json,
                 UpdatedAtUtc = @ConnectedAtUtc
-            WHERE PlatformId = @PlatformId AND RevokedAtUtc IS NULL
+            WHERE ResourceType = @ResourceType
+              AND ResourceId = @ResourceId
+              AND RevokedAtUtc IS NULL
         """;
 
         return db.ExecuteAsync(
             sql,
             new
             {
-                PlatformId = platformId,
+                ResourceType = EnumFormatter<EdgeAgentResourceType>.GetValue(resourceType),
+                ResourceId = resourceId,
                 ConnectedAtUtc = connectedAtUtc,
                 Hostname = hostname,
                 AgentVersion = agentVersion,
@@ -257,6 +287,9 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     }
 
     public Task<int> UpdateBindingHeartbeatAsync(Guid platformId, DateTime heartbeatAtUtc, string? hostname, string? agentVersion, string? capabilitiesJson, CancellationToken cancellationToken)
+        => UpdateBindingHeartbeatAsync(EdgeAgentResourceType.Platform, platformId, heartbeatAtUtc, hostname, agentVersion, capabilitiesJson, cancellationToken);
+
+    public Task<int> UpdateBindingHeartbeatAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime heartbeatAtUtc, string? hostname, string? agentVersion, string? capabilitiesJson, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE EdgeAgentBindings
@@ -265,14 +298,17 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
                 LastSeenVersion = COALESCE(@AgentVersion, LastSeenVersion),
                 CapabilitiesJson = COALESCE(@CapabilitiesJson::json, CapabilitiesJson),
                 UpdatedAtUtc = @HeartbeatAtUtc
-            WHERE PlatformId = @PlatformId AND RevokedAtUtc IS NULL
+            WHERE ResourceType = @ResourceType
+              AND ResourceId = @ResourceId
+              AND RevokedAtUtc IS NULL
         """;
 
         return db.ExecuteAsync(
             sql,
             new
             {
-                PlatformId = platformId,
+                ResourceType = EnumFormatter<EdgeAgentResourceType>.GetValue(resourceType),
+                ResourceId = resourceId,
                 HeartbeatAtUtc = heartbeatAtUtc,
                 Hostname = hostname,
                 AgentVersion = agentVersion,
@@ -282,20 +318,26 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     }
 
     public Task<int> UpdateBindingDisconnectedAsync(Guid platformId, DateTime disconnectedAtUtc, CancellationToken cancellationToken)
+        => UpdateBindingDisconnectedAsync(EdgeAgentResourceType.Platform, platformId, disconnectedAtUtc, cancellationToken);
+
+    public Task<int> UpdateBindingDisconnectedAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime disconnectedAtUtc, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE EdgeAgentBindings
             SET ConnectionStatus = @ConnectionStatus,
                 LastDisconnectedAtUtc = @DisconnectedAtUtc,
                 UpdatedAtUtc = @DisconnectedAtUtc
-            WHERE PlatformId = @PlatformId AND RevokedAtUtc IS NULL
+            WHERE ResourceType = @ResourceType
+              AND ResourceId = @ResourceId
+              AND RevokedAtUtc IS NULL
         """;
 
         return db.ExecuteAsync(
             sql,
             new
             {
-                PlatformId = platformId,
+                ResourceType = EnumFormatter<EdgeAgentResourceType>.GetValue(resourceType),
+                ResourceId = resourceId,
                 DisconnectedAtUtc = disconnectedAtUtc,
                 ConnectionStatus = EnumFormatter<EdgeAgentConnectionStatus>.GetValue(EdgeAgentConnectionStatus.Offline)
             },
@@ -303,6 +345,9 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
     }
 
     public Task<int> RevokeBindingAsync(Guid platformId, DateTime revokedAtUtc, CancellationToken cancellationToken)
+        => RevokeBindingAsync(EdgeAgentResourceType.Platform, platformId, revokedAtUtc, cancellationToken);
+
+    public Task<int> RevokeBindingAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime revokedAtUtc, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE EdgeAgentBindings
@@ -310,14 +355,16 @@ internal sealed class EdgeAgentRepository(IDbConnection db, Func<IDbTransaction>
                 RevokedAtUtc = @RevokedAtUtc,
                 LastDisconnectedAtUtc = @RevokedAtUtc,
                 UpdatedAtUtc = @RevokedAtUtc
-            WHERE PlatformId = @PlatformId
+            WHERE ResourceType = @ResourceType
+              AND ResourceId = @ResourceId
         """;
 
         return db.ExecuteAsync(
             sql,
             new
             {
-                PlatformId = platformId,
+                ResourceType = EnumFormatter<EdgeAgentResourceType>.GetValue(resourceType),
+                ResourceId = resourceId,
                 RevokedAtUtc = revokedAtUtc,
                 ConnectionStatus = EnumFormatter<EdgeAgentConnectionStatus>.GetValue(EdgeAgentConnectionStatus.Revoked)
             },

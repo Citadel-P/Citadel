@@ -35,6 +35,8 @@ The packaged context must stay under the current `16 MB` envelope limit. Add a `
 
 Because edge agents use an outbound command channel, cancelling a build closes the active build stream and the Docker Engine API build is cancelled when Docker observes the dropped request.
 
+Build Pools can also use Edge Agent mode, but that flow is pool-scoped. Create a self-managed Build Pool, select `Connection mode: Edge Agent`, save the pool, then generate the enrollment command from the pool configuration. A build-pool Edge Agent does not require an Edge Agent platform resource.
+
 ## Production gRPC Endpoint
 
 Edge Agent uses bidirectional gRPC over HTTP/2. The URL in `CITADEL_CORE_URL` must point to the Citadel Edge Agent gRPC endpoint, not the normal HTTP API endpoint.
@@ -82,6 +84,7 @@ The command includes environment variables similar to:
 
 ```env
 CITADEL_AGENT_MODE=edge
+CITADEL_EDGE_AGENT_PROFILE=edge-agent
 CITADEL_CORE_URL=https://citadel.example.com
 CITADEL_EDGE_ENROLLMENT_TOKEN=...
 CITADEL_EDGE_AGENT_KEY_PATH=/app/data/edge-agent.key
@@ -160,7 +163,7 @@ For example:
 
 The Edge Agent does not give Citadel shell access to the host. It only handles the supported agent commands.
 
-Supported operations include platform status, container list/logs/stats/inspect/create/start/stop/restart/delete/exec, image list/inspect/pull/delete, volume list/inspect/create/delete, network list/inspect/create/delete, stack apply, and deployment apply.
+Supported operations include platform status, container list/logs/stats/inspect/create/start/stop/restart/delete/exec, image list/inspect/pull/build/push/delete, build-host checks, volume list/inspect/create/delete, network list/inspect/create/delete, stack apply, and deployment apply.
 
 ## Rotate Enrollment
 

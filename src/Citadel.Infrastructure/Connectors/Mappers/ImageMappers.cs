@@ -9,6 +9,15 @@ namespace Infrastructure.Connectors.Mappers;
 
 internal static class ImageMappers
 {
+    internal static BuildHostCapabilitiesResult Map(this CheckBuildHostResponse response)
+        => new(
+            Available: response.Available,
+            DockerVersion: NullIfEmpty(response.DockerVersion),
+            ApiVersion: NullIfEmpty(response.ApiVersion),
+            OperatingSystem: NullIfEmpty(response.OperatingSystem),
+            Architecture: NullIfEmpty(response.Architecture),
+            BuildKitVersion: NullIfEmpty(response.BuildKitVersion));
+
     internal static List<ImageResult> Map(this IEnumerable<ImageReply> images)
         => [.. images.Select(Map)];
 
@@ -67,6 +76,8 @@ internal static class ImageMappers
         Type: rootFs.Type,
         Layers: rootFs.Layers?.ToList() ?? []
     );
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     internal static ImageMetadata Map(this MetadataMessage metadata) 
         => new

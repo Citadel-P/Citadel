@@ -540,9 +540,12 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   ),
 
   BuildAgentPoolTested: (info) => (
-    <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-      <KeyValueBlock label="Status" value={info.status} />
-      {info.message ? <KeyValueBlock label="Message" value={info.message} /> : null}
+    <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+      <div className="inline-flex items-center gap-2 text-foreground">
+        <StateIndicator value={info.status} kind="buildAgentPoolValidation" />
+        <span>{info.status}</span>
+      </div>
+      {info.message ? <span>{info.message}</span> : null}
     </div>
   ),
 

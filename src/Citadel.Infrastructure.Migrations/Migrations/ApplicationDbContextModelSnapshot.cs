@@ -2008,6 +2008,12 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDefaultValue(0L)
                         .HasColumnName("rowversion");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
                     b.HasKey("Id")
                         .HasName("pk_buildagentpools");
 
@@ -2811,6 +2817,18 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDefaultValue(1)
                         .HasColumnName("protocolversion");
 
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resourceid");
+
+                    b.Property<string>("ResourceType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Platform")
+                        .HasColumnName("resourcetype");
+
                     b.Property<DateTime?>("RevokedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revokedatutc");
@@ -2830,9 +2848,9 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("AgentId")
                         .HasDatabaseName("ix_edgeagentbindings_agentid");
 
-                    b.HasIndex("PlatformId")
+                    b.HasIndex("ResourceType", "ResourceId")
                         .IsUnique()
-                        .HasDatabaseName("ix_edgeagentbindings_platformid");
+                        .HasDatabaseName("ix_edgeagentbindings_resource");
 
                     b.ToTable("edgeagentbindings", (string)null);
                 });
@@ -2862,6 +2880,18 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("platformid");
 
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resourceid");
+
+                    b.Property<string>("ResourceType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("text")
+                        .HasDefaultValue("Platform")
+                        .HasColumnName("resourcetype");
+
                     b.Property<DateTime?>("RevokedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revokedatutc");
@@ -2888,6 +2918,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("PlatformId", "ExpiresAtUtc")
                         .HasDatabaseName("ix_edgeagentenrollments_platformid_expiresatutc");
+
+                    b.HasIndex("ResourceType", "ResourceId", "ExpiresAtUtc")
+                        .HasDatabaseName("ix_edgeagentenrollments_resource_expiresatutc");
 
                     b.ToTable("edgeagentenrollments", (string)null);
                 });
@@ -5612,16 +5645,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasConstraintName("fk_deployments_platforms_platformid");
                 });
 
-            modelBuilder.Entity("EdgeAgentBinding", b =>
-                {
-                    b.HasOne("Platform", null)
-                        .WithMany()
-                        .HasForeignKey("PlatformId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_edgeagentbindings_platforms_platformid");
-                });
-
             modelBuilder.Entity("EdgeAgentEnrollment", b =>
                 {
                     b.HasOne("Actor", null)
@@ -5630,13 +5653,6 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_edgeagentenrollments_actors_createdbyactorid");
-
-                    b.HasOne("Platform", null)
-                        .WithMany()
-                        .HasForeignKey("PlatformId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_edgeagentenrollments_platforms_platformid");
                 });
 
             modelBuilder.Entity("GitAccount", b =>

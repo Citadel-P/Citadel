@@ -3,6 +3,8 @@ namespace Domain.Entities.Platforms;
 public sealed record EdgeAgentBinding(
     Guid Id,
     Guid PlatformId,
+    EdgeAgentResourceType ResourceType,
+    Guid ResourceId,
     Guid AgentId,
     string AgentPublicKey,
     string AgentFingerprint,
@@ -18,6 +20,8 @@ public sealed record EdgeAgentBinding(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc)
 {
+    public EdgeAgentResourceType NormalizedResourceType => ResourceType;
+    public Guid NormalizedResourceId => ResourceId == Guid.Empty ? PlatformId : ResourceId;
     public bool IsRevoked => RevokedAtUtc is not null || ConnectionStatus == EdgeAgentConnectionStatus.Revoked;
 }
 

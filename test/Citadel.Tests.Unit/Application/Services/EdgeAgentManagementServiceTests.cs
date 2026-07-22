@@ -5,6 +5,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Activities;
+using Domain.Entities.Builds;
 using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Hosting.Common;
@@ -155,6 +156,89 @@ public sealed class EdgeAgentManagementServiceTests
     }
 
     [Fact]
+    public async Task CompleteEnrollmentAsync_ShouldRejectBuildPoolAgentWithoutBuildCapabilities()
+    {
+        var poolId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var token = "edge-token";
+        var utcNow = new DateTime(2026, 7, 22, 8, 0, 0, DateTimeKind.Utc);
+        var pool = new BuildAgentPool(
+            "edge-builders",
+            description: null,
+            enabled: true,
+            providerSpec: new SelfManagedVmBuildAgentPoolProviderSpec(
+                Endpoint: null,
+                Architecture: CpuArchitecture.Amd64,
+                MaxWorkers: 1,
+                ConnectionMode: BuildAgentPoolConnectionMode.EdgeAgent),
+            maxActiveBuilders: 1,
+            queueTimeoutSeconds: BuildAgentPool.DefaultQueueTimeoutSeconds,
+            provisioningTimeoutSeconds: BuildAgentPool.DefaultProvisioningTimeoutSeconds,
+            registrationTimeoutSeconds: BuildAgentPool.DefaultRegistrationTimeoutSeconds,
+            heartbeatTimeoutSeconds: BuildAgentPool.DefaultHeartbeatTimeoutSeconds,
+            cleanupTimeoutSeconds: BuildAgentPool.DefaultCleanupTimeoutSeconds,
+            maximumInstanceLifetimeSeconds: BuildAgentPool.DefaultMaximumInstanceLifetimeSeconds,
+            failureRetentionMinutes: BuildAgentPool.DefaultFailureRetentionMinutes,
+            createdByActorId: actorId);
+        var enrollment = new EdgeAgentEnrollment(
+            Id: Guid.CreateVersion7(),
+            PlatformId: Guid.Empty,
+            ResourceType: EdgeAgentResourceType.BuildAgentPool,
+            ResourceId: poolId,
+            TokenHash: EdgeAgentManagementService.HashToken(token),
+            ExpiresAtUtc: utcNow.AddHours(1),
+            UsedAtUtc: null,
+            RevokedAtUtc: null,
+            CreatedByActorId: actorId,
+            CreatedAtUtc: utcNow.AddMinutes(-1));
+
+        var buildAgentPools = new Mock<IBuildAgentPoolRepository>(MockBehavior.Strict);
+        buildAgentPools
+            .Setup(x => x.GetAsync(poolId, It.IsAny<CancellationToken>(), false))
+            .ReturnsAsync(pool);
+
+        var edgeAgents = new Mock<IEdgeAgentRepository>(MockBehavior.Strict);
+        edgeAgents
+            .Setup(x => x.GetEnrollmentByTokenHashAsync(enrollment.TokenHash, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(enrollment);
+
+        var unitOfWork = new Mock<IUnitOfWork>(MockBehavior.Strict);
+        unitOfWork.SetupGet(x => x.BuildAgentPools).Returns(buildAgentPools.Object);
+        unitOfWork.SetupGet(x => x.EdgeAgents).Returns(edgeAgents.Object);
+        unitOfWork
+            .Setup(x => x.DisposeAsync())
+            .Returns(ValueTask.CompletedTask);
+
+        await using var provider = new ServiceCollection()
+            .AddScoped(_ => unitOfWork.Object)
+            .BuildServiceProvider();
+
+        var service = new EdgeAgentManagementService(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<INotificationQueue>(),
+            Mock.Of<IPlatformStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            Options.Create(new EdgeAgentOptions()));
+
+        var result = await service.CompleteEnrollmentAsync(
+            new EdgeAgentEnrollmentRequest(
+                token,
+                AgentPublicKey: Convert.ToBase64String([1, 2, 3]),
+                AgentFingerprint: string.Empty,
+                Hostname: "builder",
+                AgentVersion: "edge-agent-test",
+                CapabilitiesJson: """{"commands":["platform.checkHealth","containers.list","containers.logs"]}""",
+                ProtocolVersion: 1),
+            utcNow,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        Assert.Contains("images.build", error.Message);
+        edgeAgents.Verify(x => x.AddBindingAsync(It.IsAny<EdgeAgentBinding>(), It.IsAny<CancellationToken>()), Times.Never);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task MarkConnectedAsync_ShouldAddPlatformConnectedActivity_WhenPlatformTransitionsOnline()
     {
         var platformId = Guid.CreateVersion7();
@@ -274,6 +358,8 @@ public sealed class EdgeAgentManagementServiceTests
 
         var binding = new EdgeAgentBinding(
             Guid.CreateVersion7(),
+            platformId,
+            EdgeAgentResourceType.Platform,
             platformId,
             agentId,
             "public-key",

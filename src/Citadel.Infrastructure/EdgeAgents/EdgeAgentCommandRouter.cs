@@ -18,13 +18,23 @@ internal sealed class EdgeAgentCommandRouter(
         TimeSpan timeout,
         string? correlationId,
         CancellationToken cancellationToken)
+        => await SendUnaryAsync(EdgeAgentResourceType.Platform, platformId, kind, payload, timeout, correlationId, cancellationToken);
+
+    public async Task<EdgeAgentCommandRouterResult> SendUnaryAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken)
     {
         if (payload.Length > EdgeAgentDefaults.MaxEnvelopePayloadBytes)
         {
             return EdgeAgentCommandRouterResult.Failure("Edge Agent command payload exceeded the maximum payload size.");
         }
 
-        if (!registry.TryGet(platformId, out var session))
+        if (!registry.TryGet(resourceType, resourceId, out var session))
         {
             return EdgeAgentCommandRouterResult.Failure("Edge Agent is offline.");
         }
@@ -42,7 +52,7 @@ internal sealed class EdgeAgentCommandRouter(
                 correlationId,
                 expectsStream: false,
                 timeoutCts.Token);
-            logger.LogDebug("Sent Edge unary command {CommandId} {CommandKind} to platform {PlatformId}", pending.CommandId, kind, platformId);
+            logger.LogDebug("Sent Edge unary command {CommandId} {CommandKind} to {ResourceType} {ResourceId}", pending.CommandId, kind, resourceType, resourceId);
         }
         catch (OperationCanceledException)
         {
@@ -61,21 +71,21 @@ internal sealed class EdgeAgentCommandRouter(
                 if (item.ErrorMessage is not null)
                 {
                     completed = true;
-                    logger.LogWarning("Edge unary command {CommandId} {CommandKind} failed for platform {PlatformId}: {Message}", pending.CommandId, kind, platformId, item.ErrorMessage);
+                    logger.LogWarning("Edge unary command {CommandId} {CommandKind} failed for {ResourceType} {ResourceId}: {Message}", pending.CommandId, kind, resourceType, resourceId, item.ErrorMessage);
                     return EdgeAgentCommandRouterResult.Failure(item.ErrorMessage);
                 }
 
                 if (item.Payload is not null)
                 {
                     completed = true;
-                    logger.LogDebug("Edge unary command {CommandId} {CommandKind} completed for platform {PlatformId}", pending.CommandId, kind, platformId);
+                    logger.LogDebug("Edge unary command {CommandId} {CommandKind} completed for {ResourceType} {ResourceId}", pending.CommandId, kind, resourceType, resourceId);
                     return EdgeAgentCommandRouterResult.Success(item.Payload);
                 }
 
                 if (item.Completed)
                 {
                     completed = true;
-                    logger.LogDebug("Edge unary command {CommandId} {CommandKind} completed for platform {PlatformId}", pending.CommandId, kind, platformId);
+                    logger.LogDebug("Edge unary command {CommandId} {CommandKind} completed for {ResourceType} {ResourceId}", pending.CommandId, kind, resourceType, resourceId);
                     return EdgeAgentCommandRouterResult.Success([]);
                 }
             }
@@ -110,13 +120,35 @@ internal sealed class EdgeAgentCommandRouter(
         string? correlationId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        await foreach (var item in SendServerStreamAsync(
+            EdgeAgentResourceType.Platform,
+            platformId,
+            kind,
+            payload,
+            timeout,
+            correlationId,
+            cancellationToken))
+        {
+            yield return item;
+        }
+    }
+
+    public async IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         if (payload.Length > EdgeAgentDefaults.MaxEnvelopePayloadBytes)
         {
             yield return EdgeAgentStreamItem.Failure("Edge Agent command payload exceeded the maximum payload size.");
             yield break;
         }
 
-        if (!registry.TryGet(platformId, out var session))
+        if (!registry.TryGet(resourceType, resourceId, out var session))
         {
             yield return EdgeAgentStreamItem.Failure("Edge Agent is offline.");
             yield break;
@@ -136,7 +168,7 @@ internal sealed class EdgeAgentCommandRouter(
                 correlationId,
                 expectsStream: true,
                 timeoutCts.Token);
-            logger.LogDebug("Started Edge stream command {CommandId} {CommandKind} for platform {PlatformId}", pending.CommandId, kind, platformId);
+            logger.LogDebug("Started Edge stream command {CommandId} {CommandKind} for {ResourceType} {ResourceId}", pending.CommandId, kind, resourceType, resourceId);
         }
         catch (OperationCanceledException)
         {
@@ -192,11 +224,11 @@ internal sealed class EdgeAgentCommandRouter(
                         completed = true;
                         if (item.ErrorMessage is not null)
                         {
-                            logger.LogWarning("Edge stream command {CommandId} {CommandKind} failed for platform {PlatformId}: {Message}", pending.CommandId, kind, platformId, item.ErrorMessage);
+                            logger.LogWarning("Edge stream command {CommandId} {CommandKind} failed for {ResourceType} {ResourceId}: {Message}", pending.CommandId, kind, resourceType, resourceId, item.ErrorMessage);
                         }
                         else
                         {
-                            logger.LogDebug("Edge stream command {CommandId} {CommandKind} completed for platform {PlatformId}", pending.CommandId, kind, platformId);
+                            logger.LogDebug("Edge stream command {CommandId} {CommandKind} completed for {ResourceType} {ResourceId}", pending.CommandId, kind, resourceType, resourceId);
                         }
                     }
 
@@ -228,13 +260,23 @@ internal sealed class EdgeAgentCommandRouter(
         TimeSpan timeout,
         string? correlationId,
         CancellationToken cancellationToken)
+        => await StartInteractiveAsync(EdgeAgentResourceType.Platform, platformId, kind, payload, timeout, correlationId, cancellationToken);
+
+    public async Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        EdgeAgentCommandKind kind,
+        byte[] payload,
+        TimeSpan timeout,
+        string? correlationId,
+        CancellationToken cancellationToken)
     {
         if (payload.Length > EdgeAgentDefaults.MaxEnvelopePayloadBytes)
         {
             return Result.Failure<EdgeAgentInteractiveCommand>("Edge Agent command payload exceeded the maximum payload size.");
         }
 
-        if (!registry.TryGet(platformId, out var session))
+        if (!registry.TryGet(resourceType, resourceId, out var session))
         {
             return Result.Failure<EdgeAgentInteractiveCommand>("Edge Agent is offline.");
         }
@@ -255,7 +297,7 @@ internal sealed class EdgeAgentCommandRouter(
                 correlationId,
                 expectsStream: true,
                 timeoutCts.Token);
-            logger.LogDebug("Started Edge interactive command {CommandId} {CommandKind} for platform {PlatformId}", pending.CommandId, kind, platformId);
+            logger.LogDebug("Started Edge interactive command {CommandId} {CommandKind} for {ResourceType} {ResourceId}", pending.CommandId, kind, resourceType, resourceId);
         }
         catch (OperationCanceledException)
         {
@@ -436,6 +478,7 @@ internal sealed class EdgeAgentCommandRouter(
             EdgeAgentCommandKind.ImagePullStream => ProtoEdgeCommandKind.ImagePullStream,
             EdgeAgentCommandKind.ImageBuildStream => ProtoEdgeCommandKind.ImageBuildStream,
             EdgeAgentCommandKind.ImagePushStream => ProtoEdgeCommandKind.ImagePushStream,
+            EdgeAgentCommandKind.ImageCheckBuildHost => ProtoEdgeCommandKind.ImageCheckBuildHost,
             EdgeAgentCommandKind.VolumeList => ProtoEdgeCommandKind.VolumeList,
             EdgeAgentCommandKind.VolumeInspect => ProtoEdgeCommandKind.VolumeInspect,
             EdgeAgentCommandKind.VolumeCreate => ProtoEdgeCommandKind.VolumeCreate,

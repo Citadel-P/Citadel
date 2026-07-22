@@ -31,6 +31,8 @@ export type Path<T> = T extends Primitive
     }[keyof T & string];
 
 export interface FieldConfig<T> {
+  id?: string;
+  dirtyKey?: string;
   key: Path<T>;
   label: string;
   required?: boolean;
@@ -550,18 +552,18 @@ function extractFieldMap<T>(schema: FormSchema<T>): Record<string, FieldConfig<T
     const section = schema[sectionKey];
     for (const item of section.items) {
       if (item.kind === 'field') {
-        map[item.field.key as string] = item.field;
+        map[fieldIdentity(item.field)] = item.field;
       } else if (item.kind === 'row') {
         for (const f of item.fields) {
-          map[f.key as string] = f;
+          map[fieldIdentity(f)] = f;
         }
       } else if (item.kind === 'group') {
         for (const sub of item.items) {
           if (sub.kind === 'field') {
-            map[sub.field.key as string] = sub.field;
+            map[fieldIdentity(sub.field)] = sub.field;
           } else if (sub.kind === 'row') {
             for (const f of sub.fields) {
-              map[f.key as string] = f;
+              map[fieldIdentity(f)] = f;
             }
           }
         }
@@ -583,11 +585,14 @@ function computeValidationState<T>(
   const errors: Record<string, string | null> = {};
   const dirty: Record<string, boolean> = {};
 
-  for (const [key, field] of Object.entries(fieldMap)) {
+  for (const [identity, field] of Object.entries(fieldMap)) {
+    const key = field.key as string;
+    const dirtyKey = fieldDirtyKey(field);
     const val = getValue(merged, key);
-    const originalVal = getValue(original, key);
+    const currentDirtyVal = getValue(merged, dirtyKey);
+    const originalDirtyVal = getValue(original, dirtyKey);
 
-    dirty[key] = !areValuesEqual(val, originalVal);
+    dirty[identity] = !areValuesEqual(currentDirtyVal, originalDirtyVal);
 
     const isEmpty = val === undefined || val === '';
     let err: string | null = null;
@@ -598,7 +603,7 @@ function computeValidationState<T>(
       err = field.validate(val);
     }
 
-    errors[key] = err;
+    errors[identity] = err;
   }
 
   return { errors, dirty };
@@ -617,6 +622,9 @@ type FormNavigationSection = {
   items: FormNavigationItem[];
 };
 
+const fieldIdentity = <T,>(field: FieldConfig<T>) => field.id ?? (field.key as string);
+const fieldDirtyKey = <T,>(field: FieldConfig<T>) => field.dirtyKey ?? (field.key as string);
+
 function buildNavigationSections<T>(
   schema: FormSchema<T>,
   dirty: Record<string, boolean>,
@@ -624,15 +632,20 @@ function buildNavigationSections<T>(
   touched: Record<string, boolean>,
   mode: 'add' | 'edit',
 ): FormNavigationSection[] {
-  const fieldState = (key: string) => ({
-    dirty: mode === 'edit' && !!dirty[key],
-    error: !!touched[key] && !!errors[key],
-  });
+  const fieldState = (field: FieldConfig<T>) => {
+    const identity = fieldIdentity(field);
+    const key = field.key as string;
+
+    return {
+      dirty: mode === 'edit' && !!dirty[identity],
+      error: (!!touched[identity] || !!touched[key]) && !!errors[identity],
+    };
+  };
 
   const rowState = (fields: FieldConfig<T>[]) =>
     fields.reduce(
       (state, field) => {
-        const next = fieldState(field.key as string);
+        const next = fieldState(field);
         return {
           dirty: state.dirty || next.dirty,
           error: state.error || next.error,
@@ -644,7 +657,7 @@ function buildNavigationSections<T>(
   const groupState = (group: GroupFieldConfig<T>) =>
     group.items.reduce(
       (state, item) => {
-        const next = item.kind === 'field' ? fieldState(item.field.key as string) : rowState(item.fields);
+        const next = item.kind === 'field' ? fieldState(item.field) : rowState(item.fields);
         return {
           dirty: state.dirty || next.dirty,
           error: state.error || next.error,
@@ -658,11 +671,11 @@ function buildNavigationSections<T>(
     title: section.title,
     items: section.items.map((item): FormNavigationItem => {
       if (item.kind === 'field') {
-        const key = item.field.key as string;
+        const identity = fieldIdentity(item.field);
         return {
-          id: key,
+          id: identity,
           label: item.field.label,
-          ...fieldState(key),
+          ...fieldState(item.field),
         };
       }
 
@@ -935,8 +948,9 @@ export function FormShell<T>({
       // mark all fields as touched so errors become visible
       setTouched((prev) => {
         const next: Record<string, boolean> = { ...prev };
-        for (const key of Object.keys(fieldMap)) {
-          next[key] = true;
+        for (const [identity, field] of Object.entries(fieldMap)) {
+          next[identity] = true;
+          next[field.key as string] = true;
         }
         return next;
       });
@@ -1100,15 +1114,16 @@ export function FormShell<T>({
                   if (item.kind === 'field') {
                     const f = item.field;
                     const key = f.key as string;
+                    const identity = fieldIdentity(f);
                     const value = getValue(merged, key);
-                    const error = errors[key];
-                    const edited = mode === 'edit' && dirty[key];
+                    const error = errors[identity];
+                    const edited = mode === 'edit' && dirty[identity];
                     const fieldDisabled = f.ignoreFormDisabled ? !!f.disabled : !!disabled || !!f.disabled;
 
                     return (
                       <fieldset
-                        id={key}
-                        key={key}
+                        id={identity}
+                        key={identity}
                         disabled={fieldDisabled}
                         className={cn(
                           'relative border rounded-sm p-6 scroll-mt-22 xl:scroll-mt-20 shadow-xs',
@@ -1124,7 +1139,7 @@ export function FormShell<T>({
                           edited={!!edited}
                           error={error}
                           hideValidationMessage={f.hideValidationMessage}
-                          touched={!!touched[key]}
+                          touched={!!touched[identity] || !!touched[key]}
                         />
                       </fieldset>
                     );
@@ -1140,14 +1155,15 @@ export function FormShell<T>({
                         <div className={cn('flex flex-row w-full', item.gap ?? 'gap-4', item.className)}>
                           {item.fields.map((f) => {
                             const key = f.key as string;
+                            const identity = fieldIdentity(f);
                             const value = getValue(merged, key);
-                            const error = errors[key];
-                            const edited = mode === 'edit' && dirty[key];
+                            const error = errors[identity];
+                            const edited = mode === 'edit' && dirty[identity];
                             const fieldDisabled = f.ignoreFormDisabled ? !!f.disabled : !!disabled || !!f.disabled;
 
                             return (
                               <fieldset
-                                key={key}
+                                key={identity}
                                 disabled={fieldDisabled}
                                 className={cn(
                                   'relative pb-0 last:pb-0 flex-1',
@@ -1163,7 +1179,7 @@ export function FormShell<T>({
                                   edited={!!edited}
                                   error={error}
                                   hideValidationMessage={f.hideValidationMessage}
-                                  touched={!!touched[key]}
+                                  touched={!!touched[identity] || !!touched[key]}
                                 />
                               </fieldset>
                             );
@@ -1197,14 +1213,15 @@ export function FormShell<T>({
                           if (sub.kind === 'field') {
                             const f = sub.field;
                             const key = f.key as string;
+                            const identity = fieldIdentity(f);
                             const value = getValue(merged, key);
-                            const error = errors[key];
-                            const edited = mode === 'edit' && dirty[key];
+                            const error = errors[identity];
+                            const edited = mode === 'edit' && dirty[identity];
                             const fieldDisabled = f.ignoreFormDisabled ? !!f.disabled : !!disabled || !!f.disabled;
 
                             return (
                               <fieldset
-                                key={key}
+                                key={identity}
                                 disabled={fieldDisabled}
                                 className={cn(
                                   `relative pb-6 last:pb-0 ${group.direction === 'horizontal' ? 'flex-1' : 'block border-b last:border-b-0'}`,
@@ -1220,7 +1237,7 @@ export function FormShell<T>({
                                   edited={!!edited}
                                   error={error}
                                   hideValidationMessage={f.hideValidationMessage}
-                                  touched={!!touched[key]}
+                                  touched={!!touched[identity] || !!touched[key]}
                                 />
                               </fieldset>
                             );
@@ -1236,15 +1253,16 @@ export function FormShell<T>({
                                 className={cn('flex flex-col sm:flex-row w-full', row.gap ?? 'gap-4', row.className)}>
                                 {row.fields.map((f) => {
                                   const key = f.key as string;
+                                  const identity = fieldIdentity(f);
                                   const value = getValue(merged, key);
-                                  const error = errors[key];
-                                  const edited = mode === 'edit' && dirty[key];
+                                  const error = errors[identity];
+                                  const edited = mode === 'edit' && dirty[identity];
                                   const fieldDisabled = f.ignoreFormDisabled
                                     ? !!f.disabled
                                     : !!disabled || !!f.disabled;
                                   return (
                                     <fieldset
-                                      key={key}
+                                      key={identity}
                                       disabled={fieldDisabled}
                                       className={cn(
                                         'pb-1 last:pb-1 last:flex-1 scroll-mt-22 xl:scroll-mt-20',
@@ -1260,7 +1278,7 @@ export function FormShell<T>({
                                         edited={!!edited}
                                         error={error}
                                         hideValidationMessage={f.hideValidationMessage}
-                                        touched={!!touched[key]}
+                                        touched={!!touched[identity] || !!touched[key]}
                                       />
                                     </fieldset>
                                   );

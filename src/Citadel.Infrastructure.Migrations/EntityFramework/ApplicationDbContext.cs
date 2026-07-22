@@ -673,6 +673,8 @@ internal static class Configuration
         enrollment.HasKey("Id");
 
         enrollment.Property<Guid>("PlatformId").IsRequired();
+        enrollment.Property<string>("ResourceType").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue("Platform");
+        enrollment.Property<Guid>("ResourceId").IsRequired();
         enrollment.Property<string>("TokenHash").HasColumnType(Text).HasMaxLength(128).IsRequired();
         enrollment.Property<DateTime>("ExpiresAtUtc").HasColumnType(Timestamp).IsRequired();
         enrollment.Property<DateTime?>("UsedAtUtc").HasColumnType(Timestamp).IsRequired(false);
@@ -681,18 +683,13 @@ internal static class Configuration
         enrollment.Property<DateTime>("CreatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
         enrollment
-            .HasOne("Platform")
-            .WithMany()
-            .HasForeignKey("PlatformId")
-            .OnDelete(DeleteBehavior.Cascade);
-
-        enrollment
             .HasOne("Actor")
             .WithMany()
             .HasForeignKey("CreatedByActorId")
             .OnDelete(DeleteBehavior.Restrict);
 
         enrollment.HasIndex("PlatformId", "ExpiresAtUtc").HasDatabaseName($"IX_{tableName}_PlatformId_ExpiresAtUtc");
+        enrollment.HasIndex("ResourceType", "ResourceId", "ExpiresAtUtc").HasDatabaseName($"IX_{tableName}_Resource_ExpiresAtUtc");
         enrollment.HasIndex("TokenHash").IsUnique().HasDatabaseName($"IX_{tableName}_TokenHash");
 
         return builder;
@@ -709,6 +706,8 @@ internal static class Configuration
         binding.HasKey("Id");
 
         binding.Property<Guid>("PlatformId").IsRequired();
+        binding.Property<string>("ResourceType").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue("Platform");
+        binding.Property<Guid>("ResourceId").IsRequired();
         binding.Property<Guid>("AgentId").IsRequired();
         binding.Property<string>("AgentPublicKey").HasColumnType(Text).IsRequired();
         binding.Property<string>("AgentFingerprint").HasColumnType(Text).HasMaxLength(128).IsRequired();
@@ -724,13 +723,7 @@ internal static class Configuration
         binding.Property<DateTime>("CreatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         binding.Property<DateTime>("UpdatedAtUtc").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-        binding
-            .HasOne("Platform")
-            .WithMany()
-            .HasForeignKey("PlatformId")
-            .OnDelete(DeleteBehavior.Cascade);
-
-        binding.HasIndex("PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_PlatformId");
+        binding.HasIndex("ResourceType", "ResourceId").IsUnique().HasDatabaseName($"IX_{tableName}_Resource");
         binding.HasIndex("AgentId").HasDatabaseName($"IX_{tableName}_AgentId");
         binding.HasIndex("AgentFingerprint").HasDatabaseName($"IX_{tableName}_AgentFingerprint");
 
@@ -2137,6 +2130,7 @@ internal static class Configuration
         pool.Property<string>("LastValidationStatus").HasColumnType(Text).HasMaxLength(64).IsRequired().HasDefaultValue("NotTested");
         pool.Property<string>("LastValidationMessage").HasColumnType(Text).HasMaxLength(1200).IsRequired(false);
         pool.Property<DateTime?>("LastValidatedAt").HasColumnType(Timestamp).IsRequired(false);
+        pool.Property<DateTime>("UpdatedAt").HasColumnType(Timestamp).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         pool.Property<DateTime?>("ArchivedAt").HasColumnType(Timestamp).IsRequired(false);
         pool.Property<long>("RowVersion").HasColumnType(BigInt).IsRequired().HasDefaultValue(0L);
         pool.AddAuditedMemebers();

@@ -217,6 +217,7 @@ type EditableResourceType =
   | 'Registry'
   | 'AutomationAction'
   | 'Build'
+  | 'BuildAgentPool'
   | 'BackupPolicy';
 
 const replaceTagEndpoint = {
@@ -227,6 +228,7 @@ const replaceTagEndpoint = {
   Registry: 'replaceRegistryTags',
   AutomationAction: 'replaceAutomationActionTags',
   Build: 'replaceBuildTags',
+  BuildAgentPool: 'replaceBuildAgentPoolTags',
   BackupPolicy: 'replaceBackupPolicyTags',
 } as const;
 

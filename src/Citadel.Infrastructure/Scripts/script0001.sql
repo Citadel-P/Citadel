@@ -29,6 +29,28 @@ CREATE TABLE citadelinstanceidentity (
     CONSTRAINT "CK_CitadelInstanceIdentity_Singleton" CHECK ("id" = 1)
 );
 
+CREATE TABLE edgeagentbindings (
+    id uuid NOT NULL,
+    agentfingerprint text NOT NULL,
+    agentid uuid NOT NULL,
+    agentpublickey text NOT NULL,
+    capabilitiesjson json,
+    connectionstatus text NOT NULL,
+    createdatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    lastconnectedatutc timestamp with time zone,
+    lastdisconnectedatutc timestamp with time zone,
+    lastheartbeatatutc timestamp with time zone,
+    lastseenhostname text,
+    lastseenversion text,
+    platformid uuid NOT NULL,
+    protocolversion integer NOT NULL DEFAULT 1,
+    resourceid uuid NOT NULL,
+    resourcetype text NOT NULL DEFAULT 'Platform',
+    revokedatutc timestamp with time zone,
+    updatedatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    CONSTRAINT pk_edgeagentbindings PRIMARY KEY (id)
+);
+
 CREATE TABLE platforms (
     id uuid NOT NULL,
     address text NOT NULL,
@@ -154,8 +176,24 @@ CREATE TABLE buildagentpools (
     queuetimeoutseconds integer NOT NULL DEFAULT 3600,
     registrationtimeoutseconds integer NOT NULL DEFAULT 300,
     rowversion bigint NOT NULL DEFAULT 0,
+    updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     CONSTRAINT pk_buildagentpools PRIMARY KEY (id),
     CONSTRAINT fk_buildagentpools_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE edgeagentenrollments (
+    id uuid NOT NULL,
+    createdatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdbyactorid uuid NOT NULL,
+    expiresatutc timestamp with time zone NOT NULL,
+    platformid uuid NOT NULL,
+    resourceid uuid NOT NULL,
+    resourcetype text NOT NULL DEFAULT 'Platform',
+    revokedatutc timestamp with time zone,
+    tokenhash text NOT NULL,
+    usedatutc timestamp with time zone,
+    CONSTRAINT pk_edgeagentenrollments PRIMARY KEY (id),
+    CONSTRAINT fk_edgeagentenrollments_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT
 );
 
 CREATE TABLE gitaccounts (
@@ -288,41 +326,6 @@ CREATE TABLE deployments (
     CONSTRAINT fk_deployments_actors_controltriggeredby FOREIGN KEY (controltriggeredby) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_deployments_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_deployments_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE RESTRICT
-);
-
-CREATE TABLE edgeagentbindings (
-    id uuid NOT NULL,
-    agentfingerprint text NOT NULL,
-    agentid uuid NOT NULL,
-    agentpublickey text NOT NULL,
-    capabilitiesjson json,
-    connectionstatus text NOT NULL,
-    createdatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    lastconnectedatutc timestamp with time zone,
-    lastdisconnectedatutc timestamp with time zone,
-    lastheartbeatatutc timestamp with time zone,
-    lastseenhostname text,
-    lastseenversion text,
-    platformid uuid NOT NULL,
-    protocolversion integer NOT NULL DEFAULT 1,
-    revokedatutc timestamp with time zone,
-    updatedatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    CONSTRAINT pk_edgeagentbindings PRIMARY KEY (id),
-    CONSTRAINT fk_edgeagentbindings_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
-);
-
-CREATE TABLE edgeagentenrollments (
-    id uuid NOT NULL,
-    createdatutc timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    createdbyactorid uuid NOT NULL,
-    expiresatutc timestamp with time zone NOT NULL,
-    platformid uuid NOT NULL,
-    revokedatutc timestamp with time zone,
-    tokenhash text NOT NULL,
-    usedatutc timestamp with time zone,
-    CONSTRAINT pk_edgeagentenrollments PRIMARY KEY (id),
-    CONSTRAINT fk_edgeagentenrollments_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
-    CONSTRAINT fk_edgeagentenrollments_platforms_platformid FOREIGN KEY (platformid) REFERENCES platforms (id) ON DELETE CASCADE
 );
 
 CREATE TABLE platformstats (
@@ -1438,11 +1441,13 @@ CREATE INDEX ix_edgeagentbindings_agentfingerprint ON edgeagentbindings (agentfi
 
 CREATE INDEX ix_edgeagentbindings_agentid ON edgeagentbindings (agentid);
 
-CREATE UNIQUE INDEX ix_edgeagentbindings_platformid ON edgeagentbindings (platformid);
+CREATE UNIQUE INDEX ix_edgeagentbindings_resource ON edgeagentbindings (resourcetype, resourceid);
 
 CREATE INDEX ix_edgeagentenrollments_createdbyactorid ON edgeagentenrollments (createdbyactorid);
 
 CREATE INDEX ix_edgeagentenrollments_platformid_expiresatutc ON edgeagentenrollments (platformid, expiresatutc);
+
+CREATE INDEX ix_edgeagentenrollments_resource_expiresatutc ON edgeagentenrollments (resourcetype, resourceid, expiresatutc);
 
 CREATE UNIQUE INDEX ix_edgeagentenrollments_tokenhash ON edgeagentenrollments (tokenhash);
 
@@ -1575,7 +1580,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260721115316_migration0001', '10.0.10');
+VALUES ('20260722145424_migration0001', '10.0.10');
 
 COMMIT;
 

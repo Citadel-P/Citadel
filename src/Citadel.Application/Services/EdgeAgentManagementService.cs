@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Application.Configs;
 using Application.Features.Deployments.Notifications;
 using Application.Features.Platforms;
@@ -8,6 +9,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Builds;
 using Domain.Entities.Platforms;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
@@ -24,22 +26,45 @@ internal sealed class EdgeAgentManagementService(
     IActivityStreamManager activityStreamManager,
     IOptions<EdgeAgentOptions> edgeAgentOptions) : IEdgeAgentManagementService
 {
+    private static readonly string[] RequiredBuildAgentPoolCommands =
+    [
+        "images.build",
+        "images.push",
+        "images.checkBuildHost"
+    ];
+
     public async Task<Result<EdgeAgentEnrollmentResult>> CreateEnrollmentAsync(Guid platformId, string coreUrl, Guid actorId, TimeSpan ttl, CancellationToken cancellationToken)
+        => await CreateEnrollmentAsync(
+            new EdgeAgentTarget(EdgeAgentResourceType.Platform, platformId, platformId, "edge-agent", "/app/data/edge-agent.key", "/app/data/edge-agent.identity.json"),
+            coreUrl,
+            actorId,
+            ttl,
+            cancellationToken);
+
+    public async Task<Result<EdgeAgentEnrollmentResult>> CreateBuildAgentPoolEnrollmentAsync(Guid buildAgentPoolId, string coreUrl, Guid actorId, TimeSpan ttl, CancellationToken cancellationToken)
+        => await CreateEnrollmentAsync(
+            new EdgeAgentTarget(EdgeAgentResourceType.BuildAgentPool, buildAgentPoolId, Guid.Empty, "edge-build-agent", "/app/data/edge-build-agent.key", "/app/data/edge-build-agent.identity.json"),
+            coreUrl,
+            actorId,
+            ttl,
+            cancellationToken);
+
+    private async Task<Result<EdgeAgentEnrollmentResult>> CreateEnrollmentAsync(
+        EdgeAgentTarget target,
+        string coreUrl,
+        Guid actorId,
+        TimeSpan ttl,
+        CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platform = await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken);
-        if (platform is null)
+        var validation = await ValidateTargetAsync(target, unitOfWork, cancellationToken);
+        if (validation.IsFailure(out var validationError))
         {
-            return Result.Failure<EdgeAgentEnrollmentResult>(new NotFoundError("Platform not found."));
+            return Result.Failure<EdgeAgentEnrollmentResult>(validationError!);
         }
 
-        if (platform.ConnectorType != PlatformConnectorType.EdgeAgent)
-        {
-            return Result.Failure<EdgeAgentEnrollmentResult>(new BadRequestError("Platform is not an Edge Agent platform."));
-        }
-
-        var binding = await unitOfWork.EdgeAgents.GetBindingByPlatformIdAsync(platformId, cancellationToken);
+        var binding = await unitOfWork.EdgeAgents.GetBindingByResourceAsync(target.ResourceType, target.ResourceId, cancellationToken);
         if (binding?.IsRevoked == true)
         {
             return Result.Failure<EdgeAgentEnrollmentResult>(new ConflictError("Edge Agent binding is revoked."));
@@ -50,7 +75,9 @@ internal sealed class EdgeAgentManagementService(
         var expiresAt = utcNow.Add(ttl);
         var enrollment = new EdgeAgentEnrollment(
             Id: Guid.CreateVersion7(),
-            PlatformId: platformId,
+            PlatformId: target.PlatformId,
+            ResourceType: target.ResourceType,
+            ResourceId: target.ResourceId,
             TokenHash: HashToken(token),
             ExpiresAtUtc: expiresAt,
             UsedAtUtc: null,
@@ -66,37 +93,49 @@ internal sealed class EdgeAgentManagementService(
             ["CITADEL_AGENT_MODE"] = "edge",
             ["CITADEL_CORE_URL"] = coreUrl,
             ["CITADEL_EDGE_ENROLLMENT_TOKEN"] = token,
-            ["CITADEL_EDGE_AGENT_KEY_PATH"] = "/app/data/edge-agent.key",
-            ["CITADEL_EDGE_IDENTITY_PATH"] = "/app/data/edge-agent.identity.json"
+            ["CITADEL_EDGE_AGENT_KEY_PATH"] = target.KeyPath,
+            ["CITADEL_EDGE_IDENTITY_PATH"] = target.IdentityPath
         };
         var agentImage = edgeAgentOptions.Value.GetAgentImage();
-        var dockerRunCommand = AgentDockerCommandBuilder.BuildEdgeAgentCommand(agentImage, environment);
+        var dockerRunCommand = AgentDockerCommandBuilder.BuildEdgeAgentCommand(
+            agentImage,
+            environment,
+            containerName: target.ContainerName,
+            dataVolumeName: target.ContainerName.Replace("-", "_", StringComparison.Ordinal) + "_data");
 
         return Result.Success(new EdgeAgentEnrollmentResult(
             enrollment.Id,
-            platformId,
+            target.PlatformId,
             token,
             expiresAt,
-            new EdgeAgentEnrollmentInstructions(coreUrl, environment, agentImage, dockerRunCommand)));
+            new EdgeAgentEnrollmentInstructions(coreUrl, environment, agentImage, dockerRunCommand),
+            target.ResourceType,
+            target.ResourceId));
     }
 
     public async Task<Result<EdgeAgentStatusResult>> GetStatusAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken)
+        => await GetStatusAsync(EdgeAgentResourceType.Platform, platformId, utcNow, cancellationToken);
+
+    public async Task<Result<EdgeAgentStatusResult>> GetBuildAgentPoolStatusAsync(Guid buildAgentPoolId, DateTime utcNow, CancellationToken cancellationToken)
+        => await GetStatusAsync(EdgeAgentResourceType.BuildAgentPool, buildAgentPoolId, utcNow, cancellationToken);
+
+    private async Task<Result<EdgeAgentStatusResult>> GetStatusAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        DateTime utcNow,
+        CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platform = await unitOfWork.Platforms.GetByIdAsync(platformId, cancellationToken);
-        if (platform is null)
+        var target = new EdgeAgentTarget(resourceType, resourceId, resourceType == EdgeAgentResourceType.Platform ? resourceId : Guid.Empty, "edge-agent", "/app/data/edge-agent.key", "/app/data/edge-agent.identity.json");
+        var validation = await ValidateTargetAsync(target, unitOfWork, cancellationToken);
+        if (validation.IsFailure(out var validationError))
         {
-            return Result.Failure<EdgeAgentStatusResult>(new NotFoundError("Platform not found."));
+            return Result.Failure<EdgeAgentStatusResult>(validationError!);
         }
 
-        if (platform.ConnectorType != PlatformConnectorType.EdgeAgent)
-        {
-            return Result.Failure<EdgeAgentStatusResult>(new BadRequestError("Platform is not an Edge Agent platform."));
-        }
-
-        var binding = await unitOfWork.EdgeAgents.GetBindingByPlatformIdAsync(platformId, cancellationToken);
-        var activeEnrollment = await unitOfWork.EdgeAgents.GetActiveEnrollmentAsync(platformId, utcNow, cancellationToken);
+        var binding = await unitOfWork.EdgeAgents.GetBindingByResourceAsync(resourceType, resourceId, cancellationToken);
+        var activeEnrollment = await unitOfWork.EdgeAgents.GetActiveEnrollmentAsync(resourceType, resourceId, utcNow, cancellationToken);
         if (binding is null)
         {
             return Result.Success(new EdgeAgentStatusResult(
@@ -139,16 +178,30 @@ internal sealed class EdgeAgentManagementService(
             return Result.Failure<EdgeAgentEnrollmentCompleteResult>(new UnauthorizedError("Enrollment token is invalid, expired, revoked, or already used."));
         }
 
-        var platform = await unitOfWork.Platforms.GetByIdAsync(enrollment.PlatformId, cancellationToken);
-        if (platform is null || platform.ConnectorType != PlatformConnectorType.EdgeAgent)
+        var target = new EdgeAgentTarget(
+            enrollment.NormalizedResourceType,
+            enrollment.NormalizedResourceId,
+            enrollment.PlatformId,
+            "edge-agent",
+            "/app/data/edge-agent.key",
+            "/app/data/edge-agent.identity.json");
+        var validation = await ValidateTargetAsync(target, unitOfWork, cancellationToken);
+        if (validation.IsFailure(out var validationError))
         {
-            return Result.Failure<EdgeAgentEnrollmentCompleteResult>(new BadRequestError("Enrollment token is not scoped to a valid Edge Agent platform."));
+            return Result.Failure<EdgeAgentEnrollmentCompleteResult>(validationError!);
         }
 
-        var existingBinding = await unitOfWork.EdgeAgents.GetBindingByPlatformIdAsync(enrollment.PlatformId, cancellationToken);
+        if (target.ResourceType == EdgeAgentResourceType.BuildAgentPool &&
+            !HasRequiredCommands(request.CapabilitiesJson, RequiredBuildAgentPoolCommands, out var missingCommand))
+        {
+            return Result.Failure<EdgeAgentEnrollmentCompleteResult>(
+                new BadRequestError($"Build pool Edge Agent must advertise capability '{missingCommand}'."));
+        }
+
+        var existingBinding = await unitOfWork.EdgeAgents.GetBindingByResourceAsync(enrollment.NormalizedResourceType, enrollment.NormalizedResourceId, cancellationToken);
         if (existingBinding is not null && !existingBinding.IsRevoked)
         {
-            return Result.Failure<EdgeAgentEnrollmentCompleteResult>(new ConflictError("Edge Agent platform is already enrolled."));
+            return Result.Failure<EdgeAgentEnrollmentCompleteResult>(new ConflictError("Edge Agent target is already enrolled."));
         }
 
         var publicKeyBytes = Convert.FromBase64String(request.AgentPublicKey);
@@ -164,6 +217,8 @@ internal sealed class EdgeAgentManagementService(
         var binding = new EdgeAgentBinding(
             Id: Guid.CreateVersion7(),
             PlatformId: enrollment.PlatformId,
+            ResourceType: enrollment.NormalizedResourceType,
+            ResourceId: enrollment.NormalizedResourceId,
             AgentId: agentId,
             AgentPublicKey: request.AgentPublicKey,
             AgentFingerprint: fingerprint,
@@ -183,14 +238,26 @@ internal sealed class EdgeAgentManagementService(
         await unitOfWork.EdgeAgents.MarkEnrollmentUsedAsync(enrollment.Id, now, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return Result.Success(new EdgeAgentEnrollmentCompleteResult(enrollment.PlatformId, agentId));
+        return Result.Success(new EdgeAgentEnrollmentCompleteResult(
+            enrollment.PlatformId,
+            agentId,
+            enrollment.NormalizedResourceType,
+            enrollment.NormalizedResourceId));
     }
 
     public async Task<Result<EdgeAgentBinding>> GetReconnectBindingAsync(Guid platformId, Guid agentId, string agentFingerprint, CancellationToken cancellationToken)
+        => await GetReconnectBindingAsync(EdgeAgentResourceType.Platform, platformId, agentId, agentFingerprint, cancellationToken);
+
+    public async Task<Result<EdgeAgentBinding>> GetReconnectBindingAsync(
+        EdgeAgentResourceType resourceType,
+        Guid resourceId,
+        Guid agentId,
+        string agentFingerprint,
+        CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var binding = await unitOfWork.EdgeAgents.GetBindingByAgentAsync(platformId, agentId, cancellationToken);
+        var binding = await unitOfWork.EdgeAgents.GetBindingByAgentAsync(resourceType, resourceId, agentId, cancellationToken);
         if (binding is null)
         {
             return Result.Failure<EdgeAgentBinding>(new UnauthorizedError("Edge Agent binding was not found."));
@@ -210,16 +277,21 @@ internal sealed class EdgeAgentManagementService(
     }
 
     public async Task MarkConnectedAsync(Guid platformId, string hostname, string agentVersion, string capabilitiesJson, DateTime utcNow, CancellationToken cancellationToken)
+        => await MarkConnectedAsync(EdgeAgentResourceType.Platform, platformId, hostname, agentVersion, capabilitiesJson, utcNow, cancellationToken);
+
+    public async Task MarkConnectedAsync(EdgeAgentResourceType resourceType, Guid resourceId, string hostname, string agentVersion, string capabilitiesJson, DateTime utcNow, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var state = await unitOfWork.EdgeAgents.GetPlatformStateByPlatformIdAsync(platformId, cancellationToken);
+        var state = resourceType == EdgeAgentResourceType.Platform
+            ? await unitOfWork.EdgeAgents.GetPlatformStateByPlatformIdAsync(resourceId, cancellationToken)
+            : null;
         var platform = state?.Platform;
         var previousBinding = state?.Binding;
         var previousStatus = platform?.Status;
         var wasConnected = previousBinding?.ConnectionStatus == EdgeAgentConnectionStatus.Connected;
 
-        await unitOfWork.EdgeAgents.UpdateBindingConnectedAsync(platformId, utcNow, hostname, agentVersion, capabilitiesJson, cancellationToken);
+        await unitOfWork.EdgeAgents.UpdateBindingConnectedAsync(resourceType, resourceId, utcNow, hostname, agentVersion, capabilitiesJson, cancellationToken);
 
         if (platform is not null)
         {
@@ -252,24 +324,32 @@ internal sealed class EdgeAgentManagementService(
     }
 
     public async Task MarkHeartbeatAsync(Guid platformId, EdgeAgentHeartbeatSnapshot heartbeat, DateTime utcNow, CancellationToken cancellationToken)
+        => await MarkHeartbeatAsync(EdgeAgentResourceType.Platform, platformId, heartbeat, utcNow, cancellationToken);
+
+    public async Task MarkHeartbeatAsync(EdgeAgentResourceType resourceType, Guid resourceId, EdgeAgentHeartbeatSnapshot heartbeat, DateTime utcNow, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        await unitOfWork.EdgeAgents.UpdateBindingHeartbeatAsync(platformId, utcNow, heartbeat.Hostname, heartbeat.AgentVersion, heartbeat.CapabilitiesJson, cancellationToken);
+        await unitOfWork.EdgeAgents.UpdateBindingHeartbeatAsync(resourceType, resourceId, utcNow, heartbeat.Hostname, heartbeat.AgentVersion, heartbeat.CapabilitiesJson, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
     }
 
     public async Task MarkDisconnectedAsync(Guid platformId, DateTime utcNow, CancellationToken cancellationToken)
+        => await MarkDisconnectedAsync(EdgeAgentResourceType.Platform, platformId, utcNow, cancellationToken);
+
+    public async Task MarkDisconnectedAsync(EdgeAgentResourceType resourceType, Guid resourceId, DateTime utcNow, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var state = await unitOfWork.EdgeAgents.GetPlatformStateByPlatformIdAsync(platformId, cancellationToken);
+        var state = resourceType == EdgeAgentResourceType.Platform
+            ? await unitOfWork.EdgeAgents.GetPlatformStateByPlatformIdAsync(resourceId, cancellationToken)
+            : null;
         var platform = state?.Platform;
         var previousBinding = state?.Binding;
         var previousStatus = platform?.Status;
         var wasConnected = previousBinding?.ConnectionStatus == EdgeAgentConnectionStatus.Connected;
 
-        await unitOfWork.EdgeAgents.UpdateBindingDisconnectedAsync(platformId, utcNow, cancellationToken);
+        await unitOfWork.EdgeAgents.UpdateBindingDisconnectedAsync(resourceType, resourceId, utcNow, cancellationToken);
 
         if (platform is not null)
         {
@@ -321,6 +401,52 @@ internal sealed class EdgeAgentManagementService(
         return Result.Success();
     }
 
+    public async Task<Result> RevokeBuildAgentPoolAsync(Guid buildAgentPoolId, DateTime utcNow, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var pool = await unitOfWork.BuildAgentPools.GetAsync(buildAgentPoolId, cancellationToken, includeArchived: true);
+        if (pool is null)
+        {
+            return Result.Failure(new NotFoundError("Build pool not found."));
+        }
+
+        await unitOfWork.EdgeAgents.RevokeBindingAsync(EdgeAgentResourceType.BuildAgentPool, buildAgentPoolId, utcNow, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        return Result.Success();
+    }
+
+    private static async Task<Result> ValidateTargetAsync(
+        EdgeAgentTarget target,
+        IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        if (target.ResourceType == EdgeAgentResourceType.Platform)
+        {
+            var platform = await unitOfWork.Platforms.GetByIdAsync(target.ResourceId, cancellationToken);
+            if (platform is null)
+                return Result.Failure(new NotFoundError("Platform not found."));
+
+            return platform.ConnectorType == PlatformConnectorType.EdgeAgent
+                ? Result.Success()
+                : Result.Failure(new BadRequestError("Platform is not an Edge Agent platform."));
+        }
+
+        if (target.ResourceType == EdgeAgentResourceType.BuildAgentPool)
+        {
+            var pool = await unitOfWork.BuildAgentPools.GetAsync(target.ResourceId, cancellationToken, includeArchived: false);
+            if (pool is null)
+                return Result.Failure(new NotFoundError("Build pool not found."));
+
+            if (pool.ProviderSpec is not SelfManagedVmBuildAgentPoolProviderSpec { ConnectionMode: BuildAgentPoolConnectionMode.EdgeAgent })
+                return Result.Failure(new BadRequestError("Build pool is not configured for Edge Agent mode."));
+
+            return Result.Success();
+        }
+
+        return Result.Failure(new BadRequestError("Edge Agent target type is invalid."));
+    }
+
     public static string HashToken(string token)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token));
@@ -359,4 +485,52 @@ internal sealed class EdgeAgentManagementService(
             .Replace('+', '-')
             .Replace('/', '_');
     }
+
+    private static bool HasRequiredCommands(string? capabilitiesJson, IReadOnlyCollection<string> requiredCommands, out string missingCommand)
+    {
+        missingCommand = string.Empty;
+        if (string.IsNullOrWhiteSpace(capabilitiesJson))
+        {
+            missingCommand = requiredCommands.FirstOrDefault() ?? string.Empty;
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(capabilitiesJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("commands", out var commandsElement) ||
+                commandsElement.ValueKind != JsonValueKind.Array)
+            {
+                missingCommand = requiredCommands.FirstOrDefault() ?? string.Empty;
+                return false;
+            }
+
+            var commands = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var command in commandsElement.EnumerateArray())
+            {
+                if (command.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(command.GetString()))
+                {
+                    commands.Add(command.GetString()!);
+                }
+            }
+
+            missingCommand = requiredCommands.FirstOrDefault(command => !commands.Contains(command)) ?? string.Empty;
+            return missingCommand.Length == 0;
+        }
+        catch (JsonException)
+        {
+            missingCommand = requiredCommands.FirstOrDefault() ?? string.Empty;
+            return false;
+        }
+    }
+
+    private sealed record EdgeAgentTarget(
+        EdgeAgentResourceType ResourceType,
+        Guid ResourceId,
+        Guid PlatformId,
+        string ContainerName,
+        string KeyPath,
+        string IdentityPath);
 }

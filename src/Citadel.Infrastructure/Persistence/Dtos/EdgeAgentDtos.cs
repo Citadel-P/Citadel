@@ -3,6 +3,8 @@ namespace Infrastructure.Persistence.Dtos;
 internal sealed record EdgeAgentEnrollmentDto(
     Guid Id,
     Guid PlatformId,
+    string? ResourceType,
+    Guid? ResourceId,
     string TokenHash,
     DateTime ExpiresAtUtc,
     DateTime? UsedAtUtc,
@@ -13,6 +15,8 @@ internal sealed record EdgeAgentEnrollmentDto(
 internal sealed record EdgeAgentBindingDto(
     Guid Id,
     Guid PlatformId,
+    string? ResourceType,
+    Guid? ResourceId,
     Guid AgentId,
     string AgentPublicKey,
     string AgentFingerprint,
@@ -45,6 +49,8 @@ internal sealed record EdgeAgentPlatformStateDto(
     string? PlatformDescription,
     Guid? BindingId,
     Guid? BindingPlatformId,
+    string? BindingResourceType,
+    Guid? BindingResourceId,
     Guid? BindingAgentId,
     string? BindingAgentPublicKey,
     string? BindingAgentFingerprint,

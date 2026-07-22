@@ -192,6 +192,59 @@ public sealed class BuildRepositoryTests(PostgresTestFixture fixture) : Integrat
         }
     }
 
+    [Fact]
+    public async Task BuildRunRepository_ShouldCountActiveRunsForBuildAgentPool()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var actorId = Constants.SystemId;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        Guid poolId;
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var repository = CreateRepository($"pool-count-repo-{suffix}", actorId);
+            var registry = CreateRegistry($"pool-count-registry-{suffix}", actorId);
+            var pool = CreateSelfManagedPool($"pool-count-builders-{suffix}", actorId);
+            poolId = pool.Id;
+
+            await uow.GitRepositories.AddAsync(repository, cancellationToken);
+            await uow.Registries.AddAsync(registry, cancellationToken);
+            await uow.BuildAgentPools.AddAsync(pool, cancellationToken);
+
+            var activeProject = CreatePoolBackedProject($"pool-count-active-{suffix}", repository.Id, registry.Id, pool.Id, actorId);
+            var runningProject = CreatePoolBackedProject($"pool-count-running-{suffix}", repository.Id, registry.Id, pool.Id, actorId);
+            var terminalProject = CreatePoolBackedProject($"pool-count-terminal-{suffix}", repository.Id, registry.Id, pool.Id, actorId);
+            await uow.BuildProjects.AddAsync(activeProject, cancellationToken);
+            await uow.BuildProjects.AddAsync(runningProject, cancellationToken);
+            await uow.BuildProjects.AddAsync(terminalProject, cancellationToken);
+
+            var queuedRun = CreateQueuedRun(activeProject, repository, pool, registry, actorId, "queued");
+            var runningRun = CreateQueuedRun(runningProject, repository, pool, registry, actorId, "running");
+            runningRun.MarkPreparing(DateTimeOffset.UtcNow);
+            runningRun.MarkRunning(DateTimeOffset.UtcNow.AddSeconds(1));
+            var terminalRun = CreateQueuedRun(terminalProject, repository, pool, registry, actorId, "done");
+            terminalRun.MarkPreparing(DateTimeOffset.UtcNow);
+            terminalRun.MarkRunning(DateTimeOffset.UtcNow.AddSeconds(1));
+            terminalRun.CompleteSucceeded("sha256:done", terminalRun.ImageReferences, 0, DateTimeOffset.UtcNow.AddSeconds(2));
+
+            await uow.BuildRuns.AddAsync(queuedRun, cancellationToken);
+            await uow.BuildRuns.AddAsync(runningRun, cancellationToken);
+            await uow.BuildRuns.AddAsync(terminalRun, cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var activeCount = await uow.BuildRuns.CountActiveByBuildAgentPoolAsync(poolId, cancellationToken);
+            var missingPoolCount = await uow.BuildRuns.CountActiveByBuildAgentPoolAsync(Guid.CreateVersion7(), cancellationToken);
+
+            Assert.Equal(2, activeCount);
+            Assert.Equal(0, missingPoolCount);
+        }
+    }
+
     private async Task<ProjectJsonColumns> ReadProjectJsonColumnsAsync(Guid projectId, CancellationToken cancellationToken)
     {
         await using var connection = new NpgsqlConnection(ConnectionString);
@@ -246,6 +299,53 @@ public sealed class BuildRepositoryTests(PostgresTestFixture fixture) : Integrat
             actorId,
             new CustomRegistry());
 
+    private static BuildAgentPool CreateSelfManagedPool(string name, Guid actorId)
+        => new(
+            name,
+            null,
+            true,
+            new SelfManagedVmBuildAgentPoolProviderSpec(
+                "grpc://builder.example.test:5001",
+                CpuArchitecture.Amd64,
+                2),
+            2,
+            BuildAgentPool.DefaultQueueTimeoutSeconds,
+            BuildAgentPool.DefaultProvisioningTimeoutSeconds,
+            BuildAgentPool.DefaultRegistrationTimeoutSeconds,
+            BuildAgentPool.DefaultHeartbeatTimeoutSeconds,
+            BuildAgentPool.DefaultCleanupTimeoutSeconds,
+            BuildAgentPool.DefaultMaximumInstanceLifetimeSeconds,
+            BuildAgentPool.DefaultFailureRetentionMinutes,
+            actorId);
+
+    private static BuildProject CreatePoolBackedProject(
+        string name,
+        Guid repositoryId,
+        Guid registryId,
+        Guid poolId,
+        Guid actorId)
+        => new(
+            name,
+            null,
+            enabled: true,
+            repositoryId,
+            "main",
+            ".",
+            "Dockerfile",
+            null,
+            [],
+            [],
+            Guid.Empty,
+            registryId,
+            "team/api",
+            ["{branch}-{shortSha}"],
+            webhook: null,
+            timeoutSeconds: BuildProject.DefaultTimeoutSeconds,
+            retentionRunCount: BuildProject.DefaultRetentionRunCount,
+            createdByActorId: actorId,
+            BuildProjectBuilderKind.BuildAgentPool,
+            poolId);
+
     private static BuildRun CreateQueuedRun(
         BuildProject project,
         GitRepository repository,
@@ -266,6 +366,35 @@ public sealed class BuildRepositoryTests(PostgresTestFixture fixture) : Integrat
             project.BuildArgs,
             [.. project.BuildSecrets.Select(static secret => secret.Id)],
             new BuildPlatformSnapshot(platform.Id, platform.Name, platform.Address, platform.ConnectorType),
+            new BuildRegistrySnapshot(registry.Id, registry.Name, registry.RegistryHost),
+            project.ImageRepository,
+            project.TagTemplates,
+            [$"{registry.RegistryHost}/{project.ImageRepository}:{tag}"],
+            BuildRunTrigger.Manual,
+            triggerSourceId: null,
+            actorId,
+            project.TimeoutSeconds);
+
+    private static BuildRun CreateQueuedRun(
+        BuildProject project,
+        GitRepository repository,
+        BuildAgentPool pool,
+        Registry registry,
+        Guid actorId,
+        string tag)
+        => new(
+            project.Id,
+            project.Name,
+            repository.Id,
+            repository.Name,
+            project.Branch,
+            null,
+            project.ContextPath,
+            project.DockerfilePath,
+            project.Target,
+            project.BuildArgs,
+            [.. project.BuildSecrets.Select(static secret => secret.Id)],
+            new BuildPlatformSnapshot(pool.Id, pool.Name, "grpc://builder.example.test:5001", PlatformConnectorType.Agent),
             new BuildRegistrySnapshot(registry.Id, registry.Name, registry.RegistryHost),
             project.ImageRepository,
             project.TagTemplates,

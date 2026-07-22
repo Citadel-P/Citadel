@@ -917,6 +917,29 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
             transaction: tx());
     }
 
+    public Task<int> CountActiveByBuildAgentPoolAsync(Guid buildAgentPoolId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH PoolLock AS (
+                SELECT pg_advisory_xact_lock(hashtextextended(@LockKey, 0)) AS Locked
+            )
+            SELECT COUNT(*)::int
+            FROM PoolLock, BuildRuns
+            WHERE Status = ANY(@Statuses)
+              AND COALESCE(PlatformSnapshot ->> 'Id', PlatformSnapshot ->> 'id') = @BuildAgentPoolId
+            """;
+
+        return db.ExecuteScalarAsync<int>(
+            sql,
+            new
+            {
+                BuildAgentPoolId = buildAgentPoolId.ToString("D"),
+                LockKey = $"build-agent-pool:{buildAgentPoolId:D}",
+                Statuses = ActiveRunStatuses()
+            },
+            transaction: tx());
+    }
+
     public async Task<BuildRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -1105,6 +1128,14 @@ internal sealed class BuildRunRepository(IDbConnection db, Func<IDbTransaction> 
             run.ErrorMessage,
             run.TriggeredByActorId
         );
+
+    private static string[] ActiveRunStatuses()
+        =>
+        [
+            EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Queued),
+            EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Preparing),
+            EnumFormatter<BuildRunStatus>.GetValue(BuildRunStatus.Running)
+        ];
 }
 
 internal sealed class BuildRunLogRepository(IDbConnection db, Func<IDbTransaction> tx) : IBuildRunLogRepository

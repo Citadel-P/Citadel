@@ -209,6 +209,12 @@ public enum BuildAgentPoolProvider
     SelfManagedVm
 }
 
+public enum BuildAgentPoolConnectionMode
+{
+    InboundAgent,
+    EdgeAgent
+}
+
 public enum CpuArchitecture
 {
     Amd64,
@@ -292,6 +298,12 @@ public enum EdgeAgentConnectionStatus
     Revoked
 }
 
+public enum EdgeAgentResourceType
+{
+    Platform = 0,
+    BuildAgentPool = 1
+}
+
 public enum EdgeAgentCommandKind
 {
     Unspecified = 0,
@@ -324,6 +336,7 @@ public enum EdgeAgentCommandKind
     ImagePullStream = 37,
     ImageBuildStream = 38,
     ImagePushStream = 39,
+    ImageCheckBuildHost = 40,
     VolumeList = 50,
     VolumeInspect = 51,
     VolumeCreate = 52,

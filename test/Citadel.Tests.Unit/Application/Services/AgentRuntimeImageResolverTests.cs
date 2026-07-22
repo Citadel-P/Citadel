@@ -226,6 +226,8 @@ public sealed class AgentRuntimeImageResolverTests
         => new(
             Id: Guid.CreateVersion7(),
             PlatformId: platformId,
+            ResourceType: EdgeAgentResourceType.Platform,
+            ResourceId: platformId,
             AgentId: Guid.CreateVersion7(),
             AgentPublicKey: "public-key",
             AgentFingerprint: "SHA256:fingerprint",

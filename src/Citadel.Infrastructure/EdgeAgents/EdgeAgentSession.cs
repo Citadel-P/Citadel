@@ -1,4 +1,5 @@
 using Citadel.Edge.V1;
+using Domain;
 using Domain.Contracts.Resources.Platforms;
 using Google.Protobuf;
 using Hosting.Common;
@@ -7,7 +8,13 @@ using System.Threading.Channels;
 
 namespace Infrastructure.EdgeAgents;
 
-internal sealed class EdgeAgentSession(Guid platformId, Guid agentId, string agentFingerprint, string sessionId)
+internal sealed class EdgeAgentSession(
+    Domain.EdgeAgentResourceType resourceType,
+    Guid resourceId,
+    Guid platformId,
+    Guid agentId,
+    string agentFingerprint,
+    string sessionId)
 {
     private readonly ConcurrentDictionary<string, EdgePendingCommand> pendingCommands = new();
     private readonly Channel<CoreEnvelope> outbound =
@@ -16,6 +23,9 @@ internal sealed class EdgeAgentSession(Guid platformId, Guid agentId, string age
             singleWriter: false));
 
     public Guid PlatformId { get; } = platformId;
+    public Domain.EdgeAgentResourceType ResourceType { get; } = resourceType;
+    public Guid ResourceId { get; } = resourceId;
+    public EdgeAgentTarget Target { get; } = new(resourceType, resourceId);
     public Guid AgentId { get; } = agentId;
     public string AgentFingerprint { get; } = agentFingerprint;
     public string SessionId { get; } = sessionId;
@@ -60,6 +70,8 @@ internal sealed class EdgeAgentSession(Guid platformId, Guid agentId, string age
             {
                 CommandId = commandId,
                 PlatformId = PlatformId.ToString("D"),
+                ResourceType = MapResourceType(ResourceType),
+                ResourceId = ResourceId.ToString("D"),
                 Kind = kind,
                 Payload = ByteString.CopyFrom(payload),
                 PayloadSchemaVersion = 1,
@@ -182,4 +194,9 @@ internal sealed class EdgeAgentSession(Guid platformId, Guid agentId, string age
             }
         }
     }
+
+    private static Citadel.Edge.V1.EdgeAgentResourceType MapResourceType(Domain.EdgeAgentResourceType resourceType)
+        => resourceType == Domain.EdgeAgentResourceType.BuildAgentPool
+            ? Citadel.Edge.V1.EdgeAgentResourceType.BuildAgentPool
+            : Citadel.Edge.V1.EdgeAgentResourceType.Platform;
 }

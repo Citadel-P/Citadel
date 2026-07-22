@@ -206,4 +206,18 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
             return Result.Failure<DistributionResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
+
+    public async Task<Result<BuildHostCapabilitiesResult>> CheckBuildHostAsync(string platformAddress, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = clientFactory.GetImageClient(platformAddress);
+            var response = await client.CheckBuildHostAsync(new Google.Protobuf.WellKnownTypes.Empty(), deadline: DateTime.UtcNow.AddSeconds(10), cancellationToken: cancellationToken);
+            return response.Map();
+        }
+        catch (RpcException ex)
+        {
+            return Result.Failure<BuildHostCapabilitiesResult>(new ClientRpcException($"An error occurred while checking build host capabilities, {ex.Message}", ex.StatusCode));
+        }
+    }
 }

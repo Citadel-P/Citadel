@@ -20,6 +20,19 @@ internal static class EdgeConnectorHelpers
         return false;
     }
 
+    public static bool TryGetTarget(string platformAddress, out EdgeConnectorTarget target, out ClientRpcException? error)
+    {
+        var targetResult = EdgeConnectorAddress.ParseTarget(platformAddress);
+        if (targetResult.IsSuccess(out target, out var addressError))
+        {
+            error = null;
+            return true;
+        }
+
+        error = new ClientRpcException(addressError?.Message ?? "Edge Agent address is invalid.", StatusCode.InvalidArgument);
+        return false;
+    }
+
     public static ClientRpcException CommandFailure(EdgeAgentCommandKind kind, EdgeAgentCommandRouterResult response)
         => new(response.ErrorMessage ?? $"Edge Agent command '{kind}' failed.", StatusCode.Unavailable);
 

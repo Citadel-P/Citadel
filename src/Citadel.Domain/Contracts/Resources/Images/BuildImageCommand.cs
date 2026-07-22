@@ -22,6 +22,14 @@ public sealed record PushImageCommand(
     string ImageReference,
     string? RegistryAuth);
 
+public sealed record BuildHostCapabilitiesResult(
+    bool Available,
+    string? DockerVersion,
+    string? ApiVersion,
+    string? OperatingSystem,
+    string? Architecture,
+    string? BuildKitVersion);
+
 public sealed record ImageBuildStreamItem(
     string? Id,
     string? Stream,

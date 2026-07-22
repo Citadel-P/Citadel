@@ -202,7 +202,7 @@ internal sealed class BuildRunExecutionService(
             await AppendLogAsync(run.Id, "system", $"Building {string.Join(", ", imageReferences)}.", executionToken);
             run.MarkRunning(DateTimeOffset.UtcNow);
             await unitOfWork.BuildRuns.UpdateAsync(run, executionToken);
-            var startedActivity = CreateRunActivity(run, ActivityEventType.BuildRunStarted, new BuildRunStarted(run.Id, run.Trigger), ActivityStatus.Success);
+            var startedActivity = await CreateRunActivityAsync(run, ActivityEventType.BuildRunStarted, new BuildRunStarted(run.Id, run.Trigger), ActivityStatus.Success, executionToken);
             await unitOfWork.ActivityEventRepository.AddAsync(startedActivity, executionToken);
             await unitOfWork.CommitAsync(executionToken);
             await buildRunStreamManager.SendBuildRunInfo(run);
@@ -248,11 +248,12 @@ internal sealed class BuildRunExecutionService(
                 await unitOfWork.BuildRuns.UpdateAsync(run, executionToken);
                 await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, executionToken);
                 var buildImageConsumers = await ApplyBuildImageConsumersAsync(buildContext.Project, run, executionToken);
-                var activity = CreateRunActivity(
+                var activity = await CreateRunActivityAsync(
                     run,
                     ActivityEventType.BuildRunSucceeded,
                     new BuildRunSucceeded(run.Id, run.Trigger, run.ExitCode, GetDurationMs(run), run.ImageDigest),
-                    ActivityStatus.Success);
+                    ActivityStatus.Success,
+                    executionToken);
                 await unitOfWork.ActivityEventRepository.AddAsync(activity, executionToken);
                 await unitOfWork.CommitAsync(executionToken);
 
@@ -347,15 +348,34 @@ internal sealed class BuildRunExecutionService(
         if (repository is null)
             return Result.Failure<BuildExecutionContext>(new NotFoundError("Git repository not found."));
 
-        var platform = await unitOfWork.Platforms.GetInfoAsync(run.PlatformSnapshot.Id, cancellationToken);
-        if (platform is null)
-            return Result.Failure<BuildExecutionContext>(new NotFoundError("Platform not found."));
+        var target = await ResolveConnectorTypeAsync(run, cancellationToken);
+        if (!target.IsSuccess(out var connectorType, out var targetError))
+            return Result.Failure<BuildExecutionContext>(targetError!);
 
         var registry = await unitOfWork.Registries.GetAsync(run.RegistrySnapshot.Id, cancellationToken);
         if (registry is null)
             return Result.Failure<BuildExecutionContext>(new NotFoundError("Registry not found."));
 
-        return new BuildExecutionContext(project, repository, platform.ConnectorType, registry);
+        return new BuildExecutionContext(project, repository, connectorType, registry);
+    }
+
+    private async Task<Result<PlatformConnectorType>> ResolveConnectorTypeAsync(
+        BuildRun run,
+        CancellationToken cancellationToken)
+    {
+        var platform = await unitOfWork.Platforms.GetInfoAsync(run.PlatformSnapshot.Id, cancellationToken);
+        if (platform is not null)
+            return platform.ConnectorType;
+
+        var pool = await unitOfWork.BuildAgentPools.GetAsync(run.PlatformSnapshot.Id, cancellationToken, includeArchived: true);
+        if (pool is null)
+            return Result.Failure<PlatformConnectorType>(new NotFoundError("Build target not found."));
+
+        if (pool.ProviderSpec is not SelfManagedVmBuildAgentPoolProviderSpec)
+            return Result.Failure<PlatformConnectorType>(
+                new ConflictError("Build pool provider is not runnable by the self-managed Citadel Agent executor."));
+
+        return run.PlatformSnapshot.ConnectorType;
     }
 
     private static Result<string> ResolveRepoPath(string repositoryRoot, string relativePath, bool mustBeDirectory)
@@ -525,16 +545,18 @@ internal sealed class BuildRunExecutionService(
         await unitOfWork.BuildRuns.UpdateAsync(run, cancellationToken);
         await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, cancellationToken);
         var activity = status == BuildRunStatus.TimedOut
-            ? CreateRunActivity(
+            ? await CreateRunActivityAsync(
                 run,
                 ActivityEventType.BuildRunTimedOut,
                 new BuildRunTimedOut(run.Id, run.Trigger, GetDurationMs(run), errorMessage),
-                ActivityStatus.Failure)
-            : CreateRunActivity(
+                ActivityStatus.Failure,
+                cancellationToken)
+            : await CreateRunActivityAsync(
                 run,
                 ActivityEventType.BuildRunFailed,
                 new BuildRunFailed(run.Id, run.Trigger, status, run.ExitCode, GetDurationMs(run), errorMessage),
-                ActivityStatus.Failure);
+                ActivityStatus.Failure,
+                cancellationToken);
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
@@ -550,11 +572,12 @@ internal sealed class BuildRunExecutionService(
         run.Cancel(DateTimeOffset.UtcNow);
         await unitOfWork.BuildRuns.UpdateAsync(run, cancellationToken);
         await unitOfWork.BuildProjects.MarkIdleAsync(run.BuildProjectId, run.Id, cancellationToken);
-        var activity = CreateRunActivity(
+        var activity = await CreateRunActivityAsync(
             run,
             ActivityEventType.BuildRunCancelled,
             new BuildRunCancelled(run.Id, run.Trigger),
-            ActivityStatus.Warning);
+            ActivityStatus.Warning,
+            cancellationToken);
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
@@ -848,19 +871,29 @@ internal sealed class BuildRunExecutionService(
             _ => "stdout"
         };
 
-    private static ActivityEvent CreateRunActivity(
+    private async Task<ActivityEvent> CreateRunActivityAsync(
         BuildRun run,
         ActivityEventType eventType,
         ActivityEventInfo info,
-        ActivityStatus status)
-        => new(
-            platformId: run.PlatformSnapshot.Id,
+        ActivityStatus status,
+        CancellationToken cancellationToken)
+    {
+        var platformId = await ResolveActivityPlatformIdAsync(run, cancellationToken);
+        return new ActivityEvent(
+            platformId: platformId,
             resourceId: run.BuildProjectId,
             actorId: run.TriggeredByActorId,
             resourceName: run.ProjectNameSnapshot,
             eventType: eventType,
             status: status,
             info: info);
+    }
+
+    private async Task<Guid?> ResolveActivityPlatformIdAsync(BuildRun run, CancellationToken cancellationToken)
+    {
+        var platform = await unitOfWork.Platforms.GetInfoAsync(run.PlatformSnapshot.Id, cancellationToken);
+        return platform?.Id;
+    }
 
     private static long? GetDurationMs(BuildRun run)
     {

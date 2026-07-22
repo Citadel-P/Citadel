@@ -18,17 +18,20 @@ Builds can run on Docker platforms connected through:
 - `Local`
 - `Agent`
 - `EdgeAgent`
+- `Build Pool`
 
 Local builds stream the build context from Citadel Core to the local Docker daemon.
 
 Agent and edge-agent builds package the resolved build context in Citadel Core, send that archive to the selected agent, and let the agent stream it to its Docker daemon. The transferred archive must fit within the current agent message envelope limit of `16 MB`.
+
+Build Pool builds run on a reusable build pool instead of a Docker platform. For a self-managed VM pool, Citadel either connects to a dedicated inbound Agent endpoint or uses a pool-scoped Edge Agent connection. In both modes, the builder host's Docker daemon performs the build and push.
 
 ## Prerequisites
 
 Before creating a build, configure:
 
 - a Git repository that contains the Dockerfile and build context
-- a Docker platform where the build can run
+- a Docker platform or Build Pool where the build can run
 - a registry where Citadel can push the built image
 - optional Citadel secrets when your Dockerfile uses BuildKit secret mounts
 
@@ -37,6 +40,8 @@ For repository setup, see `docs/user/git-repositories.md`.
 For registry setup, see `docs/user/registries.md`.
 
 For secrets, see `docs/user/variables-and-secrets.md`.
+
+For Agent and self-managed Build Pool setup, see `docs/user/agent.md`.
 
 ## Create A Build
 
@@ -56,7 +61,7 @@ Set:
 - Context: directory relative to the repository root sent to Docker as the build context.
 - Dockerfile: Dockerfile path relative to the repository root.
 - Target stage: optional Dockerfile stage for multi-stage builds.
-- Platform: Docker platform that runs the build.
+- Builder: Docker platform or Build Pool that runs the build.
 - Registry: registry Citadel pushes tags to.
 - Image repository: repository path under the selected registry, such as `team/api`.
 - Tags: comma-separated tag templates.
@@ -113,6 +118,63 @@ coverage
 ```
 
 In monorepos, prefer the smallest service directory as the context instead of using the repository root.
+
+## Build Pools
+
+Use a Build Pool when builds should run on builder infrastructure rather than on one of the Docker platforms managed by Citadel.
+
+For a self-managed VM pool, choose one connection mode.
+
+### Inbound Agent endpoint
+
+Use this when Citadel Core can reach the builder host directly. Run a dedicated Citadel Agent on the builder host:
+
+```bash
+docker run -d \
+  --name citadel-agent-build \
+  --restart=always \
+  -p 9001:9000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e HUB_PUBLIC_KEY="..." \
+  ghcr.io/citadel-p/citadel.agent:1.2.3
+```
+
+Then create the pool:
+
+```text
+Build Pools -> Add Build Pool
+Provider: Self-managed VM / Static VM
+Connection mode: Inbound Agent endpoint
+Endpoint: http://<builder-host>:9001
+```
+
+For local Docker testing where Citadel Core also runs in Docker, use:
+
+```text
+http://host.docker.internal:9001
+```
+
+Click **Test** on the Build Pool before selecting it in a build project. A ready pool confirms that Citadel can reach the Agent and that the Agent can reach Docker.
+
+### Edge Agent
+
+Use this when the builder host should connect outbound to Citadel Core and should not expose a build Agent port.
+
+Create and save the build pool first:
+
+```text
+Build Pools -> Add Build Pool
+Provider: Self-managed VM / Static VM
+Connection mode: Edge Agent
+```
+
+After the pool is saved, open the pool's configuration and generate an Edge Agent enrollment token from the **Edge Agent enrollment** section. Citadel shows a Docker command for that build pool. Run it on the builder host.
+
+The build pool Edge Agent is scoped to the build pool itself. You do not need to create a Platform resource, and there is no Edge Agent platform dropdown for build pools.
+
+The generated command uses the Edge Agent gRPC endpoint. For local Docker testing, that endpoint is usually port `8001`; port `8000` is the normal HTTP API and UI endpoint.
+
+Click **Test** on the Build Pool before selecting it in a build project. A ready edge pool confirms that the pool-scoped Edge Agent is connected, advertises build capabilities, and can reach Docker.
 
 ## Image Repository And Tags
 
@@ -311,6 +373,7 @@ If the build fails before Docker starts:
 - check that Dockerfile exists
 - confirm paths are relative to the repository root
 - for agent and edge-agent builds, reduce the context below `16 MB` with `.dockerignore`
+- for build-pool Edge Agent builds, confirm the pool's Edge Agent is connected and uses a build-capable Agent version
 - confirm the selected registry has push credentials when required
 - if build secrets are configured, confirm each BuildKit id maps to an existing Citadel secret selected in the build form
 - if build secrets are configured, confirm each resolved secret is no larger than `60 KiB`

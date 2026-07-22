@@ -7,7 +7,9 @@ public sealed record EdgeAgentEnrollmentResult(
     Guid PlatformId,
     string Token,
     DateTime ExpiresAtUtc,
-    EdgeAgentEnrollmentInstructions Instructions);
+    EdgeAgentEnrollmentInstructions Instructions,
+    EdgeAgentResourceType ResourceType = EdgeAgentResourceType.Platform,
+    Guid? ResourceId = null);
 
 public sealed record EdgeAgentEnrollmentInstructions(
     string CoreUrl,
@@ -38,7 +40,9 @@ public sealed record EdgeAgentEnrollmentRequest(
 
 public sealed record EdgeAgentEnrollmentCompleteResult(
     Guid PlatformId,
-    Guid AgentId);
+    Guid AgentId,
+    EdgeAgentResourceType ResourceType = EdgeAgentResourceType.Platform,
+    Guid? ResourceId = null);
 
 public sealed record EdgeAgentHeartbeatSnapshot(
     bool DockerReachable,

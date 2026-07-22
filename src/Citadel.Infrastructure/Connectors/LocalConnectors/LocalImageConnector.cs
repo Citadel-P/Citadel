@@ -107,6 +107,20 @@ internal class LocalImageConnector(IImageService imageService) : IImageConnector
         return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
     }
 
+    public async Task<Result<BuildHostCapabilitiesResult>> CheckBuildHostAsync(string platformAddress, CancellationToken cancellationToken)
+    {
+        var result = await imageService.CheckBuildHostAsync(cancellationToken);
+        return ServiceResultHandlers.HandleResult(
+            result,
+            static value => new BuildHostCapabilitiesResult(
+                value.Available,
+                value.DockerVersion,
+                value.ApiVersion,
+                value.OperatingSystem,
+                value.Architecture,
+                value.BuildKitVersion));
+    }
+
     private static ImageBuildStreamItem MapBuildMessage(Hosting.DockerClient.HttpClient.JSONMessage message)
         => new(
             message.ID,

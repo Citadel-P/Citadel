@@ -10,6 +10,10 @@ internal static class EdgeAgentMappers
         => new(
             dto.Id,
             dto.PlatformId,
+            string.IsNullOrWhiteSpace(dto.ResourceType)
+                ? EdgeAgentResourceType.Platform
+                : Enum.Parse<EdgeAgentResourceType>(dto.ResourceType),
+            dto.ResourceId ?? dto.PlatformId,
             dto.TokenHash,
             dto.ExpiresAtUtc,
             dto.UsedAtUtc,
@@ -21,6 +25,10 @@ internal static class EdgeAgentMappers
         => new(
             dto.Id,
             dto.PlatformId,
+            string.IsNullOrWhiteSpace(dto.ResourceType)
+                ? EdgeAgentResourceType.Platform
+                : Enum.Parse<EdgeAgentResourceType>(dto.ResourceType),
+            dto.ResourceId ?? dto.PlatformId,
             dto.AgentId,
             dto.AgentPublicKey,
             dto.AgentFingerprint,
@@ -58,6 +66,8 @@ internal static class EdgeAgentMappers
                 : new EdgeAgentBindingDto(
                     dto.BindingId.Value,
                     dto.BindingPlatformId!.Value,
+                    dto.BindingResourceType,
+                    dto.BindingResourceId ?? dto.BindingPlatformId.Value,
                     dto.BindingAgentId!.Value,
                     dto.BindingAgentPublicKey!,
                     dto.BindingAgentFingerprint!,

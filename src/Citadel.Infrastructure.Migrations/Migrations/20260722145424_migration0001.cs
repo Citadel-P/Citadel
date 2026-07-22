@@ -58,6 +58,34 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "edgeagentbindings",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    agentfingerprint = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    agentid = table.Column<Guid>(type: "uuid", nullable: false),
+                    agentpublickey = table.Column<string>(type: "text", nullable: false),
+                    capabilitiesjson = table.Column<string>(type: "json", nullable: true),
+                    connectionstatus = table.Column<string>(type: "text", maxLength: 64, nullable: false),
+                    createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    lastconnectedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastdisconnectedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastheartbeatatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    lastseenhostname = table.Column<string>(type: "text", maxLength: 256, nullable: true),
+                    lastseenversion = table.Column<string>(type: "text", maxLength: 128, nullable: true),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    protocolversion = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
+                    resourceid = table.Column<Guid>(type: "uuid", nullable: false),
+                    resourcetype = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Platform"),
+                    revokedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    updatedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_edgeagentbindings", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "platforms",
                 columns: table => new
                 {
@@ -246,13 +274,40 @@ namespace Infrastructure.Migrations.Migrations
                     provisioningtimeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 600),
                     queuetimeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 3600),
                     registrationtimeoutseconds = table.Column<int>(type: "integer", nullable: false, defaultValue: 300),
-                    rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L)
+                    rowversion = table.Column<long>(type: "bigint", nullable: false, defaultValue: 0L),
+                    updatedat = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_buildagentpools", x => x.id);
                     table.ForeignKey(
                         name: "fk_buildagentpools_actors_createdbyactorid",
+                        column: x => x.createdbyactorid,
+                        principalTable: "actors",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "edgeagentenrollments",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
+                    expiresatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
+                    resourceid = table.Column<Guid>(type: "uuid", nullable: false),
+                    resourcetype = table.Column<string>(type: "text", maxLength: 64, nullable: false, defaultValue: "Platform"),
+                    revokedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    tokenhash = table.Column<string>(type: "text", maxLength: 128, nullable: false),
+                    usedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_edgeagentenrollments", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_edgeagentenrollments_actors_createdbyactorid",
                         column: x => x.createdbyactorid,
                         principalTable: "actors",
                         principalColumn: "id",
@@ -514,68 +569,6 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "platforms",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "edgeagentbindings",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    agentfingerprint = table.Column<string>(type: "text", maxLength: 128, nullable: false),
-                    agentid = table.Column<Guid>(type: "uuid", nullable: false),
-                    agentpublickey = table.Column<string>(type: "text", nullable: false),
-                    capabilitiesjson = table.Column<string>(type: "json", nullable: true),
-                    connectionstatus = table.Column<string>(type: "text", maxLength: 64, nullable: false),
-                    createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    lastconnectedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    lastdisconnectedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    lastheartbeatatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    lastseenhostname = table.Column<string>(type: "text", maxLength: 256, nullable: true),
-                    lastseenversion = table.Column<string>(type: "text", maxLength: 128, nullable: true),
-                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
-                    protocolversion = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
-                    revokedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    updatedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_edgeagentbindings", x => x.id);
-                    table.ForeignKey(
-                        name: "fk_edgeagentbindings_platforms_platformid",
-                        column: x => x.platformid,
-                        principalTable: "platforms",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "edgeagentenrollments",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    createdatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    createdbyactorid = table.Column<Guid>(type: "uuid", nullable: false),
-                    expiresatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    platformid = table.Column<Guid>(type: "uuid", nullable: false),
-                    revokedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    tokenhash = table.Column<string>(type: "text", maxLength: 128, nullable: false),
-                    usedatutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_edgeagentenrollments", x => x.id);
-                    table.ForeignKey(
-                        name: "fk_edgeagentenrollments_actors_createdbyactorid",
-                        column: x => x.createdbyactorid,
-                        principalTable: "actors",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "fk_edgeagentenrollments_platforms_platformid",
-                        column: x => x.platformid,
-                        principalTable: "platforms",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -2552,9 +2545,9 @@ namespace Infrastructure.Migrations.Migrations
                 column: "agentid");
 
             migrationBuilder.CreateIndex(
-                name: "ix_edgeagentbindings_platformid",
+                name: "ix_edgeagentbindings_resource",
                 table: "edgeagentbindings",
-                column: "platformid",
+                columns: new[] { "resourcetype", "resourceid" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -2566,6 +2559,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_edgeagentenrollments_platformid_expiresatutc",
                 table: "edgeagentenrollments",
                 columns: new[] { "platformid", "expiresatutc" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_edgeagentenrollments_resource_expiresatutc",
+                table: "edgeagentenrollments",
+                columns: new[] { "resourcetype", "resourceid", "expiresatutc" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_edgeagentenrollments_tokenhash",

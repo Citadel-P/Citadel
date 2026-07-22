@@ -1603,6 +1603,46 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("updateBuildAgentPoolMetadata");
 
+        buildAgentPools.MapPost("{id:guid}/test", BuildAgentPools.Test)
+            .WithSummary("Test build pool")
+            .Produces<BuildAgentPoolView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("testBuildAgentPool");
+
+        buildAgentPools.MapPost("{id:guid}/edge/enrollments", BuildAgentPools.CreateEdgeEnrollment)
+            .WithSummary("Create build pool Edge Agent enrollment")
+            .Produces<EdgeAgentEnrollmentView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createBuildAgentPoolEdgeEnrollment");
+
+        buildAgentPools.MapGet("{id:guid}/edge/status", BuildAgentPools.GetEdgeStatus)
+            .WithSummary("Get build pool Edge Agent status")
+            .Produces<EdgeAgentStatusView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getBuildAgentPoolEdgeStatus");
+
+        buildAgentPools.MapPost("{id:guid}/edge/revoke", BuildAgentPools.RevokeEdge)
+            .WithSummary("Revoke build pool Edge Agent")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("revokeBuildAgentPoolEdgeAgent");
+
         buildAgentPools.MapDelete("{id:guid}", BuildAgentPools.Archive)
             .WithSummary("Archive build pool")
             .ProducesValidationProblem()

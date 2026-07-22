@@ -1,16 +1,17 @@
 using System.Collections.Concurrent;
+using Domain;
 using Domain.Contracts.Interfaces;
 
 namespace Infrastructure.EdgeAgents;
 
 internal sealed class EdgeAgentSessionRegistry : IEdgeAgentSessionTerminator
 {
-    private readonly ConcurrentDictionary<Guid, EdgeAgentSession> sessions = new();
+    private readonly ConcurrentDictionary<EdgeAgentTarget, EdgeAgentSession> sessions = new();
 
     public EdgeAgentSession Register(EdgeAgentSession session)
     {
         sessions.AddOrUpdate(
-            session.PlatformId,
+            session.Target,
             session,
             (_, previous) =>
             {
@@ -22,11 +23,19 @@ internal sealed class EdgeAgentSessionRegistry : IEdgeAgentSessionTerminator
     }
 
     public bool TryGet(Guid platformId, out EdgeAgentSession session)
-        => sessions.TryGetValue(platformId, out session!);
+        => TryGet(EdgeAgentResourceType.Platform, platformId, out session);
+
+    public bool TryGet(EdgeAgentResourceType resourceType, Guid resourceId, out EdgeAgentSession session)
+        => sessions.TryGetValue(new EdgeAgentTarget(resourceType, resourceId), out session!);
 
     public void Disconnect(Guid platformId, string reason)
     {
-        if (sessions.TryRemove(platformId, out var session))
+        Disconnect(EdgeAgentResourceType.Platform, platformId, reason);
+    }
+
+    public void Disconnect(EdgeAgentResourceType resourceType, Guid resourceId, string reason)
+    {
+        if (sessions.TryRemove(new EdgeAgentTarget(resourceType, resourceId), out var session))
         {
             session.Disconnect(reason);
         }
@@ -34,10 +43,10 @@ internal sealed class EdgeAgentSessionRegistry : IEdgeAgentSessionTerminator
 
     public void Remove(EdgeAgentSession session)
     {
-        if (sessions.TryGetValue(session.PlatformId, out var current) &&
+        if (sessions.TryGetValue(session.Target, out var current) &&
             ReferenceEquals(current, session))
         {
-            sessions.TryRemove(session.PlatformId, out _);
+            sessions.TryRemove(session.Target, out _);
         }
     }
 }

@@ -116,6 +116,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<BuildAgentPoolProviderSpec>]
 [GenerateShapeFor<AwsEc2BuildAgentPoolProviderSpec>]
 [GenerateShapeFor<SelfManagedVmBuildAgentPoolProviderSpec>]
+[GenerateShapeFor<BuildAgentPoolConnectionMode>]
 [GenerateShapeFor<BuildAgentPoolSnapshot>]
 [GenerateShapeFor<BuildCreated>]
 [GenerateShapeFor<BuildUpdated>]

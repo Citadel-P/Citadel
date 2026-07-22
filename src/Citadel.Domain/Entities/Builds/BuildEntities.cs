@@ -53,11 +53,12 @@ public sealed record AwsEc2BuildAgentPoolProviderSpec(
     : BuildAgentPoolProviderSpec(BuildAgentPoolProvider.AwsEc2);
 
 public sealed record SelfManagedVmBuildAgentPoolProviderSpec(
-    string Endpoint,
+    string? Endpoint,
     CpuArchitecture Architecture,
     int MaxWorkers,
     Guid? RegistrationSecretId = null,
-    IReadOnlyList<string>? Labels = null)
+    IReadOnlyList<string>? Labels = null,
+    BuildAgentPoolConnectionMode ConnectionMode = BuildAgentPoolConnectionMode.InboundAgent)
     : BuildAgentPoolProviderSpec(BuildAgentPoolProvider.SelfManagedVm);
 
 public sealed record BuildAgentPoolSnapshot(
@@ -221,7 +222,9 @@ public sealed class BuildAgentPool(
                 Provider,
                 ProviderSpec,
                 vm.Architecture,
-                vm.Endpoint,
+                vm.ConnectionMode == BuildAgentPoolConnectionMode.EdgeAgent
+                    ? $"edge-build-pool://{Id:D}"
+                    : vm.Endpoint ?? string.Empty,
                 $"static-vm x{vm.MaxWorkers}",
                 MaxActiveBuilders,
                 QueueTimeoutSeconds,
@@ -334,7 +337,18 @@ public sealed class BuildAgentPool(
                 if (aws.SecurityGroupIds.Count == 0) throw new ArgumentException("At least one AWS security group is required.", nameof(ProviderSpec));
                 break;
             case SelfManagedVmBuildAgentPoolProviderSpec vm:
-                if (string.IsNullOrWhiteSpace(vm.Endpoint)) throw new ArgumentException("Self-managed VM endpoint is required.", nameof(ProviderSpec));
+                switch (vm.ConnectionMode)
+                {
+                    case BuildAgentPoolConnectionMode.InboundAgent:
+                        if (string.IsNullOrWhiteSpace(vm.Endpoint))
+                            throw new ArgumentException("Self-managed VM endpoint is required.", nameof(ProviderSpec));
+                        break;
+                    case BuildAgentPoolConnectionMode.EdgeAgent:
+                        break;
+                    default:
+                        throw new ArgumentException("Self-managed VM connection mode is invalid.", nameof(ProviderSpec));
+                }
+
                 if (vm.MaxWorkers is < 1 or > 100) throw new ArgumentException("Self-managed VM workers must be between 1 and 100.", nameof(ProviderSpec));
                 break;
             default:

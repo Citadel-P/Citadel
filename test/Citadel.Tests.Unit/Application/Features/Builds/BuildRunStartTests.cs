@@ -197,6 +197,207 @@ public sealed class BuildRunStartTests
     }
 
     [Fact]
+    public async Task QueueBuildRun_ShouldCreateRunForSelfManagedBuildPool()
+    {
+        var actorId = Guid.CreateVersion7();
+        var pool = CreateSelfManagedPool(actorId);
+        var project = CreateProject(actorId, BuildProjectBuilderKind.BuildAgentPool, buildAgentPoolId: pool.Id);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var buildRuns = new Mock<IBuildRunRepository>(MockBehavior.Strict);
+        var buildProjects = new Mock<IBuildProjectRepository>(MockBehavior.Strict);
+        var gitRepositories = new Mock<IGitReposRepository>(MockBehavior.Strict);
+        var platforms = new Mock<IPlatformRepository>(MockBehavior.Strict);
+        var registries = new Mock<IRegistryRepository>(MockBehavior.Strict);
+        var buildAgentPools = new Mock<IBuildAgentPoolRepository>(MockBehavior.Strict);
+        var unitOfWork = CreateUnitOfWork(buildProjects, buildRuns, gitRepositories, platforms, registries, buildAgentPools);
+        var runStream = new Mock<IBuildRunStreamManager>(MockBehavior.Strict);
+        var projectStream = new Mock<IBuildProjectStreamManager>(MockBehavior.Strict);
+        BuildRun? capturedRun = null;
+
+        buildProjects
+            .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false))
+            .ReturnsAsync(project);
+        buildRuns
+            .Setup(x => x.HasActiveRunAsync(project.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        gitRepositories
+            .Setup(x => x.GetAsync(project.GitRepositoryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(repository);
+        buildAgentPools
+            .Setup(x => x.GetAsync(pool.Id, It.IsAny<CancellationToken>(), false))
+            .ReturnsAsync(pool);
+        buildRuns
+            .Setup(x => x.CountActiveByBuildAgentPoolAsync(pool.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+        registries
+            .Setup(x => x.GetAsync(project.RegistryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(registry);
+        buildProjects
+            .Setup(x => x.MarkProcessingAsync(project.Id, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, Guid, CancellationToken>((_, runId, _) => project.MarkProcessing(runId, DateTimeOffset.UtcNow))
+            .ReturnsAsync(1);
+        buildRuns
+            .Setup(x => x.AddAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildRun, CancellationToken>((run, _) => capturedRun = run)
+            .ReturnsAsync(1);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        runStream
+            .Setup(x => x.SendBuildRunInfo(It.IsAny<BuildRun>(), "create"))
+            .Returns(Task.CompletedTask);
+        projectStream
+            .Setup(x => x.SendBuildProjectInfo(It.IsAny<BuildProject>(), "update", It.IsAny<BuildRun?>()))
+            .Returns(Task.CompletedTask);
+        var handler = new QueueBuildRunHandler(
+            unitOfWork.Object,
+            CreateUserContextAccessor(actorId),
+            projectStream.Object,
+            runStream.Object,
+            Mock.Of<IActivityStreamManager>());
+
+        var result = await handler.Handle(
+            new QueueBuildRun(project.Id, new QueueBuildRunInputModel(BuildRunTrigger.Manual, null)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out _, out var error), error?.Message);
+        Assert.NotNull(capturedRun);
+        Assert.Equal(pool.Id, capturedRun.PlatformSnapshot.Id);
+        Assert.Equal("grpc://builder.example.test:5001", capturedRun.PlatformSnapshot.Address);
+        Assert.Equal(PlatformConnectorType.Agent, capturedRun.PlatformSnapshot.ConnectorType);
+        platforms.Verify(x => x.GetInfoAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task QueueBuildRun_ShouldCreateRunForEdgeSelfManagedBuildPool()
+    {
+        var actorId = Guid.CreateVersion7();
+        var pool = CreateSelfManagedPool(
+            actorId,
+            new SelfManagedVmBuildAgentPoolProviderSpec(
+                null,
+                CpuArchitecture.Amd64,
+                1,
+                ConnectionMode: BuildAgentPoolConnectionMode.EdgeAgent));
+        var project = CreateProject(actorId, BuildProjectBuilderKind.BuildAgentPool, buildAgentPoolId: pool.Id);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var buildRuns = new Mock<IBuildRunRepository>(MockBehavior.Strict);
+        var buildProjects = new Mock<IBuildProjectRepository>(MockBehavior.Strict);
+        var gitRepositories = new Mock<IGitReposRepository>(MockBehavior.Strict);
+        var platforms = new Mock<IPlatformRepository>(MockBehavior.Strict);
+        var registries = new Mock<IRegistryRepository>(MockBehavior.Strict);
+        var buildAgentPools = new Mock<IBuildAgentPoolRepository>(MockBehavior.Strict);
+        var unitOfWork = CreateUnitOfWork(buildProjects, buildRuns, gitRepositories, platforms, registries, buildAgentPools);
+        var runStream = new Mock<IBuildRunStreamManager>(MockBehavior.Strict);
+        var projectStream = new Mock<IBuildProjectStreamManager>(MockBehavior.Strict);
+        BuildRun? capturedRun = null;
+
+        buildProjects
+            .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false))
+            .ReturnsAsync(project);
+        buildRuns
+            .Setup(x => x.HasActiveRunAsync(project.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        gitRepositories
+            .Setup(x => x.GetAsync(project.GitRepositoryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(repository);
+        buildAgentPools
+            .Setup(x => x.GetAsync(pool.Id, It.IsAny<CancellationToken>(), false))
+            .ReturnsAsync(pool);
+        buildRuns
+            .Setup(x => x.CountActiveByBuildAgentPoolAsync(pool.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+        registries
+            .Setup(x => x.GetAsync(project.RegistryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(registry);
+        buildProjects
+            .Setup(x => x.MarkProcessingAsync(project.Id, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, Guid, CancellationToken>((_, runId, _) => project.MarkProcessing(runId, DateTimeOffset.UtcNow))
+            .ReturnsAsync(1);
+        buildRuns
+            .Setup(x => x.AddAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildRun, CancellationToken>((run, _) => capturedRun = run)
+            .ReturnsAsync(1);
+        unitOfWork
+            .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        runStream
+            .Setup(x => x.SendBuildRunInfo(It.IsAny<BuildRun>(), "create"))
+            .Returns(Task.CompletedTask);
+        projectStream
+            .Setup(x => x.SendBuildProjectInfo(It.IsAny<BuildProject>(), "update", It.IsAny<BuildRun?>()))
+            .Returns(Task.CompletedTask);
+        var handler = new QueueBuildRunHandler(
+            unitOfWork.Object,
+            CreateUserContextAccessor(actorId),
+            projectStream.Object,
+            runStream.Object,
+            Mock.Of<IActivityStreamManager>());
+
+        var result = await handler.Handle(
+            new QueueBuildRun(project.Id, new QueueBuildRunInputModel(BuildRunTrigger.Manual, null)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out _, out var error), error?.Message);
+        Assert.NotNull(capturedRun);
+        Assert.Equal(pool.Id, capturedRun.PlatformSnapshot.Id);
+        Assert.Equal($"edge-build-pool://{pool.Id:D}", capturedRun.PlatformSnapshot.Address);
+        Assert.Equal(PlatformConnectorType.EdgeAgent, capturedRun.PlatformSnapshot.ConnectorType);
+        platforms.Verify(x => x.GetInfoAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task QueueBuildRun_ShouldRejectSelfManagedBuildPoolWhenNoBuilderIsAvailable()
+    {
+        var actorId = Guid.CreateVersion7();
+        var pool = CreateSelfManagedPool(actorId);
+        var project = CreateProject(actorId, BuildProjectBuilderKind.BuildAgentPool, buildAgentPoolId: pool.Id);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var buildRuns = new Mock<IBuildRunRepository>(MockBehavior.Strict);
+        var buildProjects = new Mock<IBuildProjectRepository>(MockBehavior.Strict);
+        var gitRepositories = new Mock<IGitReposRepository>(MockBehavior.Strict);
+        var platforms = new Mock<IPlatformRepository>(MockBehavior.Strict);
+        var registries = new Mock<IRegistryRepository>(MockBehavior.Strict);
+        var buildAgentPools = new Mock<IBuildAgentPoolRepository>(MockBehavior.Strict);
+        var unitOfWork = CreateUnitOfWork(buildProjects, buildRuns, gitRepositories, platforms, registries, buildAgentPools);
+        var handler = new QueueBuildRunHandler(
+            unitOfWork.Object,
+            CreateUserContextAccessor(actorId),
+            Mock.Of<IBuildProjectStreamManager>(),
+            Mock.Of<IBuildRunStreamManager>(),
+            Mock.Of<IActivityStreamManager>());
+
+        buildProjects
+            .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false))
+            .ReturnsAsync(project);
+        buildRuns
+            .Setup(x => x.HasActiveRunAsync(project.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        gitRepositories
+            .Setup(x => x.GetAsync(project.GitRepositoryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(repository);
+        buildAgentPools
+            .Setup(x => x.GetAsync(pool.Id, It.IsAny<CancellationToken>(), false))
+            .ReturnsAsync(pool);
+        buildRuns
+            .Setup(x => x.CountActiveByBuildAgentPoolAsync(pool.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pool.MaxActiveBuilders);
+
+        var result = await handler.Handle(
+            new QueueBuildRun(project.Id, new QueueBuildRunInputModel(BuildRunTrigger.Manual, null)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out var error));
+        Assert.Contains("no available builders", error.Message);
+        buildRuns.Verify(x => x.AddAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()), Times.Never);
+        buildProjects.Verify(x => x.MarkProcessingAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        registries.Verify(x => x.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        platforms.Verify(x => x.GetInfoAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ExecuteQueuedBuildRun_ShouldNotStartProcess_WhenRunWasAlreadyClaimed()
     {
         var buildRuns = new Mock<IBuildRunRepository>(MockBehavior.Strict);
@@ -289,6 +490,149 @@ public sealed class BuildRunStartTests
         context.Retention.Verify(x => x.PruneAsync(project.Id, It.IsAny<CancellationToken>()), Times.Once);
         context.BuildRunStream.Verify(x => x.SendBuildRunInfo(It.IsAny<BuildRun>(), It.IsAny<string>()), Times.AtLeast(2));
         context.ProjectStream.Verify(x => x.SendBuildProjectInfo(project, "update", It.IsAny<BuildRun?>()), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedBuildRun_ShouldUseSelfManagedBuildPoolAgentTarget()
+    {
+        var actorId = Guid.CreateVersion7();
+        var pool = CreateSelfManagedPool(actorId);
+        var project = CreateProject(actorId, BuildProjectBuilderKind.BuildAgentPool, buildAgentPoolId: pool.Id);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var platform = new PlatformConnectionInfo(pool.Id, pool.Name, "grpc://builder.example.test:5001", PlatformConnectorType.Agent);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var run = CreateRun(project, repository, platform, registry, actorId);
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        PrepareRepositoryCache(repository);
+
+        var context = CreateExecutionContext(project, repository, platform, registry, run, buildAgentPool: pool);
+        BuildProcessCommand? processCommand = null;
+        context.RepoCache
+            .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+        context.Runner
+            .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildProcessCommand, CancellationToken>((command, _) => processCommand = command)
+            .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
+        context.BuildRuns
+            .Setup(x => x.UpdateAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        CaptureLogs(context.BuildRunLogs, []);
+
+        var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        Assert.NotNull(processCommand);
+        Assert.Equal("grpc://builder.example.test:5001", processCommand.PlatformAddress);
+        Assert.Equal(PlatformConnectorType.Agent, processCommand.PlatformConnectorType);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedBuildRun_ShouldPersistPoolRunFailureActivityWithoutPlatform()
+    {
+        var actorId = Guid.CreateVersion7();
+        var pool = CreateSelfManagedPool(actorId);
+        var project = CreateProject(actorId, BuildProjectBuilderKind.BuildAgentPool, buildAgentPoolId: pool.Id);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var platform = new PlatformConnectionInfo(pool.Id, pool.Name, "grpc://builder.example.test:5001", PlatformConnectorType.Agent);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var run = CreateRun(project, repository, platform, registry, actorId);
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        PrepareRepositoryCache(repository);
+
+        var context = CreateExecutionContext(project, repository, platform, registry, run, buildAgentPool: pool);
+        var activities = new List<ActivityEvent>();
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents
+            .Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<ActivityEvent, CancellationToken>((activity, _) => activities.Add(activity))
+            .ReturnsAsync(1);
+        context.UnitOfWork.SetupGet(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+
+        context.RepoCache
+            .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+        context.Runner
+            .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(BuildEvents(
+                new BuildProcessEvent(BuildProcessStream.StdErr, "dockerfile parse error"),
+                new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 1)));
+        context.BuildRuns
+            .Setup(x => x.UpdateAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        CaptureLogs(context.BuildRunLogs, []);
+
+        var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure(out _));
+        var failedActivity = Assert.Single(activities, activity => activity.EventType == ActivityEventType.BuildRunFailed);
+        Assert.Null(failedActivity.PlatformId);
+        Assert.All(activities, activity => Assert.Null(activity.PlatformId));
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedBuildRun_ShouldUseQueuedRunTargetSnapshot_WhenProjectBuilderChangesAfterQueue()
+    {
+        var actorId = Guid.CreateVersion7();
+        var pool = CreateSelfManagedPool(actorId);
+        var queuedProject = CreateProject(actorId, BuildProjectBuilderKind.BuildAgentPool, buildAgentPoolId: pool.Id);
+        var currentProject = BuildProject.FromPersistence(
+            queuedProject.Id,
+            queuedProject.Name,
+            queuedProject.NormalizedName,
+            queuedProject.Description,
+            queuedProject.Enabled,
+            queuedProject.GitRepositoryId,
+            queuedProject.Branch,
+            queuedProject.ContextPath,
+            queuedProject.DockerfilePath,
+            queuedProject.Target,
+            queuedProject.BuildArgs,
+            queuedProject.BuildSecrets,
+            Guid.CreateVersion7(),
+            queuedProject.RegistryId,
+            queuedProject.ImageRepository,
+            queuedProject.TagTemplates,
+            queuedProject.Webhook,
+            queuedProject.TimeoutSeconds,
+            queuedProject.RetentionRunCount,
+            BuildProjectBuilderKind.Platform,
+            buildAgentPoolId: null,
+            currentRunId: queuedProject.CurrentRunId,
+            queuedProject.ControlState,
+            queuedProject.ControlStartedAt,
+            queuedProject.CreatedByActorId,
+            queuedProject.CreatedAt,
+            queuedProject.UpdatedAt,
+            queuedProject.ArchivedAt,
+            queuedProject.RowVersion);
+        var repository = CreateRepository(queuedProject.GitRepositoryId, actorId);
+        var platformSnapshot = new PlatformConnectionInfo(pool.Id, pool.Name, "grpc://builder.example.test:5001", PlatformConnectorType.Agent);
+        var registry = CreateRegistry(queuedProject.RegistryId, actorId);
+        var run = CreateRun(queuedProject, repository, platformSnapshot, registry, actorId);
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        PrepareRepositoryCache(repository);
+
+        var context = CreateExecutionContext(currentProject, repository, platformSnapshot, registry, run, buildAgentPool: pool);
+        BuildProcessCommand? processCommand = null;
+        context.RepoCache
+            .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+        context.Runner
+            .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildProcessCommand, CancellationToken>((command, _) => processCommand = command)
+            .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
+        context.BuildRuns
+            .Setup(x => x.UpdateAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        CaptureLogs(context.BuildRunLogs, []);
+
+        var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        Assert.NotNull(processCommand);
+        Assert.Equal("grpc://builder.example.test:5001", processCommand.PlatformAddress);
+        Assert.Equal(PlatformConnectorType.Agent, processCommand.PlatformConnectorType);
     }
 
     [Fact]
@@ -519,7 +863,8 @@ public sealed class BuildRunStartTests
         Mock<IBuildRunRepository> buildRuns,
         Mock<IGitReposRepository> gitRepositories,
         Mock<IPlatformRepository> platforms,
-        Mock<IRegistryRepository> registries)
+        Mock<IRegistryRepository> registries,
+        Mock<IBuildAgentPoolRepository>? buildAgentPools = null)
     {
         var unitOfWork = new Mock<IUnitOfWork>(MockBehavior.Strict);
         unitOfWork.SetupGet(x => x.BuildProjects).Returns(buildProjects.Object);
@@ -527,6 +872,7 @@ public sealed class BuildRunStartTests
         unitOfWork.SetupGet(x => x.GitRepositories).Returns(gitRepositories.Object);
         unitOfWork.SetupGet(x => x.Platforms).Returns(platforms.Object);
         unitOfWork.SetupGet(x => x.Registries).Returns(registries.Object);
+        unitOfWork.SetupGet(x => x.BuildAgentPools).Returns(buildAgentPools?.Object ?? Mock.Of<IBuildAgentPoolRepository>());
         var activityEvents = new Mock<IActivityEventRepository>();
         activityEvents
             .Setup(x => x.AddAsync(It.IsAny<global::Domain.Entities.Activities.ActivityEvent>(), It.IsAny<CancellationToken>()))
@@ -549,7 +895,8 @@ public sealed class BuildRunStartTests
         PlatformConnectionInfo platform,
         Registry registry,
         BuildRun run,
-        IBuildRunCoordinator? coordinator = null)
+        IBuildRunCoordinator? coordinator = null,
+        BuildAgentPool? buildAgentPool = null)
     {
         var buildRuns = new Mock<IBuildRunRepository>(MockBehavior.Strict);
         var buildRunLogs = new Mock<IBuildRunLogRepository>(MockBehavior.Strict);
@@ -557,9 +904,10 @@ public sealed class BuildRunStartTests
         var gitRepositories = new Mock<IGitReposRepository>(MockBehavior.Strict);
         var platforms = new Mock<IPlatformRepository>(MockBehavior.Strict);
         var registries = new Mock<IRegistryRepository>(MockBehavior.Strict);
+        var buildAgentPools = new Mock<IBuildAgentPoolRepository>(MockBehavior.Strict);
         var deployments = new Mock<IDeploymentRepository>(MockBehavior.Strict);
         var stacks = new Mock<IStackRepository>(MockBehavior.Strict);
-        var unitOfWork = CreateUnitOfWork(buildProjects, buildRuns, gitRepositories, platforms, registries);
+        var unitOfWork = CreateUnitOfWork(buildProjects, buildRuns, gitRepositories, platforms, registries, buildAgentPools);
         var repoCache = new Mock<IRepoCacheManager>(MockBehavior.Strict);
         var runner = new Mock<IBuildProcessRunner>(MockBehavior.Strict);
         var projectStream = new Mock<IBuildProjectStreamManager>(MockBehavior.Strict);
@@ -589,9 +937,21 @@ public sealed class BuildRunStartTests
         gitRepositories
             .Setup(x => x.GetWithAccountAsync(repository.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(repository);
-        platforms
-            .Setup(x => x.GetInfoAsync(platform.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(platform);
+        if (buildAgentPool is not null)
+        {
+            platforms
+                .Setup(x => x.GetInfoAsync(platform.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((PlatformConnectionInfo?)null);
+            buildAgentPools
+                .Setup(x => x.GetAsync(buildAgentPool.Id, It.IsAny<CancellationToken>(), true))
+                .ReturnsAsync(buildAgentPool);
+        }
+        else
+        {
+            platforms
+                .Setup(x => x.GetInfoAsync(platform.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(platform);
+        }
         registries
             .Setup(x => x.GetAsync(registry.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(registry);
@@ -671,7 +1031,10 @@ public sealed class BuildRunStartTests
             .ReturnsAsync(1);
     }
 
-    private static BuildProject CreateProject(Guid actorId)
+    private static BuildProject CreateProject(
+        Guid actorId,
+        BuildProjectBuilderKind builderKind = BuildProjectBuilderKind.Platform,
+        Guid? buildAgentPoolId = null)
         => new(
             "api-image",
             null,
@@ -683,13 +1046,36 @@ public sealed class BuildRunStartTests
             null,
             [],
             [],
-            Guid.CreateVersion7(),
+            builderKind == BuildProjectBuilderKind.Platform ? Guid.CreateVersion7() : Guid.Empty,
             Guid.CreateVersion7(),
             "citadel/api",
             ["{branch}-{shortSha}"],
             null,
             BuildProject.DefaultTimeoutSeconds,
             BuildProject.DefaultRetentionRunCount,
+            actorId,
+            builderKind,
+            buildAgentPoolId);
+
+    private static BuildAgentPool CreateSelfManagedPool(
+        Guid actorId,
+        SelfManagedVmBuildAgentPoolProviderSpec? providerSpec = null)
+        => new(
+            "agent-builders",
+            null,
+            true,
+            providerSpec ?? new SelfManagedVmBuildAgentPoolProviderSpec(
+                "grpc://builder.example.test:5001",
+                CpuArchitecture.Amd64,
+                1),
+            BuildAgentPool.DefaultMaxActiveBuilders,
+            BuildAgentPool.DefaultQueueTimeoutSeconds,
+            BuildAgentPool.DefaultProvisioningTimeoutSeconds,
+            BuildAgentPool.DefaultRegistrationTimeoutSeconds,
+            BuildAgentPool.DefaultHeartbeatTimeoutSeconds,
+            BuildAgentPool.DefaultCleanupTimeoutSeconds,
+            BuildAgentPool.DefaultMaximumInstanceLifetimeSeconds,
+            BuildAgentPool.DefaultFailureRetentionMinutes,
             actorId);
 
     private static GitRepository CreateRepository(Guid id, Guid actorId)

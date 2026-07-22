@@ -680,6 +680,8 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
         public Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Result<InspectImageResult>> InspectImageAsync(InspectImageCommand inspectImageCommand, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Result<DistributionResult>> DistributionInspectAsync(DistributionInspectCommand command, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Result<BuildHostCapabilitiesResult>> CheckBuildHostAsync(string platformAddress, CancellationToken cancellationToken)
+            => Task.FromResult(Result.Success(new BuildHostCapabilitiesResult(false, null, null, null, null, null)));
         public Task<Result<ExposedPortsResult>> GetExposedPortsAsync(RunImageInfoCommand runImageInfoCommand, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Result<IEnumerable<HistoryImageResult>>> HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Result<DeleteImageResult>> DeleteImageAsync(DeleteImageCommand deleteImageCommand, CancellationToken cancellationToken) => throw new NotSupportedException();

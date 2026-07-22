@@ -13,6 +13,8 @@ public sealed class EdgeAgentCommandRouterTests
         var registry = new EdgeAgentSessionRegistry();
         var platformId = Guid.CreateVersion7();
         var session = registry.Register(new EdgeAgentSession(
+            global::Domain.EdgeAgentResourceType.Platform,
+            platformId,
             platformId,
             Guid.CreateVersion7(),
             "SHA256:test",

@@ -1,9 +1,9 @@
-import { BuildAgentPoolView } from '@/api/generated/api.types';
+import { BuildAgentPoolProvider, BuildAgentPoolValidationStatus, BuildAgentPoolView } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
@@ -37,6 +37,38 @@ const { dropdown, group, info } = createActionsBuilder<BuildAgentPoolView>()
         run: () => {
           if (!selected || multiSelect) return;
           navigate(`/build-pools/edit/${selected.id}`);
+        },
+      };
+    },
+  })
+  .addAction({
+    key: 'test',
+    type: 'command',
+    icon: RefreshCw,
+    requiredCapabilities: ['canWrite'],
+    useHandler: ({ resources }) => {
+      const { selected, multiSelect } = singleSelection(resources);
+      const queryClient = useQueryClient();
+      const testPool = useMutate('testBuildAgentPool');
+
+      return {
+        canExecute: !!selected && !multiSelect && selected.provider === BuildAgentPoolProvider.SelfManagedVm,
+        isPending: testPool.isPending,
+        run: async () => {
+          if (!selected || multiSelect || selected.provider !== BuildAgentPoolProvider.SelfManagedVm) return;
+
+          try {
+            const result = await testPool.mutateAsync({ id: selected.id });
+            await invalidateBuildPoolQueries(queryClient, selected.id);
+            const message = result.data.lastValidationMessage ?? 'Build pool test completed';
+            if (result.data.lastValidationStatus === BuildAgentPoolValidationStatus.Ready) {
+              toast.success(message);
+            } else {
+              toast.error(message);
+            }
+          } catch {
+            toast.error(testPool.validationErrors ?? 'Build pool test failed');
+          }
         },
       };
     },

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using Citadel.Containers.V1;
+using Citadel.Images.V1;
 using Citadel.Platforms.V1;
 using Citadel.SharedModels.V1;
 using Domain;
@@ -46,6 +47,39 @@ public class EdgeAgentConnectorTests
         Assert.Equal(EdgeAgentCommandKind.ImageList, router.Kind);
         Assert.Single(images);
         Assert.Equal("sha256:test", images[0].Id);
+    }
+
+    [Fact]
+    public async Task CheckBuildHostAsync_Should_Route_ImageCheckBuildHost_Command()
+    {
+        var platformId = Guid.CreateVersion7();
+        var router = new TestEdgeAgentCommandRouter
+        {
+            UnaryResult = EdgeAgentCommandRouterResult.Success(new CheckBuildHostResponse
+            {
+                Available = true,
+                DockerVersion = "28.0.0",
+                ApiVersion = "1.49",
+                OperatingSystem = "linux",
+                Architecture = "amd64",
+                BuildKitVersion = "v0.20.2"
+            }.ToByteArray())
+        };
+        var connector = new EdgeImageConnector(router);
+
+        var result = await connector.CheckBuildHostAsync($"edge://{platformId}", CancellationToken.None);
+
+        Assert.True(result.IsSuccess(out var capabilities, out var error), error?.Message);
+        Assert.Equal(platformId, router.PlatformId);
+        Assert.Equal(EdgeAgentCommandKind.ImageCheckBuildHost, router.Kind);
+        Assert.NotNull(router.Payload);
+        Google.Protobuf.WellKnownTypes.Empty.Parser.ParseFrom(router.Payload);
+        Assert.True(capabilities.Available);
+        Assert.Equal("28.0.0", capabilities.DockerVersion);
+        Assert.Equal("1.49", capabilities.ApiVersion);
+        Assert.Equal("linux", capabilities.OperatingSystem);
+        Assert.Equal("amd64", capabilities.Architecture);
+        Assert.Equal("v0.20.2", capabilities.BuildKitVersion);
     }
 
     [Fact]
@@ -221,6 +255,16 @@ public class EdgeAgentConnectorTests
             return Task.FromResult(UnaryResult);
         }
 
+        public Task<EdgeAgentCommandRouterResult> SendUnaryAsync(
+            EdgeAgentResourceType resourceType,
+            Guid resourceId,
+            EdgeAgentCommandKind kind,
+            byte[] payload,
+            TimeSpan timeout,
+            string? correlationId,
+            CancellationToken cancellationToken)
+            => SendUnaryAsync(resourceId, kind, payload, timeout, correlationId, cancellationToken);
+
         public async IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
             Guid platformId,
             EdgeAgentCommandKind kind,
@@ -242,6 +286,21 @@ public class EdgeAgentConnectorTests
             await Task.CompletedTask;
         }
 
+        public async IAsyncEnumerable<EdgeAgentStreamItem> SendServerStreamAsync(
+            EdgeAgentResourceType resourceType,
+            Guid resourceId,
+            EdgeAgentCommandKind kind,
+            byte[] payload,
+            TimeSpan timeout,
+            string? correlationId,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await foreach (var item in SendServerStreamAsync(resourceId, kind, payload, timeout, correlationId, cancellationToken))
+            {
+                yield return item;
+            }
+        }
+
         public Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
             Guid platformId,
             EdgeAgentCommandKind kind,
@@ -256,6 +315,16 @@ public class EdgeAgentConnectorTests
 
             return Task.FromResult(Result.Success(new EdgeAgentInteractiveCommand("command-1", ReadStreamItemsAsync())));
         }
+
+        public Task<Result<EdgeAgentInteractiveCommand>> StartInteractiveAsync(
+            EdgeAgentResourceType resourceType,
+            Guid resourceId,
+            EdgeAgentCommandKind kind,
+            byte[] payload,
+            TimeSpan timeout,
+            string? correlationId,
+            CancellationToken cancellationToken)
+            => StartInteractiveAsync(resourceId, kind, payload, timeout, correlationId, cancellationToken);
 
         public Task<Result> SendStreamInputAsync(
             Guid platformId,

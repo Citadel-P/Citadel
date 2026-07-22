@@ -106,6 +106,7 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<BackupRestoreStatus>),
         typeof(JsonStringEnumConverter<BuildProjectBuilderKind>),
         typeof(JsonStringEnumConverter<BuildAgentPoolProvider>),
+        typeof(JsonStringEnumConverter<BuildAgentPoolConnectionMode>),
         typeof(JsonStringEnumConverter<CpuArchitecture>),
         typeof(JsonStringEnumConverter<BuildAgentPoolValidationStatus>),
         typeof(JsonStringEnumConverter<BuildRunTrigger>),
@@ -271,6 +272,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(BuildProjectBuilderKind))]
 [JsonSerializable(typeof(BuildProjectBuilderKind?))]
 [JsonSerializable(typeof(BuildAgentPoolProvider))]
+[JsonSerializable(typeof(BuildAgentPoolConnectionMode))]
 [JsonSerializable(typeof(BuildAgentPoolProviderSpec))]
 [JsonSerializable(typeof(AwsEc2BuildAgentPoolProviderSpec))]
 [JsonSerializable(typeof(SelfManagedVmBuildAgentPoolProviderSpec))]

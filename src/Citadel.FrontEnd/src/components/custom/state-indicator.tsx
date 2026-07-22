@@ -5,6 +5,7 @@ import {
   BackupRunItemStatus,
   BackupRestoreStatus,
   BackupRunStatus,
+  BuildAgentPoolValidationStatus,
   BuildRunStatus,
   BackupRepositoryStatus,
   ContainerStateStatus,
@@ -27,13 +28,21 @@ type StateValue =
   | AlertRuleStatus
   | BackupRepositoryStatus
   | BackupRunStatus
+  | BuildAgentPoolValidationStatus
   | BuildRunStatus
   | BackupRunItemStatus
   | BackupRestoreStatus
   | GitReposStatus
   | ActionRunStatus;
 
-type StateIndicatorKind = 'automationActionRun' | 'backupRun' | 'backupRestore' | 'buildRun' | 'container' | 'platform';
+type StateIndicatorKind =
+  | 'automationActionRun'
+  | 'backupRun'
+  | 'backupRestore'
+  | 'buildAgentPoolValidation'
+  | 'buildRun'
+  | 'container'
+  | 'platform';
 
 type StatusStyle = {
   colorClass: string;
@@ -131,6 +140,21 @@ const getBuildRunStatusStyle = (value: StateValue): StatusStyle | undefined => {
   }
 };
 
+const getBuildAgentPoolValidationStatusStyle = (value: StateValue): StatusStyle | undefined => {
+  switch (value) {
+    case BuildAgentPoolValidationStatus.Ready:
+      return { colorClass: 'bg-green-500', tooltip: 'Ready' };
+    case BuildAgentPoolValidationStatus.Invalid:
+      return { colorClass: 'bg-red-500', tooltip: 'Invalid' };
+    case BuildAgentPoolValidationStatus.Degraded:
+      return { colorClass: 'bg-orange-500', tooltip: 'Degraded' };
+    case BuildAgentPoolValidationStatus.NotTested:
+      return { colorClass: 'bg-gray-400', tooltip: 'Not tested' };
+    default:
+      return undefined;
+  }
+};
+
 const getContainerStatusStyle = (value: StateValue): StatusStyle | undefined => {
   switch (value) {
     case ContainerStateStatus.Unknown:
@@ -188,6 +212,10 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
 
   if (kind === 'buildRun') {
     return getBuildRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+  }
+
+  if (kind === 'buildAgentPoolValidation') {
+    return getBuildAgentPoolValidationStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
   }
 
   if (kind === 'container') {

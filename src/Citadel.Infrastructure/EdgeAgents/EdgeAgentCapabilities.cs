@@ -66,4 +66,39 @@ internal static class EdgeAgentCapabilities
         => TryValidate(capabilitiesJson, out var normalizedJson, out _)
             ? normalizedJson
             : null;
+
+    public static bool HasRequiredCommands(string capabilitiesJson, IReadOnlyCollection<string> requiredCommands, out string missingCommand)
+    {
+        missingCommand = string.Empty;
+
+        try
+        {
+            using var document = JsonDocument.Parse(capabilitiesJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("commands", out var commandsElement) ||
+                commandsElement.ValueKind != JsonValueKind.Array)
+            {
+                missingCommand = requiredCommands.FirstOrDefault() ?? string.Empty;
+                return false;
+            }
+
+            var commands = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var command in commandsElement.EnumerateArray())
+            {
+                if (command.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(command.GetString()))
+                {
+                    commands.Add(command.GetString()!);
+                }
+            }
+
+            missingCommand = requiredCommands.FirstOrDefault(command => !commands.Contains(command)) ?? string.Empty;
+            return missingCommand.Length == 0;
+        }
+        catch (JsonException)
+        {
+            missingCommand = requiredCommands.FirstOrDefault() ?? string.Empty;
+            return false;
+        }
+    }
 }

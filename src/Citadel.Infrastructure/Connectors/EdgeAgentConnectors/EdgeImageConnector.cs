@@ -15,13 +15,14 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
 {
     public async Task<Result<ImageResult>> GetAsync(string platformAddress, string imageId, CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(platformAddress, out var platformId, out var addressError))
+        if (!EdgeConnectorHelpers.TryGetTarget(platformAddress, out var target, out var addressError))
         {
             return Result.Failure<ImageResult>(addressError!);
         }
 
         var response = await commandRouter.SendUnaryAsync(
-            platformId,
+            target.ResourceType,
+            target.ResourceId,
             EdgeAgentCommandKind.ImageGet,
             new GetImageRequest { Id = imageId }.ToByteArray(),
             TimeSpan.FromSeconds(30),
@@ -35,13 +36,14 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
 
     public async Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(platformAddress, out var platformId, out var addressError))
+        if (!EdgeConnectorHelpers.TryGetTarget(platformAddress, out var target, out var addressError))
         {
             return Result.Failure<IReadOnlyList<ImageResult>>(addressError!);
         }
 
         var response = await commandRouter.SendUnaryAsync(
-            platformId,
+            target.ResourceType,
+            target.ResourceId,
             EdgeAgentCommandKind.ImageList,
             new ListImagesRequest().ToByteArray(),
             TimeSpan.FromSeconds(60),
@@ -55,13 +57,14 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
 
     public async Task<Result<InspectImageResult>> InspectImageAsync(InspectImageCommand inspectImageCommand, CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(inspectImageCommand.PlatformAddress, out var platformId, out var addressError))
+        if (!EdgeConnectorHelpers.TryGetTarget(inspectImageCommand.PlatformAddress, out var target, out var addressError))
         {
             return Result.Failure<InspectImageResult>(addressError!);
         }
 
         var response = await commandRouter.SendUnaryAsync(
-            platformId,
+            target.ResourceType,
+            target.ResourceId,
             EdgeAgentCommandKind.ImageInspect,
             new InspectImageRequest { Id = inspectImageCommand.ImageId }.ToByteArray(),
             TimeSpan.FromSeconds(60),
@@ -75,13 +78,14 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
 
     public async Task<Result<DistributionResult>> DistributionInspectAsync(DistributionInspectCommand command, CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(command.PlatformAddress, out var platformId, out var addressError))
+        if (!EdgeConnectorHelpers.TryGetTarget(command.PlatformAddress, out var target, out var addressError))
         {
             return Result.Failure<DistributionResult>(addressError!);
         }
 
         var response = await commandRouter.SendUnaryAsync(
-            platformId,
+            target.ResourceType,
+            target.ResourceId,
             EdgeAgentCommandKind.ImageDistributionInspect,
             new DistributionInspectRequest { ImageName = command.ImageName, Auth = command.Auth }.ToByteArray(),
             TimeSpan.FromSeconds(60),
@@ -93,15 +97,37 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
             : Result.Failure<DistributionResult>(EdgeConnectorHelpers.CommandFailure(EdgeAgentCommandKind.ImageDistributionInspect, response));
     }
 
+    public async Task<Result<BuildHostCapabilitiesResult>> CheckBuildHostAsync(string platformAddress, CancellationToken cancellationToken)
+    {
+        if (!EdgeConnectorHelpers.TryGetTarget(platformAddress, out var target, out var addressError))
+        {
+            return Result.Failure<BuildHostCapabilitiesResult>(addressError!);
+        }
+
+        var response = await commandRouter.SendUnaryAsync(
+            target.ResourceType,
+            target.ResourceId,
+            EdgeAgentCommandKind.ImageCheckBuildHost,
+            new Google.Protobuf.WellKnownTypes.Empty().ToByteArray(),
+            TimeSpan.FromSeconds(15),
+            correlationId: null,
+            cancellationToken);
+
+        return response.IsSuccess && response.Payload is not null
+            ? CheckBuildHostResponse.Parser.ParseFrom(response.Payload).Map()
+            : Result.Failure<BuildHostCapabilitiesResult>(EdgeConnectorHelpers.CommandFailure(EdgeAgentCommandKind.ImageCheckBuildHost, response));
+    }
+
     public async Task<Result<ExposedPortsResult>> GetExposedPortsAsync(RunImageInfoCommand runImageInfoCommand, CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(runImageInfoCommand.PlatformAddress, out var platformId, out var addressError))
+        if (!EdgeConnectorHelpers.TryGetTarget(runImageInfoCommand.PlatformAddress, out var target, out var addressError))
         {
             return Result.Failure<ExposedPortsResult>(addressError!);
         }
 
         var response = await commandRouter.SendUnaryAsync(
-            platformId,
+            target.ResourceType,
+            target.ResourceId,
             EdgeAgentCommandKind.ImageExposedPorts,
             new GetExposedPortsRequest { Id = runImageInfoCommand.ImageId }.ToByteArray(),
             TimeSpan.FromSeconds(30),
@@ -115,13 +141,14 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
 
     public async Task<Result<IEnumerable<DomainHistoryImageResult>>> HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(command.PlatformAddress, out var platformId, out var addressError))
+        if (!EdgeConnectorHelpers.TryGetTarget(command.PlatformAddress, out var target, out var addressError))
         {
             return Result.Failure<IEnumerable<DomainHistoryImageResult>>(addressError!);
         }
 
         var response = await commandRouter.SendUnaryAsync(
-            platformId,
+            target.ResourceType,
+            target.ResourceId,
             EdgeAgentCommandKind.ImageHistory,
             new HistoryImageRequest { Id = command.ImageId }.ToByteArray(),
             TimeSpan.FromSeconds(30),
@@ -135,13 +162,14 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
 
     public async Task<Result<DeleteImageResult>> DeleteImageAsync(DeleteImageCommand deleteImageCommand, CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(deleteImageCommand.PlatformAddress, out var platformId, out var addressError))
+        if (!EdgeConnectorHelpers.TryGetTarget(deleteImageCommand.PlatformAddress, out var target, out var addressError))
         {
             return Result.Failure<DeleteImageResult>(addressError!);
         }
 
         var response = await commandRouter.SendUnaryAsync(
-            platformId,
+            target.ResourceType,
+            target.ResourceId,
             EdgeAgentCommandKind.ImageDelete,
             new DeleteImageRequest
             {
@@ -162,9 +190,9 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
         PullImageCommand pullImageCommand,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(pullImageCommand.PlatformAddress, out var platformId, out _))
+        if (!EdgeConnectorHelpers.TryGetTarget(pullImageCommand.PlatformAddress, out var target, out _))
         {
-            yield return new PullImageStreamItem(ErrorMessage: "Edge Agent platform address is invalid.");
+            yield return new PullImageStreamItem(ErrorMessage: "Edge Agent address is invalid.");
             yield break;
         }
 
@@ -178,7 +206,8 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
         };
 
         await foreach (var item in commandRouter.SendServerStreamAsync(
-                           platformId,
+                           target.ResourceType,
+                           target.ResourceId,
                            EdgeAgentCommandKind.ImagePullStream,
                            request.ToByteArray(),
                            TimeSpan.FromHours(1),
@@ -207,16 +236,16 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
         BuildImageCommand buildImageCommand,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(buildImageCommand.PlatformAddress, out var platformId, out _))
+        if (!EdgeConnectorHelpers.TryGetTarget(buildImageCommand.PlatformAddress, out var target, out _))
         {
             yield return new ImageBuildStreamItem(
                 Id: null,
                 Stream: null,
                 Status: "error",
-                ErrorMessage: "Edge Agent platform address is invalid.",
+                ErrorMessage: "Edge Agent address is invalid.",
                 ProgressMessage: null,
                 Progress: null,
-                Error: new ImageBuildError(400, "Edge Agent platform address is invalid."));
+                Error: new ImageBuildError(400, "Edge Agent address is invalid."));
             yield break;
         }
 
@@ -242,7 +271,8 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
             request.ContextArchive = ByteString.CopyFrom(buildImageCommand.ContextArchive);
 
         await foreach (var item in commandRouter.SendServerStreamAsync(
-                           platformId,
+                           target.ResourceType,
+                           target.ResourceId,
                            EdgeAgentCommandKind.ImageBuildStream,
                            request.ToByteArray(),
                            buildImageCommand.Timeout,
@@ -278,16 +308,16 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
         PushImageCommand pushImageCommand,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (!EdgeConnectorHelpers.TryGetPlatformId(pushImageCommand.PlatformAddress, out var platformId, out _))
+        if (!EdgeConnectorHelpers.TryGetTarget(pushImageCommand.PlatformAddress, out var target, out _))
         {
             yield return new ImageBuildStreamItem(
                 Id: null,
                 Stream: null,
                 Status: "error",
-                ErrorMessage: "Edge Agent platform address is invalid.",
+                ErrorMessage: "Edge Agent address is invalid.",
                 ProgressMessage: null,
                 Progress: null,
-                Error: new ImageBuildError(400, "Edge Agent platform address is invalid."));
+                Error: new ImageBuildError(400, "Edge Agent address is invalid."));
             yield break;
         }
 
@@ -298,7 +328,8 @@ internal sealed class EdgeImageConnector(IEdgeAgentCommandRouter commandRouter) 
         };
 
         await foreach (var item in commandRouter.SendServerStreamAsync(
-                           platformId,
+                           target.ResourceType,
+                           target.ResourceId,
                            EdgeAgentCommandKind.ImagePushStream,
                            request.ToByteArray(),
                            TimeSpan.FromHours(1),
