@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import {
   AlertRuleStatus,
   ActionRunStatus,
@@ -312,13 +312,15 @@ export const StateIndicator = memo(
     isProcessing,
     enableLabel,
     kind,
+    tooltip,
   }: {
     value: StateValue;
     isProcessing?: boolean;
     enableLabel?: boolean;
     kind?: StateIndicatorKind;
+    tooltip?: ReactNode;
   }) => {
-    const { colorClass, tooltip } = getStatusStyle(value, enableLabel, kind);
+    const { colorClass, tooltip: defaultTooltip } = getStatusStyle(value, enableLabel, kind);
     if (isProcessing) return <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />;
     return (
       <TooltipProvider delayDuration={200}>
@@ -326,9 +328,7 @@ export const StateIndicator = memo(
           <TooltipTrigger asChild>
             <div className={`${colorClass} mr-2 h-2 w-2 rounded-full`} />
           </TooltipTrigger>
-          <TooltipContent>
-            <span>{tooltip}</span>
-          </TooltipContent>
+          <TooltipContent>{tooltip ?? <span>{defaultTooltip}</span>}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     );

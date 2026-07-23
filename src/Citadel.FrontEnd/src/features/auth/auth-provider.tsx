@@ -39,14 +39,6 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
   const isAuthenticated = authState.status === 'authenticated';
   const isAuthReady = authState.status !== 'loading';
 
-  const {
-    token: refreshedToken,
-    isSuccess,
-    error,
-    didAttemptRefresh,
-    triggerManualRefresh,
-  } = useTokenRefresh(authState.token, isAuthenticated);
-
   const applyToken = useCallback(
     (token?: string) => {
       apiClient.setSecurityData(token);
@@ -57,6 +49,18 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
       }
     },
     [apiClient],
+  );
+
+  const requestRefreshToken = useCallback(async () => {
+    const response = await apiClient.api.refreshToken({});
+    return response.data.accessToken;
+  }, [apiClient]);
+
+  const { error, didAttemptRefresh, triggerManualRefresh, isAccessTokenExpired } = useTokenRefresh(
+    authState.token,
+    isAuthenticated,
+    requestRefreshToken,
+    applyToken,
   );
 
   const login = useCallback(
@@ -77,6 +81,8 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
 
   // Bootstrap (silent refresh)
   useEffect(() => {
+    if (authState.status !== 'loading') return;
+
     const controller = new AbortController();
     const signal = controller.signal;
 
@@ -100,21 +106,15 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
 
     void init();
     return () => controller.abort();
-  }, [triggerManualRefresh, applyToken]);
-
-  // Successful automatic / manual refresh
-  useEffect(() => {
-    if (isSuccess && refreshedToken) {
-      applyToken(refreshedToken);
-    }
-  }, [isSuccess, refreshedToken, applyToken]);
+  }, [authState.status, triggerManualRefresh, applyToken]);
 
   // Handle expired cookie / refresh 401
   useEffect(() => {
-    if ((error as ProblemDetails)?.status === 401 && didAttemptRefresh.current) {
+    const problem = ((error as { error?: ProblemDetails } | undefined)?.error ?? error) as ProblemDetails | undefined;
+    if (problem?.status === 401 && didAttemptRefresh.current && (!authState.token || isAccessTokenExpired)) {
       logout();
     }
-  }, [error, logout, didAttemptRefresh]);
+  }, [authState.token, error, isAccessTokenExpired, logout, didAttemptRefresh]);
 
   return (
     <AuthContext.Provider

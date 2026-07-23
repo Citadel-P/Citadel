@@ -8,13 +8,15 @@ import { AlertTriangle, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
+const LICENSE_REMINDER_REFRESH_INTERVAL = 60 * 60 * 1000;
+
 export function LicenseReminder() {
   const formatDate = useProfileDateTimeFormatter();
   const [dismissedKey, setDismissedKey] = useLocalStorage<string | null>('license-reminder-dismissed-key', null);
   const licenseQuery = useRead('getLicense', undefined, {
     retry: false,
-    staleTime: 60_000,
-    refetchInterval: 60_000,
+    staleTime: LICENSE_REMINDER_REFRESH_INTERVAL,
+    refetchInterval: LICENSE_REMINDER_REFRESH_INTERVAL,
     meta: { suppressErrorToast: true },
   });
 
@@ -54,7 +56,10 @@ export function LicenseReminder() {
   }, [formatDate, license, overQuota.length]);
 
   const overQuotaSummary = useMemo(() => formatOverQuota(overQuota), [overQuota]);
-  const noticeKey = notice && license ? `${license.status}:${license.expiresAt ?? ''}:${license.graceUntil ?? ''}:${overQuotaSummary}` : null;
+  const noticeKey =
+    notice && license
+      ? `${license.status}:${license.expiresAt ?? ''}:${license.graceUntil ?? ''}:${overQuotaSummary}`
+      : null;
 
   if (!notice || !noticeKey || dismissedKey === noticeKey) return null;
 
@@ -66,13 +71,17 @@ export function LicenseReminder() {
             ? 'rounded-sm border-destructive/40 bg-destructive/5'
             : 'rounded-sm border-amber-500/40 bg-amber-500/5'
         }>
-        <AlertTriangle className={notice.tone === 'danger' ? 'text-destructive' : 'text-amber-600 dark:text-amber-300'} />
+        <AlertTriangle
+          className={notice.tone === 'danger' ? 'text-destructive' : 'text-amber-600 dark:text-amber-300'}
+        />
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <AlertTitle>{notice.title}</AlertTitle>
             <AlertDescription className="text-foreground/80">
               {notice.message}
-              {overQuotaSummary ? <span className="ml-1 font-medium text-foreground">Over limit: {overQuotaSummary}.</span> : null}
+              {overQuotaSummary ? (
+                <span className="ml-1 font-medium text-foreground">Over limit: {overQuotaSummary}.</span>
+              ) : null}
             </AlertDescription>
           </div>
           <div className="flex shrink-0 items-center gap-2">

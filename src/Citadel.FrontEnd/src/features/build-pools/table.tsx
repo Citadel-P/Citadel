@@ -19,7 +19,7 @@ import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData } from '@/pages/types';
 import { ColumnDef } from '@tanstack/react-table';
-import { Cpu, ShieldCheck, Server } from 'lucide-react';
+import { Cpu, Server } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -71,7 +71,7 @@ const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnD
   {
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => <BuildPoolNameRow pool={row.original} />,
+    cell: ({ row }) => <BuildPoolNameRow pool={row.original} formatDateTime={formatDateTime} />,
     sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
   },
   {
@@ -92,12 +92,6 @@ const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnD
     sortingFn: (rowA, rowB) => Number(rowA.original.maxActiveBuilders) - Number(rowB.original.maxActiveBuilders),
   },
   {
-    accessorKey: 'lastValidationStatus',
-    header: ({ column }) => <SortableCell cellName="Validation" column={column} />,
-    cell: ({ row }) => <ValidationCell pool={row.original} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) => rowA.original.lastValidationStatus.localeCompare(rowB.original.lastValidationStatus),
-  },
-  {
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
@@ -112,9 +106,20 @@ const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnD
   },
 ];
 
-const BuildPoolNameRow = ({ pool }: { pool: BuildAgentPoolView }) => (
+const BuildPoolNameRow = ({
+  pool,
+  formatDateTime,
+}: {
+  pool: BuildAgentPoolView;
+  formatDateTime: DateTimeFormatter;
+}) => (
   <div className="flex min-w-0 items-center gap-1">
-    <StateIndicator value={pool.enabled} enableLabel />
+    <StateIndicator
+      value={pool.lastValidationStatus}
+      kind="buildAgentPoolValidation"
+      isProcessing={pool.controlState === ResourceControlState.Processing}
+      tooltip={<ValidationTooltip pool={pool} formatDateTime={formatDateTime} />}
+    />
     <Link to={`../build-pools/edit/${pool.id}`} title={pool.name} className="truncate text-sm hover:underline">
       {pool.name}
     </Link>
@@ -122,17 +127,21 @@ const BuildPoolNameRow = ({ pool }: { pool: BuildAgentPoolView }) => (
 );
 
 const ProviderCell = ({ pool }: { pool: BuildAgentPoolView }) => {
-  const aws = pool.provider === BuildAgentPoolProvider.AwsEc2
-    ? (pool.providerSpec as BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec)
-    : undefined;
-  const vm = pool.provider === BuildAgentPoolProvider.SelfManagedVm
-    ? (pool.providerSpec as BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec)
-    : undefined;
+  const aws =
+    pool.provider === BuildAgentPoolProvider.AwsEc2
+      ? (pool.providerSpec as BuildAgentPoolProviderSpecAwsEc2BuildAgentPoolProviderSpec)
+      : undefined;
+  const vm =
+    pool.provider === BuildAgentPoolProvider.SelfManagedVm
+      ? (pool.providerSpec as BuildAgentPoolProviderSpecSelfManagedVmBuildAgentPoolProviderSpec)
+      : undefined;
   const label = aws ? 'AWS EC2' : vm ? 'Self-managed VM' : pool.provider;
-  const vmTarget = vm?.connectionMode === BuildAgentPoolConnectionMode.EdgeAgent
-    ? 'Edge Agent'
-    : vm?.endpoint;
-  const details = aws ? `${aws.region} - ${aws.instanceType}` : vm ? `${vmTarget ?? 'Unconfigured'} - ${vm.maxWorkers} worker(s)` : '';
+  const vmTarget = vm?.connectionMode === BuildAgentPoolConnectionMode.EdgeAgent ? 'Edge Agent' : vm?.endpoint;
+  const details = aws
+    ? `${aws.region} - ${aws.instanceType}`
+    : vm
+      ? `${vmTarget ?? 'Unconfigured'} - ${vm.maxWorkers} worker(s)`
+      : '';
 
   return (
     <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
@@ -145,7 +154,7 @@ const ProviderCell = ({ pool }: { pool: BuildAgentPoolView }) => {
   );
 };
 
-const ValidationCell = ({
+const ValidationTooltip = ({
   pool,
   formatDateTime,
 }: {
@@ -153,21 +162,15 @@ const ValidationCell = ({
   formatDateTime: DateTimeFormatter;
 }) => {
   const testedAt = pool.lastValidatedAt ? formatDateTime(pool.lastValidatedAt) : 'Not tested yet';
-  const title = [validationLabel(pool.lastValidationStatus), testedAt, pool.lastValidationMessage].filter(Boolean).join(' - ');
 
   return (
-    <span className="inline-flex min-w-0 max-w-72 items-center gap-2 text-sm" title={title}>
-      <StateIndicator
-        value={pool.lastValidationStatus}
-        kind="buildAgentPoolValidation"
-        isProcessing={pool.controlState === ResourceControlState.Processing}
-      />
-      <ShieldCheck className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 truncate">
-        <span>{validationLabel(pool.lastValidationStatus)}</span>
-        <span className="ml-2 text-xs text-muted-foreground">{testedAt}</span>
-      </span>
-    </span>
+    <div className="space-y-1">
+      <div className="font-medium">Connection: {validationLabel(pool.lastValidationStatus)}</div>
+      <div>Last validated: {testedAt}</div>
+      {pool.lastValidationMessage ? (
+        <div className="max-w-xs whitespace-normal">{pool.lastValidationMessage}</div>
+      ) : null}
+    </div>
   );
 };
 

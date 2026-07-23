@@ -13,6 +13,7 @@ import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack';
 
 export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   type GroupState = { state: 'joining' | 'joined'; references: number };
+  type CancellationRef = { current: boolean };
   const [connectionState, setConnectionState] = useState<HubConnectionState>(HubConnectionState.Disconnected);
   const [connection, setConnection] = useState<HubConnection | null>(null);
   const { accessToken } = useAuthContext();
@@ -20,13 +21,18 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
 
   const tokenRef = useRef<string | undefined>(accessToken);
   const prevTokenRef = useRef<string | undefined>(accessToken);
-  const isCanceledRef = useRef(false);
+  const activeCancelRef = useRef<CancellationRef | null>(null);
+  const activeConnectionRef = useRef<HubConnection | null>(null);
   const readyResolveRef = useRef<(() => void) | null>(null);
   const readyPromiseRef = useRef<Promise<void> | null>(null);
   const groupStates = useRef<Map<string, GroupState>>(new Map());
 
   const buildConnection = useCallback(() => {
-    isCanceledRef.current = false;
+    if (activeCancelRef.current) {
+      activeCancelRef.current.current = true;
+    }
+    const cancelRef: CancellationRef = { current: false };
+    activeCancelRef.current = cancelRef;
 
     const conn = new HubConnectionBuilder()
       .withUrl(`${baseUrl}/hubs/global`, {
@@ -36,6 +42,8 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
       .withAutomaticReconnect()
       .withHubProtocol(new MessagePackHubProtocol())
       .build();
+
+    activeConnectionRef.current = conn;
 
     conn.onreconnecting(() => setConnectionState(HubConnectionState.Reconnecting));
     conn.onreconnected(async () => {
@@ -60,10 +68,12 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
 
     (async () => {
       try {
-        await startConnectionWithRetry(conn, isCanceledRef);
-        if (isCanceledRef.current) {
+        await startConnectionWithRetry(conn, cancelRef);
+        if (cancelRef.current || activeConnectionRef.current !== conn) {
           await conn.stop().catch(() => {});
-          setConnection(null);
+          if (activeConnectionRef.current === conn) {
+            setConnection(null);
+          }
           return;
         }
         setConnection(conn);
@@ -72,8 +82,10 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
       } catch (err) {
         console.error('[SignalR] final connection failure', err);
         await conn.stop().catch(() => {});
-        setConnectionState(conn.state ?? HubConnectionState.Disconnected);
-        setConnection(null);
+        if (activeConnectionRef.current === conn) {
+          setConnectionState(conn.state ?? HubConnectionState.Disconnected);
+          setConnection(null);
+        }
       }
     })();
 
@@ -81,13 +93,22 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
   }, [baseUrl]);
 
   const rebuildConnection = useCallback(() => {
-    isCanceledRef.current = true;
-    connection
-      ?.stop()
+    if (activeCancelRef.current) {
+      activeCancelRef.current.current = true;
+    }
+
+    const currentConnection = activeConnectionRef.current ?? connection;
+    if (!currentConnection) {
+      setConnection(null);
+      buildConnection();
+      return;
+    }
+
+    currentConnection
+      .stop()
       .catch(console.error)
       .finally(() => {
         setConnection(null);
-        isCanceledRef.current = false;
         buildConnection();
       });
   }, [connection, buildConnection]);
@@ -118,8 +139,10 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
   useEffect(() => {
     buildConnection();
     return () => {
-      isCanceledRef.current = true;
-      connection?.stop().catch(console.error);
+      if (activeCancelRef.current) {
+        activeCancelRef.current.current = true;
+      }
+      activeConnectionRef.current?.stop().catch(console.error);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // OK to omit buildConnection here – only run once

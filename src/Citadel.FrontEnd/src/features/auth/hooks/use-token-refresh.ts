@@ -1,61 +1,72 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { useInterval } from '@/hooks/useInterval';
-import { useRead } from '@/lib/hooks';
 
 const EXPIRY_BUFFER_INTERVAL = 30; // seconds before expiry to refresh
 const EXPIRY_BUFFER_ON_FOCUS = 10; // when tab becomes visible
 
-export const useTokenRefresh = (accessToken: string | undefined, isAuthenticated: boolean) => {
-  const { data, isSuccess, refetch, error } = useRead('refreshToken', undefined, {
-    enabled: false,
-  });
+const parseJwt = (token: string) => {
+  try {
+    return token ? (jwtDecode(token) as { exp?: number }) : null;
+  } catch {
+    return null;
+  }
+};
 
-  const isRefreshing = useRef(false);
+const getTokenSecondsLeft = (token: string | undefined) => {
+  if (!token) return undefined;
+  const decoded = parseJwt(token);
+  if (!decoded?.exp) return undefined;
+
+  return decoded.exp - Math.floor(Date.now() / 1000);
+};
+
+export const useTokenRefresh = (
+  accessToken: string | undefined,
+  isAuthenticated: boolean,
+  refreshToken: () => Promise<string | undefined>,
+  onTokenRefreshed: (token: string) => void,
+) => {
+  const refreshPromise = useRef<Promise<string | undefined> | null>(null);
   const didAttemptRefresh = useRef(false);
-
-  useEffect(() => {
-    isRefreshing.current = false;
-  }, []);
-
-  const parseJwt = (token: string) => {
-    try {
-      return token ? (jwtDecode(token) as { exp?: number }) : null;
-    } catch {
-      return null;
-    }
-  };
+  const [error, setError] = useState<unknown>();
 
   /** Manual refresh trigger (returns token if successful) */
   const triggerManualRefresh = useCallback(async (): Promise<string | undefined> => {
-    if (isRefreshing.current) {
-      console.log('refresh in progress, skipping');
-      return undefined;
+    if (refreshPromise.current) {
+      return refreshPromise.current;
     }
 
-    isRefreshing.current = true;
     didAttemptRefresh.current = true;
 
-    try {
-      const result = await refetch();
-      const newToken = result.data?.data?.accessToken as string | undefined;
-      return newToken;
-    } catch (err) {
-      console.error('refresh error:', err);
-      return undefined;
-    } finally {
-      isRefreshing.current = false;
-    }
-  }, [refetch]);
+    refreshPromise.current = refreshToken()
+      .then((token) => {
+        setError(undefined);
+        if (token) {
+          onTokenRefreshed(token);
+        }
+        return token;
+      })
+      .catch((err) => {
+        console.error('refresh error:', err);
+        setError(err);
+        return undefined;
+      })
+      .finally(() => {
+        refreshPromise.current = null;
+      });
+
+    return refreshPromise.current;
+  }, [onTokenRefreshed, refreshToken]);
 
   /** Periodically check expiry and refresh early */
   const maybeRefreshIfExpiringSoon = useCallback(
     async (bufferSeconds: number) => {
       if (!isAuthenticated || !accessToken) return;
-      const decoded = parseJwt(accessToken);
-      if (!decoded?.exp) return;
 
-      const secondsLeft = decoded.exp - Math.floor(Date.now() / 1000);
+      const secondsLeft = getTokenSecondsLeft(accessToken);
+      if (secondsLeft === undefined) return;
+
       if (secondsLeft < bufferSeconds) {
         await triggerManualRefresh();
       }
@@ -78,10 +89,9 @@ export const useTokenRefresh = (accessToken: string | undefined, isAuthenticated
   }, [maybeRefreshIfExpiringSoon]);
 
   return {
-    token: data?.data?.accessToken as string | undefined,
-    isSuccess,
     error,
     didAttemptRefresh,
     triggerManualRefresh,
+    isAccessTokenExpired: (getTokenSecondsLeft(accessToken) ?? 0) <= 0,
   };
 };

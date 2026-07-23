@@ -34,6 +34,10 @@ export const startConnectionWithRetry = async (
     onRetryAttempt,
   } = options || {};
 
+  if (isCanceled.current) {
+    return;
+  }
+
   try {
     // Attempt to start the connection.
     await connection.start();
@@ -50,7 +54,7 @@ export const startConnectionWithRetry = async (
     // If the maximum number of retries has been reached, log the error and exit.
     if (currentRetryAttempt >= maxRetries) {
       console.error('Maximum number of SignalR connection retries reached. Aborting.', error);
-      return;
+      throw error;
     }
 
     // Calculate the base delay for the next retry using exponential backoff.
@@ -75,6 +79,7 @@ export const startConnectionWithRetry = async (
     onRetryAttempt?.(currentRetryAttempt + 1, retryDelay, error);
 
     // Schedule the next retry attempt.
-    setTimeout(() => startConnectionWithRetry(connection, isCanceled, options, currentRetryAttempt + 1), retryDelay);
+    await new Promise<void>((resolve) => setTimeout(resolve, retryDelay));
+    return startConnectionWithRetry(connection, isCanceled, options, currentRetryAttempt + 1);
   }
 };

@@ -22,19 +22,39 @@ internal sealed class RefreshTokenCookieService(IHttpContextAccessor httpContext
 
     public void Set(string refreshToken, DateTime expiresAt)
     {
-        httpContextAccessor.HttpContext?.Response.Cookies.Append(Constants.RefreshToken, refreshToken, new CookieOptions
+        httpContextAccessor.HttpContext?.Response.Cookies.Append(
+            Constants.RefreshToken,
+            refreshToken,
+            CookieOptionsFactory.Create(expiresAt));
+    }
+
+    public void Delete()
+        => httpContextAccessor.HttpContext?.Response.Cookies.Delete(Constants.RefreshToken, CookieOptionsFactory.DeleteOptions());
+}
+
+internal static class CookieOptionsFactory
+{
+    private const string AuthenticationPath = "/api/v1/authentication";
+
+    public static CookieOptions Create(DateTime expiresAt)
+        => new()
         {
             HttpOnly = true,
             Secure = true,
             IsEssential = true,
-            SameSite = SameSiteMode.Strict,
+            SameSite = SameSiteMode.None,
+            Path = AuthenticationPath,
             Expires = new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)),
             MaxAge = expiresAt - DateTime.UtcNow
-        });
-    }
+        };
 
-    public void Delete()
-        => httpContextAccessor.HttpContext?.Response.Cookies.Delete(Constants.RefreshToken);
+    public static CookieOptions DeleteOptions()
+        => new()
+        {
+            Secure = true,
+            SameSite = SameSiteMode.None,
+            Path = AuthenticationPath
+        };
 }
 
 internal sealed class MfaChallengeCookieService(IHttpContextAccessor httpContextAccessor) : IMfaChallengeCookieService
@@ -49,21 +69,12 @@ internal sealed class MfaChallengeCookieService(IHttpContextAccessor httpContext
         => Append(Constants.MfaChallenge, challengeId, expiresAt);
 
     public void Delete()
-        => httpContextAccessor.HttpContext?.Response.Cookies.Delete(Constants.MfaChallenge);
+        => httpContextAccessor.HttpContext?.Response.Cookies.Delete(Constants.MfaChallenge, CookieOptionsFactory.DeleteOptions());
 
     private void Append(string name, Guid value, DateTime expiresAt)
-        => httpContextAccessor.HttpContext?.Response.Cookies.Append(name, value.ToString(), CreateOptions(expiresAt));
-
-    private static CookieOptions CreateOptions(DateTime expiresAt)
-        => new()
-        {
-            HttpOnly = true,
-            Secure = true,
-            IsEssential = true,
-            SameSite = SameSiteMode.Strict,
-            Expires = new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)),
-            MaxAge = expiresAt - DateTime.UtcNow
-        };
+    {
+        httpContextAccessor.HttpContext?.Response.Cookies.Append(name, value.ToString(), CookieOptionsFactory.Create(expiresAt));
+    }
 }
 
 internal sealed class MfaSetupCookieService(IHttpContextAccessor httpContextAccessor) : IMfaSetupCookieService
@@ -75,19 +86,13 @@ internal sealed class MfaSetupCookieService(IHttpContextAccessor httpContextAcce
     }
 
     public void Set(Guid setupSessionId, DateTime expiresAt)
-        => httpContextAccessor.HttpContext?.Response.Cookies.Append(
+    {
+        httpContextAccessor.HttpContext?.Response.Cookies.Append(
             Constants.MfaSetup,
             setupSessionId.ToString(),
-            new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                IsEssential = true,
-                SameSite = SameSiteMode.Strict,
-                Expires = new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)),
-                MaxAge = expiresAt - DateTime.UtcNow
-            });
+            CookieOptionsFactory.Create(expiresAt));
+    }
 
     public void Delete()
-        => httpContextAccessor.HttpContext?.Response.Cookies.Delete(Constants.MfaSetup);
+        => httpContextAccessor.HttpContext?.Response.Cookies.Delete(Constants.MfaSetup, CookieOptionsFactory.DeleteOptions());
 }

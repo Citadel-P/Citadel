@@ -89,6 +89,21 @@ interface LogEntry {
   message: string;
 }
 
+type LogEntryMap = Map<string, LogEntry>;
+
+const logsCache = new Map<string, LogEntryMap>();
+
+const getCachedLogs = (groupName: string | undefined): LogEntryMap => {
+  const cached = groupName ? logsCache.get(groupName) : undefined;
+  return cached ? new Map(cached) : new Map();
+};
+
+const sortLogs = (logsMap: LogEntryMap) => {
+  const arr = Array.from(logsMap.values());
+  arr.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  return arr;
+};
+
 export const useContainerLogGroup = ({
   hubMethodName,
   hubMethodArg,
@@ -102,26 +117,35 @@ export const useContainerLogGroup = ({
   logEventName: string;
   logBatchEventName: string;
 }) => {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>(() => sortLogs(getCachedLogs(groupName)));
 
-  const logsMapRef = useRef<Map<string, LogEntry>>(new Map());
+  const logsMapRef = useRef<LogEntryMap>(getCachedLogs(groupName));
   const bufferRef = useRef<string[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevGroupNameRef = useRef<string | undefined>(groupName);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Safe reset when the resource ID actually changes
   useEffect(() => {
     if (groupName !== prevGroupNameRef.current) {
       prevGroupNameRef.current = groupName;
 
-      logsMapRef.current = new Map();
+      logsMapRef.current = getCachedLogs(groupName);
       bufferRef.current = [];
       if (flushTimerRef.current) {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
 
-      setLogs([]);
+      setLogs(sortLogs(logsMapRef.current));
     }
   }, [groupName]);
 
@@ -164,12 +188,14 @@ export const useContainerLogGroup = ({
       logsMapRef.current = next;
     }
 
-    // Build sorted array
-    const arr = Array.from(logsMapRef.current.values());
-    arr.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    if (groupName) {
+      logsCache.set(groupName, new Map(logsMapRef.current));
+    }
 
-    setLogs(arr);
-  }, []);
+    if (mountedRef.current) {
+      setLogs(sortLogs(logsMapRef.current));
+    }
+  }, [groupName]);
 
   // max 50ms batching
   const handleLogs = useCallback(
@@ -225,8 +251,11 @@ export const useContainerLogGroup = ({
       clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     }
+    if (groupName) {
+      logsCache.delete(groupName);
+    }
     setLogs([]);
-  }, []);
+  }, [groupName]);
 
   return { containerLogs: logs, clearLogs };
 };
