@@ -57,9 +57,13 @@ internal sealed class AcknowledgeAlertEventsHandler(
 
         await unitOfWork.AlertEvents.BulkUpdateAsync(alertEvents, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        var notificationPayload = await AlertEventNotificationPayloadBuilder.BuildAsync(unitOfWork, alertEvents, cancellationToken);
 
         await notificationQueue.EnqueueAsync(
-            new UpdatedAlertEventsNotificationWorkItem(alertEvents, alertEventStreamManager),
+            new UpdatedAlertEventsNotificationWorkItem(
+                notificationPayload.AlertEventsByUser,
+                notificationPayload.UnresolvedCountsByUser,
+                alertEventStreamManager),
             cancellationToken);
 
         return Result.Success();

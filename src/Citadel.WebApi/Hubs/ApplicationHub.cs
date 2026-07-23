@@ -2,6 +2,8 @@ using Application.Features.Containers.Commands;
 using Application.Features.Deployments.Commands;
 using Application.Features.Stacks.Commands;
 using Application.Services.SignalR;
+using Hosting.Common;
+using Hosting.Common.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -34,7 +36,7 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
 
         groups.Add(groupId);
         resolver.Resolve(groupId).AddSubscriber(groupId, Context.ConnectionId);
-        return Groups.AddToGroupAsync(Context.ConnectionId, groupId);
+        return Groups.AddToGroupAsync(Context.ConnectionId, GetSignalRGroupId(groupId));
     }
 
     public Task LeaveGroup(string groupId)
@@ -44,7 +46,7 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
             groups.Remove(groupId);
         }
         resolver.Resolve(groupId).RemoveSubscriber(groupId, Context.ConnectionId);
-        return Groups.RemoveFromGroupAsync(Context.ConnectionId, groupId);
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, GetSignalRGroupId(groupId));
     }
 
     #endregion
@@ -112,4 +114,12 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
     }
 
     #endregion
+
+    private string GetSignalRGroupId(string groupId)
+    {
+        if (groupId == Constants.WellKnownSignalRGroups.AlertEventsGroup)
+            return Constants.WellKnownSignalRGroups.AlertEventsUserGroup(Context.User!.GetUserId());
+
+        return groupId;
+    }
 }

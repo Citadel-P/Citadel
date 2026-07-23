@@ -301,27 +301,44 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     #endregion
 
     #region Alerts
-    public Task SendTriggeredAlertEvent(AlertEvent alertEvent)
+    public Task SendTriggeredAlertEvent(AlertEvent alertEvent, IEnumerable<Guid> userIds)
     {
+        var groups = userIds
+            .Distinct()
+            .Select(WellKnownSignalRGroups.AlertEventsUserGroup)
+            .ToArray();
+
+        if (groups.Length == 0)
+            return Task.CompletedTask;
+
         return hubContext.Clients
-            .Group(WellKnownSignalRGroups.AlertEventsGroup)
+            .Groups(groups)
             .SendAsync("AlertEventReceived", AlertEventView.Map(alertEvent));
     }
 
-    public Task SendUpdatedAlertEvents(IEnumerable<AlertEvent> alertEvents)
+    public Task SendUpdatedAlertEvents(IReadOnlyDictionary<Guid, IReadOnlyCollection<AlertEvent>> alertEventsByUser)
     {
-        var mapped = alertEvents.Select(AlertEventView.Map).ToList();
+        if (alertEventsByUser.Count == 0)
+            return Task.CompletedTask;
 
-        return hubContext.Clients
-            .Group(WellKnownSignalRGroups.AlertEventsGroup)
-            .SendAsync("AlertEventsUpdated", mapped);
+        return Task.WhenAll(alertEventsByUser.Select(kvp =>
+        {
+            var mapped = kvp.Value.Select(AlertEventView.Map).ToList();
+            return hubContext.Clients
+                .Group(WellKnownSignalRGroups.AlertEventsUserGroup(kvp.Key))
+                .SendAsync("AlertEventsUpdated", mapped);
+        }));
     }
 
-    public Task SendUnresolvedAlertCount(int count)
+    public Task SendUnresolvedAlertCounts(IReadOnlyDictionary<Guid, int> countsByUser)
     {
-        return hubContext.Clients
-            .Group(WellKnownSignalRGroups.AlertEventsGroup)
-            .SendAsync("UnresolvedAlertCount", UnresolvedAlertsCountView.Map(count));
+        if (countsByUser.Count == 0)
+            return Task.CompletedTask;
+
+        return Task.WhenAll(countsByUser.Select(kvp =>
+            hubContext.Clients
+                .Group(WellKnownSignalRGroups.AlertEventsUserGroup(kvp.Key))
+                .SendAsync("UnresolvedAlertCount", UnresolvedAlertsCountView.Map(kvp.Value))));
     }
     #endregion
 

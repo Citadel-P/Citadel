@@ -58,15 +58,13 @@ internal sealed class ResolveAlertEventsHandler(
 
         await unitOfWork.AlertEvents.BulkUpdateAsync(alertEvents, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
-
-        var unresolvedCount = await unitOfWork.AlertEvents.CountUnresolvedAsync(cancellationToken);
-
-        await notificationQueue.EnqueueAsync(
-            new UpdatedAlertEventsNotificationWorkItem(alertEvents, alertEventStreamManager),
-            cancellationToken);
+        var notificationPayload = await AlertEventNotificationPayloadBuilder.BuildAsync(unitOfWork, alertEvents, cancellationToken);
 
         await notificationQueue.EnqueueAsync(
-            new UnresolvedAlertCountNotificationWorkItem(unresolvedCount, alertEventStreamManager),
+            new UpdatedAlertEventsNotificationWorkItem(
+                notificationPayload.AlertEventsByUser,
+                notificationPayload.UnresolvedCountsByUser,
+                alertEventStreamManager),
             cancellationToken);
 
         return Result.Success();

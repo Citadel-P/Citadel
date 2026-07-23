@@ -1135,7 +1135,9 @@ public interface IAlertEventRepository
 {
     Task<Guid> AddAsync(AlertEvent alertEvent, CancellationToken cancellationToken);
     Task<AlertEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<AlertEvent?> GetAuthorizedByIdAsync(Guid userId, ResourceType permissionResourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<Guid>> GetAuthorizedUserIdsAsync(Guid alertEventId, ResourceType permissionResourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
     Task<PagedResult<AlertEvent>> GetAuthorizedPagedAsync(Guid userId, ResourceType permissionResourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, Guid? resourceId, AlertType? alertType, AlertResourceType? resourceType,
         int page, int pageSize, CancellationToken cancellationToken, bool? unresolvedOnly = null);
     Task<PagedResult<AlertEvent>> GetPagedAsync(Guid? resourceId, AlertType? alertType, AlertResourceType? resourceType,
@@ -1143,4 +1145,5 @@ public interface IAlertEventRepository
     Task<int> UpdateAsync(AlertEvent alertEvent, CancellationToken cancellationToken);
     Task<int> BulkUpdateAsync(IEnumerable<AlertEvent> alertEvents, CancellationToken cancellationToken);
     Task<int> CountUnresolvedAsync(CancellationToken cancellationToken);
+    Task<int> CountAuthorizedUnresolvedAsync(Guid userId, ResourceType permissionResourceType, PermissionLevel permissionLevel, SpecificPermission specificPermission, CancellationToken cancellationToken);
 }

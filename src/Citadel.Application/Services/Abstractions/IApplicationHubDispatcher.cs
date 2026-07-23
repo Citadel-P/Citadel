@@ -84,9 +84,9 @@ public interface IApplicationHubDispatcher
     #endregion
 
     #region Alerts
-    Task SendTriggeredAlertEvent(AlertEvent alertEvent);
-    Task SendUpdatedAlertEvents(IEnumerable<AlertEvent> alertEvents);
-    Task SendUnresolvedAlertCount(int count);
+    Task SendTriggeredAlertEvent(AlertEvent alertEvent, IEnumerable<Guid> userIds);
+    Task SendUpdatedAlertEvents(IReadOnlyDictionary<Guid, IReadOnlyCollection<AlertEvent>> alertEventsByUser);
+    Task SendUnresolvedAlertCounts(IReadOnlyDictionary<Guid, int> countsByUser);
     #endregion
 
     #region Exec Sessions

@@ -94,6 +94,59 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return row?.ToDomain();
     }
 
+    public async Task<AlertEvent?> GetAuthorizedByIdAsync(
+        Guid userId,
+        ResourceType permissionResourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.PermissionGlobalAccessCte + @"
+        SELECT
+            a.Id,
+            a.AlertRuleId,
+            a.Type,
+            a.Severity,
+            a.Info,
+            a.ResourceId,
+            a.ResourceName,
+            a.ResourceType,
+            a.DeduplicationKey,
+            a.OpenIncidentKey,
+            a.AcknowledgedByActorId,
+            a.AcknowledgedAt,
+            a.ResolvedByActorId,
+            a.ResolvedAt,
+            a.ResolutionNote,
+            a.CreatedAt,
+            a.UpdatedAt,
+            ac.Id AS Actor_Id,
+            COALESCE(au.Name, at.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
+            ac.Type AS Actor_Type
+        FROM AlertEvents a
+        LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
+        LEFT JOIN Users au ON au.ActorId = ac.Id
+        LEFT JOIN Teams at ON at.ActorId = ac.Id
+        WHERE a.Id = @Id
+            AND " + AuthorizationSql.PermissionResourcePredicatePrefix + "a.Id" + AuthorizationSql.ResourcePredicateSuffix + @"
+        LIMIT 1;
+        ";
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
+        var row = await db.QuerySingleOrDefaultAsync<AlertEventDto>(sql, new
+        {
+            UserId = userId,
+            PermissionResourceType = (int)permissionResourceType,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)specificPermission,
+            Id = id,
+            cancellationToken
+        }, transaction: tx());
+
+        return row?.ToDomain();
+    }
+
     public async Task<IEnumerable<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -139,6 +192,79 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
         return alertEvents;
     }
+
+    public Task<IEnumerable<Guid>> GetAuthorizedUserIdsAsync(
+        Guid alertEventId,
+        ResourceType permissionResourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+        WITH CandidateActorScope AS (
+            SELECT u.Id AS UserId, u.ActorId
+            FROM Users u
+            JOIN Actors userActor ON userActor.Id = u.ActorId
+            WHERE userActor.IsEnabled
+
+            UNION
+
+            SELECT u.Id AS UserId, t.ActorId
+            FROM Users u
+            JOIN Actors userActor ON userActor.Id = u.ActorId
+            JOIN UsersTeams ut ON ut.UserId = u.Id
+            JOIN Teams t ON t.Id = ut.TeamId
+            JOIN Actors teamActor ON teamActor.Id = t.ActorId
+            WHERE userActor.IsEnabled
+              AND teamActor.IsEnabled
+        )
+        SELECT DISTINCT u.Id
+        FROM Users u
+        JOIN Actors userActor ON userActor.Id = u.ActorId
+        WHERE userActor.IsEnabled
+          AND (
+            EXISTS (
+                SELECT 1
+                FROM CandidateActorScope scope
+                JOIN ActorRoles ar ON ar.ActorId = scope.ActorId
+                JOIN Roles r ON r.Id = ar.RoleId
+                WHERE scope.UserId = u.Id
+                  AND LOWER(r.Name) = 'admin'
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM CandidateActorScope scope
+                JOIN ActorRoles ar ON ar.ActorId = scope.ActorId
+                JOIN Permissions p ON p.RoleId = ar.RoleId
+                WHERE scope.UserId = u.Id
+                  AND p.ResourceType = @PermissionResourceType
+                  AND (p.PermissionLevel & @GrantedPermissionMask) <> 0
+                  AND (@SpecificPermission = 0 OR (p.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM CandidateActorScope scope
+                JOIN ResourceAccesses ra ON ra.ActorId = scope.ActorId
+                WHERE scope.UserId = u.Id
+                  AND ra.ResourceType = @PermissionResourceType
+                  AND (ra.PermissionLevel & @GrantedPermissionMask) <> 0
+                  AND (@SpecificPermission = 0 OR (ra.SpecificPermissions & @SpecificPermission) = @SpecificPermission)
+                  AND ra.ResourceId = @AlertEventId
+            )
+          );
+        """;
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
+        return db.QueryAsync<Guid>(sql, new
+        {
+            AlertEventId = alertEventId,
+            PermissionResourceType = (int)permissionResourceType,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)specificPermission,
+            cancellationToken
+        }, transaction: tx());
+    }
+
 
     public async Task<PagedResult<AlertEvent>> GetPagedAsync(
      Guid? resourceId,
@@ -385,4 +511,39 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         => db.QuerySingleAsync<int>(
             "SELECT COUNT(*) FROM AlertEvents WHERE ResolvedAt IS NULL",
             transaction: tx());
+
+    public Task<int> CountAuthorizedUnresolvedAsync(
+        Guid userId,
+        ResourceType permissionResourceType,
+        PermissionLevel permissionLevel,
+        SpecificPermission specificPermission,
+        CancellationToken cancellationToken)
+    {
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.PermissionGlobalAccessCte + @",
+        AdminAccess AS (
+            SELECT 1 AS HasAccess
+            FROM ActorRoles ar
+            JOIN Roles r ON r.Id = ar.RoleId
+            JOIN ActorScope actorScope ON actorScope.ActorId = ar.ActorId
+            WHERE LOWER(r.Name) = 'admin'
+            LIMIT 1
+        )
+        SELECT COUNT(*)
+        FROM AlertEvents a
+        WHERE a.ResolvedAt IS NULL
+            AND (
+                EXISTS (SELECT 1 FROM AdminAccess)
+                OR " + AuthorizationSql.PermissionResourcePredicatePrefix + "a.Id" + AuthorizationSql.ResourcePredicateSuffix + @"
+            );";
+
+        var grantedPermissionMask = UserRepository.GetGrantedPermissionMask(permissionLevel);
+        return db.QuerySingleAsync<int>(sql, new
+        {
+            UserId = userId,
+            PermissionResourceType = (int)permissionResourceType,
+            GrantedPermissionMask = grantedPermissionMask,
+            SpecificPermission = (int)specificPermission,
+            cancellationToken
+        }, transaction: tx());
+    }
 }

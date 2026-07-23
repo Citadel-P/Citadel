@@ -5,7 +5,9 @@ import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { HubConnection } from '@microsoft/signalr';
 
 export function useAlertEventsGroup() {
-  const { data } = useRead('getUnresolvedAlertEventsCount');
+  const { data: unresolvedEventsData } = useRead('listAlertEvents', {
+    query: { UnresolvedOnly: true, Page: 1, PageSize: 5 },
+  });
 
   const [liveUnresolvedAlertCount, setLiveUnresolvedAlertCount] = useState<number | null>(null);
   const [liveAlertEvents, setLiveAlertEvents] = useState<Record<string, AlertEventView>>({});
@@ -14,9 +16,20 @@ export function useAlertEventsGroup() {
   const unresolvedAlertCount = useMemo(() => {
     if (liveUnresolvedAlertCount !== null) return liveUnresolvedAlertCount;
 
-    const initialCount = Number(data?.data?.count ?? 0);
+    const initialCount = Number(unresolvedEventsData?.data?.pagedResult.totalCount ?? 0);
     return Number.isNaN(initialCount) ? 0 : initialCount;
-  }, [data, liveUnresolvedAlertCount]);
+  }, [unresolvedEventsData, liveUnresolvedAlertCount]);
+
+  const alertEvents = useMemo(() => {
+    const seededEvents = unresolvedEventsData?.data?.pagedResult.items ?? [];
+    const next: Record<string, AlertEventView> = {};
+
+    seededEvents.forEach((alertEvent) => {
+      next[alertEvent.id] = alertEvent;
+    });
+
+    return { ...next, ...liveAlertEvents };
+  }, [unresolvedEventsData, liveAlertEvents]);
 
   const handleAlertEventReceived = useCallback((alertEvent: AlertEventView) => {
     setLiveAlertEvents((prev) => ({ ...prev, [alertEvent.id]: alertEvent }));
@@ -66,9 +79,9 @@ export function useAlertEventsGroup() {
   return useMemo(
     () => ({
       unresolvedAlertCount,
-      liveAlertEvents,
+      liveAlertEvents: alertEvents,
       receivedAlertEventIds,
     }),
-    [unresolvedAlertCount, liveAlertEvents, receivedAlertEventIds],
+    [unresolvedAlertCount, alertEvents, receivedAlertEventIds],
   );
 }

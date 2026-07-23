@@ -202,9 +202,14 @@ internal sealed class AlertStateWorkItem(
             var persistedAlertEvent = await uow.AlertEvents.GetByIdAsync(persistedAlertEventId, token) ?? evt;
 
             await uow.CommitAsync(token);
-            var unresolvedCount = await uow.AlertEvents.CountUnresolvedAsync(token);
-            await notificationQueue.EnqueueAsync(new TriggeredAlertEventNotificationWorkItem(persistedAlertEvent, alertEventStreamManager), token);
-            await notificationQueue.EnqueueAsync(new UnresolvedAlertCountNotificationWorkItem(unresolvedCount, alertEventStreamManager), token);
+            var notificationPayload = await AlertEventNotificationPayloadBuilder.BuildAsync(uow, [persistedAlertEvent], token);
+            await notificationQueue.EnqueueAsync(
+                new TriggeredAlertEventNotificationWorkItem(
+                    persistedAlertEvent,
+                    notificationPayload.AlertEventsByUser.Keys,
+                    notificationPayload.UnresolvedCountsByUser,
+                    alertEventStreamManager),
+                token);
 
             if (rule.ChannelIds.Count > 0)
             {

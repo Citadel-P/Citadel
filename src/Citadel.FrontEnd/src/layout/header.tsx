@@ -14,6 +14,7 @@ import { useAuthContext } from '@/features/auth/auth-context';
 import { getInitials } from '@/features/profile/utils';
 import { useRead, useMutate } from '@/lib/hooks';
 import { useAppContext } from '@/lib/context/app-context';
+import { useTaskSheet } from '@/lib/atoms';
 import { useLayoutContext, type ThemeMode } from '@/lib/context/layout-context';
 import { toUserTheme } from '@/lib/theme-preferences';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
@@ -155,6 +156,7 @@ function HeaderAccountMenu() {
 
 function AlertBell() {
   const navigate = useNavigate();
+  const { open: openAlertSheet } = useTaskSheet('Alert');
   const formatDateTime = useProfileDateTimeFormatter();
   const { unresolvedAlertCount, liveAlertEvents } = useAppContext();
   const latestEvents = useMemo(
@@ -189,7 +191,15 @@ function AlertBell() {
         {latestEvents.length > 0 ? (
           <div className="max-h-80 overflow-y-auto">
             {latestEvents.map((event) => (
-              <AlertEventPreview key={event.id} event={event} formatDateTime={formatDateTime} />
+              <AlertEventPreview
+                key={event.id}
+                event={event}
+                formatDateTime={formatDateTime}
+                onOpen={() => {
+                  openAlertSheet({ kind: 'alertEvent', payload: event });
+                  navigate('/alerts');
+                }}
+              />
             ))}
           </div>
         ) : (
@@ -207,18 +217,20 @@ function AlertBell() {
 function AlertEventPreview({
   event,
   formatDateTime,
+  onOpen,
 }: {
   event: AlertEventView;
   formatDateTime: (value: unknown) => string;
+  onOpen: () => void;
 }) {
   return (
-    <div className="rounded-sm px-2 py-2 hover:bg-card">
+    <DropdownMenuItem onSelect={onOpen} className="block h-auto cursor-pointer rounded-sm px-2 py-2 hover:bg-card">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="truncate text-xs font-semibold">{event.resourceName || event.resourceType}</span>
         <span className="shrink-0 text-[10px] text-muted-foreground">{formatDateTime(event.createdAt)}</span>
       </div>
       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{event.message}</p>
-    </div>
+    </DropdownMenuItem>
   );
 }
 

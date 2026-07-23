@@ -6,24 +6,31 @@ namespace Application.Features.Alerters.Notifications;
 
 internal sealed class TriggeredAlertEventNotificationWorkItem(
     AlertEvent alertEvent,
+    IEnumerable<Guid> userIds,
+    IReadOnlyDictionary<Guid, int> unresolvedCountsByUser,
     IAlertEventStreamManager alertEventStreamManager) : INotificationWorkItem
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
-        => alertEventStreamManager.SendTriggeredAlertEvent(alertEvent);
+        => Task.WhenAll(
+            alertEventStreamManager.SendTriggeredAlertEvent(alertEvent, userIds),
+            alertEventStreamManager.SendUnresolvedAlertCounts(unresolvedCountsByUser));
 }
 
 internal sealed class UpdatedAlertEventsNotificationWorkItem(
-    IEnumerable<AlertEvent> alertEvents,
+    IReadOnlyDictionary<Guid, IReadOnlyCollection<AlertEvent>> alertEventsByUser,
+    IReadOnlyDictionary<Guid, int> unresolvedCountsByUser,
     IAlertEventStreamManager alertEventStreamManager) : INotificationWorkItem
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
-        => alertEventStreamManager.SendUpdatedAlertEvents(alertEvents);
+        => Task.WhenAll(
+            alertEventStreamManager.SendUpdatedAlertEvents(alertEventsByUser),
+            alertEventStreamManager.SendUnresolvedAlertCounts(unresolvedCountsByUser));
 }
 
 internal sealed class UnresolvedAlertCountNotificationWorkItem(
-    int count,
+    IReadOnlyDictionary<Guid, int> countsByUser,
     IAlertEventStreamManager alertEventStreamManager) : INotificationWorkItem
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
-        => alertEventStreamManager.SendUnresolvedAlertCount(count);
+        => alertEventStreamManager.SendUnresolvedAlertCounts(countsByUser);
 }

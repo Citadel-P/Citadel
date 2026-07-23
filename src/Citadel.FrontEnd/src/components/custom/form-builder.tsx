@@ -696,17 +696,31 @@ function buildNavigationSections<T>(
   }));
 }
 
-const FormNavigationLink = ({ item, variant }: { item: FormNavigationItem; variant: 'sidebar' | 'compact' }) => (
+const FormNavigationLink = ({
+  item,
+  variant,
+  onSelect,
+}: {
+  item: FormNavigationItem;
+  variant: 'sidebar' | 'compact';
+  onSelect: (id: string) => void;
+}) => (
   <Button
     asChild
     variant={variant === 'sidebar' ? 'secondary' : 'outline'}
     size="sm"
     className={cn(
-      'text-xs',
+      'text-xs font-normal text-foreground/90',
       variant === 'sidebar' ? 'w-full justify-end bg-accent/60' : 'h-8 shrink-0 rounded-sm px-2.5',
       item.error && 'border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/15',
     )}>
-    <a href={`#${item.id}`} title={item.label}>
+    <a
+      href={`#${item.id}`}
+      title={item.label}
+      onClick={(event) => {
+        event.preventDefault();
+        onSelect(item.id);
+      }}>
       {item.dirty && <span className="mr-1 text-[10px] text-destructive">*</span>}
       <span className="truncate">{item.label}</span>
     </a>
@@ -714,7 +728,12 @@ const FormNavigationLink = ({ item, variant }: { item: FormNavigationItem; varia
 );
 
 const FormNavigationSelectItem = ({ item }: { item: FormNavigationItem }) => (
-  <SelectItem value={item.id} className={cn(item.error && 'text-destructive focus:text-destructive')}>
+  <SelectItem
+    value={item.id}
+    className={cn(
+      'text-xs font-normal text-foreground/90',
+      item.error && 'text-destructive focus:text-destructive',
+    )}>
     <span
       className={cn(
         'size-1.5 shrink-0 rounded-full bg-transparent',
@@ -722,7 +741,7 @@ const FormNavigationSelectItem = ({ item }: { item: FormNavigationItem }) => (
         item.error && 'bg-destructive',
       )}
     />
-    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+    <span className="min-w-0 flex-1 truncate font-normal">{item.label}</span>
     {item.dirty && <span className="text-[10px] text-muted-foreground">Edited</span>}
   </SelectItem>
 );
@@ -937,7 +956,7 @@ export function FormShell<T>({
     if (typeof window === 'undefined') return;
 
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${id}`);
-    document.getElementById(id)?.scrollIntoView({ block: 'start' });
+    document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, []);
 
   const validateAll = useCallback(
@@ -1063,7 +1082,14 @@ export function FormShell<T>({
                   )}
 
                   {section.items.map((item) => {
-                    return <FormNavigationLink key={`${section.key}:${item.id}`} item={item} variant="sidebar" />;
+                    return (
+                      <FormNavigationLink
+                        key={`${section.key}:${item.id}`}
+                        item={item}
+                        variant="sidebar"
+                        onSelect={handleNavigationSelect}
+                      />
+                    );
                   })}
                 </div>
               );

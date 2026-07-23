@@ -150,7 +150,7 @@ export function ProfileForm({
                 key: 'displayName',
                 label: 'Display Name',
                 required: true,
-                description: 'Your display name must be unique and use the same naming rules as users.',
+                description: 'Your display name must be unique.',
                 validate: (value) =>
                   !new RegExp(Constants.validNameIdentifier).test(value ?? '') ? 'Invalid name format' : null,
                 render: (value, set) => (
