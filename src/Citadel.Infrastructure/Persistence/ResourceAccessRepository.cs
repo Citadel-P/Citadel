@@ -26,6 +26,14 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
                 SELECT Id, @RegistryResourceType, Name FROM Registries
                 UNION ALL
                 SELECT Id, @GitRepositoryResourceType, Name FROM GitRepositories
+                UNION ALL
+                SELECT Id, @BackupRepositoryResourceType, Name FROM BackupRepositories
+                UNION ALL
+                SELECT Id, @AutomationActionResourceType, Name FROM Actions
+                UNION ALL
+                SELECT Id, @BuildResourceType, Name FROM BuildProjects
+                UNION ALL
+                SELECT Id, @BuildAgentPoolResourceType, Name FROM BuildAgentPools
             )
             SELECT
                 ra.Id,
@@ -53,6 +61,10 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
                 StackResourceType = (int)ResourceType.Stack,
                 RegistryResourceType = (int)ResourceType.Registry,
                 GitRepositoryResourceType = (int)ResourceType.GitRepository,
+                BackupRepositoryResourceType = (int)ResourceType.BackupRepository,
+                AutomationActionResourceType = (int)ResourceType.AutomationAction,
+                BuildResourceType = (int)ResourceType.Build,
+                BuildAgentPoolResourceType = (int)ResourceType.BuildAgentPool,
             },
             transaction: tx());
 

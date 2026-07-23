@@ -141,6 +141,22 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
 
         // Permissions — only valid combinations from the matrix are seeded
         var permissions = new List<object>();
+        var defaultNonAdminRoleResources = new HashSet<ResourceType>
+        {
+            ResourceType.Platform,
+            ResourceType.Deployment,
+            ResourceType.Stack,
+            ResourceType.Registry,
+            ResourceType.GitRepository,
+            ResourceType.GitAccount,
+            ResourceType.Tag,
+            ResourceType.Volume,
+            ResourceType.BackupPolicy,
+            ResourceType.BackupRepository,
+            ResourceType.AutomationAction,
+            ResourceType.Build,
+            ResourceType.BuildAgentPool
+        };
 
         foreach (var (resource, capabilities) in PermissionMatrix.GetAll())
         {
@@ -156,7 +172,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
                 RoleType = RoleType.System.ToString()
             });
 
-            if (resource == ResourceType.License)
+            if (!defaultNonAdminRoleResources.Contains(resource))
                 continue;
 
             permissions.Add(new

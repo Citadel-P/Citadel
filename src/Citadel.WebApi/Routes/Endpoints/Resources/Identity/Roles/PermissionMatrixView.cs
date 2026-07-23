@@ -32,6 +32,11 @@ public static class PermissionMatrixView
             ResourceType.GitRepository => "Git Repository",
             ResourceType.GitAccount => "Git Account",
             ResourceType.AlertChannel => "Alert Channel",
+            ResourceType.AutomationAction => "Automation",
+            ResourceType.BackupRepository => "Backup Repositories",
+            ResourceType.BackupPolicy => "Backups",
+            ResourceType.Build => "Builds",
+            ResourceType.BuildAgentPool => "Build Pools",
             _ => resourceType.ToString(),
         };
 

@@ -318,7 +318,7 @@ export const BindingComponents: RequiredComponents<ResourceBindingView> = {
   GroupActions: ({ items }) => <ActionBar type="Binding" items={items} actions={Object.values(BindingGroupActions)} />,
   header: {
     title: 'Bindings',
-    subtitle: 'Manage global variables, secret keys, and providers inherited by stacks and deployments.',
+    subtitle: 'Manage global variables, secret keys, and providers inherited by Citadel resources.',
     showSearch: true,
     showAdd: false,
     Extra: BindingsAddButton,

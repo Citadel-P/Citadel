@@ -33,12 +33,14 @@ import {
   Check,
   ChevronDown,
   GitBranch,
+  Hammer,
   Info,
   Layers,
   LucideIcon,
   Megaphone,
   Rocket,
   Server,
+  ServerPlus,
   Settings,
   Tags,
   User,
@@ -248,6 +250,11 @@ export const IntegrationAddCard = ({
   </button>
 );
 
+const getLookupResourceName = (type: LookupResourceType | undefined) => {
+  if (!type) return 'Resources';
+  return type in PluralResourceMap ? PluralResourceMap[type as keyof typeof PluralResourceMap] : 'Resources';
+};
+
 export function ResourceSelectorField<T extends { id: string; name: string }>({
   sourceType,
   targetType,
@@ -346,7 +353,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
         style={contentWidth ? { width: `${contentWidth}px` } : undefined}>
         <Command shouldFilter={false} defaultValue={selectedItem?.name ?? '__none__'}>
           <CommandInput
-            placeholder={`Search ${PluralResourceMap[sourceType]}`}
+            placeholder={`Search ${getLookupResourceName(sourceType ?? targetType)}`}
             value={search}
             onValueChange={setSearch}
           />
@@ -413,7 +420,7 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   sourceResourceId?: string;
   queryEnabled?: boolean;
 }) {
-  const resourceName = PluralResourceMap[sourceType];
+  const resourceName = getLookupResourceName(sourceType);
   const read = useRead(
     `lookup`,
     {
@@ -1398,7 +1405,7 @@ export const TargetCell = ({
   resourceId: string | undefined;
   resourceName: string | undefined;
 }) => {
-  const resourceConfig: Partial<Record<ActivityResourceType, { Icon: any; path: string }>> = {
+  const resourceConfig: Partial<Record<string, { Icon: any; path: string }>> = {
     [ActivityResourceType.AlertRule]: { Icon: Megaphone, path: `/alert-rules/edit/${resourceId}` },
     [ActivityResourceType.Deployment]: { Icon: Rocket, path: `/deployments/edit/${resourceId}` },
     [ActivityResourceType.Registry]: { Icon: Cable, path: `/registries/edit/${resourceId}` },
@@ -1406,6 +1413,8 @@ export const TargetCell = ({
     [ActivityResourceType.Stack]: { Icon: Layers, path: `/stacks/edit/${resourceId}` },
     [ActivityResourceType.GitRepository]: { Icon: GitBranch, path: `/git-repos/edit/${resourceId}` },
     [ActivityResourceType.AutomationAction]: { Icon: Workflow, path: `/automation/edit/${resourceId}` },
+    [ActivityResourceType.Build]: { Icon: Hammer, path: `/builds/edit/${resourceId}` },
+    [ActivityResourceType.BuildAgentPool]: { Icon: ServerPlus, path: `/build-pools/edit/${resourceId}` },
     [ActivityResourceType.User]: { Icon: User, path: `/access/users/edit/${resourceId}` },
     [ActivityResourceType.Volume]: {
       Icon: Database,

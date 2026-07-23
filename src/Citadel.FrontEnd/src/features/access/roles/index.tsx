@@ -47,6 +47,22 @@ type ResourceIcon = React.ComponentType<{ className?: string }>;
 
 const createRoleOpenAtom = atom(false);
 
+const ROLE_PERMISSION_RESOURCES = [
+  ResourceType.Platform,
+  ResourceType.Deployment,
+  ResourceType.Stack,
+  ResourceType.Registry,
+  ResourceType.GitRepository,
+  ResourceType.GitAccount,
+  ResourceType.BackupPolicy,
+  ResourceType.BackupRepository,
+  ResourceType.AutomationAction,
+  ResourceType.Build,
+  ResourceType.BuildAgentPool,
+] as const;
+
+type RolePermissionResourceType = (typeof ROLE_PERMISSION_RESOURCES)[number];
+
 export const AddRoleButton = () => {
   const [, setOpen] = useAtom(createRoleOpenAtom);
   return (
@@ -56,19 +72,18 @@ export const AddRoleButton = () => {
   );
 };
 
-export const RESOURCE_ICONS: Record<ResourceType, ResourceIcon> = {
-  Platform: CitadelIcons.Platform,
-  Deployment: CitadelIcons.Deployment,
-  Stack: CitadelIcons.Stack,
-  Registry: CitadelIcons.Registry,
-  GitRepository: CitadelIcons.GitRepository,
-  GitAccount: CitadelIcons.GitAccount,
-  Binding: CitadelIcons.Binding,
-  Alert: CitadelIcons.Alert,
-  AlertChannel: CitadelIcons.AlertChannel,
-  User: CitadelIcons.User,
-  Team: CitadelIcons.Team,
-  Role: CitadelIcons.Role,
+export const RESOURCE_ICONS: Record<RolePermissionResourceType, ResourceIcon> = {
+  [ResourceType.Platform]: CitadelIcons.Platform,
+  [ResourceType.Deployment]: CitadelIcons.Deployment,
+  [ResourceType.Stack]: CitadelIcons.Stack,
+  [ResourceType.Registry]: CitadelIcons.Registry,
+  [ResourceType.GitRepository]: CitadelIcons.GitRepository,
+  [ResourceType.GitAccount]: CitadelIcons.GitAccount,
+  [ResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
+  [ResourceType.BackupRepository]: CitadelIcons.BackupRepository,
+  [ResourceType.AutomationAction]: CitadelIcons.AutomationAction,
+  [ResourceType.Build]: CitadelIcons.Build,
+  [ResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
 };
 
 const buildPermissionsFromView = (permissions: PermissionView[]): SelectedPermissions => {
@@ -351,7 +366,7 @@ const PermissionsMatrixTable = ({
   ) => void;
   disabled?: boolean;
 }) => {
-  const orderedResources = (Object.keys(RESOURCE_ICONS) as ResourceType[]).filter((r) => permissionMatrix[r]);
+  const orderedResources = ROLE_PERMISSION_RESOURCES.filter((resource) => permissionMatrix[resource]);
 
   return (
     <ContentCard>

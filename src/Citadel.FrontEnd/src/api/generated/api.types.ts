@@ -280,6 +280,7 @@ export enum LookupResourceType {
   License = "License",
   BackupRepository = "BackupRepository",
   BackupPolicy = "BackupPolicy",
+  Build = "Build",
   BuildAgentPool = "BuildAgentPool",
 }
 

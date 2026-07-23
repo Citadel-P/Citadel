@@ -44546,6 +44546,7 @@
           "License",
           "BackupRepository",
           "BackupPolicy",
+          "Build",
           "BuildAgentPool"
         ]
       },

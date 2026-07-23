@@ -20,11 +20,11 @@ import { ContentCard } from '@/components/custom/content-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useRead } from '@/lib/hooks';
 import { CitadelIcons } from '@/lib/icons';
-import { PluralResourceMap } from '@/api/types';
 import { Link } from 'react-router';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState, type ComponentType } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { KnownResourceName } from '@/api/types';
 
 type ResourceItem = {
   id: string;
@@ -36,7 +36,12 @@ type OverrideResourceType =
   | ResourceType.Deployment
   | ResourceType.Stack
   | ResourceType.Registry
-  | ResourceType.GitRepository;
+  | ResourceType.GitRepository
+  | ResourceType.BackupPolicy
+  | ResourceType.BackupRepository
+  | ResourceType.AutomationAction
+  | ResourceType.Build
+  | ResourceType.BuildAgentPool;
 
 type DisplayResourceItem = ResourceItem & {
   resourceType: OverrideResourceType;
@@ -52,6 +57,12 @@ type ResourceSelectionMap = Record<
   { permissionLevel: PermissionLevel | null; specificPermissions: SpecificPermission[]; resourceName?: string | null }
 >;
 type ResourceDraftSelections = Record<OverrideResourceType, ResourceSelectionMap>;
+type OverrideResourceConfig = {
+  icon: ComponentType<{ className?: string }>;
+  listQuery: KnownResourceName;
+  readItems: (data: unknown) => ResourceItem[];
+  getEditPath: (resourceId: string) => string;
+};
 
 const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
   ResourceType.Platform,
@@ -59,14 +70,79 @@ const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
   ResourceType.Stack,
   ResourceType.Registry,
   ResourceType.GitRepository,
+  ResourceType.BackupPolicy,
+  ResourceType.BackupRepository,
+  ResourceType.AutomationAction,
+  ResourceType.Build,
+  ResourceType.BuildAgentPool,
 ];
 
-const OVERRIDE_RESOURCE_ICONS: Record<OverrideResourceType, ComponentType<{ className?: string }>> = {
-  [ResourceType.Platform]: CitadelIcons.Platform,
-  [ResourceType.Deployment]: CitadelIcons.Deployment,
-  [ResourceType.Stack]: CitadelIcons.Stack,
-  [ResourceType.Registry]: CitadelIcons.Registry,
-  [ResourceType.GitRepository]: CitadelIcons.GitRepository,
+const readItemsFrom = (propertyName: string) => (data: unknown): ResourceItem[] => {
+  const raw = (data as Record<string, unknown> | null | undefined)?.[propertyName];
+  return (Array.isArray(raw) ? raw : []) as ResourceItem[];
+};
+
+const OVERRIDE_RESOURCE_CONFIG: Record<OverrideResourceType, OverrideResourceConfig> = {
+  [ResourceType.Platform]: {
+    icon: CitadelIcons.Platform,
+    listQuery: 'listPlatforms',
+    readItems: readItemsFrom('platforms'),
+    getEditPath: (resourceId) => `/platforms/edit/${resourceId}`,
+  },
+  [ResourceType.Deployment]: {
+    icon: CitadelIcons.Deployment,
+    listQuery: 'listDeployments',
+    readItems: readItemsFrom('deployments'),
+    getEditPath: (resourceId) => `/deployments/edit/${resourceId}`,
+  },
+  [ResourceType.Stack]: {
+    icon: CitadelIcons.Stack,
+    listQuery: 'listStacks',
+    readItems: readItemsFrom('stacks'),
+    getEditPath: (resourceId) => `/stacks/edit/${resourceId}`,
+  },
+  [ResourceType.Registry]: {
+    icon: CitadelIcons.Registry,
+    listQuery: 'listRegistries',
+    readItems: readItemsFrom('registries'),
+    getEditPath: (resourceId) => `/registries/edit/${resourceId}`,
+  },
+  [ResourceType.GitRepository]: {
+    icon: CitadelIcons.GitRepository,
+    listQuery: 'listGitRepositories',
+    readItems: readItemsFrom('gitRepositories'),
+    getEditPath: (resourceId) => `/git-repos/edit/${resourceId}`,
+  },
+  [ResourceType.BackupRepository]: {
+    icon: CitadelIcons.BackupRepository,
+    listQuery: 'listBackupRepositories',
+    readItems: readItemsFrom('repositories'),
+    getEditPath: (resourceId) => `/backup-repositories/edit/${resourceId}`,
+  },
+  [ResourceType.BackupPolicy]: {
+    icon: CitadelIcons.BackupPolicy,
+    listQuery: 'listBackupPolicies',
+    readItems: readItemsFrom('policies'),
+    getEditPath: (resourceId) => `/backup-policies/edit/${resourceId}`,
+  },
+  [ResourceType.AutomationAction]: {
+    icon: CitadelIcons.AutomationAction,
+    listQuery: 'listAutomationActions',
+    readItems: readItemsFrom('actions'),
+    getEditPath: (resourceId) => `/automation/edit/${resourceId}`,
+  },
+  [ResourceType.Build]: {
+    icon: CitadelIcons.Build,
+    listQuery: 'listBuildProjects',
+    readItems: readItemsFrom('projects'),
+    getEditPath: (resourceId) => `/builds/edit/${resourceId}`,
+  },
+  [ResourceType.BuildAgentPool]: {
+    icon: CitadelIcons.BuildAgentPool,
+    listQuery: 'listBuildAgentPools',
+    readItems: readItemsFrom('pools'),
+    getEditPath: (resourceId) => `/build-pools/edit/${resourceId}`,
+  },
 };
 
 const isOverrideResourceType = (resourceType: ResourceType): resourceType is OverrideResourceType =>
@@ -107,14 +183,9 @@ const flattenDraftSelections = (draftSelectionsByType: ResourceDraftSelections):
 const getResourceRowKey = (resourceType: ResourceType, resourceId: string) => `${resourceType}:${resourceId}`;
 
 const getResourceEditPath = (resourceType: OverrideResourceType, resourceId: string) =>
-  `/${PluralResourceMap[resourceType].toLowerCase()}/edit/${resourceId}`;
+  OVERRIDE_RESOURCE_CONFIG[resourceType].getEditPath(resourceId);
 
 const rowName = (resourceName: string | null | undefined, resourceId: string) => resourceName ?? resourceId;
-
-const readResourceItems = (data: unknown): ResourceItem[] => {
-  const raw = Object.values((data as Record<string, unknown>) ?? {}).at(0);
-  return (Array.isArray(raw) ? raw : []) as ResourceItem[];
-};
 
 const ResourceLinkCell = ({
   resourceType,
@@ -125,7 +196,7 @@ const ResourceLinkCell = ({
   resourceId: string;
   resourceName: string;
 }) => {
-  const Icon = OVERRIDE_RESOURCE_ICONS[resourceType];
+  const Icon = OVERRIDE_RESOURCE_CONFIG[resourceType].icon;
 
   return (
     <TableCell>
@@ -178,8 +249,8 @@ export const ResourceOverridesField = ({
     () =>
       OVERRIDE_RESOURCE_TYPES.filter((resourceType) => permissionMatrix[resourceType]).map((resourceType) => ({
         value: resourceType,
-        label: resourceType,
-        icon: OVERRIDE_RESOURCE_ICONS[resourceType],
+        label: permissionMatrix[resourceType]?.label ?? resourceType,
+        icon: OVERRIDE_RESOURCE_CONFIG[resourceType].icon,
       })),
     [permissionMatrix],
   );
@@ -190,16 +261,16 @@ export const ResourceOverridesField = ({
     return (resourceTypeOptions[0]?.value as OverrideResourceType | undefined) ?? ResourceType.Platform;
   }, [resourceTypeOptions, selectedType]);
 
-  const selectedTypePlural = PluralResourceMap[effectiveSelectedType as keyof typeof PluralResourceMap];
-  const selectedTypeRead = useRead(`list${selectedTypePlural}` as any, undefined, { enabled: dialogOpen });
+  const selectedTypeConfig = OVERRIDE_RESOURCE_CONFIG[effectiveSelectedType];
+  const selectedTypeRead = useRead(selectedTypeConfig.listQuery as any, undefined, { enabled: dialogOpen });
 
   const resources = useMemo<DisplayResourceItem[]>(
     () =>
-      readResourceItems(selectedTypeRead.data?.data).map((resource) => ({
+      selectedTypeConfig.readItems(selectedTypeRead.data?.data).map((resource) => ({
         ...resource,
         resourceType: effectiveSelectedType,
       })),
-    [selectedTypeRead.data, effectiveSelectedType],
+    [selectedTypeRead.data, effectiveSelectedType, selectedTypeConfig],
   );
 
   const isResourcesLoading = selectedTypeRead.isLoading;

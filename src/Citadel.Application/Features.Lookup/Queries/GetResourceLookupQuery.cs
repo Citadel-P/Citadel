@@ -107,6 +107,8 @@ internal sealed class GetResourceLookupQueryHandler(
             (null, LookupResourceType.AutomationAction) => await GetAutomationActionLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.BackupRepository) => await GetBackupRepositoryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.BackupPolicy) => await GetBackupPolicyLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.Build) => await GetBuildLookupAsync(userId, cancellationToken),
+            (null, LookupResourceType.BuildAgentPool) => await GetBuildAgentPoolLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Deployment) => await GetDeploymentLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Stack) => await GetStackLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Image) => await GetImageLookupAsync(userId, context, cancellationToken),
@@ -380,6 +382,14 @@ internal sealed class GetResourceLookupQueryHandler(
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetBackupPolicyLookupAsync(Guid userId, CancellationToken cancellationToken)
         => Result.Success((await unitOfWork.BackupPolicies.GetAuthorizedAsync(userId, ResourceType.BackupPolicy, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetBuildLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.BuildProjects.GetAuthorizedAsync(userId, ResourceType.Build, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
+            .Select(static item => new ResourceInfo(item.Id, item.Name)));
+
+    private async Task<Result<IEnumerable<ResourceInfo>>> GetBuildAgentPoolLookupAsync(Guid userId, CancellationToken cancellationToken)
+        => Result.Success((await unitOfWork.BuildAgentPools.GetAuthorizedAsync(userId, ResourceType.BuildAgentPool, PermissionLevel.Read, SpecificPermission.None, cancellationToken))
             .Select(static item => new ResourceInfo(item.Id, item.Name)));
 
     private async Task<Result<IEnumerable<ResourceInfo>>> GetDeploymentLookupAsync(Guid userId, CancellationToken cancellationToken)

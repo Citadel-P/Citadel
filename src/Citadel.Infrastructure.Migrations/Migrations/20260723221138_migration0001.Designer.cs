@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260722203438_migration0001")]
+    [Migration("20260723221138_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -3714,22 +3714,6 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("672ebf04-40e5-547b-29f2-6daf5c3c3856"),
-                            PermissionLevel = 1,
-                            ResourceType = 8,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("44debca1-5d97-b691-196c-8e421143e307"),
-                            PermissionLevel = 2,
-                            ResourceType = 8,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
                             Id = new Guid("fbb8ef70-2ec3-134f-0c18-1533173d5849"),
                             PermissionLevel = 4,
                             ResourceType = 9,
@@ -3738,42 +3722,10 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("fb710f21-c146-e381-00f0-820f58ecb69a"),
-                            PermissionLevel = 1,
-                            ResourceType = 9,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("3bf8e221-07a0-052c-d831-2c82d22f7660"),
-                            PermissionLevel = 2,
-                            ResourceType = 9,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
                             Id = new Guid("440deb9d-ace8-5e15-ef80-3a42f11a0c42"),
                             PermissionLevel = 4,
                             ResourceType = 10,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("4032d1e2-fe5e-16ef-f554-69bd2c2ac19d"),
-                            PermissionLevel = 1,
-                            ResourceType = 10,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("2533e6f2-53e3-1281-01f7-cc28045cbc4f"),
-                            PermissionLevel = 2,
-                            ResourceType = 10,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
                         new
@@ -3902,22 +3854,6 @@ namespace Infrastructure.Migrations.Migrations
                             PermissionLevel = 4,
                             ResourceType = 11,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("abc5b80b-4722-4a2e-f881-448642fc4207"),
-                            PermissionLevel = 1,
-                            ResourceType = 11,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("96ca4b3c-b503-941b-2d70-83f41e529cd7"),
-                            PermissionLevel = 2,
-                            ResourceType = 11,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         },
                         new
@@ -4130,42 +4066,10 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
-                            Id = new Guid("b104e60e-87ef-a58f-f04a-ba2fc634f037"),
-                            PermissionLevel = 1,
-                            ResourceType = 6,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("ee9254c3-9b59-15a0-aa85-898f5974a603"),
-                            PermissionLevel = 2,
-                            ResourceType = 6,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
                             Id = new Guid("361e1bf8-ef0f-1409-9137-6fa885696a19"),
                             PermissionLevel = 4,
                             ResourceType = 7,
                             RoleId = new Guid("30000000-0000-0000-0000-000000000001"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("a60ba8de-ff46-b387-85ed-913d96170a2a"),
-                            PermissionLevel = 1,
-                            ResourceType = 7,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000003"),
-                            SpecificPermissions = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("80aa1c34-79dd-6587-52db-52605326fe77"),
-                            PermissionLevel = 2,
-                            ResourceType = 7,
-                            RoleId = new Guid("30000000-0000-0000-0000-000000000002"),
                             SpecificPermissions = 0
                         });
                 });

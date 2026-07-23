@@ -23,6 +23,7 @@ const activityResourceIcons = {
   [ActivityResourceType.User]: CitadelIcons.User,
   [ActivityResourceType.License]: CitadelIcons.License,
   [ActivityResourceType.Volume]: CitadelIcons.Volume,
+  [ActivityResourceType.Build]: CitadelIcons.Build,
   [ActivityResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
 } satisfies Record<ActivityResourceType, any>;
 
@@ -38,8 +39,13 @@ const activityEventPrefixes = {
   [ActivityResourceType.User]: 'User',
   [ActivityResourceType.License]: 'License',
   [ActivityResourceType.Volume]: 'Volume',
+  [ActivityResourceType.Build]: 'Build',
   [ActivityResourceType.BuildAgentPool]: 'BuildAgentPool',
 } satisfies Record<ActivityResourceType, string>;
+
+const activityResourceLabels: Partial<Record<ActivityResourceType, string>> = {
+  [ActivityResourceType.BuildAgentPool]: 'Build Agent Pool',
+};
 
 const activityLookupTargets = {
   [ActivityResourceType.Deployment]: LookupResourceType.Deployment,
@@ -53,6 +59,7 @@ const activityLookupTargets = {
   [ActivityResourceType.User]: LookupResourceType.User,
   [ActivityResourceType.License]: LookupResourceType.License,
   [ActivityResourceType.Volume]: LookupResourceType.Platform,
+  [ActivityResourceType.Build]: LookupResourceType.Build,
   [ActivityResourceType.BuildAgentPool]: LookupResourceType.BuildAgentPool,
 } satisfies Record<ActivityResourceType, LookupResourceType>;
 
@@ -91,7 +98,7 @@ function SearchSection() {
   const resourceOptions = useMemo(() => {
     return Object.values(ActivityResourceType).map((t) => ({
       value: t,
-      label: t,
+      label: activityResourceLabels[t] ?? t,
       icon: activityResourceIcons[t],
     }));
   }, []);
@@ -100,7 +107,11 @@ function SearchSection() {
     const all = Object.values(ActivityEventType);
     if (query.resourceType === 'All') return all;
     const eventPrefix = activityEventPrefixes[query.resourceType];
-    return all.filter((e) => e.startsWith(eventPrefix));
+    return all.filter(
+      (e) =>
+        e.startsWith(eventPrefix) &&
+        (query.resourceType !== ActivityResourceType.Build || !e.startsWith('BuildAgentPool')),
+    );
   }, [query.resourceType]);
 
   const handleResourceTypeChange = (value: string) => {

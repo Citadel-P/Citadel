@@ -985,6 +985,7 @@ public enum LookupResourceType
     License,
     BackupRepository,
     BackupPolicy,
+    Build,
     BuildAgentPool,
 }
 
