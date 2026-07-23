@@ -24,7 +24,7 @@ export default function ProfilePage() {
 
   if (profileQuery.isLoading || preferencesQuery.isLoading) {
     return (
-      <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
         <div className="rounded-sm border bg-background p-4">
           <Loader />
         </div>
@@ -34,7 +34,7 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
         <div className="rounded-sm border bg-background p-4 text-sm text-muted-foreground">
           Profile is not available.
         </div>
@@ -43,8 +43,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
-      <div className="space-y-4 bg-background p-4">
+    <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
+      <div className="space-y-4 bg-background p-4 rounded-lg">
         <AccountHeader profile={profile} formatDate={formatDate} />
         <ProfileForm profile={profile} preferences={preferences} formatDate={formatDate} />
       </div>

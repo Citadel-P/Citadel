@@ -3,6 +3,7 @@ import { useLayoutContext } from '@/lib/context/layout-context';
 import { ISubMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
+import { SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem } from '@/components/ui/sidebar';
 
 interface IProps {
   submenu: ISubMenuItem;
@@ -13,40 +14,30 @@ export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
   const { sidebarMinimized } = useLayoutContext();
   const expanded = !!submenu.expanded;
 
-  if (sidebarMinimized) return null;
+  if (sidebarMinimized || !expanded) return null;
 
   return (
-    <div
-      aria-hidden={!expanded}
-      className={clsx(
-        'transition-all duration-300 ease-out overflow-hidden pl-4 pt-1',
-        expanded ? 'grid grid-rows-[1fr] opacity-100' : 'grid grid-rows-[0fr] opacity-0',
-      )}>
-      <ul className="overflow-hidden flex flex-col border-l border-dashed border-border pl-2 gap-0.5 text-muted-foreground">
-        {submenu.children?.map((sub) => (
-          <li key={sub.label} className="hover:underline">
-            <SubRow sub={sub} toggleMenu={toggleMenu} />
-            {sub.children && sub.expanded && <SidebarSubMenu submenu={sub} toggleMenu={toggleMenu} />}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <SidebarMenuSub className="animate-in fade-in-0 slide-in-from-top-1 overflow-hidden duration-150">
+      {submenu.children?.map((sub) => (
+        <SidebarMenuSubItem key={sub.label}>
+          <SubRow sub={sub} toggleMenu={toggleMenu} />
+          {sub.children && sub.expanded && <SidebarSubMenu submenu={sub} toggleMenu={toggleMenu} />}
+        </SidebarMenuSubItem>
+      ))}
+    </SidebarMenuSub>
   );
 };
 
 function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISubMenuItem) => void }) {
-  const base = 'flex items-center rounded text-muted-foreground hover:bg-card hover:text-foreground';
-
   if (sub.children) {
     return (
-      <button
+      <SidebarMenuSubButton
         type="button"
         onClick={() => toggleMenu(sub)}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleMenu(sub)}
-        aria-expanded={!!sub.expanded}
-        className={clsx(base, 'w-full px-3 py-2')}>
+        aria-expanded={!!sub.expanded}>
         {sub.icon && <span className="mr-2 flex items-center">{sub.icon}</span>}
-        <span className="flex-1 text-left text-xs font-medium">{sub.label}</span>
+        <span className="flex-1 text-left">{sub.label}</span>
         <ChevronRight
           className={clsx(
             'h-4 w-4 transition-transform duration-300 ease-out text-muted-foreground/60',
@@ -54,21 +45,16 @@ function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISu
           )}
           aria-hidden
         />
-      </button>
+      </SidebarMenuSubButton>
     );
   }
 
   return (
-    <Link
-      to={sub.route ?? '/'}
-      className={clsx(
-        base,
-        'w-full p-2 gap-4 text-xs font-medium',
-        sub.active && 'text-primary hover:text-primary bg-card',
-      )}
-      onClick={() => toggleMenu(sub)}>
-      {sub.icon && <span className="flex items-center">{sub.icon}</span>}
-      {sub.label}
-    </Link>
+    <SidebarMenuSubButton asChild isActive={sub.active}>
+      <Link to={sub.route ?? '/'} onClick={() => toggleMenu(sub)}>
+        {sub.icon && <span className="flex items-center">{sub.icon}</span>}
+        <span className="truncate">{sub.label}</span>
+      </Link>
+    </SidebarMenuSubButton>
   );
 }

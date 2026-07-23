@@ -11,16 +11,7 @@ import { useRead, useMutate } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useQueryClient } from '@tanstack/react-query';
 import { LICENSE_LIMIT_LABELS, LICENSE_STATUS_LABELS } from './license-labels';
-import {
-  AlertTriangle,
-  CheckCheck,
-  Clipboard,
-  KeyRound,
-  Loader2,
-  RotateCcw,
-  ShieldCheck,
-  Trash2,
-} from 'lucide-react';
+import { AlertTriangle, CheckCheck, Clipboard, KeyRound, Loader2, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react';
 import { ReactNode, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -76,7 +67,7 @@ export default function LicensePage() {
 
   if (licenseQuery.isLoading || requestQuery.isLoading) {
     return (
-      <div className="mx-auto px-4 py-4 sm:px-6 lg:container">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
         <div className="rounded-sm border bg-background p-4">
           <Loader />
         </div>
@@ -85,8 +76,8 @@ export default function LicensePage() {
   }
 
   return (
-    <div className="mx-auto px-4 py-4 sm:px-6 lg:container">
-      <div className="space-y-4 bg-background p-4">
+    <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
+      <div className="space-y-4 bg-background rounded-lg p-4">
         <header className="rounded-sm border bg-background p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
@@ -111,7 +102,10 @@ export default function LicensePage() {
                 <HeaderFact label="Edition" value={license.edition} />
                 <HeaderFact label="Instance" value={shortId(license.instanceId)} />
                 <HeaderFact label="Expires" value={license.expiresAt ? formatDate(license.expiresAt) : '-'} />
-                <HeaderFact label="Fingerprint" value={license.fingerprint ? shortFingerprint(license.fingerprint) : '-'} />
+                <HeaderFact
+                  label="Fingerprint"
+                  value={license.fingerprint ? shortFingerprint(license.fingerprint) : '-'}
+                />
                 {license.replacedLicenseId ? <HeaderFact label="Replaces" value={license.replacedLicenseId} /> : null}
               </div>
             )}
@@ -150,9 +144,12 @@ export default function LicensePage() {
                     variant="outline"
                     size="sm"
                     disabled={!requestJson}
-                    onClick={() => copyRequest(requestJson)}
-                  >
-                    {copiedRequest ? <CheckCheck className="size-4 text-green-500" /> : <Clipboard className="size-4" />}
+                    onClick={() => copyRequest(requestJson)}>
+                    {copiedRequest ? (
+                      <CheckCheck className="size-4 text-green-500" />
+                    ) : (
+                      <Clipboard className="size-4" />
+                    )}
                     Copy
                   </Button>
                 }
@@ -176,18 +173,24 @@ export default function LicensePage() {
                     type="button"
                     variant="outline"
                     disabled={installLicense.isPending || !licenseInput.trim()}
-                    onClick={handleInstall}
-                  >
-                    {installLicense.isPending ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+                    onClick={handleInstall}>
+                    {installLicense.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="size-4" />
+                    )}
                     Install
                   </Button>
                   <Button
                     type="button"
                     variant="destructive"
                     disabled={removeLicense.isPending || !license?.licenseId}
-                    onClick={() => setConfirmRemoveOpen(true)}
-                  >
-                    {removeLicense.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                    onClick={() => setConfirmRemoveOpen(true)}>
+                    {removeLicense.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-4" />
+                    )}
                     Remove
                   </Button>
                 </div>
@@ -207,8 +210,8 @@ export default function LicensePage() {
         onConfirm={handleRemove}
         description={
           <>
-            Removing the installed license returns Citadel to Community limits. Existing resources are kept, but create and
-            enable actions may be blocked if current usage is over those limits.
+            Removing the installed license returns Citadel to Community limits. Existing resources are kept, but create
+            and enable actions may be blocked if current usage is over those limits.
           </>
         }
       />
@@ -216,15 +219,7 @@ export default function LicensePage() {
   );
 }
 
-function SectionHeader({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
+function SectionHeader({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
@@ -241,8 +236,10 @@ function LicenseStatusBadge({ status }: { status: LicenseStatus }) {
   return (
     <Badge
       variant={active ? 'secondary' : 'destructive'}
-      className={cn('rounded-sm', active && status === LicenseStatus.Valid && 'bg-green-500/10 text-green-700 dark:text-green-300')}
-    >
+      className={cn(
+        'rounded-sm',
+        active && status === LicenseStatus.Valid && 'bg-green-500/10 text-green-700 dark:text-green-300',
+      )}>
       {active && status === LicenseStatus.Valid ? <ShieldCheck className="size-3.5" /> : null}
       {LICENSE_STATUS_LABELS[status] ?? status}
     </Badge>
@@ -257,11 +254,16 @@ function QuotaRow({ limit }: { limit: LicenseLimitView }) {
   return (
     <div className="grid gap-3 p-4 sm:grid-cols-[220px_minmax(0,1fr)_120px] sm:items-center">
       <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-foreground">{LICENSE_LIMIT_LABELS[limit.limit] ?? limit.limit}</div>
+        <div className="truncate text-sm font-medium text-foreground">
+          {LICENSE_LIMIT_LABELS[limit.limit] ?? limit.limit}
+        </div>
         <div className="text-xs text-muted-foreground">{limit.overQuota ? 'Over licensed quota' : 'Within quota'}</div>
       </div>
       <div className="h-2 overflow-hidden rounded-sm bg-muted">
-        <div className={cn('h-full bg-primary', limit.overQuota && 'bg-destructive')} style={{ width: `${percent}%` }} />
+        <div
+          className={cn('h-full bg-primary', limit.overQuota && 'bg-destructive')}
+          style={{ width: `${percent}%` }}
+        />
       </div>
       <div className="text-sm font-medium tabular-nums text-foreground sm:text-right">
         {current} / {maximum}

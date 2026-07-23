@@ -48,6 +48,7 @@ export const LayoutProvider: React.FC<{ children?: React.ReactNode }> = ({ child
   const [sidebarMinimized, setSidebarMinimized] = useState<boolean>(getInitialSidebarMinimized);
 
   const toggleSidebar = useCallback((): void => setSidebarMinimized((prev) => !prev), []);
+  const setSidebarOpen = useCallback((open: boolean): void => setSidebarMinimized(!open), []);
   const toggleMobileMenu = useCallback(() => setMobileMenuVisibility((prev) => !prev), []);
   const toggleThemeColor = useCallback(
     (color: string): void => setTheme((prev: ITheme) => (prev.color === color ? prev : { ...prev, color })),
@@ -99,11 +100,21 @@ export const LayoutProvider: React.FC<{ children?: React.ReactNode }> = ({ child
       sidebarMinimized,
       mobileMenuVisible,
       toggleSidebar,
+      setSidebarOpen,
       toggleMobileMenu,
       toggleThemeColor,
       setThemeMode,
     }),
-    [theme, sidebarMinimized, mobileMenuVisible, toggleSidebar, toggleMobileMenu, toggleThemeColor, setThemeMode],
+    [
+      theme,
+      sidebarMinimized,
+      mobileMenuVisible,
+      toggleSidebar,
+      setSidebarOpen,
+      toggleMobileMenu,
+      toggleThemeColor,
+      setThemeMode,
+    ],
   );
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>;

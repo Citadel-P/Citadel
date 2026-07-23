@@ -64,7 +64,7 @@ export const ResourceTabs = ({
       <div ref={sentinelRef} aria-hidden className="h-px" />
       <div
         className={cn(
-          'sticky top-11.5 z-30 bg-background left-0 right-0 transition-all duration-200',
+          'sticky top-0 z-30 bg-background left-0 right-0 transition-all duration-200',
           isStuck ? '-mx-4' : 'mx-0',
         )}>
         <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>

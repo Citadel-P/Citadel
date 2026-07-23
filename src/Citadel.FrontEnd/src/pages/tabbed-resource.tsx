@@ -73,7 +73,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
 
   return (
     <div className="flex-col relative">
-      <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
         <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-4">
           <ResourceHeader
             type={type}

@@ -151,7 +151,7 @@ const EditFormContent = ({
 };
 
 const PageShell = ({ mode, children }: { mode: 'add' | 'edit'; children: React.ReactNode }) => (
-  <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
+  <div className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6">
     <div className={`w-full rounded-lg border bg-background p-4 flex flex-col ${mode === 'add' ? 'gap-6' : 'gap-0.5'}`}>
       {children}
     </div>

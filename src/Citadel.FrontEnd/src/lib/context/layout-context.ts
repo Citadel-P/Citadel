@@ -6,6 +6,7 @@ interface IContext {
   sidebarMinimized: boolean;
   mobileMenuVisible: boolean;
   toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
   toggleThemeColor: (color: string) => void;
   setThemeMode: (mode: ThemeMode) => void;

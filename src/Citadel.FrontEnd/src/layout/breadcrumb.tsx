@@ -25,21 +25,16 @@ const singularizeSegment = (segment: string) => {
   return title.endsWith('ies') ? `${title.slice(0, -3)}y` : title.endsWith('s') ? title.slice(0, -1) : title;
 };
 
-export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
+export function useBreadcrumbItems() {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const params = useParams();
-
   const { currentPlatform } = useAppContext();
   const [segmentTitle, setSegmentTitle] = useSegmentTitle();
 
-  // Split path segments
-  let segments = pathname.split('/').filter(Boolean);
-
-  // Homepage "/"
-  if (segments.length === 0) {
-    segments = ['platforms'];
-  }
+  const segments = useMemo(() => {
+    const pathSegments = pathname.split('/').filter(Boolean);
+    return pathSegments.length === 0 ? ['platforms'] : pathSegments;
+  }, [pathname]);
 
   const { platformId, type, resourceId, id } = params;
 
@@ -47,7 +42,7 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
     setSegmentTitle(null);
   }, [resourceId, id, setSegmentTitle]);
 
-  const crumbs = useMemo(() => {
+  return useMemo(() => {
     const result: { title: string; link?: string }[] = [];
     let pathAcc = '';
 
@@ -80,7 +75,8 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
       // /:type/add or /:type/edit
       if (segment === 'add' || segment === 'edit') {
         const previousSegment = segments[i - 1];
-        const typeStr = previousSegment && previousSegment !== type ? previousSegment : (type ?? previousSegment ?? 'Resource');
+        const typeStr =
+          previousSegment && previousSegment !== type ? previousSegment : (type ?? previousSegment ?? 'Resource');
         const formattedType = typeStr
           .split('-')
           .map((s) => capitalize(s))
@@ -116,31 +112,46 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
 
     return result;
   }, [segments, platformId, type, resourceId, id, currentPlatform, segmentTitle]);
+}
 
+export function BreadcrumbTrail({ className, compact = false }: { className?: string; compact?: boolean }) {
+  const navigate = useNavigate();
+  const crumbs = useBreadcrumbItems();
+  const textClassName = compact
+    ? 'hover:text-primary text-xs cursor-pointer max-w-40 truncate sm:max-w-64'
+    : 'hover:text-primary text-xs cursor-pointer';
+  const pageClassName = compact
+    ? 'text-muted-foreground text-xs max-w-40 truncate sm:max-w-64'
+    : 'text-muted-foreground text-xs';
+
+  return (
+    <Breadcrumb className={className}>
+      <BreadcrumbList className={compact ? 'flex-nowrap overflow-hidden' : undefined}>
+        {crumbs.map((crumb, i) => (
+          <Fragment key={i}>
+            <BreadcrumbItem className={compact ? 'min-w-0' : undefined}>
+              {crumb.link ? (
+                <BreadcrumbLink className={textClassName} onClick={() => navigate(crumb.link ?? '/')}>
+                  {crumb.title}
+                </BreadcrumbLink>
+              ) : (
+                <BreadcrumbPage className={pageClassName}>{crumb.title}</BreadcrumbPage>
+              )}
+            </BreadcrumbItem>
+
+            {i < crumbs.length - 1 && <BreadcrumbSeparator className="shrink-0 text-[1px]" />}
+          </Fragment>
+        ))}
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
+export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
   return (
     <div className={`sticky top-0 z-40 mx-auto px-4 lg:container sm:px-6 ${isSticky ? 'pt-0' : 'pt-3'}`}>
       <div className={`w-full border-border bg-background p-4 ${isSticky ? 'shadow-sm rounded-b-none' : 'rounded-lg'}`}>
-        <Breadcrumb>
-          <BreadcrumbList>
-            {crumbs.map((crumb, i) => (
-              <Fragment key={i}>
-                <BreadcrumbItem>
-                  {crumb.link ? (
-                    <BreadcrumbLink
-                      className="hover:text-primary text-xs cursor-pointer"
-                      onClick={() => navigate(crumb.link ?? '/')}>
-                      {crumb.title}
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage className="text-muted-foreground text-xs">{crumb.title}</BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
-
-                {i < crumbs.length - 1 && <BreadcrumbSeparator className="text-[1px]" />}
-              </Fragment>
-            ))}
-          </BreadcrumbList>
-        </Breadcrumb>
+        <BreadcrumbTrail />
       </div>
     </div>
   );

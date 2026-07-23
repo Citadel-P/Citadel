@@ -173,7 +173,11 @@ function getTokenProfile(accessToken: string | undefined) {
   if (!accessToken) return undefined;
 
   try {
-    return jwtDecode<{ name?: string; email?: string }>(accessToken);
+    const decoded = jwtDecode<{ displayName?: string; name?: string; email?: string }>(accessToken);
+    return {
+      displayName: decoded.displayName ?? decoded.name,
+      email: decoded.email,
+    };
   } catch {
     return undefined;
   }
