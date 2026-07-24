@@ -374,6 +374,7 @@ public static class AlertTypeMetadata
         { AlertType.WebhookGitRepoSyncFailed, AlertResourceType.Webhook },
         { AlertType.WebhookStackGitDeployFailed, AlertResourceType.Webhook },
         { AlertType.AutomationActionRunFailed, AlertResourceType.AutomationAction },
+        { AlertType.BuildRunFailed, AlertResourceType.Build },
         { AlertType.LicenseEnteredGracePeriod, AlertResourceType.License },
         { AlertType.LicenseExpired, AlertResourceType.License },
     };
@@ -418,6 +419,7 @@ public static class AlertTypeMetadata
             (AlertType.WebhookGitRepoSyncFailed, WebhookGitRepoSyncFailedAlertInfo) => true,
             (AlertType.WebhookStackGitDeployFailed, WebhookStackGitDeployFailedAlertInfo) => true,
             (AlertType.AutomationActionRunFailed, AutomationActionRunFailedAlertInfo) => true,
+            (AlertType.BuildRunFailed, BuildRunFailedAlertInfo) => true,
             (AlertType.LicenseEnteredGracePeriod, LicenseEnteredGracePeriodAlertInfo) => true,
             (AlertType.LicenseExpired, LicenseExpiredAlertInfo) => true,
             _ => false

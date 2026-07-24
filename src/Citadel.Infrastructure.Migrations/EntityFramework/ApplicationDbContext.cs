@@ -380,6 +380,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             // Automation event alerts
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000018"), Name = "Automation Action Run Failed", Type = "AutomationActionRunFailed", Severity = "Critical", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
 
+            // Build event alerts
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-00000000001b"), Name = "Build Run Failed", Type = "BuildRunFailed", Severity = "Critical", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+
             // License event alerts
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000019"), Name = "License Entered Grace Period", Type = "LicenseEnteredGracePeriod", Severity = "Warning", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-00000000001a"), Name = "License Expired", Type = "LicenseExpired", Severity = "Critical", CooldownSeconds = (int?)null, Status = AlertRuleStatus.Enabled.ToString(), LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate }

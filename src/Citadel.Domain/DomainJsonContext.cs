@@ -329,6 +329,7 @@ public partial class LicenseJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(WebhookGitRepoSyncFailedAlertInfo))]
 [JsonSerializable(typeof(WebhookStackGitDeployFailedAlertInfo))]
 [JsonSerializable(typeof(AutomationActionRunFailedAlertInfo))]
+[JsonSerializable(typeof(BuildRunFailedAlertInfo))]
 [JsonSerializable(typeof(LicenseEnteredGracePeriodAlertInfo))]
 [JsonSerializable(typeof(LicenseExpiredAlertInfo))]
 public partial class AlertEventJsonContext : JsonSerializerContext

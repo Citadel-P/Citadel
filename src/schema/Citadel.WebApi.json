@@ -33086,6 +33086,9 @@
             "$ref": "#/components/schemas/AlertEventInfoAutomationActionRunFailedAlertInfo"
           },
           {
+            "$ref": "#/components/schemas/AlertEventInfoBuildRunFailedAlertInfo"
+          },
+          {
             "$ref": "#/components/schemas/AlertEventInfoLicenseEnteredGracePeriodAlertInfo"
           },
           {
@@ -33120,6 +33123,7 @@
             "WebhookGitRepoSyncFailed": "#/components/schemas/AlertEventInfoWebhookGitRepoSyncFailedAlertInfo",
             "WebhookStackGitDeployFailed": "#/components/schemas/AlertEventInfoWebhookStackGitDeployFailedAlertInfo",
             "AutomationActionRunFailed": "#/components/schemas/AlertEventInfoAutomationActionRunFailedAlertInfo",
+            "BuildRunFailed": "#/components/schemas/AlertEventInfoBuildRunFailedAlertInfo",
             "LicenseEnteredGracePeriod": "#/components/schemas/AlertEventInfoLicenseEnteredGracePeriodAlertInfo",
             "LicenseExpired": "#/components/schemas/AlertEventInfoLicenseExpiredAlertInfo"
           }
@@ -33154,6 +33158,65 @@
           },
           "status": {
             "$ref": "#/components/schemas/ActionRunStatus"
+          },
+          "exitCode": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoBuildRunFailedAlertInfo": {
+        "required": [
+          "buildName",
+          "runId",
+          "trigger",
+          "status",
+          "exitCode",
+          "durationMs",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BuildRunFailed"
+            ],
+            "type": "string"
+          },
+          "buildName": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BuildRunTrigger"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BuildRunStatus"
           },
           "exitCode": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -34327,6 +34390,7 @@
           "GitRepository",
           "Webhook",
           "AutomationAction",
+          "Build",
           "License"
         ]
       },
@@ -34785,6 +34849,7 @@
           "WebhookGitRepoSyncFailed",
           "WebhookStackGitDeployFailed",
           "AutomationActionRunFailed",
+          "BuildRunFailed",
           "LicenseEnteredGracePeriod",
           "LicenseExpired"
         ]

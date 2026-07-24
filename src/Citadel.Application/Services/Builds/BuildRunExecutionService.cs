@@ -1,5 +1,6 @@
 using Application.Features.Builds.Commands;
 using Application.Services;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -128,6 +129,7 @@ internal sealed class BuildRunExecutionService(
     IStackStreamManager stackStreamManager,
     IApplyDeploymentService applyDeploymentService,
     IApplyStackService applyStackService,
+    IAlertService alertService,
     IBuildRunRetentionService buildRunRetentionService,
     ILogger<BuildRunExecutionService> logger) : IBuildRunExecutionService
 {
@@ -586,6 +588,26 @@ internal sealed class BuildRunExecutionService(
                 cancellationToken);
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        await alertService.ProcessAsync(
+            AlertType.BuildRunFailed,
+            new AlertEvaluationContext(
+                DateTime.UtcNow,
+                Platforms: [],
+                Deployments: [],
+                Stacks: [],
+                BuildRunFailures:
+                [
+                    new BuildRunFailureAlertSnapshot(
+                        run.BuildProjectId,
+                        run.ProjectNameSnapshot,
+                        run.Id,
+                        run.Trigger,
+                        status,
+                        run.ExitCode,
+                        GetDurationMs(run),
+                        errorMessage)
+                ]),
+            cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
         await activityStreamManager.SendActivityInfo(await activity.AssignActor(unitOfWork, cancellationToken));
         await buildRunRetentionService.PruneAsync(run.BuildProjectId, cancellationToken);

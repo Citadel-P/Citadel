@@ -103,6 +103,7 @@ export const AlertRuleForm = ({
     AlertType.DeploymentAutoUpdated,
     AlertType.DeploymentAutoDeployFailed,
     AlertType.AutomationActionRunFailed,
+    AlertType.BuildRunFailed,
     AlertType.LicenseEnteredGracePeriod,
     AlertType.LicenseExpired,
   ];
@@ -113,6 +114,7 @@ export const AlertRuleForm = ({
     if (merged.type.startsWith('AutomationAction')) return 'AutomationAction';
     if (merged.type.startsWith('Webhook')) return 'Webhook';
     if (merged.type.startsWith('License')) return 'License';
+    if (merged.type.startsWith('Build')) return 'Build';
     if (merged.type.startsWith('Deployment')) return 'Deployment';
     if (merged.type.includes('Stack')) return 'Stack';
     return 'Platform';
@@ -276,7 +278,7 @@ export const AlertRuleForm = ({
                       description: `Optionally limit this alert rule to specific ${resourceFromAlertType().toLocaleLowerCase()}s.`,
                       render: (value, set) => (
                         <MultiResourceSelectorField
-                          targetType={resourceFromAlertType()}
+                          targetType={LookupResourceType[resourceFromAlertType() as keyof typeof LookupResourceType]}
                           sourceType={LookupResourceType.Alert}
                           sourceResourceId={mode == 'add' ? undefined : id}
                           selected={

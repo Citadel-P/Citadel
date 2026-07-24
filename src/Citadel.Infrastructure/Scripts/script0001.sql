@@ -1100,6 +1100,8 @@ VALUES ('019d0000-0001-7000-8001-000000000017', NULL, TIMESTAMPTZ '2026-01-01T00
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000018', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Automation Action Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'AutomationActionRunFailed');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
+VALUES ('019d0000-0001-7000-8001-00000000001b', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Build Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'BuildRunFailed');
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000019', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'License Entered Grace Period', '[]', NULL, 'Warning', 'Enabled', NULL, 'LicenseEnteredGracePeriod');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
 VALUES ('019d0000-0001-7000-8001-00000000001a', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'License Expired', '[]', NULL, 'Critical', 'Enabled', NULL, 'LicenseExpired');

@@ -93,6 +93,7 @@ internal sealed class GetResourceLookupQueryHandler(
             (LookupResourceType.Alert, LookupResourceType.Stack) => await GetAlertStackLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.GitRepository) => await GetAlertGitRepositoryLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.AutomationAction) => await GetAlertAutomationActionLookupAsync(userId, cancellationToken),
+            (LookupResourceType.Alert, LookupResourceType.Build) => await GetBuildLookupAsync(userId, cancellationToken),
             (LookupResourceType.Alert, LookupResourceType.AlertChannel) => await GetAlertChannelLookupAsync(userId, cancellationToken),
             (LookupResourceType.Image, LookupResourceType.Registry) => await GetImageRegistryLookupAsync(userId, cancellationToken),
             (null, LookupResourceType.Platform) => await GetPlatformLookupAsync(userId, cancellationToken),

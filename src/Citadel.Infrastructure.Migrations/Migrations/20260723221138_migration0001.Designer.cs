@@ -831,6 +831,18 @@ namespace Infrastructure.Migrations.Migrations
                             Severity = "Critical",
                             Status = "Enabled",
                             Type = "LicenseExpired"
+                        },
+                        new
+                        {
+                            Id = new Guid("019d0000-0001-7000-8001-00000000001b"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Build Run Failed",
+                            QuietHours = "[]",
+                            Severity = "Critical",
+                            Status = "Enabled",
+                            Type = "BuildRunFailed"
                         });
                 });
 

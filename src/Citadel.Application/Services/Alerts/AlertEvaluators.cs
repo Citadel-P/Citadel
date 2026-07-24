@@ -681,6 +681,39 @@ public sealed class AutomationActionRunFailedEvaluator : IAlertEvaluator
 
 #endregion
 
+#region Build
+
+[AlertEvaluator(AlertType.BuildRunFailed)]
+public sealed class BuildRunFailedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.BuildRunFailed;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.BuildRunFailures is null)
+            yield break;
+
+        foreach (var failure in context.BuildRunFailures)
+        {
+            yield return new AlertMatch(
+                failure.Id,
+                failure.Name,
+                AlertResourceType.Build,
+                new BuildRunFailedAlertInfo(
+                    failure.Name,
+                    failure.RunId,
+                    failure.Trigger,
+                    failure.Status,
+                    failure.ExitCode,
+                    failure.DurationMs,
+                    failure.Reason),
+                DeduplicationComponent: failure.RunId.ToString("N"));
+        }
+    }
+}
+
+#endregion
+
 #region License
 
 [AlertEvaluator(AlertType.LicenseEnteredGracePeriod)]

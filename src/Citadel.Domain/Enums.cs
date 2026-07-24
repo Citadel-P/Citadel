@@ -845,6 +845,10 @@ public enum AlertType
     AutomationActionRunFailed,
     #endregion
 
+    #region Build Alerts
+    BuildRunFailed,
+    #endregion
+
     #region License Alerts
     LicenseEnteredGracePeriod,
     LicenseExpired,
@@ -878,6 +882,7 @@ public enum AlertResourceType
     GitRepository,
     Webhook,
     AutomationAction,
+    Build,
     License
 }
 

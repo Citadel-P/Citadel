@@ -18,6 +18,7 @@ public sealed record AlertEvaluationContext(
     IReadOnlyCollection<StackConfigurationResolutionFailureAlertSnapshot>? StackConfigurationFailures = null,
     IReadOnlyCollection<DeploymentConfigurationResolutionFailureAlertSnapshot>? DeploymentConfigurationFailures = null,
     IReadOnlyCollection<AutomationActionRunFailureAlertSnapshot>? AutomationActionRunFailures = null,
+    IReadOnlyCollection<BuildRunFailureAlertSnapshot>? BuildRunFailures = null,
     IReadOnlyCollection<LicenseAlertSnapshot>? Licenses = null);
 
 public sealed record AlertMatch(
@@ -108,6 +109,16 @@ public sealed record AutomationActionRunFailureAlertSnapshot(
     Guid RunId,
     ActionRunTrigger Trigger,
     ActionRunStatus Status,
+    int? ExitCode,
+    long? DurationMs,
+    string Reason);
+
+public sealed record BuildRunFailureAlertSnapshot(
+    Guid Id,
+    string Name,
+    Guid RunId,
+    BuildRunTrigger Trigger,
+    BuildRunStatus Status,
     int? ExitCode,
     long? DurationMs,
     string Reason);

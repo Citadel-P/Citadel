@@ -32,6 +32,7 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(WebhookGitRepoSyncFailedAlertInfo), nameof(AlertType.WebhookGitRepoSyncFailed))]
 [JsonDerivedType(typeof(WebhookStackGitDeployFailedAlertInfo), nameof(AlertType.WebhookStackGitDeployFailed))]
 [JsonDerivedType(typeof(AutomationActionRunFailedAlertInfo), nameof(AlertType.AutomationActionRunFailed))]
+[JsonDerivedType(typeof(BuildRunFailedAlertInfo), nameof(AlertType.BuildRunFailed))]
 [JsonDerivedType(typeof(LicenseEnteredGracePeriodAlertInfo), nameof(AlertType.LicenseEnteredGracePeriod))]
 [JsonDerivedType(typeof(LicenseExpiredAlertInfo), nameof(AlertType.LicenseExpired))]
 public abstract record AlertEventInfo
@@ -300,6 +301,19 @@ public sealed record AutomationActionRunFailedAlertInfo(
 {
     public override string HumanMessage =>
         $"Automation action '{ActionName}' {Status.ToString().ToLowerInvariant()} during {Trigger.ToString().ToLowerInvariant()} run: {Reason}";
+}
+
+public sealed record BuildRunFailedAlertInfo(
+    string BuildName,
+    Guid RunId,
+    BuildRunTrigger Trigger,
+    BuildRunStatus Status,
+    int? ExitCode,
+    long? DurationMs,
+    string Reason) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"Build '{BuildName}' {Status.ToString().ToLowerInvariant()} during {Trigger.ToString().ToLowerInvariant()} run: {Reason}";
 }
 
 public sealed record LicenseEnteredGracePeriodAlertInfo(

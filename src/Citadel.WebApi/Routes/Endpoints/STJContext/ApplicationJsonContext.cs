@@ -489,6 +489,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(PagedResultView<AlertEventView>))]
 [JsonSerializable(typeof(AlertEventView))]
 [JsonSerializable(typeof(AlertEventsView))]
+[JsonSerializable(typeof(BuildRunFailedAlertInfo))]
 [JsonSerializable(typeof(LicenseEnteredGracePeriodAlertInfo))]
 [JsonSerializable(typeof(LicenseExpiredAlertInfo))]
 [JsonSerializable(typeof(AlertEventFilter))]

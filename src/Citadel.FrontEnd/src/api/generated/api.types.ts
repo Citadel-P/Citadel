@@ -555,6 +555,7 @@ export enum AlertType {
   WebhookGitRepoSyncFailed = "WebhookGitRepoSyncFailed",
   WebhookStackGitDeployFailed = "WebhookStackGitDeployFailed",
   AutomationActionRunFailed = "AutomationActionRunFailed",
+  BuildRunFailed = "BuildRunFailed",
   LicenseEnteredGracePeriod = "LicenseEnteredGracePeriod",
   LicenseExpired = "LicenseExpired",
 }
@@ -577,6 +578,7 @@ export enum AlertResourceType {
   GitRepository = "GitRepository",
   Webhook = "Webhook",
   AutomationAction = "AutomationAction",
+  Build = "Build",
   License = "License",
 }
 
@@ -1032,6 +1034,10 @@ export type AlertEventInfo = BaseAlertEventInfo &
     | BaseAlertEventInfoTypeMapping<
         "AutomationActionRunFailed",
         AlertEventInfoAutomationActionRunFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "BuildRunFailed",
+        AlertEventInfoBuildRunFailedAlertInfo
       >
     | BaseAlertEventInfoTypeMapping<
         "LicenseEnteredGracePeriod",
@@ -2210,6 +2216,27 @@ export interface AlertEventInfoAutomationActionRunFailedAlertInfo {
   runId: string;
   trigger: ActionRunTrigger;
   status: ActionRunStatus;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  durationMs: null | number | string;
+  reason: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoBuildRunFailedAlertInfo {
+  $type?: "BuildRunFailed";
+  buildName: string;
+  /** @format uuid */
+  runId: string;
+  trigger: BuildRunTrigger;
+  status: BuildRunStatus;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
