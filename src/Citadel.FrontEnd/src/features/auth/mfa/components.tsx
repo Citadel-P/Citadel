@@ -120,7 +120,7 @@ export function TotpSetupPanel({ secret, otpAuthUri }: { secret: string; otpAuth
         )}
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium leading-none">Manual secret</label>
+        <div className="text-sm font-medium leading-none">Manual secret</div>
         <div className="break-all rounded-sm border bg-muted/30 px-3 py-2 font-mono text-sm">{secret}</div>
       </div>
     </div>
@@ -170,9 +170,13 @@ export function RecoveryCodesPanel({
           Download
         </Button>
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox checked={confirmed} onCheckedChange={(value) => setConfirmed(value === true)} />I have saved my
-        recovery codes.
+      <label className="flex items-center gap-2 text-sm" htmlFor="recovery-codes-confirmed">
+        <Checkbox
+          id="recovery-codes-confirmed"
+          checked={confirmed}
+          onCheckedChange={(value) => setConfirmed(value === true)}
+        />
+        I have saved my recovery codes.
       </label>
       <Button type="button" className="w-full" disabled={!confirmed} onClick={onContinue}>
         {actionLabel}

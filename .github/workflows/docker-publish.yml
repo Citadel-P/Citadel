@@ -16,11 +16,10 @@ on:
     branches: [ "main" ]
 
 env:
-  # Use docker.io for Docker Hub if empty
-  REGISTRY: ghcr.io
+  GHCR_REGISTRY: ghcr.io
   # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
-
+  DOCKERHUB_REPOSITORY: citadel
 
 jobs:
   build:
@@ -44,7 +43,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0
+          dotnet-version: 10.0.x
       - name: Restore application and test projects
         run: |
           dotnet restore src/Citadel.WebApi/Citadel.WebApi.csproj
@@ -57,8 +56,8 @@ jobs:
           dotnet build test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-restore -c Release
       - name: Test
         run: |
-          dotnet test test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release --verbosity normal
-          dotnet test test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release --verbosity normal
+          dotnet run --project test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release
+          dotnet run --project test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release
         
       - name: Install cosign
         if: github.event_name != 'pull_request'
@@ -66,28 +65,75 @@ jobs:
         with:
           cosign-release: 'v2.2.4'
 
-      - name: Install Nerdbank.GitVersioning CLI
-        run: dotnet tool install --global nbgv || true
-        
+      - name: Restore local .NET tools
+        run: dotnet tool restore
+
       - name: Get version from Nerdbank.GitVersioning
         id: nbgv
+        shell: bash
         run: |
-          echo "VERSION=$(nbgv get-version -f json | jq -r .NuGetPackageVersion)" >> $GITHUB_OUTPUT
+          echo "VERSION=$(dotnet nbgv get-version -v NuGetPackageVersion)" >> "$GITHUB_OUTPUT"
+          echo "SIMPLE_VERSION=$(dotnet nbgv get-version -v SimpleVersion)" >> "$GITHUB_OUTPUT"
+          echo "ASSEMBLY_VERSION=$(dotnet nbgv get-version -v AssemblyVersion)" >> "$GITHUB_OUTPUT"
+          echo "FILE_VERSION=$(dotnet nbgv get-version -v AssemblyFileVersion)" >> "$GITHUB_OUTPUT"
+          echo "PUBLIC_RELEASE=$(dotnet nbgv get-version -v PublicRelease)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          SIMPLE_VERSION: ${{ steps.nbgv.outputs.SIMPLE_VERSION }}
+          PUBLIC_RELEASE: ${{ steps.nbgv.outputs.PUBLIC_RELEASE }}
+        run: |
+          expected_tag="v${SIMPLE_VERSION}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "Release tag '${GITHUB_REF_NAME}' does not match version.json ('${expected_tag}')." >&2
+            exit 1
+          fi
+          if [[ "${PUBLIC_RELEASE}" != "True" ]]; then
+            echo "Release tag '${GITHUB_REF_NAME}' is not recognized by publicReleaseRefSpec." >&2
+            exit 1
+          fi
       # Set up BuildKit Docker container builder to be able to build
       # multi-platform images and export cache
       # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
 
-      # Login against a Docker registry except on PR
+      - name: Validate Docker Hub configuration
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          missing=()
+          [[ -n "${DOCKERHUB_NAMESPACE}" ]] || missing+=("DOCKERHUB_NAMESPACE variable")
+          [[ -n "${DOCKERHUB_USERNAME}" ]] || missing+=("DOCKERHUB_USERNAME variable")
+          [[ -n "${DOCKERHUB_TOKEN}" ]] || missing+=("DOCKERHUB_TOKEN secret")
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing Docker Hub configuration: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      # Login against both registries except on PR
       # https://github.com/docker/login-action
-      - name: Log into registry ${{ env.REGISTRY }}
+      - name: Log into GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Log into Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: docker.io
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
@@ -95,9 +141,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            name=${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+            name=docker.io/${{ vars.DOCKERHUB_NAMESPACE }}/${{ env.DOCKERHUB_REPOSITORY }},enable=${{ vars.DOCKERHUB_NAMESPACE != '' }}
           tags: |
             type=raw,value=${{ steps.nbgv.outputs.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.nbgv.outputs.VERSION }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{major}},value=${{ steps.nbgv.outputs.VERSION }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
           labels: |
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.description=Docker image for ${{ env.IMAGE_NAME }}
@@ -117,10 +167,15 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.nbgv.outputs.VERSION }}
+            ASSEMBLY_VERSION=${{ steps.nbgv.outputs.ASSEMBLY_VERSION }}
+            FILE_VERSION=${{ steps.nbgv.outputs.FILE_VERSION }}
+            INFORMATIONAL_VERSION=${{ steps.nbgv.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Sign the resulting Docker image digest except on PRs.
+      # Sign the resulting image digest in both registries except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
       # repository is public to avoid leaking data.  If you would like to publish
       # transparency data even for private images, pass --force to cosign below.

@@ -21,6 +21,11 @@ RUN npm run build:prod
 
 # Build and publish the application
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS build
+ARG VERSION=0.0.0-local
+ARG ASSEMBLY_VERSION=0.0.0.0
+ARG FILE_VERSION=0.0.0.0
+ARG INFORMATIONAL_VERSION=0.0.0-local
+ENV NBGV_GitEngine=Disabled
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 WORKDIR /src
 
@@ -52,8 +57,14 @@ WORKDIR /src/Citadel.WebApi
 # Publish
 RUN dotnet publish Citadel.WebApi.csproj -c Release -o /app/publish \
     -r linux-musl-x64 --self-contained true /p:StripSymbols=true \
+    /p:Version="${VERSION}" /p:PackageVersion="${VERSION}" \
+    /p:AssemblyVersion="${ASSEMBLY_VERSION}" /p:FileVersion="${FILE_VERSION}" \
+    /p:InformationalVersion="${INFORMATIONAL_VERSION}" \
     && dotnet publish ../Citadel.VolumeHelper/Citadel.VolumeHelper.csproj -c Release -o /app/volume-helper \
         -r linux-musl-x64 --self-contained true /p:StripSymbols=true \
+        /p:Version="${VERSION}" /p:PackageVersion="${VERSION}" \
+        /p:AssemblyVersion="${ASSEMBLY_VERSION}" /p:FileVersion="${FILE_VERSION}" \
+        /p:InformationalVersion="${INFORMATIONAL_VERSION}" \
     && cp /app/volume-helper/Citadel.VolumeHelper /app/publish/Citadel.VolumeHelper \
     && rm -f /app/publish/*.dbg /app/volume-helper/*.dbg
 

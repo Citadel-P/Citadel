@@ -100,8 +100,15 @@ public sealed class PlatformVersionMismatchEvaluator : IAlertEvaluator
         }
     }
 
-    public static bool IsCompatible(string agentVersion) =>
-        agentVersion.Equals(Constants.CompatibilityVersion, StringComparison.Ordinal);
+    public static bool IsCompatible(string agentVersion)
+    {
+        var compatibilityVersion = Constants.CompatibilityVersion;
+        if (!agentVersion.StartsWith(compatibilityVersion, StringComparison.Ordinal))
+            return false;
+
+        return agentVersion.Length == compatibilityVersion.Length
+               || agentVersion[compatibilityVersion.Length] is '.' or '-' or '+';
+    }
 
     public static bool IsLocal(string agentVersion) => string.IsNullOrEmpty(agentVersion);
 }

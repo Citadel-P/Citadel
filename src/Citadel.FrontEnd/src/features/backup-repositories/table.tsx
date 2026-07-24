@@ -88,7 +88,7 @@ function RepositoryCard({ repository, actions }: { repository: BackupRepositoryV
     operation: RepositoryOperation,
     mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
     successMessage: string,
-    failureMessage: string,
+    _failureMessage: string,
   ) => {
     if (operating) return;
 
@@ -99,7 +99,7 @@ function RepositoryCard({ repository, actions }: { repository: BackupRepositoryV
       await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: repository.id }] });
       toast.success(successMessage);
     } catch {
-      //toast.error(mutation.validationErrors ?? failureMessage);
+      //toast.error(mutation.validationErrors ?? _failureMessage);
     } finally {
       setPendingOperation(null);
     }

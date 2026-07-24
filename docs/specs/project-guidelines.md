@@ -70,51 +70,13 @@ dotnet ef migrations script 20250911211455_migration0001 20250911215953_migratio
 
 ## Release Workflow
 
-### Development / Preview Builds
+Citadel uses stable, tag-based releases in the exact
+`vMAJOR.MINOR.PATCH` form. Tagged prereleases are not supported by the current
+workflow.
 
-- Normal builds automatically produce preview versions, for example `1.0.5-preview-gabc123`.
-- Version shape:
-  - `1.0` is the current release train.
-  - `5` is the git commit height.
-  - `preview` is the prerelease label.
-  - `gabc123` is the git commit hash for traceability.
-
-### Start A New Development Version Cycle
-
-- When ready to start a new version cycle, update `version.json`:
-
-```json
-{
-  "version": "1.1"
-}
-```
-
-- Commit it:
-
-```powershell
-git add version.json
-git commit -m "Start 1.1 development"
-```
-
-- Preview builds then become `1.1.1-preview-gHASH`.
-
-### Creating A Stable Release
-
-- Prepare `main`:
-
-```powershell
-git checkout main
-git pull
-```
-
-- Create and push a release tag:
-
-```powershell
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-- NBGV detects stable releases when the current ref matches `^refs/tags/v\d+\.\d+\.\d+$`.
+Follow [Stable Release Procedure](release-procedure.md) for version changes,
+Core and Agent coordination, validation, tagging, published image aliases, and
+rollback.
 
 ## Caching Guidelines
 

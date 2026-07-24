@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, FingerprintPattern, KeyRound, RefreshCw, ShieldAlert, ShieldCheck, ShieldOff, Smartphone, XCircle } from 'lucide-react';
+import { CheckCircle2, FingerprintPattern, KeyRound, RefreshCw, ShieldAlert, ShieldCheck, ShieldOff, XCircle } from 'lucide-react';
 import { FormEvent, ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import { RecoveryCodesPanel, TotpSetupPanel } from '@/features/auth/mfa/components';

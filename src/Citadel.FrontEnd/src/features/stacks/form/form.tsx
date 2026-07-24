@@ -483,7 +483,10 @@ const StackBuildImageBindingsField = ({
             </div>
             <div className="flex min-w-32 flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground">Redeploy</span>
-              <label className="flex h-10 items-center gap-2 text-sm">
+              <label
+                className="flex h-10 items-center gap-2 text-sm"
+                htmlFor={`stack-build-redeploy-${index}`}
+              >
                 <FieldSwitch
                   id={`stack-build-redeploy-${index}`}
                   checked={binding.redeployOnBuild ?? false}
