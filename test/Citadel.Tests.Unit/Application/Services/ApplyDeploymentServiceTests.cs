@@ -9,6 +9,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.ResourceBindings;
 using Domain.Contracts.Resources.Deployments;
+using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using Domain.Entities.Identity;
@@ -158,6 +159,92 @@ public sealed class ApplyDeploymentServiceTests
         var applied = Assert.IsType<DeploymentApplied>(capturedActivity?.Info);
         Assert.Equal("failed with ******** and orphan-token", applied.Result?.Message);
         Assert.Equal(["APP_MODE", "API_KEY"], applied.Result?.ResourceBindings?.Select(entry => entry.Name));
+    }
+
+    [Fact]
+    public async Task DeploymentSucceededWorkItem_Should_Record_Applied_Build_Provenance_Without_Replacing_Newer_Resolved_Run()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platformId = Guid.CreateVersion7();
+        var buildProjectId = Guid.CreateVersion7();
+        var resolvedBuildRunId = Guid.CreateVersion7();
+        var appliedBuildRunId = Guid.CreateVersion7();
+        var deployment = new Deployment(
+            name: "api",
+            createdByActorId: actorId,
+            platformId: platformId,
+            spec: new DeploymentSpec(
+                Image: new BuildImage(
+                    BuildProjectId: buildProjectId,
+                    ResolvedImageReference: "registry.example.test/api:43",
+                    ResolvedDigest: "sha256:newer",
+                    ResolvedBuildRunId: resolvedBuildRunId),
+                UpdateBehavior: UpdateBehavior.Disabled));
+        var container = new Container(
+            name: "api",
+            dockerImageId: "sha256:image",
+            platformId: platformId,
+            dockerContainerId: "api-container",
+            state: ContainerStateStatus.Running);
+
+        var deployments = new Mock<IDeploymentRepository>();
+        deployments.Setup(x => x.GetAsync(deployment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(deployment);
+        deployments.Setup(x => x.UpdateAsync(deployment, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var containers = new Mock<IContainerRepository>();
+        containers.Setup(x => x.GetByIdAsync(container.DockerContainerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(container);
+        containers.Setup(x => x.UpdateAsync(container, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents.Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var actors = new Mock<IActorRepository>();
+        actors.Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Actor?)null);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Deployments).Returns(deployments.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var startedAt = DateTimeOffset.UtcNow;
+        var workItem = new DeploymentSucceededWorkItem(
+            deployment.Id,
+            actorId,
+            container.DockerContainerId,
+            "sha256:applied",
+            autoUpdateState: null,
+            new ResolvedBuildImage(
+                buildProjectId,
+                "api-build",
+                Guid.CreateVersion7(),
+                "registry.example.test/api:42",
+                "sha256:desired",
+                appliedBuildRunId),
+            Mock.Of<IDeploymentStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            resourceBindings: null);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        var image = Assert.IsType<BuildImage>(deployment.Spec!.Image);
+        Assert.Equal(resolvedBuildRunId, image.ResolvedBuildRunId);
+        Assert.Equal("registry.example.test/api:43", image.ResolvedImageReference);
+        Assert.Equal("sha256:newer", image.ResolvedDigest);
+        Assert.Equal(appliedBuildRunId, image.AppliedBuildRunId);
+        Assert.Equal("registry.example.test/api:42", image.AppliedImageReference);
+        Assert.Equal("sha256:applied", image.AppliedDigest);
+        Assert.True(image.AppliedAt >= startedAt);
+        Assert.Equal(DeploymentStatus.Healthy, deployment.Status);
     }
 
     private sealed class StaticResourceBindingResolver(ResolvedResourceBindings configuration) : IResourceBindingResolver

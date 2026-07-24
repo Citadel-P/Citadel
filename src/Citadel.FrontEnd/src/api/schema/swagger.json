@@ -33489,9 +33489,14 @@
             ]
           },
           "expiresAt": {
+            "type": "string",
             "format": "date-time"
           },
           "graceUntil": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "humanMessage": {
@@ -33536,9 +33541,17 @@
             ]
           },
           "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "graceUntil": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "humanMessage": {
@@ -35705,12 +35718,24 @@
             ]
           },
           "lastRunAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "lastSuccessfulRunAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "nextRunAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           }
         }
@@ -35977,9 +36002,17 @@
             "format": "uuid"
           },
           "lastScheduledRunAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "firstSuccessfulRunAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "createdByActorId": {
@@ -35987,12 +36020,18 @@
             "format": "uuid"
           },
           "createdAt": {
+            "type": "string",
             "format": "date-time"
           },
           "updatedAt": {
+            "type": "string",
             "format": "date-time"
           },
           "archivedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "rowVersion": {
@@ -36240,6 +36279,7 @@
             "$ref": "#/components/schemas/BackupRepositoryValidationStatus"
           },
           "lastValidatedAt": {
+            "type": "string",
             "format": "date-time"
           },
           "lastErrorCode": {
@@ -36328,9 +36368,17 @@
             "format": "int64"
           },
           "lastPrunedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "lastCheckedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "createdByActorId": {
@@ -36338,12 +36386,18 @@
             "format": "uuid"
           },
           "createdAt": {
+            "type": "string",
             "format": "date-time"
           },
           "updatedAt": {
+            "type": "string",
             "format": "date-time"
           },
           "archivedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "rowVersion": {
@@ -36474,12 +36528,21 @@
             }
           },
           "queuedAt": {
+            "type": "string",
             "format": "date-time"
           },
           "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "exitCode": {
@@ -36624,9 +36687,17 @@
             "format": "int64"
           },
           "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "exitCode": {
@@ -36833,12 +36904,21 @@
             }
           },
           "queuedAt": {
+            "type": "string",
             "format": "date-time"
           },
           "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "exitCode": {
@@ -37550,6 +37630,10 @@
             ]
           },
           "lastValidatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           }
         }
@@ -37693,6 +37777,10 @@
             ]
           },
           "lastValidatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "controlState": {
@@ -37719,12 +37807,18 @@
             "format": "uuid"
           },
           "createdAt": {
+            "type": "string",
             "format": "date-time"
           },
           "updatedAt": {
+            "type": "string",
             "format": "date-time"
           },
           "archivedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "rowVersion": {
@@ -38288,12 +38382,18 @@
             "format": "uuid"
           },
           "createdAt": {
+            "type": "string",
             "format": "date-time"
           },
           "updatedAt": {
+            "type": "string",
             "format": "date-time"
           },
           "archivedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "rowVersion": {
@@ -38389,6 +38489,7 @@
             "format": "uuid"
           },
           "createdAt": {
+            "type": "string",
             "format": "date-time"
           },
           "stream": {
@@ -38553,12 +38654,21 @@
             "format": "int32"
           },
           "queuedAt": {
+            "type": "string",
             "format": "date-time"
           },
           "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "exitCode": {
@@ -41121,6 +41231,39 @@
               "null",
               "string"
             ]
+          },
+          "resolvedBuildRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "appliedImageReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appliedDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appliedBuildRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "appliedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -44588,9 +44731,17 @@
             "$ref": "#/components/schemas/LicenseStatus"
           },
           "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "graceUntil": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           }
         }
@@ -44657,6 +44808,7 @@
             "type": "string"
           },
           "generatedAt": {
+            "type": "string",
             "format": "date-time"
           }
         }
@@ -44734,15 +44886,31 @@
             ]
           },
           "issuedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "notBefore": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "graceUntil": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "limits": {
@@ -48660,6 +48828,39 @@
               "null",
               "string"
             ]
+          },
+          "resolvedBuildRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "appliedImageReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appliedDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appliedBuildRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "appliedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -49807,6 +50008,7 @@
             "$ref": "#/components/schemas/StackApplyEventType"
           },
           "timestamp": {
+            "type": "string",
             "format": "date-time"
           },
           "progressMessage": {
@@ -51658,6 +51860,10 @@
             "format": "int64"
           },
           "modifiedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "date-time"
           },
           "linkTarget": {

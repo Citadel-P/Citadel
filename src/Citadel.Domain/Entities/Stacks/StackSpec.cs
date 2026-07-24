@@ -22,7 +22,16 @@ public abstract record StackSpec(
     Guid? RegistryId = null,
     bool DestroyBeforeDeploy = true,
     IReadOnlyList<StackBuildImageBinding>? BuildImageBindings = null
-    );
+    )
+{
+    public StackSpec WithBuildImageBindings(IReadOnlyList<StackBuildImageBinding>? bindings)
+        => this switch
+        {
+            ManualStack manual => manual with { BuildImageBindings = bindings },
+            GitStack git => git with { BuildImageBindings = bindings },
+            _ => this
+        };
+}
 
 public sealed record ManualStack(
     string ComposeFile,
@@ -72,7 +81,40 @@ public sealed record StackBuildImageBinding(
     Guid BuildProjectId,
     bool RedeployOnBuild = false,
     string? ResolvedImageReference = null,
-    string? ResolvedDigest = null);
+    string? ResolvedDigest = null,
+    Guid? ResolvedBuildRunId = null,
+    string? AppliedImageReference = null,
+    string? AppliedDigest = null,
+    Guid? AppliedBuildRunId = null,
+    DateTimeOffset? AppliedAt = null)
+{
+    public StackBuildImageBinding ClearProvenance()
+        => this with
+        {
+            ResolvedImageReference = null,
+            ResolvedDigest = null,
+            ResolvedBuildRunId = null,
+            AppliedImageReference = null,
+            AppliedDigest = null,
+            AppliedBuildRunId = null,
+            AppliedAt = null
+        };
+
+    public StackBuildImageBinding PreserveProvenanceFrom(StackBuildImageBinding current)
+        => BuildProjectId == current.BuildProjectId
+            && string.Equals(ServiceName, current.ServiceName, StringComparison.OrdinalIgnoreCase)
+            ? this with
+            {
+                ResolvedImageReference = current.ResolvedImageReference,
+                ResolvedDigest = current.ResolvedDigest,
+                ResolvedBuildRunId = current.ResolvedBuildRunId,
+                AppliedImageReference = current.AppliedImageReference,
+                AppliedDigest = current.AppliedDigest,
+                AppliedBuildRunId = current.AppliedBuildRunId,
+                AppliedAt = current.AppliedAt
+            }
+            : ClearProvenance();
+}
 
 public sealed record StackWebhookConfig(
     bool Enabled = false,

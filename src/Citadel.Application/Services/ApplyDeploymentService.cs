@@ -69,7 +69,7 @@ internal sealed partial class ApplyDeploymentService(
 
         string? imageId = null;
         string? digest = null;
-        string? resolvedBuildImageReference = null;
+        ResolvedBuildImage? resolvedBuildImage = null;
 
         ExternalImage? pulledExternalImage = null;
 
@@ -96,7 +96,7 @@ internal sealed partial class ApplyDeploymentService(
                 resolved.RegistryId,
                 resolved.ImageReference,
                 resolved.Digest);
-            resolvedBuildImageReference = resolved.ImageReference;
+            resolvedBuildImage = resolved;
 
             yield return Info($"Resolved build \"{resolved.ProjectName}\" from run {resolved.RunId}.");
         }
@@ -219,7 +219,7 @@ internal sealed partial class ApplyDeploymentService(
                 deploymentResult.ContainerId,
                 digest ?? "",
                 autoUpdateState,
-                resolvedBuildImageReference,
+                resolvedBuildImage,
                 deploymentHub,
                 activityHub,
                 notificationQueue,
@@ -514,7 +514,7 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
 
 internal sealed class DeploymentSucceededWorkItem(
     Guid deploymentId, Guid actorId, string containerId, string imageDigest, AutoUpdateState? autoUpdateState,
-    string? resolvedBuildImageReference,
+    ResolvedBuildImage? appliedBuildImage,
     IDeploymentStreamManager deploymentHub, IActivityStreamManager activityHub, 
     INotificationQueue notificationQueue,
     IReadOnlyList<ResourceBindingSnapshot>? resourceBindings) : IDbWorkItem
@@ -538,15 +538,31 @@ internal sealed class DeploymentSucceededWorkItem(
                     ResolvedDigest: imageDigest)
                 });
         }
-        else if (!string.IsNullOrEmpty(imageDigest) && deployment.Spec?.Image is BuildImage buildImage)
+        else if (appliedBuildImage is not null
+                 && deployment.Spec?.Image is BuildImage buildImage
+                 && buildImage.BuildProjectId == appliedBuildImage.ProjectId)
         {
+            var appliedDigest = string.IsNullOrEmpty(imageDigest)
+                ? appliedBuildImage.Digest
+                : imageDigest;
+            var hasResolvedBuild = buildImage.ResolvedBuildRunId is not null;
+
             deployment.PartialUpdate(
                 spec: deployment.Spec with
                 {
                     Image = buildImage with
                     {
-                        ResolvedImageReference = resolvedBuildImageReference ?? buildImage.ResolvedImageReference,
-                        ResolvedDigest = imageDigest
+                        ResolvedImageReference = hasResolvedBuild
+                            ? buildImage.ResolvedImageReference
+                            : appliedBuildImage.ImageReference,
+                        ResolvedDigest = hasResolvedBuild
+                            ? buildImage.ResolvedDigest
+                            : appliedDigest,
+                        ResolvedBuildRunId = buildImage.ResolvedBuildRunId ?? appliedBuildImage.RunId,
+                        AppliedImageReference = appliedBuildImage.ImageReference,
+                        AppliedDigest = appliedDigest,
+                        AppliedBuildRunId = appliedBuildImage.RunId,
+                        AppliedAt = DateTimeOffset.UtcNow
                     }
                 });
         }

@@ -179,7 +179,7 @@ internal sealed class BuildRunExecutionService(
             await unitOfWork.BuildRuns.UpdateAsync(run, executionToken);
             await unitOfWork.CommitAsync(executionToken);
 
-            var repositoryRoot = Path.GetFullPath(buildContext.Repository.GetCachePath());
+            var repositoryRoot = Path.GetFullPath(sync.CachePath ?? buildContext.Repository.GetCachePath());
             var contextPath = ResolveRepoPath(repositoryRoot, run.ContextPath, mustBeDirectory: true);
             if (!contextPath.IsSuccess(out var buildContextPath, out var contextPathError))
                 return await FailAsync(run, BuildRunStatus.Failed, 1, "build.context_path_invalid", contextPathError!.Message, executionToken);
@@ -671,7 +671,8 @@ internal sealed class BuildRunExecutionService(
                     Image = buildImage with
                     {
                         ResolvedImageReference = imageReference,
-                        ResolvedDigest = run.ImageDigest
+                        ResolvedDigest = run.ImageDigest,
+                        ResolvedBuildRunId = run.Id
                     }
                 });
 
@@ -719,7 +720,8 @@ internal sealed class BuildRunExecutionService(
                 return binding with
                 {
                     ResolvedImageReference = imageReference,
-                    ResolvedDigest = run.ImageDigest
+                    ResolvedDigest = run.ImageDigest,
+                    ResolvedBuildRunId = run.Id
                 };
             }).ToArray();
 
@@ -727,7 +729,7 @@ internal sealed class BuildRunExecutionService(
                 continue;
 
             var oldSnapshot = stack.ToSnapshot();
-            release.UpdateSpec(SetBuildImageBindings(release.Spec, nextBindings));
+            release.UpdateSpec(release.Spec.WithBuildImageBindings(nextBindings));
             var activity = new ActivityEvent(
                 platformId: release.PlatformId,
                 resourceId: stack.Id,
@@ -769,8 +771,20 @@ internal sealed class BuildRunExecutionService(
         {
             try
             {
-                await foreach (var _ in applyDeploymentService.ApplyAsync(deploymentId, actorId, recreate: false, ct: cancellationToken))
+                string? failure = null;
+                await foreach (var item in applyDeploymentService.ApplyAsync(deploymentId, actorId, recreate: false, ct: cancellationToken))
                 {
+                    failure ??= GetDeploymentRedeployFailure(item);
+                }
+
+                if (failure is not null)
+                {
+                    logger.LogWarning(
+                        "Failed to redeploy deployment {DeploymentId} after build run {BuildRunId}: {ErrorMessage}",
+                        deploymentId,
+                        runId,
+                        failure);
+                    await AppendPostBuildRedeployLogAsync(runId, $"Deployment redeploy failed for {deploymentId}: {failure}");
                 }
             }
             catch (OperationCanceledException ex)
@@ -789,7 +803,8 @@ internal sealed class BuildRunExecutionService(
         {
             try
             {
-                await foreach (var _ in applyStackService.ApplyAsync(
+                string? failure = null;
+                await foreach (var item in applyStackService.ApplyAsync(
                     request.StackId,
                     actorId,
                     request.ServiceNames,
@@ -800,6 +815,17 @@ internal sealed class BuildRunExecutionService(
                     previousStackSnapshot: null,
                     ct: cancellationToken))
                 {
+                    failure ??= GetStackRedeployFailure(item);
+                }
+
+                if (failure is not null)
+                {
+                    logger.LogWarning(
+                        "Failed to redeploy stack {StackId} after build run {BuildRunId}: {ErrorMessage}",
+                        request.StackId,
+                        runId,
+                        failure);
+                    await AppendPostBuildRedeployLogAsync(runId, $"Stack redeploy failed for {request.StackId}: {failure}");
                 }
             }
             catch (OperationCanceledException ex)
@@ -813,6 +839,36 @@ internal sealed class BuildRunExecutionService(
                 await AppendPostBuildRedeployLogAsync(runId, $"Stack redeploy failed for {request.StackId}: {ex.Message}");
             }
         }
+    }
+
+    private static string? GetDeploymentRedeployFailure(DeploymentStreamItem item)
+    {
+        if (item.Error is null && string.IsNullOrWhiteSpace(item.ErrorMessage))
+            return null;
+
+        return !string.IsNullOrWhiteSpace(item.Error?.Message)
+            ? item.Error.Message
+            : !string.IsNullOrWhiteSpace(item.ErrorMessage)
+                ? item.ErrorMessage
+                : "Deployment apply failed.";
+    }
+
+    private static string? GetStackRedeployFailure(StackStreamItem item)
+    {
+        if (item.Type != StackApplyEventType.StdErr
+            && item.StackStatus != StackReleaseStatus.Failed
+            && item.ExitCode is not > 0)
+        {
+            return null;
+        }
+
+        return !string.IsNullOrWhiteSpace(item.Message)
+            ? item.Message
+            : !string.IsNullOrWhiteSpace(item.ProgressMessage)
+                ? item.ProgressMessage
+                : item.ExitCode is int exitCode
+                    ? $"Stack apply exited with code {exitCode}."
+                    : "Stack apply failed.";
     }
 
     private async Task AppendPostBuildRedeployLogAsync(Guid runId, string message)
@@ -831,14 +887,6 @@ internal sealed class BuildRunExecutionService(
 
         await SendBuildRunLogsSafeAsync(runId, [entry]);
     }
-
-    private static StackSpec SetBuildImageBindings(StackSpec spec, IReadOnlyList<StackBuildImageBinding> bindings)
-        => spec switch
-        {
-            ManualStack manual => manual with { BuildImageBindings = bindings },
-            GitStack git => git with { BuildImageBindings = bindings },
-            _ => spec
-        };
 
     private async Task AppendLogAsync(Guid runId, string stream, string message, CancellationToken cancellationToken)
     {

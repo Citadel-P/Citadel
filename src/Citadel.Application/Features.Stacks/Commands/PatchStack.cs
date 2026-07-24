@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
+using Application.Services.Builds;
 using Application.Services.SignalR;
 using FluentValidation;
 using Hosting.Common;
@@ -71,6 +72,11 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IPlatformStreamM
         {
             return Result.Failure<Stack>(new BadRequestError("Spec is required."));
         }
+
+        patched = patched with
+        {
+            Spec = BuildImageProvenance.Preserve(patched.Spec, stack.CurrentStackRelease.Spec)
+        };
 
         var stackSource = patched.StackSource ?? stack.StackSource;
         if (stackSource != stack.StackSource)

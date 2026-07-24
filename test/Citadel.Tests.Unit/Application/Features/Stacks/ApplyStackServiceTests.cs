@@ -1157,6 +1157,120 @@ public class ApplyStackServiceTests
     }
 
     [Fact]
+    public async Task StackSucceededWorkItem_Should_Record_Only_ServiceScoped_Build_Provenance()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var apiBuildProjectId = Guid.CreateVersion7();
+        var workerBuildProjectId = Guid.CreateVersion7();
+        var apiRunId = Guid.CreateVersion7();
+        var workerResolvedRunId = Guid.CreateVersion7();
+        var workerAppliedRunId = Guid.CreateVersion7();
+        var workerAppliedAt = DateTimeOffset.UtcNow.AddHours(-1);
+        var stack = Stack.Create(
+            name: "application",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  api:\n    image: api\n  worker:\n    image: worker\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled,
+                BuildImageBindings:
+                [
+                    new StackBuildImageBinding(
+                        ServiceName: "api",
+                        BuildProjectId: apiBuildProjectId,
+                        ResolvedImageReference: "registry.example.test/api:42",
+                        ResolvedDigest: "sha256:api",
+                        ResolvedBuildRunId: apiRunId),
+                    new StackBuildImageBinding(
+                        ServiceName: "worker",
+                        BuildProjectId: workerBuildProjectId,
+                        ResolvedImageReference: "registry.example.test/worker:43",
+                        ResolvedDigest: "sha256:worker-new",
+                        ResolvedBuildRunId: workerResolvedRunId,
+                        AppliedImageReference: "registry.example.test/worker:41",
+                        AppliedDigest: "sha256:worker-old",
+                        AppliedBuildRunId: workerAppliedRunId,
+                        AppliedAt: workerAppliedAt)
+                ]));
+        stack.MarkProcessing(actorId);
+
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stacks.Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        stacks.Setup(x => x.ReplaceReleaseVolumeBindingsAsync(
+                stack.CurrentStackRelease!.Id,
+                It.IsAny<IReadOnlyCollection<StackReleaseVolumeBinding>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var containers = new Mock<IContainerRepository>();
+        containers.Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        containers.Setup(x => x.BulkUpsertAsync(It.IsAny<IEnumerable<Container>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var images = new Mock<IImageRepository>();
+        images.Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents.Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var actors = new Mock<IActorRepository>();
+        actors.Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Actor?)null);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
+        unitOfWork.Setup(x => x.Images).Returns(images.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var appliedAt = DateTimeOffset.UtcNow;
+        var workItem = new StackSucceededWorkItem(
+            stack.Id,
+            actorId,
+            [],
+            StackReleaseStatus.Healthy,
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            StackApplyOperation.Apply,
+            appliedBuildImages:
+            [
+                new AppliedStackBuildImage(
+                    "api",
+                    apiBuildProjectId,
+                    "registry.example.test/api:42",
+                    "sha256:api-runtime",
+                    apiRunId)
+            ]);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        var bindings = stack.CurrentStackRelease!.Spec.BuildImageBindings!;
+        var api = Assert.Single(bindings, binding => binding.ServiceName == "api");
+        Assert.Equal(apiRunId, api.AppliedBuildRunId);
+        Assert.Equal("registry.example.test/api:42", api.AppliedImageReference);
+        Assert.Equal("sha256:api-runtime", api.AppliedDigest);
+        Assert.True(api.AppliedAt >= appliedAt);
+
+        var worker = Assert.Single(bindings, binding => binding.ServiceName == "worker");
+        Assert.Equal(workerResolvedRunId, worker.ResolvedBuildRunId);
+        Assert.Equal(workerAppliedRunId, worker.AppliedBuildRunId);
+        Assert.Equal("sha256:worker-old", worker.AppliedDigest);
+        Assert.Equal(workerAppliedAt, worker.AppliedAt);
+    }
+
+    [Fact]
     public async Task StackSucceededWorkItem_creates_and_associates_containers_when_sync_has_not_seen_them_yet()
     {
         var platformId = Guid.CreateVersion7();

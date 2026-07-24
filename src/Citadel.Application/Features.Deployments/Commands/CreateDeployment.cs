@@ -1,4 +1,5 @@
 using Application.Features.Deployments.Notifications;
+using Application.Services.Builds;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
@@ -54,7 +55,8 @@ internal class CreateDeploymentHandler(
             return Result.Failure<Deployment>(new ConflictError("Name already exists"));
         }
 
-        var imageValidation = await DeploymentImageValidation.ValidateAsync(command.Spec, unitOfWork, cancellationToken);
+        var spec = BuildImageProvenance.Clear(command.Spec);
+        var imageValidation = await DeploymentImageValidation.ValidateAsync(spec, unitOfWork, cancellationToken);
         if (imageValidation.IsFailure(out var imageError))
         {
             return Result.Failure<Deployment>(imageError);
@@ -71,7 +73,7 @@ internal class CreateDeploymentHandler(
             description: command.Description,
             createdByActorId: actorId,
             platformId: command.PlatformId,
-            spec: command.Spec);
+            spec: spec);
 
         var result = await unitOfWork.Deployments.AddAsync(deployment, cancellationToken, command.TagIds, actorId);
         if (result == 0)

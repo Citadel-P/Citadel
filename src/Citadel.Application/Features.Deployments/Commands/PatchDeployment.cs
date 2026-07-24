@@ -1,4 +1,5 @@
 ﻿using Application.Features.Deployments.Notifications;
+using Application.Services.Builds;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
@@ -59,6 +60,9 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         
         if (patchedDeployment.Spec is not null)
         {
+            patchedDeployment.PartialUpdate(
+                spec: BuildImageProvenance.Preserve(patchedDeployment.Spec, deployment.Spec));
+
             var imageValidation = await DeploymentImageValidation.ValidateAsync(patchedDeployment.Spec, unitOfWork, cancellationToken);
             if (imageValidation.IsFailure(out var imageError))
             {

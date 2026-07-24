@@ -39,6 +39,7 @@ internal static class WebApiModule
             .AddOpenApi(options =>
             {
                 options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1; 
+                options.AddSchemaTransformer<DateTimeOffsetSchemaTransformer>();
                 options.AddDocumentTransformer<ServerTransformer>();
                 options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
                 options.AddDocumentTransformer<KnownEnumSchemaDocumentTransformer>();

@@ -66,9 +66,12 @@ internal sealed class GetDeploymentDuplicateDraftHandler(IUnitOfWork unitOfWork)
 
     private static DeploymentSpec SanitizeSpec(DeploymentSpec spec)
     {
-        var image = spec.Image is ExternalImage external
-            ? external with { ResolvedDigest = null }
-            : spec.Image;
+        var image = spec.Image switch
+        {
+            ExternalImage external => external with { ResolvedDigest = null },
+            BuildImage build => build.ClearProvenance(),
+            _ => spec.Image
+        };
 
         return spec with { Image = image };
     }

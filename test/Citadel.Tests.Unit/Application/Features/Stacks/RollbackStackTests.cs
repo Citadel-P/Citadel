@@ -16,12 +16,31 @@ public class RollbackStackTests
     {
         var actorId = Guid.CreateVersion7();
         var platformId = Guid.CreateVersion7();
+        var buildProjectId = Guid.CreateVersion7();
+        var historicalBuildRunId = Guid.CreateVersion7();
+        var currentBuildRunId = Guid.CreateVersion7();
+        var historicalBinding = new StackBuildImageBinding(
+            ServiceName: "app",
+            BuildProjectId: buildProjectId,
+            ResolvedImageReference: "registry.example.test/app:historical",
+            ResolvedDigest: "sha256:historical",
+            ResolvedBuildRunId: historicalBuildRunId);
         var oldSpec = new ManualStack(
             ComposeFile: "services:\n  app:\n    image: nginx:1\n",
-            UpdateBehavior: StackUpdateBehavior.Disabled);
+            UpdateBehavior: StackUpdateBehavior.Disabled,
+            BuildImageBindings: [historicalBinding]);
         var newSpec = oldSpec with
         {
-            ComposeFile = "services:\n  app:\n    image: nginx:2\n"
+            ComposeFile = "services:\n  app:\n    image: nginx:2\n",
+            BuildImageBindings =
+            [
+                historicalBinding with
+                {
+                    ResolvedImageReference = "registry.example.test/app:current",
+                    ResolvedDigest = "sha256:current",
+                    ResolvedBuildRunId = currentBuildRunId
+                }
+            ]
         };
         var stack = Stack.Create(
             name: "manual-stack",
@@ -85,6 +104,11 @@ public class RollbackStackTests
         var rollbackSpec = Assert.IsType<ManualStack>(updatedStack.CurrentStackRelease!.Spec);
         Assert.Equal(oldSpec.ComposeFile, rollbackSpec.ComposeFile);
         Assert.NotEqual(newSpec.ComposeFile, rollbackSpec.ComposeFile);
+        var rollbackBinding = Assert.Single(rollbackSpec.BuildImageBindings!);
+        Assert.Equal(historicalBinding.ResolvedImageReference, rollbackBinding.ResolvedImageReference);
+        Assert.Equal(historicalBinding.ResolvedDigest, rollbackBinding.ResolvedDigest);
+        Assert.Equal(historicalBuildRunId, rollbackBinding.ResolvedBuildRunId);
+        Assert.NotEqual(currentBuildRunId, rollbackBinding.ResolvedBuildRunId);
         Assert.Contains(
             items,
             item => item.ProgressMessage?.Contains("Rollback release prepared", StringComparison.Ordinal) == true);

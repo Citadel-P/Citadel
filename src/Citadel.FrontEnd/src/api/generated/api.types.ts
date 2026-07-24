@@ -2319,9 +2319,9 @@ export interface AlertEventInfoLicenseEnteredGracePeriodAlertInfo {
   customerName: null | string;
   fingerprint: null | string;
   /** @format date-time */
-  expiresAt: any;
+  expiresAt: string;
   /** @format date-time */
-  graceUntil: any;
+  graceUntil: null | string;
   humanMessage?: null | string;
 }
 
@@ -2331,9 +2331,9 @@ export interface AlertEventInfoLicenseExpiredAlertInfo {
   customerName: null | string;
   fingerprint: null | string;
   /** @format date-time */
-  expiresAt: any;
+  expiresAt: null | string;
   /** @format date-time */
-  graceUntil: any;
+  graceUntil: null | string;
   humanMessage?: null | string;
 }
 
@@ -2924,11 +2924,11 @@ export interface BackupCoverageView {
   lastRunId: null | string;
   lastRunStatus: null | BackupRunStatus;
   /** @format date-time */
-  lastRunAt: any;
+  lastRunAt: null | string;
   /** @format date-time */
-  lastSuccessfulRunAt: any;
+  lastSuccessfulRunAt: null | string;
   /** @format date-time */
-  nextRunAt: any;
+  nextRunAt: null | string;
 }
 
 export interface BackupEventsView {
@@ -3006,17 +3006,17 @@ export interface BackupPolicyView {
   /** @format uuid */
   currentRunId: null | string;
   /** @format date-time */
-  lastScheduledRunAt: any;
+  lastScheduledRunAt: null | string;
   /** @format date-time */
-  firstSuccessfulRunAt: any;
+  firstSuccessfulRunAt: null | string;
   /** @format uuid */
   createdByActorId: string;
   /** @format date-time */
-  createdAt: any;
+  createdAt: string;
   /** @format date-time */
-  updatedAt: any;
+  updatedAt: string;
   /** @format date-time */
-  archivedAt: any;
+  archivedAt: null | string;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -3077,7 +3077,7 @@ export interface BackupRepositoryValidationView {
   platformId: null | string;
   status: BackupRepositoryValidationStatus;
   /** @format date-time */
-  lastValidatedAt: any;
+  lastValidatedAt: string;
   lastErrorCode: null | string;
   lastErrorMessage: null | string;
 }
@@ -3102,17 +3102,17 @@ export interface BackupRepositoryView {
    */
   controlStartedAt: null | number | string;
   /** @format date-time */
-  lastPrunedAt: any;
+  lastPrunedAt: null | string;
   /** @format date-time */
-  lastCheckedAt: any;
+  lastCheckedAt: null | string;
   /** @format uuid */
   createdByActorId: string;
   /** @format date-time */
-  createdAt: any;
+  createdAt: string;
   /** @format date-time */
-  updatedAt: any;
+  updatedAt: string;
   /** @format date-time */
-  archivedAt: any;
+  archivedAt: null | string;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -3150,11 +3150,11 @@ export interface BackupRestoreRunView {
   affectedContainers: BackupAffectedContainer[];
   warnings: BackupRunWarning[];
   /** @format date-time */
-  queuedAt: any;
+  queuedAt: string;
   /** @format date-time */
-  startedAt: any;
+  startedAt: null | string;
   /** @format date-time */
-  completedAt: any;
+  completedAt: null | string;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -3197,9 +3197,9 @@ export interface BackupRunItemView {
    */
   bytesAdded: null | number | string;
   /** @format date-time */
-  startedAt: any;
+  startedAt: null | string;
   /** @format date-time */
-  completedAt: any;
+  completedAt: null | string;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -3256,11 +3256,11 @@ export interface BackupRunView {
   bytesAdded: null | number | string;
   warnings: BackupRunWarning[];
   /** @format date-time */
-  queuedAt: any;
+  queuedAt: string;
   /** @format date-time */
-  startedAt: any;
+  startedAt: null | string;
   /** @format date-time */
-  completedAt: any;
+  completedAt: null | string;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -3472,7 +3472,7 @@ export interface BuildAgentPoolSnapshot {
   lastValidationStatus: BuildAgentPoolValidationStatus;
   lastValidationMessage: null | string;
   /** @format date-time */
-  lastValidatedAt: any;
+  lastValidatedAt: null | string;
 }
 
 export interface BuildAgentPoolView {
@@ -3527,7 +3527,7 @@ export interface BuildAgentPoolView {
   lastValidationStatus: BuildAgentPoolValidationStatus;
   lastValidationMessage: null | string;
   /** @format date-time */
-  lastValidatedAt: any;
+  lastValidatedAt: null | string;
   controlState: ResourceControlState;
   /** @format uuid */
   controlTriggeredBy: null | string;
@@ -3539,11 +3539,11 @@ export interface BuildAgentPoolView {
   /** @format uuid */
   createdByActorId: string;
   /** @format date-time */
-  createdAt: any;
+  createdAt: string;
   /** @format date-time */
-  updatedAt: any;
+  updatedAt: string;
   /** @format date-time */
-  archivedAt: any;
+  archivedAt: null | string;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -3695,11 +3695,11 @@ export interface BuildProjectView {
   /** @format uuid */
   createdByActorId: string;
   /** @format date-time */
-  createdAt: any;
+  createdAt: string;
   /** @format date-time */
-  updatedAt: any;
+  updatedAt: string;
   /** @format date-time */
-  archivedAt: any;
+  archivedAt: null | string;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -3728,7 +3728,7 @@ export interface BuildRunLogEntry {
   /** @format uuid */
   buildRunId: string;
   /** @format date-time */
-  createdAt: any;
+  createdAt: string;
   stream: string;
   message: string;
 }
@@ -3765,11 +3765,11 @@ export interface BuildRunView {
    */
   timeoutSeconds: number | string;
   /** @format date-time */
-  queuedAt: any;
+  queuedAt: string;
   /** @format date-time */
-  startedAt: any;
+  startedAt: null | string;
   /** @format date-time */
-  completedAt: any;
+  completedAt: null | string;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -4406,6 +4406,14 @@ export interface DeploymentImageInfoBuildImage {
   redeployOnBuild?: boolean;
   resolvedImageReference?: null | string;
   resolvedDigest?: null | string;
+  /** @format uuid */
+  resolvedBuildRunId?: null | string;
+  appliedImageReference?: null | string;
+  appliedDigest?: null | string;
+  /** @format uuid */
+  appliedBuildRunId?: null | string;
+  /** @format date-time */
+  appliedAt?: null | string;
 }
 
 export interface DeploymentImageInfoExternalImage {
@@ -5264,9 +5272,9 @@ export interface LicenseActivitySnapshot {
   fingerprint: null | string;
   status: LicenseStatus;
   /** @format date-time */
-  expiresAt: any;
+  expiresAt: null | string;
   /** @format date-time */
-  graceUntil: any;
+  graceUntil: null | string;
 }
 
 export interface LicenseLimitView {
@@ -5290,7 +5298,7 @@ export interface LicenseRequestView {
   instanceId: string;
   coreVersion: string;
   /** @format date-time */
-  generatedAt: any;
+  generatedAt: string;
 }
 
 export interface LicenseView {
@@ -5304,13 +5312,13 @@ export interface LicenseView {
   customerName: null | string;
   fingerprint: null | string;
   /** @format date-time */
-  issuedAt: any;
+  issuedAt: null | string;
   /** @format date-time */
-  notBefore: any;
+  notBefore: null | string;
   /** @format date-time */
-  expiresAt: any;
+  expiresAt: null | string;
   /** @format date-time */
-  graceUntil: any;
+  graceUntil: null | string;
   limits: LicenseLimitView[];
   warnings: string[];
 }
@@ -6401,6 +6409,14 @@ export interface StackBuildImageBinding {
   redeployOnBuild?: boolean;
   resolvedImageReference?: null | string;
   resolvedDigest?: null | string;
+  /** @format uuid */
+  resolvedBuildRunId?: null | string;
+  appliedImageReference?: null | string;
+  appliedDigest?: null | string;
+  /** @format uuid */
+  appliedBuildRunId?: null | string;
+  /** @format date-time */
+  appliedAt?: null | string;
 }
 
 export interface StackCapabilities {
@@ -6659,7 +6675,7 @@ export interface StackStatsView {
 export interface StackStreamItem {
   type: StackApplyEventType;
   /** @format date-time */
-  timestamp: any;
+  timestamp: string;
   progressMessage?: null | string;
   message?: null | string;
   /**
@@ -7182,7 +7198,7 @@ export interface VolumeFileEntryView {
    */
   size: null | number | string;
   /** @format date-time */
-  modifiedAt: any;
+  modifiedAt: null | string;
   linkTarget?: null | string;
 }
 

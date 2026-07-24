@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
+using Application.Services.Builds;
 using Application.Services.SignalR;
 using FluentValidation;
 using Hosting.Common;
@@ -53,7 +54,8 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStream
             return Result.Failure<Stack>(new ConflictError("Name already exists"));
         }
 
-        if (!IsCompatible(command.StackSource, command.Spec))
+        var spec = BuildImageProvenance.Clear(command.Spec);
+        if (!IsCompatible(command.StackSource, spec))
         {
             return Result.Failure<Stack>(new BadRequestError("StackSource does not match the provided StackSpec."));
         }
@@ -64,7 +66,7 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStream
             return Result.Failure<Stack>(new NotFoundError("The provided platform does not exist."));
         }
 
-        if (command.Spec is GitStack gitSpec)
+        if (spec is GitStack gitSpec)
         {
             var validationError = GitStackSpecValidation.Validate(gitSpec);
             if (validationError is not null)
@@ -90,7 +92,7 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStream
             createdByActorId: actorId,
             StackSource: command.StackSource,
             platformId: command.PlatformId,
-            spec: command.Spec,
+            spec: spec,
             description: command.Description,
             driftPolicy: command.DriftPolicy);
 

@@ -87,19 +87,27 @@ internal sealed class GetStackDuplicateDraftHandler(IUnitOfWork unitOfWork)
                 "The stack webhook secret was intentionally omitted. Generate a new secret after saving the duplicate.",
                 "spec.webhook.secret"));
 
-            return git with
+            var sanitizedGit = git with
             {
                 ProjectName = null,
                 Webhook = git.Webhook with { Secret = null }
             };
+
+            return sanitizedGit.WithBuildImageBindings(sanitizedGit.BuildImageBindings?
+                .Select(static binding => binding.ClearProvenance())
+                .ToArray());
         }
 
-        return spec switch
+        var sanitized = spec switch
         {
             ManualStack manual => manual with { ProjectName = null },
             GitStack gitSpec => gitSpec with { ProjectName = null },
             _ => spec
         };
+
+        return sanitized.WithBuildImageBindings(sanitized.BuildImageBindings?
+            .Select(static binding => binding.ClearProvenance())
+            .ToArray());
     }
 
     private async Task<string> GetAvailableDuplicateNameAsync(string sourceName, CancellationToken cancellationToken)

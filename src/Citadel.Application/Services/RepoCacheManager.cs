@@ -72,7 +72,7 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
             if (hashResult.IsFailure(out var hashError, out var hash))
                 return new RepoSyncResult(Operation: operation, Error: hashError.Message);
 
-            return new RepoSyncResult(operation, hash, Success: true);
+            return new RepoSyncResult(operation, hash, Success: true, CachePath: targetPath);
         }
         finally
         {
@@ -182,4 +182,5 @@ internal sealed record RepoSyncResult(
     GitOperation Operation,
     string? Hash = null,
     bool? Success = false,
-    string? Error = null);
+    string? Error = null,
+    string? CachePath = null);

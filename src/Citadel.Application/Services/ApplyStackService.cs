@@ -468,7 +468,11 @@ internal class ApplyStackService(
                 previousStackSnapshot,
                 releaseSource,
                 selectedConfiguration.SnapshotEntries,
-                volumeBindings.Bindings);
+                volumeBindings.Bindings,
+                ResolveAppliedBuildImages(
+                    resolvedBuildBindings.Bindings,
+                    serviceNames,
+                    secretTargetServiceNames));
 
             if (waitForCompletion)
             {
@@ -940,6 +944,30 @@ internal class ApplyStackService(
         return await uow.GitRepositories.GetWithAccountAsync(gitRepositoryId, ct);
     }
 
+    private static IReadOnlyList<AppliedStackBuildImage> ResolveAppliedBuildImages(
+        IReadOnlyList<ResolvedStackBuildImageBinding> resolvedBindings,
+        IReadOnlyList<string>? requestedServiceNames,
+        IReadOnlyList<string>? availableServiceNames)
+    {
+        var requested = requestedServiceNames is { Count: > 0 }
+            ? requestedServiceNames.ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : null;
+        var available = availableServiceNames is { Count: > 0 }
+            ? availableServiceNames.ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        return resolvedBindings
+            .Where(binding => requested is null || requested.Contains(binding.Binding.ServiceName))
+            .Where(binding => available is null || available.Contains(binding.Binding.ServiceName))
+            .Select(binding => new AppliedStackBuildImage(
+                binding.Binding.ServiceName,
+                binding.Binding.BuildProjectId,
+                binding.ImageReference,
+                binding.Digest,
+                binding.BuildRunId))
+            .ToArray();
+    }
+
     private ValueTask EnqueueStatus(
         Guid stackId,
         Guid actorId,
@@ -1031,7 +1059,8 @@ internal sealed class StackSucceededWorkItem(
     StackSnapshot? previousStackSnapshot = null,
     StackReleaseSource? source = null,
     IReadOnlyList<ResourceBindingSnapshot>? resourceBindings = null,
-    IReadOnlyList<StackReleaseVolumeBinding>? volumeBindings = null) : IDbWorkItem
+    IReadOnlyList<StackReleaseVolumeBinding>? volumeBindings = null,
+    IReadOnlyList<AppliedStackBuildImage>? appliedBuildImages = null) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -1057,6 +1086,7 @@ internal sealed class StackSucceededWorkItem(
         }
 
         stack.CurrentStackRelease.UpdateResourceBindings(resourceBindings);
+        UpdateAppliedBuildImages(stack.CurrentStackRelease, appliedBuildImages);
         stack.ReleaseProcessing(composeStatus ?? GetAppliedStackStatus(dockerContainers));
 
         var platformId = stack.CurrentStackRelease.PlatformId;
@@ -1130,6 +1160,42 @@ internal sealed class StackSucceededWorkItem(
             ? StackReleaseStatus.Healthy
             : Stack.ToStackStatus(containers.Select(container => container.State));
 
+    private static void UpdateAppliedBuildImages(
+        StackRelease release,
+        IReadOnlyList<AppliedStackBuildImage>? appliedImages)
+    {
+        if (appliedImages is not { Count: > 0 } || release.Spec.BuildImageBindings is not { Count: > 0 })
+            return;
+
+        var appliedAt = DateTimeOffset.UtcNow;
+        var bindings = release.Spec.BuildImageBindings.Select(binding =>
+        {
+            var applied = appliedImages.FirstOrDefault(candidate =>
+                candidate.BuildProjectId == binding.BuildProjectId
+                && string.Equals(candidate.ServiceName, binding.ServiceName, StringComparison.OrdinalIgnoreCase));
+            if (applied is null)
+                return binding;
+
+            var hasResolvedBuild = binding.ResolvedBuildRunId is not null;
+            return binding with
+            {
+                ResolvedImageReference = hasResolvedBuild
+                    ? binding.ResolvedImageReference
+                    : applied.ImageReference,
+                ResolvedDigest = hasResolvedBuild
+                    ? binding.ResolvedDigest
+                    : applied.Digest,
+                ResolvedBuildRunId = binding.ResolvedBuildRunId ?? applied.BuildRunId,
+                AppliedImageReference = applied.ImageReference,
+                AppliedDigest = applied.Digest,
+                AppliedBuildRunId = applied.BuildRunId,
+                AppliedAt = appliedAt
+            };
+        }).ToArray();
+
+        release.UpdateSpec(release.Spec.WithBuildImageBindings(bindings));
+    }
+
     private static IReadOnlyList<StackReleaseVolumeBinding> DeduplicateVolumeBindings(
         IReadOnlyList<StackReleaseVolumeBinding>? volumeBindings)
     {
@@ -1145,6 +1211,13 @@ internal sealed class StackSucceededWorkItem(
         return [.. bindings.Values];
     }
 }
+
+internal sealed record AppliedStackBuildImage(
+    string ServiceName,
+    Guid BuildProjectId,
+    string ImageReference,
+    string? Digest,
+    Guid BuildRunId);
 
 internal static class StackActivityFactory
 {

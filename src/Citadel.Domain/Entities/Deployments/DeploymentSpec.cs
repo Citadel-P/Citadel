@@ -29,7 +29,39 @@ public sealed record BuildImage(
     Guid BuildProjectId,
     bool RedeployOnBuild = false,
     string? ResolvedImageReference = null,
-    string? ResolvedDigest = null) : DeploymentImageInfo;
+    string? ResolvedDigest = null,
+    Guid? ResolvedBuildRunId = null,
+    string? AppliedImageReference = null,
+    string? AppliedDigest = null,
+    Guid? AppliedBuildRunId = null,
+    DateTimeOffset? AppliedAt = null) : DeploymentImageInfo
+{
+    public BuildImage ClearProvenance()
+        => this with
+        {
+            ResolvedImageReference = null,
+            ResolvedDigest = null,
+            ResolvedBuildRunId = null,
+            AppliedImageReference = null,
+            AppliedDigest = null,
+            AppliedBuildRunId = null,
+            AppliedAt = null
+        };
+
+    public BuildImage PreserveProvenanceFrom(BuildImage current)
+        => BuildProjectId == current.BuildProjectId
+            ? this with
+            {
+                ResolvedImageReference = current.ResolvedImageReference,
+                ResolvedDigest = current.ResolvedDigest,
+                ResolvedBuildRunId = current.ResolvedBuildRunId,
+                AppliedImageReference = current.AppliedImageReference,
+                AppliedDigest = current.AppliedDigest,
+                AppliedBuildRunId = current.AppliedBuildRunId,
+                AppliedAt = current.AppliedAt
+            }
+            : ClearProvenance();
+}
 public sealed record ResourceSpec(
     float? NanoCpus,
     float? MemoryLimit

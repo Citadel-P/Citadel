@@ -22,8 +22,14 @@ using System.Runtime.CompilerServices;
 
 namespace Tests.Unit.Application.Features.Builds;
 
-public sealed class BuildRunStartTests
+public sealed class BuildRunStartTests : IDisposable
 {
+    private readonly string repositoryCacheRoot = Path.Combine(
+        Path.GetTempPath(),
+        "citadel-tests",
+        "build-runs",
+        Guid.NewGuid().ToString("N"));
+
     [Fact]
     public async Task QueueBuildRun_ShouldCreateSingleRunAndNotifyAfterCommit()
     {
@@ -448,7 +454,7 @@ public sealed class BuildRunStartTests
         var registry = CreateRegistry(project.RegistryId, actorId);
         var run = CreateRun(project, repository, platform, registry, actorId);
         run.MarkPreparing(DateTimeOffset.UtcNow);
-        PrepareRepositoryCache(repository);
+        var repositoryCachePath = PrepareRepositoryCache(repository);
 
         var context = CreateExecutionContext(project, repository, platform, registry, run);
         BuildProcessCommand? processCommand = null;
@@ -457,7 +463,11 @@ public sealed class BuildRunStartTests
 
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryCachePath));
         context.Runner
             .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
             .Callback<BuildProcessCommand, CancellationToken>((command, _) => processCommand = command)
@@ -475,9 +485,9 @@ public sealed class BuildRunStartTests
 
         Assert.True(result.IsSuccess());
         Assert.NotNull(processCommand);
-        Assert.Equal(Path.GetFullPath(repository.GetCachePath()), processCommand.WorkingDirectory);
-        Assert.Equal(Path.GetFullPath(repository.GetCachePath()), Path.GetFullPath(processCommand.ContextPath));
-        Assert.Equal(Path.Combine(Path.GetFullPath(repository.GetCachePath()), "Dockerfile"), processCommand.DockerfilePath);
+        Assert.Equal(repositoryCachePath, processCommand.WorkingDirectory);
+        Assert.Equal(repositoryCachePath, Path.GetFullPath(processCommand.ContextPath));
+        Assert.Equal(Path.Combine(repositoryCachePath, "Dockerfile"), processCommand.DockerfilePath);
         Assert.Equal(PlatformConnectorType.Local, processCommand.PlatformConnectorType);
         Assert.Equal("registry.example.test/citadel/api:main-abcdef123456", Assert.Single(processCommand.ImageReferences));
         Assert.Contains(BuildRunStatus.Running, statusUpdates);
@@ -503,13 +513,17 @@ public sealed class BuildRunStartTests
         var registry = CreateRegistry(project.RegistryId, actorId);
         var run = CreateRun(project, repository, platform, registry, actorId);
         run.MarkPreparing(DateTimeOffset.UtcNow);
-        PrepareRepositoryCache(repository);
+        var repositoryCachePath = PrepareRepositoryCache(repository);
 
         var context = CreateExecutionContext(project, repository, platform, registry, run, buildAgentPool: pool);
         BuildProcessCommand? processCommand = null;
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryCachePath));
         context.Runner
             .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
             .Callback<BuildProcessCommand, CancellationToken>((command, _) => processCommand = command)
@@ -537,8 +551,7 @@ public sealed class BuildRunStartTests
         var registry = CreateRegistry(project.RegistryId, actorId);
         var run = CreateRun(project, repository, platform, registry, actorId);
         run.MarkPreparing(DateTimeOffset.UtcNow);
-        PrepareRepositoryCache(repository);
-        var repositoryRoot = Path.GetFullPath(repository.GetCachePath());
+        var repositoryRoot = PrepareRepositoryCache(repository);
         File.Delete(Path.Combine(repositoryRoot, "Dockerfile"));
         Directory.CreateDirectory(Path.Combine(repositoryRoot, "vote"));
         File.WriteAllText(Path.Combine(repositoryRoot, "vote", "Dockerfile"), "FROM scratch");
@@ -547,7 +560,11 @@ public sealed class BuildRunStartTests
         BuildProcessCommand? processCommand = null;
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryRoot));
         context.Runner
             .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
             .Callback<BuildProcessCommand, CancellationToken>((command, _) => processCommand = command)
@@ -586,7 +603,7 @@ public sealed class BuildRunStartTests
         var registry = CreateRegistry(project.RegistryId, actorId);
         var run = CreateRun(project, repository, platform, registry, actorId);
         run.MarkPreparing(DateTimeOffset.UtcNow);
-        PrepareRepositoryCache(repository);
+        var repositoryCachePath = PrepareRepositoryCache(repository);
 
         var context = CreateExecutionContext(project, repository, platform, registry, run, buildAgentPool: pool);
         var activities = new List<ActivityEvent>();
@@ -605,7 +622,11 @@ public sealed class BuildRunStartTests
 
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryCachePath));
         context.Runner
             .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
             .Returns(BuildEvents(
@@ -675,13 +696,17 @@ public sealed class BuildRunStartTests
         var registry = CreateRegistry(queuedProject.RegistryId, actorId);
         var run = CreateRun(queuedProject, repository, platformSnapshot, registry, actorId);
         run.MarkPreparing(DateTimeOffset.UtcNow);
-        PrepareRepositoryCache(repository);
+        var repositoryCachePath = PrepareRepositoryCache(repository);
 
         var context = CreateExecutionContext(currentProject, repository, platformSnapshot, registry, run, buildAgentPool: pool);
         BuildProcessCommand? processCommand = null;
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryCachePath));
         context.Runner
             .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
             .Callback<BuildProcessCommand, CancellationToken>((command, _) => processCommand = command)
@@ -710,14 +735,18 @@ public sealed class BuildRunStartTests
         var deployment = CreateBuildImageDeployment(Guid.CreateVersion7(), project.PlatformId, project.Id, actorId);
         var run = CreateRun(project, repository, platform, registry, actorId);
         run.MarkPreparing(DateTimeOffset.UtcNow);
-        PrepareRepositoryCache(repository);
+        var repositoryCachePath = PrepareRepositoryCache(repository);
 
         var context = CreateExecutionContext(project, repository, platform, registry, run);
         var persistedLogs = new List<BuildRunLogEntry>();
 
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryCachePath));
         context.Runner
             .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
             .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
@@ -738,6 +767,8 @@ public sealed class BuildRunStartTests
         var image = Assert.IsType<BuildImage>(deployment.Spec!.Image);
         Assert.Equal("registry.example.test/citadel/api:main-abcdef123456", image.ResolvedImageReference);
         Assert.Equal("sha256:abc", image.ResolvedDigest);
+        Assert.Equal(run.Id, image.ResolvedBuildRunId);
+        Assert.Null(image.AppliedBuildRunId);
         Assert.Contains(persistedLogs, log => log.Stream == "system" && log.Message.Contains("Updated build image source for deployment", StringComparison.Ordinal));
         context.Deployments.Verify(x => x.UpdateAsync(deployment, It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -753,14 +784,18 @@ public sealed class BuildRunStartTests
         var stack = CreateBuildImageStack(project.PlatformId, project.Id, actorId, redeployOnBuild: true);
         var run = CreateRun(project, repository, platform, registry, actorId);
         run.MarkPreparing(DateTimeOffset.UtcNow);
-        PrepareRepositoryCache(repository);
+        var repositoryCachePath = PrepareRepositoryCache(repository);
 
         var context = CreateExecutionContext(project, repository, platform, registry, run);
         var persistedLogs = new List<BuildRunLogEntry>();
 
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryCachePath));
         context.Runner
             .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
             .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
@@ -793,6 +828,8 @@ public sealed class BuildRunStartTests
         var binding = Assert.Single(stack.CurrentStackRelease!.Spec.BuildImageBindings!);
         Assert.Equal("registry.example.test/citadel/api:main-abcdef123456", binding.ResolvedImageReference);
         Assert.Equal("sha256:abc", binding.ResolvedDigest);
+        Assert.Equal(run.Id, binding.ResolvedBuildRunId);
+        Assert.Null(binding.AppliedBuildRunId);
         Assert.Contains(persistedLogs, log => log.Stream == "system" && log.Message.Contains("Updated build image binding for stack", StringComparison.Ordinal));
         context.Stacks.Verify(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()), Times.Once);
         context.ApplyStack.Verify(x => x.ApplyAsync(
@@ -814,7 +851,7 @@ public sealed class BuildRunStartTests
     }
 
     [Fact]
-    public async Task ExecuteQueuedBuildRun_ShouldRemainSucceeded_WhenBuildImageRedeployFails()
+    public async Task ExecuteQueuedBuildRun_ShouldRemainSucceeded_WhenDeploymentRedeployYieldsError()
     {
         var actorId = Guid.CreateVersion7();
         var project = CreateProject(actorId);
@@ -822,9 +859,22 @@ public sealed class BuildRunStartTests
         var platform = CreatePlatform(project.PlatformId);
         var registry = CreateRegistry(project.RegistryId, actorId);
         var deployment = CreateBuildImageDeployment(Guid.CreateVersion7(), project.PlatformId, project.Id, actorId, redeployOnBuild: true);
+        var previousAppliedRunId = Guid.CreateVersion7();
+        var previousAppliedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var previousBuildImage = Assert.IsType<BuildImage>(deployment.Spec!.Image);
+        deployment.PartialUpdate(spec: deployment.Spec with
+        {
+            Image = previousBuildImage with
+            {
+                AppliedImageReference = "registry.example.test/citadel/api:previous",
+                AppliedDigest = "sha256:previous",
+                AppliedBuildRunId = previousAppliedRunId,
+                AppliedAt = previousAppliedAt
+            }
+        });
         var run = CreateRun(project, repository, platform, registry, actorId);
         run.MarkPreparing(DateTimeOffset.UtcNow);
-        PrepareRepositoryCache(repository);
+        var repositoryCachePath = PrepareRepositoryCache(repository);
 
         var context = CreateExecutionContext(project, repository, platform, registry, run);
         var persistedLogs = new List<BuildRunLogEntry>();
@@ -832,7 +882,11 @@ public sealed class BuildRunStartTests
 
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryCachePath));
         context.Runner
             .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
             .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
@@ -847,13 +901,101 @@ public sealed class BuildRunStartTests
             .ReturnsAsync(1);
         context.ApplyDeployment
             .Setup(x => x.ApplyAsync(deployment.Id, actorId, false, It.IsAny<CancellationToken>()))
-            .Returns((Guid _, Guid _, bool _, CancellationToken ct) => FailingDeploymentApply(ct));
+            .Returns((Guid _, Guid _, bool _, CancellationToken ct) => FailedDeploymentApply(ct));
 
         var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess());
         Assert.Equal(BuildRunStatus.Succeeded, run.Status);
+        var image = Assert.IsType<BuildImage>(deployment.Spec!.Image);
+        Assert.Equal(run.Id, image.ResolvedBuildRunId);
+        Assert.Equal("sha256:abc", image.ResolvedDigest);
+        Assert.Equal(previousAppliedRunId, image.AppliedBuildRunId);
+        Assert.Equal("sha256:previous", image.AppliedDigest);
+        Assert.Equal(previousAppliedAt, image.AppliedAt);
         Assert.Contains(persistedLogs, log => log.Stream == "stderr" && log.Message.Contains("Deployment redeploy failed", StringComparison.Ordinal));
+        context.BuildProjects.Verify(x => x.MarkIdleAsync(project.Id, run.Id, It.IsAny<CancellationToken>()), Times.Once);
+        context.Retention.Verify(x => x.PruneAsync(project.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedBuildRun_ShouldRemainSucceeded_WhenStackRedeployYieldsFailure()
+    {
+        var actorId = Guid.CreateVersion7();
+        var project = CreateProject(actorId);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var platform = CreatePlatform(project.PlatformId);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var stack = CreateBuildImageStack(project.PlatformId, project.Id, actorId, redeployOnBuild: true);
+        var previousAppliedRunId = Guid.CreateVersion7();
+        var previousAppliedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var currentRelease = stack.CurrentStackRelease!;
+        var previousBinding = Assert.Single(currentRelease.Spec.BuildImageBindings!);
+        currentRelease.UpdateSpec(currentRelease.Spec.WithBuildImageBindings(
+        [
+            previousBinding with
+            {
+                AppliedImageReference = "registry.example.test/citadel/api:previous",
+                AppliedDigest = "sha256:previous",
+                AppliedBuildRunId = previousAppliedRunId,
+                AppliedAt = previousAppliedAt
+            }
+        ]));
+        var run = CreateRun(project, repository, platform, registry, actorId);
+        run.MarkPreparing(DateTimeOffset.UtcNow);
+        var repositoryCachePath = PrepareRepositoryCache(repository);
+
+        var context = CreateExecutionContext(project, repository, platform, registry, run);
+        var persistedLogs = new List<BuildRunLogEntry>();
+        CaptureLogs(context.BuildRunLogs, persistedLogs);
+
+        context.RepoCache
+            .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryCachePath));
+        context.Runner
+            .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(BuildEvents(new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0, Digest: "sha256:abc")));
+        context.BuildRuns
+            .Setup(x => x.UpdateAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        context.Stacks
+            .Setup(x => x.GetBuildImageConsumerStacksAsync(project.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([stack]);
+        context.Stacks
+            .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        context.ApplyStack
+            .Setup(x => x.ApplyAsync(
+                stack.Id,
+                actorId,
+                It.Is<IReadOnlyList<string>>(services => services.Count == 1 && services[0] == "api"),
+                true,
+                false,
+                false,
+                StackApplyOperation.Apply,
+                null,
+                It.IsAny<CancellationToken>()))
+            .Returns((Guid _, Guid _, IReadOnlyList<string>? _, bool _, bool _, bool _, StackApplyOperation _, StackSnapshot? _, CancellationToken ct) => FailedStackApply(ct));
+
+        var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        Assert.Equal(BuildRunStatus.Succeeded, run.Status);
+        var binding = Assert.Single(stack.CurrentStackRelease!.Spec.BuildImageBindings!);
+        Assert.Equal(run.Id, binding.ResolvedBuildRunId);
+        Assert.Equal("sha256:abc", binding.ResolvedDigest);
+        Assert.Equal(previousAppliedRunId, binding.AppliedBuildRunId);
+        Assert.Equal("sha256:previous", binding.AppliedDigest);
+        Assert.Equal(previousAppliedAt, binding.AppliedAt);
+        Assert.Contains(
+            persistedLogs,
+            log => log.Stream == "stderr"
+                && log.Message.Contains("Stack redeploy failed", StringComparison.Ordinal)
+                && log.Message.Contains("redeploy failed", StringComparison.Ordinal));
         context.BuildProjects.Verify(x => x.MarkIdleAsync(project.Id, run.Id, It.IsAny<CancellationToken>()), Times.Once);
         context.Retention.Verify(x => x.PruneAsync(project.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -868,7 +1010,7 @@ public sealed class BuildRunStartTests
         var registry = CreateRegistry(project.RegistryId, actorId);
         var run = CreateRun(project, repository, platform, registry, actorId);
         run.MarkPreparing(DateTimeOffset.UtcNow);
-        PrepareRepositoryCache(repository);
+        var repositoryCachePath = PrepareRepositoryCache(repository);
 
         var coordinator = new BuildRunCoordinator();
         var context = CreateExecutionContext(project, repository, platform, registry, run, coordinator);
@@ -879,7 +1021,11 @@ public sealed class BuildRunStartTests
 
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abcdef1234567890", Success: true));
+            .ReturnsAsync(new RepoSyncResult(
+                GitOperation.Pull,
+                "abcdef1234567890",
+                Success: true,
+                CachePath: repositoryCachePath));
         context.Runner
             .Setup(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()))
             .Returns((BuildProcessCommand _, CancellationToken ct) => CancellableBuild(runnerStarted, runnerCancelled, ct));
@@ -1301,11 +1447,18 @@ public sealed class BuildRunStartTests
             : run;
     }
 
-    private static void PrepareRepositoryCache(GitRepository repository)
+    private string PrepareRepositoryCache(GitRepository repository)
     {
-        var path = Path.GetFullPath(repository.GetCachePath());
+        var path = Path.GetFullPath(Path.Combine(repositoryCacheRoot, repository.Id.ToString("D")));
         Directory.CreateDirectory(path);
         File.WriteAllText(Path.Combine(path, "Dockerfile"), "FROM scratch");
+        return path;
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(repositoryCacheRoot))
+            Directory.Delete(repositoryCacheRoot, recursive: true);
     }
 
     private static async IAsyncEnumerable<BuildProcessEvent> BuildEvents(params BuildProcessEvent[] events)
@@ -1334,15 +1487,22 @@ public sealed class BuildRunStartTests
         yield return new BuildProcessEvent(BuildProcessStream.Exit, ExitCode: 0);
     }
 
-    private static async IAsyncEnumerable<DeploymentStreamItem> FailingDeploymentApply(
+    private static async IAsyncEnumerable<DeploymentStreamItem> FailedDeploymentApply(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
-        throw new InvalidOperationException("redeploy failed");
-#pragma warning disable CS0162
-        yield return new DeploymentStreamItem();
-#pragma warning restore CS0162
+        yield return new DeploymentStreamItem(
+            ErrorMessage: "redeploy failed",
+            Error: new DeploymentApplyError(500, "redeploy failed"));
+    }
+
+    private static async IAsyncEnumerable<StackStreamItem> FailedStackApply(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        yield return StackStreamItem.FromStdErr("redeploy failed", 1);
     }
 
     private static async IAsyncEnumerable<StackStreamItem> SuccessfulStackApply(
