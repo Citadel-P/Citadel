@@ -21,7 +21,6 @@ using WebApi.OpenApi;
 using WebApi.Hubs;
 using WebApi.Middlewares;
 using WebApi.Routes;
-using WebApi.Services;
 using static Nerdbank.MessagePack.OptionalConverters;
 
 namespace WebApi;
@@ -49,10 +48,6 @@ internal static class WebApiModule
                 options.AddOperationTransformer<RateLimitOperationTransformer>();
             })
             .AddSingleton<IAutomationApiEndpointCatalog, EndpointDataSourceAutomationApiEndpointCatalog>()
-            .AddScoped<IRequestSessionMetadataAccessor, RequestSessionMetadataAccessor>()
-            .AddScoped<IRefreshTokenCookieService, RefreshTokenCookieService>()
-            .AddScoped<IMfaChallengeCookieService, MfaChallengeCookieService>()
-            .AddScoped<IMfaSetupCookieService, MfaSetupCookieService>()
             .AddCors();
 
         services

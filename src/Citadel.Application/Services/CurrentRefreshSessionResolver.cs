@@ -17,7 +17,7 @@ internal sealed class CurrentRefreshSessionResolver(
         if (string.IsNullOrWhiteSpace(refreshToken))
             return null;
 
-        if (!jwtService.TryValidate(refreshToken, out var tokenId))
+        if (!jwtService.TryValidate(refreshToken, out var tokenId, out _))
             return null;
 
         return await unitOfWork.RefreshTokens.GetActiveTokenIdAsync(

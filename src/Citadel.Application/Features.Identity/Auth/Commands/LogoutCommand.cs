@@ -20,13 +20,12 @@ internal sealed class LogoutCommandHandler(
         var refreshToken = refreshTokenCookieService.GetCurrent();
         mfaChallengeCookieService.Delete();
         mfaSetupCookieService.Delete();
+        refreshTokenCookieService.Delete();
 
         if (string.IsNullOrWhiteSpace(refreshToken))
             return Result.Success();
 
-        refreshTokenCookieService.Delete();
-
-        if (!jwtService.TryValidate(refreshToken, out var tokenId))
+        if (!jwtService.TryValidate(refreshToken, out var tokenId, out _))
             return Result.Success();
 
         await unitOfWork.RefreshTokens.DeleteAsync(tokenId, cancellationToken);

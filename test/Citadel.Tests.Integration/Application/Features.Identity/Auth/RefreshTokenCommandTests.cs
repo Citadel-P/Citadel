@@ -22,6 +22,39 @@ public class RefreshTokenCommandTests(PostgresTestFixture fixture) : Integration
     }
 
     [Fact]
+    public async Task Handle_UsesCanonicalCookie_WhenLegacyCookieIsAlsoPresent()
+    {
+        var refreshToken = await GetRefreshToken();
+        Client.DefaultRequestHeaders.Add(
+            "Cookie",
+            $"{Constants.RefreshToken}={refreshToken}; {Constants.RefreshToken}=stale_legacy_token");
+
+        var response = await Client.GetAsync(
+            "/api/v1/authentication/refresh",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        var setCookieHeaders = GetSetCookieHeaders(response);
+        Assert.Contains(setCookieHeaders, header => IsCookieForPath(header, "/", hasValue: false));
+        Assert.Contains(setCookieHeaders, header => IsCookieForPath(header, "/api/v1/authentication", hasValue: true));
+    }
+
+    [Fact]
+    public async Task Handle_DoesNotFallBackToLegacyCookie_WhenCanonicalCookieIsInvalid()
+    {
+        var refreshToken = await GetRefreshToken();
+        Client.DefaultRequestHeaders.Add(
+            "Cookie",
+            $"{Constants.RefreshToken}=invalid_canonical_token; {Constants.RefreshToken}={refreshToken}");
+
+        var response = await Client.GetAsync(
+            "/api/v1/authentication/refresh",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Handle_ReturnsFailure_WhenRefreshTokenIsMissing()
     {
         // Act
@@ -76,23 +109,32 @@ public class RefreshTokenCommandTests(PostgresTestFixture fixture) : Integration
         var response = await Client.PostAsync("/api/v1/authentication/login", content, cancellationToken: TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
-        if (response.Headers.TryGetValues("Set-Cookie", out var setCookieHeaders))
+        foreach (var header in GetSetCookieHeaders(response))
         {
-            foreach (var header in setCookieHeaders)
-            {
-                // Looking for the refresh_token cookie
-                var cookies = header.Split(';');
-                foreach (var cookie in cookies)
-                {
-                    var trimmed = cookie.Trim();
-                    if (trimmed.StartsWith($"{Constants.RefreshToken}="))
-                    {
-                        return trimmed[$"{Constants.RefreshToken}=".Length..];
-                    }
-                }
-            }
+            var cookie = header.Split(';', 2)[0].Trim();
+            var prefix = $"{Constants.RefreshToken}=";
+            if (cookie.StartsWith(prefix, StringComparison.Ordinal) && cookie.Length > prefix.Length)
+                return cookie[prefix.Length..];
         }
 
-        throw new InvalidOperationException("Refresh token not found in response cookies."); ;
+        throw new InvalidOperationException("Refresh token not found in response cookies.");
+    }
+
+    private static string[] GetSetCookieHeaders(HttpResponseMessage response)
+        => response.Headers.TryGetValues("Set-Cookie", out var values)
+            ? values.ToArray()
+            : [];
+
+    private static bool IsCookieForPath(string header, string path, bool hasValue)
+    {
+        var parts = header.Split(';', StringSplitOptions.TrimEntries);
+        var cookiePrefix = $"{Constants.RefreshToken}=";
+        if (!parts[0].StartsWith(cookiePrefix, StringComparison.Ordinal))
+            return false;
+
+        var cookieHasValue = parts[0].Length > cookiePrefix.Length;
+        var expectedPath = $"Path={path}";
+        return cookieHasValue == hasValue
+               && parts.Any(part => string.Equals(part, expectedPath, StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -13,7 +13,7 @@ public interface IJwtService
 {
     string CreateAccessToken(IEnumerable<Claim> claims);
     (Guid Id, string Token, DateTime ExpiresAt) CreateRefreshToken();
-    bool TryValidate(string refreshToken, out Guid tokenId);
+    bool TryValidate(string refreshToken, out Guid tokenId, out DateTime expiresAt);
 }
 
 internal sealed class JwtService(
@@ -79,7 +79,7 @@ internal sealed class JwtService(
         return (tokenId, refreshToken, expiresAt);
     }
 
-    public bool TryValidate(string refreshToken, out Guid tokenId)
+    public bool TryValidate(string refreshToken, out Guid tokenId, out DateTime expiresAt)
     {
         string issuer = jwtConfig.Issuer ?? throw new ArgumentNullException(nameof(jwtConfig.Issuer));
         string audience = jwtConfig.Audience ?? throw new ArgumentNullException(nameof(jwtConfig.Audience));
@@ -102,11 +102,13 @@ internal sealed class JwtService(
             var jwt = (JwtSecurityToken)token;
             var valid = Guid.TryParse(jwt.Id, out var id);
             tokenId = id;
+            expiresAt = jwt.ValidTo;
             return valid;
         }
         catch (Exception)
         {
             tokenId = default;
+            expiresAt = default;
             return false;
         }
     }

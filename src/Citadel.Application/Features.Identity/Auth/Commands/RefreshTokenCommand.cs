@@ -24,18 +24,25 @@ internal sealed class RefreshTokenCommandHandler(
         if (string.IsNullOrWhiteSpace(refreshToken))
             return Result.Failure<string>(new UnauthorizedError("Missing refresh token."));
 
-        if (!jwtService.TryValidate(refreshToken, out var tokenId))
-            return Result.Failure<string>(new UnauthorizedError("Invalid refresh token."));
+        if (!jwtService.TryValidate(refreshToken, out var tokenId, out var expiresAt))
+            return InvalidRefreshToken();
 
         var existing = await unitOfWork.RefreshTokens.GetUserAuthInfoByRefreshTokenIdAsync(tokenId, cancellationToken);
-        if (existing == null)
-            return Result.Failure<string>(new UnauthorizedError("Invalid refresh token."));
+        if (existing is null)
+            return InvalidRefreshToken();
 
         var accessToken = jwtService.CreateAccessToken(User.GetJwtClaims(existing));
         var metadata = requestSessionMetadataAccessor.GetCurrent();
         await unitOfWork.RefreshTokens.TouchAsync(tokenId, DateTime.UtcNow, metadata.UserAgent, metadata.IpAddress, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
-        
+
+        refreshTokenCookieService.Set(refreshToken, expiresAt);
         return Result.Success(accessToken);
+    }
+
+    private Result<string> InvalidRefreshToken()
+    {
+        refreshTokenCookieService.Delete();
+        return Result.Failure<string>(new UnauthorizedError("Invalid refresh token."));
     }
 }
