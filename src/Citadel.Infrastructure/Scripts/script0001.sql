@@ -5,6 +5,8 @@
 );
 
 START TRANSACTION;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE TABLE actors (
     id uuid NOT NULL,
     isenabled boolean NOT NULL DEFAULT TRUE,
@@ -1100,11 +1102,11 @@ VALUES ('019d0000-0001-7000-8001-000000000017', NULL, TIMESTAMPTZ '2026-01-01T00
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000018', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Automation Action Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'AutomationActionRunFailed');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
-VALUES ('019d0000-0001-7000-8001-00000000001b', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Build Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'BuildRunFailed');
-INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000019', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'License Entered Grace Period', '[]', NULL, 'Warning', 'Enabled', NULL, 'LicenseEnteredGracePeriod');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
 VALUES ('019d0000-0001-7000-8001-00000000001a', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'License Expired', '[]', NULL, 'Critical', 'Enabled', NULL, 'LicenseExpired');
+INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
+VALUES ('019d0000-0001-7000-8001-00000000001b', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Build Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'BuildRunFailed');
 
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000022', 300, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'RAM > 80% - Platform', '[]', 3, 'Warning', 80.0, 'PlatformRamHigh');
@@ -1225,7 +1227,7 @@ VALUES ('41000000-0000-0000-0000-000000000002', 'AutomationAction', '40000000-00
 INSERT INTO resourcetags (resourceid, resourcetype, tagid, createdat, createdbyactorid)
 VALUES ('41000000-0000-0000-0000-000000000002', 'AutomationAction', '40000000-0000-0000-0000-000000000002', TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001');
 
-CREATE INDEX ix_actionruns_actionid_queuedat ON actionruns (actionid, queuedat);
+CREATE INDEX ix_actionruns_actionid_queuedat ON actionruns (actionid, queuedat DESC, id DESC) INCLUDE (status);
 
 CREATE INDEX ix_actionruns_runasactorid ON actionruns (runasactorid);
 
@@ -1236,6 +1238,8 @@ CREATE INDEX ix_actionruns_triggeredbyactorid ON actionruns (triggeredbyactorid)
 CREATE INDEX ix_actions_controlstate_controlstartedat ON actions (controlstate, controlstartedat);
 
 CREATE INDEX ix_actions_createdbyactorid ON actions (createdbyactorid);
+
+CREATE INDEX ix_actions_globalsearch_name_trgm ON actions USING gin (name gin_trgm_ops);
 
 CREATE UNIQUE INDEX ix_actions_name ON actions (name);
 
@@ -1285,6 +1289,8 @@ CREATE INDEX ix_backuppolicies_controlstate_controlstartedat ON backuppolicies (
 
 CREATE INDEX ix_backuppolicies_createdbyactorid ON backuppolicies (createdbyactorid);
 
+CREATE INDEX ix_backuppolicies_globalsearch_name_trgm ON backuppolicies USING gin (name gin_trgm_ops) WHERE archivedat IS NULL;
+
 CREATE UNIQUE INDEX ix_backuppolicies_normalizedname ON backuppolicies (normalizedname);
 
 CREATE INDEX ix_backuppolicies_runasactorid ON backuppolicies (runasactorid);
@@ -1298,6 +1304,10 @@ CREATE INDEX ix_backuprepositories_archivedat ON backuprepositories (archivedat)
 CREATE INDEX ix_backuprepositories_controlstate_controlstartedat ON backuprepositories (controlstate, controlstartedat);
 
 CREATE INDEX ix_backuprepositories_createdbyactorid ON backuprepositories (createdbyactorid);
+
+CREATE INDEX ix_backuprepositories_globalsearch_name_trgm ON backuprepositories USING gin (name gin_trgm_ops) WHERE archivedat IS NULL;
+
+CREATE INDEX ix_backuprepositories_globalsearch_type_trgm ON backuprepositories USING gin (type gin_trgm_ops) WHERE archivedat IS NULL;
 
 CREATE UNIQUE INDEX ix_backuprepositories_normalizedname ON backuprepositories (normalizedname);
 
@@ -1337,7 +1347,7 @@ CREATE INDEX ix_backuprunlogs_run_createdat ON backuprunlogs (backuprunid, creat
 
 CREATE UNIQUE INDEX ix_backupruns_active_policy ON backupruns (backuppolicyid) WHERE status IN ('Queued', 'Preparing', 'Running', 'ApplyingRetention');
 
-CREATE INDEX ix_backupruns_policy_queuedat ON backupruns (backuppolicyid, queuedat);
+CREATE INDEX ix_backupruns_policy_queuedat ON backupruns (backuppolicyid, queuedat DESC, id DESC) INCLUDE (status);
 
 CREATE INDEX ix_backupruns_queuedat ON backupruns (queuedat);
 
@@ -1359,6 +1369,10 @@ CREATE INDEX ix_buildagentpools_createdbyactorid ON buildagentpools (createdbyac
 
 CREATE INDEX ix_buildagentpools_enabled ON buildagentpools (enabled);
 
+CREATE INDEX ix_buildagentpools_globalsearch_name_trgm ON buildagentpools USING gin (name gin_trgm_ops) WHERE archivedat IS NULL;
+
+CREATE INDEX ix_buildagentpools_globalsearch_provider_trgm ON buildagentpools USING gin (provider gin_trgm_ops) WHERE archivedat IS NULL;
+
 CREATE UNIQUE INDEX ix_buildagentpools_normalizedname ON buildagentpools (normalizedname);
 
 CREATE INDEX ix_buildagentpools_provider ON buildagentpools (provider);
@@ -1375,6 +1389,10 @@ CREATE INDEX ix_buildprojects_createdbyactorid ON buildprojects (createdbyactori
 
 CREATE INDEX ix_buildprojects_gitrepositoryid ON buildprojects (gitrepositoryid);
 
+CREATE INDEX ix_buildprojects_globalsearch_branch_trgm ON buildprojects USING gin (branch gin_trgm_ops) WHERE archivedat IS NULL;
+
+CREATE INDEX ix_buildprojects_globalsearch_name_trgm ON buildprojects USING gin (name gin_trgm_ops) WHERE archivedat IS NULL;
+
 CREATE UNIQUE INDEX ix_buildprojects_normalizedname ON buildprojects (normalizedname);
 
 CREATE INDEX ix_buildprojects_platformid ON buildprojects (platformid);
@@ -1387,7 +1405,7 @@ CREATE UNIQUE INDEX ix_buildruns_active_project ON buildruns (buildprojectid) WH
 
 CREATE INDEX ix_buildruns_gitrepositoryid ON buildruns (gitrepositoryid);
 
-CREATE INDEX ix_buildruns_project_queuedat ON buildruns (buildprojectid, queuedat);
+CREATE INDEX ix_buildruns_project_queuedat ON buildruns (buildprojectid, queuedat DESC, id DESC) INCLUDE (status);
 
 CREATE INDEX ix_buildruns_queuedat ON buildruns (queuedat);
 
@@ -1417,6 +1435,8 @@ CREATE INDEX ix_deployments_controltriggeredby ON deployments (controltriggeredb
 
 CREATE INDEX ix_deployments_createdbyactorid ON deployments (createdbyactorid);
 
+CREATE INDEX ix_deployments_globalsearch_name_trgm ON deployments USING gin (name gin_trgm_ops);
+
 CREATE UNIQUE INDEX ix_deployments_name_platformid ON deployments (name, platformid);
 
 CREATE INDEX ix_deployments_platformid ON deployments (platformid);
@@ -1444,6 +1464,10 @@ CREATE INDEX ix_gitrepositories_controltriggeredby ON gitrepositories (controltr
 CREATE INDEX ix_gitrepositories_createdbyactorid ON gitrepositories (createdbyactorid);
 
 CREATE INDEX ix_gitrepositories_gitaccountid ON gitrepositories (gitaccountid);
+
+CREATE INDEX ix_gitrepositories_globalsearch_name_trgm ON gitrepositories USING gin (name gin_trgm_ops);
+
+CREATE INDEX ix_gitrepositories_globalsearch_url_trgm ON gitrepositories USING gin (url gin_trgm_ops);
 
 CREATE UNIQUE INDEX ix_gitrepositories_name ON gitrepositories (name);
 
@@ -1491,6 +1515,10 @@ CREATE UNIQUE INDEX ix_permissions_roleid_resourcetype ON permissions (roleid, r
 
 CREATE UNIQUE INDEX ix_platforms_address ON platforms (address);
 
+CREATE INDEX ix_platforms_globalsearch_address_trgm ON platforms USING gin (address gin_trgm_ops);
+
+CREATE INDEX ix_platforms_globalsearch_name_trgm ON platforms USING gin (name gin_trgm_ops);
+
 CREATE UNIQUE INDEX ix_platformstats_platformid_created ON platformstats (platformid, created);
 
 CREATE INDEX ix_refreshtokens_expiresat ON refreshtokens (expiresat);
@@ -1498,6 +1526,10 @@ CREATE INDEX ix_refreshtokens_expiresat ON refreshtokens (expiresat);
 CREATE INDEX ix_refreshtokens_userid ON refreshtokens (userid);
 
 CREATE INDEX ix_registries_createdbyactorid ON registries (createdbyactorid);
+
+CREATE INDEX ix_registries_globalsearch_name_trgm ON registries USING gin (name gin_trgm_ops);
+
+CREATE INDEX ix_registries_globalsearch_registryhost_trgm ON registries USING gin (registryhost gin_trgm_ops);
 
 CREATE UNIQUE INDEX ix_registries_name ON registries (name);
 
@@ -1543,6 +1575,8 @@ CREATE INDEX ix_stacks_createdbyactorid ON stacks (createdbyactorid);
 
 CREATE INDEX ix_stacks_currentstackreleaseid ON stacks (currentstackreleaseid);
 
+CREATE INDEX ix_stacks_globalsearch_name_trgm ON stacks USING gin (name gin_trgm_ops);
+
 CREATE INDEX ix_tags_createdbyactorid ON tags (createdbyactorid);
 
 CREATE UNIQUE INDEX ix_tags_normalizedname ON tags (normalizedname);
@@ -1564,7 +1598,7 @@ CREATE INDEX ix_usersteams_teamid ON usersteams (teamid);
 CREATE INDEX ix_usersteams_userid ON usersteams (userid);
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260723221138_migration0001', '10.0.10');
+VALUES ('20260724115856_migration0001', '10.0.10');
 
 COMMIT;
 

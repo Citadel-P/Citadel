@@ -3,6 +3,7 @@ using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Oidc;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Contracts.Resources.Search;
 using Domain.Contracts.Resources.Stacks;
 using Domain.Entities;
 using Domain.Entities.Activities;
@@ -79,6 +80,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
     IActivityEventRepository ActivityEventRepository { get; }
+    IGlobalSearchRepository GlobalSearch { get; }
 
     Task CommitAsync(CancellationToken cancellationToken);
     Task RollbackAsync();

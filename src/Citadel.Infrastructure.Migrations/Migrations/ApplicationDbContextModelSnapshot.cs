@@ -20,6 +20,7 @@ namespace Infrastructure.Migrations.Migrations
                 .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("ActionRun", b =>
@@ -120,11 +121,14 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("TriggeredByActorId")
                         .HasDatabaseName("ix_actionruns_triggeredbyactorid");
 
-                    b.HasIndex("ActionId", "QueuedAt")
-                        .HasDatabaseName("ix_actionruns_actionid_queuedat");
-
                     b.HasIndex("Status", "QueuedAt")
                         .HasDatabaseName("ix_actionruns_status_queuedat");
+
+                    b.HasIndex("ActionId", "QueuedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("ix_actionruns_actionid_queuedat");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("ActionId", "QueuedAt", "Id"), new[] { "Status" });
 
                     b.ToTable("actionruns", (string)null);
                 });
@@ -807,6 +811,18 @@ namespace Infrastructure.Migrations.Migrations
                         },
                         new
                         {
+                            Id = new Guid("019d0000-0001-7000-8001-00000000001b"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            LimitedTo = "[]",
+                            Name = "Build Run Failed",
+                            QuietHours = "[]",
+                            Severity = "Critical",
+                            Status = "Enabled",
+                            Type = "BuildRunFailed"
+                        },
+                        new
+                        {
                             Id = new Guid("019d0000-0001-7000-8001-000000000019"),
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
@@ -828,18 +844,6 @@ namespace Infrastructure.Migrations.Migrations
                             Severity = "Critical",
                             Status = "Enabled",
                             Type = "LicenseExpired"
-                        },
-                        new
-                        {
-                            Id = new Guid("019d0000-0001-7000-8001-00000000001b"),
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            CreatedByActorId = new Guid("00000000-0000-0000-0000-000000000001"),
-                            LimitedTo = "[]",
-                            Name = "Build Run Failed",
-                            QuietHours = "[]",
-                            Severity = "Info",
-                            Status = "Enabled",
-                            Type = "BuildRunFailed"
                         });
                 });
 
@@ -1026,6 +1030,12 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("Enabled", "ScheduleEnabled", "ScheduleCron")
                         .HasDatabaseName("ix_actions_schedule");
+
+                    b.HasIndex(new[] { "Name" }, "IX_Actions_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_actions_globalsearch_name_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_Actions_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_Actions_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("actions", (string)null);
 
@@ -1227,6 +1237,13 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("Enabled", "Cron")
                         .HasDatabaseName("ix_backuppolicies_schedule");
 
+                    b.HasIndex(new[] { "Name" }, "IX_BackupPolicies_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_backuppolicies_globalsearch_name_trgm")
+                        .HasFilter("archivedat IS NULL");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_BackupPolicies_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_BackupPolicies_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
+
                     b.ToTable("backuppolicies", (string)null);
                 });
 
@@ -1346,6 +1363,20 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("ControlState", "ControlStartedAt")
                         .HasDatabaseName("ix_backuprepositories_controlstate_controlstartedat");
+
+                    b.HasIndex(new[] { "Name" }, "IX_BackupRepositories_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_backuprepositories_globalsearch_name_trgm")
+                        .HasFilter("archivedat IS NULL");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_BackupRepositories_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_BackupRepositories_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex(new[] { "Type" }, "IX_BackupRepositories_GlobalSearch_Type_Trgm")
+                        .HasDatabaseName("ix_backuprepositories_globalsearch_type_trgm")
+                        .HasFilter("archivedat IS NULL");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Type" }, "IX_BackupRepositories_GlobalSearch_Type_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Type" }, "IX_BackupRepositories_GlobalSearch_Type_Trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("backuprepositories", (string)null);
                 });
@@ -1712,14 +1743,17 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("TriggeredByActorId")
                         .HasDatabaseName("ix_backupruns_triggeredbyactorid");
 
-                    b.HasIndex("BackupPolicyId", "QueuedAt")
-                        .HasDatabaseName("ix_backupruns_policy_queuedat");
-
                     b.HasIndex("BackupRepositoryId", "Status")
                         .HasDatabaseName("ix_backupruns_repository_status");
 
                     b.HasIndex("Status", "QueuedAt")
                         .HasDatabaseName("ix_backupruns_status_queuedat");
+
+                    b.HasIndex("BackupPolicyId", "QueuedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("ix_backupruns_policy_queuedat");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("BackupPolicyId", "QueuedAt", "Id"), new[] { "Status" });
 
                     b.ToTable("backupruns", (string)null);
                 });
@@ -2064,6 +2098,20 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("Provider")
                         .HasDatabaseName("ix_buildagentpools_provider");
 
+                    b.HasIndex(new[] { "Name" }, "IX_BuildAgentPools_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_buildagentpools_globalsearch_name_trgm")
+                        .HasFilter("archivedat IS NULL");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_BuildAgentPools_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_BuildAgentPools_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex(new[] { "Provider" }, "IX_BuildAgentPools_GlobalSearch_Provider_Trgm")
+                        .HasDatabaseName("ix_buildagentpools_globalsearch_provider_trgm")
+                        .HasFilter("archivedat IS NULL");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Provider" }, "IX_BuildAgentPools_GlobalSearch_Provider_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Provider" }, "IX_BuildAgentPools_GlobalSearch_Provider_Trgm"), new[] { "gin_trgm_ops" });
+
                     b.ToTable("buildagentpools", (string)null);
                 });
 
@@ -2264,6 +2312,20 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("ControlState", "ControlStartedAt")
                         .HasDatabaseName("ix_buildprojects_controlstate_controlstartedat");
 
+                    b.HasIndex(new[] { "Branch" }, "IX_BuildProjects_GlobalSearch_Branch_Trgm")
+                        .HasDatabaseName("ix_buildprojects_globalsearch_branch_trgm")
+                        .HasFilter("archivedat IS NULL");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Branch" }, "IX_BuildProjects_GlobalSearch_Branch_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Branch" }, "IX_BuildProjects_GlobalSearch_Branch_Trgm"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex(new[] { "Name" }, "IX_BuildProjects_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_buildprojects_globalsearch_name_trgm")
+                        .HasFilter("archivedat IS NULL");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_BuildProjects_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_BuildProjects_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
+
                     b.ToTable("buildprojects", null, t =>
                         {
                             t.HasCheckConstraint("CK_BuildProjects_Builder_Target", "(\"builderkind\" = 'Platform' AND \"platformid\" IS NOT NULL AND \"buildagentpoolid\" IS NULL) OR (\"builderkind\" = 'BuildAgentPool' AND \"platformid\" IS NULL AND \"buildagentpoolid\" IS NOT NULL)");
@@ -2443,11 +2505,14 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("TriggeredByActorId")
                         .HasDatabaseName("ix_buildruns_triggeredbyactorid");
 
-                    b.HasIndex("BuildProjectId", "QueuedAt")
-                        .HasDatabaseName("ix_buildruns_project_queuedat");
-
                     b.HasIndex("Status", "QueuedAt")
                         .HasDatabaseName("ix_buildruns_status_queuedat");
+
+                    b.HasIndex("BuildProjectId", "QueuedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("ix_buildruns_project_queuedat");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("BuildProjectId", "QueuedAt", "Id"), new[] { "Status" });
 
                     b.ToTable("buildruns", (string)null);
                 });
@@ -2774,6 +2839,12 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("Name", "PlatformId")
                         .IsUnique()
                         .HasDatabaseName("ix_deployments_name_platformid");
+
+                    b.HasIndex(new[] { "Name" }, "IX_Deployments_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_deployments_globalsearch_name_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_Deployments_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_Deployments_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("deployments", (string)null);
                 });
@@ -3118,6 +3189,18 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("Name")
                         .IsUnique()
                         .HasDatabaseName("ix_gitrepositories_name");
+
+                    b.HasIndex(new[] { "Name" }, "IX_GitRepositories_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_gitrepositories_globalsearch_name_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_GitRepositories_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_GitRepositories_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex(new[] { "Url" }, "IX_GitRepositories_GlobalSearch_Url_Trgm")
+                        .HasDatabaseName("ix_gitrepositories_globalsearch_url_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Url" }, "IX_GitRepositories_GlobalSearch_Url_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Url" }, "IX_GitRepositories_GlobalSearch_Url_Trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("gitrepositories", (string)null);
                 });
@@ -4155,6 +4238,18 @@ namespace Infrastructure.Migrations.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_platforms_address");
 
+                    b.HasIndex(new[] { "Address" }, "IX_Platforms_GlobalSearch_Address_Trgm")
+                        .HasDatabaseName("ix_platforms_globalsearch_address_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Address" }, "IX_Platforms_GlobalSearch_Address_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Address" }, "IX_Platforms_GlobalSearch_Address_Trgm"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex(new[] { "Name" }, "IX_Platforms_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_platforms_globalsearch_name_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_Platforms_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_Platforms_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
+
                     b.ToTable("platforms", (string)null);
                 });
 
@@ -4297,6 +4392,18 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("Name")
                         .IsUnique()
                         .HasDatabaseName("ix_registries_name");
+
+                    b.HasIndex(new[] { "Name" }, "IX_Registries_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_registries_globalsearch_name_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_Registries_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_Registries_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex(new[] { "RegistryHost" }, "IX_Registries_GlobalSearch_RegistryHost_Trgm")
+                        .HasDatabaseName("ix_registries_globalsearch_registryhost_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "RegistryHost" }, "IX_Registries_GlobalSearch_RegistryHost_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "RegistryHost" }, "IX_Registries_GlobalSearch_RegistryHost_Trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("registries", (string)null);
 
@@ -4720,6 +4827,12 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("CurrentStackReleaseId")
                         .HasDatabaseName("ix_stacks_currentstackreleaseid");
+
+                    b.HasIndex(new[] { "Name" }, "IX_Stacks_GlobalSearch_Name_Trgm")
+                        .HasDatabaseName("ix_stacks_globalsearch_name_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Name" }, "IX_Stacks_GlobalSearch_Name_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Name" }, "IX_Stacks_GlobalSearch_Name_Trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("stacks", (string)null);
                 });

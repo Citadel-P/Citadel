@@ -29798,6 +29798,102 @@
         ]
       }
     },
+    "/api/v1/search": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search accessible resources",
+        "operationId": "globalSearch",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "types",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limitPerType",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 5
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/listener/{authType}/{resourceType}/{id}/{execution}": {
       "post": {
         "tags": [
@@ -37486,6 +37582,9 @@
           "lastValidationStatus",
           "lastValidationMessage",
           "lastValidatedAt",
+          "controlState",
+          "controlTriggeredBy",
+          "controlStartedAt",
           "createdByActorId",
           "createdAt",
           "updatedAt",
@@ -37595,6 +37694,25 @@
           },
           "lastValidatedAt": {
             "format": "date-time"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "controlTriggeredBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "controlStartedAt": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "createdByActorId": {
             "type": "string",
@@ -43059,6 +43177,152 @@
           "Ssh"
         ]
       },
+      "GlobalSearchCategory": {
+        "enum": [
+          "Platforms",
+          "Stacks",
+          "Deployments",
+          "Repositories",
+          "Registries",
+          "Automations",
+          "Backups",
+          "Builds"
+        ]
+      },
+      "GlobalSearchGroup": {
+        "required": [
+          "category",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/GlobalSearchCategory"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GlobalSearchItem"
+            }
+          }
+        }
+      },
+      "GlobalSearchItem": {
+        "required": [
+          "id",
+          "resourceType",
+          "name",
+          "secondaryText",
+          "status",
+          "parent"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/GlobalSearchResourceType"
+          },
+          "name": {
+            "type": "string"
+          },
+          "secondaryText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GlobalSearchStatus"
+              }
+            ]
+          },
+          "parent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GlobalSearchParent"
+              }
+            ]
+          }
+        }
+      },
+      "GlobalSearchParent": {
+        "required": [
+          "id",
+          "resourceType",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/GlobalSearchResourceType"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "GlobalSearchResourceType": {
+        "enum": [
+          "Platform",
+          "Stack",
+          "Deployment",
+          "GitRepository",
+          "Registry",
+          "AutomationAction",
+          "BackupPolicy",
+          "BackupRepository",
+          "Build",
+          "BuildAgentPool"
+        ]
+      },
+      "GlobalSearchResponse": {
+        "required": [
+          "query",
+          "groups"
+        ],
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GlobalSearchGroup"
+            }
+          }
+        }
+      },
+      "GlobalSearchStatus": {
+        "required": [
+          "label",
+          "tone"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "tone": {
+            "$ref": "#/components/schemas/SearchStatusTone"
+          }
+        }
+      },
       "GraphDriverDataInfo": {
         "required": [
           "name",
@@ -48123,6 +48387,15 @@
           "Weekly"
         ]
       },
+      "SearchStatusTone": {
+        "enum": [
+          "Positive",
+          "Negative",
+          "Warning",
+          "Info",
+          "Neutral"
+        ]
+      },
       "SecretDefinitionView": {
         "required": [
           "id",
@@ -51692,6 +51965,9 @@
     },
     {
       "name": "Lookup"
+    },
+    {
+      "name": "Search"
     },
     {
       "name": "WebhookListener"

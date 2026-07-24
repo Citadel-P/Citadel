@@ -314,6 +314,7 @@ export const resources = {
   deleteAlertChannels: { method: "DELETE", key: "deleteAlertChannels", path: "/api/v1/alertRules/channels", tag: "AlertRules", group: "alertRules", params: ["data","params"], pathParams: [], requiredParams: [], queryParams: [], hasBody: true },
   verifyAlertChannel: { method: "POST", key: "verifyAlertChannel", path: "/api/v1/alertRules/channels/verify", tag: "AlertRules", group: "alertRules", params: ["data","params"], pathParams: [], requiredParams: [], queryParams: [], hasBody: true },
   lookup: { method: "GET", key: "lookup", path: "/api/v1/lookup", tag: "Lookup", group: "lookup", params: ["query","params"], pathParams: [], requiredParams: ["TargetResourceType"], queryParams: ["TargetResourceType","SourceResourceType","SourceResourceId","PlatformId"], hasBody: false },
+  globalSearch: { method: "GET", key: "globalSearch", path: "/api/v1/search", tag: "Search", group: "search", params: ["query","params"], pathParams: [], requiredParams: ["q"], queryParams: ["q","types","limitPerType"], hasBody: false },
   receiveWebhook: { method: "POST", key: "receiveWebhook", path: "/listener/{authType}/{resourceType}/{id}/{execution}", tag: "WebhookListener", group: "webhookListener", params: ["authType","resourceType","id","execution","params"], pathParams: ["authType","resourceType","id","execution"], requiredParams: ["authType","resourceType","id","execution"], queryParams: [], hasBody: false },
 } as const;
 
@@ -596,6 +597,7 @@ export const automationResourceKeys = [
   "deleteAlertChannels",
   "verifyAlertChannel",
   "lookup",
+  "globalSearch",
 ] as const;
 
 export type AutomationResourceName = (typeof automationResourceKeys)[number];
@@ -879,6 +881,7 @@ export const automationResources = {
   deleteAlertChannels: resources.deleteAlertChannels,
   verifyAlertChannel: resources.verifyAlertChannel,
   lookup: resources.lookup,
+  globalSearch: resources.globalSearch,
 } as const;
 
 export const automationResourceGroups = {
@@ -913,6 +916,7 @@ export const automationResourceGroups = {
   alertEvents: ["getAlertEvent","listAlertEvents","getUnresolvedAlertEventsCount","acknowledgeAlertEvents","resolveAlertEvents"],
   alertRules: ["getAlertRule","updateAlertRule","getAlertRuleConfig","listAlertRules","createAlertRule","deleteAlertRules","renameAlertRule","updateAlertRuleMetadata","getAlertChannel","updateAlertChannel","listAlertChannels","createAlertChannel","deleteAlertChannels","verifyAlertChannel"],
   lookup: ["lookup"],
+  search: ["globalSearch"],
 } as const;
 
 export type ResourceName = keyof typeof resources;

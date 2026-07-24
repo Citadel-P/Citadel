@@ -149,6 +149,14 @@ export enum SecretProviderType {
   VaultCompatibleKvV2 = "VaultCompatibleKvV2",
 }
 
+export enum SearchStatusTone {
+  Positive = "Positive",
+  Negative = "Negative",
+  Warning = "Warning",
+  Info = "Info",
+  Neutral = "Neutral",
+}
+
 export enum ScheduleType {
   Daily = "Daily",
   Weekly = "Weekly",
@@ -308,6 +316,30 @@ export enum LicenseLimit {
   Platforms = "Platforms",
   BackupPolicies = "BackupPolicies",
   AutomationActions = "AutomationActions",
+}
+
+export enum GlobalSearchResourceType {
+  Platform = "Platform",
+  Stack = "Stack",
+  Deployment = "Deployment",
+  GitRepository = "GitRepository",
+  Registry = "Registry",
+  AutomationAction = "AutomationAction",
+  BackupPolicy = "BackupPolicy",
+  BackupRepository = "BackupRepository",
+  Build = "Build",
+  BuildAgentPool = "BuildAgentPool",
+}
+
+export enum GlobalSearchCategory {
+  Platforms = "Platforms",
+  Stacks = "Stacks",
+  Deployments = "Deployments",
+  Repositories = "Repositories",
+  Registries = "Registries",
+  Automations = "Automations",
+  Backups = "Backups",
+  Builds = "Builds",
 }
 
 export enum GitTransport {
@@ -4863,6 +4895,38 @@ export interface GitRepositoryView {
   latestActivityView: null | LatestActivityView;
   tags?: TagSummaryView[];
   capabilities?: null | ResourceCapabilities;
+}
+
+export interface GlobalSearchGroup {
+  category: GlobalSearchCategory;
+  items: GlobalSearchItem[];
+}
+
+export interface GlobalSearchItem {
+  /** @format uuid */
+  id: string;
+  resourceType: GlobalSearchResourceType;
+  name: string;
+  secondaryText: null | string;
+  status: null | GlobalSearchStatus;
+  parent: null | GlobalSearchParent;
+}
+
+export interface GlobalSearchParent {
+  /** @format uuid */
+  id: string;
+  resourceType: GlobalSearchResourceType;
+  name: string;
+}
+
+export interface GlobalSearchResponse {
+  query: string;
+  groups: GlobalSearchGroup[];
+}
+
+export interface GlobalSearchStatus {
+  label: string;
+  tone: SearchStatusTone;
 }
 
 export interface GraphDriverDataInfo {
@@ -16591,6 +16655,45 @@ export class Api<
     ) =>
       this.request<ResourceInfo[], ProblemDetails>({
         path: `/api/v1/lookup`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Search
+     * @name GlobalSearch
+     * @summary Search accessible resources
+     * @request GET:/api/v1/search
+     * @secure
+     * @response `200` `GlobalSearchResponse` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    globalSearch: (
+      query: {
+        q: string;
+        types?: string;
+        /**
+         * @format int32
+         * @default 5
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        limitPerType?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GlobalSearchResponse,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/search`,
         method: "GET",
         query: query,
         secure: true,

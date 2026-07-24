@@ -24,6 +24,7 @@ import { Bell, LogOut, Moon, Sun, User } from 'lucide-react';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { BreadcrumbTrail } from './breadcrumb';
+import { GlobalSearch } from '@/features/search/global-search';
 
 const themeColors = [
   { name: 'base', code: '#e11d48' },
@@ -49,6 +50,7 @@ export function Header() {
         <BreadcrumbTrail compact className="min-w-0" />
       </div>
       <div className="ml-auto flex items-center gap-4">
+        <GlobalSearch />
         <AlertBell />
         <HeaderAccountMenu />
       </div>

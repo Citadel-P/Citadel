@@ -1,4 +1,5 @@
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Search;
 using Microsoft.Extensions.Logging;
 using System.Data;
 using System.Data.Common;
@@ -69,6 +70,7 @@ internal class UnitOfWork : IUnitOfWork
         BuildAgentPools = new Lazy<IBuildAgentPoolRepository>(() => new BuildAgentPoolRepository(connection, GetTransaction));
         BuildRuns = new Lazy<IBuildRunRepository>(() => new BuildRunRepository(connection, GetTransaction));
         BuildRunLogs = new Lazy<IBuildRunLogRepository>(() => new BuildRunLogRepository(connection, GetTransaction));
+        GlobalSearch = new Lazy<IGlobalSearchRepository>(() => new GlobalSearchRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -111,6 +113,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IBuildAgentPoolRepository> BuildAgentPools { get; }
     private Lazy<IBuildRunRepository> BuildRuns { get; }
     private Lazy<IBuildRunLogRepository> BuildRunLogs { get; }
+    private Lazy<IGlobalSearchRepository> GlobalSearch { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IUserMfaRepository> UserMfa { get; }
     private Lazy<IMfaChallengeRepository> MfaChallenges { get; }
@@ -172,6 +175,7 @@ internal class UnitOfWork : IUnitOfWork
     IBuildAgentPoolRepository IUnitOfWork.BuildAgentPools => BuildAgentPools.Value;
     IBuildRunRepository IUnitOfWork.BuildRuns => BuildRuns.Value;
     IBuildRunLogRepository IUnitOfWork.BuildRunLogs => BuildRunLogs.Value;
+    IGlobalSearchRepository IUnitOfWork.GlobalSearch => GlobalSearch.Value;
 
     // Lazily creates a transaction
     private IDbTransaction GetTransaction()

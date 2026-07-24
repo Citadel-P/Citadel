@@ -21,6 +21,23 @@ internal static class AuthorizationSql
         )
         """;
 
+    internal const string AuthorizedResourcesCte = """
+        AuthorizedResources AS (
+            SELECT DISTINCT permissions.ResourceType, NULL::uuid AS ResourceId
+            FROM ActorRoles actorRoles
+            JOIN Permissions permissions ON permissions.RoleId = actorRoles.RoleId
+            JOIN ActorScope actorScope ON actorScope.ActorId = actorRoles.ActorId
+            WHERE (permissions.PermissionLevel & @GrantedPermissionMask) <> 0
+
+            UNION
+
+            SELECT DISTINCT resourceAccesses.ResourceType, resourceAccesses.ResourceId
+            FROM ResourceAccesses resourceAccesses
+            JOIN ActorScope actorScope ON actorScope.ActorId = resourceAccesses.ActorId
+            WHERE (resourceAccesses.PermissionLevel & @GrantedPermissionMask) <> 0
+        )
+        """;
+
     internal const string GlobalAccessCte = """
         GlobalAccess AS (
             SELECT 1 AS HasAccess

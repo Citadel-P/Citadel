@@ -14,6 +14,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasPostgresExtension("pg_trgm");
+
         modelBuilder
             .ContainerConfiguration()
             .ContainerStatConfiguration()
@@ -454,6 +456,23 @@ internal static class Configuration
     private const string Double = "double precision";
     private const string Timestamp = "timestamp with time zone";
 
+    private static void ConfigureGlobalSearchIndex(
+        EntityTypeBuilder entity,
+        string tableName,
+        string propertyName,
+        bool activeOnly = false)
+    {
+        var indexName = $"IX_{tableName}_GlobalSearch_{propertyName}_Trgm";
+        var index = entity
+            .HasIndex([propertyName], indexName)
+            .HasDatabaseName(indexName)
+            .HasMethod("gin")
+            .HasOperators("gin_trgm_ops");
+
+        if (activeOnly)
+            index.HasFilter("archivedat IS NULL");
+    }
+
     public static ModelBuilder CitadelInstanceIdentityConfiguration(this ModelBuilder builder)
     {
         var tableName = "CitadelInstanceIdentity";
@@ -596,6 +615,8 @@ internal static class Configuration
 
         gitRepository.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
         gitRepository.HasIndex("GitAccountId").HasDatabaseName($"IX_{tableName}_GitAccountId");
+        ConfigureGlobalSearchIndex(gitRepository, tableName, "Name");
+        ConfigureGlobalSearchIndex(gitRepository, tableName, "Url");
 
         return builder;
     }
@@ -677,6 +698,8 @@ internal static class Configuration
         platform.Property<string>("PlatformDescriptor").HasColumnType(Json).IsRequired();
 
         platform.HasIndex("Address").IsUnique().HasDatabaseName($"IX_{tableName}_Address");
+        ConfigureGlobalSearchIndex(platform, tableName, "Name");
+        ConfigureGlobalSearchIndex(platform, tableName, "Address");
 
         return builder;
     }
@@ -828,6 +851,8 @@ internal static class Configuration
         registry.AddAuditedMemebers();
 
         registry.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
+        ConfigureGlobalSearchIndex(registry, tableName, "Name");
+        ConfigureGlobalSearchIndex(registry, tableName, "RegistryHost");
 
         return builder;
     }
@@ -1503,6 +1528,7 @@ internal static class Configuration
            .OnDelete(DeleteBehavior.Restrict);
 
         deployment.HasIndex("Name", "PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_Name_PlatformId");
+        ConfigureGlobalSearchIndex(deployment, tableName, "Name");
 
         return builder;
     }
@@ -1625,6 +1651,7 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.Restrict);
 
         action.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
+        ConfigureGlobalSearchIndex(action, tableName, "Name");
         action.HasIndex("CreatedByActorId").HasDatabaseName($"IX_{tableName}_CreatedByActorId");
         action.HasIndex("RunAsActorId").HasDatabaseName($"IX_{tableName}_RunAsActorId");
         action.HasIndex("Enabled", "ScheduleEnabled", "ScheduleCron").HasDatabaseName($"IX_{tableName}_Schedule");
@@ -1679,7 +1706,10 @@ internal static class Configuration
             .HasForeignKey("TriggeredByActorId")
             .OnDelete(DeleteBehavior.SetNull);
 
-        run.HasIndex("ActionId", "QueuedAt").HasDatabaseName($"IX_{tableName}_ActionId_QueuedAt");
+        run.HasIndex("ActionId", "QueuedAt", "Id")
+            .IsDescending(false, true, true)
+            .IncludeProperties("Status")
+            .HasDatabaseName($"IX_{tableName}_ActionId_QueuedAt");
         run.HasIndex("Status", "QueuedAt").HasDatabaseName($"IX_{tableName}_Status_QueuedAt");
         run.HasIndex("RunAsActorId").HasDatabaseName($"IX_{tableName}_RunAsActorId");
         run.HasIndex("TriggeredByActorId").HasDatabaseName($"IX_{tableName}_TriggeredByActorId");
@@ -1722,6 +1752,8 @@ internal static class Configuration
         repository.HasIndex("ControlState", "ControlStartedAt").HasDatabaseName($"IX_{repositoryTable}_ControlState_ControlStartedAt");
         repository.HasIndex("ArchivedAt").HasDatabaseName($"IX_{repositoryTable}_ArchivedAt");
         repository.HasIndex("PasswordSecretId").HasDatabaseName($"IX_{repositoryTable}_PasswordSecretId");
+        ConfigureGlobalSearchIndex(repository, repositoryTable, "Name", activeOnly: true);
+        ConfigureGlobalSearchIndex(repository, repositoryTable, "Type", activeOnly: true);
 
         var validationTable = "BackupRepositoryValidations";
         var validation = builder.Entity("BackupRepositoryValidation");
@@ -1799,6 +1831,7 @@ internal static class Configuration
         policy.HasIndex("ArchivedAt").HasDatabaseName($"IX_{policyTable}_ArchivedAt");
         policy.HasIndex("RunAsActorId").HasDatabaseName($"IX_{policyTable}_RunAsActorId");
         policy.HasIndex("Source").HasMethod("gin").HasDatabaseName($"IX_{policyTable}_Source_Gin");
+        ConfigureGlobalSearchIndex(policy, policyTable, "Name", activeOnly: true);
 
         var runTable = "BackupRuns";
         var run = builder.Entity("BackupRun");
@@ -1847,7 +1880,10 @@ internal static class Configuration
             .HasForeignKey("TriggeredByActorId")
             .OnDelete(DeleteBehavior.Restrict);
 
-        run.HasIndex("BackupPolicyId", "QueuedAt").HasDatabaseName($"IX_{runTable}_Policy_QueuedAt");
+        run.HasIndex("BackupPolicyId", "QueuedAt", "Id")
+            .IsDescending(false, true, true)
+            .IncludeProperties("Status")
+            .HasDatabaseName($"IX_{runTable}_Policy_QueuedAt");
         run.HasIndex("BackupRepositoryId", "Status").HasDatabaseName($"IX_{runTable}_Repository_Status");
         run.HasIndex("BackupPolicyId")
             .IsUnique()
@@ -2059,6 +2095,8 @@ internal static class Configuration
         project.HasIndex("RegistryId").HasDatabaseName($"IX_{projectTable}_RegistryId");
         project.HasIndex("ArchivedAt").HasDatabaseName($"IX_{projectTable}_ArchivedAt");
         project.HasIndex("ControlState", "ControlStartedAt").HasDatabaseName($"IX_{projectTable}_ControlState_ControlStartedAt");
+        ConfigureGlobalSearchIndex(project, projectTable, "Name", activeOnly: true);
+        ConfigureGlobalSearchIndex(project, projectTable, "Branch", activeOnly: true);
         project.ToTable(t => t.HasCheckConstraint(
             $"CK_{projectTable}_Builder_Target",
             "(\"builderkind\" = 'Platform' AND \"platformid\" IS NOT NULL AND \"buildagentpoolid\" IS NULL) OR (\"builderkind\" = 'BuildAgentPool' AND \"platformid\" IS NULL AND \"buildagentpoolid\" IS NOT NULL)"));
@@ -2100,7 +2138,10 @@ internal static class Configuration
         run.HasOne("BuildProject").WithMany().HasForeignKey("BuildProjectId").OnDelete(DeleteBehavior.Restrict);
         run.HasOne("GitRepository").WithMany().HasForeignKey("GitRepositoryId").OnDelete(DeleteBehavior.Restrict);
         run.HasOne("Actor").WithMany().HasForeignKey("TriggeredByActorId").OnDelete(DeleteBehavior.Restrict);
-        run.HasIndex("BuildProjectId", "QueuedAt").HasDatabaseName($"IX_{runTable}_Project_QueuedAt");
+        run.HasIndex("BuildProjectId", "QueuedAt", "Id")
+            .IsDescending(false, true, true)
+            .IncludeProperties("Status")
+            .HasDatabaseName($"IX_{runTable}_Project_QueuedAt");
         run.HasIndex("BuildProjectId").IsUnique().HasFilter("status IN ('Queued', 'Preparing', 'Running')").HasDatabaseName($"IX_{runTable}_Active_Project");
         run.HasIndex("Status", "QueuedAt").HasDatabaseName($"IX_{runTable}_Status_QueuedAt");
         run.HasIndex("QueuedAt").HasDatabaseName($"IX_{runTable}_QueuedAt");
@@ -2155,6 +2196,8 @@ internal static class Configuration
         pool.HasIndex("Provider").HasDatabaseName($"IX_{table}_Provider");
         pool.HasIndex("Enabled").HasDatabaseName($"IX_{table}_Enabled");
         pool.HasIndex("ArchivedAt").HasDatabaseName($"IX_{table}_ArchivedAt");
+        ConfigureGlobalSearchIndex(pool, table, "Name", activeOnly: true);
+        ConfigureGlobalSearchIndex(pool, table, "Provider", activeOnly: true);
 
         return builder;
     }
@@ -2252,6 +2295,7 @@ internal static class Configuration
         // Uniqueness will be enforced at the application level since stacks can be shared across platforms and may have the same name
         // stack.HasIndex("Name", "PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_Name_PlatformId");
         stack.HasIndex("CurrentStackReleaseId").HasDatabaseName($"IX_{tableName}_CurrentStackReleaseId");
+        ConfigureGlobalSearchIndex(stack, tableName, "Name");
 
         return builder;
     }

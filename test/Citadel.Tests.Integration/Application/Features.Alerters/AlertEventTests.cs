@@ -212,9 +212,19 @@ public sealed class AlertEventTests(PostgresTestFixture fixture) : IntegrationTe
         Assert.Equal(Constants.SystemId, secondPersisted.AcknowledgedByActorId);
 
         await WaitForAlertStreamVerificationAsync(
-            () => _alertEventStreamManager.Verify(
-                x => x.SendUpdatedAlertEvents(It.Is<IEnumerable<AlertEvent>>(events => events.Count() == 2)),
-                Times.Once),
+            () =>
+            {
+                _alertEventStreamManager.Verify(
+                    x => x.SendUpdatedAlertEvents(
+                        It.Is<IReadOnlyDictionary<Guid, IReadOnlyCollection<AlertEvent>>>(
+                            alertEventsByUser => ContainsUpdatedAlerts(alertEventsByUser))),
+                    Times.Once);
+                _alertEventStreamManager.Verify(
+                    x => x.SendUnresolvedAlertCounts(
+                        It.Is<IReadOnlyDictionary<Guid, int>>(
+                            counts => ContainsUnresolvedCount(counts, 2))),
+                    Times.Once);
+            },
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken);
     }
@@ -248,9 +258,15 @@ public sealed class AlertEventTests(PostgresTestFixture fixture) : IntegrationTe
             () =>
             {
                 _alertEventStreamManager.Verify(
-                    x => x.SendUpdatedAlertEvents(It.Is<IEnumerable<AlertEvent>>(events => events.Count() == 2)),
+                    x => x.SendUpdatedAlertEvents(
+                        It.Is<IReadOnlyDictionary<Guid, IReadOnlyCollection<AlertEvent>>>(
+                            alertEventsByUser => ContainsUpdatedAlerts(alertEventsByUser))),
                     Times.Once);
-                _alertEventStreamManager.Verify(x => x.SendUnresolvedAlertCount(0), Times.Once);
+                _alertEventStreamManager.Verify(
+                    x => x.SendUnresolvedAlertCounts(
+                        It.Is<IReadOnlyDictionary<Guid, int>>(
+                            counts => ContainsUnresolvedCount(counts, 0))),
+                    Times.Once);
             },
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken);
@@ -267,6 +283,23 @@ public sealed class AlertEventTests(PostgresTestFixture fixture) : IntegrationTe
 
     private static async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response)
         => await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken), cancellationToken: TestContext.Current.CancellationToken);
+
+    private bool ContainsUpdatedAlerts(
+        IReadOnlyDictionary<Guid, IReadOnlyCollection<AlertEvent>> alertEventsByUser)
+    {
+        var alertIds = alertEventsByUser.Values
+            .SelectMany(static events => events)
+            .Select(static alertEvent => alertEvent.Id)
+            .ToHashSet();
+
+        return alertEventsByUser.Count == 1
+            && alertIds.SetEquals([_alertId, _secondAlertId]);
+    }
+
+    private static bool ContainsUnresolvedCount(
+        IReadOnlyDictionary<Guid, int> countsByUser,
+        int expectedCount)
+        => countsByUser.Count == 1 && countsByUser.Values.Single() == expectedCount;
 
     private static JsonElement GetProperty(JsonElement element, string propertyName)
     {

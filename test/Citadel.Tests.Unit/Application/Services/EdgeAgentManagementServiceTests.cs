@@ -51,7 +51,10 @@ public sealed class EdgeAgentManagementServiceTests
 
         var edgeAgents = new Mock<IEdgeAgentRepository>(MockBehavior.Strict);
         edgeAgents
-            .Setup(x => x.GetBindingByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetBindingByResourceAsync(
+                EdgeAgentResourceType.Platform,
+                platformId,
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync((EdgeAgentBinding?)null);
         edgeAgents
             .Setup(x => x.AddEnrollmentAsync(It.IsAny<EdgeAgentEnrollment>(), It.IsAny<CancellationToken>()))
@@ -121,6 +124,7 @@ public sealed class EdgeAgentManagementServiceTests
         var edgeAgents = new Mock<IEdgeAgentRepository>(MockBehavior.Strict);
         edgeAgents
             .Setup(x => x.UpdateBindingHeartbeatAsync(
+                EdgeAgentResourceType.Platform,
                 platformId,
                 utcNow,
                 heartbeat.Hostname,
@@ -269,6 +273,7 @@ public sealed class EdgeAgentManagementServiceTests
             .ReturnsAsync(new EdgeAgentPlatformState(platform, null));
         edgeAgents
             .Setup(x => x.UpdateBindingConnectedAsync(
+                EdgeAgentResourceType.Platform,
                 platformId,
                 utcNow,
                 "edge-host",
@@ -389,6 +394,7 @@ public sealed class EdgeAgentManagementServiceTests
             .ReturnsAsync(new EdgeAgentPlatformState(platform, binding));
         edgeAgents
             .Setup(x => x.UpdateBindingConnectedAsync(
+                EdgeAgentResourceType.Platform,
                 platformId,
                 utcNow,
                 "edge-host",

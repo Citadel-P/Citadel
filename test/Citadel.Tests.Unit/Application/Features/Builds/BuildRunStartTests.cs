@@ -1,6 +1,7 @@
 using Application.Features.Builds.Commands;
 using Application.Features.Builds.Models;
 using Application.Services;
+using Application.Services.Alerts;
 using Application.Services.Builds;
 using Application.Services.SignalR;
 using Domain;
@@ -12,11 +13,9 @@ using Domain.Entities.Activities;
 using Domain.Entities.Builds;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
-using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
 using Hosting.Common.Abstraction;
-using LightResults;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System.Runtime.CompilerServices;
@@ -419,6 +418,7 @@ public sealed class BuildRunStartTests
             Mock.Of<IStackStreamManager>(),
             Mock.Of<IApplyDeploymentService>(),
             Mock.Of<IApplyStackService>(),
+            Mock.Of<IAlertService>(),
             Mock.Of<IBuildRunRetentionService>(),
             NullLogger<BuildRunExecutionService>.Instance);
         var runId = Guid.CreateVersion7();
@@ -555,6 +555,16 @@ public sealed class BuildRunStartTests
         context.BuildRuns
             .Setup(x => x.UpdateAsync(It.IsAny<BuildRun>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+        context.AlertService
+            .Setup(x => x.ProcessAsync(
+                AlertType.BuildRunFailed,
+                It.Is<AlertEvaluationContext>(alertContext =>
+                    alertContext.BuildRunFailures != null
+                    && alertContext.BuildRunFailures.Count == 1
+                    && alertContext.BuildRunFailures.Single().Id == project.Id
+                    && alertContext.BuildRunFailures.Single().RunId == run.Id),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
         CaptureLogs(context.BuildRunLogs, []);
 
         var result = await context.Service.ExecuteAsync(run.Id, TestContext.Current.CancellationToken);
@@ -586,6 +596,12 @@ public sealed class BuildRunStartTests
             .Callback<ActivityEvent, CancellationToken>((activity, _) => activities.Add(activity))
             .ReturnsAsync(1);
         context.UnitOfWork.SetupGet(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        context.AlertService
+            .Setup(x => x.ProcessAsync(
+                AlertType.BuildRunFailed,
+                It.IsAny<AlertEvaluationContext>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         context.RepoCache
             .Setup(x => x.SynchronizeAsync(repository, repository.GitAccount, "main", It.IsAny<CancellationToken>()))
@@ -606,6 +622,16 @@ public sealed class BuildRunStartTests
         var failedActivity = Assert.Single(activities, activity => activity.EventType == ActivityEventType.BuildRunFailed);
         Assert.Null(failedActivity.PlatformId);
         Assert.All(activities, activity => Assert.Null(activity.PlatformId));
+        context.AlertService.Verify(
+            x => x.ProcessAsync(
+                AlertType.BuildRunFailed,
+                It.Is<AlertEvaluationContext>(alertContext =>
+                    alertContext.BuildRunFailures != null
+                    && alertContext.BuildRunFailures.Count == 1
+                    && alertContext.BuildRunFailures.Single().Id == project.Id
+                    && alertContext.BuildRunFailures.Single().RunId == run.Id),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -957,6 +983,7 @@ public sealed class BuildRunStartTests
         var applyStack = new Mock<IApplyStackService>(MockBehavior.Strict);
         var retention = new Mock<IBuildRunRetentionService>(MockBehavior.Strict);
         var secretDefinitions = new Mock<ISecretDefinitionRepository>(MockBehavior.Strict);
+        var alertService = new Mock<IAlertService>(MockBehavior.Strict);
 
         unitOfWork.SetupGet(x => x.BuildRunLogs).Returns(buildRunLogs.Object);
         unitOfWork.SetupGet(x => x.SecretDefinitions).Returns(secretDefinitions.Object);
@@ -1036,6 +1063,7 @@ public sealed class BuildRunStartTests
             stackStream.Object,
             applyDeployment.Object,
             applyStack.Object,
+            alertService.Object,
             retention.Object,
             NullLogger<BuildRunExecutionService>.Instance);
 
@@ -1053,6 +1081,7 @@ public sealed class BuildRunStartTests
             stackStream,
             applyDeployment,
             applyStack,
+            alertService,
             retention,
             service);
     }
@@ -1352,6 +1381,7 @@ public sealed class BuildRunStartTests
         Mock<IStackStreamManager> StackStream,
         Mock<IApplyDeploymentService> ApplyDeployment,
         Mock<IApplyStackService> ApplyStack,
+        Mock<IAlertService> AlertService,
         Mock<IBuildRunRetentionService> Retention,
         BuildRunExecutionService Service);
 }

@@ -14,6 +14,9 @@ namespace Infrastructure.Migrations.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AlterDatabase()
+                .Annotation("Npgsql:PostgresExtension:pg_trgm", ",,");
+
             migrationBuilder.CreateTable(
                 name: "actors",
                 columns: table => new
@@ -2035,7 +2038,9 @@ namespace Infrastructure.Migrations.Migrations
             migrationBuilder.CreateIndex(
                 name: "ix_actionruns_actionid_queuedat",
                 table: "actionruns",
-                columns: new[] { "actionid", "queuedat" });
+                columns: new[] { "actionid", "queuedat", "id" },
+                descending: new[] { false, true, true })
+                .Annotation("Npgsql:IndexInclude", new[] { "status" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_actionruns_runasactorid",
@@ -2061,6 +2066,13 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_actions_createdbyactorid",
                 table: "actions",
                 column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_actions_globalsearch_name_trgm",
+                table: "actions",
+                column: "name")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_actions_name",
@@ -2185,6 +2197,14 @@ namespace Infrastructure.Migrations.Migrations
                 column: "createdbyactorid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_backuppolicies_globalsearch_name_trgm",
+                table: "backuppolicies",
+                column: "name",
+                filter: "archivedat IS NULL")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_backuppolicies_normalizedname",
                 table: "backuppolicies",
                 column: "normalizedname",
@@ -2220,6 +2240,22 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_backuprepositories_createdbyactorid",
                 table: "backuprepositories",
                 column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositories_globalsearch_name_trgm",
+                table: "backuprepositories",
+                column: "name",
+                filter: "archivedat IS NULL")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_backuprepositories_globalsearch_type_trgm",
+                table: "backuprepositories",
+                column: "type",
+                filter: "archivedat IS NULL")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_backuprepositories_normalizedname",
@@ -2322,7 +2358,9 @@ namespace Infrastructure.Migrations.Migrations
             migrationBuilder.CreateIndex(
                 name: "ix_backupruns_policy_queuedat",
                 table: "backupruns",
-                columns: new[] { "backuppolicyid", "queuedat" });
+                columns: new[] { "backuppolicyid", "queuedat", "id" },
+                descending: new[] { false, true, true })
+                .Annotation("Npgsql:IndexInclude", new[] { "status" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_backupruns_queuedat",
@@ -2375,6 +2413,22 @@ namespace Infrastructure.Migrations.Migrations
                 column: "enabled");
 
             migrationBuilder.CreateIndex(
+                name: "ix_buildagentpools_globalsearch_name_trgm",
+                table: "buildagentpools",
+                column: "name",
+                filter: "archivedat IS NULL")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildagentpools_globalsearch_provider_trgm",
+                table: "buildagentpools",
+                column: "provider",
+                filter: "archivedat IS NULL")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_buildagentpools_normalizedname",
                 table: "buildagentpools",
                 column: "normalizedname",
@@ -2416,6 +2470,22 @@ namespace Infrastructure.Migrations.Migrations
                 column: "gitrepositoryid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_globalsearch_branch_trgm",
+                table: "buildprojects",
+                column: "branch",
+                filter: "archivedat IS NULL")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_buildprojects_globalsearch_name_trgm",
+                table: "buildprojects",
+                column: "name",
+                filter: "archivedat IS NULL")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_buildprojects_normalizedname",
                 table: "buildprojects",
                 column: "normalizedname",
@@ -2451,7 +2521,9 @@ namespace Infrastructure.Migrations.Migrations
             migrationBuilder.CreateIndex(
                 name: "ix_buildruns_project_queuedat",
                 table: "buildruns",
-                columns: new[] { "buildprojectid", "queuedat" });
+                columns: new[] { "buildprojectid", "queuedat", "id" },
+                descending: new[] { false, true, true })
+                .Annotation("Npgsql:IndexInclude", new[] { "status" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_buildruns_queuedat",
@@ -2527,6 +2599,13 @@ namespace Infrastructure.Migrations.Migrations
                 column: "createdbyactorid");
 
             migrationBuilder.CreateIndex(
+                name: "ix_deployments_globalsearch_name_trgm",
+                table: "deployments",
+                column: "name")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_deployments_name_platformid",
                 table: "deployments",
                 columns: new[] { "name", "platformid" },
@@ -2599,6 +2678,20 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_gitrepositories_gitaccountid",
                 table: "gitrepositories",
                 column: "gitaccountid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_gitrepositories_globalsearch_name_trgm",
+                table: "gitrepositories",
+                column: "name")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_gitrepositories_globalsearch_url_trgm",
+                table: "gitrepositories",
+                column: "url")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_gitrepositories_name",
@@ -2724,6 +2817,20 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_platforms_globalsearch_address_trgm",
+                table: "platforms",
+                column: "address")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_platforms_globalsearch_name_trgm",
+                table: "platforms",
+                column: "name")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_platformstats_platformid_created",
                 table: "platformstats",
                 columns: new[] { "platformid", "created" },
@@ -2743,6 +2850,20 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_registries_createdbyactorid",
                 table: "registries",
                 column: "createdbyactorid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_registries_globalsearch_name_trgm",
+                table: "registries",
+                column: "name")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_registries_globalsearch_registryhost_trgm",
+                table: "registries",
+                column: "registryhost")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_registries_name",
@@ -2861,6 +2982,13 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ix_stacks_currentstackreleaseid",
                 table: "stacks",
                 column: "currentstackreleaseid");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_stacks_globalsearch_name_trgm",
+                table: "stacks",
+                column: "name")
+                .Annotation("Npgsql:IndexMethod", "gin")
+                .Annotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_tags_createdbyactorid",

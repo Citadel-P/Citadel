@@ -1,4 +1,5 @@
 using Application.Features.Identity.Auth.Models;
+using Application.Features.Search.Models;
 using Application.Features.Images.Queries;
 using Application.Features.ResourceBindings.Models;
 using Application.Features.GitRepositories.Queries;
@@ -59,6 +60,7 @@ using WebApi.Routes.Endpoints.Resources.Paging;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
+using WebApi.Routes.Endpoints.Resources.Search;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 using Application.Features.Webhooks.Commands;
 using Domain.Contracts.Resources.ResourceBindings;
@@ -99,6 +101,9 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<BackupRepositoryValidationStatus>),
         typeof(JsonStringEnumConverter<BackupRunTrigger>),
         typeof(JsonStringEnumConverter<BackupRunStatus>),
+        typeof(JsonStringEnumConverter<GlobalSearchResourceType>),
+        typeof(JsonStringEnumConverter<GlobalSearchCategory>),
+        typeof(JsonStringEnumConverter<SearchStatusTone>),
         typeof(JsonStringEnumConverter<BackupRunItemStatus>),
         typeof(JsonStringEnumConverter<BackupSnapshotAvailability>),
         typeof(JsonStringEnumConverter<BackupCoverageStatus>),
@@ -375,6 +380,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeleteNetworksInput))]
 [JsonSerializable(typeof(ListNetworksRequest))]
 [JsonSerializable(typeof(LookupRequest))]
+[JsonSerializable(typeof(GlobalSearchRequest))]
+[JsonSerializable(typeof(GlobalSearchResponse))]
 [JsonSerializable(typeof(NetworksView))]
 [JsonSerializable(typeof(CreateVolumeInput))]
 [JsonSerializable(typeof(DeleteVolumesInput))]

@@ -1,4 +1,5 @@
 using Application.Services.Backups;
+using Application.Features.Search.Models;
 using Domain;
 using Domain.Entities.Deployments;
 using Hosting.Common;
@@ -65,6 +66,7 @@ public static class PublicEndpoints
     const string ApplicationName = "Application";
     const string LicenseName = "License";
     const string LookupName = nameof(Lookup);
+    const string SearchName = "Search";
 
     public static void MapPublicEndpoints(this WebApplication app)
     {
@@ -202,6 +204,10 @@ public static class PublicEndpoints
             var lookup = group.MapGroup("/lookup").WithTags(LookupName).RequireAuthorization();
             {
                 MapLookupEndpoints(lookup);
+            }
+            var search = group.MapGroup("/search").WithTags(SearchName).RequireAuthorization();
+            {
+                MapSearchEndpoints(search);
             }
         }
 
@@ -2845,5 +2851,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("lookup");
+    }
+
+    private static void MapSearchEndpoints(RouteGroupBuilder search)
+    {
+        search.MapGet("/", GlobalSearch.Get)
+            .WithSummary("Search accessible resources")
+            .Produces<GlobalSearchResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("globalSearch");
     }
 }

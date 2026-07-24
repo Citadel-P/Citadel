@@ -311,15 +311,13 @@ public sealed class ProfileEndpointTests(PostgresTestFixture fixture) : Integrat
     private static string GetRefreshTokenCookie(HttpResponseMessage response)
     {
         Assert.True(response.Headers.TryGetValues("Set-Cookie", out var setCookieHeaders));
+        var prefix = $"{Constants.RefreshToken}=";
 
         foreach (var header in setCookieHeaders)
         {
-            foreach (var cookie in header.Split(';'))
-            {
-                var trimmed = cookie.Trim();
-                if (trimmed.StartsWith($"{Constants.RefreshToken}=", StringComparison.Ordinal))
-                    return trimmed[$"{Constants.RefreshToken}=".Length..];
-            }
+            var cookie = header.Split(';', 2)[0].Trim();
+            if (cookie.StartsWith(prefix, StringComparison.Ordinal) && cookie.Length > prefix.Length)
+                return cookie[prefix.Length..];
         }
 
         throw new InvalidOperationException("Refresh token cookie was not set.");

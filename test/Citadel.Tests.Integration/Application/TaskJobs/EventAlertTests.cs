@@ -164,8 +164,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         Assert.Single(alertEvents.Items);
         Assert.Equal(AlertType.DeploymentImageUpdateAvailable, alertEvents.Items.ElementAt(0).Type);
         await WaitForAlertStreamNotificationAsync(Times.Once(), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.Is<AlertEvent>(a => a.Type == AlertType.DeploymentImageUpdateAvailable)), Times.Once);
-        _alertEventStreamManager.Verify(x => x.SendUnresolvedAlertCount(1), Times.Once);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.Is<AlertEvent>(a => a.Type == AlertType.DeploymentImageUpdateAvailable), It.IsAny<IEnumerable<Guid>>()), Times.Once);
     }
 
     [Fact]
@@ -201,8 +200,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Single(alertEvents.Items);
-        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), Times.Once);
-        _alertEventStreamManager.Verify(x => x.SendUnresolvedAlertCount(1), Times.Once);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>(), It.IsAny<IEnumerable<Guid>>()), Times.Once);
     }
 
     [Fact]
@@ -236,7 +234,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Empty(alertEvents.Items);
-        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), Times.Never);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>(), It.IsAny<IEnumerable<Guid>>()), Times.Never);
     }
 
     [Fact]
@@ -269,7 +267,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Empty(alertEvents.Items);
-        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), Times.Never);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>(), It.IsAny<IEnumerable<Guid>>()), Times.Never);
     }
 
     [Fact]
@@ -289,7 +287,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Empty(alertEvents.Items);
-        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), Times.Never);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>(), It.IsAny<IEnumerable<Guid>>()), Times.Never);
     }
 
     private async Task RunAutoUpdateJobOnceAsync(CancellationToken cancellationToken)
@@ -350,7 +348,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
         {
             try
             {
-                _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), times);
+                _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>(), It.IsAny<IEnumerable<Guid>>()), times);
                 return;
             }
             catch (MockException)
@@ -359,7 +357,7 @@ public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(
             }
         }
 
-        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), times);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>(), It.IsAny<IEnumerable<Guid>>()), times);
     }
 
     private async Task UpdateAlertRuleAsync(Func<AlertRule, AlertRule> update, CancellationToken cancellationToken)
