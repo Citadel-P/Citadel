@@ -14,6 +14,8 @@ If no slice is explicitly requested:
 6. Report implemented behavior, schema changes, generated artifacts, tests, deferred work, and conflicts between this specification and the codebase.
 7. Do not continue automatically into another slice.
 
+Current implementation status: Citadel has advanced beyond the original Slice 1 scope. Deployment and stack consumers from Slice 3 are implemented. The Slice 1 exclusions below describe the historical first-slice boundary, not the current product.
+
 ---
 
 # 1. Goal
@@ -1046,16 +1048,20 @@ Add:
 - configured execution actor for non-interactive runs
 - build failure/timeout alerts
 
-## Slice 3: Deployment And Stack Consumers
+## Slice 3: Deployment And Stack Consumers (Implemented)
 
-Add:
+Current behavior:
 
-- update a deployment image reference
-- optionally apply the deployment
-- update a stack resource binding such as `IMAGE_REF`
-- optionally apply the stack
-- never edit Git-backed stack files
-- prefer immutable digest references for automatic production deployment
+- deployments select a build project as their image source
+- stack build-image bindings map Compose service names to build projects
+- a successful build updates the consumer's desired image reference, digest, and build run
+- apply uses the stored desired artifact; only consumers without a resolved artifact fall back to the latest successful build
+- references are pinned as `repository@digest` whenever a digest is available
+- successful apply records applied image reference, digest, build run, and timestamp separately from desired state
+- failed apply leaves the previous applied provenance unchanged
+- legacy snapshots with an image reference but no build run retain that nullable run identity
+- Git-backed stack files are never edited; Citadel writes a generated Compose override
+- automatic stack redeploy is scoped to mapped services
 
 ## Slice 4: Dedicated Build Agents
 

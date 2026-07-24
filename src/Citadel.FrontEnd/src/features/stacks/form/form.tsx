@@ -40,6 +40,7 @@ import { toast } from 'sonner';
 import * as monaco from 'monaco-editor';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { AlertMessage } from '@/components/custom/alert-message';
+import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -472,6 +473,7 @@ const StackBuildImageBindingsField = ({
                 className="w-full max-w-full"
               />
               <BuildBindingStatus
+                binding={binding}
                 buildProjectId={binding.buildProjectId}
                 isLoading={isLoading}
                 project={selectedProject}
@@ -479,14 +481,13 @@ const StackBuildImageBindingsField = ({
                 hasSuccessfulImage={hasSuccessfulImage}
                 latestStatus={latestRun?.status}
                 latestImageReference={latestImageReference}
+                latestDigest={latestRun?.imageDigest}
+                latestBuildRunId={latestRun?.id}
               />
             </div>
             <div className="flex min-w-32 flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground">Redeploy</span>
-              <label
-                className="flex h-10 items-center gap-2 text-sm"
-                htmlFor={`stack-build-redeploy-${index}`}
-              >
+              <label className="flex h-10 items-center gap-2 text-sm" htmlFor={`stack-build-redeploy-${index}`}>
                 <FieldSwitch
                   id={`stack-build-redeploy-${index}`}
                   checked={binding.redeployOnBuild ?? false}
@@ -533,6 +534,7 @@ const StackBuildImageBindingsField = ({
 };
 
 const BuildBindingStatus = ({
+  binding,
   buildProjectId,
   isLoading,
   project,
@@ -540,7 +542,10 @@ const BuildBindingStatus = ({
   hasSuccessfulImage,
   latestStatus,
   latestImageReference,
+  latestDigest,
+  latestBuildRunId,
 }: {
+  binding: StackBuildImageBinding;
   buildProjectId?: string | null;
   isLoading?: boolean;
   project?: BuildProjectView;
@@ -548,16 +553,23 @@ const BuildBindingStatus = ({
   hasSuccessfulImage: boolean;
   latestStatus?: BuildRunStatus;
   latestImageReference?: string;
+  latestDigest?: string | null;
+  latestBuildRunId?: string | null;
 }) => {
   if (isLoading) return null;
   if (!hasProjects) return <p className="text-xs text-amber-600">Create a build project before mapping services.</p>;
-  if (buildProjectId && !project) return <p className="text-xs text-amber-600">Selected build is no longer available.</p>;
-  if (!project) return <p className="text-xs text-muted-foreground">Select the build that produces this service image.</p>;
+  if (buildProjectId && !project)
+    return <p className="text-xs text-amber-600">Selected build is no longer available.</p>;
+  if (!project)
+    return <p className="text-xs text-muted-foreground">Select the build that produces this service image.</p>;
   if (hasSuccessfulImage) {
     return (
-      <p className="truncate text-xs text-emerald-600" title={latestImageReference}>
-        Latest image: <span className="font-mono">{latestImageReference}</span>
-      </p>
+      <BuildImageProvenanceStatus
+        value={binding}
+        latestImageReference={latestImageReference}
+        latestDigest={latestDigest}
+        latestBuildRunId={latestBuildRunId}
+      />
     );
   }
   if (latestStatus) {
@@ -1241,8 +1253,7 @@ export const StackForm = ({
                     defineField<StackInput, 'spec.buildImageBindings'>({
                       key: 'spec.buildImageBindings',
                       label: 'Service Bindings',
-                      description:
-                        'Use the exact Compose service name, then select the build that produces its image.',
+                      description: 'Use the exact Compose service name, then select the build that produces its image.',
                       validate: validateStackBuildImageBindings,
                       render: (value, set) => (
                         <StackBuildImageBindingsField

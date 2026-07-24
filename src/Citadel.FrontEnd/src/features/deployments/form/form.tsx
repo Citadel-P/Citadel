@@ -36,6 +36,7 @@ import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/
 import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ResourceTagSelector } from '@/features/tags/components';
+import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
 
 const enum ImageSource {
   local = 'Local',
@@ -493,7 +494,8 @@ export const DeploymentForm = ({
                           const selectedProject = buildProjects.find((project) => project.id === val);
                           const latestRun = selectedProject?.latestRun;
                           const latestImageReference = latestRun?.imageReferences?.[0];
-                          const hasSuccessfulImage = latestRun?.status === BuildRunStatus.Succeeded && !!latestImageReference;
+                          const hasSuccessfulImage =
+                            latestRun?.status === BuildRunStatus.Succeeded && !!latestImageReference;
                           return (
                             <div className="flex flex-col gap-2">
                               <FieldSelect
@@ -524,16 +526,20 @@ export const DeploymentForm = ({
                                   The selected build no longer exists. Select another build before saving.
                                 </AlertMessage>
                               ) : selectedProject && hasSuccessfulImage ? (
-                                <AlertMessage type="success" title="Latest image">
-                                  <span className="font-mono text-xs">{latestImageReference}</span>
-                                </AlertMessage>
+                                <BuildImageProvenanceStatus
+                                  value={currentImage as DeploymentImageInfoBuildImage}
+                                  latestImageReference={latestImageReference}
+                                  latestDigest={latestRun?.imageDigest}
+                                  latestBuildRunId={latestRun?.id}
+                                />
                               ) : selectedProject && latestRun ? (
                                 <AlertMessage type="warning" title={`Latest run ${latestRun.status}`}>
                                   Deployment can be saved, but it cannot apply this build image until a run succeeds.
                                 </AlertMessage>
                               ) : selectedProject ? (
                                 <AlertMessage type="info" title="No build image yet">
-                                  Deployment can be saved, but it cannot apply this build image until the first build succeeds.
+                                  Deployment can be saved, but it cannot apply this build image until the first build
+                                  succeeds.
                                 </AlertMessage>
                               ) : null}
                             </div>
@@ -922,6 +928,7 @@ export const DeploymentForm = ({
     [
       provider,
       currentPlatformId,
+      currentImage,
       currentSpec.image,
       mode,
       id,

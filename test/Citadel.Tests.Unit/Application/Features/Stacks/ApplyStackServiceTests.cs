@@ -23,7 +23,6 @@ using Hosting.DockerClient.Services;
 using Infrastructure.Repositories;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Tests.Unit.Application.Features.Stacks;
@@ -62,13 +61,6 @@ public class ApplyStackServiceTests
             defaultBranch: "main",
             gitAccountId: null,
             createdByActorId: actorId);
-        var repositoryCachePath = repository.GetCachePath();
-        Directory.CreateDirectory(Path.GetDirectoryName(repositoryCachePath)!);
-        if (Directory.Exists(repositoryCachePath))
-        {
-            DeleteDirectoryIfExists(repositoryCachePath);
-        }
-
         var stack = Stack.Create(
             name: "git-stack-real",
             createdByActorId: actorId,
@@ -124,9 +116,20 @@ public class ApplyStackServiceTests
                 .Returns(stackConnector.Object);
 
             var gitCli = new GitCliRepository(new ProcessCommandExecutor());
-            var repoCacheManager = new RepoCacheManager(gitCli, NullLogger<RepoCacheManager>.Instance);
+            var repoCacheManager = new Mock<IRepoCacheManager>();
+            repoCacheManager
+                .Setup(x => x.SynchronizeAsync(
+                    repository,
+                    It.IsAny<GitAccount?>(),
+                    "main",
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RepoSyncResult(
+                    GitOperation.Pull,
+                    expectedCommit,
+                    Success: true,
+                    CachePath: repoRoot));
             var gitStackMaterializer = new GitStackMaterializer(
-                repoCacheManager,
+                repoCacheManager.Object,
                 gitCli,
                 new TestStackStoragePathProvider(Path.Combine(tempPath, "stacks-storage")));
 
@@ -258,7 +261,6 @@ public class ApplyStackServiceTests
         }
         finally
         {
-            DeleteDirectoryIfExists(repositoryCachePath);
             DeleteDirectoryIfExists(tempPath);
         }
     }
@@ -1268,6 +1270,108 @@ public class ApplyStackServiceTests
         Assert.Equal(workerAppliedRunId, worker.AppliedBuildRunId);
         Assert.Equal("sha256:worker-old", worker.AppliedDigest);
         Assert.Equal(workerAppliedAt, worker.AppliedAt);
+    }
+
+    [Fact]
+    public async Task StackSucceededWorkItem_ShouldRecordAllAppliedBuildsAndPreserveLegacyRunId()
+    {
+        var platformId = Guid.CreateVersion7();
+        var actorId = Guid.CreateVersion7();
+        var apiProjectId = Guid.CreateVersion7();
+        var workerProjectId = Guid.CreateVersion7();
+        var workerRunId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "application",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: platformId,
+            spec: new ManualStack(
+                ComposeFile: "services:\n  api:\n    image: api\n  worker:\n    image: worker\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled,
+                BuildImageBindings:
+                [
+                    new StackBuildImageBinding(
+                        ServiceName: "api",
+                        BuildProjectId: apiProjectId,
+                        ResolvedImageReference: "registry.example.test/api:historical",
+                        ResolvedDigest: "sha256:api"),
+                    new StackBuildImageBinding(
+                        ServiceName: "worker",
+                        BuildProjectId: workerProjectId,
+                        ResolvedImageReference: "registry.example.test/worker:current",
+                        ResolvedDigest: "sha256:worker",
+                        ResolvedBuildRunId: workerRunId)
+                ]));
+        stack.MarkProcessing(actorId);
+
+        var stacks = new Mock<IStackRepository>();
+        stacks.Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stacks.Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        stacks.Setup(x => x.ReplaceReleaseVolumeBindingsAsync(
+                stack.CurrentStackRelease!.Id,
+                It.IsAny<IReadOnlyCollection<StackReleaseVolumeBinding>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+        var containers = new Mock<IContainerRepository>();
+        containers.Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        containers.Setup(x => x.BulkUpsertAsync(It.IsAny<IEnumerable<Container>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+        var images = new Mock<IImageRepository>();
+        images.Setup(x => x.GetByPlatformIdAsync(platformId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents.Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var actors = new Mock<IActorRepository>();
+        actors.Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Actor?)null);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
+        unitOfWork.Setup(x => x.Images).Returns(images.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var workItem = new StackSucceededWorkItem(
+            stack.Id,
+            actorId,
+            [],
+            StackReleaseStatus.Healthy,
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            StackApplyOperation.Apply,
+            appliedBuildImages:
+            [
+                new AppliedStackBuildImage(
+                    "api",
+                    apiProjectId,
+                    "registry.example.test/api@sha256:api",
+                    "sha256:api",
+                    BuildRunId: null),
+                new AppliedStackBuildImage(
+                    "worker",
+                    workerProjectId,
+                    "registry.example.test/worker@sha256:worker",
+                    "sha256:worker",
+                    workerRunId)
+            ]);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        var bindings = stack.CurrentStackRelease!.Spec.BuildImageBindings!;
+        var api = Assert.Single(bindings, binding => binding.ServiceName == "api");
+        Assert.Null(api.ResolvedBuildRunId);
+        Assert.Null(api.AppliedBuildRunId);
+        Assert.Equal("registry.example.test/api@sha256:api", api.AppliedImageReference);
+        var worker = Assert.Single(bindings, binding => binding.ServiceName == "worker");
+        Assert.Equal(workerRunId, worker.ResolvedBuildRunId);
+        Assert.Equal(workerRunId, worker.AppliedBuildRunId);
+        Assert.Equal("registry.example.test/worker@sha256:worker", worker.AppliedImageReference);
     }
 
     [Fact]

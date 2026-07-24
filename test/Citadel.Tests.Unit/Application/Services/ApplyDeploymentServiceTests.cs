@@ -247,6 +247,81 @@ public sealed class ApplyDeploymentServiceTests
         Assert.Equal(DeploymentStatus.Healthy, deployment.Status);
     }
 
+    [Fact]
+    public async Task DeploymentSucceededWorkItem_ShouldPreserveLegacyResolvedArtifactWithoutInventingRunId()
+    {
+        var actorId = Guid.CreateVersion7();
+        var platformId = Guid.CreateVersion7();
+        var buildProjectId = Guid.CreateVersion7();
+        var deployment = new Deployment(
+            name: "api",
+            createdByActorId: actorId,
+            platformId: platformId,
+            spec: new DeploymentSpec(
+                Image: new BuildImage(
+                    BuildProjectId: buildProjectId,
+                    ResolvedImageReference: "registry.example.test/api:historical",
+                    ResolvedDigest: "sha256:historical"),
+                UpdateBehavior: UpdateBehavior.Disabled));
+        var container = new Container(
+            name: "api",
+            dockerImageId: "sha256:image",
+            platformId: platformId,
+            dockerContainerId: "api-container",
+            state: ContainerStateStatus.Running);
+
+        var deployments = new Mock<IDeploymentRepository>();
+        deployments.Setup(x => x.GetAsync(deployment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(deployment);
+        deployments.Setup(x => x.UpdateAsync(deployment, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var containers = new Mock<IContainerRepository>();
+        containers.Setup(x => x.GetByIdAsync(container.DockerContainerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(container);
+        containers.Setup(x => x.UpdateAsync(container, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var activityEvents = new Mock<IActivityEventRepository>();
+        activityEvents.Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var actors = new Mock<IActorRepository>();
+        actors.Setup(x => x.GetById(actorId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Actor?)null);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Deployments).Returns(deployments.Object);
+        unitOfWork.Setup(x => x.Containers).Returns(containers.Object);
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activityEvents.Object);
+        unitOfWork.Setup(x => x.Actors).Returns(actors.Object);
+        unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var workItem = new DeploymentSucceededWorkItem(
+            deployment.Id,
+            actorId,
+            container.DockerContainerId,
+            "sha256:historical",
+            autoUpdateState: null,
+            new ResolvedBuildImage(
+                buildProjectId,
+                "api-build",
+                Guid.CreateVersion7(),
+                "registry.example.test/api@sha256:historical",
+                "sha256:historical",
+                RunId: null),
+            Mock.Of<IDeploymentStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            new TestNotificationQueue(),
+            resourceBindings: null);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        var image = Assert.IsType<BuildImage>(deployment.Spec!.Image);
+        Assert.Equal("registry.example.test/api:historical", image.ResolvedImageReference);
+        Assert.Equal("sha256:historical", image.ResolvedDigest);
+        Assert.Null(image.ResolvedBuildRunId);
+        Assert.Equal("registry.example.test/api@sha256:historical", image.AppliedImageReference);
+        Assert.Equal("sha256:historical", image.AppliedDigest);
+        Assert.Null(image.AppliedBuildRunId);
+    }
+
     private sealed class StaticResourceBindingResolver(ResolvedResourceBindings configuration) : IResourceBindingResolver
     {
         public Task<Result<ResolvedResourceBindings>> ResolveAsync(

@@ -215,9 +215,11 @@ In a deployment, choose:
 - Build: the build project that produces the image
 - Redeploy On Build: whether Citadel should redeploy this deployment automatically after a successful build
 
-The deployment form shows whether the selected build already has a latest successful image. You can save the deployment before the first successful build, but the deployment cannot be applied from that build image until a run succeeds.
+The deployment form shows the latest build artifact, the artifact currently desired by the deployment, and the artifact last applied successfully. You can save the deployment before the first successful build, but the deployment cannot be applied from that build image until a run succeeds.
 
-When a build succeeds, Citadel updates each deployment that uses that build image source with the new image reference and digest, records a `DeploymentUpdated` activity event, streams the deployment update to connected clients, and writes the update to the build run log. If `Redeploy On Build` is enabled, Citadel redeploys the deployment after the build finishes.
+When a build succeeds, Citadel updates each deployment that uses that build image source with the new desired image reference and digest, records a `DeploymentUpdated` activity event, streams the deployment update to connected clients, and writes the update to the build run log. If `Redeploy On Build` is enabled, Citadel redeploys the deployment after the build finishes.
+
+Apply uses the stored desired artifact, not whichever build happens to be latest when apply starts. Citadel pins the runtime reference to the image digest when available and advances the applied fields only after the deployment starts successfully. A failed redeploy therefore remains visibly pending and does not claim that the new build is running.
 
 ### Stacks
 
@@ -229,9 +231,9 @@ Each binding contains:
 - Build: the build project that produces that service image
 - Redeploy On Build: whether Citadel should redeploy that service after a successful build
 
-When the stack is applied, Citadel resolves each binding to the latest successful build image. For web editor stacks, Citadel replaces the service image in the generated Compose content. For Git stacks, Citadel writes a generated Compose override file with the resolved image references.
+When the stack is applied, Citadel uses the desired artifact stored on each binding. A binding without a resolved artifact falls back to the latest successful build. For web editor stacks, Citadel replaces the service image in the generated Compose content. For Git stacks, Citadel writes a generated Compose override file with the resolved image references.
 
-When a build succeeds, Citadel updates matching stack build image bindings with the new image reference and digest, records a `StackUpdated` activity event, streams the stack update to connected clients, and writes the affected service names to the build run log. If `Redeploy On Build` is enabled, Citadel reapplies only the mapped services.
+When a build succeeds, Citadel updates matching stack build image bindings with the new desired image reference and digest, records a `StackUpdated` activity event, streams the stack update to connected clients, and writes the affected service names to the build run log. If `Redeploy On Build` is enabled, Citadel reapplies only the mapped services. Applied provenance changes only for services that were included in a successful apply.
 
 If a mapped build has no successful image yet, save is allowed, but stack apply fails until that build has a successful run.
 

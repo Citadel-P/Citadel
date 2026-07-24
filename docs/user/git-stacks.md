@@ -119,11 +119,11 @@ For each service binding:
 - Build: build project that produces the service image
 - Redeploy On Build: automatically reapply that service after the selected build succeeds
 
-When the stack is applied, Citadel resolves each binding to the latest successful image from the selected build and writes a generated Compose override file. The override is added after the repository Compose files so the build image replaces the service image from Git without changing the repository.
+When the stack is applied, Citadel uses the desired artifact stored on each binding and writes a generated Compose override file. A binding without a resolved artifact falls back to the latest successful build. The override is added after the repository Compose files so the build image replaces the service image from Git without changing the repository.
 
 You can save bindings before the first successful build, but apply fails until each selected build has a successful image.
 
-When a mapped build succeeds later, Citadel updates the stored binding with the new image reference and digest. If `Redeploy On Build` is enabled, Citadel reapplies only the mapped service.
+When a mapped build succeeds later, Citadel updates the binding's desired image reference and digest. If `Redeploy On Build` is enabled, Citadel reapplies only the mapped service. Applied state changes only after that apply succeeds.
 
 For build setup and webhook-triggered builds, see `docs/user/builds.md`.
 

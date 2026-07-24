@@ -1176,16 +1176,18 @@ internal sealed class StackSucceededWorkItem(
             if (applied is null)
                 return binding;
 
-            var hasResolvedBuild = binding.ResolvedBuildRunId is not null;
+            var hasResolvedArtifact = !string.IsNullOrWhiteSpace(binding.ResolvedImageReference);
             return binding with
             {
-                ResolvedImageReference = hasResolvedBuild
+                ResolvedImageReference = hasResolvedArtifact
                     ? binding.ResolvedImageReference
                     : applied.ImageReference,
-                ResolvedDigest = hasResolvedBuild
+                ResolvedDigest = hasResolvedArtifact
                     ? binding.ResolvedDigest
                     : applied.Digest,
-                ResolvedBuildRunId = binding.ResolvedBuildRunId ?? applied.BuildRunId,
+                ResolvedBuildRunId = hasResolvedArtifact
+                    ? binding.ResolvedBuildRunId
+                    : applied.BuildRunId,
                 AppliedImageReference = applied.ImageReference,
                 AppliedDigest = applied.Digest,
                 AppliedBuildRunId = applied.BuildRunId,
@@ -1217,7 +1219,7 @@ internal sealed record AppliedStackBuildImage(
     Guid BuildProjectId,
     string ImageReference,
     string? Digest,
-    Guid BuildRunId);
+    Guid? BuildRunId);
 
 internal static class StackActivityFactory
 {

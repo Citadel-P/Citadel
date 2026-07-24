@@ -107,14 +107,18 @@ internal class PullImageService(
 
         internal PullImageCommand ToConnectorCommand(string platformAddress, Registry registry)
         {
-            string domainName = registry.RegistryHost.Replace("https://", "").ToLower();
+            var domainName = registry.RegistryHost
+                .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("http://", "", StringComparison.OrdinalIgnoreCase)
+                .TrimEnd('/')
+                .ToLowerInvariant();
             switch (registry.Configuration)
             {
                 case GitHubRegistry ghCfg:
                     return new PullImageCommand
                         (
                             PlatformAddress: platformAddress,
-                            FromImage: $"{domainName}/{ghCfg.NameSpace}/{BuildImageAndTag()}",
+                            FromImage: QualifyImageReference(domainName, $"{domainName}/{ghCfg.NameSpace}"),
                             Auth: ghCfg.GetRegistryAuth(domainName)
                         );
 
@@ -122,7 +126,7 @@ internal class PullImageService(
                     return new PullImageCommand
                     (
                         PlatformAddress: platformAddress,
-                        FromImage: $"{domainName}/{BuildImageAndTag()}",
+                        FromImage: QualifyImageReference(domainName, domainName),
                         Auth: customCfg.GetRegistryAuth(domainName)
                     );
 
@@ -140,7 +144,7 @@ internal class PullImageService(
                         return new PullImageCommand
                             (
                                 PlatformAddress: platformAddress,
-                                FromImage: $"{domainName}/{dockerCfg.UserName}/{ImageTag}".ToLower(),
+                                FromImage: QualifyImageReference(domainName, $"{domainName}/{dockerCfg.UserName}"),
                                 Auth: dockerCfg.GetRegistryAuth(domainName)
                             );
                     }
@@ -151,7 +155,22 @@ internal class PullImageService(
         }
 
         private string BuildImageAndTag()
-            => (ImageTag.Split(':').Length == 1 ? $"{ImageTag}:latest" : ImageTag).ToLower();
+        {
+            var imageReference = ImageTag.Trim().ToLowerInvariant();
+            var lastSlash = imageReference.LastIndexOf('/');
+            var imageName = imageReference[(lastSlash + 1)..];
+            return imageReference.Contains('@', StringComparison.Ordinal) || imageName.Contains(':', StringComparison.Ordinal)
+                ? imageReference
+                : $"{imageReference}:latest";
+        }
+
+        private string QualifyImageReference(string registryHost, string prefix)
+        {
+            var imageReference = BuildImageAndTag();
+            return imageReference.StartsWith($"{registryHost}/", StringComparison.OrdinalIgnoreCase)
+                ? imageReference
+                : $"{prefix}/{imageReference}";
+        }
     }
 
 }

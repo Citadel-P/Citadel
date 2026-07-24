@@ -648,7 +648,9 @@ internal sealed class BuildRunExecutionService(
         BuildRun run,
         CancellationToken cancellationToken)
     {
-        var imageReference = run.ImageReferences.FirstOrDefault();
+        var imageReference = run.ImageReferences
+            .Select(reference => BuildImageReference.PinToDigest(reference, run.ImageDigest))
+            .FirstOrDefault();
         if (string.IsNullOrWhiteSpace(imageReference))
             return new BuildImageConsumerUpdateResult([], [], [], [], []);
 

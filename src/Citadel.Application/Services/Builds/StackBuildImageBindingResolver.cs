@@ -34,20 +34,12 @@ internal sealed class StackBuildImageBindingResolver(IBuildImageResolver buildIm
             if (binding.BuildProjectId == Guid.Empty)
                 return Result.Failure<ResolvedStackBuildImageBindings>($"Build project is required for service '{binding.ServiceName}'.");
 
-            if (binding.ResolvedBuildRunId is Guid resolvedBuildRunId
-                && resolvedBuildRunId != Guid.Empty
-                && !string.IsNullOrWhiteSpace(binding.ResolvedImageReference))
-            {
-                resolved.Add(new ResolvedStackBuildImageBinding(
-                    binding,
-                    binding.ResolvedImageReference,
-                    binding.ResolvedDigest,
-                    resolvedBuildRunId));
-                messages.Add($"Resolved service \"{binding.ServiceName}\" from build run {resolvedBuildRunId}.");
-                continue;
-            }
-
-            var image = await buildImageResolver.ResolveLatestAsync(binding.BuildProjectId, cancellationToken);
+            var image = await buildImageResolver.ResolveAsync(
+                binding.BuildProjectId,
+                binding.ResolvedImageReference,
+                binding.ResolvedDigest,
+                binding.ResolvedBuildRunId,
+                cancellationToken);
             if (image.IsFailure(out var error, out var resolvedImage))
                 return Result.Failure<ResolvedStackBuildImageBindings>($"Service '{binding.ServiceName}': {error.Message}");
 
@@ -56,7 +48,9 @@ internal sealed class StackBuildImageBindingResolver(IBuildImageResolver buildIm
                 resolvedImage.ImageReference,
                 resolvedImage.Digest,
                 resolvedImage.RunId));
-            messages.Add($"Resolved service \"{binding.ServiceName}\" from build \"{resolvedImage.ProjectName}\".");
+            messages.Add(resolvedImage.RunId is Guid runId
+                ? $"Resolved service \"{binding.ServiceName}\" from build run {runId}."
+                : $"Resolved service \"{binding.ServiceName}\" from its stored build artifact.");
         }
 
         return new ResolvedStackBuildImageBindings(resolved, messages);
@@ -130,4 +124,4 @@ internal sealed record ResolvedStackBuildImageBinding(
     StackBuildImageBinding Binding,
     string ImageReference,
     string? Digest,
-    Guid BuildRunId);
+    Guid? BuildRunId);

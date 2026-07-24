@@ -40,13 +40,15 @@ Use local images when:
 
 Build images are produced by Citadel build projects.
 
-Use this when the deployment should run the latest successful image from a build:
+Use this when the deployment should run images produced by a build:
 
 - Image Source: `Build`
 - Build: the build project that produces the image
 - Redeploy On Build: automatically redeploy this deployment after the selected build succeeds
 
-You can save a deployment before the selected build has a successful run. The form shows whether the build already has a usable latest image. Deploy or redeploy succeeds only after the build has produced an image reference.
+You can save a deployment before the selected build has a successful run. The form shows latest, desired, and applied artifacts. A successful build advances desired state; a successful deploy advances applied state. Deploy or redeploy succeeds only after the build has produced an image reference.
+
+Citadel deploys the stored desired artifact and pins it to its digest when available. It falls back to the latest successful build only when the deployment has not resolved an artifact yet.
 
 For build setup and webhook-triggered builds, see `docs/user/builds.md`.
 

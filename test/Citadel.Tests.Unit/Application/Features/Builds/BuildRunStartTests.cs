@@ -765,7 +765,7 @@ public sealed class BuildRunStartTests : IDisposable
 
         Assert.True(result.IsSuccess());
         var image = Assert.IsType<BuildImage>(deployment.Spec!.Image);
-        Assert.Equal("registry.example.test/citadel/api:main-abcdef123456", image.ResolvedImageReference);
+        Assert.Equal("registry.example.test/citadel/api@sha256:abc", image.ResolvedImageReference);
         Assert.Equal("sha256:abc", image.ResolvedDigest);
         Assert.Equal(run.Id, image.ResolvedBuildRunId);
         Assert.Null(image.AppliedBuildRunId);
@@ -826,7 +826,7 @@ public sealed class BuildRunStartTests : IDisposable
 
         Assert.True(result.IsSuccess());
         var binding = Assert.Single(stack.CurrentStackRelease!.Spec.BuildImageBindings!);
-        Assert.Equal("registry.example.test/citadel/api:main-abcdef123456", binding.ResolvedImageReference);
+        Assert.Equal("registry.example.test/citadel/api@sha256:abc", binding.ResolvedImageReference);
         Assert.Equal("sha256:abc", binding.ResolvedDigest);
         Assert.Equal(run.Id, binding.ResolvedBuildRunId);
         Assert.Null(binding.AppliedBuildRunId);

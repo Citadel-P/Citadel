@@ -41,7 +41,7 @@ internal sealed class GitStackMaterializer(
         if (sync.Success != true)
             return Result.Failure<GitStackMaterializationResult>(sync.Error ?? "Repository sync failed.");
 
-        var repoPath = repository.GetCachePath();
+        var repoPath = sync.CachePath ?? repository.GetCachePath();
         string resolvedCommit;
 
         if (!string.IsNullOrWhiteSpace(spec.CommitSha))

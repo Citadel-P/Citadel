@@ -13,24 +13,77 @@ public sealed class StackBuildImageBindingResolverTests
         var projectId = Guid.CreateVersion7();
         var runId = Guid.CreateVersion7();
         var buildImageResolver = new Mock<IBuildImageResolver>();
-        var resolver = new StackBuildImageBindingResolver(buildImageResolver.Object);
         var binding = new StackBuildImageBinding(
             ServiceName: "api",
             BuildProjectId: projectId,
             ResolvedImageReference: "registry.example.test/citadel/api:historical",
             ResolvedDigest: "sha256:historical",
             ResolvedBuildRunId: runId);
+        buildImageResolver
+            .Setup(x => x.ResolveAsync(
+                projectId,
+                binding.ResolvedImageReference,
+                binding.ResolvedDigest,
+                runId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new ResolvedBuildImage(
+                projectId,
+                "api",
+                Guid.CreateVersion7(),
+                "registry.example.test/citadel/api@sha256:historical",
+                "sha256:historical",
+                runId)));
+        var resolver = new StackBuildImageBindingResolver(buildImageResolver.Object);
 
         var result = await resolver.ResolveAsync([binding], TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
         var resolvedBinding = Assert.Single(resolved.Bindings);
-        Assert.Equal(binding.ResolvedImageReference, resolvedBinding.ImageReference);
+        Assert.Equal("registry.example.test/citadel/api@sha256:historical", resolvedBinding.ImageReference);
         Assert.Equal(binding.ResolvedDigest, resolvedBinding.Digest);
         Assert.Equal(runId, resolvedBinding.BuildRunId);
         buildImageResolver.Verify(
-            x => x.ResolveLatestAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+            x => x.ResolveAsync(
+                projectId,
+                binding.ResolvedImageReference,
+                binding.ResolvedDigest,
+                runId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_ShouldPreserveLegacyArtifactWithoutInventingBuildRunId()
+    {
+        var projectId = Guid.CreateVersion7();
+        var buildImageResolver = new Mock<IBuildImageResolver>();
+        var binding = new StackBuildImageBinding(
+            ServiceName: "api",
+            BuildProjectId: projectId,
+            ResolvedImageReference: "registry.example.test/citadel/api:historical",
+            ResolvedDigest: "sha256:historical");
+        buildImageResolver
+            .Setup(x => x.ResolveAsync(
+                projectId,
+                binding.ResolvedImageReference,
+                binding.ResolvedDigest,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new ResolvedBuildImage(
+                projectId,
+                "api",
+                Guid.CreateVersion7(),
+                "registry.example.test/citadel/api@sha256:historical",
+                "sha256:historical",
+                null)));
+        var resolver = new StackBuildImageBindingResolver(buildImageResolver.Object);
+
+        var result = await resolver.ResolveAsync([binding], TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
+        var resolvedBinding = Assert.Single(resolved.Bindings);
+        Assert.Equal("registry.example.test/citadel/api@sha256:historical", resolvedBinding.ImageReference);
+        Assert.Null(resolvedBinding.BuildRunId);
     }
 
     [Fact]
@@ -40,12 +93,12 @@ public sealed class StackBuildImageBindingResolverTests
         var runId = Guid.CreateVersion7();
         var buildImageResolver = new Mock<IBuildImageResolver>();
         buildImageResolver
-            .Setup(x => x.ResolveLatestAsync(projectId, It.IsAny<CancellationToken>()))
+            .Setup(x => x.ResolveAsync(projectId, null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(new ResolvedBuildImage(
                 projectId,
                 "api",
                 Guid.CreateVersion7(),
-                "registry.example.test/citadel/api:latest",
+                "registry.example.test/citadel/api@sha256:latest",
                 "sha256:latest",
                 runId)));
         var resolver = new StackBuildImageBindingResolver(buildImageResolver.Object);
@@ -55,11 +108,11 @@ public sealed class StackBuildImageBindingResolverTests
 
         Assert.True(result.IsSuccess(out var resolved, out var error), error?.Message);
         var resolvedBinding = Assert.Single(resolved.Bindings);
-        Assert.Equal("registry.example.test/citadel/api:latest", resolvedBinding.ImageReference);
+        Assert.Equal("registry.example.test/citadel/api@sha256:latest", resolvedBinding.ImageReference);
         Assert.Equal("sha256:latest", resolvedBinding.Digest);
         Assert.Equal(runId, resolvedBinding.BuildRunId);
         buildImageResolver.Verify(
-            x => x.ResolveLatestAsync(projectId, It.IsAny<CancellationToken>()),
+            x => x.ResolveAsync(projectId, null, null, null, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 }

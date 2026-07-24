@@ -164,6 +164,9 @@ public class StackServiceTests
         Assert.Equal(2, executor.Invocations.Count);
         Assert.Equal(1, results.Count(result => result.Type == StackApplyEventType.StdErr && result.Message == warning));
         Assert.Equal("up -d", string.Join(' ', executor.Invocations[1].Arguments[^2..]));
+        Assert.All(
+            executor.Invocations,
+            invocation => Assert.Equal(temp.Path, invocation.WorkingDirectory));
     }
 
     [Fact]
@@ -291,6 +294,7 @@ public class StackServiceTests
         var invocation = Assert.Single(executor.Invocations);
         Assert.NotNull(invocation.DockerConfigDirectory);
         Assert.False(Directory.Exists(invocation.DockerConfigDirectory));
+        Assert.Equal(generatedDirectory, invocation.WorkingDirectory);
     }
 
     [Fact]

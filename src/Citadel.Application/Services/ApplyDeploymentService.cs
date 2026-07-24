@@ -83,7 +83,12 @@ internal sealed partial class ApplyDeploymentService(
         }
         else if (deployment.Spec.Image is BuildImage buildImage)
         {
-            var resolvedBuild = await buildImageResolver.ResolveLatestAsync(buildImage.BuildProjectId, ct);
+            var resolvedBuild = await buildImageResolver.ResolveAsync(
+                buildImage.BuildProjectId,
+                buildImage.ResolvedImageReference,
+                buildImage.ResolvedDigest,
+                buildImage.ResolvedBuildRunId,
+                ct);
             if (resolvedBuild.IsFailure(out var resolvedBuildError, out var resolved))
             {
                 var message = resolvedBuildError.Message;
@@ -98,7 +103,9 @@ internal sealed partial class ApplyDeploymentService(
                 resolved.Digest);
             resolvedBuildImage = resolved;
 
-            yield return Info($"Resolved build \"{resolved.ProjectName}\" from run {resolved.RunId}.");
+            yield return Info(resolved.RunId is Guid runId
+                ? $"Resolved build \"{resolved.ProjectName}\" from run {runId}."
+                : $"Resolved build \"{resolved.ProjectName}\" from its stored artifact.");
         }
 
         if (pulledExternalImage is not null)
@@ -545,20 +552,22 @@ internal sealed class DeploymentSucceededWorkItem(
             var appliedDigest = string.IsNullOrEmpty(imageDigest)
                 ? appliedBuildImage.Digest
                 : imageDigest;
-            var hasResolvedBuild = buildImage.ResolvedBuildRunId is not null;
+            var hasResolvedArtifact = !string.IsNullOrWhiteSpace(buildImage.ResolvedImageReference);
 
             deployment.PartialUpdate(
                 spec: deployment.Spec with
                 {
                     Image = buildImage with
                     {
-                        ResolvedImageReference = hasResolvedBuild
+                        ResolvedImageReference = hasResolvedArtifact
                             ? buildImage.ResolvedImageReference
                             : appliedBuildImage.ImageReference,
-                        ResolvedDigest = hasResolvedBuild
+                        ResolvedDigest = hasResolvedArtifact
                             ? buildImage.ResolvedDigest
                             : appliedDigest,
-                        ResolvedBuildRunId = buildImage.ResolvedBuildRunId ?? appliedBuildImage.RunId,
+                        ResolvedBuildRunId = hasResolvedArtifact
+                            ? buildImage.ResolvedBuildRunId
+                            : appliedBuildImage.RunId,
                         AppliedImageReference = appliedBuildImage.ImageReference,
                         AppliedDigest = appliedDigest,
                         AppliedBuildRunId = appliedBuildImage.RunId,
