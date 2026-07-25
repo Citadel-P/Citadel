@@ -6,20 +6,32 @@ using Domain.Entities.Backups;
 using Domain.Entities.ResourceBindings;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Tests.Integration.Application.TaskJobs;
 
 public sealed class BackupPolicySchedulerJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
+    private readonly FixedTimeProvider timeProvider =
+        new(new DateTimeOffset(2026, 7, 14, 8, 30, 45, TimeSpan.Zero));
+
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(timeProvider);
+    }
+
     [Fact]
-    public async Task QueueDueScheduledRunsAsync_ShouldQueueDuePolicyOnce()
+    public async Task QueueDueScheduledRunsAsync_ShouldQueueDuePolicyOnceAcrossSchedulerRestart()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var policyId = await CreateScheduledPolicyAsync("scheduled-backup", enabled: true, cron: "* * * * *", cancellationToken);
-        var scheduler = Services.GetRequiredService<IBackupPolicyScheduler>();
+        var beforeRestart = ActivatorUtilities.CreateInstance<BackupPolicyScheduler>(Services);
 
-        await scheduler.QueueDueScheduledRunsAsync(cancellationToken);
-        await scheduler.QueueDueScheduledRunsAsync(cancellationToken);
+        await beforeRestart.QueueDueScheduledRunsAsync(cancellationToken);
+
+        var afterRestart = ActivatorUtilities.CreateInstance<BackupPolicyScheduler>(Services);
+        await afterRestart.QueueDueScheduledRunsAsync(cancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -32,6 +44,50 @@ public sealed class BackupPolicySchedulerJobTests(PostgresTestFixture fixture) :
         Assert.Equal(BackupRunTrigger.Schedule, run.Trigger);
         Assert.Equal(BackupRunStatus.Queued, run.Status);
         Assert.Equal(Constants.SystemId, run.TriggeredByActorId);
+    }
+
+    [Fact]
+    public async Task QueueDueScheduledRunsAsync_ShouldClaimScheduledMinuteOnceAcrossConcurrentTicks()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var policyId = await CreateScheduledPolicyAsync(
+            "concurrent-scheduled-backup",
+            enabled: true,
+            cron: "* * * * *",
+            cancellationToken);
+        var firstScheduler = ActivatorUtilities.CreateInstance<BackupPolicyScheduler>(Services);
+        var secondScheduler = ActivatorUtilities.CreateInstance<BackupPolicyScheduler>(Services);
+
+        await Task.WhenAll(
+            firstScheduler.QueueDueScheduledRunsAsync(cancellationToken),
+            secondScheduler.QueueDueScheduledRunsAsync(cancellationToken));
+
+        await using var scope = Services.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var runs = (await unitOfWork.BackupRuns.GetByPolicyAsync(policyId, 50, cancellationToken)).ToArray();
+
+        Assert.Single(runs);
+    }
+
+    [Fact]
+    public async Task QueueDueScheduledRunsAsync_ShouldEvaluateCronInConfiguredTimeZone()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var policyId = await CreateScheduledPolicyAsync(
+            "timezone-scheduled-backup",
+            enabled: true,
+            cron: "30 10 * * *",
+            cancellationToken,
+            timeZone: "Europe/Paris");
+        var scheduler = Services.GetRequiredService<IBackupPolicyScheduler>();
+
+        await scheduler.QueueDueScheduledRunsAsync(cancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var runs = (await unitOfWork.BackupRuns.GetByPolicyAsync(policyId, 50, cancellationToken)).ToArray();
+
+        Assert.Single(runs);
     }
 
     [Fact]
@@ -112,7 +168,8 @@ public sealed class BackupPolicySchedulerJobTests(PostgresTestFixture fixture) :
         string name,
         bool enabled,
         string cron,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string timeZone = "UTC")
     {
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -138,7 +195,7 @@ public sealed class BackupPolicySchedulerJobTests(PostgresTestFixture fixture) :
             repository.Id,
             enabled,
             cron,
-            timeZone: "UTC",
+            timeZone,
             webhook: null,
             keepLastSuccessful: BackupPolicy.DefaultKeepLastSuccessful,
             timeoutSeconds: BackupPolicy.DefaultTimeoutSeconds,
@@ -149,5 +206,10 @@ public sealed class BackupPolicySchedulerJobTests(PostgresTestFixture fixture) :
         await uow.CommitAsync(cancellationToken);
 
         return policy.Id;
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }

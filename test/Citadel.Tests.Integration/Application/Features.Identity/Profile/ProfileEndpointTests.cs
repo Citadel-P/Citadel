@@ -106,7 +106,7 @@ public sealed class ProfileEndpointTests(PostgresTestFixture fixture) : Integrat
             "/api/v1/profile/preferences",
             MergePatchContent("""
             {
-              "timeZone": "UTC",
+              "timeZone": "Europe/Paris",
               "dateTimeFormat": "TwentyFourHour",
               "theme": "Dark"
             }
@@ -118,7 +118,7 @@ public sealed class ProfileEndpointTests(PostgresTestFixture fixture) : Integrat
         using (var json = await ReadJsonAsync(response))
         {
             var root = json.RootElement;
-            Assert.Equal("UTC", root.GetProperty("timeZone").GetString());
+            Assert.Equal("Europe/Paris", root.GetProperty("timeZone").GetString());
             Assert.Equal("TwentyFourHour", root.GetProperty("dateTimeFormat").GetString());
             Assert.Equal("Dark", root.GetProperty("theme").GetString());
             Assert.True(root.GetProperty("isPersisted").GetBoolean());

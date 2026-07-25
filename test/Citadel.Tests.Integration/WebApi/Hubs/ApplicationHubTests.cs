@@ -21,6 +21,7 @@ public class ApplicationHubTests(PostgresTestFixture fixture) : IntegrationTestB
     private Guid platformId;
     private readonly Mock<IStreamSubscriptionResolver> resolverMock = new();
     private readonly Mock<IStreamGroupManager> groupManagerMock = new();
+    private readonly Mock<ISignalRGroupAuthorizationService> groupAuthorizationServiceMock = new();
     
     private HubConnection? connection;
 
@@ -28,6 +29,14 @@ public class ApplicationHubTests(PostgresTestFixture fixture) : IntegrationTestB
     {
         services.RemoveAll<IStreamSubscriptionResolver>();
         services.AddSingleton(resolverMock.Object);
+        services.RemoveAll<ISignalRGroupAuthorizationService>();
+        services.AddSingleton(groupAuthorizationServiceMock.Object);
+        groupAuthorizationServiceMock
+            .Setup(service => service.CanJoinAsync(
+                It.IsAny<System.Security.Claims.ClaimsPrincipal>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         // Reconfigure SignalR to add the testing filter
         services.PostConfigure<HubOptions>(options =>
         {

@@ -212,18 +212,19 @@ public abstract record AlertRuleQuietHour(
     string Timezone,
     string? Description)
 {
+    [JsonIgnore]
     public TimeZoneInfo TimeZoneInfo { get; } =
-        TimeZoneInfo.FindSystemTimeZoneById(Timezone);
+        TimeZoneResolver.Resolve(Timezone);
 
     public bool IsInQuietHours(DateTime utcNow)
     {
-        var localTime = TimeOnly.FromTimeSpan(
-            TimeZoneInfo.ConvertTimeFromUtc(utcNow, TimeZoneInfo).TimeOfDay);
+        var localDateTime = TimeZoneInfo.ConvertTimeFromUtc(utcNow, TimeZoneInfo);
+        var localTime = TimeOnly.FromDateTime(localDateTime);
 
-        return IsInRange(localTime) && MatchesDay(utcNow, TimeZoneInfo);
+        return IsInRange(localTime) && MatchesDay(localDateTime, localTime);
     }
 
-    protected abstract bool MatchesDay(DateTime utcNow, TimeZoneInfo tz);
+    protected abstract bool MatchesDay(DateTime localDateTime, TimeOnly localTime);
 
     protected bool IsInRange(TimeOnly localTime)
         => StartTime <= EndTime
@@ -232,35 +233,37 @@ public abstract record AlertRuleQuietHour(
 
     public bool Overlaps(AlertRuleQuietHour other)
     {
-        if (!string.Equals(Timezone, other.Timezone, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(TimeZoneInfo.Id, other.TimeZoneInfo.Id, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        if (!DayMatches(other))
-            return false;
-
-        foreach (var r1 in GetRanges())
-            foreach (var r2 in other.GetRanges())
-                if (r1.Start <= r2.End && r2.Start <= r1.End)
-                    return true;
+        foreach (var left in GetWeeklyRanges())
+        {
+            foreach (var right in other.GetWeeklyRanges())
+            {
+                for (var weekOffset = -1; weekOffset <= 1; weekOffset++)
+                {
+                    var offset = TimeSpan.FromDays(weekOffset * 7);
+                    if (left.Start <= right.End + offset && right.Start + offset <= left.End)
+                        return true;
+                }
+            }
+        }
 
         return false;
     }
 
-    protected abstract bool DayMatches(AlertRuleQuietHour other);
-
-    protected IEnumerable<(TimeSpan Start, TimeSpan End)> GetRanges()
+    protected (TimeSpan Start, TimeSpan End) GetWeeklyRange(DayOfWeek day)
     {
-        var start = StartTime.ToTimeSpan();
-        var end = EndTime.ToTimeSpan();
+        var dayOffset = TimeSpan.FromDays((int)day);
+        var start = dayOffset + StartTime.ToTimeSpan();
+        var end = dayOffset + EndTime.ToTimeSpan();
 
-        if (StartTime <= EndTime)
-            yield return (start, end);
-        else
-        {
-            yield return (start, TimeSpan.FromDays(1));
-            yield return (TimeSpan.Zero, end);
-        }
+        return StartTime <= EndTime
+            ? (start, end)
+            : (start, end + TimeSpan.FromDays(1));
     }
+
+    protected abstract IEnumerable<(TimeSpan Start, TimeSpan End)> GetWeeklyRanges();
 }
 
 public sealed record DailyQuietHour(
@@ -271,8 +274,13 @@ public sealed record DailyQuietHour(
     string? Description)
     : AlertRuleQuietHour(Name, ScheduleType.Daily, StartTime, EndTime, Timezone, Description)
 {
-    protected override bool MatchesDay(DateTime utcNow, TimeZoneInfo tz) => true;
-    protected override bool DayMatches(AlertRuleQuietHour other) => true;
+    protected override bool MatchesDay(DateTime localDateTime, TimeOnly localTime) => true;
+
+    protected override IEnumerable<(TimeSpan Start, TimeSpan End)> GetWeeklyRanges()
+    {
+        for (var day = 0; day < 7; day++)
+            yield return GetWeeklyRange((DayOfWeek)day);
+    }
 }
 
 public sealed record WeeklyQuietHour(
@@ -284,11 +292,22 @@ public sealed record WeeklyQuietHour(
     string? Description)
     : AlertRuleQuietHour(Name, ScheduleType.Weekly, StartTime, EndTime, Timezone, Description)
 {
-    protected override bool MatchesDay(DateTime utcNow, TimeZoneInfo tz)
-        => TimeZoneInfo.ConvertTimeFromUtc(utcNow, tz).DayOfWeek == DayOfWeek;
+    protected override bool MatchesDay(DateTime localDateTime, TimeOnly localTime)
+    {
+        var effectiveDay = StartTime > EndTime && localTime <= EndTime
+            ? PreviousDay(localDateTime.DayOfWeek)
+            : localDateTime.DayOfWeek;
 
-    protected override bool DayMatches(AlertRuleQuietHour other)
-        => other is WeeklyQuietHour w && w.DayOfWeek == DayOfWeek;
+        return effectiveDay == DayOfWeek;
+    }
+
+    protected override IEnumerable<(TimeSpan Start, TimeSpan End)> GetWeeklyRanges()
+    {
+        yield return GetWeeklyRange(DayOfWeek);
+    }
+
+    private static DayOfWeek PreviousDay(DayOfWeek day)
+        => day == DayOfWeek.Sunday ? DayOfWeek.Saturday : day - 1;
 }
 
 public sealed record AlertRuleLimitedTo(AlertResourceType ResourceType, Guid ResourceId);

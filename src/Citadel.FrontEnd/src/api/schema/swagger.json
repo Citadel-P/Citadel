@@ -34664,9 +34664,6 @@
               "null",
               "string"
             ]
-          },
-          "timeZoneInfo": {
-            "$ref": "#/components/schemas/TimeZoneInfo"
           }
         }
       },
@@ -34711,9 +34708,6 @@
               "null",
               "string"
             ]
-          },
-          "timeZoneInfo": {
-            "$ref": "#/components/schemas/TimeZoneInfo"
           }
         }
       },
@@ -50667,45 +50661,6 @@
               "null",
               "string"
             ]
-          }
-        }
-      },
-      "TimeZoneInfo": {
-        "type": "object",
-        "properties": {
-          "baseUtcOffset": {
-            "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
-            "type": "string"
-          },
-          "daylightName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "displayName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "hasIanaId": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "standardName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "supportsDaylightSavingTime": {
-            "type": "boolean"
           }
         }
       },

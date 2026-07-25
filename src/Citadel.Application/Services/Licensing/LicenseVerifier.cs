@@ -76,6 +76,11 @@ public sealed class LicenseVerifier(ILicensePublicKeyRegistry publicKeyRegistry)
                 out var payloadError))
             return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, payloadError);
 
+        payload = payload with
+        {
+            Limits = payload.Limits ?? new Dictionary<string, int>()
+        };
+
         var payloadResult = ValidatePayload(payload, instance, now);
         if (payloadResult.Status is LicenseStatus.Invalid or LicenseStatus.InstanceMismatch or LicenseStatus.UnsupportedSchema)
             return payloadResult;

@@ -45,6 +45,7 @@ internal sealed class GetLicenseRequestHandler(IUnitOfWork unitOfWork, TimeProvi
     {
         var now = timeProvider.GetUtcNow();
         var identity = await unitOfWork.InstanceIdentity.GetOrCreateAsync(Guid.CreateVersion7(), now, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
         return new LicenseRequest(
             Product: LicenseConstants.Product,
             InstanceId: identity.InstanceId,

@@ -2,6 +2,7 @@ using Application.Configs;
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Automation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -9,39 +10,26 @@ using Microsoft.Extensions.Options;
 
 namespace Application.TaskJobs;
 
-internal sealed class AutomationActionSchedulerJob(
+internal interface IAutomationActionScheduler
+{
+    Task QueueDueScheduledRunsAsync(CancellationToken cancellationToken);
+}
+
+internal sealed class AutomationActionScheduler(
     IServiceScopeFactory scopeFactory,
     IOptions<AutomationOptions> automationOptions,
-    ILogger<AutomationActionSchedulerJob> logger) : BackgroundService
+    TimeProvider timeProvider,
+    ILogger<AutomationActionScheduler> logger) : IAutomationActionScheduler
 {
     private readonly AutomationOptions options = automationOptions.Value;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task QueueDueScheduledRunsAsync(CancellationToken cancellationToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(5, options.SchedulePollIntervalSeconds)));
+        if (!options.Enabled)
+            return;
 
-        try
-        {
-            while (await timer.WaitForNextTickAsync(stoppingToken))
-            {
-                if (!options.Enabled)
-                    continue;
-
-                await QueueDueScheduledRunsAsync(stoppingToken);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-    }
-
-    private async Task QueueDueScheduledRunsAsync(CancellationToken stoppingToken)
-    {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var queueService = scope.ServiceProvider.GetRequiredService<IAutomationRunQueueService>();
-        var actions = await unitOfWork.AutomationActions.GetScheduledAsync(stoppingToken);
-        var nowUtc = TruncateToMinute(DateTime.UtcNow);
+        var nowUtc = SchedulerTime.TruncateToMinute(timeProvider.GetUtcNow()).UtcDateTime;
+        var actions = await GetScheduledActionsAsync(cancellationToken);
 
         foreach (var action in actions)
         {
@@ -50,29 +38,67 @@ internal sealed class AutomationActionSchedulerJob(
                 if (!CronSchedule.IsDue(action.ScheduleCron, action.ScheduleTimeZone, nowUtc))
                     continue;
 
-                if (!await unitOfWork.AutomationActions.TryMarkScheduledAsync(action.Id, nowUtc, stoppingToken))
-                    continue;
-
-                await unitOfWork.CommitAsync(stoppingToken);
-                await queueService.QueueAsync(
-                    action.Id,
-                    ActionRunTrigger.Schedule,
-                    argsJson: null,
-                    timeoutSeconds: null,
-                    triggeredByActorId: null,
-                    requireEnabled: true,
-                    stoppingToken);
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var queueService = scope.ServiceProvider.GetRequiredService<IAutomationRunQueueService>();
+                var result = await queueService.QueueScheduledAsync(action.Id, nowUtc, cancellationToken);
+                if (result.IsFailure(out var error))
+                    logger.LogDebug("Skipped scheduled automation action {ActionId}: {Error}", action.Id, error.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Failed to queue scheduled automation action {ActionId}", action.Id);
-                await unitOfWork.RollbackAsync();
             }
         }
     }
 
-    private static DateTime TruncateToMinute(DateTime value)
-        => new(value.Year, value.Month, value.Day, value.Hour, value.Minute, 0, DateTimeKind.Utc);
+    private async Task<AutomationAction[]> GetScheduledActionsAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return (await unitOfWork.AutomationActions.GetScheduledAsync(cancellationToken)).ToArray();
+    }
+}
+
+internal sealed class AutomationActionSchedulerJob(
+    IAutomationActionScheduler scheduler,
+    IOptions<AutomationOptions> automationOptions,
+    TimeProvider timeProvider,
+    ILogger<AutomationActionSchedulerJob> logger) : BackgroundService
+{
+    private readonly AutomationOptions options = automationOptions.Value;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(
+            TimeSpan.FromSeconds(Math.Max(5, options.SchedulePollIntervalSeconds)),
+            timeProvider);
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+            {
+                try
+                {
+                    await scheduler.QueueDueScheduledRunsAsync(stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Automation action scheduler tick failed.");
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
 }
 
 internal static class CronSchedule
@@ -87,6 +113,9 @@ internal static class CronSchedule
             return false;
 
         var timeZone = ResolveTimeZone(timeZoneId);
+        if (timeZone is null)
+            return false;
+
         var local = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, timeZone);
 
         return Matches(fields[0], local.Minute, 0, 59)
@@ -96,19 +125,14 @@ internal static class CronSchedule
             && MatchesDayOfWeek(fields[4], local.DayOfWeek);
     }
 
-    private static TimeZoneInfo ResolveTimeZone(string? timeZoneId)
+    private static TimeZoneInfo? ResolveTimeZone(string? timeZoneId)
     {
         if (string.IsNullOrWhiteSpace(timeZoneId))
             return TimeZoneInfo.Utc;
 
-        try
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-        }
-        catch
-        {
-            return TimeZoneInfo.Utc;
-        }
+        return TimeZoneResolver.TryResolve(timeZoneId, out var timeZone)
+            ? timeZone
+            : null;
     }
 
     private static bool MatchesDayOfWeek(string field, DayOfWeek dayOfWeek)
@@ -160,5 +184,21 @@ internal static class CronSchedule
         return parts.Length == 2 && int.TryParse(parts[0], out var start) && int.TryParse(parts[1], out var end)
             ? (start, end)
             : (int.MinValue, int.MinValue);
+    }
+}
+
+internal static class SchedulerTime
+{
+    public static DateTimeOffset TruncateToMinute(DateTimeOffset value)
+    {
+        var utc = value.ToUniversalTime();
+        return new DateTimeOffset(
+            utc.Year,
+            utc.Month,
+            utc.Day,
+            utc.Hour,
+            utc.Minute,
+            0,
+            TimeSpan.Zero);
     }
 }

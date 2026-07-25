@@ -32,7 +32,9 @@ public sealed class LicenseStateProvider(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         await using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        return await LicenseStateBuilder.BuildAsync(unitOfWork, verifier, timeProvider, cancellationToken);
+        var state = await LicenseStateBuilder.BuildAsync(unitOfWork, verifier, timeProvider, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        return state;
     }
 
     public ValueTask ReloadAsync(CancellationToken cancellationToken)
@@ -48,7 +50,9 @@ public sealed class LicenseQuotaService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         await using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        return await LicenseStateBuilder.BuildAsync(unitOfWork, verifier, timeProvider, cancellationToken);
+        var state = await LicenseStateBuilder.BuildAsync(unitOfWork, verifier, timeProvider, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        return state;
     }
 
     public async ValueTask<Result> EnsureCanIncreaseAsync(

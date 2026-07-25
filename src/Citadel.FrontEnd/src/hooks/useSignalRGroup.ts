@@ -24,12 +24,18 @@ export const useSignalRGroup = ({
   const [isConnected, setIsConnected] = useState(false);
 
   const onJoinedRef = useRef(onJoinedGroup);
+  const activeSetupRef = useRef(setupEventListeners);
+  const effectGenerationRef = useRef(0);
 
   const lastStateRef = useRef({ isLoading: false, isConnected: false });
 
   useEffect(() => {
     onJoinedRef.current = onJoinedGroup;
   }, [onJoinedGroup]);
+
+  useEffect(() => {
+    activeSetupRef.current = setupEventListeners;
+  }, [setupEventListeners]);
 
   const state = connectionState;
 
@@ -52,6 +58,7 @@ export const useSignalRGroup = ({
       return;
     }
 
+    const generation = ++effectGenerationRef.current;
     let joined = false;
     let disposed = false;
 
@@ -61,7 +68,14 @@ export const useSignalRGroup = ({
         await joinGroup(groupName, setupEventListeners);
 
         if (disposed) {
-          await leaveGroup(groupName, removeEventListeners);
+          const replayedWithSameListeners =
+            generation !== effectGenerationRef.current &&
+            activeSetupRef.current === setupEventListeners;
+
+          await leaveGroup(
+            groupName,
+            replayedWithSameListeners ? undefined : removeEventListeners,
+          );
           return;
         }
 

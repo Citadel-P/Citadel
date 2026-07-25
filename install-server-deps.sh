@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-apk add --no-cache curl ca-certificates tar gzip deno restic
+apk add --no-cache curl ca-certificates tar gzip deno restic tzdata
 
 ARCH=$(uname -m)
 case "$ARCH" in

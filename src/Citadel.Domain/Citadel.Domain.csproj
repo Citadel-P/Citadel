@@ -6,6 +6,10 @@
   </PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="TimeZoneConverter" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<Compile Remove="Entities\Git\GitRepository.cs" />
 		<ProjectReference Include="..\Citadel.Contracts\src\Citadel.Hosting.Common\Citadel.Hosting.Common.csproj" />
 	</ItemGroup>

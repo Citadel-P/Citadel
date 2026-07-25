@@ -2629,7 +2629,6 @@ export interface AlertRuleQuietHourDailyQuietHour {
   endTime: string;
   timezone: string;
   description: null | string;
-  timeZoneInfo?: TimeZoneInfo;
 }
 
 export interface AlertRuleQuietHourWeeklyQuietHour {
@@ -2643,7 +2642,6 @@ export interface AlertRuleQuietHourWeeklyQuietHour {
   endTime: string;
   timezone: string;
   description: null | string;
-  timeZoneInfo?: TimeZoneInfo;
 }
 
 export interface AlertRuleSnapshot {
@@ -6856,17 +6854,6 @@ export interface TestVaultKvV2SecretProviderConnectionInput {
   address: string;
   mountPath: string;
   token: null | string;
-}
-
-export interface TimeZoneInfo {
-  /** @pattern ^-?(\d+\.)?\d{2}:\d{2}:\d{2}(\.\d{1,7})?$ */
-  baseUtcOffset?: string;
-  daylightName?: null | string;
-  displayName?: null | string;
-  hasIanaId?: boolean;
-  id?: null | string;
-  standardName?: null | string;
-  supportsDaylightSavingTime?: boolean;
 }
 
 export interface TopologyEntry {

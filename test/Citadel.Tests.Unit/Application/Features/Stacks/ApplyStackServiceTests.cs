@@ -284,6 +284,14 @@ public class ApplyStackServiceTests
                 ComposePaths: ["stacks/app/compose.yml"],
                 WorkingDirectory: "stacks/app",
                 ComposeEnvFilesFromRepo: ["stacks/app/.env"]));
+        stack.ReleaseProcessing(StackReleaseStatus.Healthy);
+        stack.SetStackUpdateState(new GitStackUpdateState(
+            new RecreateStackOnNewImageState([]),
+            new RecreateStackOnNewCommitState(
+                CurrentCommitSha: "previous-commit",
+                RemoteCommitSha: "abc123",
+                LastCheckedAt: DateTime.UtcNow)));
+        var previousReleaseId = stack.CurrentStackReleaseId;
         var repository = new GitRepository(
             name: "homelab",
             description: null,
@@ -330,6 +338,7 @@ public class ApplyStackServiceTests
         stacks
             .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+        SetupSuccessfulProcessingUpdates(stacks);
 
         var gitRepos = new Mock<IGitReposRepository>();
         gitRepos
@@ -471,9 +480,19 @@ public class ApplyStackServiceTests
         Assert.Equal("runtime.env", capturedCommand.EnvironmentFilePath);
         Assert.Equal(["APP_ENV=prod"], capturedCommand.EnvironmentVariables);
         Assert.True(capturedCommand.PullImages);
+        Assert.NotEqual(previousReleaseId, stack.CurrentStackReleaseId);
         Assert.Equal(StackReleaseStatus.Healthy, stack.CurrentStackRelease?.Status);
         Assert.Equal("abc123", stack.CurrentStackRelease?.Source?.ResolvedCommitSha);
         Assert.Contains(items, item => item.ExitCode == 0);
+        stacks.Verify(x => x.UpdateProcessingAsync(
+            stack.Id,
+            StackReleaseStatus.Healthy,
+            ResourceControlState.Processing,
+            It.IsAny<long?>(),
+            0,
+            true,
+            actorId,
+            It.IsAny<CancellationToken>()), Times.Once);
         gitStackMaterializer.Verify(x => x.ActivateCurrentAsync(stack.Id, snapshotRoot, It.IsAny<CancellationToken>()), Times.Once);
         gitStackMaterializer.Verify(x => x.DiscardSnapshotAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -510,6 +529,7 @@ public class ApplyStackServiceTests
         stacks.Setup(x => x.GetContainerIdsAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         stacks.Setup(x => x.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(() => [stack.CurrentStackRelease!]);
         stacks.Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        SetupSuccessfulProcessingUpdates(stacks);
 
         var gitRepos = new Mock<IGitReposRepository>();
         gitRepos.Setup(x => x.GetWithAccountAsync(repositoryId, It.IsAny<CancellationToken>())).ReturnsAsync(repository);
@@ -667,6 +687,7 @@ public class ApplyStackServiceTests
         stacks.Setup(x => x.GetContainerIdsAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         stacks.Setup(x => x.GetReleasesByStackIdAsync(stack.Id, It.IsAny<CancellationToken>())).ReturnsAsync(() => [stack.CurrentStackRelease!]);
         stacks.Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        SetupSuccessfulProcessingUpdates(stacks);
 
         var gitRepos = new Mock<IGitReposRepository>();
         gitRepos.Setup(x => x.GetWithAccountAsync(repositoryId, It.IsAny<CancellationToken>())).ReturnsAsync(repository);
@@ -1156,6 +1177,64 @@ public class ApplyStackServiceTests
                 Assert.Equal(SecretDeliveryMode.MountedFile, entry.SecretDeliveryMode);
                 Assert.Equal("/run/secrets/postgres_password", entry.TargetPath);
             });
+    }
+
+    [Fact]
+    public async Task UpdateStackStatusWorkItem_WhenOperationIsStale_DoesNotPersistFailure()
+    {
+        var actorId = Guid.CreateVersion7();
+        var stack = Stack.Create(
+            name: "application",
+            createdByActorId: actorId,
+            StackSource: StackSource.WebEditor,
+            platformId: Guid.CreateVersion7(),
+            spec: new ManualStack(
+                ComposeFile: "services:\n  api:\n    image: api\n",
+                UpdateBehavior: StackUpdateBehavior.Disabled));
+        stack.MarkProcessing(actorId);
+        stack.PartialUpdate(StackReleaseStatus.Applying);
+
+        var stacks = new Mock<IStackRepository>();
+        stacks
+            .Setup(x => x.GetAsync(stack.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stack);
+        stacks
+            .Setup(x => x.UpdateProcessingAsync(
+                stack.Id,
+                StackReleaseStatus.Failed,
+                ResourceControlState.Idle,
+                null,
+                stack.RowVersion + 1,
+                true,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.Stacks).Returns(stacks.Object);
+        var notifications = new TestNotificationQueue();
+        var workItem = new UpdateStackStatusWorkItem(
+            stack.Id,
+            actorId,
+            StackReleaseStatus.Failed,
+            "compose failed",
+            Mock.Of<IStackStreamManager>(),
+            Mock.Of<IActivityStreamManager>(),
+            notifications,
+            StackApplyOperation.Apply,
+            expectedRowVersion: stack.RowVersion + 1);
+
+        await workItem.ExecuteAsync(unitOfWork.Object, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ResourceControlState.Processing, stack.ControlState);
+        Assert.Equal(StackReleaseStatus.Applying, stack.CurrentStackRelease?.Status);
+        Assert.Empty(notifications.Items);
+        stacks.Verify(
+            x => x.UpdateAsync(It.IsAny<Stack>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        unitOfWork.Verify(
+            x => x.CommitAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
@@ -2096,6 +2175,7 @@ public class ApplyStackServiceTests
         stacks
             .Setup(x => x.UpdateAsync(stack, It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+        SetupSuccessfulProcessingUpdates(stacks);
 
         var gitRepos = new Mock<IGitReposRepository>();
         gitRepos
@@ -2137,6 +2217,21 @@ public class ApplyStackServiceTests
             .Returns(Task.CompletedTask);
 
         return unitOfWork;
+    }
+
+    private static void SetupSuccessfulProcessingUpdates(Mock<IStackRepository> stacks)
+    {
+        stacks
+            .Setup(x => x.UpdateProcessingAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<StackReleaseStatus>(),
+                It.IsAny<ResourceControlState>(),
+                It.IsAny<long?>(),
+                It.IsAny<long>(),
+                It.IsAny<bool?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
     }
 
     private sealed class ProcessCommandExecutor : ICommandExecutor

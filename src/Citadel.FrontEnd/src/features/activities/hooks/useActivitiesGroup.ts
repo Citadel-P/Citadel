@@ -66,10 +66,10 @@ export const useActivitiesGroup = (
   );
 
   useSignalRGroup({
-    groupName: `activity:${resourceId}`,
+    groupName: resourceId && resourceType ? `activity:${resourceType}:${resourceId}` : undefined,
     setupEventListeners,
     removeEventListeners,
-    skip: !resourceId,
+    skip: !resourceId || !resourceType,
   });
 
   return { pagedActivities, isLoading };

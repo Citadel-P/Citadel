@@ -34,7 +34,7 @@ running.
 ## Test Suites
 
 ```powershell
-npm run test:smoke            # Fast authentication, authorization, navigation, and tag checks
+npm run test:smoke            # Fast authentication, authorization, licensing, navigation, and tag checks
 npm run test:core-runtime     # Deploy, second release, UI rollback, and Docker-state verification
 npm run test:nightly-runtime  # Logs, Inspect, Terminal, and real SignalR reconnect coverage
 npm test                      # Run every Playwright test

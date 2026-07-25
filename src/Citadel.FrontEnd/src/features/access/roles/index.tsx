@@ -7,6 +7,7 @@ import {
   PermissionInput,
   PermissionView,
   PermissionMatrixViewItem,
+  LicenseLimit,
 } from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
@@ -24,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocalStorage, useMutate, useRead } from '@/lib/hooks';
 import { Lock, Plus, Loader2, Trash } from 'lucide-react';
 import { useState, useMemo } from 'react';
@@ -65,10 +67,36 @@ type RolePermissionResourceType = (typeof ROLE_PERMISSION_RESOURCES)[number];
 
 export const AddRoleButton = () => {
   const [, setOpen] = useAtom(createRoleOpenAtom);
-  return (
+  const { data: licenseData } = useRead('getLicense', undefined, {
+    retry: false,
+    staleTime: 60 * 60 * 1000,
+    meta: { suppressErrorToast: true },
+  });
+  const customRoleLimit = licenseData?.data.limits.find((limit) => limit.limit === LicenseLimit.CustomRoles);
+  const quotaReached =
+    customRoleLimit !== undefined && Number(customRoleLimit.current) >= Number(customRoleLimit.maximum);
+  const button = (
     <Button onClick={() => setOpen(true)} className="bg-primary hover:bg-primary/80 text-sm px-2.5 py-2.5">
       <Plus className="h-3 w-3" /> Add Role
     </Button>
+  );
+
+  if (!quotaReached || !customRoleLimit) return button;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span data-testid="custom-role-quota">
+          <Button disabled className="bg-primary text-sm px-2.5 py-2.5">
+            <Plus className="h-3 w-3" /> Add Role
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        Custom role quota reached ({customRoleLimit.current} of {customRoleLimit.maximum}). Update the license to add
+        another role.
+      </TooltipContent>
+    </Tooltip>
   );
 };
 
@@ -479,7 +507,10 @@ const PermissionMatrixRow = ({
       <TableCell>
         {currentLevel && availableSpecific.length > 0 ? (
           <MultiSelect
-            options={availableSpecific.map((sp) => ({ label: matrixData.specificPermissionLabels?.[sp] ?? sp, value: sp }))}
+            options={availableSpecific.map((sp) => ({
+              label: matrixData.specificPermissionLabels?.[sp] ?? sp,
+              value: sp,
+            }))}
             defaultValue={currentSpecific}
             onValueChange={(v) => handlePermissionChange(undefined, v)}
             placeholder="Select capabilities"

@@ -39,6 +39,11 @@ public interface IAutomationRunQueueService
         bool requireEnabled,
         CancellationToken cancellationToken);
 
+    Task<Result<ActionRun>> QueueScheduledAsync(
+        Guid actionId,
+        DateTime scheduledMinuteUtc,
+        CancellationToken cancellationToken);
+
     Task<Result<ActionRun>> QueueDraftTestAsync(
         Guid actionId,
         string code,
@@ -646,6 +651,52 @@ internal sealed class AutomationRunQueueService(
             action.RunAsActorId,
             action.Code,
             triggeredByActorId,
+            cancellationToken);
+    }
+
+    public async Task<Result<ActionRun>> QueueScheduledAsync(
+        Guid actionId,
+        DateTime scheduledMinuteUtc,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var action = await unitOfWork.AutomationActions.GetAsync(actionId, cancellationToken);
+        if (action is null)
+            return Result.Failure<ActionRun>(new NotFoundError("Automation action not found."));
+
+        if (!action.Enabled || !action.ScheduleEnabled)
+            return Result.Failure<ActionRun>(new BadRequestError("Automation action scheduling is disabled."));
+
+        var normalizedArgs = AutomationInputValidation.NormalizeJsonObject(action.DefaultArgsJson);
+        var argsResult = AutomationInputValidation.ValidateJsonObject(normalizedArgs, "Args");
+        if (argsResult.IsFailure(out var argsError))
+            return Result.Failure<ActionRun>(argsError);
+
+        if (action.TimeoutSeconds < 1 || action.TimeoutSeconds > options.MaxTimeoutSeconds)
+        {
+            return Result.Failure<ActionRun>(
+                new BadRequestError($"Timeout must be between 1 and {options.MaxTimeoutSeconds} seconds."));
+        }
+
+        if (!await unitOfWork.AutomationActions.TryMarkScheduledAsync(
+                action.Id,
+                scheduledMinuteUtc,
+                cancellationToken))
+        {
+            return Result.Failure<ActionRun>(
+                new ConflictError("Automation action was already scheduled for this minute."));
+        }
+
+        return await QueueCoreAsync(
+            unitOfWork,
+            action,
+            ActionRunTrigger.Schedule,
+            normalizedArgs,
+            action.TimeoutSeconds,
+            action.RunAsActorId,
+            action.Code,
+            triggeredByActorId: null,
             cancellationToken);
     }
 

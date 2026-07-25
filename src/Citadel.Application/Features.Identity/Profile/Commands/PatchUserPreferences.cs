@@ -71,21 +71,7 @@ public sealed record PatchUserPreferences(JsonMergePatchDocument<PatchUserPrefer
            || string.Equals(name, "theme", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsValidTimeZone(string timeZone)
-    {
-        try
-        {
-            _ = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
-            return true;
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return false;
-        }
-        catch (InvalidTimeZoneException)
-        {
-            return false;
-        }
-    }
+        => TimeZoneResolver.TryResolve(timeZone, out _);
 }
 
 internal sealed class PatchUserPreferencesHandler(IUnitOfWork unitOfWork, IUserContextAccessor userContext)
@@ -188,19 +174,5 @@ internal sealed class PatchUserPreferencesHandler(IUnitOfWork unitOfWork, IUserC
     }
 
     private static bool IsValidTimeZone(string timeZone)
-    {
-        try
-        {
-            _ = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
-            return true;
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return false;
-        }
-        catch (InvalidTimeZoneException)
-        {
-            return false;
-        }
-    }
+        => TimeZoneResolver.TryResolve(timeZone, out _);
 }

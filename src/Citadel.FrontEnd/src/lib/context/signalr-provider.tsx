@@ -69,7 +69,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
 
       for (const [groupName, group] of groupStates.current.entries()) {
         try {
-          const joinPromise = conn.send('JoinGroup', groupName);
+          const joinPromise = conn.invoke('JoinGroup', groupName);
           groupStates.current.set(groupName, { ...group, state: 'joining', joinPromise });
           await joinPromise;
 
@@ -223,7 +223,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
         return;
       }
 
-      const joinPromise = conn.send('JoinGroup', groupName);
+      const joinPromise = conn.invoke('JoinGroup', groupName);
       groupStates.current.set(groupName, { state: 'joining', references: 1, joinPromise });
 
       try {
@@ -273,7 +273,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
 
       if (connection?.state === HubConnectionState.Connected) {
         try {
-          await connection.send('LeaveGroup', groupName);
+          await connection.invoke('LeaveGroup', groupName);
         } catch (err) {
           console.warn('LeaveGroup failed:', err);
         }

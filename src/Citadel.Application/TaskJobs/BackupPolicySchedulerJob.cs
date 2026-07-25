@@ -20,6 +20,7 @@ internal sealed class BackupPolicyScheduler(
     IOptions<BackupOptions> backupOptions,
     IBackupRunStreamManager backupRunStreamManager,
     INotificationQueue notificationQueue,
+    TimeProvider timeProvider,
     ILogger<BackupPolicyScheduler> logger) : IBackupPolicyScheduler
 {
     private readonly BackupOptions options = backupOptions.Value;
@@ -29,7 +30,7 @@ internal sealed class BackupPolicyScheduler(
         if (!options.Enabled)
             return;
 
-        var nowUtc = TruncateToMinute(DateTimeOffset.UtcNow);
+        var nowUtc = SchedulerTime.TruncateToMinute(timeProvider.GetUtcNow());
         var policies = await GetScheduledPoliciesAsync(nowUtc, cancellationToken);
 
         foreach (var policy in policies)
@@ -92,30 +93,21 @@ internal sealed class BackupPolicyScheduler(
         return queueResult;
     }
 
-    private static DateTimeOffset TruncateToMinute(DateTimeOffset value)
-    {
-        var utc = value.ToUniversalTime();
-        return new DateTimeOffset(
-            utc.Year,
-            utc.Month,
-            utc.Day,
-            utc.Hour,
-            utc.Minute,
-            0,
-            TimeSpan.Zero);
-    }
 }
 
 internal sealed class BackupPolicySchedulerJob(
     IBackupPolicyScheduler scheduler,
     IOptions<BackupOptions> backupOptions,
+    TimeProvider timeProvider,
     ILogger<BackupPolicySchedulerJob> logger) : BackgroundService
 {
     private readonly BackupOptions options = backupOptions.Value;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(5, options.SchedulePollIntervalSeconds)));
+        using var timer = new PeriodicTimer(
+            TimeSpan.FromSeconds(Math.Max(5, options.SchedulePollIntervalSeconds)),
+            timeProvider);
 
         try
         {

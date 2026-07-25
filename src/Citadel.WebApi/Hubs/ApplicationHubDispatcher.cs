@@ -295,7 +295,9 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     public Task SendActivityInfo(ActivityEvent activity)
     {
         return hubContext.Clients
-            .Group(WellKnownSignalRGroups.ActivityGroup(activity.ResourceId ?? Guid.Empty))
+            .Group(WellKnownSignalRGroups.ActivityGroup(
+                activity.ResourceType.ToString(),
+                activity.ResourceId ?? Guid.Empty))
             .SendAsync("ActivityEventReceived", ActivityView.Map(activity));
     }
     #endregion

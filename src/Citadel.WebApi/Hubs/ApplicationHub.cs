@@ -11,7 +11,10 @@ using Microsoft.AspNetCore.SignalR;
 namespace WebApi.Hubs;
 
 [Authorize]
-internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMediator mediator) : Hub
+internal sealed class ApplicationHub(
+    IStreamSubscriptionResolver resolver,
+    ISignalRGroupAuthorizationService groupAuthorizationService,
+    IMediator mediator) : Hub
 {
     #region Overrides
     public override Task OnDisconnectedAsync(Exception? exception)
@@ -26,27 +29,51 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         return base.OnDisconnectedAsync(exception);
     }
 
-    public Task JoinGroup(string groupId)
+    public async Task JoinGroup(string groupId)
     {
+        if (!await groupAuthorizationService.CanJoinAsync(
+                Context.User!,
+                groupId,
+                Context.ConnectionAborted))
+            throw new HubException("Not authorized to join this group.");
+
         if (!Context.Items.TryGetValue("GroupIds", out var obj) || obj is not HashSet<string> groups)
         {
             groups = [];
             Context.Items["GroupIds"] = groups;
         }
 
-        groups.Add(groupId);
-        resolver.Resolve(groupId).AddSubscriber(groupId, Context.ConnectionId);
-        return Groups.AddToGroupAsync(Context.ConnectionId, GetSignalRGroupId(groupId));
-    }
+        if (!groups.Add(groupId))
+            return;
 
-    public Task LeaveGroup(string groupId)
-    {
-        if (Context.Items.TryGetValue("GroupIds", out var obj) && obj is HashSet<string> groups)
+        resolver.Resolve(groupId).AddSubscriber(groupId, Context.ConnectionId);
+        try
+        {
+            await Groups.AddToGroupAsync(
+                Context.ConnectionId,
+                GetSignalRGroupId(groupId),
+                Context.ConnectionAborted);
+        }
+        catch
         {
             groups.Remove(groupId);
+            resolver.Resolve(groupId).RemoveSubscriber(groupId, Context.ConnectionId);
+            throw;
         }
+    }
+
+    public async Task LeaveGroup(string groupId)
+    {
+        if (!Context.Items.TryGetValue("GroupIds", out var obj) ||
+            obj is not HashSet<string> groups ||
+            !groups.Remove(groupId))
+            return;
+
         resolver.Resolve(groupId).RemoveSubscriber(groupId, Context.ConnectionId);
-        return Groups.RemoveFromGroupAsync(Context.ConnectionId, GetSignalRGroupId(groupId));
+        await Groups.RemoveFromGroupAsync(
+            Context.ConnectionId,
+            GetSignalRGroupId(groupId),
+            Context.ConnectionAborted);
     }
 
     #endregion

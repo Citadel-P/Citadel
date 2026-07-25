@@ -15,8 +15,11 @@ internal static class AuthorizationSql
             SELECT t.ActorId
             FROM Teams t
             JOIN UsersTeams ut ON ut.TeamId = t.Id
+            JOIN Users u ON u.Id = ut.UserId
+            JOIN Actors userActor ON userActor.Id = u.ActorId
             JOIN Actors teamActor ON teamActor.Id = t.ActorId
             WHERE ut.UserId = @UserId
+              AND userActor.IsEnabled
               AND teamActor.IsEnabled
         )
         """;

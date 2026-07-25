@@ -173,6 +173,91 @@ public sealed class LicenseVerifierTests
     }
 
     [Fact]
+    public void Verify_Should_Return_NotYetValid_For_Future_NotBefore()
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var payload = CreatePayload(expiresAt: now.AddDays(30)) with
+        {
+            IssuedAt = now.AddDays(-1),
+            NotBefore = now.AddDays(1)
+        };
+        var license = fixture.Sign(payload);
+
+        var result = fixture.Verifier.Verify(license, Instance(), now);
+
+        Assert.True(result.IsAccepted);
+        Assert.Equal(LicenseStatus.NotYetValid, result.Status);
+        Assert.NotNull(result.License);
+    }
+
+    [Fact]
+    public void Verify_Should_Reject_Unsupported_Schema()
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var payload = CreatePayload(expiresAt: now.AddDays(30)) with
+        {
+            Schema = LicenseConstants.CurrentSchema + 1
+        };
+
+        var result = fixture.Verifier.Verify(fixture.Sign(payload), Instance(), now);
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal(LicenseStatus.UnsupportedSchema, result.Status);
+        Assert.Equal("LICENSE_UNSUPPORTED_SCHEMA", result.ErrorCode);
+    }
+
+    [Fact]
+    public void Verify_Should_Reject_Signed_Malformed_Payload_Without_Throwing()
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var license = fixture.SignPayload(Encoding.UTF8.GetBytes("{not-json"));
+
+        var result = fixture.Verifier.Verify(license, Instance(), now);
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
+        Assert.Equal("LICENSE_INVALID", result.ErrorCode);
+    }
+
+    [Fact]
+    public void Verify_Should_Use_Community_Limits_When_Limits_Are_Missing()
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var payload = CreatePayload(expiresAt: now.AddDays(30));
+        var payloadWithoutLimits = new
+        {
+            payload.Schema,
+            payload.Product,
+            payload.Issuer,
+            payload.Audience,
+            payload.LicenseId,
+            payload.ReplacedLicenseId,
+            payload.Customer,
+            payload.Edition,
+            payload.InstanceId,
+            payload.IssuedAt,
+            payload.NotBefore,
+            payload.ExpiresAt,
+            payload.GraceUntil
+        };
+        var license = fixture.SignPayload(JsonSerializer.SerializeToUtf8Bytes(
+            payloadWithoutLimits,
+            LicenseFixture.JsonOptions));
+
+        var result = fixture.Verifier.Verify(license, Instance(), now);
+
+        Assert.True(result.IsAccepted);
+        Assert.NotNull(result.License);
+        Assert.Equal(
+            CommunityLicenseLimits.Values[LicenseLimit.ActiveUsers],
+            result.License.EffectiveLimits[LicenseLimit.ActiveUsers]);
+    }
+
+    [Fact]
     public void Verify_Should_Derive_GracePeriod_And_Expired_From_Current_Time()
     {
         var fixture = LicenseFixture.Create();
@@ -250,9 +335,22 @@ public sealed class LicenseVerifierTests
             string type = LicenseConstants.JoseType,
             string keyId = KeyId)
         {
+            return SignPayload(
+                JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions),
+                algorithm,
+                type,
+                keyId);
+        }
+
+        public string SignPayload(
+            byte[] payload,
+            string algorithm = LicenseConstants.JoseAlgorithm,
+            string type = LicenseConstants.JoseType,
+            string keyId = KeyId)
+        {
             var header = new LicenseProtectedHeader(algorithm, type, keyId);
             var encodedHeader = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(header, JsonOptions));
-            var encodedPayload = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions));
+            var encodedPayload = Base64UrlEncode(payload);
             var signingInput = Encoding.ASCII.GetBytes($"{encodedHeader}.{encodedPayload}");
             var signature = SignatureAlgorithm.Ed25519.Sign(key, signingInput);
 

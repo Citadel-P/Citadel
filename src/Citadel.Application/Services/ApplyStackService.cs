@@ -53,8 +53,11 @@ internal class ApplyStackService(
     IResourceBindingResolver resourceBinderResolver,
     ISecretRedactor secretRedactor,
     IAlertService alertService,
-    IStackBuildImageBindingResolver stackBuildImageBindingResolver) : IApplyStackService
+    IStackBuildImageBindingResolver stackBuildImageBindingResolver,
+    IStackOperationBarrier? operationBarrier = null) : IApplyStackService
 {
+    private readonly IStackOperationBarrier _operationBarrier = operationBarrier ?? new NoOpStackOperationBarrier();
+
     public async IAsyncEnumerable<StackStreamItem> ApplyAsync(
         Guid stackId,
         Guid actorId,
@@ -74,10 +77,16 @@ internal class ApplyStackService(
             yield break;
         }
 
+        if (stack.ControlState == ResourceControlState.Processing)
+        {
+            yield return StackStreamItem.FromStdErr("Stack is already being processed.", 1);
+            yield break;
+        }
+
         if (stack.CurrentStackRelease?.Spec is null)
         {
             var message = $"Stack with ID {stackId} has no spec defined.";
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: stack.RowVersion, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
@@ -85,7 +94,7 @@ internal class ApplyStackService(
         if (!platformCache.TryGetCacheEntry(stack.CurrentStackRelease.PlatformId, out var platform, out _))
         {
             var message = "Platform not found or disconnected.";
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: stack.RowVersion, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
@@ -95,7 +104,7 @@ internal class ApplyStackService(
         if (currentRelease.Spec is not ManualStack and not GitStack)
         {
             var message = "Unsupported stack source.";
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: stack.RowVersion, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
@@ -103,7 +112,7 @@ internal class ApplyStackService(
         if (currentRelease.Spec is ManualStack manualStack && string.IsNullOrWhiteSpace(manualStack.ComposeFile))
         {
             var message = "Manual stack compose file is required.";
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: stack.RowVersion, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
@@ -122,7 +131,7 @@ internal class ApplyStackService(
 
         if (projectSetupError is not null)
         {
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, projectSetupError, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, projectSetupError, operation: operation, expectedRowVersion: stack.RowVersion, ct: ct);
             yield return StackStreamItem.FromStdErr(projectSetupError, 1);
             yield break;
         }
@@ -136,7 +145,7 @@ internal class ApplyStackService(
             if (registry is null)
             {
                 var message = $"Registry with ID {registryId} not found.";
-                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: stack.RowVersion, ct: ct);
                 yield return StackStreamItem.FromStdErr(message, 1);
                 yield break;
             }
@@ -154,7 +163,7 @@ internal class ApplyStackService(
         var collisionMessage = await ValidateProjectContainerOwnershipAsync(stack, platform, projectName, knownStackContainerIds, ct);
         if (!string.IsNullOrWhiteSpace(collisionMessage))
         {
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, collisionMessage, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, collisionMessage, operation: operation, expectedRowVersion: stack.RowVersion, ct: ct);
             yield return StackStreamItem.FromStdErr(collisionMessage, 1);
             yield break;
         }
@@ -169,13 +178,19 @@ internal class ApplyStackService(
 
         await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, markResult.Stack!), ct);
         stack = markResult.Stack!;
+        var operationRowVersion = markResult.OperationRowVersion!.Value;
+        await _operationBarrier.WaitAsync(
+            StackOperationCheckpoint.ProcessingClaimed,
+            stack.Id,
+            operationRowVersion,
+            ct);
         currentRelease = stack.CurrentStackRelease!;
         var stackSpec = currentRelease.Spec;
         var buildImageBindings = await stackBuildImageBindingResolver.ResolveAsync(stackSpec.BuildImageBindings, ct);
         if (buildImageBindings.IsFailure(out var buildBindingError, out var resolvedBuildBindings))
         {
             var message = buildBindingError.Message;
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: operationRowVersion, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
@@ -200,7 +215,7 @@ internal class ApplyStackService(
         if (configurationResult.IsFailure(out var configurationError, out var resolvedConfiguration))
         {
             var message = configurationError.Message;
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: operationRowVersion, ct: ct);
             await ProcessConfigurationFailureAlertAsync(stack.Id, stack.Name, message, ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
@@ -225,7 +240,7 @@ internal class ApplyStackService(
             if (gitRepository is null)
             {
                 var message = $"Git repository with ID {gitStack.GitRepoId} not found.";
-                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: operationRowVersion, ct: ct);
                 yield return StackStreamItem.FromStdErr(message, 1);
                 yield break;
             }
@@ -234,7 +249,7 @@ internal class ApplyStackService(
             if (materialization.IsFailure(out var materializationError, out var payload))
             {
                 var message = materializationError.Message;
-                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: operationRowVersion, ct: ct);
                 yield return StackStreamItem.FromStdErr(message, 1);
                 yield break;
             }
@@ -282,7 +297,7 @@ internal class ApplyStackService(
         else
         {
             var message = "Unsupported stack source.";
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: operationRowVersion, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
@@ -298,7 +313,7 @@ internal class ApplyStackService(
         if (secretFiles.Count > 0 && secretTargetServiceNames is not { Count: > 0 })
         {
             var message = "Mounted file secrets require at least one Compose service.";
-            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, ct: ct);
+            await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, message, operation: operation, expectedRowVersion: operationRowVersion, ct: ct);
             yield return StackStreamItem.FromStdErr(message, 1);
             yield break;
         }
@@ -356,7 +371,7 @@ internal class ApplyStackService(
                 {
                     var safeError = secretRedactor.Redact(next.ErrorMessage, selectedConfiguration.RedactionValues);
                     await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
-                    await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, safeError, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, ct: ct);
+                    await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, safeError, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, expectedRowVersion: operationRowVersion, ct: ct);
                     yield return StackStreamItem.FromStdErr(safeError, exitCode ?? 1);
                     yield break;
                 }
@@ -407,7 +422,7 @@ internal class ApplyStackService(
                             : $"Pipeline command failed with exit code {result.ExitCode}.";
 
                         await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
-                        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, ct: ct);
+                        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, explicitFailure, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, expectedRowVersion: operationRowVersion, ct: ct);
                         yield return StackStreamItem.FromStdErr(explicitFailure, result.ExitCode.Value);
                         yield break;
                     }
@@ -425,7 +440,7 @@ internal class ApplyStackService(
             if (!string.IsNullOrEmpty(errorMessage))
             {
                 await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
-                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, ct: ct);
+                await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, errorMessage, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, expectedRowVersion: operationRowVersion, ct: ct);
                 yield return StackStreamItem.FromStdErr(errorMessage, exitCode ?? 1 );
                 yield break;
             }
@@ -456,6 +471,12 @@ internal class ApplyStackService(
                 }
             }
         
+            await _operationBarrier.WaitAsync(
+                StackOperationCheckpoint.ExternalStateCaptured,
+                stack.Id,
+                operationRowVersion,
+                ct);
+
             var workItem = new StackSucceededWorkItem(
                 stack.Id,
                 actorId,
@@ -472,11 +493,19 @@ internal class ApplyStackService(
                 ResolveAppliedBuildImages(
                     resolvedBuildBindings.Bindings,
                     serviceNames,
-                    secretTargetServiceNames));
+                    secretTargetServiceNames),
+                operationRowVersion);
 
             if (waitForCompletion)
             {
                 await dbWorkQueue.EnqueueAndWaitAsync(workItem, ct);
+                if (!workItem.Applied)
+                {
+                    yield return StackStreamItem.FromStdErr(
+                        "Stack operation was superseded before its result could be committed.",
+                        1);
+                    yield break;
+                }
             }
             else
             {
@@ -495,7 +524,7 @@ internal class ApplyStackService(
             : (exitCode is int code ? $"docker compose exited with code {code}." : "Stack apply did not report a completion exit code.");
 
         await DiscardFailedGitSnapshotAsync(stack.Id, currentRelease.Id, gitSnapshotRoot, ct);
-        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, ct: ct);
+        await EnqueueStatus(stack.Id, actorId, StackReleaseStatus.Failed, finalFailureMessage, operation: operation, source: releaseSource, resourceBindings: selectedConfiguration.SnapshotEntries, expectedRowVersion: operationRowVersion, ct: ct);
 
         yield return StackStreamItem.FromStdErr(finalFailureMessage, exitCode ?? 1);
     }
@@ -854,14 +883,14 @@ internal class ApplyStackService(
             ? "Stack applied successfully."
             : $"Stack applied with status {status}.";
 
-    private async Task<(bool IsSuccess, Stack? Stack, string? ErrorMessage)> MarkProcessingAsync(Guid stackId, Guid actorId, CancellationToken ct)
+    private async Task<(bool IsSuccess, Stack? Stack, long? OperationRowVersion, string? ErrorMessage)> MarkProcessingAsync(Guid stackId, Guid actorId, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var stack = await uow.Stacks.GetAsync(stackId, ct);
         if (stack is null)
         {
-            return (false, null, $"Stack with ID {stackId} not found.");
+            return (false, null, null, $"Stack with ID {stackId} not found.");
         }
 
         var previousRelease = stack.CurrentStackRelease;
@@ -872,7 +901,32 @@ internal class ApplyStackService(
 
         if (!stack.PrepareReleaseForApply(actorId, createNextRelease))
         {
-            return (false, null, "Stack has no release to apply.");
+            return (false, null, null, "Stack has no release to apply.");
+        }
+
+        if (!stack.MarkProcessing(actorId))
+        {
+            return (false, null, null, "Stack is already being processed.");
+        }
+
+        stack.PartialUpdate(StackReleaseStatus.Applying);
+        var claimedReleaseStatus = previousRelease is not null
+            && previousRelease.Id != stack.CurrentStackReleaseId
+                ? previousRelease.Status
+                : stack.CurrentStackRelease?.Status ?? StackReleaseStatus.Applying;
+        var operationRowVersion = stack.RowVersion + 1;
+        var claimed = await uow.Stacks.UpdateProcessingAsync(
+            stack.Id,
+            claimedReleaseStatus,
+            stack.ControlState,
+            stack.ControlStartedAt,
+            stack.RowVersion,
+            checkRowVersion: true,
+            stack.ControlTriggeredBy,
+            ct);
+        if (!claimed)
+        {
+            return (false, null, null, "Stack is already being processed.");
         }
 
         if (demotePreviousEditedRelease && previousRelease is not null && previousRelease.Id != stack.CurrentStackReleaseId)
@@ -880,15 +934,9 @@ internal class ApplyStackService(
             await uow.Stacks.UpdateReleaseStatusAsync(previousRelease.Id, StackReleaseStatus.Created, ct);
         }
 
-        if (!stack.MarkProcessing(actorId))
-        {
-            return (false, null, "Stack is already being processed.");
-        }
-
-        stack.PartialUpdate(StackReleaseStatus.Applying);
         await uow.Stacks.UpdateAsync(stack, ct);
         await uow.CommitAsync(ct);
-        return (true, stack, null);
+        return (true, stack, operationRowVersion, null);
     }
 
     private static async Task<bool> HasRollbackSnapshotForCurrentVersionAsync(
@@ -977,6 +1025,7 @@ internal class ApplyStackService(
         StackSnapshot? previousStackSnapshot = null,
         StackReleaseSource? source = null,
         IReadOnlyList<ResourceBindingSnapshot>? resourceBindings = null,
+        long? expectedRowVersion = null,
         CancellationToken ct = default)
         => dbWorkQueue.EnqueueAsync(
             new UpdateStackStatusWorkItem(
@@ -990,24 +1039,27 @@ internal class ApplyStackService(
                 operation,
                 previousStackSnapshot,
                 source,
-                resourceBindings),
+                resourceBindings,
+                expectedRowVersion),
             ct);
 }
 
 internal sealed class UpdateStackStatusWorkItem(Guid stackId, Guid actorId, StackReleaseStatus status, string? message, IStackStreamManager stackHub,
-    IActivityStreamManager activityHub, INotificationQueue notificationQueue, StackApplyOperation operation, StackSnapshot? previousStackSnapshot = null, StackReleaseSource? source = null, IReadOnlyList<ResourceBindingSnapshot>? resourceBindings = null) : IDbWorkItem
+    IActivityStreamManager activityHub, INotificationQueue notificationQueue, StackApplyOperation operation, StackSnapshot? previousStackSnapshot = null, StackReleaseSource? source = null, IReadOnlyList<ResourceBindingSnapshot>? resourceBindings = null, long? expectedRowVersion = null) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var stack = await uow.Stacks.GetAsync(stackId, ct);
         if (stack is null) return;
 
+        if (!await StackOperationOwnership.TryCompleteAsync(uow, stack, status, expectedRowVersion, ct))
+            return;
+
         if (source is not null)
         {
             stack.CurrentStackRelease?.UpdateSource(source);
         }
 
-        stack.ReleaseProcessing(status);
         await uow.Stacks.UpdateAsync(stack, ct);
 
         // Add activity event
@@ -1060,12 +1112,19 @@ internal sealed class StackSucceededWorkItem(
     StackReleaseSource? source = null,
     IReadOnlyList<ResourceBindingSnapshot>? resourceBindings = null,
     IReadOnlyList<StackReleaseVolumeBinding>? volumeBindings = null,
-    IReadOnlyList<AppliedStackBuildImage>? appliedBuildImages = null) : IDbWorkItem
+    IReadOnlyList<AppliedStackBuildImage>? appliedBuildImages = null,
+    long? operationRowVersion = null) : IDbWorkItem
 {
+    public bool Applied { get; private set; }
+
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var stack = await uow.Stacks.GetAsync(stackId, ct);
         if (stack?.CurrentStackRelease is null) return;
+
+        var completionStatus = composeStatus ?? GetAppliedStackStatus(dockerContainers);
+        if (!await StackOperationOwnership.TryCompleteAsync(uow, stack, completionStatus, operationRowVersion, ct))
+            return;
 
         if (source is not null)
         {
@@ -1087,7 +1146,6 @@ internal sealed class StackSucceededWorkItem(
 
         stack.CurrentStackRelease.UpdateResourceBindings(resourceBindings);
         UpdateAppliedBuildImages(stack.CurrentStackRelease, appliedBuildImages);
-        stack.ReleaseProcessing(composeStatus ?? GetAppliedStackStatus(dockerContainers));
 
         var platformId = stack.CurrentStackRelease.PlatformId;
         var images = await uow.Images.GetByPlatformIdAsync(platformId, ct);
@@ -1151,6 +1209,7 @@ internal sealed class StackSucceededWorkItem(
         stack.AssignActivityEvent(activity);
 
         await uow.CommitAsync(ct);
+        Applied = true;
         await notificationQueue.EnqueueAsync(new StackNotificationWorkItem(stackHub, stack), ct);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, ct)), ct);
     }
@@ -1211,6 +1270,34 @@ internal sealed class StackSucceededWorkItem(
         }
 
         return [.. bindings.Values];
+    }
+}
+
+internal static class StackOperationOwnership
+{
+    public static async Task<bool> TryCompleteAsync(
+        IUnitOfWork uow,
+        Stack stack,
+        StackReleaseStatus status,
+        long? expectedRowVersion,
+        CancellationToken ct)
+    {
+        if (expectedRowVersion.HasValue)
+        {
+            var completed = await uow.Stacks.UpdateProcessingAsync(
+                stack.Id,
+                status,
+                ResourceControlState.Idle,
+                startedAt: null,
+                expectedRowVersion.Value,
+                checkRowVersion: true,
+                controlTriggeredBy: null,
+                ct);
+            if (!completed)
+                return false;
+        }
+
+        return stack.ReleaseProcessing(status);
     }
 }
 

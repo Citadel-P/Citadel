@@ -5,6 +5,10 @@
 Citadel publishes stable semantic versions only. Release tags use the exact
 `vMAJOR.MINOR.PATCH` form, for example `v1.0.0` or `v1.0.1`.
 
+Public container images are published only by stable release tag workflows.
+Pull requests, pushes to `main`, and scheduled nightly runs build and test
+candidate images without pushing them to GHCR or Docker Hub.
+
 Citadel Core and Citadel Agent are separate repositories with separate release
 workflows. Release each repository independently. When a change affects both
 applications, use the same product version in both repositories and release the
@@ -47,19 +51,23 @@ The release version is defined in the root `version.json`:
 Nerdbank.GitVersioning calculates versions from the committed `version.json`.
 Commit a version change before validating it or creating the release tag.
 
-## Development Builds
+## CI Builds
 
-Untagged builds are development builds. For a committed product version of
-`1.0.1`, a development image has a commit-qualified tag such as:
+Nerdbank.GitVersioning still calculates commit-qualified versions for untagged
+builds, but CI does not publish those builds to a public registry. Candidate
+Docker images are loaded only into the CI runner for smoke, core runtime, and
+nightly runtime testing.
 
-```text
-1.0.1-gabc123def
-```
+| Workflow event | Build and test | Push to GHCR and Docker Hub |
+| --- | --- | --- |
+| Pull request | Yes | No |
+| Push to `main` | Yes | No |
+| Nightly schedule | Yes, including nightly runtime tests | No |
+| Stable `vMAJOR.MINOR.PATCH` tag | Yes | Yes |
 
-Development builds do not update the stable `1.0` or `1` aliases. After
-releasing `1.0.0`, update `version.json` on `main` to the next intended stable
-version, such as `1.0.1`, so subsequent development images are associated with
-the next release.
+After releasing `1.0.0`, update `version.json` on `main` to the next intended
+stable version, such as `1.0.1`. This keeps local binaries and CI diagnostics
+associated with the next release even though no development image is published.
 
 ## Prepare The Release
 
@@ -157,6 +165,10 @@ The workflow rejects a tag when:
 
 Do not move or reuse a published release tag.
 
+The release workflow does not wait for the separately scheduled nightly runtime
+suite. Run or review the latest nightly workflow before tagging when a release
+requires that additional confidence.
+
 ## Published Images
 
 A successful `v1.0.1` release publishes:
@@ -182,8 +194,8 @@ docker.io/citadelplane/citadel-agent:1
 ```
 
 The exact patch tag is immutable. The minor and major aliases move to the most
-recent stable release in that release line. Published images are signed by the
-release workflow in both registries.
+recent stable release in that release line. Citadel does not publish a `latest`
+tag. Published images are signed by the release workflow in both registries.
 
 ## Verify The Release
 

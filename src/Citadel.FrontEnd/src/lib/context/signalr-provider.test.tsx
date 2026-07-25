@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { PropsWithChildren, useCallback, useState } from 'react';
+import { HubConnection } from '@microsoft/signalr';
+import { PropsWithChildren, StrictMode, useCallback, useState } from 'react';
 import { AuthContext, AuthContextValue } from '@/features/auth/auth-context';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { FakeHubConnection } from '@/test/fakes/signalr';
@@ -26,6 +27,31 @@ function GroupSubscriber({ name }: { name: string }) {
   });
 
   return <span>{isConnected ? 'connected' : 'disconnected'}</span>;
+}
+
+function EventSubscriber({ name }: { name: string }) {
+  const [message, setMessage] = useState('waiting');
+  const handleEvent = useCallback((value: string) => setMessage(value), []);
+  const setupEventListeners = useCallback(
+    (hub: HubConnection) => hub.on('StreamEvent', handleEvent),
+    [handleEvent],
+  );
+  const removeEventListeners = useCallback(
+    (hub: HubConnection) => hub.off('StreamEvent', handleEvent),
+    [handleEvent],
+  );
+  const { isConnected } = useSignalRGroup({
+    groupName: name,
+    setupEventListeners,
+    removeEventListeners,
+  });
+
+  return (
+    <>
+      <span>{isConnected ? 'connected' : 'disconnected'}</span>
+      <span>{message}</span>
+    </>
+  );
 }
 
 function SignalRTestRoot({
@@ -72,15 +98,15 @@ describe('SignalRProvider', () => {
     await waitFor(() => {
       expect(screen.getAllByText('connected')).toHaveLength(2);
     });
-    expect(fake.send).toHaveBeenCalledTimes(1);
-    expect(fake.send).toHaveBeenLastCalledWith('JoinGroup', 'Stacks:1');
+    expect(fake.invoke).toHaveBeenCalledTimes(1);
+    expect(fake.invoke).toHaveBeenLastCalledWith('JoinGroup', 'Stacks:1');
 
     await user.click(screen.getByRole('button', { name: 'remove second' }));
-    expect(fake.send).toHaveBeenCalledTimes(1);
+    expect(fake.invoke).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole('button', { name: 'remove first' }));
     await waitFor(() => {
-      expect(fake.send).toHaveBeenLastCalledWith('LeaveGroup', 'Stacks:1');
+      expect(fake.invoke).toHaveBeenLastCalledWith('LeaveGroup', 'Stacks:1');
     });
   });
 
@@ -105,7 +131,7 @@ describe('SignalRProvider', () => {
 
     await screen.findByText('connected');
     await waitFor(() => {
-      const joins = fake.send.mock.calls.filter(
+      const joins = fake.invoke.mock.calls.filter(
         ([method, group]) => method === 'JoinGroup' && group === 'Builds:2',
       );
       expect(joins).toHaveLength(2);
@@ -114,7 +140,7 @@ describe('SignalRProvider', () => {
 
   it('does not report a failed group join as connected', async () => {
     const fake = new FakeHubConnection();
-    fake.send.mockRejectedValueOnce(new Error('join failed'));
+    fake.invoke.mockRejectedValueOnce(new Error('join failed'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(
@@ -124,10 +150,31 @@ describe('SignalRProvider', () => {
     );
 
     await waitFor(() => {
-      expect(fake.send).toHaveBeenCalledWith('JoinGroup', 'Alerts');
+      expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', 'Alerts');
     });
     expect(screen.getByText('disconnected')).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalledWith('JoinGroup failed:', expect.any(Error));
+  });
+
+  it('preserves event listeners during StrictMode effect replay', async () => {
+    const fake = new FakeHubConnection();
+
+    render(
+      <SignalRTestRoot fake={fake}>
+        <StrictMode>
+          <EventSubscriber name="container-log:0123456789ab" />
+        </StrictMode>
+      </SignalRTestRoot>,
+    );
+
+    await screen.findByText('connected');
+    expect(fake.listenerCount('StreamEvent')).toBe(1);
+
+    act(() => {
+      fake.emit('StreamEvent', 'streamed');
+    });
+
+    expect(await screen.findByText('streamed')).toBeInTheDocument();
   });
 });
 

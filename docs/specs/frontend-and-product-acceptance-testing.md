@@ -727,6 +727,14 @@ protected events. The test must inspect both hub invocation failure and actual
 recipient connections. Keep only one or two representative browser journeys;
 the complete matrix belongs in backend integration tests.
 
+SignalR group authorization must fail closed. Shared resource-list groups
+require global `Read` permission for that resource type; a resource-specific
+grant authorizes only the matching detail group. Activity groups include both
+the activity resource type and resource ID so the server can apply the correct
+permission. Alert clients join only the public `alert-events` alias, which the
+server maps to a user-specific group after database-side recipient selection;
+clients must never be allowed to join another user's concrete alert group.
+
 ### 17.7 Licensing And Quota Boundaries
 
 Add backend integration coverage for:
@@ -734,8 +742,9 @@ Add backend integration coverage for:
 - no installed license uses Community capabilities and quotas;
 - creation exactly at the allowed boundary succeeds;
 - creation above the boundary fails with a stable error;
-- invalid signature, malformed payload, wrong instance, not-yet-valid, and
-  expired licenses are rejected;
+- invalid signature, malformed payload, wrong-instance, and expired licenses
+  are rejected; a valid future-dated license may be installed as
+  `NotYetValid`, but Community limits remain effective until `notBefore`;
 - existing resources remain usable according to the documented expiry policy;
 - reducing a quota does not destructively delete existing resources;
 - concurrent creates cannot both pass a quota with one remaining slot;
