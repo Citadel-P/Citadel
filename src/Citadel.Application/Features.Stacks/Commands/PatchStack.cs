@@ -5,6 +5,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
 using Application.Services.Builds;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -36,7 +37,11 @@ public sealed record PatchStack(Guid Id, JsonMergePatchDocument<StackPatchModel>
     }
 }
 
-internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IPlatformStreamManager platformHub, IUserContextAccessor userContext) : ICommandHandler<PatchStack, Result<Stack>>
+internal sealed class PatchStackHandler(
+    IUnitOfWork unitOfWork,
+    IPlatformStreamManager platformHub,
+    IUserContextAccessor userContext,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<PatchStack, Result<Stack>>
 {
     public async ValueTask<Result<Stack>> Handle(PatchStack command, CancellationToken cancellationToken)
     {
@@ -77,6 +82,16 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IPlatformStreamM
         {
             Spec = BuildImageProvenance.Preserve(patched.Spec, stack.CurrentStackRelease.Spec)
         };
+
+        var entitlement = await StackLicenseConfigurationPolicy.EnsureAllowedAsync(
+            stack.CurrentStackRelease.Spec,
+            stack.DriftPolicy,
+            patched.Spec,
+            patched.DriftPolicy,
+            entitlementService,
+            cancellationToken);
+        if (entitlement.IsFailure(out var entitlementError))
+            return Result.Failure<Stack>(entitlementError);
 
         var stackSource = patched.StackSource ?? stack.StackSource;
         if (stackSource != stack.StackSource)
@@ -187,4 +202,5 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IPlatformStreamM
 
         return false;
     }
+
 }

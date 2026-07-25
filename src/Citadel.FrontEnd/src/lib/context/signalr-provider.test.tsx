@@ -5,6 +5,7 @@ import { AuthContext, AuthContextValue } from '@/features/auth/auth-context';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { FakeHubConnection } from '@/test/fakes/signalr';
 import { SignalRProvider } from './signalr-provider';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const authValue: AuthContextValue = {
   accessToken: 'access-token',
@@ -58,15 +59,27 @@ function SignalRTestRoot({
   children,
   fake,
 }: PropsWithChildren<{ fake: FakeHubConnection }>) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      }),
+  );
+
   return (
-    <AuthContext.Provider value={authValue}>
-      <SignalRProvider
-        connectionFactory={() => fake.asHubConnection()}
-        startConnection={(connection) => connection.start()}
-      >
-        {children}
-      </SignalRProvider>
-    </AuthContext.Provider>
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={authValue}>
+        <SignalRProvider
+          connectionFactory={() => fake.asHubConnection()}
+          startConnection={(connection) => connection.start()}
+        >
+          {children}
+        </SignalRProvider>
+      </AuthContext.Provider>
+    </QueryClientProvider>
   );
 }
 

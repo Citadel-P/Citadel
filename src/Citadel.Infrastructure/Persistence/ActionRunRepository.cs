@@ -160,7 +160,10 @@ internal sealed class ActionRunRepository(IDbConnection db, Func<IDbTransaction>
             transaction: tx());
     }
 
-    public async Task<bool> TryMarkRunningAsync(Guid id, DateTime startedAt, CancellationToken cancellationToken)
+    public async Task<ActionRun?> TryMarkRunningAsync(
+        Guid id,
+        DateTime startedAt,
+        CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE ActionRuns
@@ -168,9 +171,10 @@ internal sealed class ActionRunRepository(IDbConnection db, Func<IDbTransaction>
                 StartedAt = @StartedAt
             WHERE Id = @Id
               AND Status = @QueuedStatus
+            RETURNING *
             """;
 
-        var rows = await db.ExecuteAsync(
+        var result = await db.QuerySingleOrDefaultAsync<ActionRunDto>(
             sql,
             new
             {
@@ -180,7 +184,7 @@ internal sealed class ActionRunRepository(IDbConnection db, Func<IDbTransaction>
                 RunningStatus = EnumFormatter<ActionRunStatus>.GetValue(ActionRunStatus.Running)
             },
             transaction: tx());
-        return rows > 0;
+        return result?.ToDomain();
     }
 
     public Task<int> CancelQueuedOrRunningAsync(Guid id, DateTime cancelledAt, string reason, CancellationToken cancellationToken)

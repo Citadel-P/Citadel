@@ -88,6 +88,10 @@ Image update checks only work for services with image references that can be res
 
 Use `Notify Only` for production stacks until the stack has been tested. Use auto-deploy modes only when the image tag policy is controlled and rollback expectations are clear.
 
+Update detection and `Notify Only` remain available in Community. Automatic
+deployment caused by a detected image change requires Team's
+`Operational Guardrails` capability.
+
 ## Build Images
 
 Use **Build Images** when one or more Compose services should use images produced by Citadel build projects.
@@ -97,6 +101,9 @@ For each service binding:
 - Compose Service: exact service name from the Compose file
 - Build: build project that produces the service image
 - Redeploy On Build: automatically reapply that service after the selected build succeeds
+
+`Redeploy On Build` requires Team's `Automated Operations` capability. Without
+it, Citadel records the desired artifact and waits for a manual stack apply.
 
 When the stack is applied, Citadel uses the desired artifact stored on each binding and injects that image into the generated Compose content. A binding without a resolved artifact falls back to the latest successful build. You can save bindings before the first successful build, but apply fails until each selected build has a successful image.
 
@@ -151,6 +158,10 @@ Drift management compares the Compose definition against containers currently ru
 - `Auto-fix safe drift`: allow safe fixes such as starting stopped containers or resuming paused containers.
 
 Use drift detection when operators may change containers outside Citadel and you want Citadel to report those differences.
+
+Manual drift checks remain available in Community. Continuous drift monitoring
+and automatic safe reconciliation require Team's `Operational Guardrails`
+capability.
 
 ## Rollback
 

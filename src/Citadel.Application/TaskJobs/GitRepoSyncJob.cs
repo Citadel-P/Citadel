@@ -2,6 +2,7 @@ using Application.Features.Deployments.Notifications;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Git;
@@ -28,6 +29,7 @@ internal class GitRepoSyncJob(
     IStackStreamManager stackStreamManager,
     IAlertService alertService,
     IApplyStackService applyStackService,
+    ILicenseEntitlementService entitlementService,
     ILogger<GitRepoSyncJob> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -95,6 +97,7 @@ internal class GitRepoSyncJob(
                                 alertService,
                                 gitCliRepository,
                                 applyStackService,
+                                entitlementService,
                                 syncResult.Operation,
                                 syncResult.Hash!,
                                 branch,
@@ -128,6 +131,7 @@ internal sealed class GitRepoSyncSuccessWorkItem(
     IAlertService alertService,
     IGitCliRepository gitCliRepository,
     IApplyStackService applyStackService,
+    ILicenseEntitlementService entitlementService,
     GitOperation gitOperation,
     string commitHash,
     string branch,
@@ -166,7 +170,16 @@ internal sealed class GitRepoSyncSuccessWorkItem(
             await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
         }
 
-        var stackUpdates = await UpdateLinkedGitStacksAsync(uow, cancellationToken);
+        var requiredCapability = trigger == GitRepoSyncTrigger.Webhook
+            ? LicenseCapability.AutomatedOperations
+            : LicenseCapability.OperationalGuardrails;
+        var canAutoDeploy = await entitlementService.IsEnabledAsync(
+            requiredCapability,
+            cancellationToken);
+        var stackUpdates = await UpdateLinkedGitStacksAsync(
+            uow,
+            canAutoDeploy,
+            cancellationToken);
 
         await uow.CommitAsync(cancellationToken);
 
@@ -237,7 +250,10 @@ internal sealed class GitRepoSyncSuccessWorkItem(
         }
     }
 
-    private async Task<List<LinkedGitStackUpdate>> UpdateLinkedGitStacksAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+    private async Task<List<LinkedGitStackUpdate>> UpdateLinkedGitStacksAsync(
+        IUnitOfWork uow,
+        bool canAutoDeploy,
+        CancellationToken cancellationToken)
     {
         var linkedStacks = await uow.Stacks.GetBranchTrackingGitStacksAsync(repo.Id, branch, cancellationToken);
         var updates = new List<LinkedGitStackUpdate>();
@@ -296,8 +312,10 @@ internal sealed class GitRepoSyncSuccessWorkItem(
             if (!relevantUpdate || alreadyReported)
                 continue;
 
-            var shouldNotify = gitStack.UpdateBehavior == StackUpdateBehavior.Notify;
-            var shouldAutoDeploy = gitStack.UpdateBehavior is StackUpdateBehavior.StackAutoDeploy or StackUpdateBehavior.ServiceAutoDeploy;
+            var autoDeployConfigured = gitStack.UpdateBehavior is StackUpdateBehavior.StackAutoDeploy or StackUpdateBehavior.ServiceAutoDeploy;
+            var shouldNotify = gitStack.UpdateBehavior == StackUpdateBehavior.Notify
+                || (autoDeployConfigured && !canAutoDeploy);
+            var shouldAutoDeploy = autoDeployConfigured && canAutoDeploy;
             ActivityEvent? availableActivity = null;
 
             if (shouldNotify)

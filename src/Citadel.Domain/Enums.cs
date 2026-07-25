@@ -253,13 +253,13 @@ public enum BuildAgentLeaseCleanupStatus
     Failed
 }
 
-public enum LicenseLimit
+public enum LicenseCapability
 {
-    CustomRoles,
-    ActiveUsers,
-    Platforms,
-    BackupPolicies,
-    AutomationActions
+    CustomAccessControl,
+    AutomatedOperations,
+    AdvancedAlerting,
+    OperationalGuardrails,
+    ElasticBuildExecution
 }
 
 public enum LicenseStatus
@@ -1150,6 +1150,7 @@ public enum BuildRunStatus
     Failed,
     TimedOut,
     Cancelled,
+    Rejected,
     Interrupted
 }
 

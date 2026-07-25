@@ -25,7 +25,9 @@ public sealed class LicenseVerifierTests
         Assert.True(result.IsAccepted);
         Assert.Equal(LicenseStatus.Valid, result.Status);
         Assert.NotNull(result.License);
-        Assert.Equal(20, result.License.EffectiveLimits[LicenseLimit.ActiveUsers]);
+        Assert.Equal(
+            LicenseCapabilityKeys.All.Order(),
+            result.License.EffectiveCapabilities.Order());
     }
 
     [Fact]
@@ -68,6 +70,31 @@ public sealed class LicenseVerifierTests
         Assert.False(result.IsAccepted);
         Assert.Equal(LicenseStatus.Invalid, result.Status);
         Assert.Equal("LICENSE_UNSUPPORTED_TYPE", result.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData("jku")]
+    [InlineData("x5u")]
+    [InlineData("jwk")]
+    [InlineData("crit")]
+    public void Verify_Should_Reject_Unsupported_Protected_Header_Properties(string property)
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var license = fixture.Sign(
+            CreatePayload(expiresAt: now.AddDays(30)),
+            additionalHeaderFields: new Dictionary<string, object?>
+            {
+                [property] = property == "crit"
+                    ? new[] { "future-header" }
+                    : "https://issuer.example.test/key"
+            });
+
+        var result = fixture.Verifier.Verify(license, Instance(), now);
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
+        Assert.Equal("LICENSE_INVALID", result.ErrorCode);
     }
 
     [Fact]
@@ -209,6 +236,26 @@ public sealed class LicenseVerifierTests
     }
 
     [Fact]
+    public void Verify_Should_Accept_Schema2_Enterprise_Without_Granting_Missing_Capabilities()
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var payload = CreatePayload(expiresAt: now.AddDays(30)) with
+        {
+            Edition = LicenseConstants.EditionEnterprise,
+            Capabilities = [LicenseCapabilityKeys.CustomAccessControl]
+        };
+
+        var result = fixture.Verifier.Verify(fixture.Sign(payload), Instance(), now);
+
+        Assert.True(result.IsAccepted);
+        Assert.NotNull(result.License);
+        Assert.Equal(
+            [LicenseCapability.CustomAccessControl],
+            result.License.EffectiveCapabilities);
+    }
+
+    [Fact]
     public void Verify_Should_Reject_Signed_Malformed_Payload_Without_Throwing()
     {
         var fixture = LicenseFixture.Create();
@@ -223,38 +270,110 @@ public sealed class LicenseVerifierTests
     }
 
     [Fact]
-    public void Verify_Should_Use_Community_Limits_When_Limits_Are_Missing()
+    public void Verify_Should_Map_Legacy_Business_License_To_All_Team_Capabilities()
     {
         var fixture = LicenseFixture.Create();
         var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
-        var payload = CreatePayload(expiresAt: now.AddDays(30));
-        var payloadWithoutLimits = new
+        var payload = CreatePayload(expiresAt: now.AddDays(30)) with
         {
-            payload.Schema,
-            payload.Product,
-            payload.Issuer,
-            payload.Audience,
-            payload.LicenseId,
-            payload.ReplacedLicenseId,
-            payload.Customer,
-            payload.Edition,
-            payload.InstanceId,
-            payload.IssuedAt,
-            payload.NotBefore,
-            payload.ExpiresAt,
-            payload.GraceUntil
+            Schema = LicenseConstants.LegacySchema,
+            Edition = LicenseConstants.EditionBusiness,
+            Limits = null,
+            Capabilities = null
         };
-        var license = fixture.SignPayload(JsonSerializer.SerializeToUtf8Bytes(
-            payloadWithoutLimits,
-            LicenseFixture.JsonOptions));
+        var license = fixture.Sign(payload);
 
         var result = fixture.Verifier.Verify(license, Instance(), now);
 
         Assert.True(result.IsAccepted);
         Assert.NotNull(result.License);
         Assert.Equal(
-            CommunityLicenseLimits.Values[LicenseLimit.ActiveUsers],
-            result.License.EffectiveLimits[LicenseLimit.ActiveUsers]);
+            LicenseCapabilityKeys.All.Order(),
+            result.License.EffectiveCapabilities.Order());
+        Assert.Contains(result.License.Warnings, warning => warning.Contains("Legacy Business", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Verify_Should_Ignore_Unknown_Schema2_Capability_With_Warning()
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var payload = CreatePayload(expiresAt: now.AddDays(30)) with
+        {
+            Capabilities =
+            [
+                LicenseCapabilityKeys.AutomatedOperations,
+                "future-capability"
+            ]
+        };
+
+        var result = fixture.Verifier.Verify(fixture.Sign(payload), Instance(), now);
+
+        Assert.True(result.IsAccepted);
+        Assert.NotNull(result.License);
+        Assert.Equal(
+            [LicenseCapability.AutomatedOperations],
+            result.License.EffectiveCapabilities);
+        Assert.Contains(result.License.Warnings, warning => warning.Contains("future-capability", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Verify_Should_Reject_Duplicate_Schema2_Capabilities()
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var payload = CreatePayload(expiresAt: now.AddDays(30)) with
+        {
+            Capabilities =
+            [
+                LicenseCapabilityKeys.AutomatedOperations,
+                LicenseCapabilityKeys.AutomatedOperations
+            ]
+        };
+
+        var result = fixture.Verifier.Verify(fixture.Sign(payload), Instance(), now);
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
+    }
+
+    [Fact]
+    public void Verify_Should_Reject_NonUtc_Timestamps()
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var offset = TimeSpan.FromHours(2);
+        var payload = CreatePayload(expiresAt: now.AddDays(30)) with
+        {
+            IssuedAt = now.AddDays(-1).ToOffset(offset),
+            NotBefore = now.AddDays(-1).ToOffset(offset),
+            ExpiresAt = now.AddDays(30).ToOffset(offset),
+            GraceUntil = now.AddDays(44).ToOffset(offset)
+        };
+
+        var result = fixture.Verifier.Verify(fixture.Sign(payload), Instance(), now);
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
+    }
+
+    [Fact]
+    public void Verify_Should_Reject_Negative_Legacy_Limit()
+    {
+        var fixture = LicenseFixture.Create();
+        var now = new DateTimeOffset(2026, 7, 12, 10, 0, 0, TimeSpan.Zero);
+        var payload = CreatePayload(expiresAt: now.AddDays(30)) with
+        {
+            Schema = LicenseConstants.LegacySchema,
+            Edition = LicenseConstants.EditionBusiness,
+            Limits = new Dictionary<string, int> { ["active-users"] = -1 },
+            Capabilities = null
+        };
+
+        var result = fixture.Verifier.Verify(fixture.Sign(payload), Instance(), now);
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
     }
 
     [Fact]
@@ -285,20 +404,16 @@ public sealed class LicenseVerifierTests
             LicenseId: "lic-test",
             ReplacedLicenseId: null,
             Customer: new LicenseCustomer("customer-test", "Test Customer"),
-            Edition: LicenseConstants.EditionBusiness,
+            Edition: LicenseConstants.EditionTeam,
             InstanceId: InstanceId,
             IssuedAt: expiresAt.AddDays(-30),
             NotBefore: expiresAt.AddDays(-30),
             ExpiresAt: expiresAt,
             GraceUntil: graceUntil,
-            Limits: new Dictionary<string, int>
-            {
-                [LicenseLimitKeys.CustomRoles] = 10,
-                [LicenseLimitKeys.ActiveUsers] = 20,
-                [LicenseLimitKeys.Platforms] = 10,
-                [LicenseLimitKeys.BackupPolicies] = 25,
-                [LicenseLimitKeys.AutomationActions] = 50
-            });
+            Limits: null,
+            Capabilities: LicenseCapabilityKeys.All
+                .Select(LicenseCapabilityKeys.GetKey)
+                .ToArray());
 
     private sealed class LicenseFixture
     {
@@ -333,22 +448,41 @@ public sealed class LicenseVerifierTests
             LicensePayload payload,
             string algorithm = LicenseConstants.JoseAlgorithm,
             string type = LicenseConstants.JoseType,
-            string keyId = KeyId)
+            string keyId = KeyId,
+            IReadOnlyDictionary<string, object?>? additionalHeaderFields = null)
         {
             return SignPayload(
                 JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions),
                 algorithm,
                 type,
-                keyId);
+                keyId,
+                additionalHeaderFields);
         }
 
         public string SignPayload(
             byte[] payload,
             string algorithm = LicenseConstants.JoseAlgorithm,
             string type = LicenseConstants.JoseType,
-            string keyId = KeyId)
+            string keyId = KeyId,
+            IReadOnlyDictionary<string, object?>? additionalHeaderFields = null)
         {
-            var header = new LicenseProtectedHeader(algorithm, type, keyId);
+            object header;
+            if (additionalHeaderFields is null)
+            {
+                header = new LicenseProtectedHeader(algorithm, type, keyId);
+            }
+            else
+            {
+                var headerFields = additionalHeaderFields.ToDictionary(
+                    pair => pair.Key,
+                    pair => pair.Value,
+                    StringComparer.Ordinal);
+                headerFields["alg"] = algorithm;
+                headerFields["typ"] = type;
+                headerFields["kid"] = keyId;
+                header = headerFields;
+            }
+
             var encodedHeader = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(header, JsonOptions));
             var encodedPayload = Base64UrlEncode(payload);
             var signingInput = Encoding.ASCII.GetBytes($"{encodedHeader}.{encodedPayload}");

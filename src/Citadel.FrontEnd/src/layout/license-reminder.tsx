@@ -1,27 +1,15 @@
-import { LicenseLimitView, LicenseStatus } from '@/api/generated/api.types';
+import { LicenseStatus } from '@/api/generated/api.types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { LICENSE_LIMIT_LABELS } from '@/features/license/license-labels';
-import { useLocalStorage, useRead } from '@/lib/hooks';
-import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
+import { useLocalStorage } from '@/lib/hooks';
 import { AlertTriangle, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
-const LICENSE_REMINDER_REFRESH_INTERVAL = 60 * 60 * 1000;
-
 export function LicenseReminder() {
-  const formatDate = useProfileDateTimeFormatter();
   const [dismissedKey, setDismissedKey] = useLocalStorage<string | null>('license-reminder-dismissed-key', null);
-  const licenseQuery = useRead('getLicense', undefined, {
-    retry: false,
-    staleTime: LICENSE_REMINDER_REFRESH_INTERVAL,
-    refetchInterval: LICENSE_REMINDER_REFRESH_INTERVAL,
-    meta: { suppressErrorToast: true },
-  });
-
-  const license = licenseQuery.data?.data;
-  const overQuota = useMemo(() => license?.limits?.filter((limit) => limit.overQuota) ?? [], [license?.limits]);
+  const { entitlements: license } = useLicenseEntitlements();
 
   const notice = useMemo(() => {
     if (!license) return null;
@@ -30,9 +18,7 @@ export function LicenseReminder() {
       return {
         tone: 'warning' as const,
         title: 'License in grace period',
-        message: license.graceUntil
-          ? `Renew before ${formatDate(license.graceUntil)} to avoid create and enable restrictions.`
-          : 'Renew the license to avoid create and enable restrictions.',
+        message: 'Renew the license before the grace period ends to keep Team operations active.',
       };
     }
 
@@ -40,26 +26,14 @@ export function LicenseReminder() {
       return {
         tone: 'danger' as const,
         title: 'License expired',
-        message: 'Renew your license or reduce usage to Community limits. Quota-increasing actions may be blocked.',
-      };
-    }
-
-    if (overQuota.length > 0) {
-      return {
-        tone: 'warning' as const,
-        title: 'License usage over limit',
-        message: 'Renew your license or reduce usage to stay within the active limits.',
+        message: 'Citadel is using Community capabilities. Paid configuration is preserved but remains paused.',
       };
     }
 
     return null;
-  }, [formatDate, license, overQuota.length]);
+  }, [license]);
 
-  const overQuotaSummary = useMemo(() => formatOverQuota(overQuota), [overQuota]);
-  const noticeKey =
-    notice && license
-      ? `${license.status}:${license.expiresAt ?? ''}:${license.graceUntil ?? ''}:${overQuotaSummary}`
-      : null;
+  const noticeKey = notice && license ? `${license.status}:${license.effectiveEdition}` : null;
 
   if (!notice || !noticeKey || dismissedKey === noticeKey) return null;
 
@@ -77,12 +51,7 @@ export function LicenseReminder() {
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <AlertTitle>{notice.title}</AlertTitle>
-            <AlertDescription className="text-foreground/80">
-              {notice.message}
-              {overQuotaSummary ? (
-                <span className="ml-1 font-medium text-foreground">Over limit: {overQuotaSummary}.</span>
-              ) : null}
-            </AlertDescription>
+            <AlertDescription className="text-foreground/80">{notice.message}</AlertDescription>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Button asChild variant="outline" size="sm">
@@ -102,10 +71,4 @@ export function LicenseReminder() {
       </Alert>
     </div>
   );
-}
-
-function formatOverQuota(limits: LicenseLimitView[]) {
-  return limits
-    .map((limit) => `${LICENSE_LIMIT_LABELS[limit.limit] ?? limit.limit} ${limit.current} / ${limit.maximum}`)
-    .join(', ');
 }

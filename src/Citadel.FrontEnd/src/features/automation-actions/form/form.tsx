@@ -2,6 +2,7 @@ import {
   AutomationActionInput,
   AutomationActionView,
   AutomationWebhookConfig,
+  LicenseCapability,
   LookupResourceType,
   ResourceControlState,
   TestAutomationActionInput,
@@ -29,6 +30,7 @@ import { TestTube2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { toast } from 'sonner';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
 type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
   id?: string;
@@ -77,6 +79,8 @@ export function AutomationActionForm({
   const createAction = useMutate('createAutomationAction');
   const updateAction = useMutate('updateAutomationAction');
   const [update, setUpdate] = useState<Partial<AutomationActionFormValue>>({});
+  const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
+  const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
 
   const original = useMemo(() => toFormValue(resource), [resource]);
   const current = useMemo(() => ({ ...original, ...update }), [original, update]);
@@ -335,6 +339,7 @@ export function AutomationActionForm({
             id: 'schedule',
             label: 'Schedule',
             description: 'Run this action automatically from a cron expression.',
+            requiredLicense: automatedOperationsEnabled ? undefined : 'Team',
             items: [
               defineField({
                 key: 'scheduleEnabled',
@@ -344,7 +349,7 @@ export function AutomationActionForm({
                     checked={value ?? false}
                     id="automation-action-schedule-enabled"
                     onChange={(scheduleEnabled) => set({ scheduleEnabled })}
-                    disabled={disabled}
+                    disabled={disabled || (!value && !automatedOperationsEnabled)}
                   />
                 ),
               }),
@@ -361,7 +366,7 @@ export function AutomationActionForm({
                   <FieldInput
                     value={value ?? ''}
                     placeholder="*/15 * * * *"
-                    disabled={disabled || !currentScheduleEnabled}
+                    disabled={disabled || !currentScheduleEnabled || !automatedOperationsEnabled}
                     onChange={(scheduleCron) => set({ scheduleCron })}
                   />
                 ),
@@ -374,7 +379,7 @@ export function AutomationActionForm({
                 render: (value, set) => (
                   <TimezoneSelectField
                     value={value ?? 'UTC'}
-                    disabled={disabled || !currentScheduleEnabled}
+                    disabled={disabled || !currentScheduleEnabled || !automatedOperationsEnabled}
                     onChange={(scheduleTimeZone) => set({ scheduleTimeZone })}
                     className="w-100"
                   />
@@ -386,6 +391,7 @@ export function AutomationActionForm({
             id: 'webhook',
             label: 'Webhook',
             description: 'Allow a Git webhook to queue this action through the shared listener.',
+            requiredLicense: automatedOperationsEnabled ? undefined : 'Team',
             items: [
               defineField<AutomationActionFormValue, 'webhook'>({
                 key: 'webhook',
@@ -397,6 +403,7 @@ export function AutomationActionForm({
                     execution="run"
                     value={value ?? { enabled: false }}
                     disabled={disabled}
+                    enableDisabled={!automatedOperationsEnabled}
                     onChange={(webhook) => set({ webhook: webhook as AutomationWebhookConfig })}
                   />
                 ),
@@ -406,7 +413,7 @@ export function AutomationActionForm({
         ],
       }),
     }),
-    [currentScheduleEnabled, disabled, handleTestDraft, id, mode, testDisabled],
+    [automatedOperationsEnabled, currentScheduleEnabled, disabled, handleTestDraft, id, mode, testDisabled],
   );
 
   return (

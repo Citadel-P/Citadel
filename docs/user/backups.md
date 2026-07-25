@@ -2,6 +2,21 @@
 
 Citadel backups let you save Citadel system data and Docker named volumes to a restic-compatible repository.
 
+## License Availability
+
+Community can:
+
+- create and manage backup repositories
+- create backup policy definitions
+- start backups manually
+- restore backups
+- view backup and restore history and logs
+
+Backup schedules and webhook-triggered backup execution require Team's
+`Automated Operations` capability. If the capability becomes unavailable,
+configured triggers remain stored but pause. Manual backup and restore remain
+available.
+
 ## Backup Repositories
 
 A backup repository is the destination where snapshots are stored.
@@ -143,7 +158,18 @@ Successful runs show:
 
 If a policy contains multiple volumes, Citadel creates one backup item per volume so each volume has its own status and snapshot metadata.
 
+## Scheduled Backups
+
+Scheduled backups require Team's `Automated Operations` capability.
+
+Configure the policy schedule and timezone when Citadel should queue backups
+without an operator. If the capability becomes unavailable, Citadel preserves
+the schedule but does not queue new scheduled runs. Manual backup and restore
+remain available.
+
 ## Webhook Triggers
+
+Webhook-triggered backups require Team's `Automated Operations` capability.
 
 Enable **Webhook** on a backup policy when an external system should queue the backup.
 

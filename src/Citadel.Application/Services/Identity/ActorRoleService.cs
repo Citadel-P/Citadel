@@ -1,5 +1,7 @@
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
+using Application.Services.Licensing;
+using Domain;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
@@ -31,13 +33,25 @@ public interface IActorResourceAccessService
         CancellationToken cancellationToken);
 }
 
-internal sealed class ActorRoleService(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : IActorRoleService
+internal sealed class ActorRoleService(
+    IUnitOfWork unitOfWork,
+    IActorScopeEvictor evictor,
+    ILicenseEntitlementService entitlementService) : IActorRoleService
 {
     public async Task<Result> AssignRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)
     {
         var role = await unitOfWork.Roles.GetAsync(roleId, cancellationToken);
         if (role is null)
             return Result.Failure(new NotFoundError("The provided role does not exist"));
+
+        if (role.RoleType == RoleType.Custom)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.CustomAccessControl,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure(entitlementError);
+        }
 
         var rows = await unitOfWork.Roles.AddActorRoleAsync(actorId, roleId, cancellationToken);
         if (rows == 0)
@@ -64,7 +78,9 @@ internal sealed class ActorRoleService(IUnitOfWork unitOfWork, IActorScopeEvicto
     }
 }
 
-internal sealed class ActorResourceAccessService(IUnitOfWork unitOfWork) : IActorResourceAccessService
+internal sealed class ActorResourceAccessService(
+    IUnitOfWork unitOfWork,
+    ILicenseEntitlementService entitlementService) : IActorResourceAccessService
 {
     public async Task<Result> AddResourceAccessAsync(
         Guid actorId,
@@ -74,6 +90,12 @@ internal sealed class ActorResourceAccessService(IUnitOfWork unitOfWork) : IActo
         IEnumerable<SpecificPermission>? specificPermissions,
         CancellationToken cancellationToken)
     {
+        var entitlement = await entitlementService.EnsureEnabledAsync(
+            LicenseCapability.CustomAccessControl,
+            cancellationToken);
+        if (entitlement.IsFailure(out var entitlementError))
+            return Result.Failure(entitlementError);
+
         if (!PermissionMatrix.IsAllowed(resourceType, permissionLevel, specificPermissions))
             return Result.Failure(new ConflictError($"Invalid permission: [{resourceType}]-[{permissionLevel}] with specifics [{string.Join(", ", specificPermissions ?? [])}] is not an allowed combination."));
 

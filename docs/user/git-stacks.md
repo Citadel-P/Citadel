@@ -107,6 +107,11 @@ For branch-tracking Git stacks, Citadel stores the exact deployed commit in the 
 - `ServiceAutoDeploy`: currently treated as stack-level Git source deployment because a Git commit can affect networks, volumes, env files, and dependencies.
 - `Disabled`: do not report Git source updates.
 
+`Notify` and update detection remain available in Community. Automatic
+deployment caused by continuously observed repository changes requires
+`Operational Guardrails`. Deployment caused by an external webhook requires
+`Automated Operations`.
+
 Pinned stacks set `Commit` to a SHA. They do not track branch updates and webhook deploys are ignored.
 
 ## Build Images
@@ -119,6 +124,8 @@ For each service binding:
 - Build: build project that produces the service image
 - Redeploy On Build: automatically reapply that service after the selected build succeeds
 
+`Redeploy On Build` requires `Automated Operations`.
+
 When the stack is applied, Citadel uses the desired artifact stored on each binding and writes a generated Compose override file. A binding without a resolved artifact falls back to the latest successful build. The override is added after the repository Compose files so the build image replaces the service image from Git without changing the repository.
 
 You can save bindings before the first successful build, but apply fails until each selected build has a successful image.
@@ -130,6 +137,9 @@ For build setup and webhook-triggered builds, see `docs/user/builds.md`.
 ## Webhooks
 
 Repository webhooks trigger repository sync. Git stack webhooks trigger deploy for that stack.
+
+Repository synchronization and pending-update detection remain Community.
+Applying the stack from the webhook requires `Automated Operations`.
 
 For the shared listener model, authentication options, URL shape, and troubleshooting, see `docs/user/webhooks.md`.
 

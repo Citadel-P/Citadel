@@ -1,4 +1,5 @@
 using Application.Services.Identity;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
@@ -40,7 +41,10 @@ public sealed record PatchTeam(Guid Id, JsonMergePatchDocument<PatchTeamModel> P
     }
 }
 
-internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<PatchTeam, Result<TeamDetails>>
+internal sealed class PatchTeamHandler(
+    IUnitOfWork unitOfWork,
+    IActorScopeEvictor evictor,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<PatchTeam, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(PatchTeam command, CancellationToken cancellationToken)
     {
@@ -56,10 +60,22 @@ internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvicto
         var currentRoleIds = (await unitOfWork.Roles.GetActorRoleIdsAsync(team.ActorId, cancellationToken)).ToArray();
         var current = new PatchTeamModel(team.IsEnabled, currentUserIds, currentRoleIds, null);
         var patched = command.Patch.ApplyTo(current, RoleJsonContext.Default.PatchTeamModel);
+        var roleIds = patched.RoleIds?.Distinct().ToArray();
+        var roles = Array.Empty<Role>();
+
+        if (roleIds is { Length: > 0 })
+        {
+            roles = (await unitOfWork.Roles.GetAllAsync(roleIds, cancellationToken) ?? []).ToArray();
+            var existingRoleIds = roles.Select(x => x.Id).ToHashSet();
+            var missingRoleId = roleIds.FirstOrDefault(x => !existingRoleIds.Contains(x));
+            if (missingRoleId != Guid.Empty)
+                return Result.Failure<TeamDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
+        }
 
         if (patched.UserIds is not null)
         {
             var userIds = patched.UserIds.Distinct().ToArray();
+            var addsMembers = userIds.Except(currentUserIds).Any();
             if (userIds.Length > 0)
             {
                 var users = await unitOfWork.Users.GetAllAsync(userIds, cancellationToken) ?? [];
@@ -69,20 +85,42 @@ internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvicto
                     return Result.Failure<TeamDetails>(new NotFoundError($"User with ID {missingUserId} does not exist"));
             }
 
+            if (addsMembers)
+            {
+                var resultingRoles = roles;
+                if (roleIds is null && currentRoleIds.Length > 0)
+                    resultingRoles = (await unitOfWork.Roles.GetAllAsync(currentRoleIds, cancellationToken) ?? []).ToArray();
+
+                var hasResourceAccess = patched.ResourceAccesses is not null
+                    ? patched.ResourceAccesses.Any()
+                    : await unitOfWork.ResourceAccesses.ExistsForActorAsync(team.ActorId, cancellationToken);
+
+                if (resultingRoles.Any(x => x.RoleType == RoleType.Custom) || hasResourceAccess)
+                {
+                    var entitlement = await entitlementService.EnsureEnabledAsync(
+                        LicenseCapability.CustomAccessControl,
+                        cancellationToken);
+                    if (entitlement.IsFailure(out var entitlementError))
+                        return Result.Failure<TeamDetails>(entitlementError);
+                }
+            }
+
             await unitOfWork.Teams.ReplaceMembersAsync(team.Id, userIds, cancellationToken);
-            await evictor.EvictUsers(userIds, cancellationToken);
+            await evictor.EvictUsers(
+                currentUserIds.Union(userIds),
+                cancellationToken);
         }
 
-        if (patched.RoleIds is not null)
+        if (roleIds is not null)
         {
-            var roleIds = patched.RoleIds.Distinct().ToArray();
-            if (roleIds.Length > 0)
+            var addedRoleIds = roleIds.Except(currentRoleIds).ToHashSet();
+            if (roles.Any(x => addedRoleIds.Contains(x.Id) && x.RoleType == RoleType.Custom))
             {
-                var roles = await unitOfWork.Roles.GetAllAsync(roleIds, cancellationToken) ?? [];
-                var existingRoleIds = roles.Select(x => x.Id).ToHashSet();
-                var missingRoleId = roleIds.FirstOrDefault(x => !existingRoleIds.Contains(x));
-                if (missingRoleId != Guid.Empty)
-                    return Result.Failure<TeamDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
+                var entitlement = await entitlementService.EnsureEnabledAsync(
+                    LicenseCapability.CustomAccessControl,
+                    cancellationToken);
+                if (entitlement.IsFailure(out var entitlementError))
+                    return Result.Failure<TeamDetails>(entitlementError);
             }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(team.ActorId, roleIds, cancellationToken);
@@ -95,6 +133,25 @@ internal sealed class PatchTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvicto
                 .Distinct()
                 .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, team.ActorId, x.PermissionLevel, x.SpecificPermissions))
                 .ToArray();
+
+            var currentResourceAccesses = (await unitOfWork.ResourceAccesses
+                .GetAllByActorIdAsync(team.ActorId, cancellationToken))
+                .Select(x => ResourceAccess.FromPersistence(
+                    x.Id,
+                    x.ResourceType,
+                    x.ResourceId,
+                    x.ActorId,
+                    x.PermissionLevel,
+                    x.SpecificPermissions));
+
+            if (LicenseAccessControlPolicy.ExpandsResourceAccess(currentResourceAccesses, resourceAccesses))
+            {
+                var entitlement = await entitlementService.EnsureEnabledAsync(
+                    LicenseCapability.CustomAccessControl,
+                    cancellationToken);
+                if (entitlement.IsFailure(out var entitlementError))
+                    return Result.Failure<TeamDetails>(entitlementError);
+            }
 
             await unitOfWork.ResourceAccesses.ReplaceAsync(team.ActorId, resourceAccesses, cancellationToken);
         }

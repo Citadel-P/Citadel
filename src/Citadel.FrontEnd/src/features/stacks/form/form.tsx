@@ -13,6 +13,7 @@ import {
   BuildProjectView,
   StackBuildImageBinding,
   BuildRunStatus,
+  LicenseCapability,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -41,6 +42,7 @@ import * as monaco from 'monaco-editor';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
 const update_behaviors = {
   [StackUpdateBehavior.Disabled]: {
@@ -81,9 +83,9 @@ const EMPTY_RESOURCE_BINDING_LOOKUP: { name: string }[] = [];
 const EMPTY_BUILD_PROJECTS: BuildProjectView[] = [];
 
 const DEFAULT_DRIFT_POLICY: StackDriftPolicy = {
-  mode: StackDriftMode.DetectOnly,
-  alertOnDrift: true,
-  markDegraded: true,
+  mode: StackDriftMode.Disabled,
+  alertOnDrift: false,
+  markDegraded: false,
   autoStartStoppedContainers: false,
   autoResumePausedContainers: false,
   removeExtraContainers: false,
@@ -393,12 +395,14 @@ const StackBuildImageBindingsField = ({
   projects,
   isLoading,
   disabled,
+  redeployEnabled,
   onChange,
 }: {
   value?: StackBuildImageBinding[] | null;
   projects: BuildProjectView[];
   isLoading?: boolean;
   disabled?: boolean;
+  redeployEnabled: boolean;
   onChange: (value: StackBuildImageBinding[]) => void;
 }) => {
   const bindings = value ?? [];
@@ -491,10 +495,12 @@ const StackBuildImageBindingsField = ({
                 <FieldSwitch
                   id={`stack-build-redeploy-${index}`}
                   checked={binding.redeployOnBuild ?? false}
-                  disabled={disabled}
+                  disabled={disabled || (!redeployEnabled && !binding.redeployOnBuild)}
                   onChange={(redeployOnBuild) => setBinding(index, { redeployOnBuild })}
                 />
-                <span className="text-muted-foreground">On success</span>
+                <span className="text-muted-foreground">
+                  {redeployEnabled || binding.redeployOnBuild ? 'On success' : 'Team'}
+                </span>
               </label>
             </div>
             <Button
@@ -728,6 +734,9 @@ export const StackForm = ({
   const duplicateDraftLoadedRef = useRef<string | null>(null);
   const [update, setUpdate] = useState<Partial<StackInput>>({});
   const queryClient = useQueryClient();
+  const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
+  const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
+  const operationalGuardrailsEnabled = hasLicenseCapability(LicenseCapability.OperationalGuardrails);
 
   const { mutateAsync: createStack } = useMutate('createStack');
   const { mutateAsync: updateStack } = useMutate('updateStack');
@@ -796,6 +805,42 @@ export const StackForm = ({
   const effectiveConfigurationNames = useMemo(
     () => [...new Set(effectiveResourceBindings.map((entry) => entry.name))].sort(),
     [effectiveResourceBindings],
+  );
+  const licensedUpdateBehaviors = useMemo(
+    () => ({
+      ...update_behaviors,
+      [StackUpdateBehavior.ServiceAutoDeploy]: {
+        ...update_behaviors[StackUpdateBehavior.ServiceAutoDeploy],
+        label: 'Auto Deploy Services',
+        disabled: !operationalGuardrailsEnabled,
+        requiredLicense: !operationalGuardrailsEnabled ? ('Team' as const) : undefined,
+      },
+      [StackUpdateBehavior.StackAutoDeploy]: {
+        ...update_behaviors[StackUpdateBehavior.StackAutoDeploy],
+        label: 'Auto Deploy Stack',
+        disabled: !operationalGuardrailsEnabled,
+        requiredLicense: !operationalGuardrailsEnabled ? ('Team' as const) : undefined,
+      },
+    }),
+    [operationalGuardrailsEnabled],
+  );
+  const licensedDriftModes = useMemo(
+    () => ({
+      ...drift_modes,
+      [StackDriftMode.DetectOnly]: {
+        ...drift_modes[StackDriftMode.DetectOnly],
+        label: 'Detect only',
+        disabled: !operationalGuardrailsEnabled,
+        requiredLicense: !operationalGuardrailsEnabled ? ('Team' as const) : undefined,
+      },
+      [StackDriftMode.AutoFix]: {
+        ...drift_modes[StackDriftMode.AutoFix],
+        label: 'Auto-fix safe drift',
+        disabled: !operationalGuardrailsEnabled,
+        requiredLicense: !operationalGuardrailsEnabled ? ('Team' as const) : undefined,
+      },
+    }),
+    [operationalGuardrailsEnabled],
   );
 
   useEffect(() => {
@@ -1227,7 +1272,7 @@ export const StackForm = ({
                     return (
                       <div className="flex flex-col gap-2">
                         <ItemSelector
-                          collection={update_behaviors}
+                          collection={licensedUpdateBehaviors}
                           value={value}
                           disabled={disabled}
                           onChange={(updateBehavior: StackUpdateBehavior) => {
@@ -1261,6 +1306,7 @@ export const StackForm = ({
                           projects={buildProjects}
                           isLoading={buildProjectsLoading}
                           disabled={disabled}
+                          redeployEnabled={automatedOperationsEnabled}
                           onChange={(buildImageBindings) =>
                             set((prev) => ({
                               spec: {
@@ -1409,8 +1455,8 @@ export const StackForm = ({
                       description: 'Choose how this stack handles drift checks.',
                       render: (value, set) => (
                         <ItemSelector
-                          collection={drift_modes}
-                          value={value ?? StackDriftMode.DetectOnly}
+                          collection={licensedDriftModes}
+                          value={value ?? StackDriftMode.Disabled}
                           disabled={disabled}
                           onChange={(mode: StackDriftMode) => set((prev) => patchDriftPolicy(prev, { mode }))}
                         />
@@ -1655,6 +1701,9 @@ export const StackForm = ({
       gitRefs,
       buildProjects,
       buildProjectsLoading,
+      automatedOperationsEnabled,
+      licensedUpdateBehaviors,
+      licensedDriftModes,
       selectedBranchRef?.resolvedCommitSha,
       stackView?.source?.resolvedCommitSha,
       effectiveConfigurationNames,

@@ -48,7 +48,7 @@ public sealed record PatchUser(Guid Id, JsonMergePatchDocument<PatchUserModel> P
 internal sealed class PatchUserHandler(
     IUnitOfWork unitOfWork,
     IActorScopeEvictor evictor,
-    ILicenseQuotaService licenseQuotaService) : ICommandHandler<PatchUser, Result<UserDetails>>
+    ILicenseEntitlementService entitlementService) : ICommandHandler<PatchUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(PatchUser command, CancellationToken cancellationToken)
     {
@@ -76,6 +76,7 @@ internal sealed class PatchUserHandler(
         if (patched.TeamIds is not null)
         {
             var teamIds = patched.TeamIds.Distinct().ToArray();
+            var addedTeamIds = teamIds.Except(currentTeamIds).ToHashSet();
             if (teamIds.Length > 0)
             {
                 var teams = await unitOfWork.Teams.GetAllAsync(teamIds, cancellationToken) ?? [];
@@ -83,6 +84,19 @@ internal sealed class PatchUserHandler(
                 var missingTeamId = teamIds.FirstOrDefault(x => !existingTeamIds.Contains(x));
                 if (missingTeamId != Guid.Empty)
                     return Result.Failure<UserDetails>(new NotFoundError($"Team with ID {missingTeamId} does not exist"));
+
+                if (await unitOfWork.Actors.HasCustomAccessConfigurationAsync(
+                        teams
+                            .Where(x => addedTeamIds.Contains(x.Id))
+                            .Select(x => x.ActorId),
+                        cancellationToken))
+                {
+                    var entitlement = await entitlementService.EnsureEnabledAsync(
+                        LicenseCapability.CustomAccessControl,
+                        cancellationToken);
+                    if (entitlement.IsFailure(out var entitlementError))
+                        return Result.Failure<UserDetails>(entitlementError);
+                }
             }
 
             await unitOfWork.Users.ReplaceTeamsAsync(state.User.Id, teamIds, cancellationToken);
@@ -92,6 +106,7 @@ internal sealed class PatchUserHandler(
         if (patched.RoleIds is not null)
         {
             var roleIds = patched.RoleIds.Distinct().ToArray();
+            var addedRoleIds = roleIds.Except(currentRoleIds).ToHashSet();
             if (roleIds.Length > 0)
             {
                 var roles = await unitOfWork.Roles.GetAllAsync(roleIds, cancellationToken) ?? [];
@@ -99,6 +114,15 @@ internal sealed class PatchUserHandler(
                 var missingRoleId = roleIds.FirstOrDefault(x => !existingRoleIds.Contains(x));
                 if (missingRoleId != Guid.Empty)
                     return Result.Failure<UserDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
+
+                if (roles.Any(x => addedRoleIds.Contains(x.Id) && x.RoleType == RoleType.Custom))
+                {
+                    var entitlement = await entitlementService.EnsureEnabledAsync(
+                        LicenseCapability.CustomAccessControl,
+                        cancellationToken);
+                    if (entitlement.IsFailure(out var entitlementError))
+                        return Result.Failure<UserDetails>(entitlementError);
+                }
             }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(state.User.ActorId, roleIds, cancellationToken);
@@ -112,6 +136,25 @@ internal sealed class PatchUserHandler(
                 .Select(x => ResourceAccess.Create(x.ResourceType, x.ResourceId, state.User.ActorId, x.PermissionLevel, x.SpecificPermissions))
                 .ToArray();
 
+            var currentResourceAccesses = (await unitOfWork.ResourceAccesses
+                .GetAllByActorIdAsync(state.User.ActorId, cancellationToken))
+                .Select(x => ResourceAccess.FromPersistence(
+                    x.Id,
+                    x.ResourceType,
+                    x.ResourceId,
+                    x.ActorId,
+                    x.PermissionLevel,
+                    x.SpecificPermissions));
+
+            if (LicenseAccessControlPolicy.ExpandsResourceAccess(currentResourceAccesses, resourceAccesses))
+            {
+                var entitlement = await entitlementService.EnsureEnabledAsync(
+                    LicenseCapability.CustomAccessControl,
+                    cancellationToken);
+                if (entitlement.IsFailure(out var entitlementError))
+                    return Result.Failure<UserDetails>(entitlementError);
+            }
+
             await unitOfWork.ResourceAccesses.ReplaceAsync(state.User.ActorId, resourceAccesses, cancellationToken);
         }
 
@@ -121,19 +164,6 @@ internal sealed class PatchUserHandler(
 
         if (patched.IsEnabled.HasValue && patched.IsEnabled.Value != actor.IsEnabled)
         {
-            if (patched.IsEnabled.Value)
-            {
-                var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-                    new Dictionary<LicenseLimit, int>
-                    {
-                        [LicenseLimit.ActiveUsers] = 1
-                    },
-                    unitOfWork,
-                    cancellationToken);
-                if (quotaResult.IsFailure())
-                    return Result.Failure<UserDetails>(quotaResult.Errors);
-            }
-
             var setEnabledResult = actor.SetEnabled(patched.IsEnabled.Value);
             if (setEnabledResult.IsFailure(out var error))
                 return Result.Failure<UserDetails>(error);

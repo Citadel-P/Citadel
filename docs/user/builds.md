@@ -11,6 +11,30 @@ Use builds when:
 
 Builds are not automation actions. Automation actions may call the Build API, but build projects do not run arbitrary TypeScript or shell scripts.
 
+## License Availability
+
+Community can:
+
+- create build projects and build-pool definitions
+- test and manage build-pool configuration
+- run builds manually on existing Local, Agent, and Edge Agent platforms
+- view build configuration, history, artifacts, and logs
+- cancel in-flight builds
+
+Team capabilities add:
+
+- `Automated Operations`: webhook-triggered builds and automatic deployment or
+  stack apply after a successful build
+- `Elastic Build Execution`: builds dispatched through an external Build Pool
+
+A webhook-triggered build using an external Build Pool requires both
+capabilities. A manual build using an external Build Pool requires only
+`Elastic Build Execution`.
+
+If a license changes, an external build that has already started may finish or
+be cancelled. Queued external-pool builds do not lease or provision new builder
+capacity without `Elastic Build Execution`.
+
 ## Current Runner Support
 
 Builds can run on Docker platforms connected through:
@@ -25,6 +49,10 @@ Local builds stream the build context from Citadel Core to the local Docker daem
 Agent and edge-agent builds package the resolved build context in Citadel Core, send that archive to the selected agent, and let the agent stream it to its Docker daemon. The transferred archive must fit within the current agent message envelope limit of `16 MB`.
 
 Build Pool builds run on a reusable build pool instead of a Docker platform. For a self-managed VM pool, Citadel either connects to a dedicated inbound Agent endpoint or uses a pool-scoped Edge Agent connection. In both modes, the builder host's Docker daemon performs the build and push.
+
+Executing a build through a Build Pool requires `Elastic Build Execution`.
+Creating, testing, updating, disabling, or deleting the pool definition does
+not.
 
 ## Prerequisites
 
@@ -215,6 +243,10 @@ In a deployment, choose:
 - Build: the build project that produces the image
 - Redeploy On Build: whether Citadel should redeploy this deployment automatically after a successful build
 
+`Redeploy On Build` requires `Automated Operations`. Without it, Citadel still
+records the new desired artifact and shows it as pending, but an operator must
+apply the deployment manually.
+
 The deployment form shows the latest build artifact, the artifact currently desired by the deployment, and the artifact last applied successfully. You can save the deployment before the first successful build, but the deployment cannot be applied from that build image until a run succeeds.
 
 When a build succeeds, Citadel updates each deployment that uses that build image source with the new desired image reference and digest, records a `DeploymentUpdated` activity event, streams the deployment update to connected clients, and writes the update to the build run log. If `Redeploy On Build` is enabled, Citadel redeploys the deployment after the build finishes.
@@ -230,6 +262,9 @@ Each binding contains:
 - Compose Service: exact Compose service name, such as `api`
 - Build: the build project that produces that service image
 - Redeploy On Build: whether Citadel should redeploy that service after a successful build
+
+`Redeploy On Build` requires `Automated Operations`. Without it, Citadel records
+the desired artifact but does not automatically apply the stack.
 
 When the stack is applied, Citadel uses the desired artifact stored on each binding. A binding without a resolved artifact falls back to the latest successful build. For web editor stacks, Citadel replaces the service image in the generated Compose content. For Git stacks, Citadel writes a generated Compose override file with the resolved image references.
 
@@ -290,9 +325,15 @@ A run:
 9. redeploys consumers that have `Redeploy On Build` enabled
 10. stores run status, image references, digest when available, and logs
 
+Step 9 requires `Automated Operations`. Without it, the desired artifacts in
+step 8 remain pending until an operator applies the consumer manually.
+
 Only one run per build project can be active at a time. If a run is already queued, preparing, or running, Citadel rejects another run for the same project.
 
 ## Webhooks
+
+Webhook-triggered builds require `Automated Operations`. Builds using an
+external Build Pool additionally require `Elastic Build Execution`.
 
 Enable webhooks on a build project when a Git provider should queue a build after a push.
 

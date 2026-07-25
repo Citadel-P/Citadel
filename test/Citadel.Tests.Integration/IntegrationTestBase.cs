@@ -1,5 +1,6 @@
 ﻿using Application.Services;
 using Domain.Contracts.Interfaces;
+using Application.Services.Licensing;
 using Hosting.Common;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -14,6 +15,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Tests.Integration.Helpers;
+using Tests.Common;
 
 namespace Tests.Integration;
 
@@ -66,6 +68,11 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
                     services.ReplaceService<IDbConnectionFactory>(sp =>
                         new TestDbConnectionFactory(sp.GetRequiredService<NpgsqlDataSource>()));
                     services.ReplaceService<IPlatformContainerCache>(new PlatformContainerCache());
+                    if (!UseRealLicenseEntitlements)
+                    {
+                        services.ReplaceService<ILicenseEntitlementService>(
+                            new PermissiveLicenseEntitlementService());
+                    }
                     ConfigureTestServices(services);
                 });
             });
@@ -77,6 +84,8 @@ public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncL
     }
 
     protected HttpMessageHandler CreateServerHandler() => Factory.Server.CreateHandler();
+
+    protected virtual bool UseRealLicenseEntitlements => false;
 
     protected virtual void ConfigureTestServices(IServiceCollection services) { }
 

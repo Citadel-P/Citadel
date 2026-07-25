@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using Application.Features.Alerters.Notifications;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using Hosting.Common;
 using Microsoft.Extensions.Logging;
 using System.Data;
@@ -21,6 +22,7 @@ public sealed class AlertService(
     IEnumerable<IAlertEvaluator> evaluators, 
     IShoutrrrCliRepository notificationService,
     IAlertEventStreamManager alertEventStreamManager,
+    ILicenseEntitlementService entitlementService,
     ILogger<AlertService> logger) : IAlertService
 {
     private readonly Dictionary<AlertType, IAlertEvaluator> _evaluators = evaluators.ToDictionary(x => x.Type);
@@ -28,14 +30,23 @@ public sealed class AlertService(
     public async Task ProcessAsync(AlertType type, AlertEvaluationContext context, CancellationToken ct)
     {
         var snapshot = alertRuleProvider.Current;
+        var rules = snapshot.Get(type);
+        var hasCustomRules = rules.Any(static rule => rule.CreatedByActorId != Constants.SystemId);
+        var advancedAlertingEnabled = !hasCustomRules
+            || await entitlementService.IsEnabledAsync(
+                LicenseCapability.AdvancedAlerting,
+                ct);
 
         var thresholdNonMatches = new List<(AlertRule Rule, AlertMatch Match)>();
 
         // Most-severe-wins: per resource we keep only the highest-severity matching rule
         var candidates = new Dictionary<Guid, (AlertRule Rule, List<AlertMatch> Matches)>();
 
-        foreach (var rule in snapshot.Get(type))
+        foreach (var rule in rules)
         {
+            if (rule.CreatedByActorId != Constants.SystemId && !advancedAlertingEnabled)
+                continue;
+
             if (!_evaluators.TryGetValue(rule.Type, out var evaluator))
                 throw new InvalidOperationException($"No evaluator registered for {rule.Type}");
 

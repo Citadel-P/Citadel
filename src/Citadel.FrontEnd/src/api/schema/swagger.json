@@ -1631,6 +1631,62 @@
         ]
       }
     },
+    "/api/v1/license/entitlements": {
+      "get": {
+        "tags": [
+          "License"
+        ],
+        "summary": "Get effective license entitlements",
+        "operationId": "getLicenseEntitlements",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseEntitlementsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/license": {
       "get": {
         "tags": [
@@ -34508,6 +34564,7 @@
           "id",
           "name",
           "description",
+          "isSystem",
           "type",
           "severity",
           "cooldownSeconds",
@@ -34532,6 +34589,9 @@
               "null",
               "string"
             ]
+          },
+          "isSystem": {
+            "type": "boolean"
           },
           "type": {
             "$ref": "#/components/schemas/AlertType"
@@ -38503,6 +38563,7 @@
           "Failed",
           "TimedOut",
           "Cancelled",
+          "Rejected",
           "Interrupted"
         ]
       },
@@ -44676,9 +44737,12 @@
       },
       "LicenseActivitySnapshot": {
         "required": [
+          "schema",
           "licenseId",
           "replacedLicenseId",
-          "edition",
+          "licensedEdition",
+          "effectiveEdition",
+          "effectiveCapabilities",
           "customerId",
           "customerName",
           "fingerprint",
@@ -44688,6 +44752,15 @@
         ],
         "type": "object",
         "properties": {
+          "schema": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
           "licenseId": {
             "type": [
               "null",
@@ -44700,8 +44773,20 @@
               "string"
             ]
           },
-          "edition": {
+          "licensedEdition": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "effectiveEdition": {
             "type": "string"
+          },
+          "effectiveCapabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LicenseCapability"
+            }
           },
           "customerId": {
             "type": [
@@ -44740,45 +44825,49 @@
           }
         }
       },
-      "LicenseLimit": {
+      "LicenseCapability": {
         "enum": [
-          "CustomRoles",
-          "ActiveUsers",
-          "Platforms",
-          "BackupPolicies",
-          "AutomationActions"
+          "CustomAccessControl",
+          "AutomatedOperations",
+          "AdvancedAlerting",
+          "OperationalGuardrails",
+          "ElasticBuildExecution"
         ]
       },
-      "LicenseLimitView": {
+      "LicenseCapabilityView": {
         "required": [
-          "limit",
-          "current",
-          "maximum",
-          "overQuota"
+          "capability",
+          "enabled"
         ],
         "type": "object",
         "properties": {
-          "limit": {
-            "$ref": "#/components/schemas/LicenseLimit"
+          "capability": {
+            "$ref": "#/components/schemas/LicenseCapability"
           },
-          "current": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "maximum": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "overQuota": {
+          "enabled": {
             "type": "boolean"
+          }
+        }
+      },
+      "LicenseEntitlementsView": {
+        "required": [
+          "status",
+          "effectiveEdition",
+          "capabilities"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/LicenseStatus"
+          },
+          "effectiveEdition": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LicenseCapabilityView"
+            }
           }
         }
       },
@@ -44823,8 +44912,10 @@
       "LicenseView": {
         "required": [
           "status",
-          "edition",
+          "effectiveEdition",
+          "licensedEdition",
           "instanceId",
+          "licenseSchema",
           "licenseId",
           "replacedLicenseId",
           "customerId",
@@ -44834,7 +44925,7 @@
           "notBefore",
           "expiresAt",
           "graceUntil",
-          "limits",
+          "capabilities",
           "warnings"
         ],
         "type": "object",
@@ -44842,12 +44933,27 @@
           "status": {
             "$ref": "#/components/schemas/LicenseStatus"
           },
-          "edition": {
+          "effectiveEdition": {
             "type": "string"
+          },
+          "licensedEdition": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "instanceId": {
             "type": "string",
             "format": "uuid"
+          },
+          "licenseSchema": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "licenseId": {
             "type": [
@@ -44907,10 +45013,10 @@
             ],
             "format": "date-time"
           },
-          "limits": {
+          "capabilities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/LicenseLimitView"
+              "$ref": "#/components/schemas/LicenseCapabilityView"
             }
           },
           "warnings": {

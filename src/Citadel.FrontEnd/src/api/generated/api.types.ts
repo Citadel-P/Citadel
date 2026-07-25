@@ -310,12 +310,12 @@ export enum LicenseStatus {
   UnknownSigningKey = "UnknownSigningKey",
 }
 
-export enum LicenseLimit {
-  CustomRoles = "CustomRoles",
-  ActiveUsers = "ActiveUsers",
-  Platforms = "Platforms",
-  BackupPolicies = "BackupPolicies",
-  AutomationActions = "AutomationActions",
+export enum LicenseCapability {
+  CustomAccessControl = "CustomAccessControl",
+  AutomatedOperations = "AutomatedOperations",
+  AdvancedAlerting = "AdvancedAlerting",
+  OperationalGuardrails = "OperationalGuardrails",
+  ElasticBuildExecution = "ElasticBuildExecution",
 }
 
 export enum GlobalSearchResourceType {
@@ -437,6 +437,7 @@ export enum BuildRunStatus {
   Failed = "Failed",
   TimedOut = "TimedOut",
   Cancelled = "Cancelled",
+  Rejected = "Rejected",
   Interrupted = "Interrupted",
 }
 
@@ -2590,6 +2591,7 @@ export interface AlertRuleConfigView {
   id: string;
   name: string;
   description: null | string;
+  isSystem: boolean;
   type: AlertType;
   severity: AlertSeverity;
   /**
@@ -5262,9 +5264,16 @@ export interface LatestActivityView {
 }
 
 export interface LicenseActivitySnapshot {
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  schema: null | number | string;
   licenseId: null | string;
   replacedLicenseId: null | string;
-  edition: string;
+  licensedEdition: null | string;
+  effectiveEdition: string;
+  effectiveCapabilities: LicenseCapability[];
   customerId: null | string;
   customerName: null | string;
   fingerprint: null | string;
@@ -5275,19 +5284,15 @@ export interface LicenseActivitySnapshot {
   graceUntil: null | string;
 }
 
-export interface LicenseLimitView {
-  limit: LicenseLimit;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  current: number | string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  maximum: number | string;
-  overQuota: boolean;
+export interface LicenseCapabilityView {
+  capability: LicenseCapability;
+  enabled: boolean;
+}
+
+export interface LicenseEntitlementsView {
+  status: LicenseStatus;
+  effectiveEdition: string;
+  capabilities: LicenseCapabilityView[];
 }
 
 export interface LicenseRequestView {
@@ -5301,9 +5306,15 @@ export interface LicenseRequestView {
 
 export interface LicenseView {
   status: LicenseStatus;
-  edition: string;
+  effectiveEdition: string;
+  licensedEdition: null | string;
   /** @format uuid */
   instanceId: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  licenseSchema: null | number | string;
   licenseId: null | string;
   replacedLicenseId: null | string;
   customerId: null | string;
@@ -5317,7 +5328,7 @@ export interface LicenseView {
   expiresAt: null | string;
   /** @format date-time */
   graceUntil: null | string;
-  limits: LicenseLimitView[];
+  capabilities: LicenseCapabilityView[];
   warnings: string[];
 }
 
@@ -8183,6 +8194,28 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags License
+     * @name GetLicenseEntitlements
+     * @summary Get effective license entitlements
+     * @request GET:/api/v1/license/entitlements
+     * @secure
+     * @response `200` `LicenseEntitlementsView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getLicenseEntitlements: (params: RequestParams = {}) =>
+      this.request<LicenseEntitlementsView, ProblemDetails>({
+        path: `/api/v1/license/entitlements`,
+        method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),

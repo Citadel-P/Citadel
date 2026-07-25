@@ -2,7 +2,7 @@ import { Input } from '@/components/ui/input';
 import { renderCitadel } from '@/test/render-citadel';
 import { screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { defineField, FormSchema, FormShell } from './form-builder';
+import { defineField, defineGroupField, FormSchema, FormShell } from './form-builder';
 
 vi.mock('@/lib/monaco', () => ({
   MonacoDiff: () => null,
@@ -49,19 +49,69 @@ const schema: FormSchema<TestConfiguration> = {
   },
 };
 
+const licensedSchema: FormSchema<TestConfiguration> = {
+  automation: {
+    title: 'Automation',
+    items: [
+      defineGroupField<TestConfiguration>({
+        id: 'scheduled-backups',
+        label: 'Scheduled backups',
+        description: 'Run this policy automatically from a cron expression.',
+        requiredLicense: 'Team',
+        items: [
+          defineField<TestConfiguration, 'name'>({
+            key: 'name',
+            label: 'Name',
+            render: (value, set) => (
+              <Input
+                aria-label="Name input"
+                value={value ?? ''}
+                onChange={(event) => set({ name: event.target.value })}
+              />
+            ),
+          }),
+        ],
+      }),
+    ],
+  },
+};
+
+const licensedFieldSchema: FormSchema<TestConfiguration> = {
+  automation: {
+    title: 'Automation',
+    items: [
+      defineField<TestConfiguration, 'name'>({
+        key: 'name',
+        label: 'Redeploy On Build',
+        description: 'Automatically redeploy this deployment after the selected build succeeds.',
+        requiredLicense: 'Team',
+        render: (value, set) => (
+          <Input
+            aria-label="Name input"
+            value={value ?? ''}
+            onChange={(event) => set({ name: event.target.value })}
+          />
+        ),
+      }),
+    ],
+  },
+};
+
 function FormHarness({
   onSave,
   draftKey,
+  formSchema = schema,
 }: {
   onSave: (payload: TestConfiguration) => Promise<void>;
   draftKey?: string;
+  formSchema?: FormSchema<TestConfiguration>;
 }) {
   const [update, setUpdate] = useState<Partial<TestConfiguration>>({});
 
   return (
     <FormShell
       title="Configuration"
-      schema={schema}
+      schema={formSchema}
       original={original}
       update={update}
       setUpdate={setUpdate}
@@ -139,5 +189,21 @@ describe('FormShell', () => {
       behavior: 'smooth',
     });
     expect(window.location.hash).toBe('#name');
+  });
+
+  it('shows a license indicator beside a licensed group description', () => {
+    renderCitadel(<FormHarness formSchema={licensedSchema} onSave={vi.fn().mockResolvedValue(undefined)} />);
+
+    expect(screen.getByText('Run this policy automatically from a cron expression.')).toBeVisible();
+    expect(screen.getByLabelText('Requires a Team license')).toBeVisible();
+  });
+
+  it('shows a license indicator beside a licensed field description', () => {
+    renderCitadel(<FormHarness formSchema={licensedFieldSchema} onSave={vi.fn().mockResolvedValue(undefined)} />);
+
+    expect(
+      screen.getByText('Automatically redeploy this deployment after the selected build succeeds.'),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Requires a Team license')).toBeVisible();
   });
 });

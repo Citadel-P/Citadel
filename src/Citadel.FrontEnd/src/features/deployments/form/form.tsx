@@ -14,6 +14,7 @@ import {
   PatchDeploymentInput,
   LookupResourceType,
   BuildRunStatus,
+  LicenseCapability,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -37,6 +38,7 @@ import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { BuildImageProvenanceStatus } from '@/features/builds/build-image-provenance-status';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
 const enum ImageSource {
   local = 'Local',
@@ -196,6 +198,9 @@ export const DeploymentForm = ({
   const duplicateDraftLoadedRef = useRef<string | null>(null);
   const [update, setUpdate] = useState<Partial<DeploymentInput>>({});
   const queryClient = useQueryClient();
+  const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
+  const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
+  const operationalGuardrailsEnabled = hasLicenseCapability(LicenseCapability.OperationalGuardrails);
 
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
@@ -226,6 +231,18 @@ export const DeploymentForm = ({
   const currentSpec = { ...original.spec, ...update.spec };
   const currentImage = update.spec?.image ?? original.spec?.image;
   const provider = currentImage?.$type;
+  const licensedUpdateBehaviors = useMemo(
+    () => ({
+      ...update_behaviors,
+      [UpdateBehavior.AutoDeploy]: {
+        ...update_behaviors[UpdateBehavior.AutoDeploy],
+        label: 'Auto Deploy',
+        disabled: !operationalGuardrailsEnabled,
+        requiredLicense: !operationalGuardrailsEnabled ? ('Team' as const) : undefined,
+      },
+    }),
+    [operationalGuardrailsEnabled],
+  );
   const buildProjects = useMemo(() => buildProjectsData?.data.projects ?? [], [buildProjectsData?.data.projects]);
   const buildProjectOptions = useMemo(
     () =>
@@ -550,11 +567,12 @@ export const DeploymentForm = ({
                         key: 'spec.image.redeployOnBuild',
                         label: 'Redeploy On Build',
                         description: 'Automatically redeploy this deployment after the selected build succeeds.',
+                        requiredLicense: automatedOperationsEnabled ? undefined : 'Team',
                         render: (val, set) => (
                           <FieldSwitch
                             id="deployment-redeploy-on-build"
                             checked={val ?? false}
-                            disabled={disabled}
+                            disabled={disabled || (!val && !automatedOperationsEnabled)}
                             onChange={(redeployOnBuild) =>
                               set((prev) => ({
                                 spec: {
@@ -749,7 +767,7 @@ export const DeploymentForm = ({
               return (
                 <div className="flex flex-col gap-2">
                   <ItemSelector
-                    collection={update_behaviors}
+                    collection={licensedUpdateBehaviors}
                     value={value}
                     disabled={disabled}
                     onChange={(updateBehavior: UpdateBehavior) => {
@@ -927,6 +945,8 @@ export const DeploymentForm = ({
     }),
     [
       provider,
+      automatedOperationsEnabled,
+      licensedUpdateBehaviors,
       currentPlatformId,
       currentImage,
       currentSpec.image,

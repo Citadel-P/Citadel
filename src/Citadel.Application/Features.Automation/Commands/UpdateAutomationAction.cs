@@ -1,6 +1,7 @@
 using Application.Configs;
 using Application.Features.Automation.Models;
 using Application.Services;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
@@ -43,6 +44,7 @@ public sealed record UpdateAutomationAction(
 internal sealed class UpdateAutomationActionHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
+    ILicenseEntitlementService licenseEntitlementService,
     IOptions<AutomationOptions> options)
     : ICommandHandler<UpdateAutomationAction, Result<AutomationActionResult>>
 {
@@ -66,6 +68,19 @@ internal sealed class UpdateAutomationActionHandler(
         {
             return Result.Failure<AutomationActionResult>(
                 new BadRequestError($"Timeout must be between 1 and {options.MaxTimeoutSeconds} seconds."));
+        }
+
+        if (AutomationLicenseConfigurationPolicy.ChangesActivePaidTrigger(
+                action,
+                input,
+                command.UpdateScheduleCron,
+                command.UpdateWebhook))
+        {
+            var entitlement = await licenseEntitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure())
+                return Result.Failure<AutomationActionResult>(entitlement.Errors);
         }
 
         var oldAction = AutomationActionActivity.ToSnapshot(action);

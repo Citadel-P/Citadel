@@ -31,6 +31,9 @@ namespace WebApi.Hubs;
 
 internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) : IApplicationHubDispatcher
 {
+    public Task SendLicenseStateChanged(CancellationToken cancellationToken = default) =>
+        hubContext.Clients.All.SendAsync("LicenseStateChanged", cancellationToken);
+
     #region Container Info
     public Task SendContainerInfo(DockerContainer container, CancellationToken cancellationToken) =>
         hubContext.Clients

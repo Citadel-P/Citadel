@@ -117,7 +117,7 @@ public static class ApplicationModule
             .AddSingleton<ILicensePublicKeyRegistry, EmbeddedLicensePublicKeyRegistry>()
             .AddSingleton<ILicenseVerifier, LicenseVerifier>()
             .AddSingleton<ILicenseStateProvider, LicenseStateProvider>()
-            .AddSingleton<ILicenseQuotaService, LicenseQuotaService>()
+            .AddSingleton<ILicenseEntitlementService, LicenseEntitlementService>()
             .AddSingleton<IEdgeAgentManagementService, EdgeAgentManagementService>()
             .AddSingleton<IAgentHubPublicKeyProvider, AgentHubPublicKeyProvider>()
             .AddSingleton<IResourceBindingResolver, ResourceBindingResolver>()

@@ -93,7 +93,7 @@ public sealed class BuildRun(
 
     public void Fail(BuildRunStatus status, int? exitCode, string? errorCode, string errorMessage, DateTimeOffset now)
     {
-        if (status is not (BuildRunStatus.Failed or BuildRunStatus.TimedOut or BuildRunStatus.Interrupted))
+        if (status is not (BuildRunStatus.Failed or BuildRunStatus.TimedOut or BuildRunStatus.Rejected or BuildRunStatus.Interrupted))
             throw new ArgumentException("Build run failure status is invalid.", nameof(status));
 
         Complete(status, exitCode, errorCode, errorMessage, now);

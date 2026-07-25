@@ -2,6 +2,7 @@ using Application.Features.Deployments.Notifications;
 using Application.Services;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Stacks;
@@ -24,6 +25,7 @@ internal sealed class StackDriftMonitorJob(
     IStackStreamManager stackStreamManager,
     IActivityStreamManager activityStreamManager,
     IDelayWithJitterService delayWithJitterService,
+    ILicenseEntitlementService entitlementService,
     ILogger<StackDriftMonitorJob> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(5);
@@ -66,6 +68,11 @@ internal sealed class StackDriftMonitorJob(
 
     private async Task CheckStacksAsync(CancellationToken cancellationToken)
     {
+        if (!await entitlementService.IsEnabledAsync(
+                LicenseCapability.OperationalGuardrails,
+                cancellationToken))
+            return;
+
         var stacks = await GetDriftMonitorStacks(cancellationToken);
 
         foreach (var stack in stacks)

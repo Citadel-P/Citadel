@@ -39,7 +39,9 @@ public sealed record CreateRole(string Name, IEnumerable<PatchPermissionModel> P
     }
 }
 
-internal sealed class CreateRoleHandler(IUnitOfWork unitOfWork, ILicenseQuotaService licenseQuotaService) : ICommandHandler<CreateRole, Result<RoleDetails>>
+internal sealed class CreateRoleHandler(
+    IUnitOfWork unitOfWork,
+    ILicenseEntitlementService licenseEntitlementService) : ICommandHandler<CreateRole, Result<RoleDetails>>
 {
     public async ValueTask<Result<RoleDetails>> Handle(CreateRole command, CancellationToken cancellationToken)
     {
@@ -47,15 +49,11 @@ internal sealed class CreateRoleHandler(IUnitOfWork unitOfWork, ILicenseQuotaSer
         if (exists)
             return Result.Failure<RoleDetails>(new ConflictError("Name already exists"));
 
-        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-            new Dictionary<LicenseLimit, int>
-            {
-                [LicenseLimit.CustomRoles] = 1
-            },
-            unitOfWork,
+        var entitlement = await licenseEntitlementService.EnsureEnabledAsync(
+            LicenseCapability.CustomAccessControl,
             cancellationToken);
-        if (quotaResult.IsFailure())
-            return Result.Failure<RoleDetails>(quotaResult.Errors);
+        if (entitlement.IsFailure())
+            return Result.Failure<RoleDetails>(entitlement.Errors);
 
         var permissions = command.Permissions.Select(x => x.ToDomain(Guid.Empty)).ToArray();
         var role = Role.Create(command.Name, RoleType.Custom, permissions);

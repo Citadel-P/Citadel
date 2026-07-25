@@ -52,9 +52,8 @@ public sealed class LicenseVerifier(ILicensePublicKeyRegistry publicKeyRegistry)
         if (segments.Length != 3 || segments.Any(string.IsNullOrEmpty))
             return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, "License must be a compact three-segment JWS.");
 
-        if (!TryDecodeJson<LicenseProtectedHeader>(
+        if (!TryDecodeProtectedHeader(
                 segments[0],
-                LicenseJsonContext.Default.LicenseProtectedHeader,
                 out var header,
                 out var headerError))
             return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, headerError);
@@ -78,14 +77,15 @@ public sealed class LicenseVerifier(ILicensePublicKeyRegistry publicKeyRegistry)
 
         payload = payload with
         {
-            Limits = payload.Limits ?? new Dictionary<string, int>()
+            Limits = payload.Limits ?? new Dictionary<string, int>(),
+            Capabilities = payload.Capabilities ?? []
         };
 
         var payloadResult = ValidatePayload(payload, instance, now);
         if (payloadResult.Status is LicenseStatus.Invalid or LicenseStatus.InstanceMismatch or LicenseStatus.UnsupportedSchema)
             return payloadResult;
 
-        var effectiveLimits = BuildEffectiveLimits(payload, out var warnings);
+        var effectiveCapabilities = BuildEffectiveCapabilities(payload, out var warnings);
         var fingerprint = LicenseFingerprint.Compute(normalized);
         var verified = new VerifiedLicense(
             RawLicense: normalized,
@@ -93,7 +93,7 @@ public sealed class LicenseVerifier(ILicensePublicKeyRegistry publicKeyRegistry)
             KeyId: header.Kid,
             Payload: payload,
             Status: payloadResult.Status,
-            EffectiveLimits: effectiveLimits,
+            EffectiveCapabilities: effectiveCapabilities,
             Warnings: warnings);
 
         return LicenseVerificationResult.Succeeded(verified);
@@ -121,7 +121,7 @@ public sealed class LicenseVerifier(ILicensePublicKeyRegistry publicKeyRegistry)
         CitadelInstanceIdentity instance,
         DateTimeOffset now)
     {
-        if (payload.Schema != LicenseConstants.CurrentSchema)
+        if (payload.Schema is not (LicenseConstants.LegacySchema or LicenseConstants.CurrentSchema))
             return LicenseVerificationResult.Failed(LicenseStatus.UnsupportedSchema, "LICENSE_UNSUPPORTED_SCHEMA", "License schema is not supported.");
 
         if (!string.Equals(payload.Product, LicenseConstants.Product, StringComparison.Ordinal)
@@ -132,7 +132,12 @@ public sealed class LicenseVerifier(ILicensePublicKeyRegistry publicKeyRegistry)
         if (payload.InstanceId != instance.InstanceId)
             return LicenseVerificationResult.Failed(LicenseStatus.InstanceMismatch, "LICENSE_INSTANCE_MISMATCH", "License is bound to another Citadel instance.");
 
-        if (!string.Equals(payload.Edition, LicenseConstants.EditionBusiness, StringComparison.Ordinal))
+        if (payload.Schema == LicenseConstants.LegacySchema
+            && !string.Equals(payload.Edition, LicenseConstants.EditionBusiness, StringComparison.Ordinal))
+            return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, "License edition is invalid.");
+
+        if (payload.Schema == LicenseConstants.CurrentSchema
+            && payload.Edition is not (LicenseConstants.EditionTeam or LicenseConstants.EditionEnterprise))
             return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, "License edition is invalid.");
 
         if (!IsValidIdentifier(payload.LicenseId, LicenseConstants.MaxLicenseIdLength)
@@ -143,14 +148,25 @@ public sealed class LicenseVerifier(ILicensePublicKeyRegistry publicKeyRegistry)
             || payload.Customer.Name.Length > LicenseConstants.MaxCustomerNameLength)
             return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, "License identity fields are invalid.");
 
-        if (payload.Limits.Count > LicenseConstants.MaxLimitEntries || payload.Limits.Values.Any(x => x < 0))
+        if (payload.Schema == LicenseConstants.LegacySchema
+            && (payload.Limits!.Count > LicenseConstants.MaxLimitEntries || payload.Limits.Values.Any(x => x < 0)))
             return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, "License limits are invalid.");
+
+        if (payload.Schema == LicenseConstants.CurrentSchema
+            && !AreCapabilitiesValid(payload.Capabilities!))
+            return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, "License capabilities are invalid.");
 
         if (payload.IssuedAt > payload.NotBefore
             || payload.IssuedAt > payload.ExpiresAt
             || payload.NotBefore > payload.ExpiresAt
             || (payload.GraceUntil.HasValue && payload.GraceUntil.Value < payload.ExpiresAt))
             return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, "License date range is invalid.");
+
+        if (payload.IssuedAt.Offset != TimeSpan.Zero
+            || payload.NotBefore.Offset != TimeSpan.Zero
+            || payload.ExpiresAt.Offset != TimeSpan.Zero
+            || (payload.GraceUntil.HasValue && payload.GraceUntil.Value.Offset != TimeSpan.Zero))
+            return LicenseVerificationResult.Failed(LicenseStatus.Invalid, InvalidLicense, "License timestamps must use UTC.");
 
         return new LicenseVerificationResult(DeriveTemporalStatus(payload, now), null, null, null);
     }
@@ -169,26 +185,49 @@ public sealed class LicenseVerifier(ILicensePublicKeyRegistry publicKeyRegistry)
         return LicenseStatus.Expired;
     }
 
-    private static IReadOnlyDictionary<LicenseLimit, int> BuildEffectiveLimits(
+    private static IReadOnlySet<LicenseCapability> BuildEffectiveCapabilities(
         LicensePayload payload,
         out IReadOnlyList<string> warnings)
     {
-        var result = new Dictionary<LicenseLimit, int>(CommunityLicenseLimits.Values);
         var warningList = new List<string>();
 
-        foreach (var (key, value) in payload.Limits)
+        if (payload.Schema == LicenseConstants.LegacySchema)
         {
-            if (!LicenseLimitKeys.TryGetLimit(key, out var limit))
-            {
-                warningList.Add($"Unknown license limit '{key}' was ignored.");
-                continue;
-            }
-
-            result[limit] = Math.Max(CommunityLicenseLimits.Values[limit], value);
+            warnings = ["Legacy Business license mapped to all shipped Team capabilities. Replace it with a schema-2 Team license at renewal."];
+            return LicenseCapabilityKeys.All;
         }
+
+        var result = new HashSet<LicenseCapability>();
+        foreach (var key in payload.Capabilities!)
+        {
+            if (LicenseCapabilityKeys.TryGetCapability(key, out var capability))
+                result.Add(capability);
+            else
+                warningList.Add($"Unknown license capability '{key}' was ignored.");
+        }
+
+        if (payload.Limits is { Count: > 0 })
+            warningList.Add("Schema-2 license limits were ignored.");
 
         warnings = warningList;
         return result;
+    }
+
+    private static bool AreCapabilitiesValid(IReadOnlyList<string> capabilities)
+    {
+        if (capabilities.Count > LicenseConstants.MaxCapabilityEntries)
+            return false;
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var capability in capabilities)
+        {
+            if (string.IsNullOrWhiteSpace(capability)
+                || capability.Length > LicenseConstants.MaxCapabilityKeyLength
+                || !seen.Add(capability))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool TryVerifySignature(string encodedHeader, string encodedPayload, string encodedSignature, string publicKeyPem)
@@ -226,6 +265,64 @@ public sealed class LicenseVerifier(ILicensePublicKeyRegistry publicKeyRegistry)
             if (value is null)
             {
                 error = "License JSON segment is empty.";
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is JsonException or FormatException or ArgumentException)
+        {
+            error = $"License JSON segment is invalid: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static bool TryDecodeProtectedHeader(
+        string segment,
+        out LicenseProtectedHeader header,
+        out string error)
+    {
+        header = default!;
+        error = string.Empty;
+
+        try
+        {
+            var json = Base64Url.Decode(segment);
+            using var document = JsonDocument.Parse(
+                json,
+                new JsonDocumentOptions { MaxDepth = LicenseConstants.JsonMaxDepth });
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                error = "License header must be a JSON object.";
+                return false;
+            }
+
+            var allowedProperties = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "alg",
+                "typ",
+                "kid"
+            };
+            var seenProperties = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (!allowedProperties.Contains(property.Name))
+                {
+                    error = $"License header property '{property.Name}' is not supported.";
+                    return false;
+                }
+
+                if (!seenProperties.Add(property.Name))
+                {
+                    error = $"License header property '{property.Name}' is duplicated.";
+                    return false;
+                }
+            }
+
+            header = document.Deserialize(LicenseJsonContext.Default.LicenseProtectedHeader)!;
+            if (header is null)
+            {
+                error = "License header is empty.";
                 return false;
             }
 

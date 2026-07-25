@@ -7,7 +7,7 @@ import {
   PermissionInput,
   PermissionView,
   PermissionMatrixViewItem,
-  LicenseLimit,
+  LicenseCapability,
 } from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
@@ -32,6 +32,8 @@ import { useState, useMemo } from 'react';
 import { atom, useAtom } from 'jotai';
 import { useQueryClient } from '@tanstack/react-query';
 import { CitadelIcons } from '@/lib/icons';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
+import { LicensedFeatureDescription } from '@/components/custom/license-feature-indicator';
 
 type PermissionMatrix = Record<string, PermissionMatrixViewItem>;
 
@@ -67,34 +69,32 @@ type RolePermissionResourceType = (typeof ROLE_PERMISSION_RESOURCES)[number];
 
 export const AddRoleButton = () => {
   const [, setOpen] = useAtom(createRoleOpenAtom);
-  const { data: licenseData } = useRead('getLicense', undefined, {
-    retry: false,
-    staleTime: 60 * 60 * 1000,
-    meta: { suppressErrorToast: true },
-  });
-  const customRoleLimit = licenseData?.data.limits.find((limit) => limit.limit === LicenseLimit.CustomRoles);
-  const quotaReached =
-    customRoleLimit !== undefined && Number(customRoleLimit.current) >= Number(customRoleLimit.maximum);
+  const { hasCapability } = useLicenseEntitlements();
+  const canCreateCustomRoles = hasCapability(LicenseCapability.CustomAccessControl);
   const button = (
     <Button onClick={() => setOpen(true)} className="bg-primary hover:bg-primary/80 text-sm px-2.5 py-2.5">
       <Plus className="h-3 w-3" /> Add Role
     </Button>
   );
 
-  if (!quotaReached || !customRoleLimit) return button;
+  if (canCreateCustomRoles) return button;
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span data-testid="custom-role-quota">
+        <span data-testid="custom-role-license">
           <Button disabled className="bg-primary text-sm px-2.5 py-2.5">
             <Plus className="h-3 w-3" /> Add Role
           </Button>
         </span>
       </TooltipTrigger>
-      <TooltipContent>
-        Custom role quota reached ({customRoleLimit.current} of {customRoleLimit.maximum}). Update the license to add
-        another role.
+      <TooltipContent className="w-72">
+        <LicensedFeatureDescription
+          requiredLicense="Team"
+          descriptionClassName="text-xs leading-4 text-primary-foreground"
+          indicatorClassName="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground dark:text-primary-foreground">
+          Create custom roles and permission sets.
+        </LicensedFeatureDescription>
       </TooltipContent>
     </Tooltip>
   );
@@ -245,6 +245,8 @@ export const Roles = ({ items, isLoading }: { items: RoleView[]; isLoading: bool
 
 const RoleDetail = ({ role, permissionMatrix }: { role: RoleView; permissionMatrix: PermissionMatrix }) => {
   const queryClient = useQueryClient();
+  const { hasCapability } = useLicenseEntitlements();
+  const canExpandPermissions = hasCapability(LicenseCapability.CustomAccessControl);
   const { mutate: updatePermissions } = useMutate('updateRolePermissions', {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['listRoles'] });
@@ -280,6 +282,7 @@ const RoleDetail = ({ role, permissionMatrix }: { role: RoleView; permissionMatr
           ) : (
             <>
               {permissions.length} permission{permissions.length !== 1 && 's'}
+              {!canExpandPermissions ? ' - Team is required to expand permissions' : null}
             </>
           )}
         </p>
@@ -293,6 +296,7 @@ const RoleDetail = ({ role, permissionMatrix }: { role: RoleView; permissionMatr
           selectedPermissions={selectedPermissions}
           onPermissionChange={handleChange}
           disabled={role.roleType === RoleType.System}
+          allowExpansion={canExpandPermissions}
         />
       </div>
     </div>
@@ -384,6 +388,7 @@ const PermissionsMatrixTable = ({
   selectedPermissions,
   onPermissionChange,
   disabled,
+  allowExpansion = true,
 }: {
   permissionMatrix: PermissionMatrix;
   selectedPermissions: SelectedPermissions;
@@ -393,6 +398,7 @@ const PermissionsMatrixTable = ({
     specificPermissions: SpecificPermission[],
   ) => void;
   disabled?: boolean;
+  allowExpansion?: boolean;
 }) => {
   const orderedResources = ROLE_PERMISSION_RESOURCES.filter((resource) => permissionMatrix[resource]);
 
@@ -421,6 +427,7 @@ const PermissionsMatrixTable = ({
                 currentState={currentState}
                 onPermissionChange={onPermissionChange}
                 disabled={disabled}
+                allowExpansion={allowExpansion}
               />
             );
           })}
@@ -437,6 +444,7 @@ const PermissionMatrixRow = ({
   currentState,
   onPermissionChange,
   disabled,
+  allowExpansion,
 }: {
   resource: ResourceType;
   icon: ResourceIcon;
@@ -448,23 +456,33 @@ const PermissionMatrixRow = ({
     specificPermissions: SpecificPermission[],
   ) => void;
   disabled?: boolean;
+  allowExpansion: boolean;
 }) => {
   const currentLevel = currentState?.permissionLevel ?? null;
-  const currentSpecific = currentState?.specificPermissions ?? [];
+  const currentSpecific = useMemo(
+    () => currentState?.specificPermissions ?? [],
+    [currentState?.specificPermissions],
+  );
 
   const maxLevelIndex = useMemo(
     () => PERMISSION_LEVELS.indexOf(matrixData.maximumLevel as PermissionLevel),
     [matrixData.maximumLevel],
   );
-  const availableLevels = useMemo(() => PERMISSION_LEVELS.filter((_, i) => i <= maxLevelIndex), [maxLevelIndex]);
+  const availableLevels = useMemo(() => {
+    const currentLevelIndex = currentLevel ? PERMISSION_LEVELS.indexOf(currentLevel) : -1;
+    return PERMISSION_LEVELS.filter(
+      (_, i) => i <= maxLevelIndex && (allowExpansion || i <= currentLevelIndex),
+    );
+  }, [allowExpansion, currentLevel, maxLevelIndex]);
 
   const availableSpecific = useMemo(() => {
     if (!currentLevel) return [];
     const currentLevelIndex = PERMISSION_LEVELS.indexOf(currentLevel);
     return Object.entries(matrixData.specificPermissions)
       .filter(([, minLevel]) => PERMISSION_LEVELS.indexOf(minLevel as PermissionLevel) <= currentLevelIndex)
-      .map(([perm]) => perm as SpecificPermission);
-  }, [currentLevel, matrixData.specificPermissions]);
+      .map(([perm]) => perm as SpecificPermission)
+      .filter((permission) => allowExpansion || currentSpecific.includes(permission));
+  }, [allowExpansion, currentLevel, currentSpecific, matrixData.specificPermissions]);
 
   const handlePermissionChange = (level?: string, values?: string[]) => {
     if (level !== undefined) {
@@ -490,7 +508,10 @@ const PermissionMatrixRow = ({
         </div>
       </TableCell>
       <TableCell>
-        <Select value={currentLevel ?? 'NONE'} onValueChange={(v) => handlePermissionChange(v)} disabled={disabled}>
+        <Select
+          value={currentLevel ?? 'NONE'}
+          onValueChange={(v) => handlePermissionChange(v)}
+          disabled={disabled || (!allowExpansion && !currentLevel)}>
           <SelectTrigger className={currentLevel === null ? 'w-full text-muted-foreground/90' : 'w-full'}>
             <SelectValue placeholder="Select level" />
           </SelectTrigger>

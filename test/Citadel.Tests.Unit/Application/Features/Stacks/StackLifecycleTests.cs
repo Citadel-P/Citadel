@@ -14,6 +14,7 @@ using Hosting.Common.Abstraction;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Moq;
+using Tests.Common;
 using Actor = Domain.Entities.Identity.Actor;
 
 namespace Tests.Unit.Application.Features.Stacks;
@@ -158,7 +159,11 @@ public class StackLifecycleTests
             }
             """);
         var platformHub = new Mock<IPlatformStreamManager>();
-        var handler = new PatchStackHandler(unitOfWork.Object, platformHub.Object, userContext.Object);
+        var handler = new PatchStackHandler(
+            unitOfWork.Object,
+            platformHub.Object,
+            userContext.Object,
+            new PermissiveLicenseEntitlementService());
 
         var result = await handler.Handle(new PatchStack(stack.Id, patch), CancellationToken.None);
 

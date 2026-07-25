@@ -46,6 +46,10 @@ Use this when the deployment should run images produced by a build:
 - Build: the build project that produces the image
 - Redeploy On Build: automatically redeploy this deployment after the selected build succeeds
 
+`Redeploy On Build` requires Team's `Automated Operations` capability. Without
+it, a successful build advances the desired artifact, but an operator must
+deploy it manually.
+
 You can save a deployment before the selected build has a successful run. The form shows latest, desired, and applied artifacts. A successful build advances desired state; a successful deploy advances applied state. Deploy or redeploy succeeds only after the build has produced an image reference.
 
 Citadel deploys the stored desired artifact and pins it to its digest when available. It falls back to the latest successful build only when the deployment has not resolved an artifact yet.
@@ -121,6 +125,9 @@ Auto update checks external image tags for new digests.
 - `Disabled`: do not check for updates.
 - `Notify Only`: record update availability and emit an alert.
 - `Auto Deploy`: pull the updated image and redeploy the container automatically.
+
+`Notify Only` remains available in Community. `Auto Deploy` requires Team's
+`Operational Guardrails` capability.
 
 Citadel checks periodically. When an updated digest is found:
 

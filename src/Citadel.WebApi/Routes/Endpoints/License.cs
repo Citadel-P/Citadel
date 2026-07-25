@@ -17,6 +17,14 @@ public static class License
         return EndpointHandlers.HandleResult(result, LicenseView.Map);
     }
 
+    public static async Task<Results<Ok<LicenseEntitlementsView>, ProblemHttpResult>> GetEntitlements(
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetLicenseEntitlements(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, LicenseEntitlementsView.Map);
+    }
+
     public static async Task<Results<Ok<LicenseView>, ProblemHttpResult>> Install(
         IMediator mediator,
         [FromBody] InstallLicenseInput input,

@@ -32,6 +32,7 @@ type WebhookConfigFieldProps = {
   defaultBranch?: string | null;
   showBranchFilter?: boolean;
   disabled?: boolean;
+  enableDisabled?: boolean;
   onChange: (value: WebhookConfigValue) => void;
 };
 
@@ -112,6 +113,7 @@ export function WebhookConfigField({
   defaultBranch,
   showBranchFilter = true,
   disabled,
+  enableDisabled,
   onChange,
 }: WebhookConfigFieldProps) {
   const [localProvider, setLocalProvider] = useState<WebhookProvider>(value?.provider ?? WebhookProvider.GitHub);
@@ -153,7 +155,7 @@ export function WebhookConfigField({
       <FieldSwitch
         id={`${resourceType}-${execution}-webhook-enabled`}
         checked={enabled ?? false}
-        disabled={disabled}
+        disabled={disabled || (enableDisabled && !enabled)}
         onChange={(checked) => patch({ enabled: checked })}
       />
 
@@ -165,7 +167,7 @@ export function WebhookConfigField({
             <FieldSelect
               value={provider}
               onChange={handleProviderChange}
-              disabled={disabled}
+              disabled={disabled || enableDisabled}
               options={Object.values(WebhookProvider).map((item) => ({
                 value: item,
                 label: providerLabels[item],
@@ -183,7 +185,7 @@ export function WebhookConfigField({
                 setLocalAuthScheme(next);
                 patch({ authScheme: next });
               }}
-              disabled={disabled}
+              disabled={disabled || enableDisabled}
               options={authSchemesByProvider[provider].map((item) => ({
                 value: item,
                 label: authSchemeLabels[item],
@@ -199,7 +201,7 @@ export function WebhookConfigField({
               <FieldInput
                 value={branchFilter}
                 placeholder="eg: main"
-                disabled={disabled}
+                disabled={disabled || enableDisabled}
                 onChange={(next) => patch({ branchFilter: next || null })}
               />
             </WebhookSubField>
@@ -213,14 +215,14 @@ export function WebhookConfigField({
               <FieldInput
                 className="font-mono text-xs"
                 value={secret}
-                disabled={disabled}
+                disabled={disabled || enableDisabled}
                 onChange={(next) => patch({ secret: next || null })}
               />
               <Button
                 type="button"
                 variant="outline"
                 className="w-fit gap-2"
-                disabled={disabled}
+                disabled={disabled || enableDisabled}
                 onClick={() => patch({ secret: generateSecret() })}>
                 <KeyRound className="size-3.5" />
                 Generate

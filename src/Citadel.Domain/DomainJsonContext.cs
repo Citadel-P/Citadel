@@ -290,13 +290,14 @@ public partial class ProfileJsonContext : JsonSerializerContext
     PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
-        typeof(JsonStringEnumConverter<LicenseLimit>),
+        typeof(JsonStringEnumConverter<LicenseCapability>),
         typeof(JsonStringEnumConverter<LicenseStatus>)
     })]
 [JsonSerializable(typeof(LicensePayload))]
 [JsonSerializable(typeof(LicenseProtectedHeader))]
 [JsonSerializable(typeof(LicenseCustomer))]
 [JsonSerializable(typeof(IReadOnlyDictionary<string, int>))]
+[JsonSerializable(typeof(IReadOnlyList<string>))]
 public partial class LicenseJsonContext : JsonSerializerContext
 {
 }

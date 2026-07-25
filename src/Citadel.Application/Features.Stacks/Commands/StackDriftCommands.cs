@@ -1,4 +1,5 @@
 using Application.Services;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Stacks;
@@ -29,7 +30,8 @@ public sealed record UpdateStackDriftPolicy(Guid Id, StackDriftPolicy Policy) : 
 }
 
 internal sealed class UpdateStackDriftPolicyHandler(
-    IUnitOfWork unitOfWork) : ICommandHandler<UpdateStackDriftPolicy, Result<Stack>>
+    IUnitOfWork unitOfWork,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<UpdateStackDriftPolicy, Result<Stack>>
 {
     public async ValueTask<Result<Stack>> Handle(UpdateStackDriftPolicy command, CancellationToken cancellationToken)
     {
@@ -37,6 +39,17 @@ internal sealed class UpdateStackDriftPolicyHandler(
         if (stack is null)
         {
             return Result.Failure<Stack>(new NotFoundError("The provided stack does not exist."));
+        }
+
+        if (StackLicenseConfigurationPolicy.ExpandsDriftPolicy(
+                stack.DriftPolicy,
+                command.Policy))
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.OperationalGuardrails,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<Stack>(entitlementError);
         }
 
         stack.UpdateDetails(driftPolicy: command.Policy);

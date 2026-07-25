@@ -40,7 +40,6 @@ internal class UnitOfWork : IUnitOfWork
         UserPreferences = new Lazy<IUserPreferencesRepository>(() => new UserPreferencesRepository(connection, GetTransaction));
         InstanceIdentity = new Lazy<IInstanceIdentityRepository>(() => new InstanceIdentityRepository(connection, GetTransaction));
         InstalledLicense = new Lazy<IInstalledLicenseRepository>(() => new InstalledLicenseRepository(connection, GetTransaction));
-        LicenseUsage = new Lazy<ILicenseUsageRepository>(() => new LicenseUsageRepository(connection, GetTransaction));
         PlatformStats = new Lazy<IPlatformStatRepository>(() => new PlatformStatRepository(connection, GetTransaction));
         ContainerStats = new Lazy<IContainerStatRepository>(() => new ContainerStatRepository(connection, GetTransaction));
         ActivityEvents = new Lazy<IActivityEventRepository>(() => new ActivityEventRepository(connection, GetTransaction));
@@ -120,7 +119,6 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IUserPreferencesRepository> UserPreferences { get; }
     private Lazy<IInstanceIdentityRepository> InstanceIdentity { get; }
     private Lazy<IInstalledLicenseRepository> InstalledLicense { get; }
-    private Lazy<ILicenseUsageRepository> LicenseUsage { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
     private Lazy<IActivityEventRepository> ActivityEvents { get; }
     private Lazy<IContainerStatRepository> ContainerStats { get; }
@@ -146,7 +144,6 @@ internal class UnitOfWork : IUnitOfWork
     IUserPreferencesRepository IUnitOfWork.UserPreferences => UserPreferences.Value;
     IInstanceIdentityRepository IUnitOfWork.InstanceIdentity => InstanceIdentity.Value;
     IInstalledLicenseRepository IUnitOfWork.InstalledLicense => InstalledLicense.Value;
-    ILicenseUsageRepository IUnitOfWork.LicenseUsage => LicenseUsage.Value;
     IGitAccountRepository IUnitOfWork.GitAccounts => GitAccounts.Value;
     IGitReposRepository IUnitOfWork.GitRepositories => GitRepositories.Value;
     IContainerStatRepository IUnitOfWork.ContainerStats => ContainerStats.Value;

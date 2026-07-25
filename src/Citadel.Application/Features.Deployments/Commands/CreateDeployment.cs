@@ -1,6 +1,7 @@
 using Application.Features.Deployments.Notifications;
 using Application.Services.Builds;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -44,7 +45,8 @@ internal class CreateDeploymentHandler(
     IPlatformStreamManager platformHub,
     INotificationQueue notificationQueue,
     IActivityStreamManager activityHub,
-    IUserContextAccessor userContext) : ICommandHandler<CreateDeployment, Result<Deployment>>
+    IUserContextAccessor userContext,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<CreateDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(CreateDeployment command, CancellationToken cancellationToken)
     {
@@ -56,6 +58,28 @@ internal class CreateDeploymentHandler(
         }
 
         var spec = BuildImageProvenance.Clear(command.Spec);
+        if (DeploymentLicenseConfigurationPolicy.ExpandsOperationalGuardrails(
+                current: null,
+                spec))
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.OperationalGuardrails,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<Deployment>(entitlementError);
+        }
+
+        if (DeploymentLicenseConfigurationPolicy.ExpandsAutomatedOperations(
+                current: null,
+                spec))
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<Deployment>(entitlementError);
+        }
+
         var imageValidation = await DeploymentImageValidation.ValidateAsync(spec, unitOfWork, cancellationToken);
         if (imageValidation.IsFailure(out var imageError))
         {

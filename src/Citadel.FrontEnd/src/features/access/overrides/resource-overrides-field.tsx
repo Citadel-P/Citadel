@@ -4,6 +4,7 @@ import {
   SpecificPermission,
   PermissionInput,
   PermissionMatrixViewItem,
+  LicenseCapability,
 } from '@/api/generated/api.types';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,8 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState, type ComponentType } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { KnownResourceName } from '@/api/types';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
+import { LicensedFeatureDescription } from '@/components/custom/license-feature-indicator';
 
 type ResourceItem = {
   id: string;
@@ -231,6 +234,8 @@ export const ResourceOverridesField = ({
   value: ResourceAccessEntry[] | null;
   onChange: (next: ResourceAccessEntry[]) => void;
 }) => {
+  const { hasCapability } = useLicenseEntitlements();
+  const canExpandAccess = hasCapability(LicenseCapability.CustomAccessControl);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<OverrideResourceType>(ResourceType.Platform);
   const [draftSelectionsByType, setDraftSelectionsByType] = useState<ResourceDraftSelections>(() =>
@@ -322,9 +327,18 @@ export const ResourceOverridesField = ({
       <Button
         variant="outline"
         className="w-full max-w-100 flex flex-row gap-2"
+        disabled={!canExpandAccess}
+        aria-describedby={!canExpandAccess ? 'resource-overrides-license' : undefined}
         onClick={() => openDialogWithDraft(effectiveSelectedType)}>
         <Plus className="h-3 w-3" /> Grant Access
       </Button>
+      {!canExpandAccess ? (
+        <div id="resource-overrides-license">
+          <LicensedFeatureDescription requiredLicense="Team">
+            Create resource-specific grants. Existing overrides can still be reduced or removed.
+          </LicensedFeatureDescription>
+        </div>
+      ) : null}
 
       {entries.length > 0 && (
         <ContentCard className="w-full">
@@ -480,10 +494,13 @@ export const ResourceOverridesField = ({
                         if (!matrix) return null;
                         const levels = [PermissionLevel.Read, PermissionLevel.Write, PermissionLevel.Execute];
                         const maxIndex = levels.indexOf(matrix.maximumLevel as PermissionLevel);
-                        const availableLevels = levels.filter((_, i) => i <= maxIndex);
                         const currentState = selectedByResourceKey[resource.id];
                         const currentLevel = currentState?.permissionLevel ?? null;
                         const currentSpecific = currentState?.specificPermissions ?? [];
+                        const currentLevelIndex = currentLevel ? levels.indexOf(currentLevel) : -1;
+                        const availableLevels = levels.filter(
+                          (_, i) => i <= maxIndex && (canExpandAccess || i <= currentLevelIndex),
+                        );
                         const availableSpecific = !currentLevel
                           ? []
                           : Object.entries(matrix.specificPermissions)
@@ -491,7 +508,11 @@ export const ResourceOverridesField = ({
                                 ([, minLevel]) =>
                                   levels.indexOf(minLevel as PermissionLevel) <= levels.indexOf(currentLevel),
                               )
-                              .map(([perm]) => perm);
+                              .map(([perm]) => perm)
+                              .filter(
+                                (permission) =>
+                                  canExpandAccess || currentSpecific.includes(permission as SpecificPermission),
+                              );
 
                         return (
                           <TableRow key={getResourceRowKey(resource.resourceType, resource.id)}>
@@ -503,6 +524,7 @@ export const ResourceOverridesField = ({
                             <TableCell>
                               <Select
                                 value={currentLevel ?? ''}
+                                disabled={!canExpandAccess && !currentLevel}
                                 onValueChange={(v) =>
                                   handleResourcePermissionChange(resource.id, v ? (v as PermissionLevel) : null, [])
                                 }>

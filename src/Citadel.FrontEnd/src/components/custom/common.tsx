@@ -406,6 +406,7 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   valueKey = 'id',
   sourceResourceId,
   queryEnabled = true,
+  disableUnselectedOptions = false,
 }: {
   sourceType: LookupResourceType;
   targetType: LookupResourceType;
@@ -419,6 +420,7 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   valueKey?: 'id' | 'name';
   sourceResourceId?: string;
   queryEnabled?: boolean;
+  disableUnselectedOptions?: boolean;
 }) {
   const resourceName = getLookupResourceName(sourceType);
   const read = useRead(
@@ -448,17 +450,6 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
 
   const getValue = useCallback((item: T) => (valueKey === 'name' ? item.name : item.id), [valueKey]);
 
-  const options: MultiSelectOption[] = useMemo(
-    () =>
-      items
-        .map((item) => ({
-          label: item.name,
-          value: getValue(item),
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [items, getValue],
-  );
-
   const selectedIds = useMemo(() => {
     if (!selected) return [];
     return selected.map((s) => {
@@ -470,6 +461,21 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
       return s;
     });
   }, [selected, getValue, items, valueKey]);
+
+  const options: MultiSelectOption[] = useMemo(
+    () =>
+      items
+        .map((item) => {
+          const value = getValue(item);
+          return {
+            label: item.name,
+            value,
+            disabled: disableUnselectedOptions && !selectedIds.includes(value),
+          };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [disableUnselectedOptions, getValue, items, selectedIds],
+  );
 
   const handleValueChange = (newIds: string[]) => {
     const newSelectedItems = items.filter((item) => newIds.includes(getValue(item)));

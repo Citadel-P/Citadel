@@ -1,5 +1,6 @@
 ﻿using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Licensing;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Application.Features.Deployments.Notifications;
@@ -16,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using System.Threading.Channels;
+using Tests.Common;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -497,6 +499,7 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             _stackStreamManagerMock.Object,
             _alertServiceMock.Object,
             _applyStackServiceMock.Object,
+            new PermissiveLicenseEntitlementService(),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<GitRepoSyncJob>>());
 
         var runTask = job.RunAsync(TestContext.Current.CancellationToken);
@@ -671,8 +674,22 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         IStackStreamManager stackStreamManager,
         IAlertService alertService,
         IApplyStackService applyStackService,
+        ILicenseEntitlementService entitlementService,
         Microsoft.Extensions.Logging.ILogger<GitRepoSyncJob> logger)
-        : GitRepoSyncJob(dbWorkQueue, scopeFactory, gitCliRepository, repoCacheManager, activityHub, notificationQueue, gitSyncReader, gitRepoStreamManager, stackStreamManager, alertService, applyStackService, logger)
+        : GitRepoSyncJob(
+            dbWorkQueue,
+            scopeFactory,
+            gitCliRepository,
+            repoCacheManager,
+            activityHub,
+            notificationQueue,
+            gitSyncReader,
+            gitRepoStreamManager,
+            stackStreamManager,
+            alertService,
+            applyStackService,
+            entitlementService,
+            logger)
     {
         public Task RunAsync(CancellationToken cancellationToken) => ExecuteAsync(cancellationToken);
     }

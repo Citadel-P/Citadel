@@ -54,7 +54,6 @@ internal sealed class CreatePlatformHandler(
     IUserContextAccessor userContext,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    ILicenseQuotaService licenseQuotaService,
     ILogger<PatchPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
@@ -93,16 +92,6 @@ internal sealed class CreatePlatformHandler(
         {
             return Result.Failure<Platform>(new ConflictError("A platform with the same name or address already exists."));
         }
-
-        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-            new Dictionary<LicenseLimit, int>
-            {
-                [LicenseLimit.Platforms] = 1
-            },
-            unitOfWork,
-            cancellationToken);
-        if (quotaResult.IsFailure())
-            return Result.Failure<Platform>(quotaResult.Errors);
 
         var platform = Platform.FromPersistence(
             id: platformId,
@@ -143,16 +132,6 @@ internal sealed class CreatePlatformHandler(
 
     private async Task<Result<Platform>> HandleDockerPlatform(CreatePlatform command, CancellationToken cancellationToken)
     {
-        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-            new Dictionary<LicenseLimit, int>
-            {
-                [LicenseLimit.Platforms] = 1
-            },
-            unitOfWork,
-            cancellationToken);
-        if (quotaResult.IsFailure())
-            return Result.Failure<Platform>(quotaResult.Errors);
-
         var param = new GetPlatformCommand
         (
             PlatformAddress: command.Address ?? "",

@@ -71,6 +71,22 @@ internal sealed class ResourceAccessRepository(IDbConnection db, Func<IDbTransac
         return rows.ToDetails();
     }
 
+    public Task<bool> ExistsForActorAsync(Guid actorId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM ResourceAccesses
+                WHERE ActorId = @ActorId
+            )
+            """;
+
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new { ActorId = actorId, cancellationToken },
+            transaction: tx());
+    }
+
     // ResourceAccessRepository handles CRUD for ResourceAccesses. Effective permission computation
     // is implemented on IUserRepository (UserRepository) to keep actor-scope aggregation close to user logic.
 

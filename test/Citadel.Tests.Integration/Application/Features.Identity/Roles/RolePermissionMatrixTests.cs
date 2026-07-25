@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Tests.Common;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Identity.Roles;
@@ -12,7 +13,7 @@ public class RolePermissionMatrixTests(PostgresTestFixture fixture) : Integratio
 {
     protected override void ConfigureTestServices(IServiceCollection services)
     {
-        services.ReplaceService<ILicenseQuotaService>(new PermissiveLicenseQuotaService());
+        services.ReplaceService<ILicenseEntitlementService>(new PermissiveLicenseEntitlementService());
     }
 
     [Fact]

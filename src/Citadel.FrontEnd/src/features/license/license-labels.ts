@@ -1,11 +1,19 @@
-import { LicenseLimit, LicenseStatus } from '@/api/generated/api.types';
+import { LicenseCapability, LicenseStatus } from '@/api/generated/api.types';
 
-export const LICENSE_LIMIT_LABELS: Record<LicenseLimit, string> = {
-  [LicenseLimit.CustomRoles]: 'Custom Roles',
-  [LicenseLimit.ActiveUsers]: 'Active Users',
-  [LicenseLimit.Platforms]: 'Platforms',
-  [LicenseLimit.BackupPolicies]: 'Backup Policies',
-  [LicenseLimit.AutomationActions]: 'Automation Actions',
+export const LICENSE_CAPABILITY_LABELS: Record<LicenseCapability, string> = {
+  [LicenseCapability.CustomAccessControl]: 'Custom access control',
+  [LicenseCapability.AutomatedOperations]: 'Automated operations',
+  [LicenseCapability.AdvancedAlerting]: 'Advanced alerting',
+  [LicenseCapability.OperationalGuardrails]: 'Operational guardrails',
+  [LicenseCapability.ElasticBuildExecution]: 'Elastic build execution',
+};
+
+export const LICENSE_CAPABILITY_DESCRIPTIONS: Record<LicenseCapability, string> = {
+  [LicenseCapability.CustomAccessControl]: 'Custom roles, scoped grants, and resource overrides.',
+  [LicenseCapability.AutomatedOperations]: 'Scheduled and webhook-triggered mutating workflows.',
+  [LicenseCapability.AdvancedAlerting]: 'Custom alert rules, conditions, thresholds, and scoping.',
+  [LicenseCapability.OperationalGuardrails]: 'Continuous drift checks, reconciliation, and automatic image updates.',
+  [LicenseCapability.ElasticBuildExecution]: 'Build execution through external build-agent pools.',
 };
 
 export const LICENSE_STATUS_LABELS: Record<LicenseStatus, string> = {

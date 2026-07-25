@@ -9,6 +9,7 @@ import {
   BuildProjectBuilderKind,
   BuildSecretSpec,
   LookupResourceType,
+  LicenseCapability,
   PlatformConnectorType,
   SecretDefinitionView,
   UpdateBuildProjectInput,
@@ -36,6 +37,7 @@ import { GitBranch, Plus, Trash2 } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { useBuildRunQuery } from '../hooks/useBuildRunQuery';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
 type BuildInput = BuildProjectInput | UpdateBuildProjectInput;
 
@@ -425,6 +427,9 @@ export const BuildForm = ({
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<BuildInput>>({});
   const { runId: urlRunId, hash: urlHash, clearRunId } = useBuildRunQuery();
+  const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
+  const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
+  const elasticBuildExecutionEnabled = hasLicenseCapability(LicenseCapability.ElasticBuildExecution);
   const createBuild = useMutate('createBuildProject');
   const updateBuild = useMutate('updateBuildProject');
   const currentGitRepositoryId = update.gitRepositoryId ?? resource?.gitRepositoryId ?? defaultBuild.gitRepositoryId;
@@ -677,7 +682,12 @@ export const BuildForm = ({
                     }
                     options={[
                       { value: BuildProjectBuilderKind.Platform, label: 'Docker platform' },
-                      { value: BuildProjectBuilderKind.BuildAgentPool, label: 'Build pool' },
+                      {
+                        value: BuildProjectBuilderKind.BuildAgentPool,
+                        label: 'Build pool',
+                        disabled: !elasticBuildExecutionEnabled,
+                        requiredLicense: !elasticBuildExecutionEnabled ? ('Team' as const) : undefined,
+                      },
                     ]}
                   />
                 ),
@@ -698,7 +708,7 @@ export const BuildForm = ({
                           value={value}
                           pools={buildPools}
                           isLoading={isLoadingBuildPools}
-                          disabled={disabled}
+                          disabled={disabled || !elasticBuildExecutionEnabled}
                           onChange={(buildAgentPoolId) => set({ buildAgentPoolId })}
                         />
                       ),
@@ -781,6 +791,7 @@ export const BuildForm = ({
             id: 'webhook',
             label: 'Webhook',
             description: 'Allow a Git provider webhook to queue this build when matching source files change.',
+            requiredLicense: automatedOperationsEnabled ? undefined : 'Team',
             items: [
               defineField<BuildInput, 'webhook'>({
                 key: 'webhook',
@@ -793,6 +804,7 @@ export const BuildForm = ({
                     value={value ?? { enabled: false }}
                     defaultBranch={(update.branch ?? original.branch) as string | null | undefined}
                     disabled={disabled}
+                    enableDisabled={!automatedOperationsEnabled}
                     onChange={(webhook) => set({ webhook: webhook as BuildWebhookConfig })}
                   />
                 ),
@@ -877,6 +889,8 @@ export const BuildForm = ({
     [
       currentGitRepositoryId,
       currentBuilderKind,
+      automatedOperationsEnabled,
+      elasticBuildExecutionEnabled,
       fallbackPlatformId,
       disabled,
       buildPools,

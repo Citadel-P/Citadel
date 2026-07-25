@@ -54,6 +54,8 @@ interface MultiSelectOption {
   value: string;
   icon?: React.ComponentType<{ className?: string }>;
   disabled?: boolean;
+  disabledReason?: string;
+  trailing?: React.ReactNode;
   style?: {
     badgeColor?: string;
     iconColor?: string;
@@ -460,7 +462,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
     const toggleOption = (optionValue: string) => {
       if (disabled) return;
       const option = getOptionByValue(optionValue);
-      if (option?.disabled) return;
+      if (option?.disabled && !selectedValues.includes(optionValue)) return;
       const newSelectedValues = selectedValues.includes(optionValue)
         ? selectedValues.filter((value) => value !== optionValue)
         : [...selectedValues, optionValue];
@@ -861,7 +863,9 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                             aria-disabled={option.disabled}
                             aria-label={`${option.label}${
                               isSelected ? ', selected' : ', not selected'
-                            }${option.disabled ? ', disabled' : ''}`}
+                            }${option.disabled ? ', disabled' : ''}${
+                              option.disabledReason ? `, ${option.disabledReason}` : ''
+                            }`}
                             className={cn('cursor-pointer', option.disabled && 'opacity-50 cursor-not-allowed')}
                             disabled={option.disabled}>
                             <div
@@ -875,7 +879,8 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                             {option.icon && (
                               <option.icon className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                             )}
-                            <span>{option.label}</span>
+                            <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                            {option.trailing && <span className="ml-auto shrink-0">{option.trailing}</span>}
                           </CommandItem>
                         );
                       })}
@@ -894,7 +899,9 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                           aria-disabled={option.disabled}
                           aria-label={`${option.label}${
                             isSelected ? ', selected' : ', not selected'
-                          }${option.disabled ? ', disabled' : ''}`}
+                          }${option.disabled ? ', disabled' : ''}${
+                            option.disabledReason ? `, ${option.disabledReason}` : ''
+                          }`}
                           className={cn('cursor-pointer', option.disabled && 'opacity-50 cursor-not-allowed')}
                           disabled={option.disabled}>
                           <div
@@ -908,7 +915,8 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                           {option.icon && (
                             <option.icon className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                           )}
-                          <span>{option.label}</span>
+                          <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                          {option.trailing && <span className="ml-auto shrink-0">{option.trailing}</span>}
                         </CommandItem>
                       );
                     })}

@@ -88,6 +88,23 @@ internal sealed class InstalledLicenseRepository(IDbConnection db, Func<IDbTrans
         return dto?.ToDomain();
     }
 
+    public async Task<InstalledLicense?> GetLockedAsync(CancellationToken cancellationToken)
+    {
+        const string sql = """
+            LOCK TABLE installedlicenses IN SHARE ROW EXCLUSIVE MODE;
+
+            SELECT rawlicense AS RawLicense, fingerprint AS Fingerprint, installedat AS InstalledAt,
+                   installedbyactorid AS InstalledByActorId, lastvalidatedat AS LastValidatedAt,
+                   lastvalidationstatus AS LastValidationStatus, lastvalidationerrorcode AS LastValidationErrorCode
+            FROM installedlicenses
+            WHERE id = 1
+            FOR UPDATE
+            """;
+
+        var dto = await db.QuerySingleOrDefaultAsync<InstalledLicenseDto>(sql, transaction: tx());
+        return dto?.ToDomain();
+    }
+
     public Task<int> UpsertAsync(InstalledLicense license, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -154,36 +171,6 @@ internal sealed class InstalledLicenseRepository(IDbConnection db, Func<IDbTrans
     }
 }
 
-internal sealed class LicenseUsageRepository(IDbConnection db, Func<IDbTransaction> tx) : ILicenseUsageRepository
-{
-    public async Task<LicenseReadModel> GetLicenseReadModelAsync(CancellationToken cancellationToken)
-    {
-        const string sql = """
-            SELECT
-                (SELECT COUNT(*)::int FROM roles WHERE roletype = 'Custom') AS CustomRoles,
-                (SELECT COUNT(*)::int FROM users u JOIN actors a ON a.id = u.actorid WHERE a.isenabled) AS ActiveUsers,
-                (SELECT COUNT(*)::int FROM platforms) AS Platforms,
-                (SELECT COUNT(*)::int FROM backuppolicies WHERE archivedat IS NULL) AS BackupPolicies,
-                (SELECT COUNT(*)::int FROM actions WHERE createdbyactorid <> @SystemActorId) AS AutomationActions,
-                il.rawlicense AS RawLicense,
-                il.fingerprint AS Fingerprint,
-                il.installedat AS InstalledAt,
-                il.installedbyactorid AS InstalledByActorId,
-                il.lastvalidatedat AS LastValidatedAt,
-                il.lastvalidationstatus AS LastValidationStatus,
-                il.lastvalidationerrorcode AS LastValidationErrorCode
-            FROM (SELECT 1) seed
-            LEFT JOIN installedlicenses il ON il.id = 1
-            """;
-
-        var dto = await db.QuerySingleAsync<LicenseReadModelDto>(
-            sql,
-            new { SystemActorId = Constants.SystemId },
-            transaction: tx());
-        return dto.ToDomain();
-    }
-}
-
 internal sealed record CitadelInstanceIdentityDto(Guid InstanceId, DateTime CreatedAt)
 {
     public CitadelInstanceIdentity ToDomain() => new(InstanceId, LicenseDateTimeMapper.ToOffset(CreatedAt));
@@ -207,44 +194,6 @@ internal sealed record InstalledLicenseDto(
             LicenseDateTimeMapper.ToOffset(LastValidatedAt),
             Enum.TryParse<LicenseStatus>(LastValidationStatus, out var status) ? status : null,
             LastValidationErrorCode);
-}
-
-internal sealed record LicenseReadModelDto(
-    int CustomRoles,
-    int ActiveUsers,
-    int Platforms,
-    int BackupPolicies,
-    int AutomationActions,
-    string? RawLicense,
-    string? Fingerprint,
-    DateTime? InstalledAt,
-    Guid? InstalledByActorId,
-    DateTime? LastValidatedAt,
-    string? LastValidationStatus,
-    string? LastValidationErrorCode)
-{
-    public LicenseReadModel ToDomain()
-    {
-        var usage = new LicenseUsageSnapshot(
-            CustomRoles,
-            ActiveUsers,
-            Platforms,
-            BackupPolicies,
-            AutomationActions);
-
-        var installed = RawLicense is null || Fingerprint is null || InstalledAt is null
-            ? null
-            : new InstalledLicense(
-                RawLicense,
-                Fingerprint,
-                LicenseDateTimeMapper.ToOffset(InstalledAt.Value),
-                InstalledByActorId,
-                LicenseDateTimeMapper.ToOffset(LastValidatedAt),
-                Enum.TryParse<LicenseStatus>(LastValidationStatus, out var status) ? status : null,
-                LastValidationErrorCode);
-
-        return new LicenseReadModel(usage, installed);
-    }
 }
 
 internal static class LicenseDateTimeMapper

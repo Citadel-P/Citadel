@@ -33,7 +33,8 @@ public sealed record LicensePayload(
     DateTimeOffset NotBefore,
     DateTimeOffset ExpiresAt,
     DateTimeOffset? GraceUntil,
-    IReadOnlyDictionary<string, int> Limits);
+    IReadOnlyDictionary<string, int>? Limits,
+    IReadOnlyList<string>? Capabilities = null);
 
 public sealed record LicenseProtectedHeader(
     string Alg,
@@ -46,7 +47,7 @@ public sealed record VerifiedLicense(
     string KeyId,
     LicensePayload Payload,
     LicenseStatus Status,
-    IReadOnlyDictionary<LicenseLimit, int> EffectiveLimits,
+    IReadOnlySet<LicenseCapability> EffectiveCapabilities,
     IReadOnlyList<string> Warnings);
 
 public sealed record LicenseVerificationResult(
@@ -65,39 +66,12 @@ public sealed record LicenseVerificationResult(
         => new(license.Status, null, null, license);
 }
 
-public sealed record LicenseUsageSnapshot(
-    int CustomRoles,
-    int ActiveUsers,
-    int Platforms,
-    int BackupPolicies,
-    int AutomationActions)
-{
-    public int GetValue(LicenseLimit limit)
-        => limit switch
-        {
-            LicenseLimit.CustomRoles => CustomRoles,
-            LicenseLimit.ActiveUsers => ActiveUsers,
-            LicenseLimit.Platforms => Platforms,
-            LicenseLimit.BackupPolicies => BackupPolicies,
-            LicenseLimit.AutomationActions => AutomationActions,
-            _ => 0
-        };
-}
-
-public sealed record LicenseReadModel(
-    LicenseUsageSnapshot Usage,
-    InstalledLicense? InstalledLicense);
-
-public sealed record LicenseLimitState(
-    LicenseLimit Limit,
-    int Current,
-    int Maximum,
-    bool OverQuota);
-
 public sealed record LicenseState(
     LicenseStatus Status,
-    string Edition,
+    string EffectiveEdition,
+    string? LicensedEdition,
     Guid InstanceId,
+    int? LicenseSchema,
     string? LicenseId,
     string? ReplacedLicenseId,
     string? CustomerId,
@@ -107,29 +81,20 @@ public sealed record LicenseState(
     DateTimeOffset? NotBefore,
     DateTimeOffset? ExpiresAt,
     DateTimeOffset? GraceUntil,
-    IReadOnlyDictionary<LicenseLimit, int> EffectiveLimits,
-    LicenseUsageSnapshot Usage,
+    IReadOnlySet<LicenseCapability> EffectiveCapabilities,
     IReadOnlyList<string> Warnings);
-
-public sealed record LicenseQuotaViolation(
-    LicenseLimit Limit,
-    int Current,
-    int Requested,
-    int Maximum);
-
-public sealed record LicenseQuotaExceeded(
-    IReadOnlyList<LicenseQuotaViolation> Violations,
-    LicenseStatus LicenseStatus,
-    string Edition);
 
 public static class LicenseConstants
 {
-    public const int CurrentSchema = 1;
+    public const int LegacySchema = 1;
+    public const int CurrentSchema = 2;
     public const string Product = "citadel";
     public const string Issuer = "citadel-p";
     public const string Audience = "citadel-core";
     public const string EditionCommunity = "Community";
     public const string EditionBusiness = "Business";
+    public const string EditionTeam = "Team";
+    public const string EditionEnterprise = "Enterprise";
 
     public const string JoseAlgorithm = "Ed25519";
     public const string JoseType = "citadel-license+jws";
@@ -140,52 +105,49 @@ public static class LicenseConstants
     public const int MaxCustomerIdLength = 128;
     public const int MaxCustomerNameLength = 256;
     public const int MaxLimitEntries = 32;
+    public const int MaxCapabilityEntries = 64;
+    public const int MaxCapabilityKeyLength = 128;
     public const int JsonMaxDepth = 16;
 }
 
-public static class LicenseLimitKeys
+public static class LicenseCapabilityKeys
 {
-    public const string CustomRoles = "custom-roles";
-    public const string ActiveUsers = "active-users";
-    public const string Platforms = "platforms";
-    public const string BackupPolicies = "backup-policies";
-    public const string AutomationActions = "automation-actions";
+    public const string CustomAccessControl = "custom-access-control";
+    public const string AutomatedOperations = "automated-operations";
+    public const string AdvancedAlerting = "advanced-alerting";
+    public const string OperationalGuardrails = "operational-guardrails";
+    public const string ElasticBuildExecution = "elastic-build-execution";
 
-    public static string GetKey(LicenseLimit limit)
-        => limit switch
+    public static string GetKey(LicenseCapability capability)
+        => capability switch
         {
-            LicenseLimit.CustomRoles => CustomRoles,
-            LicenseLimit.ActiveUsers => ActiveUsers,
-            LicenseLimit.Platforms => Platforms,
-            LicenseLimit.BackupPolicies => BackupPolicies,
-            LicenseLimit.AutomationActions => AutomationActions,
-            _ => throw new ArgumentOutOfRangeException(nameof(limit), limit, null)
+            LicenseCapability.CustomAccessControl => CustomAccessControl,
+            LicenseCapability.AutomatedOperations => AutomatedOperations,
+            LicenseCapability.AdvancedAlerting => AdvancedAlerting,
+            LicenseCapability.OperationalGuardrails => OperationalGuardrails,
+            LicenseCapability.ElasticBuildExecution => ElasticBuildExecution,
+            _ => throw new ArgumentOutOfRangeException(nameof(capability), capability, null)
         };
 
-    public static bool TryGetLimit(string key, out LicenseLimit limit)
+    public static bool TryGetCapability(string key, out LicenseCapability capability)
     {
-        limit = key switch
+        capability = key switch
         {
-            CustomRoles => LicenseLimit.CustomRoles,
-            ActiveUsers => LicenseLimit.ActiveUsers,
-            Platforms => LicenseLimit.Platforms,
-            BackupPolicies => LicenseLimit.BackupPolicies,
-            AutomationActions => LicenseLimit.AutomationActions,
+            CustomAccessControl => LicenseCapability.CustomAccessControl,
+            AutomatedOperations => LicenseCapability.AutomatedOperations,
+            AdvancedAlerting => LicenseCapability.AdvancedAlerting,
+            OperationalGuardrails => LicenseCapability.OperationalGuardrails,
+            ElasticBuildExecution => LicenseCapability.ElasticBuildExecution,
             _ => default
         };
 
-        return key is CustomRoles or ActiveUsers or Platforms or BackupPolicies or AutomationActions;
+        return key is CustomAccessControl
+            or AutomatedOperations
+            or AdvancedAlerting
+            or OperationalGuardrails
+            or ElasticBuildExecution;
     }
-}
 
-public static class CommunityLicenseLimits
-{
-    public static readonly IReadOnlyDictionary<LicenseLimit, int> Values = new Dictionary<LicenseLimit, int>
-    {
-        [LicenseLimit.CustomRoles] = 0,
-        [LicenseLimit.ActiveUsers] = 10,
-        [LicenseLimit.Platforms] = 5,
-        [LicenseLimit.BackupPolicies] = 5,
-        [LicenseLimit.AutomationActions] = 15
-    };
+    public static IReadOnlySet<LicenseCapability> All { get; } =
+        Enum.GetValues<LicenseCapability>().ToHashSet();
 }

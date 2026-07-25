@@ -8,8 +8,10 @@ public sealed record InstallLicenseInput(string License);
 
 public sealed record LicenseView(
     LicenseStatus Status,
-    string Edition,
+    string EffectiveEdition,
+    string? LicensedEdition,
     Guid InstanceId,
+    int? LicenseSchema,
     string? LicenseId,
     string? ReplacedLicenseId,
     string? CustomerId,
@@ -19,14 +21,16 @@ public sealed record LicenseView(
     DateTimeOffset? NotBefore,
     DateTimeOffset? ExpiresAt,
     DateTimeOffset? GraceUntil,
-    IReadOnlyList<LicenseLimitView> Limits,
+    IReadOnlyList<LicenseCapabilityView> Capabilities,
     IReadOnlyList<string> Warnings)
 {
     public static LicenseView Map(LicenseState state)
         => new(
             state.Status,
-            state.Edition,
+            state.EffectiveEdition,
+            state.LicensedEdition,
             state.InstanceId,
+            state.LicenseSchema,
             state.LicenseId,
             state.ReplacedLicenseId,
             state.CustomerId,
@@ -36,21 +40,34 @@ public sealed record LicenseView(
             state.NotBefore,
             state.ExpiresAt,
             state.GraceUntil,
-            [.. state.EffectiveLimits
-                .OrderBy(x => x.Key)
-                .Select(x => new LicenseLimitView(
-                    x.Key,
-                    state.Usage.GetValue(x.Key),
-                    x.Value,
-                    state.Usage.GetValue(x.Key) > x.Value))],
+            MapCapabilities(state),
             state.Warnings);
+
+    private static IReadOnlyList<LicenseCapabilityView> MapCapabilities(LicenseState state)
+        => [.. Enum.GetValues<LicenseCapability>()
+            .Select(capability => new LicenseCapabilityView(
+                capability,
+                state.EffectiveCapabilities.Contains(capability)))];
 }
 
-public sealed record LicenseLimitView(
-    LicenseLimit Limit,
-    int Current,
-    int Maximum,
-    bool OverQuota);
+public sealed record LicenseEntitlementsView(
+    LicenseStatus Status,
+    string EffectiveEdition,
+    IReadOnlyList<LicenseCapabilityView> Capabilities)
+{
+    public static LicenseEntitlementsView Map(LicenseState state)
+        => new(
+            state.Status,
+            state.EffectiveEdition,
+            [.. Enum.GetValues<LicenseCapability>()
+                .Select(capability => new LicenseCapabilityView(
+                    capability,
+                    state.EffectiveCapabilities.Contains(capability)))]);
+}
+
+public sealed record LicenseCapabilityView(
+    LicenseCapability Capability,
+    bool Enabled);
 
 public sealed record LicenseRequestView(
     string Product,

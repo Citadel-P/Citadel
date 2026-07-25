@@ -1,4 +1,6 @@
 using Application.Services.Identity;
+using Application.Services.Licensing;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using FluentValidation;
@@ -23,7 +25,10 @@ public sealed record AddTeamMember(Guid TeamId, Guid UserId) : ICommand<Result<T
     }
 }
 
-internal sealed class AddTeamMemberHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<AddTeamMember, Result<TeamDetails>>
+internal sealed class AddTeamMemberHandler(
+    IUnitOfWork unitOfWork,
+    IActorScopeEvictor evictor,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<AddTeamMember, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(AddTeamMember command, CancellationToken cancellationToken)
     {
@@ -36,6 +41,17 @@ internal sealed class AddTeamMemberHandler(IUnitOfWork unitOfWork, IActorScopeEv
 
         if (state.HasMember)
             return Result.Failure<TeamDetails>(new ConflictError("The user is already a member of the team"));
+
+        if (await unitOfWork.Actors.HasCustomAccessConfigurationAsync(
+                [state.Team.ActorId],
+                cancellationToken))
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.CustomAccessControl,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<TeamDetails>(entitlementError);
+        }
 
         await unitOfWork.Teams.AddMemberAsync(command.TeamId, command.UserId, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);

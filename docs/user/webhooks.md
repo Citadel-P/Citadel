@@ -4,6 +4,27 @@ Webhooks let external systems notify Citadel through a public listener URL. Cita
 
 Citadel does not have a separate "Webhook" resource page. Webhook settings live on the resource that will be triggered.
 
+## License Availability
+
+Community can receive and authenticate repository webhooks, synchronize source,
+detect changes, and show pending updates.
+
+Team's `Automated Operations` capability is required when a webhook starts a
+mutating operation:
+
+- deploy a Git stack
+- queue a build
+- run an automation action
+- queue a backup policy
+- start a deployment or stack apply
+
+Webhook reception and authentication are not themselves paid. Without
+`Automated Operations`, Citadel may accept the request and record or synchronize
+the change, but it must not start the mutating operation.
+
+A webhook-triggered build that uses an external Build Pool also requires
+`Elastic Build Execution`.
+
 ## Listener URL
 
 Webhook URLs use this shape:
@@ -17,10 +38,10 @@ Supported URL segments:
 | Resource | URL resource type | Execution | Result |
 | --- | --- | --- | --- |
 | Git repository | `repo` | `pull` | Queue repository sync |
-| Git stack | `stack` | `deploy` | Queue or run Git stack update/deploy behavior |
-| Build project | `build` | `run` | Queue a build run |
-| Automation action | `automation-action` | `run` | Queue an automation action run |
-| Backup policy | `backup-policy` | `run` | Queue a backup run |
+| Git stack | `stack` | `deploy` | Queue or run Git stack update/deploy behavior; execution requires Automated Operations |
+| Build project | `build` | `run` | Queue a build run; execution requires Automated Operations |
+| Automation action | `automation-action` | `run` | Queue an action run; execution requires Automated Operations |
+| Backup policy | `backup-policy` | `run` | Queue a backup run; execution requires Automated Operations |
 
 Supported auth types:
 
@@ -131,6 +152,10 @@ Common setup:
 
 Git stack webhooks trigger Git-backed stack deployment behavior for a specific stack.
 
+Deploying from a Git stack webhook requires `Automated Operations`. Community
+can still receive the webhook, synchronize the repository, and report a pending
+update.
+
 Web editor stacks do not support stack deploy webhooks. Use an automation action webhook if you need a custom trigger for a web editor stack.
 
 Behavior:
@@ -162,6 +187,9 @@ For Git repository and account setup, see `docs/user/git-repositories.md`.
 
 Build webhooks queue a build project run.
 
+Queueing the run requires `Automated Operations`. If the project uses an
+external Build Pool, execution also requires `Elastic Build Execution`.
+
 Use this when a Git provider should build and push an image after a branch update.
 
 Behavior:
@@ -181,6 +209,8 @@ For build project setup, see `docs/user/builds.md`.
 ## Automation Action Webhooks
 
 Automation action webhooks queue an action run.
+
+Queueing the action requires `Automated Operations`.
 
 Use this when an external Git provider or another system should trigger a small Citadel automation script.
 
@@ -204,6 +234,8 @@ For automation action setup, see `docs/user/automation-actions.md`.
 ## Backup Policy Webhooks
 
 Backup policy webhooks queue a backup run.
+
+Queueing the backup requires `Automated Operations`.
 
 Use this when another system should trigger backups before a deployment, maintenance window, or external release process.
 

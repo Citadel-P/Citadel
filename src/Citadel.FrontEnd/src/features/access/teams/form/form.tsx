@@ -1,4 +1,11 @@
-import { UserResourceAccessInput, ResourceInfo, CreateTeamInput, PatchTeamInput } from '@/api/generated/api.types';
+import {
+  UserResourceAccessInput,
+  ResourceInfo,
+  CreateTeamInput,
+  PatchTeamInput,
+  LicenseCapability,
+  RoleType,
+} from '@/api/generated/api.types';
 import {
   FormShell,
   defineField,
@@ -17,6 +24,8 @@ import { useParams } from 'react-router';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUsersList } from '../../users/hooks/useUsersList';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
+import { LicenseFeatureIndicator } from '@/components/custom/license-feature-indicator';
 
 type TeamInput = CreateTeamInput | PatchTeamInput;
 
@@ -74,14 +83,26 @@ export const TeamForm = ({
   const id = useParams().id;
   const [update, setUpdate] = useState<Partial<TeamInput>>({});
   const queryClient = useQueryClient();
+  const { hasCapability } = useLicenseEntitlements();
+  const canAssignCustomRoles = hasCapability(LicenseCapability.CustomAccessControl);
 
   const { mutateAsync: createTeam } = useMutate('createTeam');
   const { mutateAsync: updateTeam } = useMutate('updateTeam');
 
   const { data: rolesData, isLoading: rolesLoading } = useRead('listRoles');
   const roleOptions = useMemo(
-    () => (rolesData?.data?.roles ?? []).map((r) => ({ label: r.name, value: r.id })),
-    [rolesData],
+    () =>
+      (rolesData?.data?.roles ?? []).map((role) => {
+        const requiresTeamLicense = role.roleType === RoleType.Custom && !canAssignCustomRoles;
+        return {
+          label: role.name,
+          value: role.id,
+          disabled: requiresTeamLicense,
+          disabledReason: requiresTeamLicense ? 'Requires a Team license' : undefined,
+          trailing: requiresTeamLicense ? <LicenseFeatureIndicator edition="Team" /> : undefined,
+        };
+      }),
+    [canAssignCustomRoles, rolesData],
   );
 
   const refreshData = useCallback(() => {

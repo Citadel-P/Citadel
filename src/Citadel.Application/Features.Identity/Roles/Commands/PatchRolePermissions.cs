@@ -9,6 +9,7 @@ using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
 using Application.Services.Identity;
+using Application.Services.Licensing;
 
 namespace Application.Features.Identity.Roles.Commands;
 
@@ -49,7 +50,10 @@ public sealed record PatchRolePermissions(Guid Id, JsonMergePatchDocument<PatchR
     }
 }
 
-internal sealed class PatchRolePermissionsHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<PatchRolePermissions, Result<RoleDetails>>
+internal sealed class PatchRolePermissionsHandler(
+    IUnitOfWork unitOfWork,
+    IActorScopeEvictor evictor,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<PatchRolePermissions, Result<RoleDetails>>
 {
     public async ValueTask<Result<RoleDetails>> Handle(PatchRolePermissions command, CancellationToken cancellationToken)
     {
@@ -59,7 +63,17 @@ internal sealed class PatchRolePermissionsHandler(IUnitOfWork unitOfWork, IActor
 
         var current = new PatchRolePermissionsModel(role.Permissions.Select(x => new PatchPermissionModel(x.ResourceType, x.PermissionLevel, x.SpecificPermissions)));
         var patched = command.Patch.ApplyTo(current, RoleJsonContext.Default.PatchRolePermissionsModel);
-        var permissions = patched.Permissions.Select(x => x.ToDomain(role.Id));
+        var permissions = patched.Permissions.Select(x => x.ToDomain(role.Id)).ToArray();
+
+        if (role.RoleType == RoleType.Custom
+            && LicenseAccessControlPolicy.ExpandsPermissions(role.Permissions, permissions))
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.CustomAccessControl,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<RoleDetails>(entitlementError);
+        }
 
         var setPermissionsResult = role.SetPermissions(permissions);
         if (setPermissionsResult.IsFailure(out var error))

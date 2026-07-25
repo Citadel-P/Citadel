@@ -90,7 +90,7 @@ namespace Application.Models;
         typeof(JsonStringEnumConverter<CurrentProfileAuthenticationType>),
         typeof(JsonStringEnumConverter<LoginNextStep>),
         typeof(JsonStringEnumConverter<MfaPolicy>),
-        typeof(JsonStringEnumConverter<LicenseLimit>),
+        typeof(JsonStringEnumConverter<LicenseCapability>),
         typeof(JsonStringEnumConverter<LicenseStatus>),
         typeof(JsonStringEnumConverter<BackupSourceType>),
         typeof(JsonStringEnumConverter<VolumeBackupConsistency>),
@@ -129,12 +129,10 @@ namespace Application.Models;
 [JsonSerializable(typeof(UserTheme))]
 [JsonSerializable(typeof(UserTheme?))]
 [JsonSerializable(typeof(CurrentProfileAuthenticationType))]
-[JsonSerializable(typeof(LicenseLimit))]
-[JsonSerializable(typeof(LicenseLimit?))]
+[JsonSerializable(typeof(LicenseCapability))]
+[JsonSerializable(typeof(LicenseCapability?))]
 [JsonSerializable(typeof(LicenseStatus))]
 [JsonSerializable(typeof(LicenseStatus?))]
-[JsonSerializable(typeof(LicenseQuotaViolation))]
-[JsonSerializable(typeof(LicenseQuotaViolation[]))]
 [JsonSerializable(typeof(ResourceBindingKind))]
 [JsonSerializable(typeof(ResourceBindingKind?))]
 [JsonSerializable(typeof(ResourceBindingScope))]
@@ -193,8 +191,9 @@ namespace Application.Models;
 [JsonSerializable(typeof(RevokeOtherProfileSessionsView))]
 [JsonSerializable(typeof(InstallLicenseInput))]
 [JsonSerializable(typeof(LicenseView))]
-[JsonSerializable(typeof(LicenseLimitView))]
-[JsonSerializable(typeof(IReadOnlyList<LicenseLimitView>))]
+[JsonSerializable(typeof(LicenseEntitlementsView))]
+[JsonSerializable(typeof(LicenseCapabilityView))]
+[JsonSerializable(typeof(IReadOnlyList<LicenseCapabilityView>))]
 [JsonSerializable(typeof(LicenseRequestView))]
 [JsonSerializable(typeof(OidcProviderInput))]
 [JsonSerializable(typeof(UpdateOidcProviderInput))]

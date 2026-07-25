@@ -1,5 +1,6 @@
 using Application.Features.Builds.Models;
 using Application.Services.Builds;
+using Application.Services.Licensing;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -119,7 +120,8 @@ internal sealed class CreateBuildProjectHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
     IBuildProjectStreamManager buildProjectStreamManager,
-    IActivityStreamManager activityStreamManager)
+    IActivityStreamManager activityStreamManager,
+    ILicenseEntitlementService entitlementService)
     : ICommandHandler<CreateBuildProject, Result<BuildProjectResult>>
 {
     public async ValueTask<Result<BuildProjectResult>> Handle(CreateBuildProject command, CancellationToken cancellationToken)
@@ -128,6 +130,24 @@ internal sealed class CreateBuildProjectHandler(
         var normalizedName = BuildProject.ToNormalizedName(input.Name);
         if (await unitOfWork.BuildProjects.ExistsByNormalizedNameAsync(normalizedName, cancellationToken))
             return Result.Failure<BuildProjectResult>(new ConflictError("Build project name already exists."));
+
+        if (input.BuilderKind == BuildProjectBuilderKind.BuildAgentPool)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.ElasticBuildExecution,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<BuildProjectResult>(entitlementError);
+        }
+
+        if (input.Webhook?.Enabled == true)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<BuildProjectResult>(entitlementError);
+        }
 
         var validation = await ValidateReferencesAsync(
             input.GitRepositoryId,
@@ -244,7 +264,8 @@ internal sealed class UpdateBuildProjectHandler(
     IUnitOfWork unitOfWork,
     IBuildProjectStreamManager buildProjectStreamManager,
     IUserContextAccessor userContextAccessor,
-    IActivityStreamManager activityStreamManager)
+    IActivityStreamManager activityStreamManager,
+    ILicenseEntitlementService entitlementService)
     : ICommandHandler<UpdateBuildProject, Result<BuildProjectResult>>
 {
     public async ValueTask<Result<BuildProjectResult>> Handle(UpdateBuildProject command, CancellationToken cancellationToken)
@@ -256,6 +277,28 @@ internal sealed class UpdateBuildProjectHandler(
         var input = command.Project;
         var targetBuilderKind = input.BuilderKind ?? project.BuilderKind;
         var targetBuildAgentPoolId = input.BuildAgentPoolId ?? project.BuildAgentPoolId;
+        var selectsExternalPool =
+            targetBuilderKind == BuildProjectBuilderKind.BuildAgentPool
+            && (project.BuilderKind != BuildProjectBuilderKind.BuildAgentPool
+                || targetBuildAgentPoolId != project.BuildAgentPoolId);
+        if (selectsExternalPool)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.ElasticBuildExecution,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<BuildProjectResult>(entitlementError);
+        }
+
+        if (command.UpdateWebhook && input.Webhook?.Enabled == true)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<BuildProjectResult>(entitlementError);
+        }
+
         var validation = await CreateBuildProjectHandler.ValidateReferencesAsync(
             input.GitRepositoryId ?? project.GitRepositoryId,
             targetBuilderKind,
@@ -407,7 +450,8 @@ internal sealed class QueueBuildRunHandler(
     IUserContextAccessor userContextAccessor,
     IBuildProjectStreamManager buildProjectStreamManager,
     IBuildRunStreamManager buildRunStreamManager,
-    IActivityStreamManager activityStreamManager)
+    IActivityStreamManager activityStreamManager,
+    ILicenseEntitlementService entitlementService)
     : ICommandHandler<QueueBuildRun, Result<BuildRunResult>>
 {
     public async ValueTask<Result<BuildRunResult>> Handle(QueueBuildRun command, CancellationToken cancellationToken)
@@ -418,6 +462,24 @@ internal sealed class QueueBuildRunHandler(
 
         if (!project.Enabled)
             return Result.Failure<BuildRunResult>(new ConflictError("Build project is disabled."));
+
+        if (command.Input.Trigger is BuildRunTrigger.Schedule or BuildRunTrigger.Webhook)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<BuildRunResult>(entitlementError);
+        }
+
+        if (project.BuilderKind == BuildProjectBuilderKind.BuildAgentPool)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.ElasticBuildExecution,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<BuildRunResult>(entitlementError);
+        }
 
         if (await unitOfWork.BuildRuns.HasActiveRunAsync(project.Id, cancellationToken))
             return Result.Failure<BuildRunResult>(new ConflictError("Build project already has an active run."));
@@ -488,7 +550,7 @@ internal sealed class QueueBuildRunHandler(
         return Result.Success(new BuildRunResult(run));
     }
 
-    private static async Task<Result<BuildTarget>> ResolveBuildTargetAsync(
+    internal static async Task<Result<BuildTarget>> ResolveBuildTargetAsync(
         BuildProject project,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
@@ -551,7 +613,7 @@ internal sealed class QueueBuildRunHandler(
             pool.MaxActiveBuilders);
     }
 
-    private sealed record BuildTarget(BuildPlatformSnapshot PlatformSnapshot, int? MaxActiveBuilders);
+    internal sealed record BuildTarget(BuildPlatformSnapshot PlatformSnapshot, int? MaxActiveBuilders);
 
     internal static IReadOnlyList<string> ResolveImageReferences(
         string registryHost,

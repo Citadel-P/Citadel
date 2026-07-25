@@ -359,9 +359,12 @@ public sealed record UserMfaRecoveryCodesRegenerated() : ActivityEventInfo;
 public sealed record UserMfaResetByAdministrator(Guid TargetUserId) : ActivityEventInfo;
 
 public sealed record LicenseActivitySnapshot(
+    int? Schema,
     string? LicenseId,
     string? ReplacedLicenseId,
-    string Edition,
+    string? LicensedEdition,
+    string EffectiveEdition,
+    IReadOnlyList<LicenseCapability> EffectiveCapabilities,
     string? CustomerId,
     string? CustomerName,
     string? Fingerprint,

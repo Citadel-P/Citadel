@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { LicenseFeatureIndicator, LicensedFeatureLabel, type LicenseEdition } from './license-feature-indicator';
 
 type Primitive = string | number | boolean | bigint | symbol | null | undefined | Date;
 
@@ -38,6 +39,7 @@ export interface FieldConfig<T> {
   required?: boolean;
   placeholder?: string;
   description?: React.ReactElement | string;
+  requiredLicense?: LicenseEdition;
   disabled?: boolean;
   ignoreFormDisabled?: boolean;
   validate?: (value: any) => string | null;
@@ -64,6 +66,7 @@ export interface GroupFieldConfig<T> {
   label: string;
   title?: string;
   description?: React.ReactElement | string;
+  requiredLicense?: LicenseEdition;
   items: Array<FieldItemConfig<T> | RowFieldConfig<T>>;
   direction?: 'vertical' | 'horizontal';
 }
@@ -81,6 +84,7 @@ interface FieldShellProps {
   label: string;
   required?: boolean;
   description?: React.ReactElement | string;
+  requiredLicense?: LicenseEdition;
   edited: boolean;
   error?: string | null;
   hideValidationMessage?: boolean;
@@ -135,6 +139,7 @@ export function defineGroupField<T>(config: {
   label: string;
   title?: string;
   description?: React.ReactElement | string;
+  requiredLicense?: LicenseEdition;
   items: Array<FieldItemConfig<T> | RowFieldConfig<T>>;
   direction?: 'vertical' | 'horizontal';
 }): GroupFieldConfig<T> {
@@ -144,6 +149,7 @@ export function defineGroupField<T>(config: {
     label: config.label,
     title: config.title,
     description: config.description,
+    requiredLicense: config.requiredLicense,
     items: config.items,
     direction: config.direction ?? 'vertical',
   };
@@ -161,6 +167,7 @@ function FieldShell({
   label,
   required,
   description,
+  requiredLicense,
   edited,
   error,
   hideValidationMessage,
@@ -171,12 +178,19 @@ function FieldShell({
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <label className="block font-medium text-sm">
-          {label}
-          {required && <span className="text-destructive ml-1">*</span>}
-        </label>
-        {typeof description === 'string' ? <p className="text-sm text-muted-foreground">{description}</p> : description}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <label className="block font-medium text-sm">
+            {label}
+            {required && <span className="text-destructive ml-1">*</span>}
+          </label>
+          {typeof description === 'string' ? (
+            <p className="text-sm text-muted-foreground">{description}</p>
+          ) : (
+            description
+          )}
+        </div>
+        {requiredLicense && <LicenseFeatureIndicator edition={requiredLicense} className="mt-0.5" />}
       </div>
 
       <div className="relative">
@@ -311,7 +325,12 @@ export const FieldSelect = <TValue extends string>({
 }: {
   value?: TValue | null;
   onChange: (v: TValue) => void;
-  options: Array<{ value: TValue; label: React.ReactNode }>;
+  options: Array<{
+    value: TValue;
+    label: React.ReactNode;
+    disabled?: boolean;
+    requiredLicense?: LicenseEdition;
+  }>;
   disabled?: boolean;
   placeholder?: string;
   className?: string;
@@ -322,8 +341,8 @@ export const FieldSelect = <TValue extends string>({
     </SelectTrigger>
     <SelectContent className="bg-background">
       {options.map((option) => (
-        <SelectItem key={option.value} value={option.value}>
-          {option.label}
+        <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+          <LicensedFeatureLabel requiredLicense={option.requiredLicense}>{option.label}</LicensedFeatureLabel>
         </SelectItem>
       ))}
     </SelectContent>
@@ -336,6 +355,7 @@ export const FieldSlider = ({
   max = 100,
   step = 1,
   unit = '%',
+  disabled,
   onChange,
 }: {
   value?: number | null;
@@ -343,6 +363,7 @@ export const FieldSlider = ({
   max?: number;
   step?: number;
   unit?: string;
+  disabled?: boolean;
   onChange: (v: number) => void;
 }) => {
   const current = typeof value === 'number' ? value : min;
@@ -355,6 +376,7 @@ export const FieldSlider = ({
         step={step}
         value={[current]}
         onValueChange={([v]) => onChange(v)}
+        disabled={disabled}
         className="flex-1"
       />
       <span className="text-sm text-muted-foreground font-normal tabular-nums w-12 text-right">
@@ -461,6 +483,8 @@ type ItemInfo =
   | {
       label: string;
       description?: string;
+      disabled?: boolean;
+      requiredLicense?: LicenseEdition;
     };
 
 export function ItemSelector({
@@ -487,21 +511,20 @@ export function ItemSelector({
       <SelectTrigger className={cn('w-full max-w-100', className)}>
         <SelectValue placeholder="Select a value...">
           {selected && (
-            <div className="flex items-center gap-2">
-              <span>{selected.label}</span>
-            </div>
+            <LicensedFeatureLabel requiredLicense={selected.requiredLicense}>{selected.label}</LicensedFeatureLabel>
           )}
         </SelectValue>
       </SelectTrigger>
 
       <SelectContent className="bg-background">
         {Object.entries(normalized).map(([key, info]) => (
-          <SelectItem key={key} value={key}>
-            <div className="flex items-center gap-2">
-              <div className="flex flex-col">
+          <SelectItem key={key} value={key} disabled={info.disabled}>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="flex min-w-0 flex-1 flex-col">
                 <span className={info.description ? 'font-medium' : ''}>{info.label}</span>
                 {info.description && <span className="text-xs text-muted-foreground">{info.description}</span>}
               </div>
+              {info.requiredLicense && <LicenseFeatureIndicator edition={info.requiredLicense} />}
             </div>
           </SelectItem>
         ))}
@@ -1161,6 +1184,7 @@ export function FormShell<T>({
                           label={f.label}
                           required={f.required}
                           description={f.description}
+                          requiredLicense={f.requiredLicense}
                           edited={!!edited}
                           error={error}
                           hideValidationMessage={f.hideValidationMessage}
@@ -1201,6 +1225,7 @@ export function FormShell<T>({
                                   label={f.label}
                                   required={f.required}
                                   description={f.description}
+                                  requiredLicense={f.requiredLicense}
                                   edited={!!edited}
                                   error={error}
                                   hideValidationMessage={f.hideValidationMessage}
@@ -1222,15 +1247,22 @@ export function FormShell<T>({
                       key={group.id}
                       className={`relative rounded-sm border border-border/70 bg-background p-6 shadow-xs ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'} scroll-mt-22 xl:scroll-mt-20`}>
                       <div className="flex flex-col gap-4 w-full">
-                        {(group.title || group.description) && (
-                          <div className="flex flex-col gap-1.5 border-b border-dashed border-border/70 pb-4">
-                            {group.title && (
-                              <h3 className="text-sm font-semibold tracking-tight text-foreground/90">{group.title}</h3>
-                            )}
-                            {typeof group.description === 'string' ? (
-                              <p className="max-w-full text-sm leading-6 text-muted-foreground">{group.description}</p>
-                            ) : (
-                              group.description
+                        {(group.title || group.description || group.requiredLicense) && (
+                          <div className="flex items-start justify-between gap-3 border-b border-dashed border-border/70 pb-4">
+                            <div className="flex min-w-0 flex-col gap-1.5">
+                              {group.title && (
+                                <h3 className="text-sm font-semibold tracking-tight text-foreground/90">
+                                  {group.title}
+                                </h3>
+                              )}
+                              {typeof group.description === 'string' ? (
+                                <p className="max-w-full text-sm leading-6 text-muted-foreground">{group.description}</p>
+                              ) : (
+                                group.description
+                              )}
+                            </div>
+                            {group.requiredLicense && (
+                              <LicenseFeatureIndicator edition={group.requiredLicense} className="mt-0.5" />
                             )}
                           </div>
                         )}
@@ -1259,6 +1291,7 @@ export function FormShell<T>({
                                   label={f.label}
                                   required={f.required}
                                   description={f.description}
+                                  requiredLicense={f.requiredLicense}
                                   edited={!!edited}
                                   error={error}
                                   hideValidationMessage={f.hideValidationMessage}
@@ -1300,6 +1333,7 @@ export function FormShell<T>({
                                         label={f.label}
                                         required={f.required}
                                         description={f.description}
+                                        requiredLicense={f.requiredLicense}
                                         edited={!!edited}
                                         error={error}
                                         hideValidationMessage={f.hideValidationMessage}

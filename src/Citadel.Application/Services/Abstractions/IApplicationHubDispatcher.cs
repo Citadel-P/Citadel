@@ -17,6 +17,8 @@ namespace Application.Services.Abstractions;
 
 public interface IApplicationHubDispatcher
 {
+    Task SendLicenseStateChanged(CancellationToken cancellationToken = default);
+
     #region Daemon events
     Task SendContainerEvent(Container container, string @event);
     Task SendImageEvent(Image image, string @event);

@@ -12,6 +12,7 @@ import {
   CreateAlertRuleInput,
   PatchAlertRuleInput,
   LookupResourceType,
+  LicenseCapability,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -45,10 +46,17 @@ import { ContentCard } from '@/components/custom/content-card';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
+import { AlertMessage } from '@/components/custom/alert-message';
+import { LicensedFeatureDescription } from '@/components/custom/license-feature-indicator';
 
 type LimitedToEntry = {
   resourceType: AlertResourceType;
   resourceId: string;
+};
+
+type AlertRuleFormResource = AlertRuleInput & {
+  isSystem?: boolean;
 };
 
 type AlertRuleInput = CreateAlertRuleInput | PatchAlertRuleInput;
@@ -59,12 +67,17 @@ export const AlertRuleForm = ({
   disabled,
 }: {
   mode: 'add' | 'edit';
-  resource?: AlertRuleInput;
+  resource?: AlertRuleFormResource;
   disabled?: boolean;
 }) => {
   const id = useParams().id;
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<AlertRuleInput>>({});
+  const { hasCapability } = useLicenseEntitlements();
+  const hasAdvancedAlerting = hasCapability(LicenseCapability.AdvancedAlerting);
+  const formDisabled = disabled || (mode === 'add' && !hasAdvancedAlerting);
+  const advancedFieldsDisabled = disabled || !hasAdvancedAlerting;
+  const isSystemRule = resource?.isSystem === true;
 
   const { mutateAsync: createAlertRule } = useMutate('createAlertRule');
   const { mutateAsync: updateAlertRule } = useMutate('updateAlertRule');
@@ -178,11 +191,17 @@ export const AlertRuleForm = ({
             key: 'status',
             description: 'Choose the current state of this rule.',
             render: (value, set) => (
-              <ItemSelector
-                collection={AlertRuleStatus}
-                value={value}
-                onChange={(v: AlertRuleStatus) => set({ status: v })}
-              />
+                <ItemSelector
+                  collection={AlertRuleStatus}
+                  value={value}
+                  disabled={
+                    disabled
+                    || (!hasAdvancedAlerting
+                      && !isSystemRule
+                      && value === AlertRuleStatus.Disabled)
+                  }
+                  onChange={(v: AlertRuleStatus) => set({ status: v })}
+                />
             ),
           }),
 
@@ -199,6 +218,7 @@ export const AlertRuleForm = ({
                   <ItemSelector
                     collection={AlertSeverity}
                     value={val}
+                    disabled={advancedFieldsDisabled}
                     onChange={(v: AlertSeverity) => set({ severity: v })}
                   />
                 ),
@@ -215,6 +235,7 @@ export const AlertRuleForm = ({
                           type="number"
                           value={val ?? ''}
                           placeholder="e.g. 300"
+                          disabled={advancedFieldsDisabled}
                           onChange={(v) => {
                             const n = Number(v);
                             if (v === '' || v === undefined) set({ cooldownSeconds: v });
@@ -240,6 +261,7 @@ export const AlertRuleForm = ({
                           max={100}
                           step={1}
                           unit="%"
+                          disabled={advancedFieldsDisabled}
                           onChange={(v) => set({ threshold: v })}
                         />
                       ),
@@ -257,6 +279,7 @@ export const AlertRuleForm = ({
                           max={100}
                           step={1}
                           unit=""
+                          disabled={advancedFieldsDisabled}
                           onChange={(v) => set({ requiredMatches: v })}
                         />
                       ),
@@ -286,6 +309,7 @@ export const AlertRuleForm = ({
                               typeof item === 'string' ? item : item.resourceId,
                             ) ?? []
                           }
+                          disabled={advancedFieldsDisabled}
                           onSelect={(v: DeploymentView[] | undefined) =>
                             set(() => ({
                               limitedTo:
@@ -318,6 +342,7 @@ export const AlertRuleForm = ({
                     sourceType={LookupResourceType.Alert}
                     sourceResourceId={mode == 'add' ? undefined : id}
                     selected={(value as string[]) ?? []}
+                    disableUnselectedOptions={!hasAdvancedAlerting && !isSystemRule}
                     onSelect={(v: any[] | undefined) =>
                       set(() => ({
                         channelIds: v?.map((c) => c.id) ?? [],
@@ -339,7 +364,11 @@ export const AlertRuleForm = ({
                 key: 'quietHours',
                 description: `Suppress alerts during scheduled maintenance windows.`,
                 render: (value, set) => (
-                  <QuietHoursField quietHours={value ?? []} onChange={(next) => set({ quietHours: next })} />
+                  <QuietHoursField
+                    quietHours={value ?? []}
+                    disabled={advancedFieldsDisabled}
+                    onChange={(next) => set({ quietHours: next })}
+                  />
                 ),
               }),
             ],
@@ -347,22 +376,43 @@ export const AlertRuleForm = ({
         ],
       }),
     }),
-    [mode, showThresholdFields, showCooldown, id, resourceFromAlertType, showScope],
+    [
+      advancedFieldsDisabled,
+      disabled,
+      hasAdvancedAlerting,
+      id,
+      isSystemRule,
+      mode,
+      resourceFromAlertType,
+      showCooldown,
+      showScope,
+      showThresholdFields,
+    ],
   );
 
   return (
-    <FormShell
-      mode={mode}
-      schema={schema}
-      original={original}
-      update={update}
-      setUpdate={setUpdate}
-      onSave={handleSave}
-      pending={isPending}
-      disabled={disabled}
-      draftKey={`AlertRule:${id ?? 'new'}`}
-      draftVersion={1}
-    />
+    <div className="flex flex-col gap-3">
+      {!hasAdvancedAlerting ? (
+        <AlertMessage type="info" title="Advanced alerting">
+          <LicensedFeatureDescription requiredLicense="Team">
+            Create custom alert rules and configure advanced conditions. Existing rules can still be disabled or
+            deleted.
+          </LicensedFeatureDescription>
+        </AlertMessage>
+      ) : null}
+      <FormShell
+        mode={mode}
+        schema={schema}
+        original={original}
+        update={update}
+        setUpdate={setUpdate}
+        onSave={handleSave}
+        pending={isPending}
+        disabled={formDisabled}
+        draftKey={`AlertRule:${id ?? 'new'}`}
+        draftVersion={1}
+      />
+    </div>
   );
 };
 
@@ -401,7 +451,11 @@ const createDailyDraft = (): QuietHourDraft => ({
   description: null,
 });
 
-const QuietHoursField = ({ quietHours, onChange }: QuietHoursFieldProps) => {
+const QuietHoursField = ({
+  quietHours,
+  disabled,
+  onChange,
+}: QuietHoursFieldProps & { disabled?: boolean }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formState, setFormState] = useState<QuietHourDraft>(createDailyDraft);
   const [editIndex, setEditIndex] = useState<number | null>(null);
@@ -540,12 +594,21 @@ const QuietHoursField = ({ quietHours, onChange }: QuietHoursFieldProps) => {
 
   return (
     <div className="space-y-3">
-      <Button variant="outline" className="w-full max-w-100 flex flex-row gap-2" onClick={handleDialogOpen}>
+      <Button
+        variant="outline"
+        className="w-full max-w-100 flex flex-row gap-2"
+        disabled={disabled}
+        onClick={handleDialogOpen}>
         <Plus className="h-3 w-3" /> Add Window
       </Button>
       {quietHours.length > 0 && (
         <ContentCard>
-          <QuietHoursTable quietHours={quietHours} onEdit={handleEdit} onDelete={handleRemove} />
+          <QuietHoursTable
+            quietHours={quietHours}
+            disabled={disabled}
+            onEdit={handleEdit}
+            onDelete={handleRemove}
+          />
         </ContentCard>
       )}
 
@@ -654,10 +717,12 @@ type QuietHourRow = {
 
 const QuietHoursTable = ({
   quietHours,
+  disabled,
   onEdit,
   onDelete,
 }: {
   quietHours: AlertRuleQuietHour[];
+  disabled?: boolean;
   onEdit: (entry: AlertRuleQuietHour, index: number) => void;
   onDelete: (index: number) => void;
 }) => {
@@ -718,10 +783,18 @@ const QuietHoursTable = ({
           const index = row.original.index;
           return (
             <div className="flex items-center justify-end gap-1">
-              <Button variant="ghost" size="icon" onClick={() => onEdit(row.original.quietHour, index)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={disabled}
+                onClick={() => onEdit(row.original.quietHour, index)}>
                 <Pencil className="size-4 text-muted-foreground" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => onDelete(index)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={disabled}
+                onClick={() => onDelete(index)}>
                 <Trash2 className="size-4 text-muted-foreground" />
               </Button>
             </div>
@@ -729,7 +802,7 @@ const QuietHoursTable = ({
         },
       },
     ],
-    [onDelete, onEdit],
+    [disabled, onDelete, onEdit],
   );
 
   return <DataTable columns={columns} data={rows} isLoading={false} getRowId={(row) => row.id} />;

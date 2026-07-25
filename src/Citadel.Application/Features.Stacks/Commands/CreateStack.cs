@@ -5,6 +5,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Stacks;
 using Application.Services.Builds;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Abstraction;
@@ -44,7 +45,11 @@ public sealed record CreateStack(
     }
 }
 
-internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStreamManager platformHub, IUserContextAccessor userContext) : ICommandHandler<CreateStack, Result<Stack>>
+internal sealed class CreateStackHandler(
+    IUnitOfWork unitOfWork,
+    IPlatformStreamManager platformHub,
+    IUserContextAccessor userContext,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<CreateStack, Result<Stack>>
 {
     public async ValueTask<Result<Stack>> Handle(CreateStack command, CancellationToken cancellationToken)
     {
@@ -55,6 +60,17 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStream
         }
 
         var spec = BuildImageProvenance.Clear(command.Spec);
+        var driftPolicy = command.DriftPolicy ?? StackDriftPolicy.Disabled;
+        var entitlement = await StackLicenseConfigurationPolicy.EnsureAllowedAsync(
+            currentSpec: null,
+            currentDriftPolicy: null,
+            spec,
+            driftPolicy,
+            entitlementService,
+            cancellationToken);
+        if (entitlement.IsFailure(out var entitlementError))
+            return Result.Failure<Stack>(entitlementError);
+
         if (!IsCompatible(command.StackSource, spec))
         {
             return Result.Failure<Stack>(new BadRequestError("StackSource does not match the provided StackSpec."));
@@ -94,7 +110,7 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStream
             platformId: command.PlatformId,
             spec: spec,
             description: command.Description,
-            driftPolicy: command.DriftPolicy);
+            driftPolicy: driftPolicy);
 
         var result = await unitOfWork.Stacks.AddAsync(stack, cancellationToken, command.TagIds, actorId);
         if (result == 0)
@@ -159,4 +175,5 @@ internal sealed class CreateStackHandler(IUnitOfWork unitOfWork, IPlatformStream
             (StackSource.Git, GitStack) => true,
             _ => false
         };
+
 }

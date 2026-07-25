@@ -1,6 +1,7 @@
 using Application.Features.Deployments.Notifications;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Alerts;
@@ -59,10 +60,17 @@ internal sealed class CreateAlertRuleHandler(
     AlertRuleCache alertRuleCache,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IUserContextAccessor userContext) : ICommandHandler<CreateAlertRule, Result<AlertRule>>
+    IUserContextAccessor userContext,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<CreateAlertRule, Result<AlertRule>>
 {
     public async ValueTask<Result<AlertRule>> Handle(CreateAlertRule command, CancellationToken cancellationToken)
     {
+        var entitlement = await entitlementService.EnsureEnabledAsync(
+            LicenseCapability.AdvancedAlerting,
+            cancellationToken);
+        if (entitlement.IsFailure(out var entitlementError))
+            return Result.Failure<AlertRule>(entitlementError);
+
         var actorId = userContext.Current.ActorId;
         if (command.Channels is not null)
         {

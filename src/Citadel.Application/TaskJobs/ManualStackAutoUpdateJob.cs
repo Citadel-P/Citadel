@@ -1,5 +1,6 @@
 using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
@@ -19,6 +20,7 @@ internal sealed class ManualStackAutoUpdateJob(
     ISyncBarrier syncBarrier,
     IServiceScopeFactory scopeFactory,
     IDelayWithJitterService delayWithJitterService,
+    ILicenseEntitlementService entitlementService,
     ILogger<ManualStackAutoUpdateJob> logger) : BackgroundService
 {
     private const int CheckIntervalInHours = 2;
@@ -126,7 +128,10 @@ internal sealed class ManualStackAutoUpdateJob(
                 new ManualStackUpdateState(new RecreateStackOnNewImageState(nextStates)));
         }
 
-        if (manualStack.UpdateBehavior == StackUpdateBehavior.Notify)
+        var canAutoUpdate = await entitlementService.IsEnabledAsync(
+            LicenseCapability.OperationalGuardrails,
+            cancellationToken);
+        if (manualStack.UpdateBehavior == StackUpdateBehavior.Notify || !canAutoUpdate)
         {
             await ProcessAlertAsync(AlertType.StackImageUpdateAvailable, stack, updates, failed: false, null, cancellationToken);
 

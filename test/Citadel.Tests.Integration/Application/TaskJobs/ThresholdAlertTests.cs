@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using System.Threading.Channels;
+using Tests.Common;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -385,7 +386,15 @@ public class ThresholdAlertTests(PostgresTestFixture fixture) : IntegrationTestB
         var logger = services.GetRequiredService<ILogger<AlertService>>();
 
         var queue = new InlineDbWorkQueue(uow);
-        var alertService = new AlertService(queue, notificationQueue, ruleProvider, evaluators, notificationService, alertEventStreamManager, logger);
+        var alertService = new AlertService(
+            queue,
+            notificationQueue,
+            ruleProvider,
+            evaluators,
+            notificationService,
+            alertEventStreamManager,
+            new PermissiveLicenseEntitlementService(),
+            logger);
 
         await alertService.ProcessAsync(AlertType.PlatformCpuHigh, context, cancellationToken);
     }

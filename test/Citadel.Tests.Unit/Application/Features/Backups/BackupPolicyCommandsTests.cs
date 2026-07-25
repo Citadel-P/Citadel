@@ -12,6 +12,7 @@ using Domain.Entities.Backups;
 using Hosting.Common.Abstraction;
 using LightResults;
 using Moq;
+using Tests.Common;
 
 namespace Tests.Unit.Application.Features.Backups;
 
@@ -41,7 +42,8 @@ public sealed class BackupPolicyCommandsTests
             unitOfWork.Object,
             CreateUserContextAccessor(),
             streamManager.Object,
-            notificationQueue.Object);
+            notificationQueue.Object,
+            new PermissiveLicenseEntitlementService());
 
         var result = await handler.Handle(
             new QueueBackupRun(run.BackupPolicyId, new QueueBackupRunInputModel()),
@@ -86,7 +88,8 @@ public sealed class BackupPolicyCommandsTests
             executionService.Object,
             CreateUserContextAccessor(),
             streamManager.Object,
-            notificationQueue.Object);
+            notificationQueue.Object,
+            new PermissiveLicenseEntitlementService());
 
         var items = await ToListAsync(handler.Handle(
             new RunBackupPolicy(run.BackupPolicyId, new QueueBackupRunInputModel()),
@@ -405,28 +408,19 @@ public sealed class BackupPolicyCommandsTests
             TagIds: []));
 
     private static CreateBackupPolicyHandler CreateCreateHandler(IUnitOfWork unitOfWork)
-    {
-        var licenseQuotaService = new Mock<ILicenseQuotaService>();
-        licenseQuotaService
-            .Setup(x => x.EnsureCanIncreaseAsync(
-                It.IsAny<IReadOnlyDictionary<LicenseLimit, int>>(),
-                unitOfWork,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success());
-
-        return new CreateBackupPolicyHandler(
+        => new(
             unitOfWork,
             CreateUserContextAccessor(),
             Mock.Of<IStackBackupVolumeResolver>(),
             Mock.Of<IDeploymentBackupVolumeResolver>(),
-            licenseQuotaService.Object);
-    }
+            new PermissiveLicenseEntitlementService());
 
     private static UpdateBackupPolicyHandler CreateUpdateHandler(IUnitOfWork unitOfWork)
         => new(
             unitOfWork,
             Mock.Of<IStackBackupVolumeResolver>(),
-            Mock.Of<IDeploymentBackupVolumeResolver>());
+            Mock.Of<IDeploymentBackupVolumeResolver>(),
+            new PermissiveLicenseEntitlementService());
 
     private static Mock<IBackupPolicyRepository> CreateBackupPolicyRepository()
     {

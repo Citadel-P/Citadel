@@ -12,6 +12,7 @@ import {
   BackupSourceSpecStackBackupSource,
   BackupWebhookConfig,
   BackupSourceType,
+  LicenseCapability,
   DeploymentBackupSourcePreviewView,
   DockerVolumeResultView,
   LookupResourceType,
@@ -42,6 +43,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Box, Database, Layers, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
 type BackupPolicyFormValue = Omit<BackupPolicyInput, 'runAsActorId'> & {
   id?: string;
@@ -116,6 +118,8 @@ export function BackupPolicyForm({
   const createPolicy = useMutate('createBackupPolicy');
   const updatePolicy = useMutate('updateBackupPolicy');
   const [update, setUpdate] = useState<Partial<BackupPolicyFormValue>>({});
+  const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
+  const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
 
   const original = useMemo(() => toFormValue(resource), [resource]);
   const currentSource = mergeSource(original.source, update.source);
@@ -565,6 +569,7 @@ export function BackupPolicyForm({
             id: 'schedule',
             label: 'Schedule',
             description: 'Run this policy automatically from a cron expression.',
+            requiredLicense: automatedOperationsEnabled ? undefined : 'Team',
             items: [
               defineField<BackupPolicyFormValue, 'scheduleEnabled'>({
                 key: 'scheduleEnabled',
@@ -573,7 +578,7 @@ export function BackupPolicyForm({
                   <FieldSwitch
                     checked={value ?? false}
                     id="backup-policy-schedule-enabled"
-                    disabled={disabled}
+                    disabled={disabled || (!value && !automatedOperationsEnabled)}
                     onChange={(scheduleEnabled) => set({ scheduleEnabled })}
                   />
                 ),
@@ -591,7 +596,7 @@ export function BackupPolicyForm({
                   <FieldInput
                     value={value ?? ''}
                     placeholder="0 2 * * *"
-                    disabled={disabled || !currentScheduleEnabled}
+                    disabled={disabled || !currentScheduleEnabled || !automatedOperationsEnabled}
                     onChange={(cron) => set({ cron })}
                   />
                 ),
@@ -604,7 +609,7 @@ export function BackupPolicyForm({
                 render: (value, set) => (
                   <TimezoneSelectField
                     value={value ?? 'UTC'}
-                    disabled={disabled || !currentScheduleEnabled}
+                    disabled={disabled || !currentScheduleEnabled || !automatedOperationsEnabled}
                     onChange={(timeZone) => set({ timeZone })}
                     className="w-100"
                   />
@@ -616,6 +621,7 @@ export function BackupPolicyForm({
             id: 'webhook',
             label: 'Webhook',
             description: 'Allow a webhook to queue this backup policy through the shared listener.',
+            requiredLicense: automatedOperationsEnabled ? undefined : 'Team',
             items: [
               defineField<BackupPolicyFormValue, 'webhook'>({
                 key: 'webhook',
@@ -627,6 +633,7 @@ export function BackupPolicyForm({
                     execution="run"
                     value={value ?? { enabled: false }}
                     disabled={disabled}
+                    enableDisabled={!automatedOperationsEnabled}
                     onChange={(webhook) => set({ webhook: webhook as BackupWebhookConfig })}
                   />
                 ),
@@ -640,6 +647,7 @@ export function BackupPolicyForm({
       currentPlatformId,
       currentDeploymentId,
       currentScheduleEnabled,
+      automatedOperationsEnabled,
       currentStackId,
       currentSourceType,
       deploymentPreview.data?.data,

@@ -80,7 +80,8 @@ browser, and real-service acceptance coverage around them.
 - Validate upgrades from the previous release and restoration of Citadel's own
   control-plane data before stable publication.
 - Prove authorization at API, lookup, search, and SignalR delivery boundaries.
-- Prove license and quota enforcement under boundary and concurrent requests.
+- Prove license capability enforcement, transitions, and direct-request
+  resistance.
 - Store traces, screenshots, browser logs, network failures, and service logs
   for failed browser and acceptance runs.
 - Make every test independently repeatable and safe to rerun.
@@ -735,26 +736,40 @@ permission. Alert clients join only the public `alert-events` alias, which the
 server maps to a user-specific group after database-side recipient selection;
 clients must never be allowed to join another user's concrete alert group.
 
-### 17.7 Licensing And Quota Boundaries
+### 17.7 Licensing And Capability Boundaries
 
 Add backend integration coverage for:
 
-- no installed license uses Community capabilities and quotas;
-- creation exactly at the allowed boundary succeeds;
-- creation above the boundary fails with a stable error;
+- no installed license uses the Community baseline with no entity-count quotas;
+- Community can create core resources without licensing count boundaries;
+- capability-protected operations fail with a stable entitlement error;
 - invalid signature, malformed payload, wrong-instance, and expired licenses
   are rejected; a valid future-dated license may be installed as
-  `NotYetValid`, but Community limits remain effective until `notBefore`;
+  `NotYetValid`, but only Community capabilities remain effective until
+  `notBefore`;
 - existing resources remain usable according to the documented expiry policy;
-- reducing a quota does not destructively delete existing resources;
-- concurrent creates cannot both pass a quota with one remaining slot;
+- downgrade does not destructively delete or rewrite paid configuration;
+- scheduled workers, webhooks, and direct API calls cannot bypass a missing
+  capability;
+- Community accepts and authenticates repository webhooks, synchronizes source,
+  and records pending updates without starting a paid mutating operation;
+- external build-pool execution requires its capability while build-pool
+  configuration and manual builds on existing managed platforms remain
+  available;
+- webhook-triggered external-pool builds require both the trigger and
+  execution-target capabilities;
+- missing or mismatched replacement IDs and future-dated replacements of an
+  active license fail with stable conflict responses;
+- schema-1 Business licenses map to the documented Team compatibility bundle;
 - UI capabilities and backend enforcement derive from the same effective
   license state;
+- authenticated users can read effective entitlements without receiving
+  administrative license metadata;
 - a license transition invalidates relevant cached capabilities.
 
-Add one browser journey proving a representative locked feature or exhausted
-quota is explained and cannot be bypassed by direct navigation. The backend
-matrix remains authoritative.
+Add one browser journey proving a representative locked feature is explained
+and cannot be bypassed by direct navigation. The backend matrix remains
+authoritative.
 
 ### 17.8 Citadel Control-Plane Disaster Recovery
 
@@ -962,7 +977,7 @@ Run a scheduled and manually dispatchable matrix:
 | `upgrade` | previous Core release, candidate Core, PostgreSQL |
 | `control-plane-recovery` | backup, destruction, and clean restore |
 | `scheduler-webhook` | deterministic clock, restart, duplicate, and replay |
-| `licensing` | quota boundaries, transitions, and concurrent creates |
+| `licensing` | capability boundaries, transitions, downgrade, and legacy-license compatibility |
 | `authorization` | API, lookup, search, SignalR group, and recipient matrix |
 | `browser-extended` | selected visual, accessibility, and Firefox tests |
 
@@ -1112,7 +1127,7 @@ representative set from each frontend category in section 15 pass in CI.
 2. Add idempotency, concurrency, stale-operation, and startup reconciliation
    tests.
 3. Add the backend authorization and SignalR recipient matrix.
-4. Add licensing and concurrent quota boundary tests.
+4. Add licensing capability, downgrade, and legacy-license tests.
 5. Refactor schedulers to use `TimeProvider` and add restart, timezone, and
    duplicate-run coverage.
 6. Add the pre-release upgrade baseline, previous-version upgrade harness, and
@@ -1193,8 +1208,9 @@ browser coverage needed to prove the user-facing wiring.
   same effective permission rules.
 - Global roles, team roles, resource grants, specific permissions, disabled
   actors, and administrator bypass are covered by a compact matrix.
-- Community, exact-limit, above-limit, invalid-license, expiry, downgrade, and
-  concurrent-create behavior is covered.
+- Community baseline, capability denial, invalid-license, replacement conflict,
+  expiry, downgrade, automated-trigger enforcement, external-build execution,
+  and legacy Business compatibility are covered.
 
 ### Upgrade And Control-Plane Recovery
 

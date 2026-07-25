@@ -19,6 +19,7 @@ using Hosting.Common.Abstraction;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System.Runtime.CompilerServices;
+using Tests.Common;
 
 namespace Tests.Unit.Application.Features.Builds;
 
@@ -89,7 +90,8 @@ public sealed class BuildRunStartTests : IDisposable
             CreateUserContextAccessor(actorId),
             projectStream.Object,
             runStream.Object,
-            Mock.Of<IActivityStreamManager>());
+            Mock.Of<IActivityStreamManager>(),
+            new PermissiveLicenseEntitlementService());
 
         var result = await handler.Handle(
             new QueueBuildRun(project.Id, new QueueBuildRunInputModel(BuildRunTrigger.Manual, null)),
@@ -124,7 +126,8 @@ public sealed class BuildRunStartTests : IDisposable
             CreateUserContextAccessor(actorId),
             Mock.Of<IBuildProjectStreamManager>(),
             Mock.Of<IBuildRunStreamManager>(),
-            Mock.Of<IActivityStreamManager>());
+            Mock.Of<IActivityStreamManager>(),
+            new PermissiveLicenseEntitlementService());
 
         buildProjects
             .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false))
@@ -165,7 +168,8 @@ public sealed class BuildRunStartTests : IDisposable
             CreateUserContextAccessor(actorId),
             projectStream.Object,
             runStream.Object,
-            Mock.Of<IActivityStreamManager>());
+            Mock.Of<IActivityStreamManager>(),
+            new PermissiveLicenseEntitlementService());
 
         buildProjects
             .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false))
@@ -260,7 +264,8 @@ public sealed class BuildRunStartTests : IDisposable
             CreateUserContextAccessor(actorId),
             projectStream.Object,
             runStream.Object,
-            Mock.Of<IActivityStreamManager>());
+            Mock.Of<IActivityStreamManager>(),
+            new PermissiveLicenseEntitlementService());
 
         var result = await handler.Handle(
             new QueueBuildRun(project.Id, new QueueBuildRunInputModel(BuildRunTrigger.Manual, null)),
@@ -339,7 +344,8 @@ public sealed class BuildRunStartTests : IDisposable
             CreateUserContextAccessor(actorId),
             projectStream.Object,
             runStream.Object,
-            Mock.Of<IActivityStreamManager>());
+            Mock.Of<IActivityStreamManager>(),
+            new PermissiveLicenseEntitlementService());
 
         var result = await handler.Handle(
             new QueueBuildRun(project.Id, new QueueBuildRunInputModel(BuildRunTrigger.Manual, null)),
@@ -372,7 +378,8 @@ public sealed class BuildRunStartTests : IDisposable
             CreateUserContextAccessor(actorId),
             Mock.Of<IBuildProjectStreamManager>(),
             Mock.Of<IBuildRunStreamManager>(),
-            Mock.Of<IActivityStreamManager>());
+            Mock.Of<IActivityStreamManager>(),
+            new PermissiveLicenseEntitlementService());
 
         buildProjects
             .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false))
@@ -405,6 +412,12 @@ public sealed class BuildRunStartTests : IDisposable
     [Fact]
     public async Task ExecuteQueuedBuildRun_ShouldNotStartProcess_WhenRunWasAlreadyClaimed()
     {
+        var actorId = Guid.CreateVersion7();
+        var project = CreateProject(actorId);
+        var repository = CreateRepository(project.GitRepositoryId, actorId);
+        var platform = CreatePlatform(project.PlatformId);
+        var registry = CreateRegistry(project.RegistryId, actorId);
+        var run = CreateRun(project, repository, platform, registry, actorId);
         var buildRuns = new Mock<IBuildRunRepository>(MockBehavior.Strict);
         var buildRunLogs = new Mock<IBuildRunLogRepository>(MockBehavior.Strict);
         var buildProjects = new Mock<IBuildProjectRepository>(MockBehavior.Strict);
@@ -426,12 +439,19 @@ public sealed class BuildRunStartTests : IDisposable
             Mock.Of<IApplyStackService>(),
             Mock.Of<IAlertService>(),
             Mock.Of<IBuildRunRetentionService>(),
+            new PermissiveLicenseEntitlementService(),
             NullLogger<BuildRunExecutionService>.Instance);
-        var runId = Guid.CreateVersion7();
+        var runId = run.Id;
 
         unitOfWork.SetupGet(x => x.BuildRuns).Returns(buildRuns.Object);
         unitOfWork.SetupGet(x => x.BuildRunLogs).Returns(buildRunLogs.Object);
         unitOfWork.SetupGet(x => x.BuildProjects).Returns(buildProjects.Object);
+        buildRuns
+            .Setup(x => x.GetAsync(runId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(run);
+        buildProjects
+            .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), true))
+            .ReturnsAsync(project);
         buildRuns
             .Setup(x => x.TryClaimAsync(runId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((BuildRun?)null);
@@ -441,7 +461,9 @@ public sealed class BuildRunStartTests : IDisposable
         Assert.True(result.IsSuccess());
         runner.Verify(x => x.RunAsync(It.IsAny<BuildProcessCommand>(), It.IsAny<CancellationToken>()), Times.Never);
         buildRunLogs.Verify(x => x.AddAsync(It.IsAny<BuildRunLogEntry>(), It.IsAny<CancellationToken>()), Times.Never);
-        buildProjects.Verify(x => x.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Never);
+        buildRuns.Verify(
+            x => x.TryClaimAsync(runId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -1139,9 +1161,16 @@ public sealed class BuildRunStartTests : IDisposable
             .Setup(x => x.CommitAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
+        var queuedRun = CreateQueuedRunSnapshot(run);
+        buildRuns
+            .Setup(x => x.GetAsync(run.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(queuedRun);
         buildRuns
             .Setup(x => x.TryClaimAsync(run.Id, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(run);
+        buildProjects
+            .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), true))
+            .ReturnsAsync(project);
         buildProjects
             .Setup(x => x.GetAsync(project.Id, It.IsAny<CancellationToken>(), false))
             .ReturnsAsync(project);
@@ -1211,6 +1240,7 @@ public sealed class BuildRunStartTests : IDisposable
             applyStack.Object,
             alertService.Object,
             retention.Object,
+            new PermissiveLicenseEntitlementService(),
             NullLogger<BuildRunExecutionService>.Instance);
 
         return new BuildExecutionTestContext(
@@ -1446,6 +1476,38 @@ public sealed class BuildRunStartTests : IDisposable
                 run.TriggeredByActorId)
             : run;
     }
+
+    private static BuildRun CreateQueuedRunSnapshot(BuildRun run)
+        => BuildRun.FromPersistence(
+            run.Id,
+            run.BuildProjectId,
+            run.ProjectNameSnapshot,
+            run.GitRepositoryId,
+            run.GitRepositoryNameSnapshot,
+            run.Branch,
+            run.ResolvedCommitSha,
+            run.ContextPath,
+            run.DockerfilePath,
+            run.Target,
+            run.BuildArgsSnapshot,
+            run.BuildSecretIdsSnapshot,
+            run.PlatformSnapshot,
+            run.RegistrySnapshot,
+            run.ImageRepository,
+            run.TagTemplatesSnapshot,
+            run.ImageReferences,
+            run.Trigger,
+            run.TriggerSourceId,
+            BuildRunStatus.Queued,
+            run.ImageDigest,
+            run.TimeoutSeconds,
+            run.QueuedAt,
+            startedAt: null,
+            completedAt: null,
+            exitCode: null,
+            errorCode: null,
+            errorMessage: null,
+            triggeredByActorId: run.TriggeredByActorId);
 
     private string PrepareRepositoryCache(GitRepository repository)
     {

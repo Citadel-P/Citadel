@@ -1,5 +1,6 @@
 using Application.Configs;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -20,6 +21,7 @@ internal sealed class BackupPolicyScheduler(
     IOptions<BackupOptions> backupOptions,
     IBackupRunStreamManager backupRunStreamManager,
     INotificationQueue notificationQueue,
+    ILicenseEntitlementService entitlementService,
     TimeProvider timeProvider,
     ILogger<BackupPolicyScheduler> logger) : IBackupPolicyScheduler
 {
@@ -28,6 +30,11 @@ internal sealed class BackupPolicyScheduler(
     public async Task QueueDueScheduledRunsAsync(CancellationToken cancellationToken)
     {
         if (!options.Enabled)
+            return;
+
+        if (!await entitlementService.IsEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken))
             return;
 
         var nowUtc = SchedulerTime.TruncateToMinute(timeProvider.GetUtcNow());

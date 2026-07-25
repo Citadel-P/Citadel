@@ -11,6 +11,14 @@ public sealed record StackDriftPolicy(
     bool AutoResumePausedContainers,
     bool RemoveExtraContainers)
 {
+    public static StackDriftPolicy Disabled { get; } = new(
+        Mode: StackDriftMode.Disabled,
+        AlertOnDrift: false,
+        MarkDegraded: false,
+        AutoStartStoppedContainers: false,
+        AutoResumePausedContainers: false,
+        RemoveExtraContainers: false);
+
     public static StackDriftPolicy Default { get; } = new(
         Mode: StackDriftMode.DetectOnly,
         AlertOnDrift: true,

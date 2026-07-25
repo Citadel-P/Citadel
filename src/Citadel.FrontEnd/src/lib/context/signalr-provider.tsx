@@ -4,6 +4,7 @@ import { useAuthContext } from '@/features/auth/auth-context';
 import { SignalRContext } from './signalr-context';
 import { startConnectionWithRetry } from '../startConnectionWithRetry';
 import { createSignalRConnection, SignalRConnectionFactory } from '../createSignalRConnection';
+import { useQueryClient } from '@tanstack/react-query';
 
 type StartConnection = typeof startConnectionWithRetry;
 
@@ -29,6 +30,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   const [connectionState, setConnectionState] = useState<HubConnectionState>(HubConnectionState.Disconnected);
   const [connection, setConnection] = useState<HubConnection | null>(null);
   const { accessToken } = useAuthContext();
+  const queryClient = useQueryClient();
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   const tokenRef = useRef<string | undefined>(accessToken);
@@ -53,6 +55,10 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
     });
 
     activeConnectionRef.current = conn;
+    conn.on('LicenseStateChanged', () => {
+      void queryClient.invalidateQueries({ queryKey: ['getLicenseEntitlements'] });
+      void queryClient.invalidateQueries({ queryKey: ['getLicense'] });
+    });
 
     conn.onreconnecting(() => {
       if (activeConnectionRef.current === conn) {
@@ -131,7 +137,7 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
     void readyPromise.catch(() => {});
 
     return conn;
-  }, [baseUrl, connectionFactory, startConnection]);
+  }, [baseUrl, connectionFactory, queryClient, startConnection]);
 
   const rebuildConnection = useCallback(() => {
     if (activeCancelRef.current) {

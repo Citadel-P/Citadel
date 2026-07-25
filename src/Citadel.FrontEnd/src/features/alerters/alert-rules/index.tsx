@@ -6,7 +6,13 @@ import { AlertRulesTable } from './table';
 import { useMutate, useRead } from '@/lib/hooks';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { AlertDestination, AlertChannelInput, AlertChannelView, AlertRuleView } from '@/api/generated/api.types';
+import {
+  AlertDestination,
+  AlertChannelInput,
+  AlertChannelView,
+  AlertRuleView,
+  LicenseCapability,
+} from '@/api/generated/api.types';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +29,10 @@ import { toast } from 'sonner';
 import { FieldInput, FieldSwitch, ItemSelector } from '@/components/custom/form-builder';
 import { CitadelIcons } from '@/lib/icons';
 import { IntegrationAddCard, IntegrationCard } from '@/components/custom/common';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useNavigate } from 'react-router';
+import { LicensedFeatureDescription } from '@/components/custom/license-feature-indicator';
 
 const EMPTY_CHANNEL: AlertChannelInput = {
   name: '',
@@ -339,6 +349,41 @@ function AlertNotificationChannels() {
   );
 }
 
+function AddAlertRuleButton() {
+  const navigate = useNavigate();
+  const { data } = useRead('listAlertRules');
+  const { hasCapability } = useLicenseEntitlements();
+  const hasWritePermission = data?.data.capabilities?.canWrite === true;
+  const hasAdvancedAlerting = hasCapability(LicenseCapability.AdvancedAlerting);
+  const button = (
+    <Button
+      type="button"
+      disabled={!hasWritePermission || !hasAdvancedAlerting}
+      onClick={() => navigate('/alert-rules/add')}
+      className="inline-flex items-center bg-primary hover:bg-primary/80 rounded-sm text-sm px-2.5 py-2.5">
+      <Plus className="h-3 w-3" /> Add Rule
+    </Button>
+  );
+
+  if (hasAdvancedAlerting) return button;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span data-testid="advanced-alerting-license">{button}</span>
+      </TooltipTrigger>
+      <TooltipContent className="w-72">
+        <LicensedFeatureDescription
+          requiredLicense="Team"
+          descriptionClassName="text-xs leading-4 text-primary-foreground"
+          indicatorClassName="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground dark:text-primary-foreground">
+          Create custom alert rules and advanced conditions.
+        </LicensedFeatureDescription>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export const AlertRuleComponents: RequiredComponents = {
   Icon: CitadelIcons.AlertRule,
   Content: ({ items, actions, isLoading }) => (
@@ -356,8 +401,8 @@ export const AlertRuleComponents: RequiredComponents = {
     title: 'Alert Rules',
     subtitle: 'Manage conditions and thresholds.',
     showSearch: true,
-    showAdd: true,
-    addButtonTitle: 'Add Rule',
+    showAdd: false,
+    Extra: AddAlertRuleButton,
   },
   useData(): ResourceDataHookResult<AlertRuleView> {
     const { data, isLoading } = useRead('listAlertRules');

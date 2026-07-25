@@ -39,7 +39,7 @@ public sealed record CreateAutomationAction(AutomationActionInputModel Action) :
 internal sealed class CreateAutomationActionHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
-    ILicenseQuotaService licenseQuotaService,
+    ILicenseEntitlementService licenseEntitlementService,
     IOptions<AutomationOptions> options)
     : ICommandHandler<CreateAutomationAction, Result<AutomationActionResult>>
 {
@@ -51,15 +51,14 @@ internal sealed class CreateAutomationActionHandler(
         if (await unitOfWork.AutomationActions.ExistsByNameAsync(input.Name, cancellationToken))
             return Result.Failure<AutomationActionResult>(new ConflictError("Automation action name already exists."));
 
-        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-            new Dictionary<LicenseLimit, int>
-            {
-                [LicenseLimit.AutomationActions] = 1
-            },
-            unitOfWork,
-            cancellationToken);
-        if (quotaResult.IsFailure())
-            return Result.Failure<AutomationActionResult>(quotaResult.Errors);
+        if (input.ScheduleEnabled || input.Webhook?.Enabled == true)
+        {
+            var entitlement = await licenseEntitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure())
+                return Result.Failure<AutomationActionResult>(entitlement.Errors);
+        }
 
         var argsJson = AutomationInputValidation.NormalizeJsonObject(input.DefaultArgsJson);
         var argsResult = AutomationInputValidation.ValidateJsonObject(argsJson, "Default args");

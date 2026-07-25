@@ -1,6 +1,7 @@
 using Application.Features.Deployments.Notifications;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Alerts;
@@ -35,7 +36,8 @@ internal sealed class PatchAlertRuleHandler(
     AlertRuleCache alertRuleCache,
     IActivityStreamManager activityHub,
     INotificationQueue notificationQueue,
-    IUserContextAccessor userContext) : ICommandHandler<PatchAlertRule, Result<AlertRule>>
+    IUserContextAccessor userContext,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<PatchAlertRule, Result<AlertRule>>
 {
     public async ValueTask<Result<AlertRule>> Handle(PatchAlertRule command, CancellationToken cancellationToken)
     {
@@ -70,6 +72,31 @@ internal sealed class PatchAlertRuleHandler(
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
             return Result.Failure<AlertRule>(new BadRequestError(ex.Message));
+        }
+
+        var advancedConfigurationChanged =
+            rule.Type != patchedRule.Type
+            || rule.Severity != patchedRule.Severity
+            || rule.CooldownSeconds != patchedRule.CooldownSeconds
+            || rule.RequiredMatches != patchedRule.RequiredMatches
+            || rule.Threshold != patchedRule.Threshold
+            || !rule.LimitedTo.SequenceEqual(patchedRule.LimitedTo)
+            || !rule.QuietHours.SequenceEqual(patchedRule.QuietHours);
+        var addedChannel = patchedRule.ChannelIds.Except(rule.ChannelIds).Any();
+        var enabledCustomRule =
+            rule.CreatedByActorId != Constants.SystemId
+            && rule.Status != patchedRule.Status
+            && patchedRule.Status == AlertRuleStatus.Enabled;
+
+        if (advancedConfigurationChanged
+            || (rule.CreatedByActorId != Constants.SystemId && addedChannel)
+            || enabledCustomRule)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AdvancedAlerting,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<AlertRule>(entitlementError);
         }
 
         if (patchedRule.ChannelIds.Count > 0)

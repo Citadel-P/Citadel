@@ -1,6 +1,7 @@
 ﻿using Application.Features.Deployments.Notifications;
 using Application.Services.Builds;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -44,7 +45,8 @@ public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment>
 }
 
 internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeploymentStreamManager deploymentHub, IPlatformStreamManager platformHub, INotificationQueue notificationQueue,
-    IActivityStreamManager activityHub, IUserContextAccessor userContext) : ICommandHandler<PatchDeployment, Result<Deployment>>
+    IActivityStreamManager activityHub, IUserContextAccessor userContext,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<PatchDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(PatchDeployment command, CancellationToken cancellationToken)
     {
@@ -67,6 +69,28 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
             if (imageValidation.IsFailure(out var imageError))
             {
                 return Result.Failure<Deployment>(imageError);
+            }
+
+            if (DeploymentLicenseConfigurationPolicy.ExpandsOperationalGuardrails(
+                    deployment.Spec,
+                    patchedDeployment.Spec))
+            {
+                var entitlement = await entitlementService.EnsureEnabledAsync(
+                    LicenseCapability.OperationalGuardrails,
+                    cancellationToken);
+                if (entitlement.IsFailure(out var entitlementError))
+                    return Result.Failure<Deployment>(entitlementError);
+            }
+
+            if (DeploymentLicenseConfigurationPolicy.ExpandsAutomatedOperations(
+                    deployment.Spec,
+                    patchedDeployment.Spec))
+            {
+                var entitlement = await entitlementService.EnsureEnabledAsync(
+                    LicenseCapability.AutomatedOperations,
+                    cancellationToken);
+                if (entitlement.IsFailure(out var entitlementError))
+                    return Result.Failure<Deployment>(entitlementError);
             }
         }
 

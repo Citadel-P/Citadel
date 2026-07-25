@@ -4,6 +4,7 @@ import LogoIcon from '@/assets/logo.svg';
 import { SidebarMenu } from './sidebar-menu';
 import { Link, useNavigate } from 'react-router';
 import { useRead } from '@/lib/hooks';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import {
   Sidebar as SidebarRoot,
   SidebarContent,
@@ -12,20 +13,13 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 
-const LICENSE_REFRESH_INTERVAL = 60 * 60 * 1000;
-
 export const Sidebar = () => {
   const navigate = useNavigate();
   const { sidebarMinimized } = useLayoutContext();
   const { data: applicationInfo } = useRead('getApplicationInfo');
-  const { data: licenseData } = useRead('getLicense', undefined, {
-    retry: false,
-    staleTime: LICENSE_REFRESH_INTERVAL,
-    refetchInterval: LICENSE_REFRESH_INTERVAL,
-    meta: { suppressErrorToast: true },
-  });
+  const { entitlements } = useLicenseEntitlements();
   const version = applicationInfo?.data?.version ?? '-';
-  const licenseType = licenseData?.data.edition ?? '-';
+  const licenseType = entitlements?.effectiveEdition ?? '-';
 
   return (
     <SidebarRoot collapsible="icon">

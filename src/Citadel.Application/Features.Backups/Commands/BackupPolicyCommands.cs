@@ -217,7 +217,7 @@ internal sealed class CreateBackupPolicyHandler(
     IUserContextAccessor userContextAccessor,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
-    ILicenseQuotaService licenseQuotaService)
+    ILicenseEntitlementService licenseEntitlementService)
     : ICommandHandler<CreateBackupPolicy, Result<BackupPolicyResult>>
 {
     public async ValueTask<Result<BackupPolicyResult>> Handle(CreateBackupPolicy command, CancellationToken cancellationToken)
@@ -228,15 +228,15 @@ internal sealed class CreateBackupPolicyHandler(
         if (await unitOfWork.BackupPolicies.ExistsByNormalizedNameAsync(normalizedName, cancellationToken))
             return Result.Failure<BackupPolicyResult>(new ConflictError("Backup policy name already exists."));
 
-        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-            new Dictionary<LicenseLimit, int>
-            {
-                [LicenseLimit.BackupPolicies] = 1
-            },
-            unitOfWork,
-            cancellationToken);
-        if (quotaResult.IsFailure())
-            return Result.Failure<BackupPolicyResult>(quotaResult.Errors);
+        if (input.Enabled
+            && (!string.IsNullOrWhiteSpace(input.Cron) || input.Webhook?.Enabled == true))
+        {
+            var entitlement = await licenseEntitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure())
+                return Result.Failure<BackupPolicyResult>(entitlement.Errors);
+        }
 
         var repository = await unitOfWork.BackupRepositories.GetAsync(input.BackupRepositoryId, cancellationToken);
         if (repository is null)
@@ -295,7 +295,8 @@ internal sealed class CreateBackupPolicyHandler(
 internal sealed class UpdateBackupPolicyHandler(
     IUnitOfWork unitOfWork,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
-    IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver)
+    IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
+    ILicenseEntitlementService licenseEntitlementService)
     : ICommandHandler<UpdateBackupPolicy, Result<BackupPolicyResult>>
 {
     public async ValueTask<Result<BackupPolicyResult>> Handle(UpdateBackupPolicy command, CancellationToken cancellationToken)
@@ -303,6 +304,20 @@ internal sealed class UpdateBackupPolicyHandler(
         var policy = await unitOfWork.BackupPolicies.GetAsync(command.PolicyId, cancellationToken);
         if (policy is null)
             return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup policy not found."));
+
+        if (BackupLicenseConfigurationPolicy.ChangesActivePaidTrigger(
+                policy,
+                command.Policy,
+                command.UpdateCron,
+                command.UpdateTimeZone,
+                command.UpdateWebhook))
+        {
+            var entitlement = await licenseEntitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure())
+                return Result.Failure<BackupPolicyResult>(entitlement.Errors);
+        }
 
         BackupRepository? repository = null;
         if (command.UpdateBackupRepository && command.Policy.BackupRepositoryId.HasValue)
@@ -457,11 +472,21 @@ internal sealed class QueueBackupRunHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
     IBackupRunStreamManager backupRunStreamManager,
-    INotificationQueue notificationQueue)
+    INotificationQueue notificationQueue,
+    ILicenseEntitlementService entitlementService)
     : ICommandHandler<QueueBackupRun, Result<BackupRunResult>>
 {
     public async ValueTask<Result<BackupRunResult>> Handle(QueueBackupRun command, CancellationToken cancellationToken)
     {
+        if (command.Input.Trigger is BackupRunTrigger.Schedule or BackupRunTrigger.Webhook)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<BackupRunResult>(entitlementError);
+        }
+
         var queueResult = await unitOfWork.BackupRuns.QueueAsync(
             command.PolicyId,
             Guid.CreateVersion7(),
@@ -494,13 +519,29 @@ internal sealed class RunBackupPolicyHandler(
     IBackupRunExecutionService executionService,
     IUserContextAccessor userContextAccessor,
     IBackupRunStreamManager backupRunStreamManager,
-    INotificationQueue notificationQueue)
+    INotificationQueue notificationQueue,
+    ILicenseEntitlementService entitlementService)
     : IStreamCommandHandler<RunBackupPolicy, BackupRunStreamItem>
 {
     public async IAsyncEnumerable<BackupRunStreamItem> Handle(
         RunBackupPolicy command,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        if (command.Input.Trigger is BackupRunTrigger.Schedule or BackupRunTrigger.Webhook)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+            {
+                yield return new BackupRunStreamItem(
+                    Guid.Empty,
+                    BackupRunStatus.Rejected,
+                    entitlementError.Message);
+                yield break;
+            }
+        }
+
         var queueResult = await unitOfWork.BackupRuns.QueueAsync(
             command.PolicyId,
             Guid.CreateVersion7(),

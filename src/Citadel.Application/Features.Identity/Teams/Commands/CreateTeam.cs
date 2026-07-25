@@ -9,6 +9,7 @@ using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Application.Services.Identity;
+using Application.Services.Licensing;
 
 namespace Application.Features.Identity.Teams.Commands;
 
@@ -33,7 +34,10 @@ public sealed record CreateTeam(
     }
 }
 
-internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvictor evictor) : ICommandHandler<CreateTeam, Result<TeamDetails>>
+internal sealed class CreateTeamHandler(
+    IUnitOfWork unitOfWork,
+    IActorScopeEvictor evictor,
+    ILicenseEntitlementService entitlementService) : ICommandHandler<CreateTeam, Result<TeamDetails>>
 {
     public async ValueTask<Result<TeamDetails>> Handle(CreateTeam command, CancellationToken cancellationToken)
     {
@@ -50,6 +54,15 @@ internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvict
         var userIds = command.UserIds?.Distinct().ToArray() ?? [];
         var roleIds = command.RoleIds?.Distinct().ToArray() ?? [];
         var resourceAccesses = command.ResourceAccesses?.Distinct().ToArray() ?? [];
+
+        if (resourceAccesses.Length > 0)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.CustomAccessControl,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<TeamDetails>(entitlementError);
+        }
 
         if (userIds.Length > 0)
         {
@@ -70,6 +83,15 @@ internal sealed class CreateTeamHandler(IUnitOfWork unitOfWork, IActorScopeEvict
             var missingRoleId = roleIds.FirstOrDefault(x => !existingRoleIds.Contains(x));
             if (missingRoleId != Guid.Empty)
                 return Result.Failure<TeamDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
+
+            if (roles.Any(x => x.RoleType == RoleType.Custom))
+            {
+                var entitlement = await entitlementService.EnsureEnabledAsync(
+                    LicenseCapability.CustomAccessControl,
+                    cancellationToken);
+                if (entitlement.IsFailure(out var entitlementError))
+                    return Result.Failure<TeamDetails>(entitlementError);
+            }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(team.ActorId, roleIds, cancellationToken);
             await evictor.EvictPermissionsForActorAsync(team.ActorId, cancellationToken);

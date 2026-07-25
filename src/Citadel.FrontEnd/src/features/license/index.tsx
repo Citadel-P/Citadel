@@ -1,4 +1,4 @@
-import { LicenseLimitView, LicenseStatus } from '@/api/generated/api.types';
+import { LicenseCapabilityView, LicenseStatus } from '@/api/generated/api.types';
 import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -10,8 +10,23 @@ import { cn } from '@/lib/utils';
 import { useRead, useMutate } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useQueryClient } from '@tanstack/react-query';
-import { LICENSE_LIMIT_LABELS, LICENSE_STATUS_LABELS } from './license-labels';
-import { AlertTriangle, CheckCheck, Clipboard, KeyRound, Loader2, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react';
+import {
+  LICENSE_CAPABILITY_DESCRIPTIONS,
+  LICENSE_CAPABILITY_LABELS,
+  LICENSE_STATUS_LABELS,
+} from './license-labels';
+import {
+  AlertTriangle,
+  Check,
+  CheckCheck,
+  Clipboard,
+  KeyRound,
+  Loader2,
+  Lock,
+  RotateCcw,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 import { ReactNode, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -44,6 +59,7 @@ export default function LicensePage() {
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['getLicense'] }),
+      queryClient.invalidateQueries({ queryKey: ['getLicenseEntitlements'] }),
       queryClient.invalidateQueries({ queryKey: ['getLicenseRequest'] }),
     ]);
   };
@@ -91,7 +107,7 @@ export default function LicensePage() {
                     {license && <LicenseStatusBadge status={license.status} />}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Offline license state and quota usage for this Citadel instance.
+                    Offline license state and effective product capabilities for this Citadel instance.
                   </p>
                 </div>
               </div>
@@ -99,7 +115,8 @@ export default function LicensePage() {
 
             {license && (
               <div className="grid gap-3 text-sm sm:grid-cols-2 lg:min-w-[520px] lg:grid-cols-4">
-                <HeaderFact label="Edition" value={license.edition} />
+                <HeaderFact label="Edition" value={license.effectiveEdition} />
+                <HeaderFact label="Schema" value={license.licenseSchema ? String(license.licenseSchema) : '-'} />
                 <HeaderFact label="Instance" value={shortId(license.instanceId)} />
                 <HeaderFact label="Expires" value={license.expiresAt ? formatDate(license.expiresAt) : '-'} />
                 <HeaderFact
@@ -123,12 +140,12 @@ export default function LicensePage() {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
           <section className="rounded-sm border bg-background">
             <SectionHeader
-              title="Quota Usage"
-              description="Current usage is measured from the database when this page loads."
+              title="Capabilities"
+              description="The active license controls operational capabilities, not stored resource counts."
             />
             <div className="divide-y">
-              {(license?.limits ?? []).map((limit) => (
-                <QuotaRow key={limit.limit} limit={limit} />
+              {(license?.capabilities ?? []).map((capability) => (
+                <CapabilityRow key={capability.capability} capability={capability} />
               ))}
             </div>
           </section>
@@ -210,8 +227,8 @@ export default function LicensePage() {
         onConfirm={handleRemove}
         description={
           <>
-            Removing the installed license returns Citadel to Community limits. Existing resources are kept, but create
-            and enable actions may be blocked if current usage is over those limits.
+            Removing the installed license returns Citadel to Community. Existing paid configuration and history are
+            kept, but new paid operations remain paused until a suitable license is installed.
           </>
         }
       />
@@ -246,28 +263,27 @@ function LicenseStatusBadge({ status }: { status: LicenseStatus }) {
   );
 }
 
-function QuotaRow({ limit }: { limit: LicenseLimitView }) {
-  const current = Number(limit.current);
-  const maximum = Number(limit.maximum);
-  const percent = maximum > 0 ? Math.min(100, Math.round((current / maximum) * 100)) : 0;
-
+function CapabilityRow({ capability }: { capability: LicenseCapabilityView }) {
   return (
-    <div className="grid gap-3 p-4 sm:grid-cols-[220px_minmax(0,1fr)_120px] sm:items-center">
-      <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-foreground">
-          {LICENSE_LIMIT_LABELS[limit.limit] ?? limit.limit}
+    <div className="flex items-start gap-3 p-4">
+      <div
+        className={cn(
+          'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-sm',
+          capability.enabled ? 'bg-green-500/10 text-green-700 dark:text-green-300' : 'bg-muted text-muted-foreground',
+        )}>
+        {capability.enabled ? <Check className="size-4" /> : <Lock className="size-4" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-foreground">
+          {LICENSE_CAPABILITY_LABELS[capability.capability] ?? capability.capability}
         </div>
-        <div className="text-xs text-muted-foreground">{limit.overQuota ? 'Over licensed quota' : 'Within quota'}</div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          {LICENSE_CAPABILITY_DESCRIPTIONS[capability.capability]}
+        </div>
       </div>
-      <div className="h-2 overflow-hidden rounded-sm bg-muted">
-        <div
-          className={cn('h-full bg-primary', limit.overQuota && 'bg-destructive')}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <div className="text-sm font-medium tabular-nums text-foreground sm:text-right">
-        {current} / {maximum}
-      </div>
+      <Badge variant="secondary" className="shrink-0 rounded-sm">
+        {capability.enabled ? 'Included' : 'Not included'}
+      </Badge>
     </div>
   );
 }

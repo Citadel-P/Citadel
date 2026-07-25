@@ -1,4 +1,5 @@
 using Application.Services.Alerts;
+using Application.Services.Abstractions;
 using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -15,31 +16,50 @@ internal sealed class LicenseTransitionMonitorJob(
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     ILicenseVerifier verifier,
+    ILicenseStateProvider licenseStateProvider,
     IAlertService alertService,
+    IApplicationHubDispatcher hubDispatcher,
     ILogger<LicenseTransitionMonitorJob> logger) : BackgroundService
 {
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);
+    private static readonly TimeSpan MaximumCheckInterval = TimeSpan.FromHours(1);
+    private static readonly TimeSpan BoundaryMargin = TimeSpan.FromSeconds(1);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await CheckLicenseAsync(stoppingToken);
-
-        using var timer = new PeriodicTimer(CheckInterval);
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        while (!stoppingToken.IsCancellationRequested)
         {
-            await CheckLicenseAsync(stoppingToken);
+            var nextBoundary = await CheckLicenseAsync(stoppingToken);
+            var now = timeProvider.GetUtcNow();
+            var delay = CalculateNextCheckDelay(now, nextBoundary);
+            await Task.Delay(delay, timeProvider, stoppingToken);
         }
     }
 
-    private async Task CheckLicenseAsync(CancellationToken cancellationToken)
+    internal static TimeSpan CalculateNextCheckDelay(
+        DateTimeOffset now,
+        DateTimeOffset? nextBoundary)
+    {
+        if (!nextBoundary.HasValue)
+            return MaximumCheckInterval;
+
+        var boundaryDelay = nextBoundary.Value > now
+            ? nextBoundary.Value - now + BoundaryMargin
+            : BoundaryMargin;
+
+        return boundaryDelay < MaximumCheckInterval
+            ? boundaryDelay
+            : MaximumCheckInterval;
+    }
+
+    private async Task<DateTimeOffset?> CheckLicenseAsync(CancellationToken cancellationToken)
     {
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var installed = await unitOfWork.InstalledLicense.GetAsync(cancellationToken);
+            var installed = await unitOfWork.InstalledLicense.GetLockedAsync(cancellationToken);
             if (installed is null)
-                return;
+                return null;
 
             var now = timeProvider.GetUtcNow();
             var identity = await unitOfWork.InstanceIdentity.GetOrCreateAsync(Guid.CreateVersion7(), now, cancellationToken);
@@ -67,16 +87,41 @@ internal sealed class LicenseTransitionMonitorJob(
 
             await unitOfWork.CommitAsync(cancellationToken);
 
+            if (previousStatus != verification.Status)
+            {
+                await licenseStateProvider.ReloadAsync(cancellationToken);
+                await hubDispatcher.SendLicenseStateChanged(cancellationToken);
+            }
+
             if (alertType is not null && alertSnapshot is not null)
                 await DispatchAlertAsync(alertType.Value, alertSnapshot, now, cancellationToken);
+
+            return GetNextBoundary(verification.License?.Payload, now);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            return null;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error occurred while monitoring license state.");
+            return null;
         }
+    }
+
+    private static DateTimeOffset? GetNextBoundary(
+        LicensePayload? payload,
+        DateTimeOffset now)
+    {
+        if (payload is null)
+            return null;
+        if (now < payload.NotBefore)
+            return payload.NotBefore;
+        if (now <= payload.ExpiresAt)
+            return payload.ExpiresAt;
+        if (payload.GraceUntil.HasValue && now <= payload.GraceUntil.Value)
+            return payload.GraceUntil.Value;
+        return null;
     }
 
     private static ActivityEvent? BuildTransitionActivity(
@@ -152,9 +197,12 @@ internal sealed class LicenseTransitionMonitorJob(
         if (verification.License is null)
         {
             return new LicenseActivitySnapshot(
+                Schema: null,
                 LicenseId: null,
                 ReplacedLicenseId: null,
-                Edition: LicenseConstants.EditionCommunity,
+                LicensedEdition: null,
+                EffectiveEdition: LicenseConstants.EditionCommunity,
+                EffectiveCapabilities: [],
                 CustomerId: null,
                 CustomerName: null,
                 Fingerprint: fallbackFingerprint,
@@ -164,10 +212,20 @@ internal sealed class LicenseTransitionMonitorJob(
         }
 
         var payload = verification.License.Payload;
+        var isEffective = verification.Status is LicenseStatus.Valid or LicenseStatus.GracePeriod;
         return new LicenseActivitySnapshot(
+            Schema: payload.Schema,
             LicenseId: payload.LicenseId,
             ReplacedLicenseId: payload.ReplacedLicenseId,
-            Edition: payload.Edition,
+            LicensedEdition: payload.Edition,
+            EffectiveEdition: isEffective
+                ? payload.Schema == LicenseConstants.LegacySchema
+                    ? LicenseConstants.EditionTeam
+                    : payload.Edition
+                : LicenseConstants.EditionCommunity,
+            EffectiveCapabilities: isEffective
+                ? [.. verification.License.EffectiveCapabilities.Order()]
+                : [],
             CustomerId: payload.Customer.Id,
             CustomerName: payload.Customer.Name,
             Fingerprint: verification.License.Fingerprint,

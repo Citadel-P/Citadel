@@ -76,7 +76,6 @@ public interface IUnitOfWork : IAsyncDisposable
     IUserPreferencesRepository UserPreferences { get; }
     IInstanceIdentityRepository InstanceIdentity { get; }
     IInstalledLicenseRepository InstalledLicense { get; }
-    ILicenseUsageRepository LicenseUsage { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
     IActivityEventRepository ActivityEventRepository { get; }
@@ -114,7 +113,7 @@ public interface IActionRunRepository
     Task<IEnumerable<ActionRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken);
     Task<ActionRun?> GetLatestByActionAsync(Guid actionId, CancellationToken cancellationToken);
     Task<bool> HasActiveRunAsync(Guid actionId, CancellationToken cancellationToken);
-    Task<bool> TryMarkRunningAsync(Guid id, DateTime startedAt, CancellationToken cancellationToken);
+    Task<ActionRun?> TryMarkRunningAsync(Guid id, DateTime startedAt, CancellationToken cancellationToken);
     Task<int> CancelQueuedOrRunningAsync(Guid id, DateTime cancelledAt, string reason, CancellationToken cancellationToken);
     Task<int> RemoveCompletedOlderThanAsync(DateTime completedBefore, CancellationToken cancellationToken);
 }
@@ -507,6 +506,7 @@ public interface IInstanceIdentityRepository
 public interface IInstalledLicenseRepository
 {
     Task<InstalledLicense?> GetAsync(CancellationToken cancellationToken);
+    Task<InstalledLicense?> GetLockedAsync(CancellationToken cancellationToken);
     Task<int> UpsertAsync(InstalledLicense license, CancellationToken cancellationToken);
     Task<int> DeleteAsync(CancellationToken cancellationToken);
     Task<int> UpdateValidationStatusAsync(
@@ -514,11 +514,6 @@ public interface IInstalledLicenseRepository
         DateTimeOffset validatedAt,
         string? validationErrorCode,
         CancellationToken cancellationToken);
-}
-
-public interface ILicenseUsageRepository
-{
-    Task<LicenseReadModel> GetLicenseReadModelAsync(CancellationToken cancellationToken);
 }
 
 public interface IOidcProviderRepository
@@ -662,6 +657,9 @@ public sealed record ExternalSecretValueResult(bool IsSuccess, string? Value, st
 public interface IActorRepository
 {
     Task<Actor?> GetById(Guid id, CancellationToken cancellationToken);
+    Task<bool> HasCustomAccessConfigurationAsync(
+        IEnumerable<Guid> actorIds,
+        CancellationToken cancellationToken);
     Task<int> AddAsync(Actor actor, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Actor actor, CancellationToken cancellationToken);
 }
@@ -669,6 +667,7 @@ public interface IActorRepository
 public interface IResourceAccessRepository
 {
     Task<IEnumerable<ResourceAccessDetails>> GetAllByActorIdAsync(Guid actorId, CancellationToken cancellationToken);
+    Task<bool> ExistsForActorAsync(Guid actorId, CancellationToken cancellationToken);
     Task<int> AddAsync(ResourceAccess resourceAccess, CancellationToken cancellationToken);
     Task<int> RemoveAsync(
         Guid actorId,

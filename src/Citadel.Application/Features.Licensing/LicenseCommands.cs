@@ -1,4 +1,5 @@
 using Application.Services;
+using Application.Services.Abstractions;
 using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -15,6 +16,8 @@ namespace Application.Features.Licensing;
 
 [RequirePermission(ResourceType.License, PermissionLevel.Read)]
 public sealed record GetLicense : IQuery<Result<LicenseState>>;
+
+public sealed record GetLicenseEntitlements : IQuery<Result<LicenseState>>;
 
 [RequirePermission(ResourceType.License, PermissionLevel.Read)]
 public sealed record GetLicenseRequest : IQuery<Result<LicenseRequest>>;
@@ -38,6 +41,15 @@ internal sealed class GetLicenseHandler(ILicenseStateProvider licenseStateProvid
         => await licenseStateProvider.GetCurrentAsync(cancellationToken);
 }
 
+internal sealed class GetLicenseEntitlementsHandler(ILicenseEntitlementService entitlementService)
+    : IQueryHandler<GetLicenseEntitlements, Result<LicenseState>>
+{
+    public async ValueTask<Result<LicenseState>> Handle(
+        GetLicenseEntitlements query,
+        CancellationToken cancellationToken)
+        => await entitlementService.GetOverviewAsync(cancellationToken);
+}
+
 internal sealed class GetLicenseRequestHandler(IUnitOfWork unitOfWork, TimeProvider timeProvider)
     : IQueryHandler<GetLicenseRequest, Result<LicenseRequest>>
 {
@@ -59,7 +71,8 @@ internal sealed class InstallLicenseHandler(
     TimeProvider timeProvider,
     IUserContextAccessor userContext,
     ILicenseVerifier verifier,
-    ILicenseStateProvider licenseStateProvider) : ICommandHandler<InstallLicense, Result<LicenseState>>
+    ILicenseStateProvider licenseStateProvider,
+    IApplicationHubDispatcher hubDispatcher) : ICommandHandler<InstallLicense, Result<LicenseState>>
 {
     public async ValueTask<Result<LicenseState>> Handle(InstallLicense command, CancellationToken cancellationToken)
     {
@@ -73,10 +86,35 @@ internal sealed class InstallLicenseHandler(
         if (!verification.IsAccepted || verification.License is null)
             return Result.Failure<LicenseState>(new BadRequestError(verification.ErrorMessage ?? "License is not valid."));
 
-        var existing = await unitOfWork.InstalledLicense.GetAsync(cancellationToken);
+        var existing = await unitOfWork.InstalledLicense.GetLockedAsync(cancellationToken);
+        LicenseVerificationResult? existingVerification = null;
+        if (existing is not null)
+        {
+            existingVerification = verifier.Verify(existing.RawLicense, identity, now);
+            var existingLicenseId = existingVerification.License?.Payload.LicenseId;
+            if (string.IsNullOrWhiteSpace(existingLicenseId)
+                || !string.Equals(
+                    verification.License.Payload.ReplacedLicenseId,
+                    existingLicenseId,
+                    StringComparison.Ordinal))
+            {
+                return Result.Failure<LicenseState>(ReplacementConflict(
+                    "license-replacement-mismatch",
+                    "The submitted license does not replace the currently installed license."));
+            }
+
+            if (verification.Status == LicenseStatus.NotYetValid
+                && existingVerification.Status is LicenseStatus.Valid or LicenseStatus.GracePeriod)
+            {
+                return Result.Failure<LicenseState>(ReplacementConflict(
+                    "license-replacement-not-yet-effective",
+                    "A future-dated license cannot replace a currently active license."));
+            }
+        }
+
         var oldSnapshot = existing is null
             ? null
-            : ToSnapshot(verifier.Verify(existing.RawLicense, identity, now), existing.Fingerprint);
+            : ToSnapshot(existingVerification!, existing.Fingerprint);
 
         var installed = new InstalledLicense(
             RawLicense: verification.License.RawLicense,
@@ -102,22 +140,34 @@ internal sealed class InstallLicenseHandler(
                 : new LicenseReplaced(oldSnapshot!, newSnapshot));
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
-        var state = await LicenseStateBuilder.BuildAsync(unitOfWork, verifier, timeProvider, cancellationToken, identity);
+        var state = LicenseStateBuilder.Build(identity, installed, verification, now);
 
         await unitOfWork.CommitAsync(cancellationToken);
         await licenseStateProvider.ReloadAsync(cancellationToken);
+        await hubDispatcher.SendLicenseStateChanged(cancellationToken);
 
         return state;
     }
+
+    private static ConflictError ReplacementConflict(string problemType, string message)
+        => new(
+            message,
+            new Dictionary<string, object>
+            {
+                ["problemType"] = $"https://citadel.local/problems/{problemType}"
+            });
 
     private static LicenseActivitySnapshot ToSnapshot(LicenseVerificationResult verification, string? fallbackFingerprint)
     {
         if (verification.License is null)
         {
             return new LicenseActivitySnapshot(
+                Schema: null,
                 LicenseId: null,
                 ReplacedLicenseId: null,
-                Edition: LicenseConstants.EditionCommunity,
+                LicensedEdition: null,
+                EffectiveEdition: LicenseConstants.EditionCommunity,
+                EffectiveCapabilities: [],
                 CustomerId: null,
                 CustomerName: null,
                 Fingerprint: fallbackFingerprint,
@@ -127,10 +177,20 @@ internal sealed class InstallLicenseHandler(
         }
 
         var payload = verification.License.Payload;
+        var isEffective = verification.Status is LicenseStatus.Valid or LicenseStatus.GracePeriod;
         return new LicenseActivitySnapshot(
+            Schema: payload.Schema,
             LicenseId: payload.LicenseId,
             ReplacedLicenseId: payload.ReplacedLicenseId,
-            Edition: payload.Edition,
+            LicensedEdition: payload.Edition,
+            EffectiveEdition: isEffective
+                ? payload.Schema == LicenseConstants.LegacySchema
+                    ? LicenseConstants.EditionTeam
+                    : payload.Edition
+                : LicenseConstants.EditionCommunity,
+            EffectiveCapabilities: isEffective
+                ? [.. verification.License.EffectiveCapabilities.Order()]
+                : [],
             CustomerId: payload.Customer.Id,
             CustomerName: payload.Customer.Name,
             Fingerprint: verification.License.Fingerprint,
@@ -145,20 +205,25 @@ internal sealed class RemoveLicenseHandler(
     TimeProvider timeProvider,
     IUserContextAccessor userContext,
     ILicenseVerifier verifier,
-    ILicenseStateProvider licenseStateProvider) : ICommandHandler<RemoveLicense, Result<LicenseState>>
+    ILicenseStateProvider licenseStateProvider,
+    IApplicationHubDispatcher hubDispatcher) : ICommandHandler<RemoveLicense, Result<LicenseState>>
 {
     public async ValueTask<Result<LicenseState>> Handle(RemoveLicense command, CancellationToken cancellationToken)
     {
-        var existing = await unitOfWork.InstalledLicense.GetAsync(cancellationToken);
+        var existing = await unitOfWork.InstalledLicense.GetLockedAsync(cancellationToken);
         if (existing is null)
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+            await licenseStateProvider.ReloadAsync(cancellationToken);
             return await licenseStateProvider.GetCurrentAsync(cancellationToken);
+        }
 
         var now = timeProvider.GetUtcNow();
         var identity = await unitOfWork.InstanceIdentity.GetOrCreateAsync(Guid.CreateVersion7(), now, cancellationToken);
         var snapshot = InstallLicenseHandlerToSnapshot(verifier.Verify(existing.RawLicense, identity, now), existing.Fingerprint);
 
         await unitOfWork.InstalledLicense.DeleteAsync(cancellationToken);
-        var state = await LicenseStateBuilder.BuildAsync(unitOfWork, verifier, timeProvider, cancellationToken, identity);
+        var state = LicenseStateBuilder.Build(identity, installed: null, verification: null, now);
 
         var activity = new ActivityEvent(
             platformId: null,
@@ -172,6 +237,7 @@ internal sealed class RemoveLicenseHandler(
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
         await licenseStateProvider.ReloadAsync(cancellationToken);
+        await hubDispatcher.SendLicenseStateChanged(cancellationToken);
 
         return state;
     }
@@ -183,9 +249,12 @@ internal sealed class RemoveLicenseHandler(
         if (verification.License is null)
         {
             return new LicenseActivitySnapshot(
+                Schema: null,
                 LicenseId: null,
                 ReplacedLicenseId: null,
-                Edition: LicenseConstants.EditionCommunity,
+                LicensedEdition: null,
+                EffectiveEdition: LicenseConstants.EditionCommunity,
+                EffectiveCapabilities: [],
                 CustomerId: null,
                 CustomerName: null,
                 Fingerprint: fallbackFingerprint,
@@ -195,10 +264,20 @@ internal sealed class RemoveLicenseHandler(
         }
 
         var payload = verification.License.Payload;
+        var isEffective = verification.Status is LicenseStatus.Valid or LicenseStatus.GracePeriod;
         return new LicenseActivitySnapshot(
+            Schema: payload.Schema,
             LicenseId: payload.LicenseId,
             ReplacedLicenseId: payload.ReplacedLicenseId,
-            Edition: payload.Edition,
+            LicensedEdition: payload.Edition,
+            EffectiveEdition: isEffective
+                ? payload.Schema == LicenseConstants.LegacySchema
+                    ? LicenseConstants.EditionTeam
+                    : payload.Edition
+                : LicenseConstants.EditionCommunity,
+            EffectiveCapabilities: isEffective
+                ? [.. verification.License.EffectiveCapabilities.Order()]
+                : [],
             CustomerId: payload.Customer.Id,
             CustomerName: payload.Customer.Name,
             Fingerprint: verification.License.Fingerprint,

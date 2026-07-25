@@ -22,6 +22,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using Tests.Common;
 
 namespace Tests.Unit.Application.Features.Webhooks;
 
@@ -1142,6 +1143,7 @@ public sealed class ReceiveWebhookTests
             repoCacheManager ?? Mock.Of<IRepoCacheManager>(),
             gitCliRepository ?? Mock.Of<IGitCliRepository>(),
             Mock.Of<IAutomationRunQueueService>(),
+            new PermissiveLicenseEntitlementService(),
             NullLoggerFactory.Instance);
     }
 

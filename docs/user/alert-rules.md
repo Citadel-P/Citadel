@@ -10,6 +10,38 @@ Channel URLs often contain webhook IDs, tokens, or bot credentials. Treat them a
 
 Use a separate webhook or bot token for Citadel when the destination service supports it. If the URL is exposed later, you can revoke only the Citadel webhook or token without breaking other integrations.
 
+## License Availability
+
+Community includes:
+
+- notification channel creation, testing, update, enablement, and deletion
+- every supported notification destination type
+- in-app alert events
+- Citadel's seeded system alert rules
+- enabling or disabling seeded system rules
+- assigning notification channels to seeded system rules
+- external delivery when a seeded system rule triggers
+
+Community has no license-enforced notification-channel count limit.
+
+Team's `Advanced Alerting` capability adds:
+
+- custom alert-rule creation
+- custom conditions and rule behavior
+- quiet hours
+- cooldown changes
+- threshold and required-match changes
+- severity changes
+- resource-specific scoping
+
+A seeded system rule is installed by Citadel and owned by the Citadel system
+actor. In Community, you can change its enabled status and notification-channel
+assignments. Changing its other fields requires Advanced Alerting.
+
+If a Team license expires after its grace period, custom rules pause.
+Notification channels remain configured, and seeded system rules continue
+sending in-app and external notifications.
+
 ## Notification Channels
 
 Open:
@@ -223,7 +255,25 @@ These are the channel URL patterns supported by the Alert Rules page:
 | WeCom | `wecom://<key>` |
 | Zulip Chat | `zulip://<bot-email>:<bot-key>@<zulip-domain>/?stream=<stream>&topic=<topic>` |
 
-## Create An Alert Rule
+## Configure A Seeded System Rule
+
+Community administrators can configure a rule installed by Citadel:
+
+1. Open `Monitoring -> Alert Rules`.
+2. Select a seeded system rule.
+3. Enable or disable the rule.
+4. Select one or more notification channels.
+5. Save the rule.
+
+The rule continues creating in-app alert events when it has no channel.
+Selecting an active channel also enables external delivery.
+
+Changing severity, cooldown, thresholds, required matches, quiet hours, or
+resource scope requires Team's Advanced Alerting capability.
+
+## Create A Custom Alert Rule
+
+Creating a custom alert rule requires Team's `Advanced Alerting` capability.
 
 Select:
 
@@ -312,6 +362,10 @@ Automation alerts:
 - `AutomationActionRunFailed`
 
 ## Recommended Rules
+
+Creating the custom rules in this section requires Team's Advanced Alerting
+capability. Community administrators can instead attach notification channels
+to the corresponding seeded system rules.
 
 For platform availability:
 

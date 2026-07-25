@@ -46,7 +46,7 @@ internal sealed class CreateUserHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContext,
     IActorScopeEvictor evictor,
-    ILicenseQuotaService licenseQuotaService) : ICommandHandler<CreateUser, Result<UserDetails>>
+    ILicenseEntitlementService entitlementService) : ICommandHandler<CreateUser, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(CreateUser command, CancellationToken cancellationToken)
     {
@@ -58,19 +58,6 @@ internal sealed class CreateUserHandler(
         if (conflicts.EmailExists)
             return Result.Failure<UserDetails>(new ConflictError("Email already exists"));
 
-        if (command.IsEnabled)
-        {
-            var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-                new Dictionary<LicenseLimit, int>
-                {
-                    [LicenseLimit.ActiveUsers] = 1
-                },
-                unitOfWork,
-                cancellationToken);
-            if (quotaResult.IsFailure())
-                return Result.Failure<UserDetails>(quotaResult.Errors);
-        }
-
         var userActor = Actor.Create(ActorType.User, new ActorMetadata(command.Name), command.IsEnabled);
         var user = new User(command.Name, command.Email, command.Password, userActor.Id, actorId);
 
@@ -81,6 +68,15 @@ internal sealed class CreateUserHandler(
         var roleIds = command.RoleIds?.Distinct().ToArray() ?? [];
         var resourceAccesses = command.ResourceAccesses?.Distinct().ToArray() ?? [];
 
+        if (resourceAccesses.Length > 0)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.CustomAccessControl,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<UserDetails>(entitlementError);
+        }
+
         if (teamIds.Length > 0)
         {
             var teams = await unitOfWork.Teams.GetAllAsync(teamIds, cancellationToken) ?? [];
@@ -88,6 +84,17 @@ internal sealed class CreateUserHandler(
             var missingTeamId = teamIds.FirstOrDefault(x => !existingTeamIds.Contains(x));
             if (missingTeamId != Guid.Empty)
                 return Result.Failure<UserDetails>(new NotFoundError($"Team with ID {missingTeamId} does not exist"));
+
+            if (await unitOfWork.Actors.HasCustomAccessConfigurationAsync(
+                    teams.Select(x => x.ActorId),
+                    cancellationToken))
+            {
+                var entitlement = await entitlementService.EnsureEnabledAsync(
+                    LicenseCapability.CustomAccessControl,
+                    cancellationToken);
+                if (entitlement.IsFailure(out var entitlementError))
+                    return Result.Failure<UserDetails>(entitlementError);
+            }
 
             await unitOfWork.Users.ReplaceTeamsAsync(user.Id, teamIds, cancellationToken);
             await evictor.EvictUsers(new[] { user.Id }, cancellationToken);
@@ -100,6 +107,15 @@ internal sealed class CreateUserHandler(
             var missingRoleId = roleIds.FirstOrDefault(x => !existingRoleIds.Contains(x));
             if (missingRoleId != Guid.Empty)
                 return Result.Failure<UserDetails>(new NotFoundError($"Role with ID {missingRoleId} does not exist"));
+
+            if (roles.Any(x => x.RoleType == RoleType.Custom))
+            {
+                var entitlement = await entitlementService.EnsureEnabledAsync(
+                    LicenseCapability.CustomAccessControl,
+                    cancellationToken);
+                if (entitlement.IsFailure(out var entitlementError))
+                    return Result.Failure<UserDetails>(entitlementError);
+            }
 
             await unitOfWork.Roles.ReplaceActorRolesAsync(user.ActorId, roleIds, cancellationToken);
             await evictor.EvictPermissionsForActorAsync(user.ActorId, cancellationToken);

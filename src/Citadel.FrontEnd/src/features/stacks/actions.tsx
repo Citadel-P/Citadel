@@ -97,8 +97,7 @@ export const syncAction: ActionConfig<StackView, any> = {
     const queryClient = useQueryClient();
     const selected = Array.isArray(resources) ? resources[0] : resources;
     const multiSelect = Array.isArray(resources) && resources.length > 1;
-    const canCheck =
-      !!selected && !multiSelect && canCheckDrift(selected) && selected.driftPolicy?.mode !== StackDriftMode.Disabled;
+    const canCheck = !!selected && !multiSelect && canCheckDrift(selected);
     const { isFetching, refetch } = useRead('getStackDrift', { stackId: selected?.id ?? '' }, { enabled: false });
     const { mutateAsync, isPending } = useMutate('reconcileStack');
 

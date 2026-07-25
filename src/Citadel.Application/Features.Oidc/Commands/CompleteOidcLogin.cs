@@ -40,7 +40,6 @@ internal sealed class CompleteOidcLoginHandler(
     IJwtService jwtService,
     IRoleCache roleCache,
     IActorScopeEvictor actorScopeEvictor,
-    ILicenseQuotaService licenseQuotaService,
     IRequestSessionMetadataAccessor requestSessionMetadataAccessor,
     IRefreshTokenCookieService refreshTokenCookieService)
     : ICommandHandler<CompleteOidcLogin, Result<OidcLoginCompleteResult>>
@@ -162,13 +161,6 @@ internal sealed class CompleteOidcLoginHandler(
         OidcTokenIdentity identity,
         CancellationToken cancellationToken)
     {
-        var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-            new Dictionary<LicenseLimit, int> { [LicenseLimit.ActiveUsers] = 1 },
-            unitOfWork,
-            cancellationToken);
-        if (!quotaResult.IsSuccess())
-            return Result.Failure<UserAuthInfo>(quotaResult.Errors);
-
         var name = await CreateUniqueUserNameAsync(identity, cancellationToken);
         var actor = Actor.Create(ActorType.User, new ActorMetadata(name));
         var password = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));

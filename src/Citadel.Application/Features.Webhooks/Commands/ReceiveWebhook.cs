@@ -2,6 +2,7 @@ using Application.Features.Deployments.Notifications;
 using Application.Features.Builds.Commands;
 using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Licensing;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
@@ -62,6 +63,7 @@ internal sealed class ReceiveWebhookHandler(
     IRepoCacheManager repoCacheManager,
     IGitCliRepository gitCliRepository,
     IAutomationRunQueueService automationRunQueueService,
+    ILicenseEntitlementService entitlementService,
     ILoggerFactory loggerFactory) : ICommandHandler<ReceiveWebhook, Result<WebhookReceiveResult>>
 {
     private const int MaxBodyBytes = 1024 * 1024;
@@ -346,6 +348,12 @@ internal sealed class ReceiveWebhookHandler(
                 "Stack update notification queued");
         }
 
+        var entitlementNoOp = await GetEntitlementNoOpAsync(
+            LicenseCapability.AutomatedOperations,
+            cancellationToken);
+        if (entitlementNoOp is not null)
+            return entitlementNoOp;
+
         var logger = loggerFactory.CreateLogger("WebhookStackDeploy");
         _ = Task.Run(async () =>
         {
@@ -393,6 +401,12 @@ internal sealed class ReceiveWebhookHandler(
         if (branch.NoOpReason is not null)
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
+        var entitlementNoOp = await GetEntitlementNoOpAsync(
+            LicenseCapability.AutomatedOperations,
+            cancellationToken);
+        if (entitlementNoOp is not null)
+            return entitlementNoOp;
+
         var result = await automationRunQueueService.QueueAsync(
             action.Id,
             ActionRunTrigger.Webhook,
@@ -427,6 +441,12 @@ internal sealed class ReceiveWebhookHandler(
         var branch = ResolveBranch(target.BranchFilter, payload.Branch, fallbackBranch: null);
         if (branch.NoOpReason is not null)
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
+
+        var entitlementNoOp = await GetEntitlementNoOpAsync(
+            LicenseCapability.AutomatedOperations,
+            cancellationToken);
+        if (entitlementNoOp is not null)
+            return entitlementNoOp;
 
         var queueResult = await unitOfWork.BackupRuns.QueueAsync(
             policy.Id,
@@ -472,6 +492,21 @@ internal sealed class ReceiveWebhookHandler(
         if (branch.NoOpReason is not null)
             return WebhookDispatchResult.NoOp(branch.NoOpReason);
 
+        var automatedNoOp = await GetEntitlementNoOpAsync(
+            LicenseCapability.AutomatedOperations,
+            cancellationToken);
+        if (automatedNoOp is not null)
+            return automatedNoOp;
+
+        if (project.BuilderKind == BuildProjectBuilderKind.BuildAgentPool)
+        {
+            var elasticNoOp = await GetEntitlementNoOpAsync(
+                LicenseCapability.ElasticBuildExecution,
+                cancellationToken);
+            if (elasticNoOp is not null)
+                return elasticNoOp;
+        }
+
         var resolvedBranch = branch.Branch ?? project.Branch;
         if (await unitOfWork.BuildRuns.HasActiveRunAsync(project.Id, cancellationToken))
             return WebhookDispatchResult.NoOp("Build project already has an active run");
@@ -482,9 +517,12 @@ internal sealed class ReceiveWebhookHandler(
 
         var dispatchedCommit = relevance.ResolvedCommitSha ?? payload.CommitSha;
 
-        var platform = await unitOfWork.Platforms.GetInfoAsync(project.PlatformId, cancellationToken);
-        if (platform is null)
-            return WebhookDispatchResult.NoOp("Platform not found");
+        var buildTargetResult = await QueueBuildRunHandler.ResolveBuildTargetAsync(
+            project,
+            unitOfWork,
+            cancellationToken);
+        if (!buildTargetResult.IsSuccess(out var buildTarget, out var buildTargetError))
+            return WebhookDispatchResult.NoOp(buildTargetError!.Message);
 
         var registry = await unitOfWork.Registries.GetAsync(project.RegistryId, cancellationToken);
         if (registry is null)
@@ -509,7 +547,7 @@ internal sealed class ReceiveWebhookHandler(
             project.Target,
             project.BuildArgs,
             [.. project.BuildSecrets.Select(static s => s.Id)],
-            new BuildPlatformSnapshot(platform.Id, platform.Name, platform.Address, platform.ConnectorType),
+            buildTarget.PlatformSnapshot,
             new BuildRegistrySnapshot(registry.Id, registry.Name, registry.RegistryHost),
             project.ImageRepository,
             project.TagTemplates,
@@ -815,10 +853,21 @@ internal sealed class ReceiveWebhookHandler(
 
     private static bool IsAlertableDispatchNoOp(string? reason)
         => reason is not null
+           && !reason.StartsWith("Paused by license:", StringComparison.OrdinalIgnoreCase)
            && !reason.Equals("Branch mismatch", StringComparison.OrdinalIgnoreCase)
            && !reason.Equals("No relevant path changes", StringComparison.OrdinalIgnoreCase)
            && !reason.Equals("No new commit", StringComparison.OrdinalIgnoreCase)
            && !reason.Equals("Unsupported event type", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<WebhookDispatchResult?> GetEntitlementNoOpAsync(
+        LicenseCapability capability,
+        CancellationToken cancellationToken)
+    {
+        var entitlement = await entitlementService.EnsureEnabledAsync(capability, cancellationToken);
+        return entitlement.IsFailure(out var error)
+            ? WebhookDispatchResult.NoOp($"Paused by license: {error.Message}")
+            : null;
+    }
 
     private static string BackupQueueNoOpReason(BackupRunQueueResultStatus status)
         => status switch

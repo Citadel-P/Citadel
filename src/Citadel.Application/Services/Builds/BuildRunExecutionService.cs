@@ -1,6 +1,7 @@
 using Application.Features.Builds.Commands;
 using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Licensing;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -131,15 +132,62 @@ internal sealed class BuildRunExecutionService(
     IApplyStackService applyStackService,
     IAlertService alertService,
     IBuildRunRetentionService buildRunRetentionService,
+    ILicenseEntitlementService entitlementService,
     ILogger<BuildRunExecutionService> logger) : IBuildRunExecutionService
 {
     private const int MaxBufferedLogEntries = 25;
 
     public async ValueTask<Result> ExecuteAsync(Guid runId, CancellationToken cancellationToken)
     {
-        var run = await unitOfWork.BuildRuns.TryClaimAsync(runId, DateTimeOffset.UtcNow, cancellationToken);
+        var run = await unitOfWork.BuildRuns.TryClaimAsync(
+            runId,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
         if (run is null)
             return Result.Success();
+
+        if (run.Trigger is (BuildRunTrigger.Schedule or BuildRunTrigger.Webhook)
+            && !await entitlementService.IsEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken))
+        {
+            return await FailAsync(
+                run,
+                BuildRunStatus.Rejected,
+                null,
+                "license.capability_required",
+                "Automated operations require a Team license.",
+                cancellationToken);
+        }
+
+        var project = await unitOfWork.BuildProjects.GetAsync(
+            run.BuildProjectId,
+            cancellationToken,
+            includeArchived: true);
+        if (project is null)
+        {
+            return await FailAsync(
+                run,
+                BuildRunStatus.Failed,
+                null,
+                "build.project_missing",
+                "Build project no longer exists.",
+                cancellationToken);
+        }
+
+        if (project.BuilderKind == BuildProjectBuilderKind.BuildAgentPool
+            && !await entitlementService.IsEnabledAsync(
+                LicenseCapability.ElasticBuildExecution,
+                cancellationToken))
+        {
+            return await FailAsync(
+                run,
+                BuildRunStatus.Rejected,
+                null,
+                "license.capability_required",
+                "Elastic build execution requires a Team license.",
+                cancellationToken);
+        }
 
         await AppendLogAsync(run.Id, "system", "Build run claimed by worker.", cancellationToken);
         await buildRunStreamManager.SendBuildRunInfo(run);
@@ -769,6 +817,17 @@ internal sealed class BuildRunExecutionService(
         Guid actorId,
         CancellationToken cancellationToken)
     {
+        if ((consumers.DeploymentsToRedeploy.Count > 0 || consumers.StacksToRedeploy.Count > 0)
+            && !await entitlementService.IsEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken))
+        {
+            await AppendPostBuildRedeployLogAsync(
+                runId,
+                "Post-build redeployment paused by license. The desired build artifact was updated without applying it.");
+            return;
+        }
+
         foreach (var deploymentId in consumers.DeploymentsToRedeploy)
         {
             try

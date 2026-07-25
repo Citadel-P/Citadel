@@ -321,6 +321,12 @@ public static class PublicEndpoints
 
     private static void MapLicenseEndpoints(RouteGroupBuilder license)
     {
+        license.MapGet("entitlements", WebApi.Routes.Endpoints.License.GetEntitlements)
+            .WithSummary("Get effective license entitlements")
+            .Produces<LicenseEntitlementsView>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getLicenseEntitlements");
+
         license.MapGet("/", WebApi.Routes.Endpoints.License.Get)
             .WithSummary("Get license status")
             .Produces<LicenseView>()

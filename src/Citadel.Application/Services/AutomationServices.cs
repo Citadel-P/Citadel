@@ -1,5 +1,6 @@
 using Application.Configs;
 using Application.Services.Alerts;
+using Application.Services.Licensing;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
@@ -114,6 +115,7 @@ internal sealed class AutomationExecutionService(
     IAlertService alertService,
     IAutomationActionStreamManager automationActionStreamManager,
     INotificationQueue notificationQueue,
+    ILicenseEntitlementService entitlementService,
     IOptions<AutomationOptions> options,
     ILogger<AutomationExecutionService> logger) : IAutomationExecutionService
 {
@@ -123,11 +125,27 @@ internal sealed class AutomationExecutionService(
         Guid runId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var claimed = await TryClaimRunAsync(runId, cancellationToken);
-        if (!claimed)
+        var run = await TryClaimRunAsync(runId, cancellationToken);
+        if (run is null)
         {
             yield return Error(runId, 409, "Automation run is no longer queued.");
             yield break;
+        }
+
+        if (run.Trigger is ActionRunTrigger.Schedule or ActionRunTrigger.Webhook)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+            {
+                run.Reject(entitlementError.Message, DateTime.UtcNow);
+                await dbWorkQueue.EnqueueAndWaitAsync(
+                    new AutomationRunCompletedWorkItem(run, notificationQueue, automationActionStreamManager),
+                    cancellationToken);
+                yield return Error(runId, 403, entitlementError.Message);
+                yield break;
+            }
         }
 
         await foreach (var item in ExecuteAsync(runId, cancellationToken))
@@ -329,13 +347,13 @@ internal sealed class AutomationExecutionService(
         return jwtService.CreateAccessToken(claims);
     }
 
-    private async Task<bool> TryClaimRunAsync(Guid runId, CancellationToken cancellationToken)
+    private async Task<ActionRun?> TryClaimRunAsync(Guid runId, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var claimed = await unitOfWork.ActionRuns.TryMarkRunningAsync(runId, DateTime.UtcNow, cancellationToken);
+        var run = await unitOfWork.ActionRuns.TryMarkRunningAsync(runId, DateTime.UtcNow, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
-        return claimed;
+        return run;
     }
 
     private async Task<AutomationRunContext?> LoadRunContextAsync(Guid runId, CancellationToken cancellationToken)
@@ -620,7 +638,8 @@ internal sealed class AutomationRunCompletedWorkItem(
 
 internal sealed class AutomationRunQueueService(
     IServiceScopeFactory scopeFactory,
-    IOptions<AutomationOptions> options) : IAutomationRunQueueService
+    IOptions<AutomationOptions> options,
+    ILicenseEntitlementService entitlementService) : IAutomationRunQueueService
 {
     private readonly AutomationOptions options = options.Value;
 
@@ -633,6 +652,15 @@ internal sealed class AutomationRunQueueService(
         bool requireEnabled,
         CancellationToken cancellationToken)
     {
+        if (trigger is ActionRunTrigger.Schedule or ActionRunTrigger.Webhook)
+        {
+            var entitlement = await entitlementService.EnsureEnabledAsync(
+                LicenseCapability.AutomatedOperations,
+                cancellationToken);
+            if (entitlement.IsFailure(out var entitlementError))
+                return Result.Failure<ActionRun>(entitlementError);
+        }
+
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var action = await unitOfWork.AutomationActions.GetAsync(actionId, cancellationToken);
@@ -659,6 +687,12 @@ internal sealed class AutomationRunQueueService(
         DateTime scheduledMinuteUtc,
         CancellationToken cancellationToken)
     {
+        var entitlement = await entitlementService.EnsureEnabledAsync(
+            LicenseCapability.AutomatedOperations,
+            cancellationToken);
+        if (entitlement.IsFailure(out var entitlementError))
+            return Result.Failure<ActionRun>(entitlementError);
+
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var action = await unitOfWork.AutomationActions.GetAsync(actionId, cancellationToken);

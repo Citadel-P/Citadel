@@ -13,6 +13,23 @@ Examples:
 
 Actions run through Citadel permissions. They are not raw shell scripts and they do not get host or Docker access.
 
+## License Availability
+
+Community can:
+
+- create and edit action definitions
+- test an action
+- start an enabled action manually
+- view runs and logs
+
+Schedules and webhook-triggered action execution require Team's
+`Automated Operations` capability. A webhook may be received and authenticated
+without that capability, but it cannot queue the action run.
+
+If the capability becomes unavailable, existing schedule and webhook
+configuration remains stored and is shown as paused. Manual and test runs remain
+available.
+
 ## Open Actions
 
 Open:
@@ -154,6 +171,8 @@ If the same action is already running, Citadel rejects the new run instead of ru
 
 ## Schedule
 
+Schedules require Team's `Automated Operations` capability.
+
 Enable `Schedule` to run an action automatically.
 
 Set:
@@ -176,6 +195,8 @@ When a scheduled run is due, Citadel queues an action run with trigger `Schedule
 If the action is already running, Citadel records a rejected run instead of starting a duplicate.
 
 ## Webhook
+
+Webhook-triggered execution requires Team's `Automated Operations` capability.
 
 Enable `Webhook` to let a Git webhook queue the action.
 

@@ -1,5 +1,6 @@
 using Application.Configs;
 using Application.Services.SignalR;
+using Application.Services.Licensing;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -85,6 +86,7 @@ internal sealed class BackupRunExecutionService(
     IBackupPolicyStreamManager backupPolicyStreamManager,
     IBackupRunStreamManager backupRunStreamManager,
     INotificationQueue notificationQueue,
+    ILicenseEntitlementService entitlementService,
     IOptions<BackupOptions> backupOptions,
     ILogger<BackupRunExecutionService> logger) : IBackupRunExecutionService
 {
@@ -179,6 +181,24 @@ internal sealed class BackupRunExecutionService(
             {
                 await FailRunAsync(run, policy, BackupRunStatus.Rejected, null, "backup.disabled", "Backups are disabled.", cancellationToken);
                 await WriteAsync(writer, Error(run.Id, BackupRunStatus.Rejected, "Backups are disabled."), cancellationToken);
+                return;
+            }
+
+            if (run.Trigger is (BackupRunTrigger.Schedule or BackupRunTrigger.Webhook)
+                && !await entitlementService.IsEnabledAsync(
+                    LicenseCapability.AutomatedOperations,
+                    cancellationToken))
+            {
+                const string message = "Automated operations require a Team license.";
+                await FailRunAsync(
+                    run,
+                    policy,
+                    BackupRunStatus.Rejected,
+                    null,
+                    "license.capability_required",
+                    message,
+                    cancellationToken);
+                await WriteAsync(writer, Error(run.Id, BackupRunStatus.Rejected, message), cancellationToken);
                 return;
             }
 

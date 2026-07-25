@@ -1,5 +1,6 @@
 ﻿using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Licensing;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
@@ -18,6 +19,7 @@ internal sealed class DeploymentAutoUpdateJob(
     ISyncBarrier syncBarrier,
     IServiceScopeFactory scopeFactory,
     IDelayWithJitterService delayWithJitterService,
+    ILicenseEntitlementService entitlementService,
     ILogger<DeploymentAutoUpdateJob> logger) : BackgroundService
 {
     private const int CheckIntervalInHours = 2;
@@ -86,7 +88,10 @@ internal sealed class DeploymentAutoUpdateJob(
             );
         }
 
-        if (deployment.Spec?.UpdateBehavior == UpdateBehavior.Notify)
+        var canAutoUpdate = await entitlementService.IsEnabledAsync(
+            LicenseCapability.OperationalGuardrails,
+            cancellationToken);
+        if (deployment.Spec?.UpdateBehavior == UpdateBehavior.Notify || !canAutoUpdate)
         {
             var context = new AlertEvaluationContext(
                 UtcNow: now,

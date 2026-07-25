@@ -41,6 +41,40 @@ internal sealed class ActorRepository(IDbConnection db, Func<IDbTransaction> tx)
         return result?.ToDomain();
     }
 
+    public Task<bool> HasCustomAccessConfigurationAsync(
+        IEnumerable<Guid> actorIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = actorIds as Guid[] ?? [.. actorIds];
+        if (ids.Length == 0)
+            return Task.FromResult(false);
+
+        const string sql = """
+            SELECT
+                EXISTS (
+                    SELECT 1
+                    FROM ActorRoles ar
+                    JOIN Roles r ON r.Id = ar.RoleId
+                    WHERE ar.ActorId = ANY(@ActorIds)
+                      AND r.RoleType = @CustomRoleType
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM ResourceAccesses ra
+                    WHERE ra.ActorId = ANY(@ActorIds)
+                )
+            """;
+        return db.ExecuteScalarAsync<bool>(
+            sql,
+            new
+            {
+                ActorIds = ids,
+                CustomRoleType = EnumFormatter<RoleType>.GetValue(RoleType.Custom),
+                cancellationToken
+            },
+            transaction: tx());
+    }
+
     public Task<int> UpdateAsync(Actor actor, CancellationToken cancellationToken)
     {
         const string sql = "UPDATE Actors SET IsEnabled = @IsEnabled WHERE Id = @Id";

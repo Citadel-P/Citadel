@@ -25,8 +25,7 @@ public sealed record PatchActorEnabled(Guid Id, bool IsEnabled) : ICommand<Resul
 internal sealed class PatchActorEnabledHandler(
     IUnitOfWork unitOfWork,
     IUserContextAccessor userContextAccessor,
-    IActorScopeEvictor evictor,
-    ILicenseQuotaService licenseQuotaService)
+    IActorScopeEvictor evictor)
     : ICommandHandler<PatchActorEnabled, Result<Actor>>
 {
     public async ValueTask<Result<Actor>> Handle(PatchActorEnabled command, CancellationToken cancellationToken)
@@ -46,19 +45,6 @@ internal sealed class PatchActorEnabledHandler(
         if (actor is null)
         {
             return Result.Failure<Actor>(new NotFoundError("The provided actor does not exist"));
-        }
-
-        if (command.IsEnabled && !actor.IsEnabled && actor.Type == ActorType.User)
-        {
-            var quotaResult = await licenseQuotaService.EnsureCanIncreaseAsync(
-                new Dictionary<LicenseLimit, int>
-                {
-                    [LicenseLimit.ActiveUsers] = 1
-                },
-                unitOfWork,
-                cancellationToken);
-            if (quotaResult.IsFailure())
-                return Result.Failure<Actor>(quotaResult.Errors);
         }
 
         var result = actor.SetEnabled(command.IsEnabled);
