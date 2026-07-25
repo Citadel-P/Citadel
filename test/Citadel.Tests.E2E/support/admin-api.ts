@@ -13,7 +13,7 @@ const tokenFile = path.resolve(
   '../.auth/admin-token',
 );
 
-const getAccessToken = async (request: APIRequestContext) => {
+export const getAdminAccessToken = async (request: APIRequestContext) => {
   try {
     const token = (await fs.readFile(tokenFile, 'utf8')).trim();
     if (token) {
@@ -48,7 +48,7 @@ export const createRestrictedPersona = async (
   request: APIRequestContext,
   prefix: string,
 ): Promise<RestrictedPersona> => {
-  const accessToken = await getAccessToken(request);
+  const accessToken = await getAdminAccessToken(request);
   const headers = { Authorization: `Bearer ${accessToken}` };
   const email = `${prefix}@citadel.local`;
   const password = 'restricted123';
@@ -78,7 +78,7 @@ export const deleteRestrictedPersona = async (
   request: APIRequestContext,
   persona: RestrictedPersona,
 ) => {
-  const accessToken = await getAccessToken(request);
+  const accessToken = await getAdminAccessToken(request);
   const headers = { Authorization: `Bearer ${accessToken}` };
 
   const userDeletion = await request.delete('/api/v1/users', {
@@ -91,7 +91,7 @@ export const deleteRestrictedPersona = async (
 };
 
 export const deleteTagsByPrefix = async (request: APIRequestContext, prefix: string) => {
-  const accessToken = await getAccessToken(request);
+  const accessToken = await getAdminAccessToken(request);
   const headers = { Authorization: `Bearer ${accessToken}` };
   const response = await request.get('/api/v1/tags', { headers });
   if (!response.ok()) {

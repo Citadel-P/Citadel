@@ -6,6 +6,8 @@
   "scripts": {
     "test": "playwright test",
     "test:smoke": "playwright test tests/smoke",
+    "test:core-runtime": "playwright test tests/core-runtime",
+    "test:nightly-runtime": "playwright test tests/nightly",
     "typecheck": "tsc --noEmit",
     "install:chromium": "playwright install chromium",
     "env:up": "docker compose -f compose.yml up -d --wait",

@@ -15,15 +15,60 @@ on:
   pull_request:
     branches: [ "main" ]
 
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GHCR_REGISTRY: ghcr.io
   # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
   DOCKERHUB_REPOSITORY: citadel
+  BUILDKIT_CACHE_SCOPE: citadel-linux-amd64
+  CITADEL_E2E_IMAGE: citadel-e2e:${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.nbgv.outputs.VERSION }}
+      simple-version: ${{ steps.nbgv.outputs.SIMPLE_VERSION }}
+      assembly-version: ${{ steps.nbgv.outputs.ASSEMBLY_VERSION }}
+      file-version: ${{ steps.nbgv.outputs.FILE_VERSION }}
+      public-release: ${{ steps.nbgv.outputs.PUBLIC_RELEASE }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore local .NET tools
+        run: dotnet tool restore
+
+      - name: Get version from Nerdbank.GitVersioning
+        id: nbgv
+        shell: bash
+        run: |
+          {
+            echo "VERSION=$(dotnet nbgv get-version -v NuGetPackageVersion)"
+            echo "SIMPLE_VERSION=$(dotnet nbgv get-version -v SimpleVersion)"
+            echo "ASSEMBLY_VERSION=$(dotnet nbgv get-version -v AssemblyVersion)"
+            echo "FILE_VERSION=$(dotnet nbgv get-version -v AssemblyFileVersion)"
+            echo "PUBLIC_RELEASE=$(dotnet nbgv get-version -v PublicRelease)"
+          } >> "$GITHUB_OUTPUT"
+
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
 
@@ -69,11 +114,12 @@ jobs:
           retention-days: 14
 
   e2e-smoke:
+    needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     env:
-      CITADEL_E2E_IMAGE: citadel-e2e:${{ github.run_id }}-${{ github.run_attempt }}
       CITADEL_E2E_BASE_URL: http://127.0.0.1:18000
       COMPOSE_PROJECT_NAME: citadel-e2e-${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -102,8 +148,13 @@ jobs:
           file: src/Citadel.WebApi/Dockerfile
           load: true
           tags: ${{ env.CITADEL_E2E_IMAGE }}
-          cache-from: type=gha,scope=e2e-candidate
-          cache-to: type=gha,mode=max,scope=e2e-candidate
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+            ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}
+            FILE_VERSION=${{ needs.version.outputs.file-version }}
+            INFORMATIONAL_VERSION=${{ needs.version.outputs.version }}
+          cache-from: type=gha,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
+          cache-to: type=gha,mode=max,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
 
       - name: Install E2E dependencies
         working-directory: test/Citadel.Tests.E2E
@@ -139,6 +190,21 @@ jobs:
         working-directory: test/Citadel.Tests.E2E
         run: docker compose -f compose.yml down --volumes --remove-orphans
 
+      - name: Export tested E2E candidate
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: |
+          mkdir -p candidate-image
+          docker save "${CITADEL_E2E_IMAGE}" | gzip -1 > candidate-image/citadel-e2e-image.tar.gz
+
+      - name: Upload tested E2E candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: citadel-e2e-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test/Citadel.Tests.E2E/candidate-image/citadel-e2e-image.tar.gz
+          compression-level: 0
+          retention-days: 1
+
       - name: Upload E2E diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -151,74 +217,226 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  build:
-
+  core-runtime:
+    needs: e2e-smoke
     runs-on: ubuntu-latest
-    needs: [frontend, e2e-smoke]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      CITADEL_E2E_BASE_URL: http://127.0.0.1:18000
+      COMPOSE_PROJECT_NAME: citadel-e2e-core-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download tested E2E candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-e2e-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test/Citadel.Tests.E2E/candidate-image
+
+      - name: Load tested E2E candidate
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: gzip -dc candidate-image/citadel-e2e-image.tar.gz | docker load
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: test/Citadel.Tests.E2E/package-lock.json
+
+      - name: Install E2E dependencies
+        working-directory: test/Citadel.Tests.E2E
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: test/Citadel.Tests.E2E
+        run: npx playwright install --with-deps chromium
+
+      - name: Start isolated E2E environment
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml up -d --wait
+
+      - name: Run core runtime tests
+        working-directory: test/Citadel.Tests.E2E
+        run: npm run test:core-runtime
+
+      - name: Collect core runtime diagnostics
+        if: failure()
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          docker compose -f compose.yml ps --all > artifacts/compose-ps.txt
+          docker compose -f compose.yml logs --no-color > artifacts/compose.log
+
+      - name: Tear down isolated E2E environment
+        if: always()
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml down --volumes --remove-orphans
+
+      - name: Upload core runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-core-runtime-${{ github.run_attempt }}
+          path: |
+            test/Citadel.Tests.E2E/artifacts
+            test/Citadel.Tests.E2E/playwright-report
+            test/Citadel.Tests.E2E/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+  nightly-runtime:
+    if: github.event_name == 'schedule'
+    needs: e2e-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      CITADEL_E2E_BASE_URL: http://127.0.0.1:18000
+      COMPOSE_PROJECT_NAME: citadel-e2e-nightly-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download tested E2E candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-e2e-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test/Citadel.Tests.E2E/candidate-image
+
+      - name: Load tested E2E candidate
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: gzip -dc candidate-image/citadel-e2e-image.tar.gz | docker load
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: test/Citadel.Tests.E2E/package-lock.json
+
+      - name: Install E2E dependencies
+        working-directory: test/Citadel.Tests.E2E
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: test/Citadel.Tests.E2E
+        run: npx playwright install --with-deps chromium
+
+      - name: Start isolated E2E environment
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml up -d --wait
+
+      - name: Run nightly runtime tests
+        working-directory: test/Citadel.Tests.E2E
+        run: npm run test:nightly-runtime
+
+      - name: Collect nightly runtime diagnostics
+        if: failure()
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          docker compose -f compose.yml ps --all > artifacts/compose-ps.txt
+          docker compose -f compose.yml logs --no-color > artifacts/compose.log
+
+      - name: Tear down isolated E2E environment
+        if: always()
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml down --volumes --remove-orphans
+
+      - name: Upload nightly runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-nightly-runtime-${{ github.run_attempt }}
+          path: |
+            test/Citadel.Tests.E2E/artifacts
+            test/Citadel.Tests.E2E/playwright-report
+            test/Citadel.Tests.E2E/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore application and test projects
+        run: |
+          dotnet restore src/Citadel.WebApi/Citadel.WebApi.csproj
+          dotnet restore test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj
+          dotnet restore test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj
+
+      - name: Build application and test projects
+        run: |
+          dotnet build src/Citadel.WebApi/Citadel.WebApi.csproj --no-restore -c Release
+          dotnet build test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-restore -c Release
+          dotnet build test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-restore -c Release
+
+      - name: Verify OpenAPI snapshots
+        shell: bash
+        run: |
+          git diff --exit-code -- src/schema/Citadel.WebApi.json
+          cmp src/schema/Citadel.WebApi.json src/Citadel.FrontEnd/src/api/schema/swagger.json
+
+      - name: Test
+        run: |
+          dotnet run --project test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release
+          dotnet run --project test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release
+
+  publish:
+    needs: [version, frontend, build, e2e-smoke, core-runtime]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: write
-      # This is used to complete the identity challenge
-      # with sigstore/fulcio when running outside of PRs.
       id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive # Ensure submodules are updated
-          fetch-depth: 0 # NB.GV needs full history to calculate version
-          token: ${{ secrets.ACCESS_TOKEN }} # Use GitHub token for authentication
-          
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - name: Restore application and test projects
-        run: |
-          dotnet restore src/Citadel.WebApi/Citadel.WebApi.csproj
-          dotnet restore test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj
-          dotnet restore test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj
-      - name: Build application and test projects
-        run: |
-          dotnet build src/Citadel.WebApi/Citadel.WebApi.csproj --no-restore -c Release
-          dotnet build test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-restore -c Release
-          dotnet build test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-restore -c Release
-      - name: Verify OpenAPI snapshots
-        shell: bash
-        run: |
-          git diff --exit-code -- src/schema/Citadel.WebApi.json
-          cmp src/schema/Citadel.WebApi.json src/Citadel.FrontEnd/src/api/schema/swagger.json
-      - name: Test
-        run: |
-          dotnet run --project test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release
-          dotnet run --project test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release
-        
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
       - name: Install cosign
-        if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 #v3.5.0
         with:
           cosign-release: 'v2.2.4'
-
-      - name: Restore local .NET tools
-        run: dotnet tool restore
-
-      - name: Get version from Nerdbank.GitVersioning
-        id: nbgv
-        shell: bash
-        run: |
-          echo "VERSION=$(dotnet nbgv get-version -v NuGetPackageVersion)" >> "$GITHUB_OUTPUT"
-          echo "SIMPLE_VERSION=$(dotnet nbgv get-version -v SimpleVersion)" >> "$GITHUB_OUTPUT"
-          echo "ASSEMBLY_VERSION=$(dotnet nbgv get-version -v AssemblyVersion)" >> "$GITHUB_OUTPUT"
-          echo "FILE_VERSION=$(dotnet nbgv get-version -v AssemblyFileVersion)" >> "$GITHUB_OUTPUT"
-          echo "PUBLIC_RELEASE=$(dotnet nbgv get-version -v PublicRelease)" >> "$GITHUB_OUTPUT"
 
       - name: Validate release tag
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
-          SIMPLE_VERSION: ${{ steps.nbgv.outputs.SIMPLE_VERSION }}
-          PUBLIC_RELEASE: ${{ steps.nbgv.outputs.PUBLIC_RELEASE }}
+          SIMPLE_VERSION: ${{ needs.version.outputs.simple-version }}
+          PUBLIC_RELEASE: ${{ needs.version.outputs.public-release }}
         run: |
           expected_tag="v${SIMPLE_VERSION}"
           if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
@@ -229,14 +447,11 @@ jobs:
             echo "Release tag '${GITHUB_REF_NAME}' is not recognized by publicReleaseRefSpec." >&2
             exit 1
           fi
-      # Set up BuildKit Docker container builder to be able to build
-      # multi-platform images and export cache
-      # https://github.com/docker/setup-buildx-action
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
 
       - name: Validate Docker Hub configuration
-        if: github.event_name != 'pull_request'
         shell: bash
         env:
           DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
@@ -252,10 +467,7 @@ jobs:
             exit 1
           fi
 
-      # Login against both registries except on PR
-      # https://github.com/docker/login-action
       - name: Log into GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           registry: ${{ env.GHCR_REGISTRY }}
@@ -263,15 +475,12 @@ jobs:
           password: ${{ secrets.ACCESS_TOKEN }}
 
       - name: Log into Docker Hub
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           registry: docker.io
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Extract metadata (tags, labels) for Docker
-      # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
@@ -280,47 +489,39 @@ jobs:
             name=${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
             name=docker.io/${{ vars.DOCKERHUB_NAMESPACE }}/${{ env.DOCKERHUB_REPOSITORY }},enable=${{ vars.DOCKERHUB_NAMESPACE != '' }}
           tags: |
-            type=raw,value=${{ steps.nbgv.outputs.VERSION }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.nbgv.outputs.VERSION }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern={{major}},value=${{ steps.nbgv.outputs.VERSION }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ needs.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{major}},value=${{ needs.version.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
           labels: |
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.description=Docker image for ${{ env.IMAGE_NAME }}
-            org.opencontainers.image.version=${{ steps.nbgv.outputs.VERSION }}
-            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ss.SSS[Z]'}}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
-            
-      # Build and push Docker image with Buildx (don't push on PR)
-      # https://github.com/docker/build-push-action
+
       - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09
         with:
           context: .
           file: src/Citadel.WebApi/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.nbgv.outputs.VERSION }}
-            ASSEMBLY_VERSION=${{ steps.nbgv.outputs.ASSEMBLY_VERSION }}
-            FILE_VERSION=${{ steps.nbgv.outputs.FILE_VERSION }}
-            INFORMATIONAL_VERSION=${{ steps.nbgv.outputs.VERSION }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            VERSION=${{ needs.version.outputs.version }}
+            ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}
+            FILE_VERSION=${{ needs.version.outputs.file-version }}
+            INFORMATIONAL_VERSION=${{ needs.version.outputs.version }}
+          cache-from: type=gha,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
+          cache-to: type=gha,mode=max,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
 
-      # Sign the resulting image digest in both registries except on PRs.
-      # This will only write to the public Rekor transparency log when the Docker
-      # repository is public to avoid leaking data.  If you would like to publish
-      # transparency data even for private images, pass --force to cosign below.
-      # https://github.com/sigstore/cosign
       - name: Sign the published Docker image
-        if: ${{ github.event_name != 'pull_request' }}
         env:
-          # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
-        # This step uses the identity token to provision an ephemeral certificate
-        # against the sigstore community Fulcio instance.
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+        run: |
+          while IFS= read -r tag; do
+            [[ -n "${tag}" ]] && cosign sign --yes "${tag}@${DIGEST}"
+          done <<< "${TAGS}"

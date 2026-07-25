@@ -1,8 +1,7 @@
 # Citadel E2E Tests
 
-The smoke suite runs against the production Citadel image, PostgreSQL, and an
-isolated Docker-in-Docker daemon. It does not mount the host Docker socket into
-Citadel.
+The suites run against the production Citadel image, PostgreSQL, and an isolated
+Docker-in-Docker daemon. They do not mount the host Docker socket into Citadel.
 
 ## Prerequisites
 
@@ -32,10 +31,23 @@ npm run test:smoke
 Citadel is available at `http://127.0.0.1:18000` while the environment is
 running.
 
-Other available test modes:
+## Test Suites
 
 ```powershell
-npm test                         # Run every Playwright test
+npm run test:smoke            # Fast authentication, authorization, navigation, and tag checks
+npm run test:core-runtime     # Deploy, second release, UI rollback, and Docker-state verification
+npm run test:nightly-runtime  # Logs, Inspect, Terminal, and real SignalR reconnect coverage
+npm test                      # Run every Playwright test
+```
+
+The core runtime suite is a blocking CI check. The runtime lifecycle suite is
+initially scheduled nightly because it intentionally exercises a real network
+interruption. Both runtime suites create disposable resources whose names start
+with `e2e-runtime-` and remove them after each test.
+
+Other Playwright modes:
+
+```powershell
 npx playwright test --headed    # Run with a visible browser
 npx playwright test --ui        # Open Playwright's interactive UI
 npx playwright show-report      # Open the most recent HTML report

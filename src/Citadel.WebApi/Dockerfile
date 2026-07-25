@@ -17,7 +17,7 @@ COPY ["src/Citadel.FrontEnd/package.json", "src/Citadel.FrontEnd/package-lock.js
 RUN npm ci
 COPY ["src/Citadel.FrontEnd/", "./"]
 ENV NODE_OPTIONS=--max-old-space-size=4096
-RUN npm run build:prod
+RUN npm run build:image
 
 # Build and publish the application
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS build
