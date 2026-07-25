@@ -1,7 +1,6 @@
 using Application.Configs;
 using Application.Services;
 using Domain;
-using Hosting.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -14,7 +13,7 @@ public sealed class VolumeHelperImageResolverTests
     {
         var resolver = CreateResolver();
 
-        Assert.Equal("ghcr.io/citadel-p/citadel:1.0", resolver.Resolve(PlatformConnectorType.Local));
+        Assert.Equal($"ghcr.io/citadel-p/citadel:{ApplicationVersion.CoreVersion}", resolver.Resolve(PlatformConnectorType.Local));
     }
 
     [Fact]
@@ -28,7 +27,7 @@ public sealed class VolumeHelperImageResolverTests
             .Build();
         var resolver = CreateResolver(configuration);
 
-        Assert.Equal("ghcr.io/citadel-p/citadel:1.0", resolver.Resolve(PlatformConnectorType.Local));
+        Assert.Equal($"ghcr.io/citadel-p/citadel:{ApplicationVersion.CoreVersion}", resolver.Resolve(PlatformConnectorType.Local));
     }
 
     [Fact]
@@ -43,7 +42,7 @@ public sealed class VolumeHelperImageResolverTests
             .Build();
         var resolver = CreateResolver(configuration);
 
-        Assert.Equal("ghcr.io/citadel-p/citadel:1.0", resolver.Resolve(PlatformConnectorType.Local));
+        Assert.Equal($"ghcr.io/citadel-p/citadel:{ApplicationVersion.CoreVersion}", resolver.Resolve(PlatformConnectorType.Local));
     }
 
     [Theory]
@@ -53,7 +52,7 @@ public sealed class VolumeHelperImageResolverTests
     {
         var resolver = CreateResolver();
 
-        Assert.Equal($"ghcr.io/citadel-p/citadel.agent:{Constants.CompatibilityVersion}", resolver.Resolve(connectorType));
+        Assert.Equal($"ghcr.io/citadel-p/citadel.agent:{ApplicationVersion.CoreVersion}", resolver.Resolve(connectorType));
     }
 
     [Fact]

@@ -1,0 +1,19 @@
+namespace Application.Services;
+
+internal static class ApplicationVersion
+{
+    public static string CoreVersion { get; } = GetCoreVersion(ThisAssembly.AssemblyInformationalVersion);
+
+    internal static string GetCoreVersion(string informationalVersion)
+    {
+        var numericVersion = informationalVersion.AsSpan();
+        var suffixIndex = numericVersion.IndexOfAny('-', '+');
+        if (suffixIndex >= 0)
+            numericVersion = numericVersion[..suffixIndex];
+
+        if (!Version.TryParse(numericVersion, out var version))
+            return "0.0.0";
+
+        return $"{version.Major}.{version.Minor}.{Math.Max(version.Build, 0)}";
+    }
+}

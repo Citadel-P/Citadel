@@ -963,6 +963,12 @@ public sealed record LicenseRequestView(
     DateTimeOffset GeneratedAt);
 ```
 
+`CoreVersion` is the Citadel Core release version in `MAJOR.MINOR.PATCH`
+format, for example `1.0.0`. It must come from the Core application's NBGV
+version, without a `v` tag prefix, version-height revision, prerelease suffix,
+or build metadata. Do not use the major/minor `CompatibilityVersion`; that
+value is reserved for Core-to-Agent protocol compatibility checks.
+
 Do not include secrets, user data, host identifiers, network addresses,
 platform inventory, or resource counts.
 

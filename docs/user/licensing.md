@@ -254,7 +254,7 @@ The request contains:
 
 - product name
 - Citadel instance ID
-- Citadel Core version
+- Citadel Core release version in `MAJOR.MINOR.PATCH` format, such as `1.0.0`
 - request generation time
 
 It does not contain credentials, user information, platform addresses, host

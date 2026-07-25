@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Application.Services;
 using Application.Services.Licensing;
 using Domain;
 using Domain.Entities.Licensing;
@@ -49,6 +50,12 @@ public sealed class LicenseEntitlementTests(PostgresTestFixture fixture) : Integ
         Assert.Equal(
             license.GetProperty("instanceId").GetGuid(),
             request.GetProperty("instanceId").GetGuid());
+        Assert.Equal(
+            ApplicationVersion.CoreVersion,
+            request.GetProperty("coreVersion").GetString());
+        Assert.Matches(
+            @"^\d+\.\d+\.\d+$",
+            request.GetProperty("coreVersion").GetString());
         Assert.All(
             license.GetProperty("capabilities").EnumerateArray(),
             capability => Assert.False(capability.GetProperty("enabled").GetBoolean()));

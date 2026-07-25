@@ -10,11 +10,7 @@ import { cn } from '@/lib/utils';
 import { useRead, useMutate } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  LICENSE_CAPABILITY_DESCRIPTIONS,
-  LICENSE_CAPABILITY_LABELS,
-  LICENSE_STATUS_LABELS,
-} from './license-labels';
+import { LICENSE_CAPABILITY_DESCRIPTIONS, LICENSE_CAPABILITY_LABELS, LICENSE_STATUS_LABELS } from './license-labels';
 import {
   AlertTriangle,
   Check,
@@ -141,7 +137,7 @@ export default function LicensePage() {
           <section className="rounded-sm border bg-background">
             <SectionHeader
               title="Capabilities"
-              description="The active license controls operational capabilities, not stored resource counts."
+              description="See which advanced features are available with your current Citadel edition."
             />
             <div className="divide-y">
               {(license?.capabilities ?? []).map((capability) => (
@@ -254,7 +250,7 @@ function LicenseStatusBadge({ status }: { status: LicenseStatus }) {
     <Badge
       variant={active ? 'secondary' : 'destructive'}
       className={cn(
-        'rounded-sm',
+        'rounded-md',
         active && status === LicenseStatus.Valid && 'bg-green-500/10 text-green-700 dark:text-green-300',
       )}>
       {active && status === LicenseStatus.Valid ? <ShieldCheck className="size-3.5" /> : null}
@@ -269,9 +265,9 @@ function CapabilityRow({ capability }: { capability: LicenseCapabilityView }) {
       <div
         className={cn(
           'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-sm',
-          capability.enabled ? 'bg-green-500/10 text-green-700 dark:text-green-300' : 'bg-muted text-muted-foreground',
+          capability.enabled ? 'bg-green-500/10 text-green-700 dark:text-green-300' : 'bg-muted/35 text-muted-foreground',
         )}>
-        {capability.enabled ? <Check className="size-4" /> : <Lock className="size-4" />}
+        {capability.enabled ? <Check className="size-3" /> : <Lock className="size-3" />}
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-foreground">
@@ -281,7 +277,7 @@ function CapabilityRow({ capability }: { capability: LicenseCapabilityView }) {
           {LICENSE_CAPABILITY_DESCRIPTIONS[capability.capability]}
         </div>
       </div>
-      <Badge variant="secondary" className="shrink-0 rounded-sm">
+      <Badge variant="secondary" className="shrink-0 rounded-md font-medium py-1 bg-accent/90">
         {capability.enabled ? 'Included' : 'Not included'}
       </Badge>
     </div>

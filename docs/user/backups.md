@@ -92,13 +92,13 @@ To inspect a Platform filesystem repository on the same Docker daemon, run a tem
 For a local platform:
 
 ```powershell
-docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup ghcr.io/citadel-p/citadel:1.0
+docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup ghcr.io/citadel-p/citadel:1.0.0
 ```
 
 For a regular agent or edge agent platform:
 
 ```powershell
-docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup ghcr.io/citadel-p/citadel.agent:1.0
+docker run --rm -it --entrypoint sh --mount type=bind,source=/srv/backup-01,target=/backup ghcr.io/citadel-p/citadel.agent:1.0.0
 ```
 
 Then inside the container:

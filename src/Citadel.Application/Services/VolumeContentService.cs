@@ -937,7 +937,7 @@ internal sealed class VolumeHelperImageResolver(
         if (connectorType is PlatformConnectorType.Agent or PlatformConnectorType.EdgeAgent)
             return edgeAgentOptions.Value.GetAgentImage();
 
-        return $"{DefaultCoreImageRepository}:{NormalizeDockerTag(Constants.CompatibilityVersion)}";
+        return $"{DefaultCoreImageRepository}:{NormalizeDockerTag(ApplicationVersion.CoreVersion)}";
     }
 
     private static string NormalizeDockerTag(string tag)

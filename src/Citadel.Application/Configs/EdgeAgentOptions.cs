@@ -1,6 +1,6 @@
 namespace Application.Configs;
 
-using Hosting.Common;
+using Application.Services;
 
 public sealed class EdgeAgentOptions
 {
@@ -18,7 +18,7 @@ public sealed class EdgeAgentOptions
             ? DefaultAgentImageRepository
             : AgentImageRepository.Trim();
         var tag = string.IsNullOrWhiteSpace(AgentImageTag)
-            ? Constants.CompatibilityVersion
+            ? ApplicationVersion.CoreVersion
             : AgentImageTag.Trim();
 
         return $"{repository}:{NormalizeDockerTag(tag)}";

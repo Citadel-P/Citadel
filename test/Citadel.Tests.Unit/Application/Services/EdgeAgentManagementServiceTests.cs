@@ -18,11 +18,11 @@ namespace Tests.Unit.Application.Services;
 public sealed class EdgeAgentManagementServiceTests
 {
     [Fact]
-    public void EdgeAgentOptions_ShouldUseCorePackageVersion_WhenTagIsNotConfigured()
+    public void EdgeAgentOptions_ShouldUseCoreReleaseVersion_WhenTagIsNotConfigured()
     {
         var options = new EdgeAgentOptions();
 
-        Assert.Equal($"ghcr.io/citadel-p/citadel.agent:{Constants.CompatibilityVersion}", options.GetAgentImage());
+        Assert.Equal($"ghcr.io/citadel-p/citadel.agent:{ApplicationVersion.CoreVersion}", options.GetAgentImage());
     }
 
     [Fact]

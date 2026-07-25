@@ -319,7 +319,7 @@ Include:
 Use and pin the Citadel Core image for platform-scoped backup and volume-browser helper containers:
 
 ```text
-ghcr.io/citadel-p/citadel:<compatible-version>
+ghcr.io/citadel-p/citadel:<release-version>
 ```
 
 Include:
@@ -2719,9 +2719,9 @@ The platform helper image is shared with the volume browser and resolved by `IVo
 The resolver must choose the image for the connector that will execute the helper:
 
 ```text
-Local connector:      ghcr.io/citadel-p/citadel:<compatible-version>
-Agent connector:      ghcr.io/citadel-p/citadel.agent:<compatible-version>
-Edge Agent connector: ghcr.io/citadel-p/citadel.agent:<compatible-version>
+Local connector:      ghcr.io/citadel-p/citadel:<release-version>
+Agent connector:      ghcr.io/citadel-p/citadel.agent:<release-version>
+Edge Agent connector: ghcr.io/citadel-p/citadel.agent:<release-version>
 ```
 
 Local Docker development may use the currently running Core container image when Core itself is running in Docker. Development installations may still opt into a specific helper image by setting `VolumeBrowser__HelperImage` explicitly, for example `VolumeBrowser__HelperImage=citadel.dev`. That override applies to every connector, so Agent and Edge Agent platforms must also be able to run that image.

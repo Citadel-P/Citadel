@@ -295,14 +295,14 @@ Use the Citadel helper image corresponding to the running Citadel release and th
 Default helper images:
 
 ```text
-Local connector:      ghcr.io/citadel-p/citadel:<compatible-version>
-Agent connector:      ghcr.io/citadel-p/citadel.agent:<compatible-version>
-Edge Agent connector: ghcr.io/citadel-p/citadel.agent:<compatible-version>
+Local connector:      ghcr.io/citadel-p/citadel:<release-version>
+Agent connector:      ghcr.io/citadel-p/citadel.agent:<release-version>
+Edge Agent connector: ghcr.io/citadel-p/citadel.agent:<release-version>
 ```
 
 The helper image must:
 
-* Be version-pinned.
+* Be pinned to the full `MAJOR.MINOR.PATCH` Citadel release version.
 * Be distributed as part of the Citadel release.
 * Work in offline and air-gapped installations.
 * Contain the native Citadel volume helper executable.

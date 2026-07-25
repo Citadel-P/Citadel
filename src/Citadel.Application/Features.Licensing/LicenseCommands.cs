@@ -61,7 +61,7 @@ internal sealed class GetLicenseRequestHandler(IUnitOfWork unitOfWork, TimeProvi
         return new LicenseRequest(
             Product: LicenseConstants.Product,
             InstanceId: identity.InstanceId,
-            CoreVersion: Constants.CompatibilityVersion,
+            CoreVersion: ApplicationVersion.CoreVersion,
             GeneratedAt: now);
     }
 }
