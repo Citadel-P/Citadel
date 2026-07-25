@@ -1,5 +1,5 @@
 import Loader from '@/components/ui/loader';
-import { REDIRECT_TO_KEY } from '@/router';
+import { REDIRECT_TO_KEY } from '@/features/auth/auth-route-guards';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';

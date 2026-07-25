@@ -2,7 +2,7 @@ import { LoginRequest, LoginResponse } from '@/api/generated/api.types';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext } from 'react';
 
-interface IContext {
+export interface AuthContextValue {
   accessToken: string | undefined;
   isAuthenticated: boolean;
   isAuthReady: boolean;
@@ -13,7 +13,7 @@ interface IContext {
   completeLogin: (accessToken: string) => void;
 }
 
-export const AuthContext = createContext<IContext | undefined>(undefined);
+export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 AuthContext.displayName = 'AuthContext';
 
 export const useAuthContext = () => useRequiredContext(AuthContext);

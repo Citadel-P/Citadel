@@ -23,14 +23,9 @@ export const useSignalRGroup = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
-  const setupRef = useRef(setupEventListeners);
   const onJoinedRef = useRef(onJoinedGroup);
 
   const lastStateRef = useRef({ isLoading: false, isConnected: false });
-
-  useEffect(() => {
-    setupRef.current = setupEventListeners;
-  }, [setupEventListeners]);
 
   useEffect(() => {
     onJoinedRef.current = onJoinedGroup;
@@ -58,11 +53,18 @@ export const useSignalRGroup = ({
     }
 
     let joined = false;
+    let disposed = false;
 
     const run = async () => {
       try {
         setLoading(true);
-        await joinGroup(groupName, (hub) => setupRef.current(hub));
+        await joinGroup(groupName, setupEventListeners);
+
+        if (disposed) {
+          await leaveGroup(groupName, removeEventListeners);
+          return;
+        }
+
         joined = true;
         setConnected(true);
         setLoading(false);
@@ -78,11 +80,22 @@ export const useSignalRGroup = ({
     run();
 
     return () => {
+      disposed = true;
       if (joined) {
-        leaveGroup(groupName, (hub) => removeEventListeners?.(hub)).catch(console.warn);
+        leaveGroup(groupName, removeEventListeners).catch(console.warn);
       }
     };
-  }, [groupName, skip, enabled, state, connection, joinGroup, leaveGroup, removeEventListeners]);
+  }, [
+    groupName,
+    skip,
+    enabled,
+    state,
+    connection,
+    joinGroup,
+    leaveGroup,
+    setupEventListeners,
+    removeEventListeners,
+  ]);
 
   return { isLoading, isConnected };
 };

@@ -1,10 +1,12 @@
-import { Navigate, Outlet, useLocation, BrowserRouter, Routes, Route } from 'react-router';
+import { BrowserRouter, Routes, Route } from 'react-router';
 import Layout from '@/layout/layout';
 import NotFound from '@/pages/not-found';
-import { useAuthContext } from './features/auth/auth-context';
 import Loader from './components/ui/loader';
 import { lazy, Suspense } from 'react';
 import { ResourceForm } from './pages/resource-form';
+import { RequireAuth, RequireNoAuth } from './features/auth/auth-route-guards';
+
+export { REDIRECT_TO_KEY } from './features/auth/auth-route-guards';
 
 const Login = lazy(() => import('@/features/auth/login'));
 const MfaVerify = lazy(() => import('@/features/auth/mfa/verify'));
@@ -13,8 +15,6 @@ const Resources = lazy(() => import('@/pages/resource'));
 const ResourceInfo = lazy(() => import('@/pages/resource-docker-info'));
 const Profile = lazy(() => import('@/features/profile'));
 const License = lazy(() => import('@/features/license'));
-
-export const REDIRECT_TO_KEY = 'redirectTo';
 
 export const Router = () => {
   return (
@@ -54,36 +54,4 @@ export const Router = () => {
       </BrowserRouter>
     </Suspense>
   );
-};
-
-const RequireAuth = () => {
-  const { isAuthenticated, isAuthReady, accessToken } = useAuthContext();
-  const location = useLocation();
-
-  if (!isAuthReady) {
-    return <Loader />;
-  }
-
-  if (!isAuthenticated || !accessToken) {
-    const currentUrl = `${location.pathname}${location.search}${location.hash}`;
-    sessionStorage.setItem(REDIRECT_TO_KEY, currentUrl || '/');
-    return <Navigate to="/login" replace />;
-  }
-
-  return <Outlet />;
-};
-
-const RequireNoAuth = () => {
-  const { isAuthenticated, isAuthReady } = useAuthContext();
-
-  if (!isAuthReady) {
-    return <Loader />;
-  }
-
-  if (isAuthenticated) {
-    const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
-    return <Navigate to={redirectTo} replace />;
-  }
-
-  return <Outlet />;
 };

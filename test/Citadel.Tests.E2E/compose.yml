@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_USER: citadel
+      POSTGRES_PASSWORD: citadel-e2e
+      POSTGRES_DB: citadel
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U citadel -d citadel']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - citadel-e2e
+
+  docker:
+    image: docker:27.5.1-dind
+    privileged: true
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      DOCKER_TLS_CERTDIR: ''
+    healthcheck:
+      test: ['CMD', 'docker', 'info']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - docker-socket:/var/run
+      - docker-data:/var/lib/docker
+    networks:
+      - citadel-e2e
+
+  citadel:
+    image: ${CITADEL_E2E_IMAGE:-citadel-e2e:local}
+    init: true
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: Host=postgres;Database=citadel;Username=citadel;Password=citadel-e2e
+      Jwt__Issuer: http://127.0.0.1:18000
+      Jwt__Audience: http://127.0.0.1:18000
+      Jwt__Key: citadel-e2e-only-signing-key-00000000000000000000000000000000
+      Secrets__EncryptionKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DOCKER_HOST: unix:///var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      docker:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:8000/health']
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 5s
+    ports:
+      - '18000:8000'
+    volumes:
+      - citadel-data:/app/data
+      - docker-socket:/var/run
+    networks:
+      - citadel-e2e
+
+networks:
+  citadel-e2e:
+    name: ${COMPOSE_PROJECT_NAME:-citadel-e2e}-network
+
+volumes:
+  citadel-data:
+  docker-data:
+  docker-socket:
+  postgres-data:

@@ -1000,11 +1000,10 @@ export function FormShell<T>({
         setDraftInfo({ hasDraft: false, savedAt: undefined });
         setDraftLoadedBanner(false);
       }
-    } catch (e) {
+    } catch {
       if (draftKey && typeof window !== 'undefined' && backupDraft && backupDraft.update) {
         persistDraft<Partial<T>>(draftKey, backupDraft.version, backupDraft.update);
       }
-      throw e;
     }
   }, [validateAll, merged, onSave, draftKey, draftVersion, setUpdate]);
 

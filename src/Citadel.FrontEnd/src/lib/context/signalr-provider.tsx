@@ -1,19 +1,31 @@
-import {
-  HubConnection,
-  HubConnectionBuilder,
-  HttpTransportType,
-  IHttpConnectionOptions,
-  HubConnectionState,
-} from '@microsoft/signalr';
+import { HubConnection, HubConnectionState } from '@microsoft/signalr';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthContext } from '@/features/auth/auth-context';
 import { SignalRContext } from './signalr-context';
 import { startConnectionWithRetry } from '../startConnectionWithRetry';
-import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack';
+import { createSignalRConnection, SignalRConnectionFactory } from '../createSignalRConnection';
 
-export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  type GroupState = { state: 'joining' | 'joined'; references: number };
-  type CancellationRef = { current: boolean };
+type StartConnection = typeof startConnectionWithRetry;
+
+type SignalRProviderProps = {
+  children?: React.ReactNode;
+  connectionFactory?: SignalRConnectionFactory;
+  startConnection?: StartConnection;
+};
+
+type GroupState = {
+  state: 'joining' | 'joined';
+  references: number;
+  joinPromise?: Promise<void>;
+};
+
+type CancellationRef = { current: boolean };
+
+export const SignalRProvider: React.FC<SignalRProviderProps> = ({
+  children,
+  connectionFactory = createSignalRConnection,
+  startConnection = startConnectionWithRetry,
+}) => {
   const [connectionState, setConnectionState] = useState<HubConnectionState>(HubConnectionState.Disconnected);
   const [connection, setConnection] = useState<HubConnection | null>(null);
   const { accessToken } = useAuthContext();
@@ -23,81 +35,111 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
   const prevTokenRef = useRef<string | undefined>(accessToken);
   const activeCancelRef = useRef<CancellationRef | null>(null);
   const activeConnectionRef = useRef<HubConnection | null>(null);
-  const readyResolveRef = useRef<(() => void) | null>(null);
-  const readyPromiseRef = useRef<Promise<void> | null>(null);
+  const readyPromiseRef = useRef<Promise<HubConnection> | null>(null);
+  const rebuildGenerationRef = useRef(0);
   const groupStates = useRef<Map<string, GroupState>>(new Map());
 
   const buildConnection = useCallback(() => {
     if (activeCancelRef.current) {
       activeCancelRef.current.current = true;
     }
+
     const cancelRef: CancellationRef = { current: false };
     activeCancelRef.current = cancelRef;
 
-    const conn = new HubConnectionBuilder()
-      .withUrl(`${baseUrl}/hubs/global`, {
-        accessTokenFactory: () => tokenRef.current ?? '',
-        transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
-      } as IHttpConnectionOptions)
-      .withAutomaticReconnect()
-      .withHubProtocol(new MessagePackHubProtocol())
-      .build();
+    const conn = connectionFactory({
+      baseUrl,
+      accessTokenFactory: () => tokenRef.current ?? '',
+    });
 
     activeConnectionRef.current = conn;
 
-    conn.onreconnecting(() => setConnectionState(HubConnectionState.Reconnecting));
+    conn.onreconnecting(() => {
+      if (activeConnectionRef.current === conn) {
+        setConnectionState(HubConnectionState.Reconnecting);
+      }
+    });
+
     conn.onreconnected(async () => {
+      if (activeConnectionRef.current !== conn) {
+        return;
+      }
+
       setConnectionState(HubConnectionState.Connected);
-      // Rejoin groups on reconnect
+
       for (const [groupName, group] of groupStates.current.entries()) {
-        if (group.state === 'joined' || group.state === 'joining') {
-          try {
-            await conn.send('JoinGroup', groupName);
-            groupStates.current.set(groupName, { ...group, state: 'joined' });
-          } catch (err) {
-            console.error(`Failed to rejoin group ${groupName}:`, err);
+        try {
+          const joinPromise = conn.send('JoinGroup', groupName);
+          groupStates.current.set(groupName, { ...group, state: 'joining', joinPromise });
+          await joinPromise;
+
+          const current = groupStates.current.get(groupName);
+          if (current) {
+            groupStates.current.set(groupName, {
+              ...current,
+              state: 'joined',
+              joinPromise: undefined,
+            });
           }
+        } catch (err) {
+          const current = groupStates.current.get(groupName);
+          if (current?.joinPromise === joinPromise) {
+            groupStates.current.delete(groupName);
+          }
+          console.error(`Failed to rejoin group ${groupName}:`, err);
         }
       }
     });
+
     conn.onclose(() => {
-      setConnectionState(HubConnectionState.Disconnected);
+      if (activeConnectionRef.current === conn) {
+        setConnectionState(HubConnectionState.Disconnected);
+      }
     });
 
-    readyPromiseRef.current = null;
-
-    (async () => {
+    const readyPromise = (async () => {
       try {
-        await startConnectionWithRetry(conn, cancelRef);
+        await startConnection(conn, cancelRef);
+
         if (cancelRef.current || activeConnectionRef.current !== conn) {
           await conn.stop().catch(() => {});
-          if (activeConnectionRef.current === conn) {
-            setConnection(null);
-          }
-          return;
+          throw new Error('SignalR connection was replaced before it became ready');
         }
+
+        if (conn.state !== HubConnectionState.Connected) {
+          throw new Error('SignalR connection did not reach the connected state');
+        }
+
         setConnection(conn);
         setConnectionState(conn.state);
-        readyResolveRef.current?.();
+        return conn;
       } catch (err) {
-        console.error('[SignalR] final connection failure', err);
+        if (!cancelRef.current && activeConnectionRef.current === conn) {
+          console.error('[SignalR] final connection failure', err);
+        }
+
         await conn.stop().catch(() => {});
         if (activeConnectionRef.current === conn) {
           setConnectionState(conn.state ?? HubConnectionState.Disconnected);
           setConnection(null);
         }
+        throw err;
       }
     })();
 
+    readyPromiseRef.current = readyPromise;
+    void readyPromise.catch(() => {});
+
     return conn;
-  }, [baseUrl]);
+  }, [baseUrl, connectionFactory, startConnection]);
 
   const rebuildConnection = useCallback(() => {
     if (activeCancelRef.current) {
       activeCancelRef.current.current = true;
     }
 
-    const currentConnection = activeConnectionRef.current ?? connection;
+    const rebuildGeneration = ++rebuildGenerationRef.current;
+    const currentConnection = activeConnectionRef.current;
     if (!currentConnection) {
       setConnection(null);
       buildConnection();
@@ -108,59 +150,65 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
       .stop()
       .catch(console.error)
       .finally(() => {
+        if (rebuildGenerationRef.current !== rebuildGeneration) {
+          return;
+        }
+
         setConnection(null);
         buildConnection();
       });
-  }, [connection, buildConnection]);
+  }, [buildConnection]);
 
-  // Sync token ref (always OK to do in effect)
   useEffect(() => {
     tokenRef.current = accessToken;
   }, [accessToken]);
 
-  // Rebuild connection only when the token actually changes
   useEffect(() => {
-    if (accessToken === prevTokenRef.current) return;
-    prevTokenRef.current = accessToken;
+    if (accessToken === prevTokenRef.current) {
+      return;
+    }
 
+    prevTokenRef.current = accessToken;
     rebuildConnection();
   }, [accessToken, rebuildConnection]);
 
-  const ensureReadyPromise = () => {
-    if (!readyPromiseRef.current) {
-      readyPromiseRef.current = new Promise<void>((resolve) => {
-        readyResolveRef.current = resolve;
-      });
-    }
-    return readyPromiseRef.current;
-  };
-
-  // Initial connect on mount
   useEffect(() => {
     buildConnection();
     return () => {
+      rebuildGenerationRef.current += 1;
       if (activeCancelRef.current) {
         activeCancelRef.current.current = true;
       }
-      activeConnectionRef.current?.stop().catch(console.error);
+      const activeConnection = activeConnectionRef.current;
+      activeConnectionRef.current = null;
+      readyPromiseRef.current = null;
+      activeConnection?.stop().catch(console.error);
     };
+    // The connection is rebuilt explicitly when the access token changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // OK to omit buildConnection here – only run once
+  }, []);
 
   const ensureConnectionReady = useCallback(async () => {
-    if (connection && connection.state === HubConnectionState.Connected) return connection;
-    await ensureReadyPromise();
-    if (connection && connection.state === HubConnectionState.Connected) return connection;
-    if (connection) return connection;
+    const activeConnection = activeConnectionRef.current;
+    if (activeConnection?.state === HubConnectionState.Connected) {
+      return activeConnection;
+    }
+
+    const readyConnection = await readyPromiseRef.current;
+    if (readyConnection?.state === HubConnectionState.Connected) {
+      return readyConnection;
+    }
+
     throw new Error('SignalR connection not available');
-  }, [connection]);
+  }, []);
 
   const joinGroup = useCallback(
     async (groupName: string, setup?: (hub: HubConnection) => void) => {
-      if (!groupName) return;
+      if (!groupName) {
+        return;
+      }
 
-      await ensureConnectionReady();
-      const conn = connection!;
+      const conn = await ensureConnectionReady();
 
       try {
         setup?.(conn);
@@ -171,28 +219,37 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
       const group = groupStates.current.get(groupName);
       if (group) {
         groupStates.current.set(groupName, { ...group, references: group.references + 1 });
+        await group.joinPromise;
         return;
       }
 
-      groupStates.current.set(groupName, { state: 'joining', references: 1 });
+      const joinPromise = conn.send('JoinGroup', groupName);
+      groupStates.current.set(groupName, { state: 'joining', references: 1, joinPromise });
 
       try {
-        await conn.send('JoinGroup', groupName);
+        await joinPromise;
         const current = groupStates.current.get(groupName);
         if (current) {
-          groupStates.current.set(groupName, { ...current, state: 'joined' });
+          groupStates.current.set(groupName, {
+            ...current,
+            state: 'joined',
+            joinPromise: undefined,
+          });
         }
       } catch (err) {
         console.error('JoinGroup failed:', err);
         groupStates.current.delete(groupName);
+        throw err;
       }
     },
-    [connection, ensureConnectionReady],
+    [ensureConnectionReady],
   );
 
   const leaveGroup = useCallback(
     async (groupName: string, remove?: (hub: HubConnection) => void) => {
-      if (!groupName) return;
+      if (!groupName) {
+        return;
+      }
 
       if (connection) {
         try {
@@ -203,7 +260,9 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
       }
 
       const group = groupStates.current.get(groupName);
-      if (!group) return;
+      if (!group) {
+        return;
+      }
 
       if (group.references > 1) {
         groupStates.current.set(groupName, { ...group, references: group.references - 1 });

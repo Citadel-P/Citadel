@@ -47,7 +47,17 @@ export const useStacksGroup = () => {
       if (!prev) return prev;
       if (action === 'create') {
         deletedStackIdsRef.current.delete(stack.id);
-        return matchesActiveFilters(stack) ? [...prev, stack] : prev;
+        const index = prev.findIndex((current) => current.id === stack.id);
+        if (!matchesActiveFilters(stack)) {
+          return index === -1 ? prev : prev.filter((current) => current.id !== stack.id);
+        }
+        if (index === -1) {
+          return [...prev, stack];
+        }
+
+        const updated = [...prev];
+        updated[index] = stack;
+        return updated;
       }
       if (action === 'delete') {
         deletedStackIdsRef.current.add(stack.id);

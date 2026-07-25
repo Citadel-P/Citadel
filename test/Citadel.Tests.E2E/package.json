@@ -1,0 +1,20 @@
+{
+  "name": "citadel-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test tests/smoke",
+    "typecheck": "tsc --noEmit",
+    "install:chromium": "playwright install chromium",
+    "env:up": "docker compose -f compose.yml up -d --wait",
+    "env:down": "docker compose -f compose.yml down --volumes --remove-orphans"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.62.0",
+    "@types/node": "26.1.1",
+    "typescript": "7.0.2"
+  }
+}
