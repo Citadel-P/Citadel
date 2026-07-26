@@ -442,6 +442,13 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.ACCESS_TOKEN }}
 
+      - name: Preload Testcontainers infrastructure
+        shell: bash
+        run: >-
+          bash .github/scripts/pull-images-with-retry.sh
+          testcontainers/ryuk:0.14.0
+          postgres:17.5-alpine
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -492,6 +499,13 @@ jobs:
           submodules: recursive
           fetch-depth: 0
           token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Preload Testcontainers infrastructure
+        shell: bash
+        run: >-
+          bash .github/scripts/pull-images-with-retry.sh
+          testcontainers/ryuk:0.14.0
+          postgres:17.5-alpine
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -544,6 +558,13 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.ACCESS_TOKEN }}
 
+      - name: Preload Testcontainers infrastructure
+        shell: bash
+        run: >-
+          bash .github/scripts/pull-images-with-retry.sh
+          testcontainers/ryuk:0.14.0
+          postgres:17.5-alpine
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -594,6 +615,14 @@ jobs:
           submodules: recursive
           fetch-depth: 0
           token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Preload Testcontainers infrastructure
+        shell: bash
+        run: >-
+          bash .github/scripts/pull-images-with-retry.sh
+          testcontainers/ryuk:0.14.0
+          postgres:17.5-alpine
+          codeberg.org/forgejo/forgejo:16.0.1-rootless
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -646,6 +675,14 @@ jobs:
           submodules: recursive
           fetch-depth: 0
           token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Preload Testcontainers infrastructure
+        shell: bash
+        run: >-
+          bash .github/scripts/pull-images-with-retry.sh
+          testcontainers/ryuk:0.14.0
+          postgres:17.5-alpine
+          docker:27.5.1-dind
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -735,6 +772,7 @@ jobs:
 
       - name: Run real Core and Agent compatibility
         env:
+          CITADEL_ACCEPTANCE_REQUIRE_CANDIDATE_IMAGES: "true"
           CITADEL_ACCEPTANCE_CORE_IMAGE: ${{ inputs.edge_core_image || env.CITADEL_EDGE_CORE_TEST_IMAGE }}
           CITADEL_ACCEPTANCE_AGENT_IMAGE: ${{ inputs.edge_agent_image || env.CITADEL_EDGE_AGENT_TEST_IMAGE }}
           CITADEL_ACCEPTANCE_AGENT_VERSION: ${{ inputs.edge_agent_version || steps.agent-version.outputs.SIMPLE_VERSION }}
@@ -761,8 +799,84 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  backups-s3:
+    needs: e2e-smoke
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Preload Testcontainers infrastructure
+        shell: bash
+        run: >-
+          bash .github/scripts/pull-images-with-retry.sh
+          testcontainers/ryuk:0.14.0
+          postgres:17.5-alpine
+          docker:27.5.1-dind
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download tested E2E candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-e2e-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test/Citadel.Tests.Acceptance/candidate-image
+
+      - name: Load tested E2E candidate
+        working-directory: test/Citadel.Tests.Acceptance
+        shell: bash
+        run: gzip -dc candidate-image/citadel-e2e-image.tar.gz | docker load
+
+      - name: Restore S3 backup compatibility tests
+        run: dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
+
+      - name: Build S3 backup compatibility tests
+        run: dotnet build test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-restore -c Release
+
+      - name: Run RustFS backup and restore compatibility
+        env:
+          CITADEL_ACCEPTANCE_REQUIRE_CANDIDATE_IMAGES: "true"
+          CITADEL_ACCEPTANCE_CORE_IMAGE: ${{ env.CITADEL_E2E_IMAGE }}
+        run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Compatibility.RustFsBackupCompatibilityTests
+
+      - name: Collect S3 backup compatibility diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p test/Citadel.Tests.Acceptance/artifacts
+          docker ps --all > test/Citadel.Tests.Acceptance/artifacts/docker-ps.txt
+          docker images --digests > test/Citadel.Tests.Acceptance/artifacts/docker-images.txt
+          for container in $(docker ps --all --quiet); do
+            docker inspect "${container}" > "test/Citadel.Tests.Acceptance/artifacts/${container}.inspect.json" 2>&1 || true
+            docker logs "${container}" > "test/Citadel.Tests.Acceptance/artifacts/${container}.log" 2>&1 || true
+          done
+
+      - name: Upload S3 backup compatibility diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backups-s3-${{ github.run_attempt }}
+          path: test/Citadel.Tests.Acceptance/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+
   publish:
-    needs: [version, frontend, build, e2e-smoke, core-runtime, upgrade-baseline, control-plane-recovery, edge-agent-recovery, git-webhook, edge-agent-compatibility]
+    needs: [version, frontend, build, e2e-smoke, core-runtime, upgrade-baseline, control-plane-recovery, edge-agent-recovery, git-webhook, edge-agent-compatibility, backups-s3]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 35

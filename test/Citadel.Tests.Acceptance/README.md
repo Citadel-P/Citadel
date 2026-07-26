@@ -31,6 +31,13 @@ instance and a real candidate Core process. It creates a private repository,
 deploys a Git-backed stack, delivers signed push webhooks, deploys a second
 release, rejects an invalid signature, and verifies stack watch paths.
 
+The RustFS compatibility suite imports the supplied Core image into an isolated
+Docker-in-Docker platform and runs pinned RustFS in the same daemon. It
+initializes and validates an S3-compatible repository, rejects invalid
+credentials and missing buckets, backs up known volume bytes, restores a
+selected snapshot, compares byte count and SHA-256, applies retention and
+pruning, and verifies that an object outside the repository prefix survives.
+
 ## Prerequisites
 
 - Docker Desktop or another Docker Engine
@@ -45,6 +52,28 @@ From the repository root:
 dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release
 ```
+
+The candidate-image compatibility tests are skipped by this command unless
+their `CITADEL_ACCEPTANCE_*_IMAGE` variables are set. The dedicated commands
+below show the required image builds and environment variables.
+
+Run both candidate-image compatibility suites with one command:
+
+```powershell
+.\test\Citadel.Tests.Acceptance\run-image-compatibility.ps1
+```
+
+The runner builds `citadel-core:acceptance` from this repository and
+`citadel-agent:acceptance` from the sibling `Citadel.Agent` repository. Supply
+`-AgentRepository` when the Agent checkout is elsewhere. To reuse images that
+are already built:
+
+```powershell
+.\test\Citadel.Tests.Acceptance\run-image-compatibility.ps1 -SkipBuild
+```
+
+The runner requires both suites to execute, fails on missing images, and
+restores the process environment variables after completion.
 
 Run only the upgrade suite:
 
@@ -68,8 +97,9 @@ Run the real Core and Agent image compatibility suite:
 
 ```powershell
 docker build -f src/Citadel.WebApi/Dockerfile -t citadel-core:acceptance .
-docker build -t citadel-agent:acceptance D:\Projects\Citadel.Agent
+docker build -t citadel-agent:acceptance ..\Citadel.Agent
 
+$env:CITADEL_ACCEPTANCE_REQUIRE_CANDIDATE_IMAGES = "true"
 $env:CITADEL_ACCEPTANCE_CORE_IMAGE = "citadel-core:acceptance"
 $env:CITADEL_ACCEPTANCE_AGENT_IMAGE = "citadel-agent:acceptance"
 $env:CITADEL_ACCEPTANCE_AGENT_VERSION = "1.0.0" # Optional exact assertion
@@ -87,6 +117,21 @@ Run only the Forgejo Git and webhook compatibility suite:
 ```powershell
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.ForgejoGitWebhookTests
 ```
+
+Run the real Core image and RustFS backup compatibility suite:
+
+```powershell
+docker build -f src/Citadel.WebApi/Dockerfile -t citadel-core:acceptance .
+$env:CITADEL_ACCEPTANCE_REQUIRE_CANDIDATE_IMAGES = "true"
+$env:CITADEL_ACCEPTANCE_CORE_IMAGE = "citadel-core:acceptance"
+
+dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.RustFsBackupCompatibilityTests
+```
+
+The suite uses the candidate Core image as both the application and the
+platform backup-helper image. RustFS is pinned by digest, and the bucket,
+PostgreSQL database, Docker daemon, volumes, and object data are disposable.
+The test does not create backup volumes or buckets in the host Docker daemon.
 
 The PostgreSQL container and databases are disposable. Do not modify
 `script0001.sql` after release. The acceptance suite pins its normalized SHA-256

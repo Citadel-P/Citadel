@@ -30,6 +30,7 @@
     <PackageReference Include="dbup-postgresql" />
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Grpc.Net.Client" />
+    <PackageReference Include="Minio" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="NSec.Cryptography" />
     <PackageReference Include="Testcontainers" />

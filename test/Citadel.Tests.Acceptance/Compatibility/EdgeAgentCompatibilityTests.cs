@@ -11,9 +11,22 @@ namespace Tests.Acceptance.Compatibility;
 public sealed class EdgeAgentCompatibilityTests(
     AcceptancePostgresFixture postgres)
 {
-    [Fact]
+    public static bool HasRequiredCandidateImages =>
+        CandidateImageTestEnvironment.ShouldRun(
+            "CITADEL_ACCEPTANCE_CORE_IMAGE",
+            "CITADEL_ACCEPTANCE_AGENT_IMAGE");
+
+    [Fact(
+        Skip = "Set CITADEL_ACCEPTANCE_CORE_IMAGE and CITADEL_ACCEPTANCE_AGENT_IMAGE to run the real image compatibility test.",
+        SkipUnless = nameof(HasRequiredCandidateImages))]
     public async Task RealAgent_ShouldEnrollRouteDockerWorkAndRejectRevocation()
     {
+        var coreImage = CandidateImageTestEnvironment.GetRequiredImage(
+            "CITADEL_ACCEPTANCE_CORE_IMAGE");
+        var agentImage = CandidateImageTestEnvironment.GetRequiredImage(
+            "CITADEL_ACCEPTANCE_AGENT_IMAGE");
+        var expectedAgentVersion = Environment.GetEnvironmentVariable(
+            "CITADEL_ACCEPTANCE_AGENT_VERSION");
         var cancellationToken = TestContext.Current.CancellationToken;
         var hostConnectionString =
             await postgres.CreateDatabaseAsync(cancellationToken);
@@ -27,17 +40,10 @@ public sealed class EdgeAgentCompatibilityTests(
                 cancellationToken);
             databaseConnection.Host = "host.testcontainers.internal";
 
-            var coreImage = Environment.GetEnvironmentVariable(
-                "CITADEL_ACCEPTANCE_CORE_IMAGE");
-            var agentImage = Environment.GetEnvironmentVariable(
-                "CITADEL_ACCEPTANCE_AGENT_IMAGE");
-            var expectedAgentVersion = Environment.GetEnvironmentVariable(
-                "CITADEL_ACCEPTANCE_AGENT_VERSION");
-
             await using var environment =
                 await CoreAgentCompatibilityEnvironment.StartAsync(
-                    coreImage ?? string.Empty,
-                    agentImage ?? string.Empty,
+                    coreImage,
+                    agentImage,
                     databaseConnection.ConnectionString,
                     cancellationToken);
             await environment.AuthenticateAsAdminAsync(cancellationToken);

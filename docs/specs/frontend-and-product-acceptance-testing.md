@@ -1256,6 +1256,37 @@ Current Edge Agent compatibility implementation:
   Agent Git ref, and an optional expected Agent version. Stable tags build the
   Core tag under test and default to the matching Agent tag.
 
+Current RustFS compatibility implementation:
+
+- `Compatibility/RustFsBackupCompatibilityTests.cs` runs the supplied Core
+  image against pinned RustFS and a dedicated Docker-in-Docker platform.
+- The candidate Core image is imported into the platform daemon and used as
+  the real backup helper, so repository validation, backup, retention, prune,
+  and restore execute through the production container path.
+- The suite creates an isolated bucket and repository prefix, initializes and
+  validates the repository, and verifies actionable failure state for invalid
+  credentials and a missing bucket.
+- It backs up deterministic Docker volume bytes, alters the source, restores
+  the selected snapshot to a new volume, and compares both byte count and
+  SHA-256.
+- A second snapshot exercises `keep-last` retention, an explicit prune
+  completes, and an object under a separate prefix remains present.
+- `.github/workflows/docker-publish.yml` runs the `backups-s3` job on schedule,
+  on demand, and before stable publication. The job reuses the exact Core image
+  artifact that passed the browser smoke suite.
+- Candidate-image tests skip during an ordinary aggregate local run when their
+  image variables are absent. Dedicated compatibility jobs set
+  `CITADEL_ACCEPTANCE_REQUIRE_CANDIDATE_IMAGES=true`, which turns missing image
+  configuration into a test failure so a skipped suite cannot satisfy a
+  release gate.
+- `test/Citadel.Tests.Acceptance/run-image-compatibility.ps1` builds or validates
+  the local Core and Agent candidate images, requires both suites to execute,
+  and restores the caller's process environment after the run.
+
+The selected browser test for configuring a repository and starting or
+inspecting a run remains a separate user-facing slice; integrity and storage
+isolation stay owned by this .NET acceptance suite.
+
 ### Slice 6: Release Gate And Extended Quality
 
 1. Add nightly matrix execution.
