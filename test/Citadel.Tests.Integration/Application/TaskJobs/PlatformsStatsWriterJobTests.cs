@@ -158,6 +158,62 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
     }
 
     [Fact]
+    public async Task PlatformStatsRepository_ShouldPreserveDiskValuesAndUnavailableSamples()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        await using (var setupScope = Services.CreateAsyncScope())
+        {
+            var uow = setupScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await uow.PlatformStats.BulkInsertAsync(
+                [
+                    new PlatformStat(
+                        Created: now - 120,
+                        MemoryUsage: 10,
+                        CpuUsage: 20,
+                        RxBytes: 30,
+                        TxBytes: 40,
+                        PlatformId: _platformId,
+                        DiskUsedBytes: null,
+                        DiskTotalBytes: null,
+                        DiskUsage: null),
+                    new PlatformStat(
+                        Created: now,
+                        MemoryUsage: 50,
+                        CpuUsage: 60,
+                        RxBytes: 70,
+                        TxBytes: 80,
+                        PlatformId: _platformId,
+                        DiskUsedBytes: 75,
+                        DiskTotalBytes: 100,
+                        DiskUsage: 75)
+                ],
+                TestContext.Current.CancellationToken);
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stats = (await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(
+            _platformId,
+            TestContext.Current.CancellationToken)).ToArray();
+        var latestPlatform = await db.Platforms.GetPlatformWithLatestStatAsync(
+            _platformId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, stats.Length);
+        Assert.Null(stats[0].DiskUsedBytes);
+        Assert.Null(stats[0].DiskTotalBytes);
+        Assert.Null(stats[0].DiskUsage);
+        Assert.Equal(75, stats[1].DiskUsedBytes);
+        Assert.Equal(100, stats[1].DiskTotalBytes);
+        Assert.Equal(75, stats[1].DiskUsage);
+        var latestStat = Assert.Single(latestPlatform!.Stats);
+        Assert.Equal(75, latestStat.DiskUsedBytes);
+        Assert.Equal(100, latestStat.DiskTotalBytes);
+        Assert.Equal(75, latestStat.DiskUsage);
+    }
+
+    [Fact]
     public async Task PersistingStats_Should_Not_Mark_Offline_Platform_Online()
     {
         // Arrange

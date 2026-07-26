@@ -22,7 +22,10 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
                 AVG(CpuUsage) AS CpuUsage, 
                 AVG(MemoryUsage) AS MemoryUsage,
                 AVG(RxBytes) AS RxBytes,
-                AVG(TxBytes) AS TxBytes
+                AVG(TxBytes) AS TxBytes,
+                ROUND(AVG(DiskUsedBytes))::bigint AS DiskUsedBytes,
+                ROUND(AVG(DiskTotalBytes))::bigint AS DiskTotalBytes,
+                AVG(DiskUsage) AS DiskUsage
             FROM PlatformStats
             WHERE PlatformId = @PlatformId 
               AND Created > @Since
@@ -47,7 +50,7 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
     {
         const string sql = """
             INSERT INTO PlatformStats
-            (Id, PlatformId, Created, CpuUsage, MemoryUsage, RxBytes, TxBytes)
+            (Id, PlatformId, Created, CpuUsage, MemoryUsage, RxBytes, TxBytes, DiskUsedBytes, DiskTotalBytes, DiskUsage)
             VALUES
             {0}
         """;
@@ -56,7 +59,7 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
         int i = 0;
         foreach (var stat in stats)
         {
-            valueRows.Add($"(@Id{i}, @PlatformId{i}, @Created{i}, @CpuUsage{i}, @MemoryUsage{i}, @RxBytes{i}, @TxBytes{i})");
+            valueRows.Add($"(@Id{i}, @PlatformId{i}, @Created{i}, @CpuUsage{i}, @MemoryUsage{i}, @RxBytes{i}, @TxBytes{i}, @DiskUsedBytes{i}, @DiskTotalBytes{i}, @DiskUsage{i})");
             parameters.Add($"Id{i}", stat.Id);
             parameters.Add($"PlatformId{i}", stat.PlatformId);
             parameters.Add($"Created{i}", stat.Created);
@@ -64,6 +67,9 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
             parameters.Add($"MemoryUsage{i}", stat.MemoryUsage);
             parameters.Add($"RxBytes{i}", stat.RxBytes);
             parameters.Add($"TxBytes{i}", stat.TxBytes);
+            parameters.Add($"DiskUsedBytes{i}", stat.DiskUsedBytes);
+            parameters.Add($"DiskTotalBytes{i}", stat.DiskTotalBytes);
+            parameters.Add($"DiskUsage{i}", stat.DiskUsage);
             i++;
         }
         var finalSql = string.Format(sql, string.Join(", ", valueRows));

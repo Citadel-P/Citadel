@@ -100,6 +100,7 @@ internal sealed class EdgeAgentManagementService(
         var dockerRunCommand = AgentDockerCommandBuilder.BuildEdgeAgentCommand(
             agentImage,
             environment,
+            includeHostRootMount: target.ResourceType == EdgeAgentResourceType.Platform,
             containerName: target.ContainerName,
             dataVolumeName: target.ContainerName.Replace("-", "_", StringComparison.Ordinal) + "_data");
 

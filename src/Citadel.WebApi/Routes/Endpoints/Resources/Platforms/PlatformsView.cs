@@ -134,5 +134,8 @@ internal static class PlatformMapperExtension
             CpuUsage: stat.CpuUsage,
             Created: stat.Created,
             RxBytes: stat.RxBytes,
-            TxBytes: stat.TxBytes);
+            TxBytes: stat.TxBytes,
+            DiskUsedBytes: stat.DiskUsedBytes,
+            DiskTotalBytes: stat.DiskTotalBytes,
+            DiskUsage: stat.DiskUsage);
 }

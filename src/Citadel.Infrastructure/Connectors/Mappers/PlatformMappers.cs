@@ -105,7 +105,10 @@ internal static class PlatformMappers
             containerCount: stat.ContainerCount,
             containersPaused: stat.ContainersPaused,
             containersStopped: stat.ContainersStopped,
-            containersRunning: stat.ContainersRunning
+            containersRunning: stat.ContainersRunning,
+            diskUsedBytes: stat.DiskUsedBytes,
+            diskTotalBytes: stat.DiskTotalBytes,
+            diskUsage: stat.DiskUsage
         );
 
     internal static PlatformStatsResult Map(this PlatformStatsResponse source)
@@ -119,7 +122,10 @@ internal static class PlatformMappers
             containerCount: source.Stat.ContainerCount,
             containersPaused: source.Stat.ContainersPaused,
             containersStopped: source.Stat.ContainersStopped,
-            containersRunning: source.Stat.ContainersRunning
+            containersRunning: source.Stat.ContainersRunning,
+            diskUsedBytes: source.Stat.HasDiskUsedBytes ? source.Stat.DiskUsedBytes : null,
+            diskTotalBytes: source.Stat.HasDiskTotalBytes ? source.Stat.DiskTotalBytes : null,
+            diskUsage: source.Stat.HasDiskUsage ? source.Stat.DiskUsage : null
         );
 
         return new (
@@ -142,7 +148,10 @@ internal static class PlatformMappers
             containerCount: stat?.ContainerCount ?? 0,
             containersPaused: stat?.ContainersPaused ?? 0,
             containersStopped: stat?.ContainersStopped ?? 0,
-            containersRunning: stat?.ContainersRunning ?? 0
+            containersRunning: stat?.ContainersRunning ?? 0,
+            diskUsedBytes: stat?.HasDiskUsedBytes == true ? stat.DiskUsedBytes : null,
+            diskTotalBytes: stat?.HasDiskTotalBytes == true ? stat.DiskTotalBytes : null,
+            diskUsage: stat?.HasDiskUsage == true ? stat.DiskUsage : null
         );
 
     internal static PlatformStatsResult Map (this PlatformStreamResult source)
@@ -156,7 +165,10 @@ internal static class PlatformMappers
             containerCount: source.PlatformStatistics?.ContainerCount ?? 0,
             containersPaused: source.PlatformStatistics?.ContainersPaused ?? 0,
             containersStopped: source.PlatformStatistics?.ContainersStopped ?? 0,
-            containersRunning: source.PlatformStatistics?.ContainersRunning ?? 0
+            containersRunning: source.PlatformStatistics?.ContainersRunning ?? 0,
+            diskUsedBytes: source.PlatformStatistics?.DiskUsedBytes,
+            diskTotalBytes: source.PlatformStatistics?.DiskTotalBytes,
+            diskUsage: source.PlatformStatistics?.DiskUsage
         );
 
         return new PlatformStatsResult(

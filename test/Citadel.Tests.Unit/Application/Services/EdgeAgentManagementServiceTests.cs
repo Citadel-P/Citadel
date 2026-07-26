@@ -103,6 +103,7 @@ public sealed class EdgeAgentManagementServiceTests
         Assert.Contains("registry.example.com/citadel-agent:1.2.3", enrollment.Instructions.DockerRunCommand);
         Assert.Contains("CITADEL_CORE_URL=\"https://citadel.example.com\"", enrollment.Instructions.DockerRunCommand);
         Assert.Contains("CITADEL_EDGE_ENROLLMENT_TOKEN=", enrollment.Instructions.DockerRunCommand);
+        Assert.Contains("-v /:/host:ro", enrollment.Instructions.DockerRunCommand);
 
         platforms.VerifyAll();
         edgeAgents.VerifyAll();

@@ -35,6 +35,26 @@ export const DockerPlatform = ({
     : undefined;
   const cpuUsage = platform.stats && isOnline ? Number(toFixedNumber(platform.stats[0]?.cpuUsage)) || 0 : 0;
   const memUsage = platform.stats && isOnline ? Number(toFixedNumber(platform.stats[0]?.memoryUsage)) || 0 : 0;
+  const currentStat = platform.stats?.[0];
+  const rawDiskUsage = currentStat?.diskUsage;
+  const parsedDiskUsage = rawDiskUsage == null ? null : Number(rawDiskUsage);
+  const parsedDiskUsedBytes = currentStat?.diskUsedBytes == null ? null : Number(currentStat.diskUsedBytes);
+  const parsedDiskTotalBytes = currentStat?.diskTotalBytes == null ? null : Number(currentStat.diskTotalBytes);
+  const diskUsage =
+    isOnline &&
+    parsedDiskUsage != null &&
+    Number.isFinite(parsedDiskUsage) &&
+    parsedDiskUsage >= 0 &&
+    parsedDiskUsage <= 100 &&
+    parsedDiskUsedBytes != null &&
+    Number.isFinite(parsedDiskUsedBytes) &&
+    parsedDiskUsedBytes >= 0 &&
+    parsedDiskTotalBytes != null &&
+    Number.isFinite(parsedDiskTotalBytes) &&
+    parsedDiskTotalBytes > 0 &&
+    parsedDiskUsedBytes <= parsedDiskTotalBytes
+      ? Number(toFixedNumber(parsedDiskUsage))
+      : null;
 
   return (
     <ContentCard>
@@ -95,7 +115,7 @@ export const DockerPlatform = ({
             <RowActionMenu resource={platform} actions={actions} />
           </div>
 
-          <div className="col-span-full grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6 xl:col-span-1 xl:col-start-3 xl:row-start-1">
+          <div className="col-span-full grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 lg:grid-cols-7 xl:col-span-1 xl:col-start-3 xl:row-start-1">
             {/* Deployments + stacks */}
             <StatSection label="Deployments">
               <LinkedStat
@@ -141,12 +161,15 @@ export const DockerPlatform = ({
               </div>
             </StatSection>
 
-            {/* CPU + Memory */}
+            {/* CPU + Memory + Disk */}
             <StatSection label="CPU">
               <UsageMetric value={cpuUsage} online={isOnline} />
             </StatSection>
             <StatSection label="RAM">
               <UsageMetric value={memUsage} online={isOnline} />
+            </StatSection>
+            <StatSection label="Disk">
+              <UsageMetric value={diskUsage} online={isOnline} />
             </StatSection>
             <StatSection label="Tags">
               <CompactTagSummary tags={platform.tags} />
@@ -167,10 +190,10 @@ const StatSection = ({ label, children }: { label: string; children: React.React
   </div>
 );
 
-const UsageMetric = ({ value, online }: { value: number; online: boolean }) => {
+const UsageMetric = ({ value, online }: { value: number | null; online: boolean }) => {
   return (
     <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-      <span className="shrink-0 tabular-nums text-foreground">{online ? `${value} %` : 'N/A'}</span>
+      <span className="shrink-0 tabular-nums text-foreground">{online && value != null ? `${value} %` : 'N/A'}</span>
     </div>
   );
 };

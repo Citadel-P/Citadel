@@ -63,7 +63,10 @@ internal static class PlatformMappers
                 CpuUsage: platform?.Stat_CpuUsage ?? 0,
                 RxBytes: platform?.Stat_RxBytes ?? 0,
                 TxBytes: platform?.Stat_TxBytes ?? 0,
-                PlatformId: platform?.Id ?? Guid.Empty
+                PlatformId: platform?.Id ?? Guid.Empty,
+                DiskUsedBytes: platform?.Stat_DiskUsedBytes,
+                DiskTotalBytes: platform?.Stat_DiskTotalBytes,
+                DiskUsage: platform?.Stat_DiskUsage
                 )]);
 
         result.AssignTags(platform.TagsJson.ToTagSummaries());
@@ -80,7 +83,10 @@ internal static class PlatformMappers
             CpuUsage: stat.CpuUsage ?? 0,
             MemoryUsage: stat.MemoryUsage ?? 0,
             RxBytes: stat.RxBytes ?? 0,
-            TxBytes: stat.TxBytes ?? 0);
+            TxBytes: stat.TxBytes ?? 0,
+            DiskUsedBytes: stat.DiskUsedBytes,
+            DiskTotalBytes: stat.DiskTotalBytes,
+            DiskUsage: stat.DiskUsage);
 
     internal static PlatformConnectionInfo ToDomain(this PlatformConnectionInfoDto dto)
         => new (

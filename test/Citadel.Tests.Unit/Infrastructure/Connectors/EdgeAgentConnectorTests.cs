@@ -97,7 +97,10 @@ public class EdgeAgentConnectorTests
                 CpuUsage = 0.5,
                 MemoryUsage = 100,
                 ContainerCount = 2,
-                ContainersRunning = 1
+                ContainersRunning = 1,
+                DiskUsedBytes = 75,
+                DiskTotalBytes = 100,
+                DiskUsage = 75
             }
         }.ToByteArray()));
         router.StreamItems.Add(EdgeAgentStreamItem.Complete());
@@ -117,6 +120,9 @@ public class EdgeAgentConnectorTests
         Assert.Equal(250, PlatformStatsRequest.Parser.ParseFrom(router.Payload).FetchIntervalMs);
         var result = Assert.Single(results);
         Assert.Equal(0.5, result.PlatformStat.CpuUsage);
+        Assert.Equal(75, result.PlatformStat.DiskUsedBytes);
+        Assert.Equal(100, result.PlatformStat.DiskTotalBytes);
+        Assert.Equal(75, result.PlatformStat.DiskUsage);
         Assert.Equal("edge-test", result.AgentVersion);
     }
 

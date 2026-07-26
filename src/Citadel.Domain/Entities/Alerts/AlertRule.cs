@@ -19,7 +19,7 @@ public sealed class AlertRule : IAuditedEntity
     /// </summary>
     public int? CooldownSeconds { get; private set; }
     /// <summary>
-    /// Gets the number of matches required to satisfy the condition, only meaningful for threshold rules: CpuHigh, RamHigh, VersionMismatch.
+    /// Gets the number of matches required to satisfy the condition, only meaningful for platform CPU, RAM, and disk threshold rules.
     /// For example, if RequiredMatches is 3 for a CpuHigh rule, the alert will only be triggered if the CPU usage is high for 3 consecutive checks.  
     /// </summary>
     public int? RequiredMatches { get; private set; }
@@ -368,6 +368,7 @@ public static class AlertTypeMetadata
     {
         { AlertType.PlatformCpuHigh, AlertResourceType.Platform },
         { AlertType.PlatformRamHigh, AlertResourceType.Platform },
+        { AlertType.PlatformDiskHigh, AlertResourceType.Platform },
         { AlertType.PlatformUnreachable, AlertResourceType.Platform },
         { AlertType.PlatformVersionMismatch, AlertResourceType.Platform },
         { AlertType.UnmanagedContainerCreated, AlertResourceType.Platform },
@@ -402,6 +403,7 @@ public static class AlertTypeMetadata
     [
         AlertType.PlatformCpuHigh,
         AlertType.PlatformRamHigh,
+        AlertType.PlatformDiskHigh,
     ];
 
     public static AlertResourceType GetResourceType(AlertType type)
@@ -415,6 +417,7 @@ public static class AlertTypeMetadata
         {
             (AlertType.PlatformCpuHigh, PlatformCpuHighAlertInfo) => true,
             (AlertType.PlatformRamHigh, PlatformRamHighAlertInfo) => true,
+            (AlertType.PlatformDiskHigh, PlatformDiskHighAlertInfo) => true,
             (AlertType.PlatformUnreachable, PlatformUnreachableAlertInfo) => true,
             (AlertType.PlatformVersionMismatch, PlatformVersionMismatchAlertInfo) => true,
             (AlertType.UnmanagedContainerCreated, UnmanagedContainerCreatedAlertInfo) => true,

@@ -565,6 +565,7 @@ export enum AutoUpdateStatus {
 export enum AlertType {
   PlatformCpuHigh = "PlatformCpuHigh",
   PlatformRamHigh = "PlatformRamHigh",
+  PlatformDiskHigh = "PlatformDiskHigh",
   PlatformUnreachable = "PlatformUnreachable",
   PlatformVersionMismatch = "PlatformVersionMismatch",
   UnmanagedContainerCreated = "UnmanagedContainerCreated",
@@ -975,6 +976,10 @@ export type AlertEventInfo = BaseAlertEventInfo &
     | BaseAlertEventInfoTypeMapping<
         "PlatformRamHigh",
         AlertEventInfoPlatformRamHighAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformDiskHigh",
+        AlertEventInfoPlatformDiskHighAlertInfo
       >
     | BaseAlertEventInfoTypeMapping<
         "PlatformUnreachable",
@@ -2346,6 +2351,27 @@ export interface AlertEventInfoPlatformCpuHighAlertInfo {
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   cpuUsagePercent: number | string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoPlatformDiskHighAlertInfo {
+  $type?: "PlatformDiskHigh";
+  platformName: string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  diskUsagePercent: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  diskUsedBytes: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  diskTotalBytes: number | string;
   humanMessage?: null | string;
 }
 
@@ -5895,6 +5921,21 @@ export interface PlatformStatView {
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   memoryUsage?: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  diskUsedBytes?: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  diskTotalBytes?: null | number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  diskUsage?: null | number | string;
 }
 
 export interface PlatformStatsView {

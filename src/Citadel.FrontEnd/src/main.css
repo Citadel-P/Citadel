@@ -135,6 +135,7 @@
 
     --chart-1: #2490ff;
     --chart-2: #e76a4b;
+    --chart-3: #16a34a;
 
     /* Sidebar Variables */
     --sidebar-width: 250px;
@@ -169,6 +170,7 @@
     --danger: #ff3333;
     --chart-1: #cc0022;
     --chart-2: #e23670;
+    --chart-3: #4ade80;
   }
 
   /* Multi-theme support */

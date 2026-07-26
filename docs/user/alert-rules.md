@@ -296,7 +296,7 @@ Alert events are still recorded in Citadel even when no notification channel is 
 
 ## Threshold Rules
 
-`PlatformCpuHigh` and `PlatformRamHigh` are threshold rules.
+`PlatformCpuHigh`, `PlatformRamHigh`, and `PlatformDiskHigh` are threshold rules.
 
 They require:
 
@@ -325,6 +325,7 @@ Platform alerts:
 
 - `PlatformCpuHigh`
 - `PlatformRamHigh`
+- `PlatformDiskHigh`
 - `PlatformUnreachable`
 - `PlatformVersionMismatch`
 - `UnmanagedContainerCreated`
@@ -419,12 +420,12 @@ If a rule does not trigger:
 
 - Make sure the rule is enabled.
 - Check that the selected resources in `Applies to` include the resource you expect.
-- For CPU and RAM rules, confirm the threshold and required match count are reachable.
+- For CPU, RAM, and disk rules, confirm the threshold and required match count are reachable.
 - For stack, deployment, webhook, and automation rules, confirm the underlying feature is enabled and producing events.
 
 If alerts are too noisy:
 
 - Increase cooldown.
-- Increase required matches for CPU and RAM rules.
+- Increase required matches for CPU, RAM, and disk rules.
 - Limit the rule to specific resources.
 - Add quiet hours for maintenance windows.

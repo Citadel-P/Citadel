@@ -6,7 +6,10 @@ public record struct PlatformStat(
     double CpuUsage,
     double RxBytes,
     double TxBytes,
-    Guid? PlatformId = null)
+    Guid? PlatformId = null,
+    long? DiskUsedBytes = null,
+    long? DiskTotalBytes = null,
+    double? DiskUsage = null)
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
 }

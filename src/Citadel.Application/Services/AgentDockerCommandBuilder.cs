@@ -10,23 +10,29 @@ internal static class AgentDockerCommandBuilder
                 "--name citadel-agent",
                 "--restart=always",
                 "-p 9000:9000",
-                "-v /var/run/docker.sock:/var/run/docker.sock"
+                "-v /var/run/docker.sock:/var/run/docker.sock",
+                "-v /:/host:ro"
             ]);
 
     public static string BuildEdgeAgentCommand(
         string agentImage,
         IReadOnlyDictionary<string, string> environment,
+        bool includeHostRootMount,
         string containerName = "citadel-agent",
         string dataVolumeName = "citadel_edge_agent_data")
-        => Build(
-            agentImage,
-            environment,
-            [
-                $"--name {containerName}",
-                "--restart=always",
-                "-v /var/run/docker.sock:/var/run/docker.sock",
-                $"-v {dataVolumeName}:/app/data"
-            ]);
+    {
+        var options = new List<string>
+        {
+            $"--name {containerName}",
+            "--restart=always",
+            "-v /var/run/docker.sock:/var/run/docker.sock"
+        };
+        if (includeHostRootMount)
+            options.Add("-v /:/host:ro");
+        options.Add($"-v {dataVolumeName}:/app/data");
+
+        return Build(agentImage, environment, options);
+    }
 
     private static string Build(string agentImage, IReadOnlyDictionary<string, string> environment, IReadOnlyList<string> options)
     {

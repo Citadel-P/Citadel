@@ -34,5 +34,8 @@ public sealed record PlatformStatsBatchView(
             CpuUsage: stat?.CpuUsage ?? 0,
             Created: stat?.Created ?? 0,
             RxBytes: stat?.RxBytes ?? 0,
-            TxBytes: stat?.TxBytes ?? 0);
+            TxBytes: stat?.TxBytes ?? 0,
+            DiskUsedBytes: stat?.DiskUsedBytes,
+            DiskTotalBytes: stat?.DiskTotalBytes,
+            DiskUsage: stat?.DiskUsage);
 }

@@ -173,25 +173,42 @@ internal sealed class PersistPlatformStatsWorkItem(
                 cancellationToken);
 
             await alertService.ProcessAsync(
+                AlertType.PlatformDiskHigh,
+                context,
+                cancellationToken);
+
+            await alertService.ProcessAsync(
                 AlertType.PlatformVersionMismatch,
                 context,
                 cancellationToken);
         }
     }
 
-    private static PlatformAlertSnapshot BuildThresholdAlertSnapshot(
+    internal static PlatformAlertSnapshot BuildThresholdAlertSnapshot(
         Guid platformId,
         string platformName,
         IReadOnlyList<PlatformStatsResult> stats)
     {
         var last = stats[^1];
+        var diskUsage = last.PlatformStat.DiskUsage;
+        var diskUsedBytes = last.PlatformStat.DiskUsedBytes;
+        var diskTotalBytes = last.PlatformStat.DiskTotalBytes;
+        var hasValidDiskSample = diskUsage is { } usage
+                                 && double.IsFinite(usage)
+                                 && usage is >= 0 and <= 100
+                                 && diskUsedBytes is >= 0
+                                 && diskTotalBytes is > 0
+                                 && diskUsedBytes <= diskTotalBytes;
 
         return new PlatformAlertSnapshot(
             platformId,
             platformName,
             CpuUsage: Median(stats.Select(x => x.PlatformStat.CpuUsage)),
             RamUsage: Median(stats.Select(x => x.PlatformStat.MemoryUsage)),
-            AgentVersion: last.AgentVersion);
+            AgentVersion: last.AgentVersion,
+            DiskUsage: hasValidDiskSample ? diskUsage : null,
+            DiskUsedBytes: hasValidDiskSample ? diskUsedBytes : null,
+            DiskTotalBytes: hasValidDiskSample ? diskTotalBytes : null);
     }
 
     private static double Median(IEnumerable<double> values)

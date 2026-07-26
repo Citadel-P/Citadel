@@ -80,6 +80,47 @@ public sealed class PlatformRamHighEvaluator : IAlertEvaluator
     }
 }
 
+[AlertEvaluator(AlertType.PlatformDiskHigh)]
+public sealed class PlatformDiskHighEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.PlatformDiskHigh;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        foreach (var platform in context.Platforms)
+        {
+            if (platform.DiskUsage is not { } diskUsage
+                || platform.DiskUsedBytes is not { } diskUsedBytes
+                || platform.DiskTotalBytes is not { } diskTotalBytes
+                || diskTotalBytes <= 0
+                || diskUsedBytes < 0
+                || diskUsedBytes > diskTotalBytes
+                || !double.IsFinite(diskUsage)
+                || diskUsage is < 0 or > 100
+                || rule.Threshold is not { } threshold
+                || diskUsage < threshold)
+            {
+                yield return new AlertMatch(
+                    platform.Id,
+                    platform.Name,
+                    AlertResourceType.Platform,
+                    Info: null);
+                continue;
+            }
+
+            yield return new AlertMatch(
+                platform.Id,
+                platform.Name,
+                AlertResourceType.Platform,
+                new PlatformDiskHighAlertInfo(
+                    platform.Name,
+                    diskUsage,
+                    diskUsedBytes,
+                    diskTotalBytes));
+        }
+    }
+}
+
 [AlertEvaluator(AlertType.PlatformVersionMismatch)]
 public sealed class PlatformVersionMismatchEvaluator : IAlertEvaluator
 {

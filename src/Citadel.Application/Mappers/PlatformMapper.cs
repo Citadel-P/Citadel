@@ -45,6 +45,9 @@ internal static class PlatformMapper
            TxBytes: stat?.PlatformStat.TxBytes ?? 0,
            CpuUsage: stat?.PlatformStat.CpuUsage ?? 0,
            MemoryUsage: stat?.PlatformStat.MemoryUsage ?? 0,
-           Created: stat?.PlatformStat.Created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds
+           Created: stat?.PlatformStat.Created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds,
+           DiskUsedBytes: stat?.PlatformStat.DiskUsedBytes,
+           DiskTotalBytes: stat?.PlatformStat.DiskTotalBytes,
+           DiskUsage: stat?.PlatformStat.DiskUsage
        );
 }

@@ -350,6 +350,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000011"), Name = "CPU > 80% - Platform", Type = "PlatformCpuHigh", Severity = "Warning", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)3, Threshold = (double?)80.0, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000002"), Name = "RAM > 90% - Platform", Type = "PlatformRamHigh", Severity = "Critical", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)3, Threshold = (double?)90.0, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000022"), Name = "RAM > 80% - Platform", Type = "PlatformRamHigh", Severity = "Warning", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)3, Threshold = (double?)80.0, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000023"), Name = "Disk > 70% - Platform", Type = "PlatformDiskHigh", Severity = "Warning", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)3, Threshold = (double?)70.0, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000024"), Name = "Disk > 90% - Platform", Type = "PlatformDiskHigh", Severity = "Critical", CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)3, Threshold = (double?)90.0, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
 
             // Platform event alerts
             new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000003"), Name = "Platform Unreachable", Type = "PlatformUnreachable", Severity = "Critical", CooldownSeconds = 600, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
@@ -819,6 +821,9 @@ internal static class Configuration
         stat.Property<double>("CpuUsage").HasColumnType(Double).IsRequired();
         stat.Property<double>("RxBytes").HasColumnType(Double).IsRequired();
         stat.Property<double>("TxBytes").HasColumnType(Double).IsRequired();
+        stat.Property<long?>("DiskUsedBytes").HasColumnType(BigInt).IsRequired(false);
+        stat.Property<long?>("DiskTotalBytes").HasColumnType(BigInt).IsRequired(false);
+        stat.Property<double?>("DiskUsage").HasColumnType(Double).IsRequired(false);
 
         stat
             .HasOne("Platform")

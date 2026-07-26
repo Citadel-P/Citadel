@@ -286,6 +286,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 s.MemoryUsage as Stat_MemoryUsage,
                 s.RxBytes as Stat_RxBytes,
                 s.TxBytes as Stat_TxBytes,
+                s.DiskUsedBytes as Stat_DiskUsedBytes,
+                s.DiskTotalBytes as Stat_DiskTotalBytes,
+                s.DiskUsage as Stat_DiskUsage,
                 {{ResourceTagSql.TagAggregate("p")}}
             FROM Platforms p
             LEFT JOIN PlatformStats s ON s.Id = (
@@ -328,6 +331,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 s.MemoryUsage as Stat_MemoryUsage,
                 s.RxBytes as Stat_RxBytes,
                 s.TxBytes as Stat_TxBytes,
+                s.DiskUsedBytes as Stat_DiskUsedBytes,
+                s.DiskTotalBytes as Stat_DiskTotalBytes,
+                s.DiskUsage as Stat_DiskUsage,
                 {{ResourceTagSql.TagAggregate("p")}}
             FROM Platforms p
             LEFT JOIN PlatformStats s ON s.Id = (
@@ -366,6 +372,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 s.MemoryUsage as Stat_MemoryUsage,
                 s.RxBytes as Stat_RxBytes,
                 s.TxBytes as Stat_TxBytes,
+                s.DiskUsedBytes as Stat_DiskUsedBytes,
+                s.DiskTotalBytes as Stat_DiskTotalBytes,
+                s.DiskUsage as Stat_DiskUsage,
                 {{ResourceTagSql.TagAggregate("p")}}
             FROM Platforms p
             LEFT JOIN PlatformStats s ON s.Id = (
@@ -407,6 +416,9 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 s.MemoryUsage as Stat_MemoryUsage,
                 s.RxBytes as Stat_RxBytes,
                 s.TxBytes as Stat_TxBytes,
+                s.DiskUsedBytes as Stat_DiskUsedBytes,
+                s.DiskTotalBytes as Stat_DiskTotalBytes,
+                s.DiskUsage as Stat_DiskUsage,
                 {{ResourceTagSql.TagAggregate("p")}}
             FROM Platforms p
             LEFT JOIN PlatformStats s ON s.Id = (

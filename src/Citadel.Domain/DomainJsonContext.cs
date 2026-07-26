@@ -314,6 +314,7 @@ public partial class LicenseJsonContext : JsonSerializerContext
     })]
 [JsonSerializable(typeof(AlertEvent))]
 [JsonSerializable(typeof(AlertEventInfo))]
+[JsonSerializable(typeof(PlatformDiskHighAlertInfo))]
 [JsonSerializable(typeof(StackDriftDetectedAlertInfo))]
 [JsonSerializable(typeof(StackDriftAutoReconciledAlertInfo))]
 [JsonSerializable(typeof(StackImageUpdateItem))]

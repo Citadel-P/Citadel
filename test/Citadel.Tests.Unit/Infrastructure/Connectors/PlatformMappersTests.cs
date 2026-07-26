@@ -31,6 +31,29 @@ public class PlatformMappersTests
         var result = source.Map();
 
         Assert.Equal(0.25, result.PlatformStat.CpuUsage);
+        Assert.Null(result.PlatformStat.DiskUsedBytes);
+        Assert.Null(result.PlatformStat.DiskTotalBytes);
+        Assert.Null(result.PlatformStat.DiskUsage);
+    }
+
+    [Fact]
+    public void Map_PlatformStatsResponse_Should_Preserve_Disk_Field_Presence()
+    {
+        var source = new PlatformStatsResponse
+        {
+            Stat = new PlatformStatMessage
+            {
+                DiskUsedBytes = 0,
+                DiskTotalBytes = 100,
+                DiskUsage = 0
+            }
+        };
+
+        var result = source.Map();
+
+        Assert.Equal(0, result.PlatformStat.DiskUsedBytes);
+        Assert.Equal(100, result.PlatformStat.DiskTotalBytes);
+        Assert.Equal(0, result.PlatformStat.DiskUsage);
     }
 
     [Fact]
@@ -56,5 +79,6 @@ public class PlatformMappersTests
         var result = source.Map();
 
         Assert.Equal(0.25, result.PlatformStat.CpuUsage);
+        Assert.Null(result.PlatformStat.DiskUsage);
     }
 }

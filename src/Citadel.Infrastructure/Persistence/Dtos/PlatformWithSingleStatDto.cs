@@ -6,4 +6,7 @@ internal record PlatformWithSingleStatDto(
     double? Stat_CpuUsage,
     double? Stat_MemoryUsage,
     double? Stat_RxBytes,
-    double? Stat_TxBytes) : PlatformDto;
+    double? Stat_TxBytes,
+    long? Stat_DiskUsedBytes,
+    long? Stat_DiskTotalBytes,
+    double? Stat_DiskUsage) : PlatformDto;

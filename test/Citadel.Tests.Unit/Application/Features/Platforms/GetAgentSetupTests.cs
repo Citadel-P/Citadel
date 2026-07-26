@@ -27,6 +27,7 @@ public sealed class GetAgentSetupTests
         Assert.Equal("registry.example.com/citadel-agent:1.2.3", setup.AgentImage);
         Assert.Contains("-p 9000:9000", setup.DockerRunCommand);
         Assert.Contains("-v /var/run/docker.sock:/var/run/docker.sock", setup.DockerRunCommand);
+        Assert.Contains("-v /:/host:ro", setup.DockerRunCommand);
         Assert.Contains("-e HUB_PUBLIC_KEY=\"public-key\"", setup.DockerRunCommand);
         Assert.Contains("registry.example.com/citadel-agent:1.2.3", setup.DockerRunCommand);
         Assert.DoesNotContain("PRIVATE", setup.DockerRunCommand, StringComparison.OrdinalIgnoreCase);

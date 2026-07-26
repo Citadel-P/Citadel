@@ -20,7 +20,19 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { useRead } from '@/lib/hooks';
 import { toFixedNumber } from '@/lib/utils';
 import dayjs from 'dayjs';
-import { Boxes, Cpu, HardDrive, ImageIcon, Layers, MemoryStick, Network, PlugZap, Rocket, Server } from 'lucide-react';
+import {
+  Boxes,
+  Cpu,
+  Database,
+  HardDrive,
+  ImageIcon,
+  Layers,
+  MemoryStick,
+  Network,
+  PlugZap,
+  Rocket,
+  Server,
+} from 'lucide-react';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
@@ -31,6 +43,9 @@ type PlatformStatsDatum = {
   memoryUsage: number;
   rxBytes: number;
   txBytes: number;
+  diskUsedBytes: number | null;
+  diskTotalBytes: number | null;
+  diskUsage: number | null;
 };
 
 type StatsQueryState = {
@@ -44,9 +59,11 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
   const liveStats = useLiveStats(platform);
   const cpu = usePlatformStatsWindow(platform.id);
   const memory = usePlatformStatsWindow(platform.id);
+  const disk = usePlatformStatsWindow(platform.id);
   const network = usePlatformStatsWindow(platform.id);
   const cpuStats = useCombinedStats(cpu.baseStats, liveStats);
   const memoryStats = useCombinedStats(memory.baseStats, liveStats);
+  const diskStats = useCombinedStats(disk.baseStats, liveStats);
   const networkStats = useCombinedStats(network.baseStats, liveStats);
 
   return (
@@ -65,6 +82,13 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
         windowHours={memory.windowHours}
         controls={<StatsWindowSelect value={memory.windowHours} onChange={memory.onWindowHoursChange} />}
       />
+      <DiskUsageChart
+        platform={platform}
+        stats={diskStats}
+        isLoading={disk.isLoading}
+        windowHours={disk.windowHours}
+        controls={<StatsWindowSelect value={disk.windowHours} onChange={disk.onWindowHoursChange} />}
+      />
       <NetworkUsageChart
         platform={platform}
         stats={networkStats}
@@ -78,6 +102,7 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
 
 export const PlatformResourceSummary = ({ platform }: { platform: PlatformView }) => {
   const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor | null;
+  const currentDisk = getCurrentDiskUsage(platform);
   const resourceMetrics = [
     {
       icon: Boxes,
@@ -127,6 +152,20 @@ export const PlatformResourceSummary = ({ platform }: { platform: PlatformView }
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-0.5 text-xs text-muted-foreground">
         <SystemMetric icon={Cpu} label="CPU" value={`${platform.cpuCount ?? '-'} cores`} />
         <SystemMetric icon={MemoryStick} label="Memory" value={byteTransform(platform.memTotal, 2)} />
+        <SystemMetric
+          icon={Database}
+          label="Disk"
+          value={
+            currentDisk
+              ? `${byteTransform(currentDisk.usedBytes, 2)} / ${byteTransform(currentDisk.totalBytes, 2)}`
+              : '-'
+          }
+          title={
+            currentDisk
+              ? `Docker storage filesystem, ${formatPercent(currentDisk.usagePercent)} used`
+              : 'Disk metrics unavailable. Mount the host root at /host as read-only in the Citadel Core or Agent container.'
+          }
+        />
         <SystemMetric icon={PlugZap} label="Agent" value={platform.agentVersion ?? '-'} />
         <SystemMetric icon={Server} label="Docker" value={platform.serverVersion ?? '-'} />
       </div>
@@ -296,6 +335,67 @@ const NetworkUsageChart = ({
   );
 };
 
+export const DiskUsageChart = ({
+  platform,
+  stats,
+  isLoading,
+  windowHours,
+  controls,
+}: {
+  platform: PlatformView;
+  stats: PlatformStatsDatum[];
+  isLoading: boolean;
+  windowHours: StatsWindowHours;
+  controls?: ReactNode;
+}) => {
+  const current = getCurrentDiskUsage(platform);
+  const hasHistoricalData = stats.some((stat) => stat.diskUsage !== null);
+  const chartConfig = useMemo(
+    () =>
+      ({
+        diskUsage: {
+          label: <span className="text-foreground">Disk Usage</span>,
+          color: 'var(--chart-3)',
+        },
+      }) satisfies ChartConfig,
+    [],
+  );
+  const unavailable = (
+    <DiskChartState compact={hasHistoricalData} title="Disk metrics unavailable">
+      Mount the host root at /host as read-only in the Citadel Core or Agent container.
+    </DiskChartState>
+  );
+  const noHistory = (
+    <DiskChartState compact={false} title="No historical disk readings yet.">
+      Current disk metrics are available.
+    </DiskChartState>
+  );
+
+  return (
+    <StatsChartCard
+      title="Disk Usage"
+      description={`Showing Docker storage filesystem usage for the past ${windowHours} hours`}
+      controls={controls}
+      chartConfig={chartConfig}
+      stats={stats}
+      isLoading={isLoading}
+      notice={!current && hasHistoricalData ? unavailable : undefined}
+      emptyState={!hasHistoricalData ? (current ? noHistory : unavailable) : undefined}
+      areas={[
+        {
+          key: 'diskUsage',
+          gradientId: 'fillPlatformDiskUsage',
+          formatter: (value) => formatPercent(Number(value)),
+        },
+      ]}>
+      <StatsSummaryItem label="Usage" value={current ? formatPercent(current.usagePercent) : '-'} />
+      <StatsSummaryItem label="Used" value={current ? byteTransform(current.usedBytes, 2) : '-'} />
+      <StatsSummaryItem label="Total" value={current ? byteTransform(current.totalBytes, 2) : '-'} />
+      <StatsSummaryItem label="Available" value={current ? byteTransform(current.availableBytes, 2) : '-'} />
+    </StatsChartCard>
+  );
+};
+
 type StatsChartArea = {
   key: keyof Omit<PlatformStatsDatum, 'created'>;
   gradientId: string;
@@ -312,6 +412,8 @@ const StatsChartCard = ({
   isLoading,
   areas,
   children,
+  notice,
+  emptyState,
 }: {
   title: string;
   description: string;
@@ -321,6 +423,8 @@ const StatsChartCard = ({
   isLoading: boolean;
   areas: StatsChartArea[];
   children?: ReactNode;
+  notice?: ReactNode;
+  emptyState?: ReactNode;
 }) => {
   const gradientDefs = useMemo(
     () => (
@@ -378,6 +482,7 @@ const StatsChartCard = ({
             fill={`url(#${area.gradientId})`}
             stroke={`var(--color-${area.key})`}
             stackId={area.stackId}
+            connectNulls={false}
           />
         ))}
         <ChartLegend content={<ChartLegendContent />} />
@@ -393,10 +498,13 @@ const StatsChartCard = ({
       <StatsPanelHeader title={title} description={description} controls={controls}>
         {children}
       </StatsPanelHeader>
+      {notice}
       <CardContent className="px-2 sm:px-6">
-        <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
-          {memoizedChart}
-        </ChartContainer>
+        {emptyState ?? (
+          <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
+            {memoizedChart}
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   );
@@ -438,12 +546,14 @@ const SystemMetric = ({
   icon: Icon,
   label,
   value,
+  title,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: React.ReactNode;
+  title?: string;
 }) => (
-  <div className="inline-flex min-w-0 items-center gap-1.5">
+  <div className="inline-flex min-w-0 items-center gap-1.5" title={title}>
     <Icon className="h-3.5 w-3.5 shrink-0" />
     <span>{label}</span>
     <span className="max-w-48 truncate font-medium tabular-nums text-foreground">{value}</span>
@@ -513,17 +623,87 @@ const useLiveStats = (platform: PlatformView): PlatformStatView[] => {
 const useCombinedStats = (baseStats: PlatformStatView[], liveStats: PlatformStatView[]) =>
   useMemo(() => normalizeStats([...baseStats, ...liveStats]), [baseStats, liveStats]);
 
-const normalizeStats = (stats?: PlatformStatView[] | null): PlatformStatsDatum[] =>
+export const normalizePlatformStats = (stats?: PlatformStatView[] | null): PlatformStatsDatum[] =>
   (stats ?? [])
-    .map((stat) => ({
-      created: Number(stat.created ?? 0),
-      cpuUsage: Number(stat.cpuUsage ?? 0),
-      memoryUsage: Number(stat.memoryUsage ?? 0),
-      rxBytes: Number(stat.rxBytes ?? 0),
-      txBytes: Number(stat.txBytes ?? 0),
-    }))
+    .map((stat) => {
+      const diskUsage = stat.diskUsage == null ? null : Number(stat.diskUsage);
+      const diskUsedBytes = stat.diskUsedBytes == null ? null : Number(stat.diskUsedBytes);
+      const diskTotalBytes = stat.diskTotalBytes == null ? null : Number(stat.diskTotalBytes);
+      const hasCompleteDiskSample =
+        diskUsage != null &&
+        Number.isFinite(diskUsage) &&
+        diskUsage >= 0 &&
+        diskUsage <= 100 &&
+        diskUsedBytes != null &&
+        Number.isFinite(diskUsedBytes) &&
+        diskUsedBytes >= 0 &&
+        diskTotalBytes != null &&
+        Number.isFinite(diskTotalBytes) &&
+        diskTotalBytes > 0 &&
+        diskUsedBytes <= diskTotalBytes;
+
+      return {
+        created: Number(stat.created ?? 0),
+        cpuUsage: Number(stat.cpuUsage ?? 0),
+        memoryUsage: Number(stat.memoryUsage ?? 0),
+        rxBytes: Number(stat.rxBytes ?? 0),
+        txBytes: Number(stat.txBytes ?? 0),
+        diskUsedBytes: hasCompleteDiskSample ? diskUsedBytes : null,
+        diskTotalBytes: hasCompleteDiskSample ? diskTotalBytes : null,
+        diskUsage: hasCompleteDiskSample ? diskUsage : null,
+      };
+    })
     .filter((stat) => stat.created > 0)
     .sort((a, b) => a.created - b.created);
+
+const normalizeStats = normalizePlatformStats;
+
+export const getCurrentDiskUsage = (platform: PlatformView) => {
+  const stat = platform.stats?.at(0);
+  if (
+    platform.status !== PlatformStatus.Online ||
+    stat?.diskUsage == null ||
+    stat.diskUsedBytes == null ||
+    stat.diskTotalBytes == null
+  ) {
+    return null;
+  }
+
+  const usagePercent = Number(stat.diskUsage);
+  const usedBytes = Number(stat.diskUsedBytes);
+  const totalBytes = Number(stat.diskTotalBytes);
+  if (
+    !Number.isFinite(usagePercent) ||
+    !Number.isFinite(usedBytes) ||
+    !Number.isFinite(totalBytes) ||
+    usagePercent < 0 ||
+    usagePercent > 100 ||
+    usedBytes < 0 ||
+    totalBytes <= 0 ||
+    usedBytes > totalBytes
+  ) {
+    return null;
+  }
+
+  return {
+    usagePercent,
+    usedBytes,
+    totalBytes,
+    availableBytes: Math.max(totalBytes - usedBytes, 0),
+  };
+};
+
+const DiskChartState = ({ compact, title, children }: { compact: boolean; title: string; children: ReactNode }) => (
+  <div
+    className={
+      compact
+        ? 'border-t px-6 py-3 text-xs text-muted-foreground'
+        : 'flex h-62.5 flex-col items-center justify-center px-6 text-center'
+    }>
+    <div className="font-medium text-foreground">{title}</div>
+    <div className="mt-1 text-muted-foreground">{children}</div>
+  </div>
+);
 
 const formatPercent = (value: number) => `${toFixedNumber(value, undefined, 2)}%`;
 const formatTick = (timestamp: number) => dayjs(timestamp * 1000).format('HH:mm:ss');

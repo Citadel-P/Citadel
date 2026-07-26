@@ -811,6 +811,7 @@ public enum AlertType
     #region Platform Alerts
     PlatformCpuHigh,
     PlatformRamHigh,
+    PlatformDiskHigh,
     PlatformUnreachable,
     PlatformVersionMismatch,
     UnmanagedContainerCreated,

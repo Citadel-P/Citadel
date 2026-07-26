@@ -33,4 +33,7 @@ internal record struct PlatformStatDto(
     double? CpuUsage,
     double? MemoryUsage,
     double? RxBytes,
-    double? TxBytes);
+    double? TxBytes,
+    long? DiskUsedBytes,
+    long? DiskTotalBytes,
+    double? DiskUsage);

@@ -104,7 +104,10 @@ export const AlertRuleForm = ({
     }),
     [original, update],
   );
-  const showThresholdFields = merged.type === AlertType.PlatformCpuHigh || merged.type === AlertType.PlatformRamHigh;
+  const showThresholdFields =
+    merged.type === AlertType.PlatformCpuHigh ||
+    merged.type === AlertType.PlatformRamHigh ||
+    merged.type === AlertType.PlatformDiskHigh;
 
   const noCooldownTypes: AlertType[] = [
     AlertType.UnmanagedContainerCreated,
@@ -191,17 +194,12 @@ export const AlertRuleForm = ({
             key: 'status',
             description: 'Choose the current state of this rule.',
             render: (value, set) => (
-                <ItemSelector
-                  collection={AlertRuleStatus}
-                  value={value}
-                  disabled={
-                    disabled
-                    || (!hasAdvancedAlerting
-                      && !isSystemRule
-                      && value === AlertRuleStatus.Disabled)
-                  }
-                  onChange={(v: AlertRuleStatus) => set({ status: v })}
-                />
+              <ItemSelector
+                collection={AlertRuleStatus}
+                value={value}
+                disabled={disabled || (!hasAdvancedAlerting && !isSystemRule && value === AlertRuleStatus.Disabled)}
+                onChange={(v: AlertRuleStatus) => set({ status: v })}
+              />
             ),
           }),
 
@@ -451,11 +449,7 @@ const createDailyDraft = (): QuietHourDraft => ({
   description: null,
 });
 
-const QuietHoursField = ({
-  quietHours,
-  disabled,
-  onChange,
-}: QuietHoursFieldProps & { disabled?: boolean }) => {
+const QuietHoursField = ({ quietHours, disabled, onChange }: QuietHoursFieldProps & { disabled?: boolean }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formState, setFormState] = useState<QuietHourDraft>(createDailyDraft);
   const [editIndex, setEditIndex] = useState<number | null>(null);
@@ -603,12 +597,7 @@ const QuietHoursField = ({
       </Button>
       {quietHours.length > 0 && (
         <ContentCard>
-          <QuietHoursTable
-            quietHours={quietHours}
-            disabled={disabled}
-            onEdit={handleEdit}
-            onDelete={handleRemove}
-          />
+          <QuietHoursTable quietHours={quietHours} disabled={disabled} onEdit={handleEdit} onDelete={handleRemove} />
         </ContentCard>
       )}
 
@@ -790,11 +779,7 @@ const QuietHoursTable = ({
                 onClick={() => onEdit(row.original.quietHour, index)}>
                 <Pencil className="size-4 text-muted-foreground" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                disabled={disabled}
-                onClick={() => onDelete(index)}>
+              <Button variant="ghost" size="icon" disabled={disabled} onClick={() => onDelete(index)}>
                 <Trash2 className="size-4 text-muted-foreground" />
               </Button>
             </div>

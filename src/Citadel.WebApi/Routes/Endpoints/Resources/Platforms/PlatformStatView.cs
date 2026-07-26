@@ -7,7 +7,10 @@ public record struct PlatformStatView(
     double TxBytes,
     double RxBytes,
     double CpuUsage,
-    double MemoryUsage)
+    double MemoryUsage,
+    long? DiskUsedBytes,
+    long? DiskTotalBytes,
+    double? DiskUsage)
 {
     internal static List<PlatformStatView> Map(IEnumerable<PlatformStat> stats)
         => [.. stats.Select(Map)];
@@ -18,7 +21,10 @@ public record struct PlatformStatView(
             TxBytes: stat.TxBytes,
             RxBytes: stat.RxBytes,
             CpuUsage: stat.CpuUsage,
-            MemoryUsage: stat.MemoryUsage);
+            MemoryUsage: stat.MemoryUsage,
+            DiskUsedBytes: stat.DiskUsedBytes,
+            DiskTotalBytes: stat.DiskTotalBytes,
+            DiskUsage: stat.DiskUsage);
 }
 
 public sealed record PlatformStatsView(IEnumerable<PlatformStatView> Stats)

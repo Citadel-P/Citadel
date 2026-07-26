@@ -9,6 +9,7 @@ namespace Domain.Entities.Alerts;
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 [JsonDerivedType(typeof(PlatformCpuHighAlertInfo), nameof(AlertType.PlatformCpuHigh))]
 [JsonDerivedType(typeof(PlatformRamHighAlertInfo), nameof(AlertType.PlatformRamHigh))]
+[JsonDerivedType(typeof(PlatformDiskHighAlertInfo), nameof(AlertType.PlatformDiskHigh))]
 [JsonDerivedType(typeof(PlatformUnreachableAlertInfo), nameof(AlertType.PlatformUnreachable))]
 [JsonDerivedType(typeof(UnmanagedContainerCreatedAlertInfo), nameof(AlertType.UnmanagedContainerCreated))]
 [JsonDerivedType(typeof(PlatformVersionMismatchAlertInfo), nameof(AlertType.PlatformVersionMismatch))]
@@ -54,6 +55,17 @@ public record PlatformCpuHighAlertInfo(string PlatformName, double CpuUsagePerce
 public record PlatformRamHighAlertInfo(string PlatformName, double RamUsagePercent) : AlertEventInfo
 {
     public override string HumanMessage => $"'{PlatformName}' RAM usage is high: {RamUsagePercent:0.##}%";
+}
+
+public sealed record PlatformDiskHighAlertInfo(
+    string PlatformName,
+    double DiskUsagePercent,
+    long DiskUsedBytes,
+    long DiskTotalBytes) : AlertEventInfo
+{
+    public override string HumanMessage =>
+        $"'{PlatformName}' disk usage is high: {DiskUsagePercent:0.##}% " +
+        $"({DiskUsedBytes} of {DiskTotalBytes} bytes)";
 }
 
 public record PlatformVersionMismatchAlertInfo(string PlatformName, string CurrentAgentVersion, string ExpectedAgentVersion) : AlertEventInfo

@@ -33405,6 +33405,9 @@
             "$ref": "#/components/schemas/AlertEventInfoPlatformRamHighAlertInfo"
           },
           {
+            "$ref": "#/components/schemas/AlertEventInfoPlatformDiskHighAlertInfo"
+          },
+          {
             "$ref": "#/components/schemas/AlertEventInfoPlatformUnreachableAlertInfo"
           },
           {
@@ -33488,6 +33491,7 @@
           "mapping": {
             "PlatformCpuHigh": "#/components/schemas/AlertEventInfoPlatformCpuHighAlertInfo",
             "PlatformRamHigh": "#/components/schemas/AlertEventInfoPlatformRamHighAlertInfo",
+            "PlatformDiskHigh": "#/components/schemas/AlertEventInfoPlatformDiskHighAlertInfo",
             "PlatformUnreachable": "#/components/schemas/AlertEventInfoPlatformUnreachableAlertInfo",
             "UnmanagedContainerCreated": "#/components/schemas/AlertEventInfoUnmanagedContainerCreatedAlertInfo",
             "PlatformVersionMismatch": "#/components/schemas/AlertEventInfoPlatformVersionMismatchAlertInfo",
@@ -33876,6 +33880,55 @@
               "string"
             ],
             "format": "double"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoPlatformDiskHighAlertInfo": {
+        "required": [
+          "platformName",
+          "diskUsagePercent",
+          "diskUsedBytes",
+          "diskTotalBytes"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformDiskHigh"
+            ],
+            "type": "string"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "diskUsagePercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "diskUsedBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "diskTotalBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "humanMessage": {
             "type": [
@@ -35225,6 +35278,7 @@
         "enum": [
           "PlatformCpuHigh",
           "PlatformRamHigh",
+          "PlatformDiskHigh",
           "PlatformUnreachable",
           "PlatformVersionMismatch",
           "UnmanagedContainerCreated",
@@ -47241,6 +47295,33 @@
           "memoryUsage": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "diskUsedBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "diskTotalBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "diskUsage": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
               "number",
               "string"
             ],

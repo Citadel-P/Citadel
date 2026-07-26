@@ -95,10 +95,20 @@ The container should mount:
 
 ```text
 /var/run/docker.sock:/var/run/docker.sock
+/:/host:ro
 citadel_edge_agent_data:/app/data
 ```
 
-The Docker socket lets the agent inspect and manage local Docker resources. The data volume stores the agent key and enrolled identity.
+The Docker socket lets the agent inspect and manage local Docker resources. The
+read-only `/host` bind lets a Platform Edge Agent report the capacity of the
+filesystem containing Docker's configured data root. It exposes host paths to
+the trusted Agent process but does not allow writes through the mount. Removing
+it disables only disk metrics. Upgrade and recreate older Platform Edge Agent
+containers to add the mount. For ZFS, the metric represents the mounted dataset
+or filesystem, not total pool allocation. Build-pool-only Edge Agents do not
+receive this mount.
+
+The data volume stores the agent key and enrolled identity.
 
 Do not remove the persistent data volume unless you intend to re-enroll the agent.
 

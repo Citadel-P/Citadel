@@ -74,6 +74,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<ActivityView>]
 [GenerateShapeFor<AlertEventView>]
 [GenerateShapeFor<List<AlertEventView>>]
+[GenerateShapeFor<PlatformDiskHighAlertInfo>]
 [GenerateShapeFor<UnresolvedAlertsCountView>]
 [GenerateShapeFor<GitRepositoryView>]
 [GenerateShapeFor<BackupRepositoryView>]

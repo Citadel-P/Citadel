@@ -158,6 +158,7 @@ docker run -d \
   --restart=always \
   -p 9000:9000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /:/host:ro \
   -e HUB_PUBLIC_KEY="..." \
   ghcr.io/citadel-p/citadel.agent:1.2.3
 ```
@@ -206,7 +207,15 @@ services:
       HUB_PUBLIC_KEY: "..."
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /:/host:ro
 ```
+
+The read-only `/host` bind lets the Agent report the capacity of the filesystem
+containing Docker's configured data root. It exposes host paths to the trusted
+Agent process but does not allow writes through the mount. Removing it disables
+only disk metrics. Upgrade and recreate older Agent containers to add the mount.
+For ZFS, the metric represents the mounted dataset or filesystem, not total pool
+allocation.
 
 Start the Agent:
 
