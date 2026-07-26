@@ -24,7 +24,11 @@ public class GitStackMaterializerTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abc123", true));
 
         gitCli
-            .Setup(x => x.MaterializeSnapshotAsync(repository.GetCachePath(), "abc123", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.MaterializeSnapshotAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repository),
+                "abc123",
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .Callback<string, string, string, CancellationToken>((_, _, targetPath, _) =>
             {
                 Directory.CreateDirectory(targetPath);
@@ -68,7 +72,11 @@ public class GitStackMaterializerTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abc123", true));
 
         gitCli
-            .Setup(x => x.MaterializeSnapshotAsync(repository.GetCachePath(), "abc123", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.MaterializeSnapshotAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repository),
+                "abc123",
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .Callback<string, string, string, CancellationToken>((_, _, targetPath, _) =>
             {
                 var appPath = Path.Combine(targetPath, "apps", "beszel");
@@ -184,7 +192,11 @@ public class GitStackMaterializerTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abc123", true));
 
         gitCli
-            .Setup(x => x.MaterializeSnapshotAsync(repository.GetCachePath(), "abc123", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.MaterializeSnapshotAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repository),
+                "abc123",
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .Callback<string, string, string, CancellationToken>((_, _, targetPath, _) => Directory.CreateDirectory(targetPath))
             .ReturnsAsync(Result.Success());
 
@@ -215,7 +227,11 @@ public class GitStackMaterializerTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abc123", true));
 
         gitCli
-            .Setup(x => x.MaterializeSnapshotAsync(repository.GetCachePath(), "abc123", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.MaterializeSnapshotAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repository),
+                "abc123",
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .Callback<string, string, string, CancellationToken>((_, _, targetPath, _) =>
             {
                 Directory.CreateDirectory(targetPath);
@@ -250,7 +266,11 @@ public class GitStackMaterializerTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abc123", true));
 
         gitCli
-            .Setup(x => x.MaterializeSnapshotAsync(repository.GetCachePath(), "abc123", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.MaterializeSnapshotAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repository),
+                "abc123",
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .Callback<string, string, string, CancellationToken>((_, _, targetPath, _) =>
             {
                 Directory.CreateDirectory(targetPath);
@@ -290,7 +310,11 @@ public class GitStackMaterializerTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "abc123", true));
 
         gitCli
-            .Setup(x => x.MaterializeSnapshotAsync(repository.GetCachePath(), "abc123", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.MaterializeSnapshotAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repository),
+                "abc123",
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .Callback<string, string, string, CancellationToken>((_, _, targetPath, _) =>
             {
                 Directory.CreateDirectory(targetPath);

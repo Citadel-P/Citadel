@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Tests.Acceptance</RootNamespace>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishAot>false</PublishAot>
+    <OutputType>exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Citadel.Tests.Common\VerifyChecksTests.cs" Link="VerifyChecksTests.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Citadel.Tests.Common\xunit.runner.json" Link="xunit.runner.json" />
+    <Content Include="..\..\src\Citadel.Infrastructure\Scripts\script0001.sql"
+             Link="Fixtures\Upgrades\pre-release-1.0.0.sql"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures\Upgrades\pre-release-1.0.0-seed.sql"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="dbup-postgresql" />
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Net.Client" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="NSec.Cryptography" />
+    <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Citadel.Tests.Common\Citadel.Tests.Common.csproj" />
+    <ProjectReference Include="..\..\src\Citadel.WebApi\Citadel.WebApi.csproj" />
+  </ItemGroup>
+
+</Project>

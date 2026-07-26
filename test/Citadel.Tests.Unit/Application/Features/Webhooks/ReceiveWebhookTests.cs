@@ -592,7 +592,11 @@ public sealed class ReceiveWebhookTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Hash: "new-commit", Success: true));
         var gitCliRepository = new Mock<IGitCliRepository>();
         gitCliRepository
-            .Setup(x => x.GetChangedPathsAsync(repo.GetCachePath(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetChangedPathsAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repo),
+                "old-commit",
+                "new-commit",
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["stacks/other/compose.yml", "README.md"]));
         var applyStackService = new Mock<IApplyStackService>();
         var alertService = new Mock<IAlertService>();
@@ -674,7 +678,11 @@ public sealed class ReceiveWebhookTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Hash: "new-commit", Success: true));
         var gitCliRepository = new Mock<IGitCliRepository>();
         gitCliRepository
-            .Setup(x => x.GetChangedPathsAsync(repo.GetCachePath(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetChangedPathsAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repo),
+                "old-commit",
+                "new-commit",
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["stacks/app/compose.yml"]));
 
         var applyCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -839,7 +847,11 @@ public sealed class ReceiveWebhookTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Hash: "new-commit", Success: true));
         var gitCliRepository = new Mock<IGitCliRepository>();
         gitCliRepository
-            .Setup(x => x.GetChangedPathsAsync(repo.GetCachePath(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetChangedPathsAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repo),
+                "old-commit",
+                "new-commit",
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["services/web/package.json", "README.md"]));
         List<ActivityEvent> activities = [];
 
@@ -895,7 +907,11 @@ public sealed class ReceiveWebhookTests
             .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, Hash: "new-commit", Success: true));
         var gitCliRepository = new Mock<IGitCliRepository>();
         gitCliRepository
-            .Setup(x => x.GetChangedPathsAsync(repo.GetCachePath(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetChangedPathsAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repo),
+                "old-commit",
+                "new-commit",
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["services/api/Program.cs"]));
         List<ActivityEvent> activities = [];
 

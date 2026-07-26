@@ -227,7 +227,10 @@ internal sealed class BuildRunExecutionService(
             await unitOfWork.BuildRuns.UpdateAsync(run, executionToken);
             await unitOfWork.CommitAsync(executionToken);
 
-            var repositoryRoot = Path.GetFullPath(sync.CachePath ?? buildContext.Repository.GetCachePath());
+            var repositoryRoot = Path.GetFullPath(
+                sync.CachePath
+                ?? ApplicationStoragePaths.GetRepositoryCachePath(
+                    buildContext.Repository));
             var contextPath = ResolveRepoPath(repositoryRoot, run.ContextPath, mustBeDirectory: true);
             if (!contextPath.IsSuccess(out var buildContextPath, out var contextPathError))
                 return await FailAsync(run, BuildRunStatus.Failed, 1, "build.context_path_invalid", contextPathError!.Message, executionToken);

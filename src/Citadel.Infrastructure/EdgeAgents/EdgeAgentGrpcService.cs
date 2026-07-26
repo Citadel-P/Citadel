@@ -109,14 +109,18 @@ internal sealed class EdgeAgentGrpcService(
         {
             if (session is not null)
             {
-                sessionRegistry.Remove(session);
+                var shouldMarkDisconnected =
+                    sessionRegistry.RemoveAndShouldMarkDisconnected(session);
                 session.Complete();
-                await edgeAgentManagementService.MarkDisconnectedAsync(
-                    session.ResourceType,
-                    session.ResourceId,
-                    DateTime.UtcNow,
-                    CancellationToken.None);
-                logger.LogInformation("Edge Agent session disconnected for {ResourceType} {ResourceId}", session.ResourceType, session.ResourceId);
+                if (shouldMarkDisconnected)
+                {
+                    await edgeAgentManagementService.MarkDisconnectedAsync(
+                        session.ResourceType,
+                        session.ResourceId,
+                        DateTime.UtcNow,
+                        CancellationToken.None);
+                    logger.LogInformation("Edge Agent session disconnected for {ResourceType} {ResourceId}", session.ResourceType, session.ResourceId);
+                }
             }
         }
     }

@@ -78,7 +78,8 @@ internal sealed class PatchGitRepositoryHandler(
             || !string.Equals(gitRepository.DefaultBranch, patchedGitRepository.DefaultBranch, StringComparison.OrdinalIgnoreCase)
             || gitRepository.GitAccountId != patchedGitRepository.GitAccountId;
 
-        var previousCachePath = gitRepository.GetCachePath();
+        var previousCachePath =
+            ApplicationStoragePaths.GetRepositoryCachePath(gitRepository);
 
         // Add Activity
         var activity = new ActivityEvent(
@@ -112,13 +113,13 @@ internal sealed class PatchGitRepositoryHandler(
         }
 
         await unitOfWork.GitRepositories.UpdateAsync(gitRepository, cancellationToken);
-    
+
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
-       
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         await notificationQueue.EnqueueAsync(new GitRepositoryNotificationWorkItem(gitRepositoryHub, gitRepository), cancellationToken);
-        
+
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
 
         if (sourceChanged)

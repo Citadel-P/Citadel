@@ -2,10 +2,20 @@ namespace Application.Services;
 
 internal static class ApplicationVersion
 {
-    public static string CoreVersion { get; } = GetCoreVersion(ThisAssembly.AssemblyInformationalVersion);
+    public static string CoreVersion { get; } = GetCoreVersion(
+        typeof(ApplicationVersion).Assembly
+            .GetCustomAttributes(
+                typeof(System.Reflection.AssemblyInformationalVersionAttribute),
+                inherit: false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .SingleOrDefault()?
+            .InformationalVersion);
 
-    internal static string GetCoreVersion(string informationalVersion)
+    internal static string GetCoreVersion(string? informationalVersion)
     {
+        if (string.IsNullOrWhiteSpace(informationalVersion))
+            return "0.0.0";
+
         var numericVersion = informationalVersion.AsSpan();
         var suffixIndex = numericVersion.IndexOfAny('-', '+');
         if (suffixIndex >= 0)

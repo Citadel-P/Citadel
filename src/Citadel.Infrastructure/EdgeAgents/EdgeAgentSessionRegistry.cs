@@ -41,12 +41,19 @@ internal sealed class EdgeAgentSessionRegistry : IEdgeAgentSessionTerminator
         }
     }
 
-    public void Remove(EdgeAgentSession session)
+    public bool RemoveAndShouldMarkDisconnected(EdgeAgentSession session)
     {
-        if (sessions.TryGetValue(session.Target, out var current) &&
-            ReferenceEquals(current, session))
+        var removed = ((ICollection<KeyValuePair<EdgeAgentTarget, EdgeAgentSession>>)sessions)
+            .Remove(new KeyValuePair<EdgeAgentTarget, EdgeAgentSession>(
+                session.Target,
+                session));
+        if (removed)
         {
-            sessions.TryRemove(session.Target, out _);
+            return true;
         }
+
+        // A missing entry was terminated explicitly, such as by revocation.
+        // A different entry is a replacement session and owns the target state.
+        return !sessions.ContainsKey(session.Target);
     }
 }

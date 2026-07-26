@@ -70,7 +70,7 @@ internal sealed class DiscoverGitRepositoryComposeProjectsHandler(
         try
         {
             var materialize = await gitCliRepository.MaterializeSnapshotAsync(
-                repo.GetCachePath(),
+                ApplicationStoragePaths.GetRepositoryCachePath(repo),
                 sync.Hash,
                 snapshotRoot,
                 cancellationToken);

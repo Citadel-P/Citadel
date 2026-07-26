@@ -11,8 +11,9 @@ public sealed class ApplicationVersionTests
     [InlineData("2.3.4-beta.1+abcdef123", "2.3.4")]
     [InlineData("1.0", "1.0.0")]
     [InlineData("invalid", "0.0.0")]
+    [InlineData(null, "0.0.0")]
     public void GetCoreVersion_Should_Return_Three_Part_Release_Version(
-        string informationalVersion,
+        string? informationalVersion,
         string expected)
     {
         Assert.Equal(expected, ApplicationVersion.GetCoreVersion(informationalVersion));

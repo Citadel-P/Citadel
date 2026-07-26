@@ -6,6 +6,24 @@ name: Docker
 # documentation.
 
 on:
+  workflow_dispatch:
+    inputs:
+      edge_core_image:
+        description: Optional exact Core image reference to test instead of building this revision
+        required: false
+        type: string
+      edge_agent_image:
+        description: Optional exact Agent image reference to test instead of building Citadel.Agent
+        required: false
+        type: string
+      edge_agent_ref:
+        description: Agent Git ref to build; defaults to the matching stable tag or main
+        required: false
+        type: string
+      edge_agent_version:
+        description: Expected Agent version when edge_agent_image is supplied
+        required: false
+        type: string
   schedule:
     - cron: '33 5 * * *'
   push:
@@ -26,6 +44,8 @@ env:
   DOCKERHUB_REPOSITORY: citadel
   BUILDKIT_CACHE_SCOPE: citadel-linux-amd64
   CITADEL_E2E_IMAGE: citadel-e2e:${{ github.run_id }}-${{ github.run_attempt }}
+  CITADEL_EDGE_CORE_TEST_IMAGE: citadel-edge-core:${{ github.run_id }}-${{ github.run_attempt }}
+  CITADEL_EDGE_AGENT_TEST_IMAGE: citadel-edge-agent:${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
   version:
@@ -408,8 +428,341 @@ jobs:
           dotnet run --project test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release
           dotnet run --project test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release
 
+  upgrade-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore upgrade acceptance tests
+        run: dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
+
+      - name: Build upgrade acceptance tests
+        run: dotnet build test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-restore -c Release
+
+      - name: Run pre-release upgrade baseline
+        run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Upgrades.PreReleaseUpgradeTests
+
+      - name: Collect upgrade acceptance diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p test/Citadel.Tests.Acceptance/artifacts
+          docker ps --all > test/Citadel.Tests.Acceptance/artifacts/docker-ps.txt
+          for container in $(docker ps --all --quiet); do
+            docker logs "${container}" > "test/Citadel.Tests.Acceptance/artifacts/${container}.log" 2>&1 || true
+          done
+
+      - name: Upload upgrade acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-baseline-${{ github.run_attempt }}
+          path: test/Citadel.Tests.Acceptance/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+
+  control-plane-recovery:
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore control-plane recovery acceptance tests
+        run: dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
+
+      - name: Build control-plane recovery acceptance tests
+        run: dotnet build test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-restore -c Release
+
+      - name: Run control-plane backup and restore
+        run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Recovery.ControlPlaneRecoveryTests
+
+      - name: Collect recovery acceptance diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p test/Citadel.Tests.Acceptance/artifacts
+          docker ps --all > test/Citadel.Tests.Acceptance/artifacts/docker-ps.txt
+          for container in $(docker ps --all --quiet); do
+            docker logs "${container}" > "test/Citadel.Tests.Acceptance/artifacts/${container}.log" 2>&1 || true
+          done
+
+      - name: Upload recovery acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-plane-recovery-${{ github.run_attempt }}
+          path: test/Citadel.Tests.Acceptance/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+
+  edge-agent-recovery:
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore Edge Agent recovery acceptance tests
+        run: dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
+
+      - name: Build Edge Agent recovery acceptance tests
+        run: dotnet build test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-restore -c Release
+
+      - name: Run Edge Agent disconnect and reconnect recovery
+        run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Recovery.EdgeAgentRecoveryTests
+
+      - name: Collect Edge Agent recovery diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p test/Citadel.Tests.Acceptance/artifacts
+          docker ps --all > test/Citadel.Tests.Acceptance/artifacts/docker-ps.txt
+          for container in $(docker ps --all --quiet); do
+            docker logs "${container}" > "test/Citadel.Tests.Acceptance/artifacts/${container}.log" 2>&1 || true
+          done
+
+      - name: Upload Edge Agent recovery diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-agent-recovery-${{ github.run_attempt }}
+          path: test/Citadel.Tests.Acceptance/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+
+  git-webhook:
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore Forgejo acceptance tests
+        run: dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
+
+      - name: Build Forgejo acceptance tests
+        run: dotnet build test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-restore -c Release
+
+      - name: Run Forgejo Git and webhook compatibility
+        run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Compatibility.ForgejoGitWebhookTests
+
+      - name: Collect Forgejo acceptance diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p test/Citadel.Tests.Acceptance/artifacts
+          docker ps --all > test/Citadel.Tests.Acceptance/artifacts/docker-ps.txt
+          for container in $(docker ps --all --quiet); do
+            docker logs "${container}" > "test/Citadel.Tests.Acceptance/artifacts/${container}.log" 2>&1 || true
+          done
+
+      - name: Upload Forgejo acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: git-webhook-${{ github.run_attempt }}
+          path: test/Citadel.Tests.Acceptance/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+
+  edge-agent-compatibility:
+    needs: [version, e2e-smoke]
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Core repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226
+
+      - name: Pull supplied Core image
+        if: inputs.edge_core_image != ''
+        env:
+          EDGE_CORE_IMAGE: ${{ inputs.edge_core_image }}
+        run: docker pull "${EDGE_CORE_IMAGE}"
+
+      - name: Build Core compatibility image
+        if: inputs.edge_core_image == ''
+        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09
+        with:
+          context: .
+          file: src/Citadel.WebApi/Dockerfile
+          load: true
+          tags: ${{ env.CITADEL_EDGE_CORE_TEST_IMAGE }}
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+            ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}
+            FILE_VERSION=${{ needs.version.outputs.file-version }}
+            INFORMATIONAL_VERSION=${{ needs.version.outputs.version }}
+          cache-from: type=gha,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
+          cache-to: type=gha,mode=max,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
+
+      - name: Pull supplied Agent image
+        if: inputs.edge_agent_image != ''
+        env:
+          EDGE_AGENT_IMAGE: ${{ inputs.edge_agent_image }}
+        run: docker pull "${EDGE_AGENT_IMAGE}"
+
+      - name: Checkout Agent repository
+        if: inputs.edge_agent_image == ''
+        uses: actions/checkout@v4
+        with:
+          repository: Citadel-P/Citadel.Agent
+          path: .compat/Citadel.Agent
+          ref: ${{ inputs.edge_agent_ref || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || 'main' }}
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Restore Agent versioning tool
+        if: inputs.edge_agent_image == ''
+        working-directory: .compat/Citadel.Agent
+        run: dotnet tool restore
+
+      - name: Resolve Agent version
+        if: inputs.edge_agent_image == ''
+        id: agent-version
+        working-directory: .compat/Citadel.Agent
+        shell: bash
+        run: |
+          {
+            echo "VERSION=$(dotnet nbgv get-version -v NuGetPackageVersion)"
+            echo "SIMPLE_VERSION=$(dotnet nbgv get-version -v SimpleVersion)"
+            echo "ASSEMBLY_VERSION=$(dotnet nbgv get-version -v AssemblyVersion)"
+            echo "FILE_VERSION=$(dotnet nbgv get-version -v AssemblyFileVersion)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build Agent compatibility image
+        if: inputs.edge_agent_image == ''
+        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09
+        with:
+          context: .compat/Citadel.Agent
+          load: true
+          tags: ${{ env.CITADEL_EDGE_AGENT_TEST_IMAGE }}
+          build-args: |
+            VERSION=${{ steps.agent-version.outputs.VERSION }}
+            ASSEMBLY_VERSION=${{ steps.agent-version.outputs.ASSEMBLY_VERSION }}
+            FILE_VERSION=${{ steps.agent-version.outputs.FILE_VERSION }}
+            INFORMATIONAL_VERSION=${{ steps.agent-version.outputs.VERSION }}
+          cache-from: type=gha,scope=citadel-agent-linux-amd64
+          cache-to: type=gha,mode=max,scope=citadel-agent-linux-amd64
+
+      - name: Restore Edge Agent compatibility tests
+        run: dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
+
+      - name: Build Edge Agent compatibility tests
+        run: dotnet build test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-restore -c Release
+
+      - name: Run real Core and Agent compatibility
+        env:
+          CITADEL_ACCEPTANCE_CORE_IMAGE: ${{ inputs.edge_core_image || env.CITADEL_EDGE_CORE_TEST_IMAGE }}
+          CITADEL_ACCEPTANCE_AGENT_IMAGE: ${{ inputs.edge_agent_image || env.CITADEL_EDGE_AGENT_TEST_IMAGE }}
+          CITADEL_ACCEPTANCE_AGENT_VERSION: ${{ inputs.edge_agent_version || steps.agent-version.outputs.SIMPLE_VERSION }}
+        run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Compatibility.EdgeAgentCompatibilityTests
+
+      - name: Collect Edge Agent compatibility diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p test/Citadel.Tests.Acceptance/artifacts
+          docker ps --all > test/Citadel.Tests.Acceptance/artifacts/docker-ps.txt
+          docker images --digests > test/Citadel.Tests.Acceptance/artifacts/docker-images.txt
+          for container in $(docker ps --all --quiet); do
+            docker inspect "${container}" > "test/Citadel.Tests.Acceptance/artifacts/${container}.inspect.json" 2>&1 || true
+            docker logs "${container}" > "test/Citadel.Tests.Acceptance/artifacts/${container}.log" 2>&1 || true
+          done
+
+      - name: Upload Edge Agent compatibility diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-agent-compatibility-${{ github.run_attempt }}
+          path: test/Citadel.Tests.Acceptance/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+
   publish:
-    needs: [version, frontend, build, e2e-smoke, core-runtime]
+    needs: [version, frontend, build, e2e-smoke, core-runtime, upgrade-baseline, control-plane-recovery, edge-agent-recovery, git-webhook, edge-agent-compatibility]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 35

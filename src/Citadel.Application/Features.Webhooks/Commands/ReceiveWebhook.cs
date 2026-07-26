@@ -607,7 +607,7 @@ internal sealed class ReceiveWebhookHandler(
             return (false, "No new commit", null);
 
         var pathsResult = await gitCliRepository.GetChangedPathsAsync(
-            repo.GetCachePath(),
+            ApplicationStoragePaths.GetRepositoryCachePath(repo),
             latestRun.ResolvedCommitSha,
             sync.Hash,
             cancellationToken);
@@ -652,7 +652,7 @@ internal sealed class ReceiveWebhookHandler(
             return (false, "No new commit", null);
 
         var pathsResult = await gitCliRepository.GetChangedPathsAsync(
-            repo.GetCachePath(),
+            ApplicationStoragePaths.GetRepositoryCachePath(repo),
             source.ResolvedCommitSha,
             sync.Hash,
             cancellationToken);

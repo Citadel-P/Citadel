@@ -37,7 +37,11 @@ public sealed class DiscoverGitRepositoryComposeProjectsTests
 
         var gitCli = new Mock<IGitCliRepository>();
         gitCli
-            .Setup(x => x.MaterializeSnapshotAsync(repo.GetCachePath(), "abc123", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.MaterializeSnapshotAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repo),
+                "abc123",
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .Callback<string, string, string, CancellationToken>((_, _, targetPath, _) =>
             {
                 Directory.CreateDirectory(Path.Combine(targetPath, "stacks", "beszel"));

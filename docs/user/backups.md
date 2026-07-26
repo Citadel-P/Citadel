@@ -210,6 +210,10 @@ Repository and platform rules for restore:
 - An S3-compatible repository can restore to local, regular agent, or edge agent platforms because the restore runs from the target platform.
 - Citadel system backups are restored offline, not through the web UI.
 
+For the PostgreSQL dump, security assets, clean-environment restore sequence,
+and recovery drill requirements, see
+[`control-plane-recovery.md`](control-plane-recovery.md).
+
 ## Alerts
 
 Backup policies can alert on failure when **Alert on failure** is enabled. Delivery is configured through Alert Rules and Alert Channels.

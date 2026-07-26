@@ -1135,6 +1135,72 @@ representative set from each frontend category in section 15 pass in CI.
 7. Add Citadel control-plane backup, destruction, and restore automation.
 8. Add Agent disconnect, reconnect, and revocation recovery coverage.
 
+Current upgrade baseline implementation:
+
+- `test/Citadel.Tests.Acceptance` is the independent xUnit product-acceptance
+  project.
+- `Upgrades/PreReleaseUpgradeTests.cs` restores the frozen pre-release `1.0.0`
+  schema and representative seed, starts the candidate as a real process,
+  verifies authentication and preserved state, performs a new operation,
+  restarts the candidate with the same database and data directory, and
+  verifies another operation.
+- The normalized SHA-256 of `script0001.sql` is pinned so the historical
+  baseline cannot be edited silently.
+- A failing transactional migration is verified to leave neither partial
+  schema nor a journal entry.
+- `.github/workflows/docker-publish.yml` runs this baseline as the blocking
+  `upgrade-baseline` job and includes it in stable publication dependencies.
+
+After the first stable image is published, keep this pre-release baseline as a
+migration regression fixture and add the previous-stable-image path described
+in section 17.5. The image-based path must seed state through the previous
+release, preserve its PostgreSQL and Citadel data volumes, and start the tested
+candidate image rather than rebuilding a different candidate.
+
+Current control-plane recovery implementation:
+
+- `Recovery/ControlPlaneRecoveryTests.cs` creates a real custom-format
+  PostgreSQL dump and a checksum-validated package containing only the
+  file-backed JWT, secret-encryption, Core-to-Agent, and data-protection key
+  material.
+- The suite destroys the source database and data directory, restores into a
+  new empty database and data directory, starts the same built candidate
+  artifact, verifies representative identity, permissions, encrypted secret,
+  platform, stack release, Git, backup history, activity, schedule, license,
+  and agent-binding state, and performs a new operation.
+- A package missing `secret-encryption-key` is rejected before the target
+  database is modified.
+- `.github/workflows/docker-publish.yml` runs the suite on schedule, on demand,
+  and before stable publication through the `control-plane-recovery` job.
+- `docs/user/control-plane-recovery.md` documents the manual PostgreSQL and
+  recovery-asset procedure until the product `Citadel.Recovery` command and
+  packaged Citadel System backup slices are implemented.
+
+This acceptance harness validates the recovery contract but does not make the
+current Citadel System restic backup a complete control-plane backup. Product
+integration remains owned by the system-backup and offline-recovery slices in
+`docs/specs/backup-and-restore.md`.
+
+Current Edge Agent recovery implementation:
+
+- `Recovery/EdgeAgentRecoveryTests.cs` starts the candidate Core as a real
+  process and connects a protocol-level Edge Agent client over the public
+  HTTP/2 stream.
+- The suite enrolls the agent, sends a heartbeat, and completes a routed
+  platform operation. It then proves that disconnect reports the platform
+  offline and rejects routed work with `503`, authenticated reconnect restores
+  operation, and reconnect after a Core process restart restores operation.
+- The suite revokes the binding while disconnected and verifies that the same
+  persisted identity cannot reconnect or receive more commands.
+- Session replacement uses atomic key/value removal so cleanup from an older
+  stream cannot remove or mark a newer session offline.
+- `.github/workflows/docker-publish.yml` runs the suite on schedule, on demand,
+  and before stable publication through the `edge-agent-recovery` job.
+
+This reliability slice intentionally exercises the Core protocol without
+checking out or launching the separate Agent repository. The real-image suite
+below owns image compatibility and Docker-backed behavior.
+
 ### Slice 5: Compatibility Acceptance
 
 Implement in this order:
@@ -1150,6 +1216,45 @@ public release.
 
 Each service slice adds .NET acceptance coverage first and only the minimum
 browser coverage needed to prove the user-facing wiring.
+
+Current Forgejo compatibility implementation:
+
+- `Compatibility/ForgejoGitWebhookTests.cs` starts the candidate Core and
+  `codeberg.org/forgejo/forgejo:16.0.1-rootless` as disposable processes.
+- The fixture disables registration, creates an administrator, access token,
+  private repository, `main` branch, and real Git commits.
+- The suite configures a private Git repository and Git-backed stack through
+  Citadel's public API, then verifies the initial deployment and its resolved
+  commit.
+- A real Forgejo push webhook signed with `X-Gitea-Signature` updates the stack;
+  applying it creates the expected second release and resolved commit.
+- The suite rejects an invalid signature and proves that a commit outside the
+  configured stack watch paths produces a no-op without advancing the deployed
+  release or repository cache.
+- Application-owned Git caches and stack snapshots resolve from the process
+  working directory, preserving `/app/data` in containers while allowing the
+  candidate process to use its isolated acceptance data directory.
+- `.github/workflows/docker-publish.yml` runs the `git-webhook` job on schedule,
+  on demand, and before stable publication.
+
+Current Edge Agent compatibility implementation:
+
+- `Compatibility/EdgeAgentCompatibilityTests.cs` starts supplied Core and
+  Agent images on an isolated Testcontainers network with a dedicated
+  Docker-in-Docker daemon.
+- The suite creates a real enrollment, checks the connected protocol and Agent
+  version, routes Docker operations, and proves that a different platform
+  cannot deliver commands to the connected Agent.
+- It deploys a BusyBox stack through the Agent, verifies streamed progress and
+  completion, and inspects the running container through the live Agent route.
+- The Agent identity directory is persisted across a container restart. The
+  suite verifies authenticated reconnect, then revokes the binding and proves
+  that the persisted identity is rejected and cannot receive commands.
+- `.github/workflows/docker-publish.yml` runs the
+  `edge-agent-compatibility` job on schedule, on demand, and before stable
+  publication. Manual runs accept exact Core and Agent image references, an
+  Agent Git ref, and an optional expected Agent version. Stable tags build the
+  Core tag under test and default to the matching Agent tag.
 
 ### Slice 6: Release Gate And Extended Quality
 

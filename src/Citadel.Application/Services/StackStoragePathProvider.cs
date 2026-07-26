@@ -1,5 +1,3 @@
-using Hosting.Common;
-
 namespace Application.Services;
 
 internal interface IStackStoragePathProvider
@@ -9,5 +7,5 @@ internal interface IStackStoragePathProvider
 
 internal sealed class StackStoragePathProvider : IStackStoragePathProvider
 {
-    public string StacksRoot => Constants.StacksDir;
+    public string StacksRoot => ApplicationStoragePaths.StacksRoot;
 }

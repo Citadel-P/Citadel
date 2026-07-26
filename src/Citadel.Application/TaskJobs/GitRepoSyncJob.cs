@@ -61,10 +61,10 @@ internal class GitRepoSyncJob(
                         await dbWorkQueue.EnqueueAsync(new GitRepoSyncFailedWorkItem(
                             gitRepoStreamManager,
                             notificationQueue,
-                            activityHub, 
+                            activityHub,
                             alertService,
                             GitOperation.Authenticate,
-                            repo, 
+                            repo,
                             branch,
                             error.Message,
                             request.Trigger,
@@ -358,7 +358,7 @@ internal sealed class GitRepoSyncSuccessWorkItem(
         if (!changedPathsByCommitRange.TryGetValue(cacheKey, out var changedPaths))
         {
             var result = await gitCliRepository.GetChangedPathsAsync(
-                repo.GetCachePath(),
+                ApplicationStoragePaths.GetRepositoryCachePath(repo),
                 currentCommit,
                 remoteCommit,
                 cancellationToken);

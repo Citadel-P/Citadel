@@ -33,7 +33,7 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
 
         try
         {
-            var targetPath = repo.GetCachePath();
+            var targetPath = ApplicationStoragePaths.GetRepositoryCachePath(repo);
             var url = GetRemoteUrl(repo, account);
             var syncBranch = string.IsNullOrWhiteSpace(branch) ? repo.DefaultBranch ?? "main" : branch;
             GitOperation operation = GitOperation.Pull;
@@ -45,7 +45,7 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
                 var cloneResult = await gitCli.CloneAsync(url, targetPath, syncBranch, account, ct);
 
                 operation = GitOperation.Clone;
-                
+
                 if (cloneResult.IsFailure(out var error))
                     return new RepoSyncResult(Operation: operation, Error: error.Message);
 
@@ -90,7 +90,9 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
 
         try
         {
-            await EnsureDeletedAsync(repo.GetCachePath(), ct);
+            await EnsureDeletedAsync(
+                ApplicationStoragePaths.GetRepositoryCachePath(repo),
+                ct);
         }
         finally
         {

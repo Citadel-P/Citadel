@@ -21,6 +21,7 @@
     <Project Path="src/Citadel.Contracts/src/Citadel.SourceGen/Citadel.SourceGen.csproj" />
   </Folder>
   <Folder Name="/test/">
+    <Project Path="test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj" />
     <Project Path="test/Citadel.Tests.Common/Citadel.Tests.Common.csproj" />
     <Project Path="test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj" />
     <Project Path="test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj" />
