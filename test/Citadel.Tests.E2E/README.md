@@ -38,6 +38,7 @@ npm run test:smoke            # Fast authentication, authorization, licensing, n
 npm run test:core-runtime     # Deploy, second release, UI rollback, and Docker-state verification
 npm run test:nightly-runtime  # Logs, Inspect, Terminal, and real SignalR reconnect coverage
 npm run test:visual           # Chromium desktop and mobile visual regression coverage
+npm run test:accessibility    # Focused WCAG A/AA checks for login and representative application surfaces
 npm run test:oidc             # Real Keycloak redirect, refresh session, claim policy, and logout
 npm run test:vault            # Vault provider connection, save, and stored-token preservation
 npm test                      # Run every Playwright test
@@ -59,6 +60,11 @@ npm run test:visual:update
 
 Run the visual suite with the same Playwright version and operating system used
 by CI before committing updated baselines. CI uses Ubuntu and Chromium.
+
+The accessibility suite checks login validation, the authenticated shell,
+resource tables, FormBuilder validation, and a resource dialog. It runs in the
+blocking E2E job and does not suppress Axe rules globally. Any exception must
+be narrowly scoped in the test and reference a tracked issue.
 
 The OIDC suite requires the optional Keycloak profile. It uses a deterministic
 realm and empty browser storage rather than the local-login state:

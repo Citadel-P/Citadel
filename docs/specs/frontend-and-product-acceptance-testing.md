@@ -957,7 +957,8 @@ Restore, build, and run `Citadel.Tests.Integration`.
 #### `e2e-smoke`
 
 Build the local Citadel image, start the base E2E environment, install
-Playwright Chromium, run the smoke suite, collect artifacts, and tear down.
+Playwright Chromium, run the smoke and focused accessibility suites, collect
+artifacts, and tear down.
 
 #### `core-runtime`
 
@@ -1306,7 +1307,7 @@ Current RustFS compatibility implementation:
   configuration into a test failure so a skipped suite cannot satisfy a
   release gate.
 - `test/Citadel.Tests.Acceptance/run-image-compatibility.ps1` builds or validates
-  the local Core and Agent candidate images, requires both suites to execute,
+  the local Core and Agent candidate images, requires all three suites to execute,
   and restores the caller's process environment after the run.
 
 The selected browser test for configuring a repository and starting or
@@ -1371,12 +1372,28 @@ Current nightly matrix implementation:
 - `nightly-runtime` is also scheduled and manually dispatchable. Visual and
   accessibility coverage remain separate Chromium-based slices.
 
+Current release-gate and extended-quality implementation:
+
+- `e2e-smoke` builds the Core candidate once, runs browser smoke and focused
+  Axe checks against it, and exports that exact Docker image as a workflow
+  artifact.
+- The accessibility gate covers unauthenticated validation, the authenticated
+  shell and a representative table, a FormBuilder validation state, and a
+  resource dialog. It applies WCAG A/AA rules without global rule suppression.
+- Candidate-image compatibility jobs download and load the exported artifact
+  instead of rebuilding Core independently.
+- Stable publication downloads the same artifact, assigns the GHCR and Docker
+  Hub release tags to its local config digest, pushes those tags, and verifies
+  every remote tag resolves to that config and one manifest digest.
+- The verified config and manifest digests are written to the workflow summary,
+  and Cosign signs the promoted manifest digest.
+
 ### Slice 6: Release Gate And Extended Quality
 
 1. Add nightly matrix execution. (Implemented)
 2. Add selected visual regression tests. (Implemented)
-3. Add focused accessibility tests.
-4. Promote only acceptance-tested release digests.
+3. Add focused accessibility tests. (Implemented)
+4. Promote only acceptance-tested release digests. (Implemented)
 5. Add focused coverage thresholds after measuring the baseline.
 
 ## 27. Acceptance Criteria

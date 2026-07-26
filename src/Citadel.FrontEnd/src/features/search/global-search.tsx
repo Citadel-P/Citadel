@@ -96,7 +96,7 @@ export function GlobalSearch() {
         data-state={open ? 'open' : 'closed'}
         className="group h-9 w-9 justify-center overflow-hidden border-border/70 bg-muted/30 px-0 font-normal text-muted-foreground shadow-xs hover:border-border hover:bg-accent/60 hover:text-foreground data-[state=open]:border-ring/50 data-[state=open]:bg-accent data-[state=open]:text-foreground sm:w-56 sm:justify-start sm:px-3 lg:w-64">
         <Search className="size-4 shrink-0 transition-colors group-hover:text-foreground" />
-        <span className="hidden min-w-0 flex-1 truncate text-left sm:inline">Search resources...</span>
+        <span className="hidden min-w-0 flex-1 truncate text-left text-foreground/70 sm:inline">Search resources...</span>
         <kbd className="pointer-events-none ml-auto hidden h-5 shrink-0 items-center gap-1 rounded border border-border/80 bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground shadow-xs lg:inline-flex">
           <span>{isMac ? '⌘' : 'Ctrl'}</span>
           <span>K</span>

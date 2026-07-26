@@ -118,7 +118,7 @@
     --muted-foreground: #64748b;
     --accent: #f5f5f5;
     --accent-foreground: #171717;
-    --destructive: #ef4444;
+    --destructive: #dc2626;
     --destructive-foreground: #ffffff;
     --border: #e2e8f0;
     --input: #e5e5e5;
@@ -188,8 +188,8 @@
     --chart-1: #cc0033;
   }
   :root[data-theme='blue'] {
-    --primary: #2490ff;
-    --chart-1: #2490ff;
+    --primary: #0068d6;
+    --chart-1: #0068d6;
   }
   :root[data-theme='orange'] {
     --primary: #ea580c;

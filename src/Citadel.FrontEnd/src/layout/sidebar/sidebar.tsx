@@ -55,12 +55,12 @@ export const Sidebar = () => {
               target="_blank"
               rel="noreferrer"
               href="https://github.com/Citadel-P/Citadel"
-              className="truncate rounded-lg bg-primary/10 px-2 text-primary hover:underline">
+              className="truncate rounded-lg bg-card px-2 text-foreground hover:underline">
               v {version}
             </a>
             <Link
               to="/license"
-              className="truncate rounded-lg bg-card px-2 text-muted-foreground hover:text-foreground">
+              className="truncate rounded-lg bg-card px-2 text-foreground">
               {licenseType}
             </Link>
           </div>

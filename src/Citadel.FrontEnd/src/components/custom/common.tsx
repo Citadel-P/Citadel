@@ -92,6 +92,7 @@ import { truncate } from '@/lib/truncate';
 import { formatId } from '@/lib/utils';
 import { StateIndicator } from './state-indicator';
 import { getContainerSeriesColor } from './container-series-colors';
+import { useFormFieldAccessibility } from './form-field-accessibility';
 
 export type StatsWindowHours = 24 | 48 | 72;
 
@@ -280,6 +281,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   platformId?: string;
   queryEnabled?: boolean;
 }) {
+  const accessibility = useFormFieldAccessibility();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const { ref: triggerRef, width: contentWidth, measure } = useMeasuredWidth(400);
@@ -337,6 +339,9 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
           variant="ghost"
           role="combobox"
           aria-expanded={open}
+          aria-label={accessibility?.label}
+          aria-describedby={accessibility?.describedBy}
+          aria-invalid={accessibility?.invalid || undefined}
           data-placeholder={selectedItem ? undefined : ''}
           className={cn(
             'flex justify-between gap-2 w-full max-w-100 font-normal data-placeholder:text-muted-foreground text-sm bg-background hover:bg-background shadow-xs border',

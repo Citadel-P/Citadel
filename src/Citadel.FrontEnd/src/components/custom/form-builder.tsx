@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '../ui/select';
 import { LicenseFeatureIndicator, LicensedFeatureLabel, type LicenseEdition } from './license-feature-indicator';
+import { FormFieldAccessibilityContext, useFormFieldAccessibility } from './form-field-accessibility';
 
 type Primitive = string | number | boolean | bigint | symbol | null | undefined | Date;
 
@@ -175,6 +176,10 @@ function FieldShell({
   children,
 }: FieldShellProps) {
   const showError = touched && error && !hideValidationMessage;
+  const accessibilityId = React.useId();
+  const descriptionId = description ? `${accessibilityId}-description` : undefined;
+  const errorId = showError ? `${accessibilityId}-error` : undefined;
+  const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined;
 
   return (
     <div className="flex flex-col gap-4">
@@ -185,9 +190,11 @@ function FieldShell({
             {required && <span className="text-destructive ml-1">*</span>}
           </label>
           {typeof description === 'string' ? (
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p id={descriptionId} className="text-sm text-muted-foreground">
+              {description}
+            </p>
           ) : (
-            description
+            description && <div id={descriptionId}>{description}</div>
           )}
         </div>
         {requiredLicense && <LicenseFeatureIndicator edition={requiredLicense} className="mt-0.5" />}
@@ -195,10 +202,21 @@ function FieldShell({
 
       <div className="relative">
         {edited && <span className="absolute top-0 right-1 text-[10px] text-primary bg-background px-1">Edited</span>}
-        {children}
+        <FormFieldAccessibilityContext.Provider
+          value={{
+            label,
+            describedBy,
+            invalid: Boolean(showError),
+          }}>
+          {children}
+        </FormFieldAccessibilityContext.Provider>
       </div>
 
-      {showError && <p className="text-xs text-destructive mt-1">{error}</p>}
+      {showError && (
+        <p id={errorId} className="text-xs text-destructive mt-1">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -240,33 +258,40 @@ export const FieldInput = ({
   className?: string;
   ref?: Ref<HTMLInputElement> | undefined;
   id?: string;
-}) => (
-  <Input
-    disabled={disabled}
-    readOnly={readOnly}
-    type={type}
-    ref={ref}
-    autoFocus={autoFocus}
-    value={value ?? ''}
-    id={id}
-    onKeyDown={onKeyDown}
-    onChange={(e) => {
-      const v = e.target.value;
-      if (type === 'number') {
-        if (v === '') {
-          onChange(undefined);
+}) => {
+  const accessibility = useFormFieldAccessibility();
+
+  return (
+    <Input
+      disabled={disabled}
+      readOnly={readOnly}
+      type={type}
+      ref={ref}
+      autoFocus={autoFocus}
+      value={value ?? ''}
+      id={id}
+      aria-label={accessibility?.label}
+      aria-describedby={accessibility?.describedBy}
+      aria-invalid={accessibility?.invalid || undefined}
+      onKeyDown={onKeyDown}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (type === 'number') {
+          if (v === '') {
+            onChange(undefined);
+          } else {
+            const num = parseFloat(v);
+            onChange(isNaN(num) ? v : num);
+          }
         } else {
-          const num = parseFloat(v);
-          onChange(isNaN(num) ? v : num);
+          onChange(v);
         }
-      } else {
-        onChange(v);
-      }
-    }}
-    placeholder={placeholder}
-    className={cn('max-w-100 max-h-9', className)}
-  />
-);
+      }}
+      placeholder={placeholder}
+      className={cn('max-w-100 max-h-9', className)}
+    />
+  );
+};
 
 export const FieldTextArea = ({
   value,
@@ -279,15 +304,22 @@ export const FieldTextArea = ({
   placeholder?: string;
   type?: string;
   disabled?: boolean;
-}) => (
-  <Textarea
-    disabled={disabled}
-    value={value ?? ''}
-    onChange={(e) => onChange(e.target.value)}
-    placeholder={placeholder}
-    className="max-w-full focus-visible:ring-0"
-  />
-);
+}) => {
+  const accessibility = useFormFieldAccessibility();
+
+  return (
+    <Textarea
+      disabled={disabled}
+      value={value ?? ''}
+      aria-label={accessibility?.label}
+      aria-describedby={accessibility?.describedBy}
+      aria-invalid={accessibility?.invalid || undefined}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="max-w-full focus-visible:ring-0"
+    />
+  );
+};
 
 export const FieldSwitch = ({
   checked,
@@ -299,21 +331,33 @@ export const FieldSwitch = ({
   id: string;
   onChange: (v: boolean) => void;
   disabled?: boolean;
-}) => (
-  <div className="flex items-center gap-2">
-    <Switch checked={checked ?? false} id={id} onCheckedChange={onChange} disabled={disabled} />
+}) => {
+  const accessibility = useFormFieldAccessibility();
 
-    <Label
-      htmlFor={id}
-      className={cn(
-        'text-sm transition-colors font-normal',
-        disabled && 'opacity-60',
-        checked ? 'text-green-600/80' : 'text-muted-foreground',
-      )}>
-      {checked ? 'On' : 'Off'}
-    </Label>
-  </div>
-);
+  return (
+    <div className="flex items-center gap-2">
+      <Switch
+        checked={checked ?? false}
+        id={id}
+        aria-label={accessibility?.label}
+        aria-describedby={accessibility?.describedBy}
+        aria-invalid={accessibility?.invalid || undefined}
+        onCheckedChange={onChange}
+        disabled={disabled}
+      />
+
+      <Label
+        htmlFor={id}
+        className={cn(
+          'text-sm transition-colors font-normal',
+          disabled && 'opacity-60',
+          checked ? 'text-green-600/80' : 'text-muted-foreground',
+        )}>
+        {checked ? 'On' : 'Off'}
+      </Label>
+    </div>
+  );
+};
 
 export const FieldSelect = <TValue extends string>({
   value,
@@ -334,20 +378,28 @@ export const FieldSelect = <TValue extends string>({
   disabled?: boolean;
   placeholder?: string;
   className?: string;
-}) => (
-  <Select value={value ?? undefined} onValueChange={(next) => onChange(next as TValue)} disabled={disabled}>
-    <SelectTrigger className={cn('w-full max-w-100', className)}>
-      <SelectValue placeholder={placeholder} />
-    </SelectTrigger>
-    <SelectContent className="bg-background">
-      {options.map((option) => (
-        <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-          <LicensedFeatureLabel requiredLicense={option.requiredLicense}>{option.label}</LicensedFeatureLabel>
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-);
+}) => {
+  const accessibility = useFormFieldAccessibility();
+
+  return (
+    <Select value={value ?? undefined} onValueChange={(next) => onChange(next as TValue)} disabled={disabled}>
+      <SelectTrigger
+        aria-label={accessibility?.label}
+        aria-describedby={accessibility?.describedBy}
+        aria-invalid={accessibility?.invalid || undefined}
+        className={cn('w-full max-w-100', className)}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent className="bg-background">
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+            <LicensedFeatureLabel requiredLicense={option.requiredLicense}>{option.label}</LicensedFeatureLabel>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
 
 export const FieldSlider = ({
   value,
@@ -367,6 +419,7 @@ export const FieldSlider = ({
   onChange: (v: number) => void;
 }) => {
   const current = typeof value === 'number' ? value : min;
+  const accessibility = useFormFieldAccessibility();
 
   return (
     <div className="flex items-center gap-4 max-w-100">
@@ -377,6 +430,9 @@ export const FieldSlider = ({
         value={[current]}
         onValueChange={([v]) => onChange(v)}
         disabled={disabled}
+        aria-label={accessibility?.label}
+        aria-describedby={accessibility?.describedBy}
+        aria-invalid={accessibility?.invalid || undefined}
         className="flex-1"
       />
       <span className="text-sm text-muted-foreground font-normal tabular-nums w-12 text-right">
@@ -500,6 +556,7 @@ export function ItemSelector({
   collection: Record<string, ItemInfo>;
   className?: string;
 }) {
+  const accessibility = useFormFieldAccessibility();
   const normalized = Object.fromEntries(
     Object.entries(collection).map(([key, item]) => [key, typeof item === 'string' ? { label: item } : item]),
   );
@@ -508,7 +565,11 @@ export function ItemSelector({
   const selected = normalized[finalValue];
   return (
     <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className={cn('w-full max-w-100', className)}>
+      <SelectTrigger
+        aria-label={accessibility?.label}
+        aria-describedby={accessibility?.describedBy}
+        aria-invalid={accessibility?.invalid || undefined}
+        className={cn('w-full max-w-100', className)}>
         <SelectValue placeholder="Select a value...">
           {selected && (
             <LicensedFeatureLabel requiredLicense={selected.requiredLicense}>{selected.label}</LicensedFeatureLabel>
@@ -735,7 +796,7 @@ const FormNavigationLink = ({
     className={cn(
       'text-xs font-normal text-foreground/90',
       variant === 'sidebar' ? 'w-full justify-end bg-accent/60' : 'h-8 shrink-0 rounded-sm px-2.5',
-      item.error && 'border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/15',
+      item.error && 'border-destructive/50 bg-destructive/10 text-red-700 hover:bg-destructive/15',
     )}>
     <a
       href={`#${item.id}`}

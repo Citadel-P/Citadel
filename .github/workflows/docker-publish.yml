@@ -44,7 +44,6 @@ env:
   DOCKERHUB_REPOSITORY: citadel
   BUILDKIT_CACHE_SCOPE: citadel-linux-amd64
   CITADEL_E2E_IMAGE: citadel-e2e:${{ github.run_id }}-${{ github.run_attempt }}
-  CITADEL_EDGE_CORE_TEST_IMAGE: citadel-edge-core:${{ github.run_id }}-${{ github.run_attempt }}
   CITADEL_EDGE_AGENT_TEST_IMAGE: citadel-edge-agent:${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
@@ -173,6 +172,12 @@ jobs:
             ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}
             FILE_VERSION=${{ needs.version.outputs.file-version }}
             INFORMATIONAL_VERSION=${{ needs.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+            org.opencontainers.image.description=Docker image for ${{ env.IMAGE_NAME }}
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
           cache-to: type=gha,mode=max,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
 
@@ -195,6 +200,10 @@ jobs:
       - name: Run browser smoke tests
         working-directory: test/Citadel.Tests.E2E
         run: npm run test:smoke
+
+      - name: Run focused accessibility tests
+        working-directory: test/Citadel.Tests.E2E
+        run: npm run test:accessibility
 
       - name: Collect E2E environment diagnostics
         if: failure()
@@ -875,21 +884,17 @@ jobs:
           EDGE_CORE_IMAGE: ${{ inputs.edge_core_image }}
         run: docker pull "${EDGE_CORE_IMAGE}"
 
-      - name: Build Core compatibility image
+      - name: Download tested Core candidate
         if: inputs.edge_core_image == ''
-        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          file: src/Citadel.WebApi/Dockerfile
-          load: true
-          tags: ${{ env.CITADEL_EDGE_CORE_TEST_IMAGE }}
-          build-args: |
-            VERSION=${{ needs.version.outputs.version }}
-            ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}
-            FILE_VERSION=${{ needs.version.outputs.file-version }}
-            INFORMATIONAL_VERSION=${{ needs.version.outputs.version }}
-          cache-from: type=gha,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
-          cache-to: type=gha,mode=max,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
+          name: citadel-e2e-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .compat/core-image
+
+      - name: Load tested Core candidate
+        if: inputs.edge_core_image == ''
+        shell: bash
+        run: gzip -dc .compat/core-image/citadel-e2e-image.tar.gz | docker load
 
       - name: Pull supplied Agent image
         if: inputs.edge_agent_image != ''
@@ -950,7 +955,7 @@ jobs:
       - name: Run real Core and regular Agent compatibility
         env:
           CITADEL_ACCEPTANCE_REQUIRE_CANDIDATE_IMAGES: "true"
-          CITADEL_ACCEPTANCE_CORE_IMAGE: ${{ inputs.edge_core_image || env.CITADEL_EDGE_CORE_TEST_IMAGE }}
+          CITADEL_ACCEPTANCE_CORE_IMAGE: ${{ inputs.edge_core_image || env.CITADEL_E2E_IMAGE }}
           CITADEL_ACCEPTANCE_AGENT_IMAGE: ${{ inputs.edge_agent_image || env.CITADEL_EDGE_AGENT_TEST_IMAGE }}
           CITADEL_ACCEPTANCE_AGENT_VERSION: ${{ inputs.edge_agent_version || steps.agent-version.outputs.SIMPLE_VERSION }}
         run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Compatibility.RegularAgentCompatibilityTests
@@ -958,7 +963,7 @@ jobs:
       - name: Run real Core and Edge Agent compatibility
         env:
           CITADEL_ACCEPTANCE_REQUIRE_CANDIDATE_IMAGES: "true"
-          CITADEL_ACCEPTANCE_CORE_IMAGE: ${{ inputs.edge_core_image || env.CITADEL_EDGE_CORE_TEST_IMAGE }}
+          CITADEL_ACCEPTANCE_CORE_IMAGE: ${{ inputs.edge_core_image || env.CITADEL_E2E_IMAGE }}
           CITADEL_ACCEPTANCE_AGENT_IMAGE: ${{ inputs.edge_agent_image || env.CITADEL_EDGE_AGENT_TEST_IMAGE }}
           CITADEL_ACCEPTANCE_AGENT_VERSION: ${{ inputs.edge_agent_version || steps.agent-version.outputs.SIMPLE_VERSION }}
         run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Compatibility.EdgeAgentCompatibilityTests
@@ -1316,6 +1321,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
 
+      - name: Download tested candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-e2e-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidate-image
+
+      - name: Load tested candidate
+        shell: bash
+        run: gzip -dc candidate-image/citadel-e2e-image.tar.gz | docker load
+
       - name: Validate Docker Hub configuration
         shell: bash
         env:
@@ -1346,7 +1361,7 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract Docker metadata
+      - name: Extract publication tags
         id: meta
         uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
         with:
@@ -1359,35 +1374,74 @@ jobs:
             type=raw,value=${{ needs.version.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
             type=semver,pattern={{major}},value=${{ needs.version.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
-          labels: |
-            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-            org.opencontainers.image.description=Docker image for ${{ env.IMAGE_NAME }}
-            org.opencontainers.image.version=${{ needs.version.outputs.version }}
-            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ss.SSS[Z]'}}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ github.event.repository.html_url }}
 
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09
-        with:
-          context: .
-          file: src/Citadel.WebApi/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ needs.version.outputs.version }}
-            ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}
-            FILE_VERSION=${{ needs.version.outputs.file-version }}
-            INFORMATIONAL_VERSION=${{ needs.version.outputs.version }}
-          cache-from: type=gha,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
-          cache-to: type=gha,mode=max,scope=${{ env.BUILDKIT_CACHE_SCOPE }}
+      - name: Promote tested candidate
+        id: promote
+        shell: bash
+        env:
+          PUBLICATION_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          mapfile -t release_refs < <(printf '%s\n' "${PUBLICATION_TAGS}" | sed '/^[[:space:]]*$/d')
+          if (( ${#release_refs[@]} == 0 )); then
+            echo "No publication tags were generated." >&2
+            exit 1
+          fi
+
+          source_image_id="$(docker image inspect "${CITADEL_E2E_IMAGE}" --format '{{.Id}}')"
+          if [[ ! "${source_image_id}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Unable to resolve the tested candidate image ID." >&2
+            exit 1
+          fi
+
+          for tag in "${release_refs[@]}"; do
+            docker image tag "${source_image_id}" "${tag}"
+            if [[ "$(docker image inspect "${tag}" --format '{{.Id}}')" != "${source_image_id}" ]]; then
+              echo "Local tag '${tag}' does not reference the tested candidate." >&2
+              exit 1
+            fi
+            docker image push "${tag}"
+          done
+
+          published_digest=""
+          for tag in "${release_refs[@]}"; do
+            remote_config_digest="$(
+              docker buildx imagetools inspect "${tag}" --raw |
+                jq -r '.config.digest // empty'
+            )"
+            if [[ "${remote_config_digest}" != "${source_image_id}" ]]; then
+              echo "Remote tag '${tag}' does not contain the tested candidate config digest." >&2
+              exit 1
+            fi
+
+            remote_digest="$(
+              docker buildx imagetools inspect "${tag}" --format '{{.Manifest.Digest}}'
+            )"
+            if [[ ! "${remote_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Unable to resolve the manifest digest for '${tag}'." >&2
+              exit 1
+            fi
+            if [[ -n "${published_digest}" && "${remote_digest}" != "${published_digest}" ]]; then
+              echo "Published tags do not resolve to one immutable manifest." >&2
+              exit 1
+            fi
+            published_digest="${remote_digest}"
+          done
+
+          {
+            echo "digest=${published_digest}"
+            echo "image-id=${source_image_id}"
+          } >> "${GITHUB_OUTPUT}"
+          {
+            echo "### Promoted tested Citadel candidate"
+            echo
+            echo "- Candidate config digest: \`${source_image_id}\`"
+            echo "- Published manifest digest: \`${published_digest}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Sign the published Docker image
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
-          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+          DIGEST: ${{ steps.promote.outputs.digest }}
         run: |
           while IFS= read -r tag; do
             [[ -n "${tag}" ]] && cosign sign --yes "${tag}@${DIGEST}"

@@ -292,7 +292,7 @@ function SidebarGroupLabel({ className, ...props }: React.ComponentProps<'div'>)
     <div
       data-slot="sidebar-group-label"
       className={cn(
-        'flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-medium text-muted-foreground/50 outline-hidden transition-[margin,opacity] duration-200 ease-linear',
+        'flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-medium text-muted-foreground outline-hidden transition-[margin,opacity] duration-200 ease-linear',
         'group-data-[collapsible=icon]:-mt-6 group-data-[collapsible=icon]:opacity-0',
         className,
       )}

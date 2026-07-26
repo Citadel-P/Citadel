@@ -55,8 +55,9 @@ Commit a version change before validating it or creating the release tag.
 
 Nerdbank.GitVersioning still calculates commit-qualified versions for untagged
 builds, but CI does not publish those builds to a public registry. Candidate
-Docker images are loaded only into the CI runner for smoke, core runtime, and
-nightly runtime testing.
+Docker images remain private workflow artifacts. Core is built once by the E2E
+job, tested by browser smoke and accessibility checks, and reused by downstream
+runtime and compatibility jobs.
 
 | Workflow event | Build and test | Push to GHCR and Docker Hub |
 | --- | --- | --- |
@@ -162,6 +163,9 @@ The workflow rejects a tag when:
 - The tag does not match the committed `version.json`.
 - NBGV does not recognize the tag as a public release.
 - The build, test, frontend, or Docker image checks fail.
+- A required acceptance job does not pass against the archived candidate.
+- Any published tag does not resolve to the tested candidate config digest and
+  the same immutable manifest digest.
 
 Do not move or reuse a published release tag.
 
@@ -195,15 +199,20 @@ docker.io/citadelplane/citadel-agent:1
 
 The exact patch tag is immutable. The minor and major aliases move to the most
 recent stable release in that release line. Citadel does not publish a `latest`
-tag. Published images are signed by the release workflow in both registries.
+tag. The workflow promotes the exact candidate that passed the required checks;
+it does not rebuild Core for publication. It records the candidate config digest
+and published manifest digest in the workflow summary, then signs that manifest
+in both registries.
 
 ## Verify The Release
 
 1. Confirm that the repository's `Docker` workflow completed successfully.
 2. Confirm that the exact image tag exists in GHCR and Docker Hub.
-3. Pull each exact image tag, not a floating alias, for release verification.
-4. Confirm that the Citadel UI reports the expected product version.
-5. For a coordinated release, confirm that Agent connections report a
+3. Confirm the GHCR and Docker Hub exact tags resolve to the manifest digest
+   recorded in the workflow summary.
+4. Pull each exact image tag, not a floating alias, for release verification.
+5. Confirm that the Citadel UI reports the expected product version.
+6. For a coordinated release, confirm that Agent connections report a
    compatible version.
 
 ## Rollback And Corrections

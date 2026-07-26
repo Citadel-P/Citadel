@@ -10,6 +10,7 @@
     "test:nightly-runtime": "playwright test tests/nightly",
     "test:visual": "playwright test tests/visual",
     "test:visual:update": "playwright test tests/visual --update-snapshots=all",
+    "test:accessibility": "playwright test tests/accessibility",
     "test:oidc": "playwright test tests/compatibility/oidc.spec.ts",
     "test:vault": "playwright test tests/compatibility/vault.spec.ts",
     "typecheck": "tsc --noEmit",
