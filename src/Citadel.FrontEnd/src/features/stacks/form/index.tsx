@@ -91,7 +91,14 @@ export const StackFormComponents: RequiredFormComponents = {
         );
       },
       ActionButtons: ({ resource }) => {
-        return <GenericActionBarButtons resource={resource} actions={Object.values(StackActions)} />;
+        const groupedActions = Object.values(StackActions).filter((action) => action !== StackActions.checkUpdates);
+        return (
+          <GenericActionBarButtons
+            resource={resource}
+            actions={groupedActions}
+            standaloneActions={[StackActions.checkUpdates]}
+          />
+        );
       },
       Tags: ({ resource }: { resource: StackView }) => (
         <div className="flex min-w-0 flex-wrap items-center gap-2">

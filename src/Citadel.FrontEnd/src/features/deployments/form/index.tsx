@@ -51,7 +51,16 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         );
       },
       ActionButtons: ({ resource }) => {
-        return <GenericActionBarButtons resource={resource} actions={Object.values(DeploymentActions)} />;
+        const groupedActions = Object.values(DeploymentActions).filter(
+          (action) => action !== DeploymentActions.checkUpdates,
+        );
+        return (
+          <GenericActionBarButtons
+            resource={resource}
+            actions={groupedActions}
+            standaloneActions={[DeploymentActions.checkUpdates]}
+          />
+        );
       },
       Tags: ({ resource }: { resource: DeploymentView }) => (
         <div className="flex min-w-0 flex-wrap items-center gap-2">

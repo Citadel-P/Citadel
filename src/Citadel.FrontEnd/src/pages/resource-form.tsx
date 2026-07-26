@@ -200,7 +200,7 @@ const EditHeader = <T extends RequiredFormFields>({
         />
       </div>
     </div>
-    <div className="flex gap-4 items-center flex-wrap shrink-0">
+    <div className="flex w-full min-w-0 flex-wrap items-center gap-4 sm:w-auto sm:shrink-0">
       {Tags && <Tags resource={item} />}
       <Actions resource={item} />
     </div>

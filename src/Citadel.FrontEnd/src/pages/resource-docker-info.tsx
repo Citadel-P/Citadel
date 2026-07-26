@@ -63,7 +63,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
                       </div>
                     </div>
                     {Components.Header.ActionButtons && (
-                      <div className="flex gap-4 items-center overflow-auto flex-wrap">
+                      <div className="flex w-full min-w-0 flex-wrap items-center gap-4 sm:w-auto">
                         <Components.Header.ActionButtons resource={resource} />
                       </div>
                     )}

@@ -61,17 +61,26 @@ const GenericActionBar = <T,>({ selectedItems, allItems, resource, actions }: Ac
 
 export const GenericActionBarButtons = <T,>({
   actions,
+  standaloneActions = [],
   resource,
 }: {
   actions: ButtonActionComponent<any>[];
+  standaloneActions?: ButtonActionComponent<any>[];
   resource: T;
 }) => {
   return (
-    <ButtonGroup>
-      {actions.map((Action, id) => (
-        <Action resource={resource} key={id} />
+    <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
+      {standaloneActions.map((Action, id) => (
+        <div className="col-span-2 flex min-w-0 [&>*]:w-full sm:col-span-1 sm:[&>*]:w-auto" key={id}>
+          <Action resource={resource} />
+        </div>
       ))}
-    </ButtonGroup>
+      <ButtonGroup className="col-span-2 grid w-full grid-cols-2 gap-2 [&>*]:rounded-sm! [&>*]:border-l! sm:flex sm:w-fit sm:gap-0 sm:[&>*:not(:first-child)]:rounded-l-none! sm:[&>*:not(:first-child)]:border-l-0! sm:[&>*:not(:last-child)]:rounded-r-none!">
+        {actions.map((Action, id) => (
+          <Action resource={resource} key={id} />
+        ))}
+      </ButtonGroup>
+    </div>
   );
 };
 
