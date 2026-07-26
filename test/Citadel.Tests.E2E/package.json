@@ -9,12 +9,15 @@
     "test:core-runtime": "playwright test tests/core-runtime",
     "test:nightly-runtime": "playwright test tests/nightly",
     "test:oidc": "playwright test tests/compatibility/oidc.spec.ts",
+    "test:vault": "playwright test tests/compatibility/vault.spec.ts",
     "typecheck": "tsc --noEmit",
     "install:chromium": "playwright install chromium",
     "env:up": "docker compose -f compose.yml up -d --wait",
     "env:down": "docker compose -f compose.yml down --volumes --remove-orphans",
     "env:oidc:up": "docker compose -f compose.yml --profile oidc up -d --wait",
-    "env:oidc:down": "docker compose -f compose.yml --profile oidc down --volumes --remove-orphans"
+    "env:oidc:down": "docker compose -f compose.yml --profile oidc down --volumes --remove-orphans",
+    "env:vault:up": "docker compose -f compose.yml --profile vault up -d --wait",
+    "env:vault:down": "docker compose -f compose.yml --profile vault down --volumes --remove-orphans"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",

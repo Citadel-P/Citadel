@@ -38,6 +38,7 @@ npm run test:smoke            # Fast authentication, authorization, licensing, n
 npm run test:core-runtime     # Deploy, second release, UI rollback, and Docker-state verification
 npm run test:nightly-runtime  # Logs, Inspect, Terminal, and real SignalR reconnect coverage
 npm run test:oidc             # Real Keycloak redirect, refresh session, claim policy, and logout
+npm run test:vault            # Vault provider connection, save, and stored-token preservation
 npm test                      # Run every Playwright test
 ```
 
@@ -59,6 +60,19 @@ npm run env:oidc:down
 The Playwright Chromium project maps the Keycloak issuer hostname to the
 profile's published port and uses `http://127.0.0.1:18000` for Citadel. Run
 `npm test` against `env:oidc:up` when executing every Playwright suite together.
+
+The Vault suite requires its optional profile:
+
+```powershell
+npm run env:down
+npm run env:vault:up
+npm run test:vault
+npm run env:vault:down
+```
+
+The profile uses a fixed test-only root token and is suitable only for the
+disposable E2E environment. The browser configures the provider through
+Citadel; it does not connect to Vault directly.
 
 Other Playwright modes:
 

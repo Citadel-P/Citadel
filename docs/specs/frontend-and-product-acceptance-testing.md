@@ -1306,9 +1306,49 @@ Current Keycloak compatibility implementation:
 - The Compose Keycloak profile and the .NET fixture share one realm import and
   one pinned image digest so protocol and browser scenarios cannot drift.
 
+Current Vault compatibility implementation:
+
+- `Compatibility/VaultKvV2CompatibilityTests.cs` starts Vault in disposable
+  dev mode by immutable image digest and starts the candidate Core as a real
+  process against an isolated PostgreSQL database.
+- The suite verifies successful and rejected connection tests, actionable
+  missing path and key errors, blank-token preservation, token replacement,
+  and restoration of a valid stored token.
+- It resolves a real KV v2 value into a Web Editor stack, verifies the exact
+  value through raw Docker inspection, and uses only a SHA-256 comparison
+  inside the workload so the container does not print the secret.
+- Apply output, stack releases, resource-binding views, provider and secret
+  views, activity details, and both stack-scoped and generic container
+  inspection are checked for disclosure. Container inspection masks values
+  whose names follow common sensitive conventions such as tokens, secrets,
+  passwords, API and access keys, credentials, connection strings, and
+  database URLs. Ordinary and empty environment values remain visible for
+  diagnostics. This name-based policy is an interim safeguard; immutable
+  secret provenance is required to identify unusually named secret bindings.
+- `tests/compatibility/vault.spec.ts` is the selected browser journey. It
+  creates and tests a provider, saves it, edits it with a blank token, and
+  verifies the stored token still works.
+- `.github/workflows/docker-publish.yml` runs the `vault` job on schedule, on
+  demand, and before stable publication. The Compose profile and .NET fixture
+  share the same Vault digest and test-only root token.
+
+Current nightly matrix implementation:
+
+- `.github/workflows/docker-publish.yml` keeps Forgejo, Edge Agent, RustFS,
+  Keycloak, Vault, upgrade, and recovery coverage in independent jobs because
+  their service topology and candidate-image requirements differ.
+- The `nightly-matrix` job runs the selected `reliability`,
+  `scheduler-webhook`, `licensing`, and `authorization` integration cohorts on
+  scheduled and manually dispatched workflows.
+- Matrix fail-fast is disabled. Every cohort receives its own result and
+  failure artifact so one broken risk area does not hide the others.
+- `nightly-runtime` is also scheduled and manually dispatchable. It remains
+  Chromium-only until the later Firefox slice, and visual and accessibility
+  coverage remain separate later slices.
+
 ### Slice 6: Release Gate And Extended Quality
 
-1. Add nightly matrix execution.
+1. Add nightly matrix execution. (Implemented)
 2. Add selected visual regression tests.
 3. Add focused accessibility tests.
 4. Add Firefox nightly coverage.

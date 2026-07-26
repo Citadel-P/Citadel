@@ -163,3 +163,34 @@ export const deleteTagsByPrefix = async (request: APIRequestContext, prefix: str
     }),
   );
 };
+
+export const deleteSecretProvidersByPrefix = async (
+  request: APIRequestContext,
+  prefix: string,
+) => {
+  const accessToken = await getAdminAccessToken(request);
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const response = await request.get('/api/v1/resourceBindings/secret-providers', { headers });
+  if (!response.ok()) {
+    throw new Error(`Unable to list secret providers during E2E cleanup: HTTP ${response.status()}`);
+  }
+
+  const body = (await response.json()) as {
+    providers?: Array<{ id: string; name: string }>;
+  };
+  const providers = (body.providers ?? []).filter((provider) => provider.name.startsWith(prefix));
+
+  await Promise.all(
+    providers.map(async (provider) => {
+      const deletion = await request.delete(
+        `/api/v1/resourceBindings/secret-providers/${provider.id}`,
+        { headers },
+      );
+      if (!deletion.ok() && deletion.status() !== 404) {
+        throw new Error(
+          `Unable to delete E2E secret provider '${provider.name}': HTTP ${deletion.status()}`,
+        );
+      }
+    }),
+  );
+};

@@ -312,7 +312,9 @@ jobs:
           retention-days: 14
 
   nightly-runtime:
-    if: github.event_name == 'schedule'
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
     needs: e2e-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -427,6 +429,103 @@ jobs:
         run: |
           dotnet run --project test/Citadel.Tests.Unit/Citadel.Tests.Unit.csproj --no-build -c Release
           dotnet run --project test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-build -c Release
+
+  nightly-matrix:
+    name: Nightly / ${{ matrix.suite }}
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: reliability
+            classes: >-
+              -class Tests.Integration.Application.Features.Stacks.StackApplyRecoveryTests
+              -class Tests.Integration.Application.TaskJobs.ReconcilableResourceJobTests
+          - suite: scheduler-webhook
+            classes: >-
+              -class Tests.Integration.Application.TaskJobs.BackupPolicySchedulerJobTests
+              -class Tests.Integration.Application.TaskJobs.AutomationActionSchedulerJobTests
+              -class Tests.Integration.WebApi.WebhookListenerTests
+          - suite: licensing
+            classes: >-
+              -class Tests.Integration.Application.Features.Licensing.LicenseEntitlementTests
+          - suite: authorization
+            classes: >-
+              -class Tests.Integration.Application.Features.Identity.Roles.RolePermissionMatrixTests
+              -class Tests.Integration.Application.Features.Permissions.HasPermissionForAllIntegrationTests
+              -class Tests.Integration.Application.Features.Lookup.LookupTests
+              -class Tests.Integration.Application.Features.Search.GlobalSearchTests
+              -class Tests.Integration.WebApi.Hubs.ApplicationHubAuthorizationTests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Preload integration test infrastructure
+        shell: bash
+        run: >-
+          bash .github/scripts/pull-images-with-retry.sh
+          testcontainers/ryuk:0.14.0
+          postgres:17.5-alpine
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore nightly integration tests
+        run: dotnet restore test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj
+
+      - name: Build nightly integration tests
+        run: dotnet build test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj --no-restore -c Release
+
+      - name: Run ${{ matrix.suite }} acceptance cohort
+        shell: bash
+        env:
+          TEST_CLASSES: ${{ matrix.classes }}
+        run: |
+          set -o pipefail
+          read -r -a class_filters <<< "${TEST_CLASSES}"
+          mkdir -p "test/Citadel.Tests.Integration/artifacts/${{ matrix.suite }}"
+          dotnet run \
+            --project test/Citadel.Tests.Integration/Citadel.Tests.Integration.csproj \
+            --no-build \
+            -c Release \
+            -- \
+            "${class_filters[@]}" \
+            2>&1 | tee "test/Citadel.Tests.Integration/artifacts/${{ matrix.suite }}/test-output.log"
+
+      - name: Collect ${{ matrix.suite }} diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          artifact_dir="test/Citadel.Tests.Integration/artifacts/${{ matrix.suite }}"
+          mkdir -p "${artifact_dir}"
+          docker ps --all > "${artifact_dir}/docker-ps.txt"
+          docker images --digests > "${artifact_dir}/docker-images.txt"
+          for container in $(docker ps --all --quiet); do
+            docker inspect "${container}" > "${artifact_dir}/${container}.inspect.json" 2>&1 || true
+            docker logs "${container}" > "${artifact_dir}/${container}.log" 2>&1 || true
+          done
+
+      - name: Upload ${{ matrix.suite }} diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ matrix.suite }}-${{ github.run_attempt }}
+          path: test/Citadel.Tests.Integration/artifacts/${{ matrix.suite }}
+          if-no-files-found: ignore
+          retention-days: 14
 
   upgrade-baseline:
     runs-on: ubuntu-latest
@@ -980,8 +1079,116 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  vault:
+    needs: e2e-smoke
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CITADEL_E2E_BASE_URL: http://127.0.0.1:18000
+      COMPOSE_PROJECT_NAME: citadel-e2e-vault-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Preload Vault compatibility infrastructure
+        shell: bash
+        run: >-
+          bash .github/scripts/pull-images-with-retry.sh
+          testcontainers/ryuk:0.14.0
+          postgres:17.5-alpine
+          docker:27.5.1-dind
+          busybox:1.36.1
+          hashicorp/vault@sha256:3fd53308acccd9e4e83fde3e6c6cf5b15e0f7fac1ff7510780b8b23f5e4c3de7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: test/Citadel.Tests.E2E/package-lock.json
+
+      - name: Download tested E2E candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-e2e-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test/Citadel.Tests.E2E/candidate-image
+
+      - name: Load tested E2E candidate
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: gzip -dc candidate-image/citadel-e2e-image.tar.gz | docker load
+
+      - name: Restore Vault acceptance tests
+        run: dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
+
+      - name: Build Vault acceptance tests
+        run: dotnet build test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-restore -c Release
+
+      - name: Run Vault KV v2 protocol and delivery compatibility
+        run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Compatibility.VaultKvV2CompatibilityTests
+
+      - name: Install E2E dependencies
+        working-directory: test/Citadel.Tests.E2E
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: test/Citadel.Tests.E2E
+        run: npx playwright install --with-deps chromium
+
+      - name: Start isolated Vault environment
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml --profile vault up -d --wait
+
+      - name: Run Vault browser compatibility
+        working-directory: test/Citadel.Tests.E2E
+        run: npm run test:vault
+
+      - name: Collect Vault compatibility diagnostics
+        if: failure()
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          docker compose -f compose.yml --profile vault ps --all > artifacts/compose-ps.txt
+          docker compose -f compose.yml --profile vault logs --no-color citadel postgres docker > artifacts/compose.log
+          docker compose -f compose.yml --profile vault logs --no-color vault |
+            sed 's/citadel-vault-acceptance-root-token/[REDACTED]/g' > artifacts/vault.log
+
+      - name: Tear down isolated Vault environment
+        if: always()
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml --profile vault down --volumes --remove-orphans
+
+      - name: Upload Vault compatibility diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vault-kv2-${{ github.run_attempt }}
+          path: |
+            test/Citadel.Tests.E2E/artifacts
+            test/Citadel.Tests.E2E/playwright-report
+            test/Citadel.Tests.E2E/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
   publish:
-    needs: [version, frontend, build, e2e-smoke, core-runtime, upgrade-baseline, control-plane-recovery, edge-agent-recovery, git-webhook, edge-agent-compatibility, backups-s3, oidc]
+    needs: [version, frontend, build, e2e-smoke, core-runtime, upgrade-baseline, control-plane-recovery, edge-agent-recovery, git-webhook, edge-agent-compatibility, backups-s3, oidc, vault]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 35

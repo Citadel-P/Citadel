@@ -1,5 +1,6 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Application.Services;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
@@ -24,7 +25,6 @@ internal sealed class InspectDeploymentHandler(
             return Result.Failure<ContainerInspectionInfo>(new NotFoundError("Container does not exist"));
         }
 
-        ;
         if (!platformContainerCache.TryGetPlatformWithContainer(containerId, out var platform))
         {
             return Result.Failure<ContainerInspectionInfo>(new NotFoundError("Platform for the container does not exist or disconnected"));
@@ -35,6 +35,12 @@ internal sealed class InspectDeploymentHandler(
             PlatformAddress: platform.Address,
             ContainerId: containerId
         );
-        return await connectorFactory.GetConnector(platform.ConnectorType).InspectAsync(command, cancellationToken);
+        var result = await connectorFactory.GetConnector(platform.ConnectorType).InspectAsync(command, cancellationToken);
+        if (!result.IsSuccess(out var inspection))
+        {
+            return result;
+        }
+
+        return ContainerInspectionRedactor.RedactEnvironment(inspection);
     }
 }

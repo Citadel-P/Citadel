@@ -91,6 +91,26 @@ services:
     networks:
       - citadel-e2e
 
+  vault:
+    profiles: ['vault']
+    image: hashicorp/vault@sha256:3fd53308acccd9e4e83fde3e6c6cf5b15e0f7fac1ff7510780b8b23f5e4c3de7
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=citadel-vault-acceptance-root-token
+      - -dev-listen-address=0.0.0.0:8200
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+      SKIP_SETCAP: 'true'
+    healthcheck:
+      test: ['CMD', 'vault', 'status', '-address=http://127.0.0.1:8200']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    networks:
+      - citadel-e2e
+
 networks:
   citadel-e2e:
     name: ${COMPOSE_PROJECT_NAME:-citadel-e2e}-network

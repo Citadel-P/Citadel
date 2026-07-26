@@ -45,6 +45,12 @@ client secret from the browser redirect, and rejection of a disabled provider.
 The selected real-browser login, refresh, policy-rejection, and logout journey
 lives in `Citadel.Tests.E2E`.
 
+The Vault compatibility suite starts Vault in disposable dev mode by immutable
+image digest and a real candidate Core process. It verifies connection and
+reference diagnostics, token preservation and replacement, KV v2 resolution,
+real stack secret delivery, and redaction from task output, persisted API
+views, activities, and container inspection.
+
 ## Prerequisites
 
 - Docker Desktop or another Docker Engine
@@ -130,6 +136,16 @@ Run only the Keycloak OIDC protocol compatibility suite:
 ```powershell
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.KeycloakOidcCompatibilityTests
 ```
+
+Run only the Vault KV v2 compatibility suite:
+
+```powershell
+dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.VaultKvV2CompatibilityTests
+```
+
+The suite starts Vault with a fixed test-only root token and deploys a
+BusyBox stack to the local Docker engine. Vault, PostgreSQL, the candidate
+process, stack resources, and temporary data are removed after the test.
 
 Run the real Core image and RustFS backup compatibility suite:
 

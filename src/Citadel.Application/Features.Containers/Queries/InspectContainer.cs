@@ -45,6 +45,12 @@ internal sealed class InspectContainerHandler(
             PlatformAddress: platform.Address, 
             ContainerId: query.ContainerId
         );
-        return await connectorFactory.GetConnector(platform.ConnectorType).InspectAsync(command, cancellationToken);
+        var result = await connectorFactory.GetConnector(platform.ConnectorType).InspectAsync(command, cancellationToken);
+        if (!result.IsSuccess(out var inspection))
+        {
+            return result;
+        }
+
+        return ContainerInspectionRedactor.RedactEnvironment(inspection);
     }
 }
