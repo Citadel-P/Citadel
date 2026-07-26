@@ -8,7 +8,9 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Platforms;
+using Grpc.Core;
 using Hosting.Common;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -280,6 +282,50 @@ public class PlatformCreateTests(PostgresTestFixture fixture) : IntegrationTestB
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreatePlatform_Should_Preserve_Agent_Unauthenticated_Error()
+    {
+        platformFactoryMock
+            .Setup(x => x.GetConnector(PlatformConnectorType.Agent))
+            .Returns(platformConnector.Object);
+        platformConnector
+            .Setup(x => x.GetPlatformAsync(
+                It.IsAny<GetPlatformCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                Result.Failure<PlatformResult>(
+                    new ClientRpcException(
+                        "Agent rejected the Core signature.",
+                        StatusCode.Unauthenticated)));
+
+        var content = new StringContent(
+            """
+            {
+              "name": "P-INVALID-AGENT-KEY",
+              "address": "https://localhost:9005",
+              "type": "Docker",
+              "connectorType": "agent"
+            }
+            """,
+            Encoding.UTF8,
+            "application/json");
+
+        var response = await Client.PostAsync(
+            "/api/v1/platforms",
+            content,
+            cancellationToken: TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            System.Net.HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Contains(
+            "Agent rejected the Core signature.",
+            responseBody,
+            StringComparison.Ordinal);
     }
 
     [Fact]

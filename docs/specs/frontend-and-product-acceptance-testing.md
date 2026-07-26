@@ -867,7 +867,24 @@ Required acceptance coverage:
 Direct webhook payload tests remain in backend unit/integration suites. This
 suite proves actual Forgejo compatibility and delivery.
 
-### 18.5 Edge Agent
+### 18.5 Regular Agent
+
+Use the Citadel Agent image version intended to be compatible with the Core
+commit under test.
+
+Required acceptance coverage:
+
+- obtain the generated Agent setup and Core public key;
+- start an inbound Agent with that public key;
+- discover the Agent version and Docker platform through signed gRPC;
+- execute one supported platform operation through the Agent;
+- deploy a real stack and inspect its running container;
+- start an Agent with a different public key and reject Core requests.
+
+The test workflow must use the same Core and Agent artifacts that are later
+validated in Edge Agent mode.
+
+### 18.6 Edge Agent
 
 Use the Citadel Agent image version intended to be compatible with the Core
 commit under test.
@@ -969,7 +986,7 @@ Run a scheduled and manually dispatchable matrix:
 | Matrix job | Profiles or services |
 | --- | --- |
 | `git-webhook` | Forgejo and Docker |
-| `edge-agent` | Core, Agent, Docker |
+| `agent-compatibility` | Core, regular Agent, Edge Agent, and Docker |
 | `backups-s3` | RustFS |
 | `oidc` | Keycloak |
 | `secrets` | Vault |
@@ -1237,7 +1254,15 @@ Current Forgejo compatibility implementation:
 - `.github/workflows/docker-publish.yml` runs the `git-webhook` job on schedule,
   on demand, and before stable publication.
 
-Current Edge Agent compatibility implementation:
+Current regular and Edge Agent compatibility implementation:
+
+- `Compatibility/RegularAgentCompatibilityTests.cs` starts supplied Core and
+  Agent images on an isolated Testcontainers network with a dedicated
+  Docker-in-Docker daemon.
+- The suite reads the generated Core public key from the Agent setup endpoint,
+  proves signed gRPC platform discovery and Docker routing, deploys and
+  inspects a real stack, and verifies that an Agent configured with a different
+  public key rejects Core requests.
 
 - `Compatibility/EdgeAgentCompatibilityTests.cs` starts supplied Core and
   Agent images on an isolated Testcontainers network with a dedicated
@@ -1250,9 +1275,10 @@ Current Edge Agent compatibility implementation:
 - The Agent identity directory is persisted across a container restart. The
   suite verifies authenticated reconnect, then revokes the binding and proves
   that the persisted identity is rejected and cannot receive commands.
-- `.github/workflows/docker-publish.yml` runs the
+- `.github/workflows/docker-publish.yml` runs both Agent modes in the
   `edge-agent-compatibility` job on schedule, on demand, and before stable
-  publication. Manual runs accept exact Core and Agent image references, an
+  publication. The stable job identifier is retained for release dependency
+  compatibility. Manual runs accept exact Core and Agent image references, an
   Agent Git ref, and an optional expected Agent version. Stable tags build the
   Core tag under test and default to the matching Agent tag.
 

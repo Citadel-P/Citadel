@@ -11,7 +11,10 @@ namespace Tests.Acceptance.Infrastructure;
 internal sealed class CoreAgentCompatibilityEnvironment : IAsyncDisposable
 {
     private const ushort CoreHttpPort = 8000;
+    private const ushort AgentGrpcPort = 9000;
     private const string CoreNetworkAlias = "citadel-core";
+    private const string RegularAgentNetworkAlias = "citadel-agent";
+    private const string InvalidRegularAgentNetworkAlias = "citadel-agent-invalid";
     private const string DockerImage = "docker:27.5.1-dind";
 
     private readonly string agentImage;
@@ -23,6 +26,8 @@ internal sealed class CoreAgentCompatibilityEnvironment : IAsyncDisposable
     private readonly IContainer dockerDaemon;
     private readonly IContainer core;
     private IContainer? agent;
+    private IContainer? regularAgent;
+    private IContainer? invalidRegularAgent;
 
     private CoreAgentCompatibilityEnvironment(
         string coreImage,
@@ -77,6 +82,10 @@ internal sealed class CoreAgentCompatibilityEnvironment : IAsyncDisposable
     }
 
     public HttpClient Client { get; private set; } = null!;
+    public string RegularAgentAddress =>
+        $"http://{RegularAgentNetworkAlias}:{AgentGrpcPort}";
+    public string InvalidRegularAgentAddress =>
+        $"http://{InvalidRegularAgentNetworkAlias}:{AgentGrpcPort}";
 
     public static async Task<CoreAgentCompatibilityEnvironment> StartAsync(
         string coreImage,
@@ -190,6 +199,26 @@ internal sealed class CoreAgentCompatibilityEnvironment : IAsyncDisposable
         return agent.StopAsync(cancellationToken);
     }
 
+    public async Task StartRegularAgentAsync(
+        string hubPublicKey,
+        CancellationToken cancellationToken)
+    {
+        regularAgent ??= BuildRegularAgent(
+            hubPublicKey,
+            RegularAgentNetworkAlias);
+        await regularAgent.StartAsync(cancellationToken);
+    }
+
+    public async Task StartInvalidRegularAgentAsync(
+        string hubPublicKey,
+        CancellationToken cancellationToken)
+    {
+        invalidRegularAgent ??= BuildRegularAgent(
+            hubPublicKey,
+            InvalidRegularAgentNetworkAlias);
+        await invalidRegularAgent.StartAsync(cancellationToken);
+    }
+
     public async Task<string> GetDiagnosticsAsync(
         CancellationToken cancellationToken)
     {
@@ -211,10 +240,25 @@ internal sealed class CoreAgentCompatibilityEnvironment : IAsyncDisposable
                 + $"{Environment.NewLine}Agent stderr:{Environment.NewLine}{agentStderr}";
         }
 
+        var regularAgentLogs = regularAgent is null
+            ? string.Empty
+            : await GetContainerLogsAsync(
+                "Regular Agent",
+                regularAgent,
+                cancellationToken);
+        var invalidRegularAgentLogs = invalidRegularAgent is null
+            ? string.Empty
+            : await GetContainerLogsAsync(
+                "Invalid-key Agent",
+                invalidRegularAgent,
+                cancellationToken);
+
         return
             $"Core stdout:{Environment.NewLine}{coreStdout}"
             + $"{Environment.NewLine}Core stderr:{Environment.NewLine}{coreStderr}"
-            + agentLogs;
+            + agentLogs
+            + regularAgentLogs
+            + invalidRegularAgentLogs;
     }
 
     public async ValueTask DisposeAsync()
@@ -224,6 +268,12 @@ internal sealed class CoreAgentCompatibilityEnvironment : IAsyncDisposable
         if (agent is not null)
             await agent.DisposeAsync();
 
+        if (regularAgent is not null)
+            await regularAgent.DisposeAsync();
+
+        if (invalidRegularAgent is not null)
+            await invalidRegularAgent.DisposeAsync();
+
         await core.DisposeAsync();
         await dockerDaemon.DisposeAsync();
         await agentDataVolume.DisposeAsync();
@@ -231,5 +281,39 @@ internal sealed class CoreAgentCompatibilityEnvironment : IAsyncDisposable
         await dockerDataVolume.DisposeAsync();
         await dockerSocketVolume.DisposeAsync();
         await network.DisposeAsync();
+    }
+
+    private IContainer BuildRegularAgent(
+        string hubPublicKey,
+        string networkAlias)
+    {
+        return new ContainerBuilder(agentImage)
+            .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Production")
+            .WithEnvironment("HUB_PUBLIC_KEY", hubPublicKey)
+            .WithEnvironment(
+                "DOCKER_HOST",
+                "unix:///var/run/docker.sock")
+            .WithVolumeMount(dockerSocketVolume, "/var/run")
+            .WithNetwork(network)
+            .WithNetworkAliases(networkAlias)
+            .WithWaitStrategy(
+                Wait.ForUnixContainer()
+                    .UntilInternalTcpPortIsAvailable(AgentGrpcPort))
+            .Build();
+    }
+
+    private static async Task<string> GetContainerLogsAsync(
+        string label,
+        IContainer container,
+        CancellationToken cancellationToken)
+    {
+        var (stdout, stderr) = await container.GetLogsAsync(
+            DateTime.UnixEpoch,
+            DateTime.UtcNow,
+            timestampsEnabled: false,
+            cancellationToken);
+        return
+            $"{Environment.NewLine}{label} stdout:{Environment.NewLine}{stdout}"
+            + $"{Environment.NewLine}{label} stderr:{Environment.NewLine}{stderr}";
     }
 }

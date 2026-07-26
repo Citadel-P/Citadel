@@ -20,6 +20,11 @@ unavailable behavior while disconnected, authenticated reconnect, reconnect
 after Core restart, and rejection after revocation. Real Core and Agent image
 compatibility is covered separately so protocol diagnostics remain focused.
 
+The regular Agent compatibility suite starts the supplied Core and Agent images
+with an isolated Docker-in-Docker daemon. It verifies the generated setup key,
+signed gRPC authentication, rejection of a different Core key, platform
+discovery and operations, streamed stack deployment, and container inspection.
+
 The Edge Agent compatibility suite starts the supplied Core and Agent images
 with an isolated Docker-in-Docker daemon. It verifies enrollment, version and
 protocol reporting, routed Docker operations, streamed stack deployment,
@@ -70,7 +75,7 @@ The candidate-image compatibility tests are skipped by this command unless
 their `CITADEL_ACCEPTANCE_*_IMAGE` variables are set. The dedicated commands
 below show the required image builds and environment variables.
 
-Run both candidate-image compatibility suites with one command:
+Run all candidate-image compatibility suites with one command:
 
 ```powershell
 .\test\Citadel.Tests.Acceptance\run-image-compatibility.ps1
@@ -85,7 +90,7 @@ are already built:
 .\test\Citadel.Tests.Acceptance\run-image-compatibility.ps1 -SkipBuild
 ```
 
-The runner requires both suites to execute, fails on missing images, and
+The runner requires all three suites to execute, fails on missing images, and
 restores the process environment variables after completion.
 
 Run only the upgrade suite:
@@ -106,7 +111,7 @@ Run only the Edge Agent recovery suite:
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Recovery.EdgeAgentRecoveryTests
 ```
 
-Run the real Core and Agent image compatibility suite:
+Run the real Core and Agent image compatibility suites:
 
 ```powershell
 docker build -f src/Citadel.WebApi/Dockerfile -t citadel-core:acceptance .
@@ -117,13 +122,15 @@ $env:CITADEL_ACCEPTANCE_CORE_IMAGE = "citadel-core:acceptance"
 $env:CITADEL_ACCEPTANCE_AGENT_IMAGE = "citadel-agent:acceptance"
 $env:CITADEL_ACCEPTANCE_AGENT_VERSION = "1.0.0" # Optional exact assertion
 
+dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.RegularAgentCompatibilityTests
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.EdgeAgentCompatibilityTests
 ```
 
 The image references may also be registry references or immutable digests.
-The suite creates disposable Core data, Agent identity, PostgreSQL, and
-Docker data volumes; it does not deploy the test stack to the host Docker
-daemon.
+The same Agent image is exercised in inbound regular Agent and outbound Edge
+Agent modes. The suites create disposable Core data, Agent identity,
+PostgreSQL, and Docker data volumes; they do not deploy test stacks to the host
+Docker daemon.
 
 Run only the Forgejo Git and webhook compatibility suite:
 

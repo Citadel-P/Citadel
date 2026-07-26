@@ -137,8 +137,22 @@ try {
             $Configuration,
             "--",
             "-class",
+            "Tests.Acceptance.Compatibility.RegularAgentCompatibilityTests") `
+        -Operation "Running the Core and regular Agent compatibility suite"
+
+    Invoke-CheckedNative `
+        -FilePath "dotnet" `
+        -Arguments @(
+            "run",
+            "--project",
+            $testProject,
+            "--no-build",
+            "--configuration",
+            $Configuration,
+            "--",
+            "-class",
             "Tests.Acceptance.Compatibility.EdgeAgentCompatibilityTests") `
-        -Operation "Running the Core and Agent compatibility suite"
+        -Operation "Running the Core and Edge Agent compatibility suite"
 
     Invoke-CheckedNative `
         -FilePath "dotnet" `

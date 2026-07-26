@@ -141,7 +141,10 @@ internal sealed class CreatePlatformHandler(
         var response = await platformConnector.GetPlatformAsync(param, cancellationToken);
         if (!response.IsSuccess(out var platformResult, out var error))
         {
-            return Result.Failure<Platform>(new InternalServerError($"Failed to get platform info for {command.Address}: {error?.Message}"));
+            return Result.Failure<Platform>(
+                error
+                ?? new InternalServerError(
+                    $"Failed to get platform info for {command.Address}."));
         }
 
         var platform = platformResult.Map(command.Address ?? "", command.Name, command.ConnectorType);

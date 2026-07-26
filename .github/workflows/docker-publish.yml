@@ -941,13 +941,21 @@ jobs:
           cache-from: type=gha,scope=citadel-agent-linux-amd64
           cache-to: type=gha,mode=max,scope=citadel-agent-linux-amd64
 
-      - name: Restore Edge Agent compatibility tests
+      - name: Restore Agent compatibility tests
         run: dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
 
-      - name: Build Edge Agent compatibility tests
+      - name: Build Agent compatibility tests
         run: dotnet build test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-restore -c Release
 
-      - name: Run real Core and Agent compatibility
+      - name: Run real Core and regular Agent compatibility
+        env:
+          CITADEL_ACCEPTANCE_REQUIRE_CANDIDATE_IMAGES: "true"
+          CITADEL_ACCEPTANCE_CORE_IMAGE: ${{ inputs.edge_core_image || env.CITADEL_EDGE_CORE_TEST_IMAGE }}
+          CITADEL_ACCEPTANCE_AGENT_IMAGE: ${{ inputs.edge_agent_image || env.CITADEL_EDGE_AGENT_TEST_IMAGE }}
+          CITADEL_ACCEPTANCE_AGENT_VERSION: ${{ inputs.edge_agent_version || steps.agent-version.outputs.SIMPLE_VERSION }}
+        run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Compatibility.RegularAgentCompatibilityTests
+
+      - name: Run real Core and Edge Agent compatibility
         env:
           CITADEL_ACCEPTANCE_REQUIRE_CANDIDATE_IMAGES: "true"
           CITADEL_ACCEPTANCE_CORE_IMAGE: ${{ inputs.edge_core_image || env.CITADEL_EDGE_CORE_TEST_IMAGE }}
@@ -955,7 +963,7 @@ jobs:
           CITADEL_ACCEPTANCE_AGENT_VERSION: ${{ inputs.edge_agent_version || steps.agent-version.outputs.SIMPLE_VERSION }}
         run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Compatibility.EdgeAgentCompatibilityTests
 
-      - name: Collect Edge Agent compatibility diagnostics
+      - name: Collect Agent compatibility diagnostics
         if: failure()
         shell: bash
         run: |
@@ -967,7 +975,7 @@ jobs:
             docker logs "${container}" > "test/Citadel.Tests.Acceptance/artifacts/${container}.log" 2>&1 || true
           done
 
-      - name: Upload Edge Agent compatibility diagnostics
+      - name: Upload Agent compatibility diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
