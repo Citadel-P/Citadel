@@ -722,6 +722,109 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
         }, transaction: tx());
     }
 
+    public Task<int> UpdateStackUpdateStateAsync(
+        Guid id,
+        StackUpdateState state,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Stacks
+            SET StackUpdateState = @StackUpdateState::json
+            WHERE Id = @Id
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                StackUpdateState = JsonSerializer.Serialize(
+                    state,
+                    StackJsonContext.Default.StackUpdateState)
+            },
+            transaction: tx());
+    }
+
+    public Task<int> TryCompleteUpdateCheckAsync(
+        Guid id,
+        StackUpdateState state,
+        long expectedRowVersion,
+        Guid expectedCurrentReleaseId,
+        StackReleaseStatus expectedReleaseStatus,
+        StackSpec expectedSpec,
+        StackReleaseSource? expectedSource,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Stacks AS s
+            SET StackUpdateState = @StackUpdateState::json,
+                ControlState = 'Idle',
+                ControlStartedAt = NULL,
+                ControlTriggeredBy = NULL,
+                RowVersion = RowVersion + 1
+            FROM StackReleases AS sr
+            WHERE s.Id = @Id
+              AND s.ControlState = 'Processing'
+              AND s.RowVersion = @ExpectedRowVersion
+              AND s.CurrentStackReleaseId = @ExpectedCurrentReleaseId
+              AND sr.Id = s.CurrentStackReleaseId
+              AND sr.Status = @ExpectedReleaseStatus
+              AND sr.Spec = @ExpectedSpec::jsonb
+              AND sr.Source::jsonb IS NOT DISTINCT FROM @ExpectedSource::jsonb
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                StackUpdateState = JsonSerializer.Serialize(
+                    state,
+                    StackJsonContext.Default.StackUpdateState),
+                ExpectedRowVersion = expectedRowVersion,
+                ExpectedCurrentReleaseId = expectedCurrentReleaseId,
+                ExpectedReleaseStatus = EnumFormatter<StackReleaseStatus>.GetValue(expectedReleaseStatus),
+                ExpectedSpec = JsonSerializer.Serialize(
+                    expectedSpec,
+                    StackJsonContext.Default.StackSpec),
+                ExpectedSource = expectedSource is null
+                    ? null
+                    : JsonSerializer.Serialize(
+                        expectedSource,
+                        StackJsonContext.Default.StackReleaseSource)
+            },
+            transaction: tx());
+    }
+
+    public Task<int> TryReleaseUpdateCheckAsync(
+        Guid id,
+        long expectedStartedAt,
+        Guid expectedControlTriggeredBy,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Stacks
+            SET ControlState = 'Idle',
+                ControlStartedAt = NULL,
+                ControlTriggeredBy = NULL,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND ControlState = 'Processing'
+              AND ControlStartedAt = @ExpectedStartedAt
+              AND ControlTriggeredBy = @ExpectedControlTriggeredBy
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                ExpectedStartedAt = expectedStartedAt,
+                ExpectedControlTriggeredBy = expectedControlTriggeredBy
+            },
+            transaction: tx());
+    }
+
     public Task<int> UpdateReleaseStatusAsync(Guid releaseId, StackReleaseStatus status, CancellationToken cancellationToken)
     {
         const string sql = """

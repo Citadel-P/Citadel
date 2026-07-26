@@ -21,6 +21,7 @@ internal sealed class ManualStackAutoUpdateJob(
     IServiceScopeFactory scopeFactory,
     IDelayWithJitterService delayWithJitterService,
     ILicenseEntitlementService entitlementService,
+    ManualStackUpdateEvaluator updateEvaluator,
     ILogger<ManualStackAutoUpdateJob> logger) : BackgroundService
 {
     private const int CheckIntervalInHours = 2;
@@ -73,50 +74,23 @@ internal sealed class ManualStackAutoUpdateJob(
         if (stack.CurrentStackRelease?.Spec is not ManualStack manualStack)
             return null;
 
-        if (stack.StackUpdateState is not ManualStackUpdateState manualState)
+        if (stack.StackUpdateState is not ManualStackUpdateState)
             return null;
 
-        var previousStates = manualState.RecreateStackOnNewImageState.AutoUpdateStates
-            .ToDictionary(state => StateKey(state.ServiceName, state.ImageName), StringComparer.OrdinalIgnoreCase);
-
-        var nextStates = new List<ImageUpdateState>();
-        var updates = new List<StackImageUpdateItem>();
         var now = DateTime.UtcNow;
-
-        foreach (var check in checks)
-        {
-            if (!imageDigestCache.TryGet(check.Key, out var digestEntry))
-                continue;
-
-            var key = StateKey(check.ServiceName, check.ImageName);
-            previousStates.TryGetValue(key, out var previous);
-
-            var remoteDigest = digestEntry.Digest;
-            var currentDigest = string.IsNullOrWhiteSpace(previous?.CurrentDigest)
-                ? remoteDigest
-                : previous.CurrentDigest;
-
-            var updateAvailable = !remoteDigest.Equals(currentDigest, StringComparison.OrdinalIgnoreCase);
-            nextStates.Add(new ImageUpdateState(
-                check.ServiceName,
-                check.ImageName,
-                currentDigest,
-                remoteDigest,
-                now,
-                updateAvailable));
-
-            var alreadyReported = previous is { UpdateAvailable: true, RemoteDigest: not null }
-                && previous.RemoteDigest.Equals(remoteDigest, StringComparison.OrdinalIgnoreCase);
-
-            if (updateAvailable && !alreadyReported)
-            {
-                updates.Add(new StackImageUpdateItem(
-                    check.ServiceName,
-                    check.ImageName,
-                    currentDigest,
-                    remoteDigest));
-            }
-        }
+        var digests = checks
+            .Select(check => check.Key)
+            .Distinct()
+            .Select(key => imageDigestCache.TryGet(key, out var entry)
+                ? new KeyValuePair<ImageKey, string>?(
+                    new KeyValuePair<ImageKey, string>(key, entry.Digest))
+                : null)
+            .Where(item => item.HasValue)
+            .Select(item => item!.Value)
+            .ToDictionary(item => item.Key, item => item.Value);
+        var evaluation = updateEvaluator.Evaluate(stack.StackUpdateState, checks, digests, now);
+        var nextStates = evaluation.State.RecreateStackOnNewImageState.AutoUpdateStates;
+        var updates = evaluation.NewlyDetectedUpdates;
 
         if (nextStates.Count == 0)
             return null;
@@ -125,7 +99,7 @@ internal sealed class ManualStackAutoUpdateJob(
         {
             return new ManualStackAutoUpdateStateWorkItem(
                 stack.Id,
-                new ManualStackUpdateState(new RecreateStackOnNewImageState(nextStates)));
+                evaluation.State);
         }
 
         var canAutoUpdate = await entitlementService.IsEnabledAsync(
@@ -137,7 +111,7 @@ internal sealed class ManualStackAutoUpdateJob(
 
             return new ManualStackAutoUpdateStateWorkItem(
                 stack.Id,
-                new ManualStackUpdateState(new RecreateStackOnNewImageState(nextStates)));
+                evaluation.State);
         }
 
         var serviceNames = manualStack.UpdateBehavior == StackUpdateBehavior.ServiceAutoDeploy
@@ -156,7 +130,7 @@ internal sealed class ManualStackAutoUpdateJob(
 
             return new ManualStackAutoUpdateStateWorkItem(
                 stack.Id,
-                new ManualStackUpdateState(new RecreateStackOnNewImageState(nextStates)));
+                evaluation.State);
         }
 
         var updatedStates = nextStates
@@ -247,8 +221,6 @@ internal sealed class ManualStackAutoUpdateJob(
         return alertService.ProcessAsync(type, context, cancellationToken);
     }
 
-    private static string StateKey(string serviceName, string imageName)
-        => $"{serviceName}\n{imageName}";
 }
 
 internal sealed class ManualStackAutoUpdateStateWorkItem(
@@ -257,11 +229,7 @@ internal sealed class ManualStackAutoUpdateStateWorkItem(
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
-        var stack = await uow.Stacks.GetAsync(stackId, cancellationToken);
-        if (stack is null) return;
-
-        stack.SetStackUpdateState(state);
-        await uow.Stacks.UpdateAsync(stack, cancellationToken);
+        await uow.Stacks.UpdateStackUpdateStateAsync(stackId, state, cancellationToken);
         await uow.CommitAsync(cancellationToken);
     }
 }

@@ -10,6 +10,170 @@ namespace Tests.Integration.Infrastructure.Persistence;
 public sealed class StackRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
+    public async Task TryCompleteUpdateCheckAsync_ShouldReleaseProcessingAndRejectStaleReleaseOrStatus()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        Stack stack;
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var platform = CreatePlatform($"stack-update-state-platform-{suffix}");
+            await uow.Platforms.AddAsync(platform, cancellationToken);
+
+            var repositoryId = Guid.CreateVersion7();
+            var spec = new GitStack(
+                repositoryId,
+                "main",
+                null,
+                StackUpdateBehavior.Disabled,
+                ComposePaths: ["compose.yml"]);
+            stack = Stack.Create(
+                $"stack-update-state-{suffix}",
+                Constants.SystemId,
+                StackSource.Git,
+                platform.Id,
+                spec);
+            stack.PartialUpdate(StackReleaseStatus.Healthy);
+            stack.CurrentStackRelease!.UpdateSource(new StackReleaseSource(
+                StackSource.Git,
+                repositoryId,
+                "repository",
+                "main",
+                null,
+                "commit-current",
+                ["compose.yml"],
+                []));
+            await uow.Stacks.AddAsync(stack, cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+        }
+
+        var nextState = new GitStackUpdateState(
+            new RecreateStackOnNewImageState([]),
+            new RecreateStackOnNewCommitState(
+                "commit-current",
+                "commit-remote",
+                DateTime.UtcNow));
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var stored = (await uow.Stacks.GetAsync(stack.Id, cancellationToken))!;
+            Assert.True(stored.MarkUpdateCheckProcessing(Constants.SystemId));
+            var claimed = await uow.Stacks.UpdateProcessingAsync(
+                stored.Id,
+                stored.CurrentStackRelease!.Status,
+                stored.ControlState,
+                stored.ControlStartedAt,
+                stored.RowVersion,
+                checkRowVersion: true,
+                Constants.SystemId,
+                cancellationToken);
+            var operationRowVersion = stored.RowVersion + 1;
+
+            var affected = await uow.Stacks.TryCompleteUpdateCheckAsync(
+                stored.Id,
+                nextState,
+                operationRowVersion,
+                stored.CurrentStackReleaseId,
+                stored.CurrentStackRelease.Status,
+                stored.CurrentStackRelease!.Spec,
+                stored.CurrentStackRelease.Source,
+                cancellationToken);
+            var stale = await uow.Stacks.TryCompleteUpdateCheckAsync(
+                stored.Id,
+                nextState,
+                operationRowVersion,
+                Guid.CreateVersion7(),
+                stored.CurrentStackRelease.Status,
+                stored.CurrentStackRelease.Spec,
+                stored.CurrentStackRelease.Source,
+                cancellationToken);
+            await uow.Stacks.UpdateReleaseStatusAsync(
+                stored.CurrentStackReleaseId,
+                StackReleaseStatus.Failed,
+                cancellationToken);
+            var staleStatus = await uow.Stacks.TryCompleteUpdateCheckAsync(
+                stored.Id,
+                nextState,
+                operationRowVersion,
+                stored.CurrentStackReleaseId,
+                StackReleaseStatus.Healthy,
+                stored.CurrentStackRelease.Spec,
+                stored.CurrentStackRelease.Source,
+                cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+
+            Assert.True(claimed);
+            Assert.Equal(1, affected);
+            Assert.Equal(0, stale);
+            Assert.Equal(0, staleStatus);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var stored = (await uow.Stacks.GetAsync(stack.Id, cancellationToken))!;
+            var state = Assert.IsType<GitStackUpdateState>(stored.StackUpdateState);
+
+            Assert.Equal("commit-remote", state.RecreateStackOnNewCommitState.RemoteCommitSha);
+            Assert.Equal(StackReleaseStatus.Failed, stored.CurrentStackRelease!.Status);
+            Assert.Equal(ResourceControlState.Idle, stored.ControlState);
+            Assert.Null(stored.ControlStartedAt);
+            Assert.Null(stored.ControlTriggeredBy);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var stored = (await uow.Stacks.GetAsync(stack.Id, cancellationToken))!;
+            Assert.True(stored.MarkUpdateCheckProcessing(Constants.SystemId));
+            var claimed = await uow.Stacks.UpdateProcessingAsync(
+                stored.Id,
+                stored.CurrentStackRelease!.Status,
+                stored.ControlState,
+                stored.ControlStartedAt,
+                stored.RowVersion,
+                checkRowVersion: true,
+                Constants.SystemId,
+                cancellationToken);
+            await uow.Stacks.UpdateReleaseStatusAsync(
+                stored.CurrentStackReleaseId,
+                StackReleaseStatus.Healthy,
+                cancellationToken);
+            var staleCompletion = await uow.Stacks.TryCompleteUpdateCheckAsync(
+                stored.Id,
+                nextState,
+                stored.RowVersion + 1,
+                stored.CurrentStackReleaseId,
+                stored.CurrentStackRelease.Status,
+                stored.CurrentStackRelease.Spec,
+                stored.CurrentStackRelease.Source,
+                cancellationToken);
+            var released = await uow.Stacks.TryReleaseUpdateCheckAsync(
+                stored.Id,
+                stored.ControlStartedAt!.Value,
+                Constants.SystemId,
+                cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+
+            Assert.True(claimed);
+            Assert.Equal(0, staleCompletion);
+            Assert.Equal(1, released);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var stored = (await uow.Stacks.GetAsync(stack.Id, cancellationToken))!;
+
+            Assert.Equal(StackReleaseStatus.Healthy, stored.CurrentStackRelease!.Status);
+            Assert.Equal(ResourceControlState.Idle, stored.ControlState);
+        }
+    }
+
+    [Fact]
     public async Task ReplaceReleaseVolumeBindingsAsync_ShouldReplaceExistingBindingWithSameReleaseAndVolumeName()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

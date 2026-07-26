@@ -20,6 +20,7 @@ internal sealed class DeploymentAutoUpdateJob(
     IServiceScopeFactory scopeFactory,
     IDelayWithJitterService delayWithJitterService,
     ILicenseEntitlementService entitlementService,
+    DeploymentUpdateEvaluator updateEvaluator,
     ILogger<DeploymentAutoUpdateJob> logger) : BackgroundService
 {
     private const int CheckIntervalInHours = 2;
@@ -76,15 +77,14 @@ internal sealed class DeploymentAutoUpdateJob(
 
         var remoteDigest = digestEntry.Digest;
         var currentDigest = deployedImage.ResolvedDigest;
-        var matchedTag = remoteDigest.Equals(currentDigest, StringComparison.OrdinalIgnoreCase);
-
         var now = DateTime.UtcNow;
+        var evaluation = updateEvaluator.Evaluate(currentDigest, remoteDigest, now);
 
-        if (matchedTag)
+        if (!evaluation.UpdateAvailable)
         {
             return new DeploymentAutoUpdateStateWorkItem(
                 deployment.Id,
-                new AutoUpdateState(now, AutoUpdateStatus.UpToDate, remoteDigest, remoteDigest)
+                evaluation.State
             );
         }
 
@@ -119,7 +119,7 @@ internal sealed class DeploymentAutoUpdateJob(
 
             return new DeploymentAutoUpdateStateWorkItem(
                 deployment.Id,
-                new AutoUpdateState(now, AutoUpdateStatus.UpdateAvailable, currentDigest, remoteDigest)
+                evaluation.State
             );
         }
         else
@@ -222,11 +222,7 @@ internal sealed class DeploymentAutoUpdateStateWorkItem(
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
-        var deployment = await uow.Deployments.GetAsync(deploymentId, cancellationToken);
-        if (deployment is null) return;
-
-        deployment.SetAutoUpdateState(state);
-        await uow.Deployments.UpdateAsync(deployment, cancellationToken);
+        await uow.Deployments.UpdateAutoUpdateStateAsync(deploymentId, state, cancellationToken);
         await uow.CommitAsync(cancellationToken);
     }
 }
@@ -241,15 +237,13 @@ internal sealed class DeploymentAutoUpdateFailedWorkItem(
         if (deployment is null) return;
 
         var now = DateTime.UtcNow;
-        deployment.SetAutoUpdateState(
-            new AutoUpdateState(
-                now,
-                AutoUpdateStatus.Failed,
-                deployment.AutoUpdateState?.CurrentDigest,
-                deployment.AutoUpdateState?.RemoteDigest,
-                message));
-
-        await uow.Deployments.UpdateAsync(deployment, cancellationToken);
+        var state = new AutoUpdateState(
+            now,
+            AutoUpdateStatus.Failed,
+            deployment.AutoUpdateState?.CurrentDigest,
+            deployment.AutoUpdateState?.RemoteDigest,
+            message);
+        await uow.Deployments.UpdateAutoUpdateStateAsync(deploymentId, state, cancellationToken);
         await uow.CommitAsync(cancellationToken);
     }
 }

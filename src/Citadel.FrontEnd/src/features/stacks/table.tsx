@@ -1,4 +1,4 @@
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableEmptyState } from '@/components/ui/data-table';
 import {
   AutoUpdateStatus,
   ImageUpdateState,
@@ -24,14 +24,22 @@ import { fromNow } from '@/lib/dayjs.helper';
 import { formatId } from '@/lib/utils';
 import { FileText, GitBranch } from 'lucide-react';
 import { TagChips } from '@/features/tags/components';
+import {
+  getLatestStackUpdateCheckTime,
+  getStackGitUpdateState,
+  getStackImageUpdateStates,
+  getStackUpdateStatus,
+} from './update-status';
 
 export const StacksTable = ({
   items,
   actions,
   isLoading,
+  emptyState,
 }: {
   items: StackView[];
   isLoading: boolean;
+  emptyState?: DataTableEmptyState;
   actions: Record<
     string,
     React.FC<{ resource: StackView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
@@ -42,7 +50,13 @@ export const StacksTable = ({
 
   return (
     <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <DataTable
+        columns={cols}
+        data={items}
+        isLoading={isLoading}
+        emptyState={emptyState}
+        onSelectionChange={setSelectedResources}
+      />
     </ContentCard>
   );
 };
@@ -88,8 +102,7 @@ const columns = (
     accessorKey: 'updateStatus',
     header: ({ column }) => <SortableCell cellName="Update Status" column={column} />,
     cell: ({ row }) => <StackUpdateStatusCell stack={row.original} />,
-    sortingFn: (rowA, rowB) =>
-      getStackUpdateStatus(rowA.original).localeCompare(getStackUpdateStatus(rowB.original)),
+    sortingFn: (rowA, rowB) => getStackUpdateStatus(rowA.original).localeCompare(getStackUpdateStatus(rowB.original)),
   },
 
   {
@@ -210,13 +223,7 @@ const StackUpdateStatusCell = ({ stack }: { stack: StackView }) => {
   );
 };
 
-const StackGitUpdateStateRow = ({
-  stack,
-  state,
-}: {
-  stack: StackView;
-  state: RecreateStackOnNewCommitState;
-}) => {
+const StackGitUpdateStateRow = ({ stack, state }: { stack: StackView; state: RecreateStackOnNewCommitState }) => {
   const source = stack.source;
   const remoteCommit = state.remoteCommitSha ?? undefined;
 
@@ -264,7 +271,9 @@ const StackUpdateStateRow = ({ state }: { state: ImageUpdateState }) => {
       {state.updateAvailable && (
         <>
           <span className="text-muted-foreground text-xs">Available</span>
-          <span className="font-mono text-xs text-amber-600 dark:text-amber-500 truncate" title={state.remoteDigest ?? undefined}>
+          <span
+            className="font-mono text-xs text-amber-600 dark:text-amber-500 truncate"
+            title={state.remoteDigest ?? undefined}>
             {formatId(state.remoteDigest ?? undefined)}
           </span>
         </>
@@ -273,46 +282,9 @@ const StackUpdateStateRow = ({ state }: { state: ImageUpdateState }) => {
   );
 };
 
-const getStackImageUpdateStates = (stack: StackView): ImageUpdateState[] =>
-  stack.stackUpdateState?.recreateStackOnNewImageState?.autoUpdateStates ?? [];
-
 const getStackSourceLabel = (stack: StackView): string => {
   if (stack.stackSource !== StackSource.Git) return 'UI defined';
 
   const repositoryName = stack.source?.gitRepositoryName ?? 'Git repository';
   return stack.source?.branch ? `${repositoryName}/${stack.source.branch}` : repositoryName;
-};
-
-const getLatestStackUpdateCheckTime = (stack: StackView): number | undefined => {
-  const candidates = [
-    getStackGitUpdateState(stack)?.lastCheckedAt,
-    ...getStackImageUpdateStates(stack).map((state) => state.lastCheckedAt),
-  ];
-
-  return candidates
-    .map((value) => (value ? new Date(value).getTime() : Number.NaN))
-    .filter((value) => !Number.isNaN(value))
-    .sort((a, b) => b - a)[0];
-};
-
-const getStackGitUpdateState = (stack: StackView): RecreateStackOnNewCommitState | null => {
-  const state = stack.stackUpdateState;
-  if (!state || !('recreateStackOnNewCommitState' in state)) return null;
-
-  const gitState = state.recreateStackOnNewCommitState;
-  return gitState?.currentCommitSha ? gitState : null;
-};
-
-const getStackUpdateStatus = (stack: StackView): AutoUpdateStatus => {
-  const gitState = getStackGitUpdateState(stack);
-  if (gitState?.remoteCommitSha && gitState.remoteCommitSha !== gitState.currentCommitSha) {
-    return AutoUpdateStatus.UpdateAvailable;
-  }
-
-  if (gitState?.currentCommitSha) return AutoUpdateStatus.UpToDate;
-
-  const states = getStackImageUpdateStates(stack);
-  if (states.length === 0) return AutoUpdateStatus.Unknown;
-  if (states.some((state) => state.updateAvailable)) return AutoUpdateStatus.UpdateAvailable;
-  return AutoUpdateStatus.UpToDate;
 };

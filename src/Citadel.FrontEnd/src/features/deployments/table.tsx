@@ -1,4 +1,4 @@
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableEmptyState } from '@/components/ui/data-table';
 import { AutoUpdateStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
@@ -22,9 +22,11 @@ export const DeploymentsTable = ({
   items,
   actions,
   isLoading,
+  emptyState,
 }: {
   items: DeploymentView[];
   isLoading: boolean;
+  emptyState?: DataTableEmptyState;
   actions: Record<
     string,
     React.FC<{ resource: DeploymentView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
@@ -35,7 +37,13 @@ export const DeploymentsTable = ({
 
   return (
     <ContentCard>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <DataTable
+        columns={cols}
+        data={items}
+        isLoading={isLoading}
+        emptyState={emptyState}
+        onSelectionChange={setSelectedResources}
+      />
     </ContentCard>
   );
 };

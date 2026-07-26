@@ -17,6 +17,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useEffect, useRef, useState } from 'react';
 import Loader from './loader';
 
+export interface DataTableEmptyState {
+  title: string;
+  description?: string;
+}
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -24,6 +29,7 @@ interface DataTableProps<TData, TValue> {
   getRowId?: (row: TData) => string;
   getSubRows?: (row: TData) => TData[] | undefined;
   onSelectionChange?: (selectedRows: TData[]) => void;
+  emptyState?: DataTableEmptyState;
 }
 interface Identifiable {
   id?: string | null;
@@ -35,6 +41,7 @@ export function DataTable<TData extends Identifiable, TValue>({
   getRowId,
   getSubRows,
   onSelectionChange,
+  emptyState,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -114,8 +121,11 @@ export function DataTable<TData extends Identifiable, TValue>({
               <TableCell colSpan={columns.length} className="h-24">
                 {isLoading && <Loader />}
                 {!isLoading && (
-                  <div className="flex items-center justify-center p-4">
-                    <div className="rounded-full bg-muted/20 text-forground/90 px-3 py-1 text-center">No results.</div>
+                  <div className="flex flex-col items-center justify-center gap-1 p-4 text-center">
+                    <div className="text-sm font-medium text-foreground">{emptyState?.title ?? 'No results.'}</div>
+                    {emptyState?.description && (
+                      <div className="text-xs text-muted-foreground">{emptyState.description}</div>
+                    )}
                   </div>
                 )}
               </TableCell>

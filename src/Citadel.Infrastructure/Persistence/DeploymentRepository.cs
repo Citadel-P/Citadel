@@ -469,6 +469,117 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         }, transaction: tx());
     }
 
+    public Task<int> UpdateAutoUpdateStateAsync(
+        Guid id,
+        AutoUpdateState state,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Deployments
+            SET AutoUpdateState_LastCheckedAt = @LastCheckedAt,
+                AutoUpdateState_Status = @Status,
+                AutoUpdateState_CurrentDigest = @CurrentDigest,
+                AutoUpdateState_RemoteDigest = @RemoteDigest,
+                AutoUpdateState_LastError = @LastError
+            WHERE Id = @Id
+        """;
+
+        return db.ExecuteAsync(sql, MapAutoUpdateState(id, state), transaction: tx());
+    }
+
+    public Task<int> TryCompleteUpdateCheckAsync(
+        Guid id,
+        AutoUpdateState state,
+        long expectedRowVersion,
+        Guid expectedPlatformId,
+        DeploymentStatus expectedStatus,
+        DeploymentSpec expectedSpec,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Deployments
+            SET AutoUpdateState_LastCheckedAt = @LastCheckedAt,
+                AutoUpdateState_Status = @Status,
+                AutoUpdateState_CurrentDigest = @CurrentDigest,
+                AutoUpdateState_RemoteDigest = @RemoteDigest,
+                AutoUpdateState_LastError = @LastError,
+                ControlState = 'Idle',
+                ControlStartedAt = NULL,
+                ControlTriggeredBy = NULL,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND ControlState = 'Processing'
+              AND RowVersion = @ExpectedRowVersion
+              AND PlatformId = @ExpectedPlatformId
+              AND Status = @ExpectedStatus
+              AND Spec = @ExpectedSpec::jsonb
+        """;
+
+        var values = MapAutoUpdateState(id, state);
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                values.Id,
+                values.LastCheckedAt,
+                values.Status,
+                values.CurrentDigest,
+                values.RemoteDigest,
+                values.LastError,
+                ExpectedRowVersion = expectedRowVersion,
+                ExpectedPlatformId = expectedPlatformId,
+                ExpectedStatus = EnumFormatter<DeploymentStatus>.GetValue(expectedStatus),
+                ExpectedSpec = JsonSerializer.Serialize(expectedSpec, DeploymentJsonContext.Default.DeploymentSpec)
+            },
+            transaction: tx());
+    }
+
+    public Task<int> TryReleaseUpdateCheckAsync(
+        Guid id,
+        long expectedStartedAt,
+        Guid expectedControlTriggeredBy,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Deployments
+            SET ControlState = 'Idle',
+                ControlStartedAt = NULL,
+                ControlTriggeredBy = NULL,
+                RowVersion = RowVersion + 1
+            WHERE Id = @Id
+              AND ControlState = 'Processing'
+              AND ControlStartedAt = @ExpectedStartedAt
+              AND ControlTriggeredBy = @ExpectedControlTriggeredBy
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id,
+                ExpectedStartedAt = expectedStartedAt,
+                ExpectedControlTriggeredBy = expectedControlTriggeredBy
+            },
+            transaction: tx());
+    }
+
+    private static AutoUpdateStateValues MapAutoUpdateState(Guid id, AutoUpdateState state)
+        => new(
+            id,
+            state.LastCheckedAt,
+            EnumFormatter<AutoUpdateStatus>.GetValue(state.Status),
+            state.CurrentDigest,
+            state.RemoteDigest,
+            state.LastError);
+
+    private sealed record AutoUpdateStateValues(
+        Guid Id,
+        DateTime LastCheckedAt,
+        string Status,
+        string? CurrentDigest,
+        string? RemoteDigest,
+        string? LastError);
+
     public Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken)
     {
         var conditions = new List<string>

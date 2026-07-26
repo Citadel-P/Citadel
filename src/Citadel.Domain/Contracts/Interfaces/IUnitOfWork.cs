@@ -769,6 +769,17 @@ public interface IStackRepository
     Task<int> AddAsync(Stack stack, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
     Task<int> AddReleaseAsync(StackRelease release, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Stack stack, CancellationToken cancellationToken);
+    Task<int> UpdateStackUpdateStateAsync(Guid id, StackUpdateState state, CancellationToken cancellationToken);
+    Task<int> TryCompleteUpdateCheckAsync(
+        Guid id,
+        StackUpdateState state,
+        long expectedRowVersion,
+        Guid expectedCurrentReleaseId,
+        StackReleaseStatus expectedReleaseStatus,
+        StackSpec expectedSpec,
+        StackReleaseSource? expectedSource,
+        CancellationToken cancellationToken);
+    Task<int> TryReleaseUpdateCheckAsync(Guid id, long expectedStartedAt, Guid expectedControlTriggeredBy, CancellationToken cancellationToken);
     Task<int> UpdateReleaseStatusAsync(Guid releaseId, StackReleaseStatus status, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetStuckStacksAsync(int staleAfterSeconds = 3600, CancellationToken cancellationToken = default);
@@ -1104,6 +1115,16 @@ public interface IDeploymentRepository
     Task<bool> ExistsAsync(Guid id, string name, Guid platformId, CancellationToken cancellationToken);
     Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? tagIds = null, Guid? tagCreatedByActorId = null);
     Task<int> UpdateAsync(Deployment deployment, CancellationToken cancellationToken);
+    Task<int> UpdateAutoUpdateStateAsync(Guid id, AutoUpdateState state, CancellationToken cancellationToken);
+    Task<int> TryCompleteUpdateCheckAsync(
+        Guid id,
+        AutoUpdateState state,
+        long expectedRowVersion,
+        Guid expectedPlatformId,
+        DeploymentStatus expectedStatus,
+        DeploymentSpec expectedSpec,
+        CancellationToken cancellationToken);
+    Task<int> TryReleaseUpdateCheckAsync(Guid id, long expectedStartedAt, Guid expectedControlTriggeredBy, CancellationToken cancellationToken);
     Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
     Task<int> UpdateStatusAsync(IEnumerable<Guid> ids, DeploymentStatus status, CancellationToken cancellationToken);
 

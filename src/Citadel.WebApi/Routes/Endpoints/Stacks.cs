@@ -24,6 +24,16 @@ public static class Stacks
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, StackView.Map);
     }
 
+    public static async Task<Results<Ok<StackView>, ProblemHttpResult>> CheckUpdates(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [Description("The stack id")] Guid stackId,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new CheckStackUpdates(stackId), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, StackView.Map);
+    }
+
     public static async Task<Results<Ok<StackConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("The stack id")] Guid stackId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetStack(stackId), cancellationToken);

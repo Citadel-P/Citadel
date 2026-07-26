@@ -114,6 +114,19 @@ deployment caused by continuously observed repository changes requires
 
 Pinned stacks set `Commit` to a SHA. They do not track branch updates and webhook deploys are ignored.
 
+Use **Check for updates** on a Git Stack to query the Git remote immediately
+and compare relevant paths with the deployed commit. The
+check records update state for that Stack only; it does not apply the Stack,
+run repository hooks, emit an alert, or process other Stacks that use the same
+repository. It remains available when periodic update behavior is disabled.
+
+Use **Reconcile drift** separately when you need to compare the saved Stack
+definition with containers currently running on the Platform.
+
+On the Stacks page, use **Updates available** to show only stacks with a newer
+relevant commit or detected service-image digest. The filter works with
+search, tags, and the Platform filter.
+
 ## Build Images
 
 Use **Build Images** when a Compose service should use an image produced by a Citadel build project.

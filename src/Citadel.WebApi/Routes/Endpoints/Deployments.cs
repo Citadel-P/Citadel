@@ -25,6 +25,16 @@ public static class Deployments
         return await EndpointHandlers.HandleResult(result, permissionEvaluator, DeploymentView.Map);
     }
 
+    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> CheckUpdates(
+        IMediator mediator,
+        IPermissionEvaluator permissionEvaluator,
+        [Description("Deployment id")] Guid deploymentId,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new CheckDeploymentUpdates(deploymentId), cancellationToken);
+        return await EndpointHandlers.HandleResult(result, permissionEvaluator, DeploymentView.Map);
+    }
+
     public static async Task<Results<Ok<DeploymentConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("Deployment id")] Guid deploymentId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetDeployment(deploymentId), cancellationToken);

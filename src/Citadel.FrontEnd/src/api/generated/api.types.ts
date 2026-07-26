@@ -11755,6 +11755,36 @@ export class Api<
      * No description
      *
      * @tags Deployments
+     * @name CheckDeploymentUpdates
+     * @summary Check a deployment image for updates
+     * @request POST:/api/v1/deployments/{deploymentId}/check-updates
+     * @secure
+     * @response `200` `DeploymentView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     */
+    checkDeploymentUpdates: (
+      deploymentId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<DeploymentView, ProblemDetails>({
+        path: `/api/v1/deployments/${deploymentId}/check-updates`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
      * @name GetDeploymentTags
      * @summary Get deployment tags
      * @request GET:/api/v1/deployments/{deploymentId}/tags
@@ -12363,6 +12393,33 @@ export class Api<
       this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/${stackId}`,
         method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name CheckStackUpdates
+     * @summary Check a stack source for updates
+     * @request POST:/api/v1/stacks/{stackId}/check-updates
+     * @secure
+     * @response `200` `StackView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     */
+    checkStackUpdates: (stackId: string, params: RequestParams = {}) =>
+      this.request<StackView, ProblemDetails>({
+        path: `/api/v1/stacks/${stackId}/check-updates`,
+        method: "POST",
         secure: true,
         format: "json",
         ...params,

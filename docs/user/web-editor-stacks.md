@@ -92,6 +92,20 @@ Update detection and `Notify Only` remain available in Community. Automatic
 deployment caused by a detected image change requires Team's
 `Operational Guardrails` capability.
 
+Use **Check for updates** on the Stack page to query the selected registry
+immediately. The check records service-image update state but does not pull or
+apply an image, emit an alert, or run an automatic deployment. It remains
+available when periodic update behavior is disabled.
+
+The first check for a service records its current registry digest as a
+baseline. Citadel can report a newer digest only on a later check after it has
+that baseline. Services whose images come from Citadel Builds are excluded
+because their artifact state is managed by the Build workflow.
+
+On the Stacks page, use **Updates available** to show only stacks with a
+detected newer image digest. The filter works with search, tags, and the
+Platform filter.
+
 ## Build Images
 
 Use **Build Images** when one or more Compose services should use images produced by Citadel build projects.

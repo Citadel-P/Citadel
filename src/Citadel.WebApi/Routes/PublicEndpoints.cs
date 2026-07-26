@@ -2182,6 +2182,18 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getDeployment");
 
+        deployment.MapPost("/{deploymentId:guid}/check-updates", Deployments.CheckUpdates)
+            .WithSummary("Check a deployment image for updates")
+            .Produces<DeploymentView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .WithName("checkDeploymentUpdates");
+
         deployment.MapGet("/{deploymentId}/tags", Tags.GetDeploymentTags)
             .WithSummary("Get deployment tags")
             .ProducesValidationProblem()
@@ -2357,6 +2369,18 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getStack");
+
+        stacks.MapPost("/{stackId:guid}/check-updates", Stacks.CheckUpdates)
+            .WithSummary("Check a stack source for updates")
+            .Produces<StackView>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .WithName("checkStackUpdates");
 
         stacks.MapGet("/{stackId}/tags", Tags.GetStackTags)
             .WithSummary("Get stack tags")

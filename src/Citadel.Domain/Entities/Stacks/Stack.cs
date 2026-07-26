@@ -120,6 +120,15 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         if (ControlState == ResourceControlState.Processing || CurrentStackRelease is null) return false;
 
         CurrentStackRelease.UpdateStackStatus(StackReleaseStatus.Pending);
+        MarkUpdateCheckProcessing(controlTriggeredBy);
+        return true;
+    }
+
+    public bool MarkUpdateCheckProcessing(Guid controlTriggeredBy)
+    {
+        if (ControlState == ResourceControlState.Processing)
+            return false;
+
         ControlTriggeredBy = controlTriggeredBy;
         ControlState = ResourceControlState.Processing;
         ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -131,10 +140,15 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         if (CurrentStackRelease is null) return false;
 
         CurrentStackRelease.UpdateStackStatus(status);
+        ReleaseUpdateCheckProcessing();
+        return true;
+    }
+
+    public void ReleaseUpdateCheckProcessing()
+    {
         ControlState = ResourceControlState.Idle;
         ControlStartedAt = null;
         ControlTriggeredBy = null;
-        return true;
     }
 
     public void UpdateDetails(

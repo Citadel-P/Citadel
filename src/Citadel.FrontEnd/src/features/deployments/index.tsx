@@ -4,6 +4,8 @@ import { DeploymentDropdownActions, DeploymentGroupActions } from './actions';
 import { DeploymentsTable } from './table';
 import { useDeploymentsGroup } from './hooks/useDeploymentsGroup';
 import { CitadelIcons } from '@/lib/icons';
+import { UpdatesAvailableFilter, useUpdatesAvailableFilter } from '@/components/custom/updates-available-filter';
+import { hasDeploymentUpdateAvailable } from './update-status';
 
 const EMPTY_DEPLOYMENTS: never[] = [];
 
@@ -15,10 +17,10 @@ export const DeploymentComponents: RequiredComponents = {
     showAdd: true,
     showTagFilter: true,
     showPlatformFilter: true,
+    Extra: UpdatesAvailableFilter,
+    activeFilterParams: ['updates'],
   },
-  Content: ({ items, actions, isLoading }) => {
-    return <DeploymentsTable items={items} actions={actions} isLoading={isLoading} />;
-  },
+  Content: DeploymentListContent,
   DropdownActions: DeploymentDropdownActions,
   GroupActions: ({ items }) => {
     return <ActionBar type="Deployment" items={items} actions={Object.values(DeploymentGroupActions)} />;
@@ -39,3 +41,16 @@ export const DeploymentComponents: RequiredComponents = {
     );
   },
 };
+
+function DeploymentListContent({ items, actions, isLoading }: React.ComponentProps<typeof DeploymentsTable>) {
+  const { updatesAvailableOnly } = useUpdatesAvailableFilter();
+  const visibleItems = updatesAvailableOnly ? items.filter(hasDeploymentUpdateAvailable) : items;
+  const emptyState = updatesAvailableOnly
+    ? {
+        title: 'No updates available',
+        description: 'No available updates were detected for the current filters.',
+      }
+    : undefined;
+
+  return <DeploymentsTable items={visibleItems} actions={actions} isLoading={isLoading} emptyState={emptyState} />;
+}

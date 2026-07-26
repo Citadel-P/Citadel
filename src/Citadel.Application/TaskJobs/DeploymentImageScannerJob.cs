@@ -1,7 +1,5 @@
 using Application.Services;
-using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Images;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -12,9 +10,8 @@ internal sealed class DeploymentImageScannerJob(
     IImageScanScheduler imageScanScheduler,
     ISyncBarrier syncBarrier,
     IServiceScopeFactory scopeFactory,
-    IPlatformContainerCache platformContainerCache,
     IDelayWithJitterService delayWithJitterService,
-    IConnectorFactory<IImageConnector> connectorFactory,
+    IImageDigestScanner imageDigestScanner,
     ImageDigestCache imageDigestCache,
     ILogger<DeploymentImageScannerJob> logger) : BackgroundService
 {
@@ -31,13 +28,22 @@ internal sealed class DeploymentImageScannerJob(
             {
                 var syncedPlatformIds = await LoadPlatformIdsAsync(cancellationToken);
                 var scanTasks = await imageScanScheduler.LoadScanTasksAsync(cancellationToken);
-                var connectorsByType = new Dictionary<PlatformConnectorType, IImageConnector>();
 
                 foreach (var scanTask in scanTasks)
                 {
                     try
                     {
-                        await ScanImageAsync(scanTask, connectorsByType, cancellationToken);
+                        var result = await imageDigestScanner.ScanAsync(scanTask, cancellationToken);
+                        if (result.IsFailure(out var error, out var digest))
+                        {
+                            logger.LogWarning(
+                                "Image scan failed for {ImageKey}: {Error}",
+                                scanTask.Key,
+                                error.Message);
+                            continue;
+                        }
+
+                        imageDigestCache.Set(scanTask.Key, digest);
                     }
                     catch (Exception ex)
                     {
@@ -69,35 +75,4 @@ internal sealed class DeploymentImageScannerJob(
             .Distinct()];
     }
 
-    private async Task ScanImageAsync(
-        ImageScanTask scanTask,
-        Dictionary<PlatformConnectorType, IImageConnector> connectorsByType,
-        CancellationToken cancellationToken)
-    {
-        if (!platformContainerCache.TryGetCacheEntry(scanTask.PlatformId, out var platform, out _))
-            return;
-
-        if (!connectorsByType.TryGetValue(platform.ConnectorType, out var connector))
-        {
-            connector = connectorFactory.GetConnector(platform.ConnectorType);
-            connectorsByType[platform.ConnectorType] = connector;
-        }
-
-        var registryHost = scanTask.Registry.RegistryHost.Contains("://", StringComparison.Ordinal)
-            ? scanTask.Registry.RegistryHost
-            : $"https://{scanTask.Registry.RegistryHost}";
-        var registryDomain = new Uri(registryHost).Host.ToLowerInvariant();
-        var auth = scanTask.Registry.Configuration.GetRegistryAuth(registryDomain);
-        var imageName = $"{scanTask.Key.Repository}:{scanTask.Key.Tag}";
-
-        var cmd = new DistributionInspectCommand(platform.Address, imageName, auth);
-        var result = await connector.DistributionInspectAsync(cmd, cancellationToken);
-        if (result.IsFailure(out var error, out var inspect))
-        {
-            logger.LogError("Registry inspect failed for {Image}: {Error}", imageName, error);
-            return;
-        }
-
-        imageDigestCache.Set(scanTask.Key, inspect.Descriptor.Digest);
-    }
 }

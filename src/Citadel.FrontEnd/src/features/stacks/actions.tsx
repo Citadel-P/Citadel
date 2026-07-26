@@ -16,8 +16,11 @@ import {
   StackDriftReport,
   StackReconciliationResult,
   StackReconciliationStatus,
+  StackSource,
   StackView,
 } from '@/api/generated/api.types';
+import { getStackGitUpdateState, getStackImageUpdateStates, hasStackUpdateAvailable } from './update-status';
+import { getApiErrorDetail } from '@/lib/api-errors';
 
 export const useVariables = (resources: StackView | StackView[]) =>
   Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];
@@ -90,6 +93,7 @@ export const startAction: ActionConfig<StackView, 'startStacks'> = {
 
 export const syncAction: ActionConfig<StackView, any> = {
   key: 'sync',
+  title: 'Reconcile drift',
   type: 'command',
   icon: RefreshCw,
   requiredCapabilities: ['canWrite'],
@@ -129,6 +133,97 @@ export const syncAction: ActionConfig<StackView, any> = {
       },
     };
   },
+};
+
+const imageStateKey = (serviceName: string, imageName: string) => `${serviceName}\n${imageName}`.toLowerCase();
+
+export const checkUpdatesAction: ActionConfig<StackView, any> = {
+  key: 'checkUpdates',
+  title: 'Check for updates',
+  type: 'command',
+  icon: RefreshCw,
+  requiredCapabilities: ['canWrite'],
+  useHandler: ({ resources }) => {
+    const queryClient = useQueryClient();
+    const selected = Array.isArray(resources) ? resources[0] : resources;
+    const multiSelect = Array.isArray(resources) && resources.length > 1;
+    const { mutateAsync, isPending } = useMutate('checkStackUpdates');
+    const canExecute = !!selected && !multiSelect;
+    const resourcePending = !!selected && isProcessing(selected);
+
+    return {
+      canExecute,
+      isPending: isPending || resourcePending,
+      run: async () => {
+        if (!selected || !canExecute) return;
+
+        const previousImageKeys = new Set(
+          getStackImageUpdateStates(selected).map((state) => imageStateKey(state.serviceName, state.imageName)),
+        );
+
+        try {
+          const result = await mutateAsync({ stackId: selected.id });
+          const updated = result.data;
+
+          if (updated.stackSource === StackSource.Git) {
+            if (hasStackUpdateAvailable(updated) && getStackGitUpdateState(updated)?.remoteCommitSha) {
+              toast.info('Git update available', {
+                description: 'A newer relevant commit is available.',
+              });
+            } else {
+              toast.success('Stack source is up to date', {
+                description: 'No newer relevant commit was found.',
+              });
+            }
+          } else {
+            showStackImageUpdateResult(updated, previousImageKeys);
+          }
+
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['getStack'] }),
+            queryClient.invalidateQueries({ queryKey: ['listStacks'] }),
+          ]);
+        } catch (error) {
+          toast.error('Update check failed', {
+            description: getApiErrorDetail(error, 'Citadel could not check the Stack update source.'),
+          });
+        }
+      },
+    };
+  },
+};
+
+const showStackImageUpdateResult = (stack: StackView, previousImageKeys: Set<string>) => {
+  const states = getStackImageUpdateStates(stack);
+  const updateCount = states.filter((state) => state.updateAvailable).length;
+  const baselineCount = states.filter(
+    (state) => !previousImageKeys.has(imageStateKey(state.serviceName, state.imageName)),
+  ).length;
+  const baselineDescription =
+    baselineCount > 0
+      ? ` ${baselineCount} service image ${baselineCount === 1 ? 'baseline was' : 'baselines were'} also recorded.`
+      : '';
+
+  if (updateCount > 0) {
+    toast.info('Updates available', {
+      description: `${updateCount} service ${updateCount === 1 ? 'image has' : 'images have'} newer digests.${baselineDescription}`,
+    });
+    return;
+  }
+
+  if (baselineCount > 0) {
+    toast.info('Image baseline recorded', {
+      description:
+        baselineCount === 1
+          ? 'Citadel will compare future checks against the current registry digest.'
+          : `${baselineCount} image baselines were recorded. Citadel will compare future checks against the current registry digests.`,
+    });
+    return;
+  }
+
+  toast.success('Stack images are up to date', {
+    description: 'No newer service image digest was found.',
+  });
 };
 
 export const stopAction: ActionConfig<StackView, 'stopStacks'> = {

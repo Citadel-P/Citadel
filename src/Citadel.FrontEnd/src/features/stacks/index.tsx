@@ -4,6 +4,8 @@ import { StackDropdownActions, StackGroupActions } from './actions';
 import { StacksTable } from './table';
 import { useStacksGroup } from './hooks/useStacksGroup';
 import { CitadelIcons } from '@/lib/icons';
+import { UpdatesAvailableFilter, useUpdatesAvailableFilter } from '@/components/custom/updates-available-filter';
+import { hasStackUpdateAvailable } from './update-status';
 
 const EMPTY_STACKS: never[] = [];
 
@@ -15,10 +17,10 @@ export const StackComponents: RequiredComponents = {
     showAdd: true,
     showTagFilter: true,
     showPlatformFilter: true,
+    Extra: UpdatesAvailableFilter,
+    activeFilterParams: ['updates'],
   },
-  Content: ({ items, actions, isLoading }) => {
-    return <StacksTable items={items} actions={actions} isLoading={isLoading} />;
-  },
+  Content: StackListContent,
   DropdownActions: StackDropdownActions,
   GroupActions: ({ items }) => {
     return <ActionBar type="Stack" items={items} actions={Object.values(StackGroupActions)} />;
@@ -39,3 +41,16 @@ export const StackComponents: RequiredComponents = {
     );
   },
 };
+
+function StackListContent({ items, actions, isLoading }: React.ComponentProps<typeof StacksTable>) {
+  const { updatesAvailableOnly } = useUpdatesAvailableFilter();
+  const visibleItems = updatesAvailableOnly ? items.filter(hasStackUpdateAvailable) : items;
+  const emptyState = updatesAvailableOnly
+    ? {
+        title: 'No updates available',
+        description: 'No available updates were detected for the current filters.',
+      }
+    : undefined;
+
+  return <StacksTable items={visibleItems} actions={actions} isLoading={isLoading} emptyState={emptyState} />;
+}

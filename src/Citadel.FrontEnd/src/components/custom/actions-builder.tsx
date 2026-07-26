@@ -14,6 +14,7 @@ export type BaseResource = { name: string };
 
 export interface CommandAction<R, K extends KnownResourceName> {
   key: string;
+  title?: string;
   type: 'command';
   icon: LucideIcon;
   mutateKey?: K;
@@ -101,7 +102,7 @@ export function createActionsBuilder<R extends BaseResource>(options?: { showToa
 
 // --- Component Factories ---
 function createCommandComponents<R extends BaseResource>(act: CommandAction<R, any>, showToast: boolean) {
-  const title = capitalize(act.key);
+  const title = act.title ?? capitalize(act.key);
 
   const Dropdown: DropdownActionComponent<R> = ({ resource, onAction }) => {
     const { run, isPending, canExecute } = useUnifiedExecutor(act, resource, title, showToast);
@@ -157,6 +158,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
         icon={<act.icon className="h-4 w-4" />}
         onClick={run}
         disabled={!canExecute || isPending}
+        loading={isPending}
       />
     );
   };
@@ -186,6 +188,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
         icon={<act.icon className="h-4 w-4" />}
         onClick={run}
         disabled={!canExecute || isPending}
+        loading={isPending}
       />
     );
   };
@@ -259,6 +262,7 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
         variant={variant}
         onClick={run}
         disabled={!canExecute || isPending}
+        loading={isPending}
       />
     );
   };
@@ -290,6 +294,7 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
         icon={<config.icon className="h-4 w-4" />}
         onClick={run}
         disabled={!canExecute || isPending}
+        loading={isPending}
       />
     );
   };

@@ -185,6 +185,8 @@ interface HeaderOptions {
   addButtonUrl?: string;
   /** Additional custom header items (buttons, dropdowns, etc.). */
   Extra?: React.FC;
+  /** Query parameters that contribute to the page's filtered state. */
+  activeFilterParams?: string[];
   /** Optional add dialog opened by the standard Add button instead of navigating to an add route. */
   AddDialog?: React.FC<{ open: boolean; onOpenChange: (open: boolean) => void }>;
 }

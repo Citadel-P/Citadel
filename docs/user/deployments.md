@@ -135,6 +135,16 @@ Citadel checks periodically. When an updated digest is found:
 - Auto Deploy mode recreates the container with the updated image.
 - Failures emit deployment auto-deploy failure alerts when alert rules are configured.
 
+Use **Check for updates** on a deployed external image to query its registry
+immediately. This manual check records whether a newer digest is available but
+does not pull, redeploy, or alert. It remains available when periodic update
+behavior is disabled.
+
+On the Deployments page, use **Updates available** to show only deployments
+with a detected newer digest. This filter works with search, tags, and the
+Platform filter. Deployments that have not been checked or whose last check
+failed are not shown as having an available update.
+
 Use `Notify Only` for production deployments until the image tag and rollback process are proven. Use explicit version tags for predictable updates.
 
 ## Resources

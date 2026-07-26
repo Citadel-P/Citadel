@@ -36,7 +36,8 @@ export const RegularResourceView = <T,>({ Components, type }: RegularResourceVie
 
   const hasActiveUrlFilters =
     (headerCfg.showTagFilter && searchParams.getAll('tags').some((tag) => tag.trim().length > 0)) ||
-    (headerCfg.showPlatformFilter && Boolean(searchParams.get('platformId')?.trim()));
+    (headerCfg.showPlatformFilter && Boolean(searchParams.get('platformId')?.trim())) ||
+    (headerCfg.activeFilterParams?.some((parameter) => Boolean(searchParams.get(parameter)?.trim())) ?? false);
 
   const Content = Components.Content;
 

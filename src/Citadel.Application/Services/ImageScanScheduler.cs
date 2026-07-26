@@ -3,7 +3,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
-using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services;
@@ -15,8 +14,12 @@ internal interface IImageScanScheduler
     Task<IReadOnlyCollection<ManualStackImageCheck>> LoadManualStackChecksAsync(CancellationToken cancellationToken);
 }
 
-internal sealed class ImageScanScheduler(IServiceScopeFactory scopeFactory) : IImageScanScheduler
+internal sealed class ImageScanScheduler(
+    IServiceScopeFactory scopeFactory,
+    IImageCheckBuilder? imageCheckBuilder = null) : IImageScanScheduler
 {
+    private readonly IImageCheckBuilder imageCheckBuilder = imageCheckBuilder ?? new ImageCheckBuilder();
+
     public async Task<IReadOnlyCollection<ImageScanTask>> LoadScanTasksAsync(CancellationToken cancellationToken)
     {
         var deploymentChecks = await LoadDeploymentChecksAsync(cancellationToken);
@@ -26,18 +29,25 @@ internal sealed class ImageScanScheduler(IServiceScopeFactory scopeFactory) : II
 
         foreach (var check in deploymentChecks)
         {
-            if (!registriesById.TryGetValue(check.Key.RegistryId, out var registry) || registry.Status != RegistryStatus.Active)
+            if (!registriesById.TryGetValue(check.Key.RegistryId, out var registry))
                 continue;
 
-            scanTasks.TryAdd(check.Key, new ImageScanTask(check.Key, check.Deployment.PlatformId, registry));
+            var taskResult = imageCheckBuilder.BuildScanTask(check.Key, check.Deployment.PlatformId, registry);
+            if (taskResult.IsSuccess(out var task))
+                scanTasks.TryAdd(check.Key, task);
         }
 
         foreach (var check in stackChecks)
         {
-            if (!registriesById.TryGetValue(check.Key.RegistryId, out var registry) || registry.Status != RegistryStatus.Active)
+            if (!registriesById.TryGetValue(check.Key.RegistryId, out var registry))
                 continue;
 
-            scanTasks.TryAdd(check.Key, new ImageScanTask(check.Key, check.Stack.CurrentStackRelease!.PlatformId, registry));
+            var taskResult = imageCheckBuilder.BuildScanTask(
+                check.Key,
+                check.Stack.CurrentStackRelease!.PlatformId,
+                registry);
+            if (taskResult.IsSuccess(out var task))
+                scanTasks.TryAdd(check.Key, task);
         }
 
         return scanTasks.Values;
@@ -50,10 +60,9 @@ internal sealed class ImageScanScheduler(IServiceScopeFactory scopeFactory) : II
 
         foreach (var deployment in deployments)
         {
-            if (TryBuildDeploymentImageCheck(deployment, out var check) && check != null)
-            {
+            var result = imageCheckBuilder.BuildDeploymentCheck(deployment, ImageCheckMode.Scheduled);
+            if (result.IsSuccess(out var check))
                 checks.Add(check);
-            }
         }
 
         return checks;
@@ -66,7 +75,9 @@ internal sealed class ImageScanScheduler(IServiceScopeFactory scopeFactory) : II
 
         foreach (var stack in stacks)
         {
-            checks.AddRange(BuildManualStackImageChecks(stack));
+            var result = imageCheckBuilder.BuildManualStackChecks(stack, ImageCheckMode.Scheduled);
+            if (result.IsSuccess(out var stackChecks))
+                checks.AddRange(stackChecks);
         }
 
         return checks;
@@ -106,76 +117,4 @@ internal sealed class ImageScanScheduler(IServiceScopeFactory scopeFactory) : II
         return registries.ToDictionary(r => r.Id);
     }
 
-    private static bool TryBuildDeploymentImageCheck(Deployment deployment, out DeploymentImageCheck? check)
-    {
-        check = default;
-
-        if (deployment.Spec?.UpdateBehavior == UpdateBehavior.Disabled)
-            return false;
-
-        if (deployment.Spec?.Image is not ExternalImage deployedImage)
-            return false;
-
-        if (!Helpers.TrySplitImageTag(deployedImage.ImageTag, out var repository, out var tag))
-            return false;
-
-        check = new DeploymentImageCheck(
-            deployment,
-            deployedImage,
-            new ImageKey(deployedImage.RegistryId, repository, tag));
-
-        return true;
-    }
-
-    private static IEnumerable<ManualStackImageCheck> BuildManualStackImageChecks(Stack stack)
-    {
-        if (stack is { StackSource: not StackSource.WebEditor })
-            yield break;
-
-        if (stack.CurrentStackRelease is not { Spec: ManualStack manualStack })
-            yield break;
-
-        if (manualStack.UpdateBehavior == StackUpdateBehavior.Disabled)
-            yield break;
-
-        if (manualStack.RegistryId is not Guid registryId || registryId == Guid.Empty)
-            yield break;
-
-        if (stack.ControlState == ResourceControlState.Processing)
-            yield break;
-
-        if (stack.CurrentStackRelease.Status is not (StackReleaseStatus.Healthy or StackReleaseStatus.Degraded))
-            yield break;
-
-        foreach (var service in StackComposeParser.ParseServices(stack.Id, stack.CurrentStackReleaseId, manualStack.ComposeFile).Values)
-        {
-            if (string.IsNullOrWhiteSpace(service.Image))
-                continue;
-
-            if (!Helpers.TrySplitImageTag(service.Image, out var repository, out var tag))
-                continue;
-
-            yield return new ManualStackImageCheck(
-                stack,
-                service.ServiceName,
-                service.Image,
-                new ImageKey(registryId, repository, tag));
-        }
-    }
 }
-
-internal sealed record ImageScanTask(
-    ImageKey Key,
-    Guid PlatformId,
-    Registry Registry);
-
-internal sealed record DeploymentImageCheck(
-    Deployment Deployment,
-    ExternalImage DeployedImage,
-    ImageKey Key);
-
-internal sealed record ManualStackImageCheck(
-    Stack Stack,
-    string ServiceName,
-    string ImageName,
-    ImageKey Key);

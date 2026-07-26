@@ -53,6 +53,7 @@ export const ResourceHeader = ({
         {showSearch && <SearchField className="w-full sm:w-64" onSearch={onSearch} />}
         {showTagFilter && <ResourceTagFilter />}
         {showPlatformFilter && <ResourcePlatformFilter />}
+        {Extra && <Extra />}
         {showAdd && (
           <Button
             type="button"
@@ -62,7 +63,6 @@ export const ResourceHeader = ({
             <Plus className="h-3 w-3" /> {addButtonTitle ?? `Add ${type}`}
           </Button>
         )}
-        {Extra && <Extra />}
       </div>
     </div>
   );

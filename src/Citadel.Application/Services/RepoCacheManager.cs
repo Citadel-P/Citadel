@@ -17,6 +17,12 @@ internal interface IRepoCacheManager
     /// </summary>
     /// <returns>The resolved commit hash (SHA)</returns>
     Task<RepoSyncResult> SynchronizeAsync(GitRepository repo, GitAccount? account, string? branch = null, CancellationToken ct = default);
+    Task<RepoSyncResult> SynchronizeAsync(
+        GitRepository repo,
+        GitAccount? account,
+        string? branch,
+        RepoSyncOptions options,
+        CancellationToken ct = default);
     Task DeleteCacheAsync(GitRepository repo, CancellationToken ct = default);
     Task DeleteCacheAsync(string path, CancellationToken ct = default);
     string GetRemoteUrl(GitRepository repo, GitAccount? account);
@@ -26,7 +32,19 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
 {
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _repoLocks = new();
 
-    public async Task<RepoSyncResult> SynchronizeAsync(GitRepository repo, GitAccount? account, string? branch = null, CancellationToken ct = default)
+    public Task<RepoSyncResult> SynchronizeAsync(
+        GitRepository repo,
+        GitAccount? account,
+        string? branch = null,
+        CancellationToken ct = default)
+        => SynchronizeAsync(repo, account, branch, RepoSyncOptions.Default, ct);
+
+    public async Task<RepoSyncResult> SynchronizeAsync(
+        GitRepository repo,
+        GitAccount? account,
+        string? branch,
+        RepoSyncOptions options,
+        CancellationToken ct = default)
     {
         var semaphore = _repoLocks.GetOrAdd(repo.Id, _ => new SemaphoreSlim(1, 1));
         await semaphore.WaitAsync(ct);
@@ -62,10 +80,12 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
                     return new RepoSyncResult(Operation: operation, Error: error.Message);
             }
 
-            // Execute SystemMessage Hooks
-            var hookResult = await ExecuteHooksInternalAsync(repo, targetPath, operation, ct);
-            if (hookResult.IsFailure(out var hookError))
-                return new RepoSyncResult(Operation: operation, Error: hookError.Message);
+            if (options.ExecuteHooks)
+            {
+                var hookResult = await ExecuteHooksInternalAsync(repo, targetPath, operation, ct);
+                if (hookResult.IsFailure(out var hookError))
+                    return new RepoSyncResult(Operation: operation, Error: hookError.Message);
+            }
 
             // Resolve the SHA for the state tracker
             var hashResult = await gitCli.ResolveSnapshotCommitAsync(targetPath, syncBranch, ct);
@@ -178,6 +198,12 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
 
         return $"https://{account.Domain}/{repo.Url.TrimStart('/')}";
     }
+}
+
+internal sealed record RepoSyncOptions(bool ExecuteHooks = true)
+{
+    public static readonly RepoSyncOptions Default = new();
+    public static readonly RepoSyncOptions WithoutHooks = new(ExecuteHooks: false);
 }
 
 internal sealed record RepoSyncResult(
