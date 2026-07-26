@@ -37,6 +37,7 @@ running.
 npm run test:smoke            # Fast authentication, authorization, licensing, navigation, and tag checks
 npm run test:core-runtime     # Deploy, second release, UI rollback, and Docker-state verification
 npm run test:nightly-runtime  # Logs, Inspect, Terminal, and real SignalR reconnect coverage
+npm run test:oidc             # Real Keycloak redirect, refresh session, claim policy, and logout
 npm test                      # Run every Playwright test
 ```
 
@@ -44,6 +45,20 @@ The core runtime suite is a blocking CI check. The runtime lifecycle suite is
 initially scheduled nightly because it intentionally exercises a real network
 interruption. Both runtime suites create disposable resources whose names start
 with `e2e-runtime-` and remove them after each test.
+
+The OIDC suite requires the optional Keycloak profile. It uses a deterministic
+realm and empty browser storage rather than the local-login state:
+
+```powershell
+npm run env:down
+npm run env:oidc:up
+npm run test:oidc
+npm run env:oidc:down
+```
+
+The Playwright Chromium project maps the Keycloak issuer hostname to the
+profile's published port and uses `http://127.0.0.1:18000` for Citadel. Run
+`npm test` against `env:oidc:up` when executing every Playwright suite together.
 
 Other Playwright modes:
 

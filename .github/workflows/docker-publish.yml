@@ -875,8 +875,113 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  oidc:
+    needs: e2e-smoke
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CITADEL_E2E_BASE_URL: http://127.0.0.1:18000
+      COMPOSE_PROJECT_NAME: citadel-e2e-oidc-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Preload OIDC compatibility infrastructure
+        shell: bash
+        run: >-
+          bash .github/scripts/pull-images-with-retry.sh
+          testcontainers/ryuk:0.14.0
+          postgres:17.5-alpine
+          docker:27.5.1-dind
+          quay.io/keycloak/keycloak@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: test/Citadel.Tests.E2E/package-lock.json
+
+      - name: Download tested E2E candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-e2e-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test/Citadel.Tests.E2E/candidate-image
+
+      - name: Load tested E2E candidate
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: gzip -dc candidate-image/citadel-e2e-image.tar.gz | docker load
+
+      - name: Restore Keycloak acceptance tests
+        run: dotnet restore test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj
+
+      - name: Build Keycloak acceptance tests
+        run: dotnet build test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-restore -c Release
+
+      - name: Run Keycloak protocol compatibility
+        run: dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj --no-build -c Release -- -class Tests.Acceptance.Compatibility.KeycloakOidcCompatibilityTests
+
+      - name: Install E2E dependencies
+        working-directory: test/Citadel.Tests.E2E
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: test/Citadel.Tests.E2E
+        run: npx playwright install --with-deps chromium
+
+      - name: Start isolated OIDC environment
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml --profile oidc up -d --wait
+
+      - name: Run Keycloak browser compatibility
+        working-directory: test/Citadel.Tests.E2E
+        run: npm run test:oidc
+
+      - name: Collect OIDC compatibility diagnostics
+        if: failure()
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          docker compose -f compose.yml --profile oidc ps --all > artifacts/compose-ps.txt
+          docker compose -f compose.yml --profile oidc logs --no-color > artifacts/compose.log
+
+      - name: Tear down isolated OIDC environment
+        if: always()
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml --profile oidc down --volumes --remove-orphans
+
+      - name: Upload OIDC compatibility diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oidc-keycloak-${{ github.run_attempt }}
+          path: |
+            test/Citadel.Tests.E2E/artifacts
+            test/Citadel.Tests.E2E/playwright-report
+            test/Citadel.Tests.E2E/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
   publish:
-    needs: [version, frontend, build, e2e-smoke, core-runtime, upgrade-baseline, control-plane-recovery, edge-agent-recovery, git-webhook, edge-agent-compatibility, backups-s3]
+    needs: [version, frontend, build, e2e-smoke, core-runtime, upgrade-baseline, control-plane-recovery, edge-agent-recovery, git-webhook, edge-agent-compatibility, backups-s3, oidc]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 35

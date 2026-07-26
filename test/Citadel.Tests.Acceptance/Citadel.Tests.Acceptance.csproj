@@ -20,6 +20,9 @@
              CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures\Upgrades\pre-release-1.0.0-seed.sql"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Citadel.Tests.E2E\fixtures\keycloak\citadel-e2e-realm.json"
+             Link="Fixtures\Keycloak\citadel-e2e-realm.json"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

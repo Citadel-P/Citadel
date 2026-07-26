@@ -62,6 +62,35 @@ services:
     networks:
       - citadel-e2e
 
+  keycloak:
+    profiles: ['oidc']
+    image: quay.io/keycloak/keycloak@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13
+    command:
+      - start-dev
+      - --import-realm
+      - --http-port=18080
+      - --hostname=http://keycloak:18080
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: citadel-e2e-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: citadel-e2e-admin-password
+      KC_HEALTH_ENABLED: 'true'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+    ports:
+      - '18080:18080'
+    volumes:
+      - ./fixtures/keycloak/citadel-e2e-realm.json:/opt/keycloak/data/import/citadel-e2e-realm.json:ro
+    networks:
+      - citadel-e2e
+
 networks:
   citadel-e2e:
     name: ${COMPOSE_PROJECT_NAME:-citadel-e2e}-network

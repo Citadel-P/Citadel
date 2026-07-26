@@ -1287,6 +1287,25 @@ The selected browser test for configuring a repository and starting or
 inspecting a run remains a separate user-facing slice; integrity and storage
 isolation stay owned by this .NET acceptance suite.
 
+Current Keycloak compatibility implementation:
+
+- `fixtures/keycloak/citadel-e2e-realm.json` defines a deterministic realm,
+  confidential PKCE client, verified auto-link user, missing-claim user, and
+  disabled user.
+- `Compatibility/KeycloakOidcCompatibilityTests.cs` starts Keycloak by
+  immutable image digest and a real candidate Core process. It verifies
+  discovery, authorization-code login startup with PKCE, client-secret
+  isolation, and disabled-provider rejection.
+- `tests/compatibility/oidc.spec.ts` performs the selected real-browser journey
+  without local-login storage state. It verifies email auto-linking, the normal
+  Citadel refresh cookie, authenticated reload, required-claim rejection, and
+  logout followed by an unauthenticated reload.
+- `.github/workflows/docker-publish.yml` runs the `oidc` job on schedule, on
+  demand, and before stable publication. The browser journey uses the exact
+  candidate image exported by `e2e-smoke`.
+- The Compose Keycloak profile and the .NET fixture share one realm import and
+  one pinned image digest so protocol and browser scenarios cannot drift.
+
 ### Slice 6: Release Gate And Extended Quality
 
 1. Add nightly matrix execution.

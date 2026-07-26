@@ -44,6 +44,59 @@ export type RestrictedPersona = {
   password: string;
 };
 
+export type OidcProviderFixture = {
+  id: string;
+  displayName: string;
+};
+
+export const createOidcProvider = async (
+  request: APIRequestContext,
+  prefix: string,
+): Promise<OidcProviderFixture> => {
+  const accessToken = await getAdminAccessToken(request);
+  const displayName = 'Keycloak E2E';
+  const issuer = process.env.CITADEL_E2E_OIDC_ISSUER ?? 'http://keycloak:18080/realms/citadel-e2e';
+  const response = await request.post('/api/v1/oidcProviders', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: {
+      name: prefix,
+      description: 'Disposable Keycloak browser-test provider',
+      displayName,
+      issuer,
+      clientId: 'citadel-e2e',
+      clientSecret: 'citadel-e2e-client-secret',
+      scopes: 'openid profile email',
+      enabled: true,
+      autoProvisionUsers: false,
+      allowEmailAutoLink: true,
+      requireEmailVerified: true,
+      allowedEmailDomains: null,
+      requiredClaimName: 'citadel_access',
+      requiredClaimValues: 'allowed',
+      defaultRoleId: null,
+    },
+  });
+  if (!response.ok()) {
+    throw new Error(`Unable to create Keycloak E2E provider: HTTP ${response.status()} ${await response.text()}`);
+  }
+
+  const provider = (await response.json()) as { id: string };
+  return { id: provider.id, displayName };
+};
+
+export const deleteOidcProvider = async (
+  request: APIRequestContext,
+  provider: OidcProviderFixture,
+) => {
+  const accessToken = await getAdminAccessToken(request);
+  const response = await request.delete(`/api/v1/oidcProviders/${provider.id}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok() && response.status() !== 404) {
+    throw new Error(`Unable to delete Keycloak E2E provider: HTTP ${response.status()}`);
+  }
+};
+
 export const createRestrictedPersona = async (
   request: APIRequestContext,
   prefix: string,

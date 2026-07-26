@@ -38,6 +38,13 @@ credentials and missing buckets, backs up known volume bytes, restores a
 selected snapshot, compares byte count and SHA-256, applies retention and
 pruning, and verifies that an object outside the repository prefix survives.
 
+The Keycloak compatibility suite starts a pinned Keycloak image with a
+deterministic realm import and a real candidate Core process. It verifies
+discovery metadata, authorization-code login startup with PKCE, absence of the
+client secret from the browser redirect, and rejection of a disabled provider.
+The selected real-browser login, refresh, policy-rejection, and logout journey
+lives in `Citadel.Tests.E2E`.
+
 ## Prerequisites
 
 - Docker Desktop or another Docker Engine
@@ -116,6 +123,12 @@ Run only the Forgejo Git and webhook compatibility suite:
 
 ```powershell
 dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.ForgejoGitWebhookTests
+```
+
+Run only the Keycloak OIDC protocol compatibility suite:
+
+```powershell
+dotnet run --project test/Citadel.Tests.Acceptance/Citadel.Tests.Acceptance.csproj -c Release -- -class Tests.Acceptance.Compatibility.KeycloakOidcCompatibilityTests
 ```
 
 Run the real Core image and RustFS backup compatibility suite:

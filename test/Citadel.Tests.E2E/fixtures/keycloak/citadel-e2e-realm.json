@@ -1,0 +1,117 @@
+{
+  "realm": "citadel-e2e",
+  "displayName": "Citadel E2E",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "clients": [
+    {
+      "clientId": "citadel-e2e",
+      "name": "Citadel E2E",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "citadel-e2e-client-secret",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "consentRequired": false,
+      "redirectUris": [
+        "http://127.0.0.1:18000/api/v1/authentication/oidc/*"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:18000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ],
+      "protocolMappers": [
+        {
+          "name": "Citadel access",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "citadel_access",
+            "claim.name": "citadel_access",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "oidc-admin",
+      "firstName": "OIDC",
+      "lastName": "Administrator",
+      "email": "admin@citadel.local",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "citadel_access": [
+          "allowed"
+        ]
+      },
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "KeycloakE2E123!",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "oidc-missing-claim",
+      "firstName": "Missing",
+      "lastName": "Claim",
+      "email": "oidc-missing-claim@citadel.local",
+      "emailVerified": true,
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "KeycloakE2E123!",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "oidc-disabled",
+      "firstName": "Disabled",
+      "lastName": "User",
+      "email": "oidc-disabled@citadel.local",
+      "emailVerified": true,
+      "enabled": false,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "KeycloakE2E123!",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
