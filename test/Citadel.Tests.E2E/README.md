@@ -37,6 +37,7 @@ running.
 npm run test:smoke            # Fast authentication, authorization, licensing, navigation, and tag checks
 npm run test:core-runtime     # Deploy, second release, UI rollback, and Docker-state verification
 npm run test:nightly-runtime  # Logs, Inspect, Terminal, and real SignalR reconnect coverage
+npm run test:visual           # Chromium desktop and mobile visual regression coverage
 npm run test:oidc             # Real Keycloak redirect, refresh session, claim policy, and logout
 npm run test:vault            # Vault provider connection, save, and stored-token preservation
 npm test                      # Run every Playwright test
@@ -46,6 +47,18 @@ The core runtime suite is a blocking CI check. The runtime lifecycle suite is
 initially scheduled nightly because it intentionally exercises a real network
 interruption. Both runtime suites create disposable resources whose names start
 with `e2e-runtime-` and remove them after each test.
+
+The visual suite covers the authenticated shell and resource table, collapsed
+desktop sidebar, Stack FormBuilder, global search results, and a completed task
+sheet. Baselines live beside the visual test and are reviewed like code. To
+accept an intentional visual change:
+
+```powershell
+npm run test:visual:update
+```
+
+Run the visual suite with the same Playwright version and operating system used
+by CI before committing updated baselines. CI uses Ubuntu and Chromium.
 
 The OIDC suite requires the optional Keycloak profile. It uses a deterministic
 realm and empty browser storage rather than the local-login state:
@@ -91,3 +104,11 @@ npm run env:down
 Use a unique `COMPOSE_PROJECT_NAME` when running multiple environments. The
 generated `.auth` directory contains cookies and must never be committed or
 uploaded as an artifact.
+
+If port `18000` is already in use, set both the published port and Playwright
+base URL before starting the environment:
+
+```powershell
+$env:CITADEL_E2E_PORT = "18001"
+$env:CITADEL_E2E_BASE_URL = "http://127.0.0.1:18001"
+```

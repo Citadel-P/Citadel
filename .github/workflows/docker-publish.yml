@@ -388,6 +388,84 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  visual-regression:
+    name: Browser / visual regression
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    needs: e2e-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      CITADEL_E2E_BASE_URL: http://127.0.0.1:18000
+      COMPOSE_PROJECT_NAME: citadel-e2e-visual-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download tested E2E candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-e2e-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test/Citadel.Tests.E2E/candidate-image
+
+      - name: Load tested E2E candidate
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: gzip -dc candidate-image/citadel-e2e-image.tar.gz | docker load
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: test/Citadel.Tests.E2E/package-lock.json
+
+      - name: Install E2E dependencies
+        working-directory: test/Citadel.Tests.E2E
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: test/Citadel.Tests.E2E
+        run: npx playwright install --with-deps chromium
+
+      - name: Start isolated visual environment
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml up -d --wait
+
+      - name: Run visual regression tests
+        working-directory: test/Citadel.Tests.E2E
+        run: npm run test:visual
+
+      - name: Collect visual regression diagnostics
+        if: failure()
+        working-directory: test/Citadel.Tests.E2E
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          docker compose -f compose.yml ps --all > artifacts/compose-ps.txt
+          docker compose -f compose.yml logs --no-color > artifacts/compose.log
+
+      - name: Tear down isolated visual environment
+        if: always()
+        working-directory: test/Citadel.Tests.E2E
+        run: docker compose -f compose.yml down --volumes --remove-orphans
+
+      - name: Upload visual regression diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-visual-regression-${{ github.run_attempt }}
+          path: |
+            test/Citadel.Tests.E2E/artifacts
+            test/Citadel.Tests.E2E/playwright-report
+            test/Citadel.Tests.E2E/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30

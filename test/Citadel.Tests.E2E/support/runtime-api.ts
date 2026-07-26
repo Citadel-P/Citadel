@@ -127,10 +127,12 @@ export const cleanupStaleRuntimeFixtures = async (request: APIRequestContext) =>
 
 export const createRuntimeFixture = async (
   request: APIRequestContext,
+  fixedSuffix?: string,
+  connectorType: 'Local' | 'EdgeAgent' = 'Local',
 ): Promise<RuntimeFixture> => {
   await cleanupStaleRuntimeFixtures(request);
 
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const suffix = fixedSuffix ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const name = `${runtimePrefix}${suffix}`;
   const projectName = name.replace(/[^a-z0-9_-]/g, '-');
   const headers = await authorizationHeaders(request);
@@ -142,7 +144,7 @@ export const createRuntimeFixture = async (
       address: null,
       description: 'Disposable Playwright runtime platform',
       type: 'Docker',
-      connectorType: 'Local',
+      connectorType,
       tagIds: [],
     },
   });

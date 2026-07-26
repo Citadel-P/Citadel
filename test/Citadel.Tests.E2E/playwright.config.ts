@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
 const baseURL = process.env.CITADEL_E2E_BASE_URL ?? 'http://127.0.0.1:18000';
+const visualTests = /[\\/]visual[\\/]/;
 
 export default defineConfig({
   testDir: path.join(rootDirectory, 'tests'),
@@ -16,6 +17,12 @@ export default defineConfig({
   timeout: 30_000,
   expect: {
     timeout: 10_000,
+    toHaveScreenshot: {
+      animations: 'disabled',
+      caret: 'hide',
+      maxDiffPixelRatio: 0.005,
+      scale: 'css',
+    },
   },
   reporter: [
     ['list'],
@@ -32,11 +39,29 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: visualTests,
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: {
           args: ['--host-resolver-rules=MAP keycloak 127.0.0.1'],
         },
+      },
+    },
+    {
+      name: 'visual-desktop',
+      testMatch: visualTests,
+      use: {
+        ...devices['Desktop Chrome'],
+        colorScheme: 'light',
+        viewport: { width: 1440, height: 900 },
+      },
+    },
+    {
+      name: 'visual-mobile',
+      testMatch: visualTests,
+      use: {
+        ...devices['Pixel 7'],
+        colorScheme: 'light',
       },
     },
   ],

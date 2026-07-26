@@ -55,7 +55,7 @@ services:
       retries: 60
       start_period: 5s
     ports:
-      - '18000:8000'
+      - '${CITADEL_E2E_PORT:-18000}:8000'
     volumes:
       - citadel-data:/app/data
       - docker-socket:/var/run

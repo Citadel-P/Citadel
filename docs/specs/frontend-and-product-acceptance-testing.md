@@ -336,9 +336,10 @@ defined in section 17.6.
 
 ## 11. Playwright Configuration
 
-The first Playwright implementation must use Chromium only in pull requests.
-Firefox may run on a weekly schedule after the Chromium suite is stable.
-WebKit is deferred unless Citadel declares Safari support.
+The MVP Playwright implementation uses Chromium. Citadel officially supports
+current Chrome and Edge desktop releases for the MVP. Additional browser
+engines are deferred until customer demand or product telemetry justifies an
+expanded support commitment.
 
 Configure:
 
@@ -562,7 +563,6 @@ request:
 - Logs, Inspect, Terminal, and Logs tab lifecycle against real Docker;
 - real SignalR disconnect, reconnect, group rejoin, and visible update;
 - visual regression;
-- Firefox coverage;
 - full external-service browser journeys.
 
 Vitest and backend integration tests still cover tab lifecycle, SignalR cache
@@ -948,8 +948,8 @@ Run the single stack deploy, second release, and rollback journey against the
 isolated Docker daemon.
 
 All five jobs block merge. The first implementation does not make the extended
-logs/terminal lifecycle, browser SignalR reconnect, visual, Firefox, or
-external-service browser suites pull-request blocking.
+logs/terminal lifecycle, browser SignalR reconnect, visual, or external-service
+browser suites pull-request blocking.
 
 Track these initial feedback objectives:
 
@@ -979,7 +979,7 @@ Run a scheduled and manually dispatchable matrix:
 | `scheduler-webhook` | deterministic clock, restart, duplicate, and replay |
 | `licensing` | capability boundaries, transitions, downgrade, and legacy-license compatibility |
 | `authorization` | API, lookup, search, SignalR group, and recipient matrix |
-| `browser-extended` | selected visual, accessibility, and Firefox tests |
+| `browser-extended` | selected visual and accessibility tests |
 
 Matrix jobs must be independent so one service failure does not hide results
 from other suites.
@@ -1342,18 +1342,16 @@ Current nightly matrix implementation:
   scheduled and manually dispatched workflows.
 - Matrix fail-fast is disabled. Every cohort receives its own result and
   failure artifact so one broken risk area does not hide the others.
-- `nightly-runtime` is also scheduled and manually dispatchable. It remains
-  Chromium-only until the later Firefox slice, and visual and accessibility
-  coverage remain separate later slices.
+- `nightly-runtime` is also scheduled and manually dispatchable. Visual and
+  accessibility coverage remain separate Chromium-based slices.
 
 ### Slice 6: Release Gate And Extended Quality
 
 1. Add nightly matrix execution. (Implemented)
-2. Add selected visual regression tests.
+2. Add selected visual regression tests. (Implemented)
 3. Add focused accessibility tests.
-4. Add Firefox nightly coverage.
-5. Promote only acceptance-tested release digests.
-6. Add focused coverage thresholds after measuring the baseline.
+4. Promote only acceptance-tested release digests.
+5. Add focused coverage thresholds after measuring the baseline.
 
 ## 27. Acceptance Criteria
 
