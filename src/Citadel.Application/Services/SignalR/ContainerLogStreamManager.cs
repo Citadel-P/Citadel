@@ -33,11 +33,10 @@ internal sealed class ContainerLogStreamManager(
 
         // Start stream orchestration explicitly. Do not treat Start as a subscriber
         // registration. Start should only start the producer/consumer and watcher.
-        if (!context.TryStart())
+        if (!context.TryStartStream(resources => StreamLogsAsync(resources, normalized)))
             return;
 
-        context.StreamTask = StreamLogsAsync(context, normalized);
-        context.EventWatcherTask ??= WatchContainerEvents(context, normalized);
+        context.EnsureWatcher(token => WatchContainerEvents(context, normalized, token));
     }
 
     protected override void OnSubscriberAdded(string groupId, string connectionId)
@@ -64,52 +63,56 @@ internal sealed class ContainerLogStreamManager(
         }
     }
 
-    private async Task StreamLogsAsync(LogStreamContext ctx, string containerId)
+    private async Task StreamLogsAsync(LogStreamResources resources, string containerId)
     {
-        var token = ctx.Cancellation.Token;
+        var token = resources.CancellationToken;
 
         if (!platformContainerCache.TryGetPlatformWithContainer(containerId, out var platform))
             return;
 
-        var channel = ctx.LogChannel;
+        var channel = resources.Channel;
 
         try
         {
             var request = new StreamContainerLogsCommand(platform.Address, containerId);
             var connector = connectorFactory.GetConnector(platform.ConnectorType);
 
-            _ = BroadcastBatchesAsync(channel.Reader, containerId, token);
-
-            await foreach (var data in connector.StreamLogsAsync(request, token))
-            {
-                ctx.AddToBuffer(data.Span);
-                ctx.AddToBuffer("\n"u8);
-
-                var rented = ArrayPool<byte>.Shared.Rent(data.Length);
-
-                try
-                {
-                    data.Span.CopyTo(rented);
-                    var pooled = new PooledBuffer(rented, data.Length);
-
-                    // backpressure
-                    await channel.Writer.WriteAsync(pooled, token);
-                }
-                catch
-                {
-                    ArrayPool<byte>.Shared.Return(rented);
-                    throw;
-                }
-            }
+            await LogStreamPipeline.RunAsync(
+                channel,
+                pipelineToken => ProduceLogsAsync(resources, connector, request, channel.Writer, pipelineToken),
+                pipelineToken => BroadcastBatchesAsync(channel.Reader, containerId, pipelineToken),
+                token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error while polling logs for {ContainerId}", containerId);
         }
-        finally
+    }
+
+    private static async Task ProduceLogsAsync(
+        LogStreamResources resources,
+        IContainerConnector connector,
+        StreamContainerLogsCommand request,
+        ChannelWriter<PooledBuffer> writer,
+        CancellationToken token)
+    {
+        await foreach (var data in connector.StreamLogsAsync(request, token))
         {
-            channel.Writer.TryComplete();
+            resources.AddToBuffer(data.Span);
+            resources.AddToBuffer("\n"u8);
+
+            var pooled = new PooledBuffer(ArrayPool<byte>.Shared.Rent(data.Length), data.Length);
+            try
+            {
+                data.Span.CopyTo(pooled.Buffer);
+                await writer.WriteAsync(pooled, token);
+            }
+            catch
+            {
+                pooled.Dispose();
+                throw;
+            }
         }
     }
 
@@ -128,33 +131,31 @@ internal sealed class ContainerLogStreamManager(
             {
                 while (reader.TryRead(out var item))
                 {
-                    var len = item.Length;
-
-                    if (len > BatchSize)
+                    using (item)
                     {
-                        await dispatcher.SendContainerLogs(
-                            containerId,
-                            item.Buffer.AsMemory(0, len));
+                        var len = item.Length;
 
-                        item.Dispose();
-                        continue;
+                        if (len >= BatchSize)
+                        {
+                            await dispatcher.SendContainerLogs(
+                                containerId,
+                                item.Buffer.AsMemory(0, len));
+                            continue;
+                        }
+
+                        if (offset + len + 1 > BatchSize)
+                        {
+                            await dispatcher.SendContainerLogs(
+                                containerId,
+                                batch.AsMemory(0, offset));
+
+                            offset = 0;
+                        }
+
+                        item.Buffer.AsSpan(0, len).CopyTo(batch.AsSpan(offset));
+                        offset += len;
+                        batch[offset++] = (byte)'\n';
                     }
-
-                    if (offset + len > BatchSize)
-                    {
-                        await dispatcher.SendContainerLogs(
-                            containerId,
-                            batch.AsMemory(0, offset));
-
-                        offset = 0;
-                    }
-
-                    item.Buffer.AsSpan(0, len).CopyTo(batch.AsSpan(offset));
-                    offset += len;
-
-                    batch[offset++] = (byte)'\n';
-
-                    item.Dispose();
                 }
 
                 // flush remaining
@@ -165,22 +166,19 @@ internal sealed class ContainerLogStreamManager(
                 }
             }
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error while broadcasting logs for {ContainerId}", containerId);
-        }
         finally
         {
             ArrayPool<byte>.Shared.Return(batch);
         }
     }
 
-    private async Task WatchContainerEvents(LogStreamContext context, string containerId)
+    private async Task WatchContainerEvents(
+        LogStreamContext context,
+        string containerId,
+        CancellationToken token)
     {
         // IMPORTANT: per-context reader to avoid event loss
         var reader = containerEventBroadcaster.AddSubscriber();
-        var token = context.WatcherCts.Token;
 
         try
         {
@@ -193,10 +191,7 @@ internal sealed class ContainerLogStreamManager(
                 {
                     // Stop current producer/consumer and create fresh ones
                     context.Reset();
-                    if (context.TryStart())
-                    {
-                        _ = StreamLogsAsync(context, containerId);
-                    }
+                    context.TryStartStream(resources => StreamLogsAsync(resources, containerId));
                 }
             }
         }

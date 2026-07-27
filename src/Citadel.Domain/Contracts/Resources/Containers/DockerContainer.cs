@@ -23,4 +23,5 @@ public record struct DockerContainerStat(
     double? CpuUsage, 
     double? MemoryLimit, 
     double? RxBytes, 
-    double? TxBytes);
+    double? TxBytes,
+    long? Created = null);

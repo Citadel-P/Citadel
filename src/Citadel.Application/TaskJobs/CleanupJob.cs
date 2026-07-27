@@ -29,16 +29,13 @@ internal class CleanupJob(
         {
             try
             {
-                await using var scope = scopeFactory.CreateAsyncScope();
-                // Remove old stats
-                var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
                 var thresholdDate = DateTimeOffset.UtcNow.AddDays(-stats_purgeDays);
                 var thresholdEpochSeconds = thresholdDate.ToUnixTimeSeconds();
+                var countStats = await PurgeStatsInBatchesAsync(thresholdEpochSeconds, cancellationToken);
 
-                var countStats = await uow.ContainerStats.RemoveOlderThanAsync(thresholdEpochSeconds, cancellationToken);
-                countStats += await uow.PlatformStats.RemoveOlderThanAsync(thresholdEpochSeconds, cancellationToken);
-                
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
                 // Remove old activities
                 thresholdDate = DateTimeOffset.UtcNow.AddDays(-activities_purgeDays);
                 thresholdEpochSeconds = thresholdDate.ToUnixTimeSeconds();
@@ -80,5 +77,32 @@ internal class CleanupJob(
                 await Task.Delay(TimeSpan.FromHours(checkIntervalInHours), cancellationToken);
             }
         }
+    }
+
+    private async Task<int> PurgeStatsInBatchesAsync(
+        long thresholdEpochSeconds,
+        CancellationToken cancellationToken)
+    {
+        const int batchSize = 5000;
+        var totalCount = 0;
+        int containerCount;
+        int platformCount;
+
+        do
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            containerCount = await uow.ContainerStats.RemoveOlderThanAsync(
+                thresholdEpochSeconds,
+                cancellationToken);
+            platformCount = await uow.PlatformStats.RemoveOlderThanAsync(
+                thresholdEpochSeconds,
+                cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+            totalCount += containerCount + platformCount;
+        }
+        while (containerCount == batchSize || platformCount == batchSize);
+
+        return totalCount;
     }
 }

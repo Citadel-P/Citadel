@@ -27,110 +27,160 @@ internal sealed class DockerDaemonEventJob(
     IDeploymentStreamManager deploymentHub,
     IDbWorkQueue dbWorkQueue) : BackgroundService
 {
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
+    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(10);
+    private readonly ConcurrentDictionary<string, DaemonMonitorRegistration> runningStreams = new();
     private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.AddSubscriber();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await foreach (var platform in platformHealthReader.ReadAllAsync(cancellationToken))
+        try
         {
-            if (platform.IsOnLine)
+            await foreach (var platform in platformHealthReader.ReadAllAsync(cancellationToken))
             {
-                StartMonitoringPlatform(platform, cancellationToken);
+                if (platform.IsOnLine)
+                    StartMonitoringPlatform(platform, cancellationToken);
+                else
+                    StopMonitoringPlatform(platform.Address);
             }
-            else
-            {
-                StopMonitoringPlatform(platform.Address);
-            }
+        }
+        finally
+        {
+            platformHealthBroadCaster.RemoveSubscriber(platformHealthReader);
+            var registrations = runningStreams.Values.ToArray();
+            foreach (var registration in registrations)
+                StopMonitoringPlatform(registration.Address);
+
+            await Task.WhenAll(registrations.Select(static registration => registration.Task));
         }
     }
 
     public void StartMonitoringPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
-        if (runningStreams.ContainsKey(platform.Address))
+        var registration = new DaemonMonitorRegistration(
+            platform.Address,
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken));
+        if (!runningStreams.TryAdd(platform.Address, registration))
         {
+            registration.Dispose();
             logger.LogWarning("Monitoring daemon events for {Address} is already running.", platform.Address);
             return;
         }
 
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        runningStreams[platform.Address] = cts;
-
-        _ = MonitorStream(platform, cts.Token);
+        registration.Task = MonitorStreamOwnedAsync(platform, registration);
     }
 
     public void StopMonitoringPlatform(string address)
     {
-        if (runningStreams.TryRemove(address, out var cts))
+        if (runningStreams.TryRemove(address, out var registration))
         {
             logger.LogInformation("Aborting monitoring daemon events for {Address}", address);
-            cts.Cancel();
+            registration.Cancel();
         }
     }
 
-    private async Task MonitorStream(PlatformHealth platform, CancellationToken cancellationToken)
+    private async Task MonitorStreamOwnedAsync(
+        PlatformHealth platform,
+        DaemonMonitorRegistration registration)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        var cancellationToken = registration.Token;
+        try
         {
-            try
+            while (!cancellationToken.IsCancellationRequested)
             {
-                var command = new StreamDaemonEventCommand(platform.Address);
-
-                await foreach (var reply in connectorFactory
-                               .GetConnector(platform.Type)
-                               .StreamDaemonEventAsync(command, cancellationToken))
+                try
                 {
-                    if (reply is DaemonContainerEventInfo containerEvent)
+                    var command = new StreamDaemonEventCommand(platform.Address);
+
+                    await foreach (var reply in connectorFactory
+                                   .GetConnector(platform.Type)
+                                   .StreamDaemonEventAsync(command, cancellationToken))
                     {
-                        switch (reply.Action)
+                        if (reply is DaemonContainerEventInfo containerEvent)
                         {
-                            case "create":
-                                await OnContainerCreated(containerEvent, platform.Id, cancellationToken);
-                                break;
-                            case "destroy":
-                                await OnContainerDestroyed(containerEvent, platform.Id, cancellationToken);
-                                break;
-                            default:
-                                await OnContainerUpdated(containerEvent, cancellationToken);
-                                break;
+                            switch (reply.Action)
+                            {
+                                case "create":
+                                    await OnContainerCreated(containerEvent, platform.Id, cancellationToken);
+                                    break;
+                                case "destroy":
+                                    await OnContainerDestroyed(containerEvent, platform.Id, cancellationToken);
+                                    break;
+                                default:
+                                    await OnContainerUpdated(containerEvent, cancellationToken);
+                                    break;
+                            }
+                        }
+                        else if (reply is DaemonImageEventInfo imageEvent)
+                        {
+                            switch (reply.Action)
+                            {
+                                case "create":
+                                case "pull":
+                                    await OnImageCreated(imageEvent, platform.Id, cancellationToken);
+                                    break;
+                                case "delete":
+                                    await OnImageDeleted(imageEvent, platform.Id, cancellationToken);
+                                    break;
+
+                                default: break;
+                            }
+                        }
+                        else if (reply is DaemonVolumeEventInfo volumeEvent)
+                        {
+                            await OnVolumeEvent(volumeEvent, platform.Id, cancellationToken);
+                        }
+                        else if (reply is DaemonNetworkEventInfo networkEvent)
+                        {
+                            await OnNetworkEvent(networkEvent, platform.Id, cancellationToken);
                         }
                     }
-                    else if (reply is DaemonImageEventInfo imageEvent)
-                    {
-                        switch (reply.Action)
-                        {
-                            case "create":
-                            case "pull":
-                                await OnImageCreated(imageEvent, platform.Id, cancellationToken);
-                                break;
-                            case "delete":
-                                await OnImageDeleted(imageEvent, platform.Id, cancellationToken);
-                                break;
-                            
-                            default: break;
-                        }
-                    }
-                    else if (reply is DaemonVolumeEventInfo volumeEvent)
-                    {
-                        await OnVolumeEvent(volumeEvent, platform.Id, cancellationToken);
-                    }
-                    else if (reply is DaemonNetworkEventInfo networkEvent)
-                    {
-                        await OnNetworkEvent(networkEvent, platform.Id, cancellationToken);
-                    }
+
+                    logger.LogWarning(
+                        "Daemon event stream for {Address} completed; retrying in {Delay}.",
+                        platform.Address,
+                        ReconnectDelay);
                 }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // normal shutdown
-                break;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error while monitoring {Address}, retrying in 10s...", platform.Address);
-                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Error while monitoring {Address}, retrying in {Delay}.",
+                        platform.Address,
+                        ReconnectDelay);
+                }
+
+                await Task.Delay(ReconnectDelay, cancellationToken);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        finally
+        {
+            if (runningStreams.TryGetValue(platform.Address, out var current)
+                && ReferenceEquals(current, registration))
+            {
+                runningStreams.TryRemove(platform.Address, out _);
+            }
+
+            registration.Dispose();
+        }
+    }
+
+    private sealed class DaemonMonitorRegistration(string address, CancellationTokenSource cancellation) : IDisposable
+    {
+        public string Address { get; } = address;
+        public CancellationToken Token => cancellation.Token;
+        public Task Task { get; set; } = Task.CompletedTask;
+
+        public void Cancel()
+        {
+            try { cancellation.Cancel(); } catch { }
+        }
+
+        public void Dispose() => cancellation.Dispose();
     }
 
     private ValueTask OnContainerCreated(DaemonContainerEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)

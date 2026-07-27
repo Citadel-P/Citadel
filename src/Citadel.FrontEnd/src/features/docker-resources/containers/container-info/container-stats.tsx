@@ -1,6 +1,7 @@
 import { ContainerStateStatus, ContainerStatView, ContainerDataView } from '@/api/generated/api.types';
 import { StatsWindowHours, StatsWindowSelect } from '@/components/custom/common';
 import { useRead } from '@/lib/hooks';
+import { appendBoundedLiveStat, mergeStatsByCreated, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import MemoryUsage from './stats/memory-usage';
 import CpuUsage from './stats/cpu-usage';
@@ -74,7 +75,12 @@ const useLiveStats = (resource: ContainerDataView | undefined) => {
 
     if (isRunning && stat && stat !== lastStatRef.current) {
       lastStatRef.current = stat;
-      setLiveStats((prev) => [...prev, { ...stat, created: Math.floor(Date.now() / 1000) }]);
+      setLiveStats((prev) =>
+        appendBoundedLiveStat(prev, {
+          ...stat,
+          created: Number(stat.created) > 0 ? stat.created : Math.floor(Date.now() / 1000),
+        }),
+      );
     }
   }, [resource?.containerStat, resource?.state]);
 
@@ -82,15 +88,12 @@ const useLiveStats = (resource: ContainerDataView | undefined) => {
 };
 
 const useCombinedStats = (baseStats: ContainerStatView[], liveStats: ContainerStatView[]) =>
-  useMemo(() => {
-    const base = baseStats ?? [];
-    return [...base, ...liveStats].sort((a, b) => Number(a.created) - Number(b.created));
-  }, [baseStats, liveStats]);
+  useMemo(() => mergeStatsByCreated(baseStats ?? [], liveStats), [baseStats, liveStats]);
 
 const useContainerStatsWindow = (containerId: string | undefined): StatsQueryState => {
   const [windowHours, setWindowHours] = useState<StatsWindowHours>(24);
   const readArgs = useMemo(() => ({ id: containerId, query: { hours: windowHours } }), [containerId, windowHours]);
-  const { data, isLoading } = useRead('getContainerStats', readArgs);
+  const { data, isLoading } = useRead('getContainerStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
 
   return {
     baseStats: data?.data?.stats ?? [],
@@ -103,7 +106,7 @@ const useContainerStatsWindow = (containerId: string | undefined): StatsQuerySta
 const useDeploymentStatsWindow = (deploymentId: string): StatsQueryState => {
   const [windowHours, setWindowHours] = useState<StatsWindowHours>(24);
   const readArgs = useMemo(() => ({ id: deploymentId, query: { hours: windowHours } }), [deploymentId, windowHours]);
-  const { data, isLoading } = useRead('getDeploymentStats', readArgs);
+  const { data, isLoading } = useRead('getDeploymentStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
 
   return {
     baseStats: data?.data?.stats ?? [],

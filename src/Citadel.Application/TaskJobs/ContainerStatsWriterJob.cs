@@ -1,4 +1,5 @@
 ﻿using Application.Configs;
+using Application.Services;
 using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
@@ -15,6 +16,7 @@ internal sealed class ContainerStatsWriterJob(
     INotificationQueue notificationQueue,
     ChannelReader<ContainersStatBatch> reader,
     IPlatformContainerCache platformContainerCache,
+    IContainerStatsBroadcaster statsBroadcaster,
     IContainerStreamManager containersStreamManager,
     ILogger<ContainerStatsWriterJob> logger) : BackgroundService
 {
@@ -29,15 +31,17 @@ internal sealed class ContainerStatsWriterJob(
         {
             await foreach (var batch in reader.ReadAllAsync(cancellationToken))
             {
-                Accumulate(batch);
-
-                // We create a new list here so SignalR doesn't point to a pooled list that gets cleared
-                var notificationStats = batch.Stats.ToList();
-                await notificationQueue.EnqueueAsync(new SendContainersNotificationWorkItem(
-                    containersStreamManager, batch.PlatformId, notificationStats), cancellationToken);
-
-                // Release the pooled list back to the Streamer as fast as possible
-                batch.Release();
+                try
+                {
+                    Accumulate(batch);
+                    await EnqueueNotificationAsync(batch, cancellationToken);
+                    await BroadcastStatsAsync(batch, cancellationToken);
+                }
+                finally
+                {
+                    // The persistence buffer has copied the items, so the source list can be reused.
+                    batch.Release();
+                }
 
                 if (ShouldFlush())
                     await FlushAsync(cancellationToken);
@@ -48,6 +52,48 @@ internal sealed class ContainerStatsWriterJob(
         // final flush
         if (_bufferedCount > 0)
             await FlushAsync(CancellationToken.None);
+    }
+
+    private ValueTask BroadcastStatsAsync(
+        ContainersStatBatch batch,
+        CancellationToken cancellationToken)
+    {
+        if (!statsBroadcaster.HasSubscribers)
+            return ValueTask.CompletedTask;
+
+        return statsBroadcaster.PublishAsync(
+            new ContainerStatsSnapshot(batch.PlatformId, batch.Stats.ToArray()),
+            cancellationToken);
+    }
+
+    private async Task EnqueueNotificationAsync(ContainersStatBatch batch, CancellationToken cancellationToken)
+    {
+        if (!containersStreamManager.HasStatsSubscribers(batch.PlatformId))
+            return;
+
+        // SignalR must not retain the pooled list after this method returns.
+        var notificationStats = batch.Stats.ToArray();
+
+        try
+        {
+            await notificationQueue.EnqueueAsync(
+                new SendContainersNotificationWorkItem(
+                    containersStreamManager,
+                    batch.PlatformId,
+                    notificationStats),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to enqueue container stats notification for platform {PlatformId}.",
+                batch.PlatformId);
+        }
     }
 
     private void Accumulate(ContainersStatBatch batch)
@@ -141,6 +187,9 @@ internal sealed class ContainerStatsBatchWorkItem(
             await uow.ContainerStats.BulkInsertAsync(filteredList, token);
             await uow.CommitAsync(token);
         }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Database bulk insert failed.");
@@ -151,7 +200,7 @@ internal sealed class ContainerStatsBatchWorkItem(
 internal class SendContainersNotificationWorkItem(
     IContainerStreamManager containersStreamManager,
     Guid platformId,
-    List<ContainerStat> stats) : INotificationWorkItem
+    IReadOnlyList<ContainerStat> stats) : INotificationWorkItem
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
         => containersStreamManager.SendContainersStats(platformId, stats);

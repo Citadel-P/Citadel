@@ -210,6 +210,8 @@ public static class ApplicationModule
         if (Helpers.IsDesignTime()) return services;
 
         services
+            .AddSingleton<GitRepoSyncInFlightTracker>()
+            .AddSingleton<IContainerStatsBroadcaster, ContainerStatsBroadcaster>()
             .AddHostedService<DockerDaemonEventJob>()
             .AddHostedService<CleanupJob>()
             .AddHostedService<PlatformSyncJob>()
@@ -222,8 +224,6 @@ public static class ApplicationModule
             .AddHostedService<PlatformStatsWriterJob>()
             .AddHostedService<ContainerStatsWriterJob>()
             .AddHostedService<ContainerSyncJob>()
-            .AddHostedService<DeploymentSyncJob>()
-            .AddHostedService<StackSyncJob>()
             .AddHostedService<ImageSyncJob>()
             .AddHostedService<AlertRuleCacheWarmup>()
             .AddHostedService<ReconcilableResourceJob>()

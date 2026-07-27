@@ -10,6 +10,7 @@ internal interface IPlatformHealthBroadCaster
 {
     void Complete();
     ChannelReader<PlatformHealth> AddSubscriber();
+    void RemoveSubscriber(ChannelReader<PlatformHealth> reader);
     ValueTask PublishAsync(PlatformHealth platformHealth, CancellationToken cancellationToken);
 }
 

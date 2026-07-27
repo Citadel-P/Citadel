@@ -6,6 +6,7 @@ using Application.TaskJobs;
 using Application.Features.Deployments.Notifications;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Stacks;
 using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using Domain.Entities.Identity;
@@ -32,6 +33,8 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     private readonly Mock<IAlertService> _alertServiceMock = new();
     private readonly Mock<IApplyStackService> _applyStackServiceMock = new();
     private readonly Mock<INotificationQueue> _notificationQueueMock = new();
+    private InlineDbWorkQueue? _lastDbWorkQueue;
+    private bool? _alertProcessedInsideDbWorkItem;
 
     private Guid _repoId;
     private Guid _repoWithoutAccountId;
@@ -212,6 +215,7 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
                     && context.GitRepoWebhookSyncFailures.Single().Reason == "sync failed"),
                 It.IsAny<CancellationToken>()),
             Times.Once);
+        Assert.False(_alertProcessedInsideDbWorkItem);
     }
 
     [Fact]
@@ -392,6 +396,43 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenGitStackAutoDeploys_DoesNotApplyInsideDbWorkItem()
+    {
+        await CreateTrackedGitStackAsync(
+            "old-commit",
+            updateBehavior: StackUpdateBehavior.StackAutoDeploy);
+
+        _gitCliRepositoryMock
+            .Setup(x => x.TestConnectionAsync(It.IsAny<string>(), It.IsAny<GitAccount?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        _repoCacheManagerMock
+            .Setup(x => x.SynchronizeAsync(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RepoSyncResult(GitOperation.Pull, "new-commit", true));
+        _gitCliRepositoryMock
+            .Setup(x => x.GetChangedPathsAsync(It.IsAny<string>(), "old-commit", "new-commit", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<string>>(["compose.yml"]));
+
+        bool? appliedInsideDbWorkItem = null;
+        _applyStackServiceMock
+            .Setup(x => x.ApplyAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<IReadOnlyList<string>?>(),
+                It.IsAny<bool>(),
+                It.IsAny<bool>(),
+                It.IsAny<bool>(),
+                StackApplyOperation.Apply,
+                null,
+                It.IsAny<CancellationToken>()))
+            .Callback(() => appliedInsideDbWorkItem = _lastDbWorkQueue?.IsExecuting)
+            .Returns(EmptyStackApply());
+
+        await RunJobOnceAsync();
+
+        Assert.False(appliedInsideDbWorkItem);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenBranchTrackingGitStackHasOnlyUnrelatedPathChanges_DoesNotMarkUpdateAvailable()
     {
         var stackId = await CreateTrackedGitStackAsync(
@@ -480,15 +521,19 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     private async Task RunJobOnceAsync(GitRepoSyncRequest request)
     {
         var channel = Channel.CreateUnbounded<GitRepoSyncRequest>();
+        var dbWorkQueue = new InlineDbWorkQueue(Services.GetRequiredService<IServiceScopeFactory>());
+        _lastDbWorkQueue = dbWorkQueue;
         _repoCacheManagerMock
             .Setup(x => x.GetRemoteUrl(It.IsAny<GitRepository>(), It.IsAny<GitAccount?>()))
             .Returns<GitRepository, GitAccount?>((repo, _) => repo.Url);
         _alertServiceMock
             .Setup(x => x.ProcessAsync(It.IsAny<AlertType>(), It.IsAny<AlertEvaluationContext>(), It.IsAny<CancellationToken>()))
+            .Callback(() => _alertProcessedInsideDbWorkItem = dbWorkQueue.IsExecuting)
             .Returns(Task.CompletedTask);
+        _alertProcessedInsideDbWorkItem = null;
 
         var job = new TestGitRepoSyncJob(
-            new InlineDbWorkQueue(Services.GetRequiredService<IServiceScopeFactory>()),
+            dbWorkQueue,
             Services.GetRequiredService<IServiceScopeFactory>(),
             _gitCliRepositoryMock.Object,
             _repoCacheManagerMock.Object,
@@ -500,6 +545,7 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             _alertServiceMock.Object,
             _applyStackServiceMock.Object,
             new PermissiveLicenseEntitlementService(),
+            new GitRepoSyncInFlightTracker(),
             Mock.Of<Microsoft.Extensions.Logging.ILogger<GitRepoSyncJob>>());
 
         var runTask = job.RunAsync(TestContext.Current.CancellationToken);
@@ -532,7 +578,8 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
     private async Task<Guid> CreateTrackedGitStackAsync(
         string deployedCommit,
         List<string>? composePaths = null,
-        string? workingDirectory = null)
+        string? workingDirectory = null,
+        StackUpdateBehavior updateBehavior = StackUpdateBehavior.Notify)
     {
         composePaths ??= ["compose.yml"];
         await using var scope = Services.CreateAsyncScope();
@@ -546,7 +593,7 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
                 GitRepoId: _repoId,
                 Branch: "main",
                 CommitSha: null,
-                UpdateBehavior: StackUpdateBehavior.Notify,
+                UpdateBehavior: updateBehavior,
                 ComposePaths: composePaths,
                 WorkingDirectory: workingDirectory));
 
@@ -650,16 +697,31 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         private readonly Channel<IDbWorkItem> _channel = Channel.CreateUnbounded<IDbWorkItem>();
 
         public ChannelReader<IDbWorkItem> Reader => _channel.Reader;
+        public bool IsExecuting { get; private set; }
 
         public async ValueTask EnqueueAsync(IDbWorkItem item, CancellationToken cancellationToken)
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            await item.ExecuteAsync(uow, cancellationToken);
+            IsExecuting = true;
+            try
+            {
+                await item.ExecuteAsync(uow, cancellationToken);
+            }
+            finally
+            {
+                IsExecuting = false;
+            }
         }
 
         public ValueTask EnqueueAndWaitAsync(IDbWorkItem item, CancellationToken cancellationToken)
             => EnqueueAsync(item, cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<StackStreamItem> EmptyStackApply()
+    {
+        await Task.CompletedTask;
+        yield break;
     }
 
     private sealed class TestGitRepoSyncJob(
@@ -675,6 +737,7 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
         IAlertService alertService,
         IApplyStackService applyStackService,
         ILicenseEntitlementService entitlementService,
+        GitRepoSyncInFlightTracker inFlightTracker,
         Microsoft.Extensions.Logging.ILogger<GitRepoSyncJob> logger)
         : GitRepoSyncJob(
             dbWorkQueue,
@@ -689,6 +752,7 @@ public class GitRepoSyncJobTests(PostgresTestFixture fixture) : IntegrationTestB
             alertService,
             applyStackService,
             entitlementService,
+            inFlightTracker,
             logger)
     {
         public Task RunAsync(CancellationToken cancellationToken) => ExecuteAsync(cancellationToken);

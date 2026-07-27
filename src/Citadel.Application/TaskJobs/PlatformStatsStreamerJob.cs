@@ -25,65 +25,151 @@ internal class PlatformStatsStreamerJob(
     ILogger<PlatformStatsStreamerJob> logger) : BackgroundService
 {
     private readonly int _fetchIntervalMs = options.Value.MonitoringInterval * 1000;
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningStreams = new();
+    private readonly ConcurrentDictionary<string, StatsStreamRegistration> _runningStreams = new();
     private readonly ChannelReader<PlatformHealth> _platformHealthReader = platformHealthBroadCaster.AddSubscriber();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await foreach (var platform in _platformHealthReader.ReadAllAsync(cancellationToken))
+        try
         {
-            if (platform.IsOnLine)
-                StartStreamStatsForPlatform(platform, cancellationToken);
-            else
-                StopStreamStatsForPlatform(platform.Address);
+            await foreach (var platform in _platformHealthReader.ReadAllAsync(cancellationToken))
+            {
+                if (platform.IsOnLine)
+                    StartStreamStatsForPlatform(platform, cancellationToken);
+                else
+                    await StopStreamStatsForPlatformAsync(platform.Address);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            platformHealthBroadCaster.RemoveSubscriber(_platformHealthReader);
+            var registrations = _runningStreams.Values.ToArray();
+            foreach (var registration in registrations)
+            {
+                if (TryRemoveOwnedStream(registration.Address, registration))
+                    registration.Cancel();
+            }
+
+            await Task.WhenAll(registrations.Select(static registration => registration.Task));
         }
     }
 
     private void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var registration = new StatsStreamRegistration(
+            platform.Address,
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken));
 
-        if (!_runningStreams.TryAdd(platform.Address, cts))
+        if (!_runningStreams.TryAdd(platform.Address, registration))
         {
-            cts.Dispose(); // Prevent leak
+            registration.Dispose();
             return;
         }
 
-        _ = StreamPlatformStats(platform.Id, platform.Type, platform.Address, cts.Token);
+        registration.Task = StreamPlatformStats(
+            platform.Id,
+            platform.Type,
+            platform.Address,
+            registration);
     }
 
-    private void StopStreamStatsForPlatform(string address)
+    private async Task StopStreamStatsForPlatformAsync(string address)
     {
-        if (_runningStreams.TryRemove(address, out var cts))
+        if (_runningStreams.TryRemove(address, out var registration))
         {
             logger.LogInformation("Stopping platform stream for {Address}", address);
-            cts.Cancel();
-            cts.Dispose();
+            registration.Cancel();
+            await registration.Task;
         }
     }
 
-    private async Task StreamPlatformStats(Guid platformId, PlatformConnectorType connectorType, string address, CancellationToken cancellationToken)
+    private async Task StreamPlatformStats(
+        Guid platformId,
+        PlatformConnectorType connectorType,
+        string address,
+        StatsStreamRegistration registration)
     {
+        var cancellationToken = registration.Token;
+        var command = new StreamPlatformStatsCommand(address, _fetchIntervalMs);
+
         try
         {
-            var connector = connectorFactory.GetConnector(connectorType);
-            var command = new StreamPlatformStatsCommand(address, _fetchIntervalMs);
-
-            await foreach (var platformStats in connector.StreamStatsAsync(command, cancellationToken))
+            while (!cancellationToken.IsCancellationRequested)
             {
-                await platformStatsWriter.WriteAsync((platformId, platformStats), cancellationToken);
+                try
+                {
+                    var connector = connectorFactory.GetConnector(connectorType);
+                    await foreach (var platformStats in connector.StreamStatsAsync(command, cancellationToken))
+                    {
+                        await platformStatsWriter.WriteAsync((platformId, platformStats), cancellationToken);
+                    }
+
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        logger.LogWarning(
+                            "Platform stats stream for {Address} ended. Restarting in 10 seconds.",
+                            address);
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (RpcException ex) when (
+                    ex.StatusCode == StatusCode.Cancelled &&
+                    cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Platform stats stream failed for {Address}. Restarting in 10 seconds.",
+                        address);
+                }
+
+                await DelayBeforeRestartAsync(cancellationToken);
             }
-        }
-        catch (OperationCanceledException) { }
-        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled) { }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error while streaming platform stats for {Address}. Retrying in 10s...", address);
-            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
         }
         finally
         {
-            StopStreamStatsForPlatform(address);
+            TryRemoveOwnedStream(address, registration);
+            registration.Dispose();
         }
+    }
+
+    private static async Task DelayBeforeRestartAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private bool TryRemoveOwnedStream(string address, StatsStreamRegistration registration)
+        => ((ICollection<KeyValuePair<string, StatsStreamRegistration>>)_runningStreams)
+            .Remove(new KeyValuePair<string, StatsStreamRegistration>(address, registration));
+
+    private sealed class StatsStreamRegistration(
+        string address,
+        CancellationTokenSource cancellation) : IDisposable
+    {
+        public string Address { get; } = address;
+        public CancellationToken Token => cancellation.Token;
+        public Task Task { get; set; } = Task.CompletedTask;
+
+        public void Cancel()
+        {
+            try { cancellation.Cancel(); } catch { }
+        }
+
+        public void Dispose() => cancellation.Dispose();
     }
 }

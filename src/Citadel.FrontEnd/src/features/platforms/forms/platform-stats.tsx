@@ -18,6 +18,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useRead } from '@/lib/hooks';
+import { appendBoundedLiveStat, mergeStatsByCreated, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
 import { toFixedNumber } from '@/lib/utils';
 import dayjs from 'dayjs';
 import {
@@ -57,14 +58,15 @@ type StatsQueryState = {
 
 export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
   const liveStats = useLiveStats(platform);
+  const normalizedLiveStats = useMemo(() => normalizePlatformStats(liveStats), [liveStats]);
   const cpu = usePlatformStatsWindow(platform.id);
   const memory = usePlatformStatsWindow(platform.id);
   const disk = usePlatformStatsWindow(platform.id);
   const network = usePlatformStatsWindow(platform.id);
-  const cpuStats = useCombinedStats(cpu.baseStats, liveStats);
-  const memoryStats = useCombinedStats(memory.baseStats, liveStats);
-  const diskStats = useCombinedStats(disk.baseStats, liveStats);
-  const networkStats = useCombinedStats(network.baseStats, liveStats);
+  const cpuStats = useCombinedStats(cpu.baseStats, normalizedLiveStats);
+  const memoryStats = useCombinedStats(memory.baseStats, normalizedLiveStats);
+  const diskStats = useCombinedStats(disk.baseStats, normalizedLiveStats);
+  const networkStats = useCombinedStats(network.baseStats, normalizedLiveStats);
 
   return (
     <div className="flex flex-col gap-4">
@@ -586,7 +588,10 @@ const ChartValue = ({
 const usePlatformStatsWindow = (platformId: string | undefined): StatsQueryState => {
   const [windowHours, setWindowHours] = useState<StatsWindowHours>(24);
   const readArgs = useMemo(() => ({ id: platformId, query: { hours: windowHours } }), [platformId, windowHours]);
-  const { data, isLoading } = useRead('getPlatformStats', readArgs, { enabled: Boolean(platformId) });
+  const { data, isLoading } = useRead('getPlatformStats', readArgs, {
+    ...STREAMED_STATS_QUERY_OPTIONS,
+    enabled: Boolean(platformId),
+  });
 
   return {
     baseStats: data?.data?.stats ?? [],
@@ -614,14 +619,21 @@ const useLiveStats = (platform: PlatformView): PlatformStatView[] => {
     if (platform.status !== PlatformStatus.Online || !latestStat || latestStat === lastStatRef.current) return;
 
     lastStatRef.current = latestStat;
-    setLiveStats((prev) => [...prev, { ...latestStat, created: Math.floor(Date.now() / 1000) }]);
+    setLiveStats((prev) =>
+      appendBoundedLiveStat(prev, {
+        ...latestStat,
+        created: Number(latestStat.created) > 0 ? latestStat.created : Math.floor(Date.now() / 1000),
+      }),
+    );
   }, [latestStat, platform.status]);
 
   return liveStats;
 };
 
-const useCombinedStats = (baseStats: PlatformStatView[], liveStats: PlatformStatView[]) =>
-  useMemo(() => normalizeStats([...baseStats, ...liveStats]), [baseStats, liveStats]);
+const useCombinedStats = (baseStats: PlatformStatView[], liveStats: PlatformStatsDatum[]) => {
+  const normalizedBaseStats = useMemo(() => normalizePlatformStats(baseStats), [baseStats]);
+  return useMemo(() => mergeStatsByCreated(normalizedBaseStats, liveStats), [liveStats, normalizedBaseStats]);
+};
 
 export const normalizePlatformStats = (stats?: PlatformStatView[] | null): PlatformStatsDatum[] =>
   (stats ?? [])
@@ -655,8 +667,6 @@ export const normalizePlatformStats = (stats?: PlatformStatView[] | null): Platf
     })
     .filter((stat) => stat.created > 0)
     .sort((a, b) => a.created - b.created);
-
-const normalizeStats = normalizePlatformStats;
 
 export const getCurrentDiskUsage = (platform: PlatformView) => {
   const stat = platform.stats?.at(0);

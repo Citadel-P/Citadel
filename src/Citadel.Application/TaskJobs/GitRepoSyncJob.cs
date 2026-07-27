@@ -30,6 +30,7 @@ internal class GitRepoSyncJob(
     IAlertService alertService,
     IApplyStackService applyStackService,
     ILicenseEntitlementService entitlementService,
+    GitRepoSyncInFlightTracker inFlightTracker,
     ILogger<GitRepoSyncJob> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -58,7 +59,7 @@ internal class GitRepoSyncJob(
 
                     if (connectionResult.IsFailure(out var error))
                     {
-                        await dbWorkQueue.EnqueueAsync(new GitRepoSyncFailedWorkItem(
+                        var failureWorkItem = new GitRepoSyncFailedWorkItem(
                             gitRepoStreamManager,
                             notificationQueue,
                             activityHub,
@@ -68,14 +69,16 @@ internal class GitRepoSyncJob(
                             branch,
                             error.Message,
                             request.Trigger,
-                            BranchScopedFailure: false), stoppingToken);
+                            BranchScopedFailure: false);
+                        await dbWorkQueue.EnqueueAndWaitAsync(failureWorkItem, stoppingToken);
+                        await failureWorkItem.CompleteAsync(stoppingToken);
                     }
                     else
                     {
                         var syncResult = await repoCacheManager.SynchronizeAsync(repo, repo.GitAccount, branch, stoppingToken);
                         if ((syncResult.Success != null && !syncResult.Success.Value) || string.IsNullOrWhiteSpace(syncResult.Hash))
                         {
-                            await dbWorkQueue.EnqueueAsync(new GitRepoSyncFailedWorkItem(
+                            var failureWorkItem = new GitRepoSyncFailedWorkItem(
                                 gitRepoStreamManager,
                                 notificationQueue,
                                 activityHub,
@@ -85,11 +88,19 @@ internal class GitRepoSyncJob(
                                 branch,
                                 syncResult.Error ?? "Repository sync did not resolve a commit.",
                                 request.Trigger,
-                                BranchScopedFailure: true), stoppingToken);
+                                BranchScopedFailure: true);
+                            await dbWorkQueue.EnqueueAndWaitAsync(failureWorkItem, stoppingToken);
+                            await failureWorkItem.CompleteAsync(stoppingToken);
                         }
                         else
                         {
-                            await dbWorkQueue.EnqueueAsync(new GitRepoSyncSuccessWorkItem(
+                            var requiredCapability = request.Trigger == GitRepoSyncTrigger.Webhook
+                                ? LicenseCapability.AutomatedOperations
+                                : LicenseCapability.OperationalGuardrails;
+                            var canAutoDeploy = await entitlementService.IsEnabledAsync(
+                                requiredCapability,
+                                stoppingToken);
+                            var successWorkItem = new GitRepoSyncSuccessWorkItem(
                                 gitRepoStreamManager,
                                 stackStreamManager,
                                 notificationQueue,
@@ -97,18 +108,25 @@ internal class GitRepoSyncJob(
                                 alertService,
                                 gitCliRepository,
                                 applyStackService,
-                                entitlementService,
+                                canAutoDeploy,
                                 syncResult.Operation,
                                 syncResult.Hash!,
                                 branch,
                                 request.Trigger,
-                                repo), stoppingToken);
+                                repo);
+
+                            await dbWorkQueue.EnqueueAndWaitAsync(successWorkItem, stoppingToken);
+                            await successWorkItem.CompleteAsync(dbWorkQueue, stoppingToken);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Background sync failed for repo {RepoId}", request.RepoId);
+                }
+                finally
+                {
+                    inFlightTracker.Remove(request.RepoId, request.Branch);
                 }
             }
         }
@@ -131,16 +149,20 @@ internal sealed class GitRepoSyncSuccessWorkItem(
     IAlertService alertService,
     IGitCliRepository gitCliRepository,
     IApplyStackService applyStackService,
-    ILicenseEntitlementService entitlementService,
+    bool canAutoDeploy,
     GitOperation gitOperation,
     string commitHash,
     string branch,
     GitRepoSyncTrigger trigger,
     GitRepository repo) : IDbWorkItem
 {
+    private ActivityEvent? activity;
+    private IReadOnlyList<LinkedGitStackUpdate> stackUpdates = [];
+    private bool primaryRepositorySync;
+
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
-        var primaryRepositorySync = GitRepoSyncScope.IsPrimaryRepositorySync(repo, branch, trigger);
+        primaryRepositorySync = GitRepoSyncScope.IsPrimaryRepositorySync(repo, branch, trigger);
         var activityActorId = repo.ControlTriggeredBy ?? Constants.SystemId;
         var previousRef = await uow.GitRepositories.GetRefAsync(repo.Id, branch, cancellationToken);
         var shouldRecordActivity = primaryRepositorySync
@@ -158,7 +180,6 @@ internal sealed class GitRepoSyncSuccessWorkItem(
             cancellationToken);
 
         // Add activity
-        ActivityEvent? activity = null;
         if (shouldRecordActivity)
         {
             activity = GitRepoSyncActivityPolicy.CreateActivity(
@@ -170,29 +191,42 @@ internal sealed class GitRepoSyncSuccessWorkItem(
             await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
         }
 
-        var requiredCapability = trigger == GitRepoSyncTrigger.Webhook
-            ? LicenseCapability.AutomatedOperations
-            : LicenseCapability.OperationalGuardrails;
-        var canAutoDeploy = await entitlementService.IsEnabledAsync(
-            requiredCapability,
-            cancellationToken);
-        var stackUpdates = await UpdateLinkedGitStacksAsync(
+        stackUpdates = await UpdateLinkedGitStacksAsync(
             uow,
             canAutoDeploy,
             cancellationToken);
 
         await uow.CommitAsync(cancellationToken);
 
-        // Notify clients
         if (activity is not null)
         {
             repo.AssignActivityEvent(activity);
-            await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, cancellationToken)), cancellationToken);
-            await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);
+            await activity.AssignActor(uow, cancellationToken);
+        }
+
+        foreach (var update in stackUpdates)
+        {
+            if (update.AvailableActivity is not null)
+                await update.AvailableActivity.AssignActor(uow, cancellationToken);
+        }
+    }
+
+    public async Task CompleteAsync(IDbWorkQueue dbWorkQueue, CancellationToken cancellationToken)
+    {
+        if (activity is not null)
+        {
+            await notificationQueue.EnqueueAsync(
+                new ActivityNotificationWorkItem(activityHub, activity),
+                cancellationToken);
+            await notificationQueue.EnqueueAsync(
+                new GitRepoNotificationWorkItem(streamManager, repo),
+                cancellationToken);
         }
         else if (primaryRepositorySync)
         {
-            await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);
+            await notificationQueue.EnqueueAsync(
+                new GitRepoNotificationWorkItem(streamManager, repo),
+                cancellationToken);
         }
 
         foreach (var update in stackUpdates)
@@ -202,7 +236,7 @@ internal sealed class GitRepoSyncSuccessWorkItem(
             if (update.AvailableActivity is not null)
             {
                 await notificationQueue.EnqueueAsync(
-                    new ActivityNotificationWorkItem(activityHub, await update.AvailableActivity.AssignActor(uow, cancellationToken)),
+                    new ActivityNotificationWorkItem(activityHub, update.AvailableActivity),
                     cancellationToken);
             }
 
@@ -223,10 +257,10 @@ internal sealed class GitRepoSyncSuccessWorkItem(
                         ActivityStatus.Success,
                         new StackGitAutoUpdated(repo.Name, update.Branch, update.CurrentCommitSha, update.RemoteCommitSha));
 
-                    await uow.ActivityEventRepository.AddAsync(successActivity, cancellationToken);
-                    await uow.CommitAsync(cancellationToken);
+                    var persistActivity = new PersistGitStackActivityWorkItem(successActivity);
+                    await dbWorkQueue.EnqueueAndWaitAsync(persistActivity, cancellationToken);
                     await notificationQueue.EnqueueAsync(
-                        new ActivityNotificationWorkItem(activityHub, await successActivity.AssignActor(uow, cancellationToken)),
+                        new ActivityNotificationWorkItem(activityHub, persistActivity.Activity),
                         cancellationToken);
                     await ProcessGitStackAlertAsync(AlertType.StackGitAutoUpdated, update, failed: false, null, cancellationToken);
                 }
@@ -239,10 +273,10 @@ internal sealed class GitRepoSyncSuccessWorkItem(
                         ActivityStatus.Failure,
                         new StackGitAutoDeployFailed(repo.Name, update.Branch, update.CurrentCommitSha, update.RemoteCommitSha, reason));
 
-                    await uow.ActivityEventRepository.AddAsync(failureActivity, cancellationToken);
-                    await uow.CommitAsync(cancellationToken);
+                    var persistActivity = new PersistGitStackActivityWorkItem(failureActivity);
+                    await dbWorkQueue.EnqueueAndWaitAsync(persistActivity, cancellationToken);
                     await notificationQueue.EnqueueAsync(
-                        new ActivityNotificationWorkItem(activityHub, await failureActivity.AssignActor(uow, cancellationToken)),
+                        new ActivityNotificationWorkItem(activityHub, persistActivity.Activity),
                         cancellationToken);
                     await ProcessGitStackAlertAsync(AlertType.StackGitAutoDeployFailed, update, failed: true, reason, cancellationToken);
                 }
@@ -460,6 +494,18 @@ internal sealed class GitRepoSyncSuccessWorkItem(
             info: info);
 }
 
+internal sealed class PersistGitStackActivityWorkItem(ActivityEvent activity) : IDbWorkItem
+{
+    public ActivityEvent Activity { get; private set; } = activity;
+
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+    {
+        await uow.ActivityEventRepository.AddAsync(Activity, cancellationToken);
+        await uow.CommitAsync(cancellationToken);
+        Activity = await Activity.AssignActor(uow, cancellationToken);
+    }
+}
+
 internal sealed record LinkedGitStackUpdate(
     Stack Stack,
     string GitRepositoryName,
@@ -483,9 +529,12 @@ internal sealed class GitRepoSyncFailedWorkItem(
     bool BranchScopedFailure
     ) : IDbWorkItem
 {
+    private ActivityEvent? activity;
+    private bool branchOnlyFailure;
+
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
-        var branchOnlyFailure = BranchScopedFailure
+        branchOnlyFailure = BranchScopedFailure
             && !GitRepoSyncScope.IsPrimaryRepositorySync(repo, branch, trigger);
 
         if (branchOnlyFailure)
@@ -510,7 +559,6 @@ internal sealed class GitRepoSyncFailedWorkItem(
             cancellationToken);
 
         // Add activity
-        ActivityEvent? activity = null;
         if (shouldRecordActivity)
         {
             activity = GitRepoSyncActivityPolicy.CreateActivity(
@@ -524,11 +572,23 @@ internal sealed class GitRepoSyncFailedWorkItem(
 
         await uow.CommitAsync(cancellationToken);
 
-        // Notify clients
         if (activity is not null)
         {
             repo.AssignActivityEvent(activity);
-            await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, cancellationToken)), cancellationToken);
+            activity = await activity.AssignActor(uow, cancellationToken);
+        }
+    }
+
+    public async Task CompleteAsync(CancellationToken cancellationToken)
+    {
+        if (branchOnlyFailure)
+            return;
+
+        if (activity is not null)
+        {
+            await notificationQueue.EnqueueAsync(
+                new ActivityNotificationWorkItem(activityHub, activity),
+                cancellationToken);
         }
 
         await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, repo), cancellationToken);

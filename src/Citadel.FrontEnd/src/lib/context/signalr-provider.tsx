@@ -15,12 +15,19 @@ type SignalRProviderProps = {
 };
 
 type GroupState = {
-  state: 'joining' | 'joined';
+  state: 'pending' | 'joining' | 'joined';
   references: number;
   joinPromise?: Promise<void>;
 };
 
 type CancellationRef = { current: boolean };
+
+const streamedStatsQueryKeys = new Set([
+  'getContainerStats',
+  'getDeploymentStats',
+  'getPlatformStats',
+  'getStackStats',
+]);
 
 export const SignalRProvider: React.FC<SignalRProviderProps> = ({
   children,
@@ -66,6 +73,51 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
       }
     });
 
+    const rejoinGroup = async (groupName: string) => {
+      const group = groupStates.current.get(groupName);
+      if (!group || activeConnectionRef.current !== conn || conn.state !== HubConnectionState.Connected) {
+        return;
+      }
+
+      const joinPromise = conn.invoke('JoinGroup', groupName);
+      groupStates.current.set(groupName, { ...group, state: 'joining', joinPromise });
+
+      try {
+        await joinPromise;
+
+        const current = groupStates.current.get(groupName);
+        if (current?.joinPromise === joinPromise) {
+          groupStates.current.set(groupName, {
+            ...current,
+            state: 'joined',
+            joinPromise: undefined,
+          });
+        }
+      } catch (err) {
+        const current = groupStates.current.get(groupName);
+        if (current?.joinPromise === joinPromise) {
+          groupStates.current.set(groupName, {
+            ...current,
+            state: 'pending',
+            joinPromise: undefined,
+          });
+
+          setTimeout(() => {
+            const pendingGroup = groupStates.current.get(groupName);
+            if (
+              activeConnectionRef.current === conn &&
+              conn.state === HubConnectionState.Connected &&
+              pendingGroup?.state === 'pending'
+            ) {
+              void rejoinGroup(groupName);
+            }
+          }, 2_000);
+        }
+
+        console.error(`Failed to rejoin group ${groupName}:`, err);
+      }
+    };
+
     conn.onreconnected(async () => {
       if (activeConnectionRef.current !== conn) {
         return;
@@ -73,28 +125,14 @@ export const SignalRProvider: React.FC<SignalRProviderProps> = ({
 
       setConnectionState(HubConnectionState.Connected);
 
-      for (const [groupName, group] of groupStates.current.entries()) {
-        try {
-          const joinPromise = conn.invoke('JoinGroup', groupName);
-          groupStates.current.set(groupName, { ...group, state: 'joining', joinPromise });
-          await joinPromise;
-
-          const current = groupStates.current.get(groupName);
-          if (current) {
-            groupStates.current.set(groupName, {
-              ...current,
-              state: 'joined',
-              joinPromise: undefined,
-            });
-          }
-        } catch (err) {
-          const current = groupStates.current.get(groupName);
-          if (current?.joinPromise === joinPromise) {
-            groupStates.current.delete(groupName);
-          }
-          console.error(`Failed to rejoin group ${groupName}:`, err);
-        }
+      for (const groupName of groupStates.current.keys()) {
+        await rejoinGroup(groupName);
       }
+
+      await queryClient.invalidateQueries({
+        predicate: (query) => streamedStatsQueryKeys.has(String(query.queryKey[0])),
+        refetchType: 'active',
+      });
     });
 
     conn.onclose(() => {

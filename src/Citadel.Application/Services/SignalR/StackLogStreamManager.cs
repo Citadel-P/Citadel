@@ -35,11 +35,10 @@ internal sealed class StackLogStreamManager(
         var groupId = $"stack-log:{stackId}";
         var context = streams.GetOrAdd(groupId, _ => new LogStreamContext());
 
-        if (!context.TryStart())
+        if (!context.TryStartStream(resources => StreamLogsAsync(resources, stackId)))
             return;
 
-        context.StreamTask = StreamLogsAsync(context, stackId);
-        context.EventWatcherTask ??= WatchContainerEvents(context, stackId);
+        context.EnsureWatcher(token => WatchContainerEvents(context, stackId, token));
     }
 
     protected override void OnSubscriberAdded(string groupId, string connectionId)
@@ -66,33 +65,32 @@ internal sealed class StackLogStreamManager(
         }
     }
 
-    private async Task StreamLogsAsync(LogStreamContext ctx, Guid stackId)
+    private async Task StreamLogsAsync(LogStreamResources resources, Guid stackId)
     {
-        var token = ctx.Cancellation.Token;
-        var channel = ctx.LogChannel;
+        var token = resources.CancellationToken;
+        var channel = resources.Channel;
 
         try
         {
             var containers = await GetStackLogContainers(stackId, token);
             if (containers.Count == 0)
-            {
-                channel.Writer.TryComplete();
                 return;
-            }
 
-            _ = BroadcastBatchesAsync(channel.Reader, stackId, token);
-
-            var tasks = containers.Select(container => StreamContainerLogsAsync(ctx, channel.Writer, container, token));
-            await Task.WhenAll(tasks);
+            await LogStreamPipeline.RunAsync(
+                channel,
+                pipelineToken => Task.WhenAll(
+                    containers.Select(container => StreamContainerLogsAsync(
+                        resources,
+                        channel.Writer,
+                        container,
+                        pipelineToken))),
+                pipelineToken => BroadcastBatchesAsync(channel.Reader, stackId, pipelineToken),
+                token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error while polling logs for stack {StackId}", stackId);
-        }
-        finally
-        {
-            channel.Writer.TryComplete();
         }
     }
 
@@ -111,7 +109,7 @@ internal sealed class StackLogStreamManager(
     }
 
     private async Task StreamContainerLogsAsync(
-        LogStreamContext ctx,
+        LogStreamResources resources,
         ChannelWriter<PooledBuffer> writer,
         StackLogContainer container,
         CancellationToken token)
@@ -133,21 +131,18 @@ internal sealed class StackLogStreamManager(
                 if (transformed.Length == 0)
                     continue;
 
-                ctx.AddToBuffer(transformed);
-                ctx.AddToBuffer("\n"u8);
+                resources.AddToBuffer(transformed);
+                resources.AddToBuffer("\n"u8);
 
-                var rented = ArrayPool<byte>.Shared.Rent(transformed.Length);
-
+                var pooled = new PooledBuffer(ArrayPool<byte>.Shared.Rent(transformed.Length), transformed.Length);
                 try
                 {
-                    transformed.CopyTo(rented);
-                    var pooled = new PooledBuffer(rented, transformed.Length);
-
+                    transformed.CopyTo(pooled.Buffer);
                     await writer.WriteAsync(pooled, token);
                 }
                 catch
                 {
-                    ArrayPool<byte>.Shared.Return(rented);
+                    pooled.Dispose();
                     throw;
                 }
             }
@@ -171,26 +166,26 @@ internal sealed class StackLogStreamManager(
             {
                 while (reader.TryRead(out var item))
                 {
-                    var len = item.Length;
-
-                    if (len > BatchSize)
+                    using (item)
                     {
-                        await dispatcher.SendStackLogs(stackId, item.Buffer.AsMemory(0, len));
-                        item.Dispose();
-                        continue;
+                        var len = item.Length;
+
+                        if (len >= BatchSize)
+                        {
+                            await dispatcher.SendStackLogs(stackId, item.Buffer.AsMemory(0, len));
+                            continue;
+                        }
+
+                        if (offset + len + 1 > BatchSize)
+                        {
+                            await dispatcher.SendStackLogs(stackId, batch.AsMemory(0, offset));
+                            offset = 0;
+                        }
+
+                        item.Buffer.AsSpan(0, len).CopyTo(batch.AsSpan(offset));
+                        offset += len;
+                        batch[offset++] = (byte)'\n';
                     }
-
-                    if (offset + len + 1 > BatchSize)
-                    {
-                        await dispatcher.SendStackLogs(stackId, batch.AsMemory(0, offset));
-                        offset = 0;
-                    }
-
-                    item.Buffer.AsSpan(0, len).CopyTo(batch.AsSpan(offset));
-                    offset += len;
-                    batch[offset++] = (byte)'\n';
-
-                    item.Dispose();
                 }
 
                 if (offset > 0)
@@ -200,21 +195,18 @@ internal sealed class StackLogStreamManager(
                 }
             }
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error while broadcasting logs for stack {StackId}", stackId);
-        }
         finally
         {
             ArrayPool<byte>.Shared.Return(batch);
         }
     }
 
-    private async Task WatchContainerEvents(LogStreamContext context, Guid stackId)
+    private async Task WatchContainerEvents(
+        LogStreamContext context,
+        Guid stackId,
+        CancellationToken token)
     {
         var reader = containerEventBroadcaster.AddSubscriber();
-        var token = context.WatcherCts.Token;
 
         try
         {
@@ -228,10 +220,7 @@ internal sealed class StackLogStreamManager(
                     continue;
 
                 context.Reset();
-                if (context.TryStart())
-                {
-                    _ = StreamLogsAsync(context, stackId);
-                }
+                context.TryStartStream(resources => StreamLogsAsync(resources, stackId));
             }
         }
         catch (OperationCanceledException) { }

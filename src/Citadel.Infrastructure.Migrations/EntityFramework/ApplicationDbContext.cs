@@ -801,6 +801,8 @@ internal static class Configuration
 
         stat.HasIndex("ContainerId", "Created").IsUnique()
             .HasDatabaseName($"IX_{tableName}_ContainerId_Created");
+        stat.HasIndex("Created")
+            .HasDatabaseName($"IX_{tableName}_Created");
 
         return builder;
     }
@@ -833,6 +835,8 @@ internal static class Configuration
 
         stat.HasIndex("PlatformId", "Created").IsUnique()
             .HasDatabaseName($"IX_{tableName}_PlatformId_Created");
+        stat.HasIndex("Created")
+            .HasDatabaseName($"IX_{tableName}_Created");
 
         return builder;
     }

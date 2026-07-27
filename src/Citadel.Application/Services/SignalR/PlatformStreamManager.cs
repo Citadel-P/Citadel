@@ -2,11 +2,13 @@
 using Application.Services.SignalR.Context;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Platforms;
+using Hosting.Common;
 
 namespace Application.Services.SignalR;
 
 internal interface IPlatformStreamManager : IStreamGroupManager
 {
+    bool HasStatsSubscribers { get; }
     Task PushPlatformUpdate(Platform platform);
     Task PlatformDeleted(Guid platformId);
     Task PushPlatformsUpdates(IEnumerable<Platform> platforms);
@@ -15,6 +17,8 @@ internal interface IPlatformStreamManager : IStreamGroupManager
 
 internal class PlatformStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IPlatformStreamManager
 {
+    public bool HasStatsSubscribers => streams.ContainsKey(Constants.WellKnownSignalRGroups.PlatformsGroup);
+
     public Task PushPlatformUpdate(Platform platform)
     {
         if (streams.IsEmpty)
@@ -44,7 +48,7 @@ internal class PlatformStreamManager(IApplicationHubDispatcher dispatcher) : Bas
 
     public Task PushPlatformStats(Guid platformId, PlatformStatsResult platform)
     {
-        if (streams.IsEmpty)
+        if (!HasStatsSubscribers)
         {
             return Task.CompletedTask;
         }

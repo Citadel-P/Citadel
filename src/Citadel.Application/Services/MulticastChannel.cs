@@ -8,6 +8,15 @@ internal class MulticastChannel<T>
     private readonly List<Channel<T>> subscribers = [];
     private readonly Lock @lock = new();
 
+    public bool HasSubscribers
+    {
+        get
+        {
+            using (@lock.EnterScope())
+                return subscribers.Count > 0;
+        }
+    }
+
     // Add a subscriber
     public ChannelReader<T> AddSubscriber()
     {

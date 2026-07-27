@@ -79,13 +79,22 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
 
     public async Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken)
     {
-        var p = new { CreatedBefore = createdBeforeEpochSeconds };
+        const string sql = """
+            WITH expired AS (
+                SELECT ctid
+                FROM PlatformStats
+                WHERE Created < @CreatedBefore
+                ORDER BY Created
+                LIMIT 5000
+            )
+            DELETE FROM PlatformStats stats
+            USING expired
+            WHERE stats.ctid = expired.ctid
+            """;
 
-        var countstats = "SELECT COUNT(*) from  PlatformStats WHERE Created < @CreatedBefore";
-        var totalCount = await db.QuerySingleAsync<int>(countstats, p, transaction: tx());
-
-        const string sql = "DELETE FROM PlatformStats WHERE Created < @CreatedBefore";
-        await db.ExecuteAsync(sql, p, transaction: tx());
-        return totalCount;
+        return await db.ExecuteAsync(
+            sql,
+            new { CreatedBefore = createdBeforeEpochSeconds },
+            transaction: tx());
     }
 }

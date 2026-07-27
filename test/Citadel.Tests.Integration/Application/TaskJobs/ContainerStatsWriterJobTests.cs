@@ -43,11 +43,15 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         services.AddSingleton(_containerConnectorMock.Object);
         services.AddSingleton(_containerStreamManagerMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(_broadcaster);
+        services.AddSingleton<IContainerStatsBroadcaster, ContainerStatsBroadcaster>();
         services.AddSingleton(_channel);
         services.AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader);
         services.AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer);
 
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration() { BatchSize = 2 });
+        _containerStreamManagerMock
+            .Setup(x => x.HasStatsSubscribers(It.IsAny<Guid>()))
+            .Returns(true);
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -135,6 +139,29 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
         Assert.Equal(2, containers.Count());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldReleaseBatchWithoutAllocatingNotificationWhenThereAreNoSubscribers()
+    {
+        _configMock.Setup(c => c.Value).Returns(new JobConfiguration { BatchSize = 100, FlashInterval = 300 });
+        _containerStreamManagerMock
+            .Setup(x => x.HasStatsSubscribers(It.IsAny<Guid>()))
+            .Returns(false);
+        var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var batch = new ContainersStatBatch(
+            _platformId,
+            [new ContainerStat(_containerId, 100, 200, 5, 300, 100, 200, 1)],
+            _ => released.TrySetResult());
+
+        await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
+        await released.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        _containerStreamManagerMock.Verify(
+            manager => manager.SendContainersStats(
+                It.IsAny<Guid>(),
+                It.IsAny<IEnumerable<ContainerStat>>()),
+            Times.Never);
     }
     
 }

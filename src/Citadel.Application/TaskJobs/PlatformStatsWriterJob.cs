@@ -39,10 +39,7 @@ internal sealed class PlatformStatsWriterJob(
             {
                 Accumulate(platformId, stat);
 
-                // Push notification
-                await notificationQueue.EnqueueAsync(
-                    new SendPlatformNotificationWorkItem(platformStreamManager, stat, platformId),
-                    cancellationToken);
+                await EnqueueNotificationAsync(platformId, stat, cancellationToken);
 
                 if (ShouldFlush())
                     await FlushAsync(cancellationToken);
@@ -56,6 +53,33 @@ internal sealed class PlatformStatsWriterJob(
 
         if (_bufferedCount > 0)
             await FlushAsync(CancellationToken.None);
+    }
+
+    private async Task EnqueueNotificationAsync(
+        Guid platformId,
+        PlatformStatsResult stat,
+        CancellationToken cancellationToken)
+    {
+        if (!platformStreamManager.HasStatsSubscribers)
+            return;
+
+        try
+        {
+            await notificationQueue.EnqueueAsync(
+                new SendPlatformNotificationWorkItem(platformStreamManager, stat, platformId),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to enqueue platform stats notification for platform {PlatformId}.",
+                platformId);
+        }
     }
 
     private void Accumulate(Guid id, PlatformStatsResult stat)

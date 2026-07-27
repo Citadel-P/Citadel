@@ -1,5 +1,5 @@
 ﻿using System.Threading.Channels;
-using Application.Configs;
+using Application.Services;
 using Application.Services.Abstractions;
 using Application.Services.SignalR.Context;
 using Domain.Contracts.Interfaces;
@@ -7,16 +7,13 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Application.Services.SignalR;
 
 internal sealed class StackInfoStreamManager(
     IServiceScopeFactory scopeFactory,
-    IOptions<JobConfiguration> options,
     IApplicationHubDispatcher dispatcher,
-    IPlatformContainerCache platformContainerCache,
-    IConnectorFactory<IContainerConnector> connectorFactory,
+    IContainerStatsBroadcaster statsBroadcaster,
     ILogger<StackInfoStreamManager> logger) : BaseStreamManager<ChannelStreamContext<IEnumerable<DockerContainer>>>, IStreamGroupManager
 {
     protected override void OnSubscriberAdded(string groupId, string connectionId)
@@ -53,34 +50,24 @@ internal sealed class StackInfoStreamManager(
     {
         var writer = ctx.Channel.Writer;
         var token = ctx.Cancellation.Token;
-        var latest = new Dictionary<string, DockerContainer>(StringComparer.OrdinalIgnoreCase);
-        var gate = new SemaphoreSlim(1, 1);
+        var latest = new StackContainerStatsAccumulator();
+        var statsReader = statsBroadcaster.AddSubscriber();
 
         try
         {
             var containers = await GetStackContainers(stackId, token);
-            foreach (var container in containers)
-            {
-                latest[NormalizeDockerId(container.Id)] = container;
-            }
+            latest.Initialize(containers);
 
-            await writer.WriteAsync(latest.Values.ToList(), token);
+            await writer.WriteAsync(latest.Snapshot(), token);
 
-            var containerIds = latest.Keys.ToArray();
-            if (containerIds.Length == 0)
+            if (latest.IsEmpty)
                 return;
 
-            if (!platformContainerCache.TryGetPlatformsWithContainers(containerIds, out var platformEntries))
+            await foreach (var snapshot in statsReader.ReadAllAsync(token))
             {
-                logger.LogWarning("No online platform cache entries found for stack {StackId}", stackId);
-                return;
+                if (latest.Update(snapshot) is { } changedSnapshot)
+                    await writer.WriteAsync(changedSnapshot, token);
             }
-
-            var pollTasks = platformEntries
-                .SelectMany(entry => entry.Containers.Keys.Select(containerId =>
-                    PollContainerStats(containerId, entry, latest, gate, writer, token)));
-
-            await Task.WhenAll(pollTasks);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -89,70 +76,35 @@ internal sealed class StackInfoStreamManager(
         }
         finally
         {
+            statsBroadcaster.RemoveSubscriber(statsReader);
             writer.TryComplete();
-            gate.Dispose();
         }
     }
 
-    private async Task<IReadOnlyList<DockerContainer>> GetStackContainers(Guid stackId, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<TrackedStackContainer>> GetStackContainers(
+        Guid stackId,
+        CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await unitOfWork.Stacks.GetContainersAsync(stackId, cancellationToken);
 
         return containers
-            .Select(container => new DockerContainer(
-                Name: container.Name,
-                Image: container.Image?.Name ?? string.Empty,
-                Id: container.DockerContainerId,
-                ImageId: container.DockerImageId,
-                State: container.State,
-                Created: container.Created,
-                Stack: container.DockerStack,
-                ContainerStat: null,
-                ControlState: container.ControlState,
-                Ports: container.Ports))
+            .Select(container => new TrackedStackContainer(
+                container.Id,
+                container.PlatformId,
+                new DockerContainer(
+                    Name: container.Name,
+                    Image: container.Image?.Name ?? string.Empty,
+                    Id: container.DockerContainerId,
+                    ImageId: container.DockerImageId,
+                    State: container.State,
+                    Created: container.Created,
+                    Stack: container.DockerStack,
+                    ContainerStat: null,
+                    ControlState: container.ControlState,
+                    Ports: container.Ports)))
             .ToList();
-    }
-
-    private async Task PollContainerStats(
-        string containerId,
-        PlatformCacheEntry platformInfo,
-        Dictionary<string, DockerContainer> latest,
-        SemaphoreSlim gate,
-        ChannelWriter<IEnumerable<DockerContainer>> writer,
-        CancellationToken token)
-    {
-        try
-        {
-            await foreach (var container in connectorFactory
-                .GetConnector(platformInfo.ConnectorType)
-                .StreamContainerStatsAsync(
-                    new StreamContainerStatsCommand(containerId, platformInfo.Address, options.Value.MonitoringInterval * 1000),
-                    token))
-            {
-                var normalizedId = NormalizeDockerId(string.IsNullOrWhiteSpace(container.Id) ? containerId : container.Id);
-
-                await gate.WaitAsync(token);
-                try
-                {
-                    latest[normalizedId] = latest.TryGetValue(normalizedId, out var previous)
-                        ? MergeContainer(previous, container)
-                        : container;
-
-                    await writer.WriteAsync(latest.Values.ToList(), token);
-                }
-                finally
-                {
-                    gate.Release();
-                }
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error while polling stats for stack container {ContainerId}", containerId);
-        }
     }
 
     private async Task BroadcastStats(Guid stackId, ChannelStreamContext<IEnumerable<DockerContainer>> ctx)
@@ -184,19 +136,57 @@ internal sealed class StackInfoStreamManager(
         }
     }
 
-    private static DockerContainer MergeContainer(DockerContainer previous, DockerContainer current) =>
-        current with
+    private sealed class StackContainerStatsAccumulator
+    {
+        private readonly Dictionary<Guid, DockerContainer> latest = [];
+        private readonly HashSet<Guid> platformIds = [];
+
+        public bool IsEmpty => latest.Count == 0;
+
+        public void Initialize(IEnumerable<TrackedStackContainer> containers)
         {
-            Name = string.IsNullOrWhiteSpace(current.Name) ? previous.Name : current.Name,
-            Image = string.IsNullOrWhiteSpace(current.Image) ? previous.Image : current.Image,
-            Id = string.IsNullOrWhiteSpace(current.Id) ? previous.Id : current.Id,
-            ImageId = string.IsNullOrWhiteSpace(current.ImageId) ? previous.ImageId : current.ImageId,
-            Created = current.Created ?? previous.Created,
-            Stack = current.Stack ?? previous.Stack,
-            ContainerStat = current.ContainerStat ?? previous.ContainerStat,
-            ControlState = current.ControlState ?? previous.ControlState,
-            Ports = current.Ports ?? previous.Ports
-        };
+            foreach (var container in containers)
+            {
+                latest[container.ContainerId] = container.Container;
+                platformIds.Add(container.PlatformId);
+            }
+        }
+
+        public IReadOnlyList<DockerContainer>? Update(ContainerStatsSnapshot snapshot)
+        {
+            if (!platformIds.Contains(snapshot.PlatformId))
+                return null;
+
+            var changed = false;
+            foreach (var stat in snapshot.Stats)
+            {
+                if (!latest.TryGetValue(stat.ContainerId, out var container))
+                    continue;
+
+                latest[stat.ContainerId] = container with
+                {
+                    ContainerStat = new DockerContainerStat(
+                        stat.MemoryActive,
+                        stat.MemoryCache,
+                        stat.CpuUsage,
+                        stat.MemoryLimit,
+                        stat.RxBytes,
+                        stat.TxBytes,
+                        stat.Created)
+                };
+                changed = true;
+            }
+
+            return changed ? Snapshot() : null;
+        }
+
+        public IReadOnlyList<DockerContainer> Snapshot() => latest.Values.ToList();
+    }
+
+    private sealed record TrackedStackContainer(
+        Guid ContainerId,
+        Guid PlatformId,
+        DockerContainer Container);
 
     private static bool TryGetStackIdFromGroup(ReadOnlySpan<char> groupId, out Guid stackId)
     {

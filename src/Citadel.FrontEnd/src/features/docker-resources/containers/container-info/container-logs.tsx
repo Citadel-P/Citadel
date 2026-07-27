@@ -5,6 +5,7 @@ import { LogViewer } from '@/components/custom/common';
 import { normalizeDockerId } from '@/lib/utils';
 
 const MAX_LOGS = 5000;
+const MAX_CACHED_LOG_GROUPS = 8;
 const decoder = new TextDecoder('utf-8');
 const DOCKER_TIMESTAMP_ONLY_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 
@@ -89,19 +90,51 @@ interface LogEntry {
   message: string;
 }
 
-type LogEntryMap = Map<string, LogEntry>;
+const logsCache = new Map<string, LogEntry[]>();
 
-const logsCache = new Map<string, LogEntryMap>();
+const getCachedLogs = (groupName: string | undefined): LogEntry[] => {
+  if (!groupName) return [];
 
-const getCachedLogs = (groupName: string | undefined): LogEntryMap => {
-  const cached = groupName ? logsCache.get(groupName) : undefined;
-  return cached ? new Map(cached) : new Map();
+  const cached = logsCache.get(groupName);
+  if (!cached) return [];
+
+  logsCache.delete(groupName);
+  logsCache.set(groupName, cached);
+  return cached;
 };
 
-const sortLogs = (logsMap: LogEntryMap) => {
-  const arr = Array.from(logsMap.values());
-  arr.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  return arr;
+const cacheLogs = (groupName: string, logs: LogEntry[]) => {
+  logsCache.delete(groupName);
+  logsCache.set(groupName, logs);
+
+  while (logsCache.size > MAX_CACHED_LOG_GROUPS) {
+    const oldestGroup = logsCache.keys().next().value;
+    if (oldestGroup === undefined) break;
+    logsCache.delete(oldestGroup);
+  }
+};
+
+const mergeLogs = (current: LogEntry[], incoming: LogEntry[]): LogEntry[] => {
+  if (incoming.length === 0) return current;
+
+  incoming.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const merged = new Array<LogEntry>(current.length + incoming.length);
+  let currentIndex = 0;
+  let incomingIndex = 0;
+  let mergedIndex = 0;
+
+  while (currentIndex < current.length && incomingIndex < incoming.length) {
+    if (current[currentIndex].timestamp.localeCompare(incoming[incomingIndex].timestamp) <= 0) {
+      merged[mergedIndex++] = current[currentIndex++];
+    } else {
+      merged[mergedIndex++] = incoming[incomingIndex++];
+    }
+  }
+
+  while (currentIndex < current.length) merged[mergedIndex++] = current[currentIndex++];
+  while (incomingIndex < incoming.length) merged[mergedIndex++] = incoming[incomingIndex++];
+
+  return merged.length > MAX_LOGS ? merged.slice(merged.length - MAX_LOGS) : merged;
 };
 
 export const useContainerLogGroup = ({
@@ -117,9 +150,9 @@ export const useContainerLogGroup = ({
   logEventName: string;
   logBatchEventName: string;
 }) => {
-  const [logs, setLogs] = useState<LogEntry[]>(() => sortLogs(getCachedLogs(groupName)));
+  const [logs, setLogs] = useState<LogEntry[]>(() => getCachedLogs(groupName));
 
-  const logsMapRef = useRef<LogEntryMap>(getCachedLogs(groupName));
+  const logsRef = useRef<LogEntry[]>(getCachedLogs(groupName));
   const bufferRef = useRef<string[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevGroupNameRef = useRef<string | undefined>(groupName);
@@ -138,14 +171,14 @@ export const useContainerLogGroup = ({
     if (groupName !== prevGroupNameRef.current) {
       prevGroupNameRef.current = groupName;
 
-      logsMapRef.current = getCachedLogs(groupName);
+      logsRef.current = getCachedLogs(groupName);
       bufferRef.current = [];
       if (flushTimerRef.current) {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
 
-      setLogs(sortLogs(logsMapRef.current));
+      setLogs(logsRef.current);
     }
   }, [groupName]);
 
@@ -154,8 +187,7 @@ export const useContainerLogGroup = ({
     const batch = bufferRef.current.splice(0, bufferRef.current.length);
     if (batch.length === 0) return;
 
-    const next = new Map(logsMapRef.current);
-    let sequence = next.size;
+    const incoming: LogEntry[] = [];
 
     for (const rawText of batch) {
       for (const line of rawText.split('\n')) {
@@ -172,28 +204,22 @@ export const useContainerLogGroup = ({
           const message = line.substring(firstSpaceIndex + 1);
           if (!message.trim()) continue;
 
-          next.set(`${timestamp}-${sequence++}`, { timestamp, message });
+          incoming.push({ timestamp, message });
         } else {
-          // Fallback for malformed lines
-          next.set(`${Date.now()}-${sequence++}`, { timestamp: `${Date.now()}`, message: line });
+          incoming.push({ timestamp: new Date().toISOString(), message: line });
         }
       }
     }
 
-    // Trim to MAX_LOGS
-    if (next.size > MAX_LOGS) {
-      const entries = Array.from(next.entries()).slice(-MAX_LOGS);
-      logsMapRef.current = new Map(entries);
-    } else {
-      logsMapRef.current = next;
-    }
+    const next = mergeLogs(logsRef.current, incoming);
+    logsRef.current = next;
 
     if (groupName) {
-      logsCache.set(groupName, new Map(logsMapRef.current));
+      cacheLogs(groupName, next);
     }
 
     if (mountedRef.current) {
-      setLogs(sortLogs(logsMapRef.current));
+      setLogs(next);
     }
   }, [groupName]);
 
@@ -245,7 +271,7 @@ export const useContainerLogGroup = ({
   });
 
   const clearLogs = useCallback(() => {
-    logsMapRef.current = new Map();
+    logsRef.current = [];
     bufferRef.current = [];
     if (flushTimerRef.current) {
       clearTimeout(flushTimerRef.current);

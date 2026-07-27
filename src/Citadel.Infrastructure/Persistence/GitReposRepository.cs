@@ -336,6 +336,28 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
         return result.ToDomain();
     }
 
+    public async Task<IEnumerable<GitRepositoryRef>> GetRefsByRepositoryIdsAsync(
+        IReadOnlyCollection<Guid> gitRepositoryIds,
+        CancellationToken cancellationToken)
+    {
+        if (gitRepositoryIds.Count == 0)
+            return [];
+
+        const string sql = """
+            SELECT *
+            FROM GitRepositoryRefs
+            WHERE GitRepositoryId = ANY(@GitRepositoryIds)
+            ORDER BY GitRepositoryId, Branch
+            """;
+
+        var result = await db.QueryAsync<GitRepositoryRefDto>(
+            sql,
+            new { GitRepositoryIds = gitRepositoryIds.ToArray() },
+            transaction: tx());
+
+        return result.ToDomain();
+    }
+
     public Task<int> UpsertRefAsync(GitRepositoryRef gitRepositoryRef, CancellationToken cancellationToken)
     {
         const string sql = """

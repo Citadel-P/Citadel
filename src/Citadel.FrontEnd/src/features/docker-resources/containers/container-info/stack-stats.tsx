@@ -8,12 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useRead } from '@/lib/hooks';
+import {
+  appendBoundedLiveStat,
+  getLiveStatsPointLimit,
+  mergeStatsByCreated,
+  STREAMED_STATS_QUERY_OPTIONS,
+} from '@/lib/live-stats';
 import { normalizeDockerId } from '@/lib/utils';
 import dayjs from 'dayjs';
-import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
+import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
 
 type ContainerSelection = 'all' | string;
+type MetricKind = 'memory' | 'cpu' | 'network';
 type StatField = keyof Pick<
   ContainerStatView,
   'cpuUsage' | 'memoryActive' | 'memoryCache' | 'memoryLimit' | 'rxBytes' | 'txBytes'
@@ -40,7 +47,7 @@ type MetricField = {
 };
 
 type MetricConfig = {
-  kind: 'memory' | 'cpu' | 'network';
+  kind: MetricKind;
   title: string;
   description: string;
   fields: MetricField[];
@@ -53,6 +60,10 @@ type ChartDatum = {
 } & Partial<Record<StatField, number>>;
 
 const ALL_CONTAINERS = 'all';
+type MetricViewState = {
+  windowHours: StatsWindowHours;
+  selectedContainer: ContainerSelection;
+};
 
 const STACK_STAT_METRICS: MetricConfig[] = [
   {
@@ -152,64 +163,95 @@ const STACK_STAT_METRICS: MetricConfig[] = [
   },
 ];
 
-export const StackStats = ({ stackId, containers }: StackStatsProps) => {
+export const StackStats = (props: StackStatsProps) => <StackStatsContent key={props.stackId} {...props} />;
+
+const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
   const [liveStats, setLiveStats] = useState<Record<string, ContainerStatView[]>>({});
+  const [metricViews, setMetricViews] = useState<Record<MetricKind, MetricViewState>>({
+    memory: { windowHours: 24, selectedContainer: ALL_CONTAINERS },
+    cpu: { windowHours: 24, selectedContainer: ALL_CONTAINERS },
+    network: { windowHours: 24, selectedContainer: ALL_CONTAINERS },
+  });
   const lastStatRef = useRef<Record<string, ContainerStatView | undefined>>({});
+  const longestWindow = Math.max(...Object.values(metricViews).map((view) => view.windowHours)) as StatsWindowHours;
+  const readArgs = useMemo(() => ({ stackId, query: { hours: longestWindow } }), [longestWindow, stackId]);
+  const { data, isLoading } = useRead('getStackStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
+  const series = useMemo(
+    () => buildContainerSeries(data?.data?.containers ?? [], containers, liveStats),
+    [containers, data?.data?.containers, liveStats],
+  );
 
   useEffect(() => {
     const updates: { id: string; stat: ContainerStatView }[] = [];
+    const activeIds = new Set<string>();
 
     containers.forEach((container) => {
       const id = normalizeDockerId(container.id);
+      if (id) activeIds.add(id);
       const stat = container.containerStat;
       if (!id || !stat || container.state !== ContainerStateStatus.Running || stat === lastStatRef.current[id]) {
         return;
       }
 
       lastStatRef.current[id] = stat;
-      updates.push({ id, stat: { ...stat, created: Math.floor(Date.now() / 1000) } });
+      updates.push({
+        id,
+        stat: {
+          ...stat,
+          created: Number(stat.created) > 0 ? stat.created : Math.floor(Date.now() / 1000),
+        },
+      });
     });
 
-    if (updates.length > 0) {
-      appendLiveStats(setLiveStats, updates);
-    }
-  }, [containers]);
+    appendLiveStats(setLiveStats, activeIds, updates, getLiveStatsPointLimit(longestWindow));
+    lastStatRef.current = Object.fromEntries(Object.entries(lastStatRef.current).filter(([id]) => activeIds.has(id)));
+  }, [containers, longestWindow]);
+
+  const updateMetricView = useCallback((kind: MetricKind, update: Partial<MetricViewState>) => {
+    setMetricViews((current) => ({
+      ...current,
+      [kind]: { ...current[kind], ...update },
+    }));
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">
-      {STACK_STAT_METRICS.map((metric) => (
-        <StackMetricCard
-          key={metric.kind}
-          stackId={stackId}
-          containers={containers}
-          liveStats={liveStats}
-          metric={metric}
-        />
-      ))}
+      {STACK_STAT_METRICS.map((metric) => {
+        const view = metricViews[metric.kind];
+        return (
+          <StackMetricCard
+            key={metric.kind}
+            series={series}
+            isLoading={isLoading}
+            metric={metric}
+            windowHours={view.windowHours}
+            onWindowHoursChange={(windowHours) => updateMetricView(metric.kind, { windowHours })}
+            selectedContainer={view.selectedContainer}
+            onSelectedContainerChange={(selectedContainer) => updateMetricView(metric.kind, { selectedContainer })}
+          />
+        );
+      })}
     </div>
   );
 };
 
 const StackMetricCard = ({
-  stackId,
-  containers,
-  liveStats,
+  series,
+  isLoading,
   metric,
+  windowHours,
+  onWindowHoursChange,
+  selectedContainer,
+  onSelectedContainerChange,
 }: {
-  stackId: string;
-  containers: ContainerDataView[];
-  liveStats: Record<string, ContainerStatView[]>;
+  series: ContainerSeries[];
+  isLoading: boolean;
   metric: MetricConfig;
+  windowHours: StatsWindowHours;
+  onWindowHoursChange: (hours: StatsWindowHours) => void;
+  selectedContainer: ContainerSelection;
+  onSelectedContainerChange: (container: ContainerSelection) => void;
 }) => {
-  const [windowHours, setWindowHours] = useState<StatsWindowHours>(24);
-  const [selectedContainer, setSelectedContainer] = useState<ContainerSelection>(ALL_CONTAINERS);
-  const readArgs = useMemo(() => ({ stackId, query: { hours: windowHours } }), [stackId, windowHours]);
-  const { data, isLoading } = useRead('getStackStats', readArgs);
-
-  const series = useMemo(
-    () => buildContainerSeries(data?.data?.containers ?? [], containers, liveStats),
-    [containers, data?.data?.containers, liveStats],
-  );
   const effectiveContainer = useMemo(
     () =>
       selectedContainer === ALL_CONTAINERS || series.some((container) => container.id === selectedContainer)
@@ -234,9 +276,9 @@ const StackMetricCard = ({
         controls={
           <StackMetricControls
             windowHours={windowHours}
-            onWindowHoursChange={setWindowHours}
+            onWindowHoursChange={onWindowHoursChange}
             selectedContainer={effectiveContainer}
-            onSelectedContainerChange={setSelectedContainer}
+            onSelectedContainerChange={onSelectedContainerChange}
             containers={series}
           />
         }>
@@ -397,7 +439,7 @@ const buildContainerSeries = (
     byId.set(id, {
       id,
       name: getContainerLabel(container.name, container.id),
-      stats: [...(existing?.stats ?? []), ...(liveStats[id] ?? [])],
+      stats: mergeStatsByCreated(existing?.stats ?? [], liveStats[id] ?? []),
     });
   });
 
@@ -507,16 +549,19 @@ const buildChartConfig = (metric: MetricConfig): ChartConfig =>
 
 const appendLiveStats = (
   setLiveStats: Dispatch<SetStateAction<Record<string, ContainerStatView[]>>>,
+  activeIds: Set<string>,
   updates: { id: string; stat: ContainerStatView }[],
+  maxPoints: number,
 ) => {
   setLiveStats((current) => {
-    const next = { ...current };
+    const next = Object.fromEntries(Object.entries(current).filter(([id]) => activeIds.has(id)));
 
     updates.forEach(({ id, stat }) => {
-      next[id] = [...(next[id] ?? []), stat];
+      next[id] = appendBoundedLiveStat(next[id] ?? [], stat, maxPoints);
     });
 
-    return next;
+    const removedInactiveContainer = Object.keys(next).length !== Object.keys(current).length;
+    return updates.length > 0 || removedInactiveContainer ? next : current;
   });
 };
 

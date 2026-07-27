@@ -15,52 +15,70 @@ internal sealed class AutomationActionRunWorkerJob(
 {
     private readonly AutomationOptions options = automationOptions.Value;
     private readonly SemaphoreSlim concurrency = new(Math.Max(1, automationOptions.Value.MaxParallelRuns));
+    private readonly TrackedBackgroundTasks activeTasks = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(1, options.PollIntervalSeconds)));
+        var minimumDelay = TimeSpan.FromSeconds(Math.Max(1, options.PollIntervalSeconds));
+        var delay = minimumDelay;
 
         try
         {
-            while (await timer.WaitForNextTickAsync(stoppingToken))
+            while (!stoppingToken.IsCancellationRequested)
             {
-                if (!options.Enabled)
-                    continue;
-
-                await DispatchQueuedRunsAsync(stoppingToken);
+                var dispatched = options.Enabled
+                    ? await DispatchQueuedRunsAsync(stoppingToken)
+                    : 0;
+                delay = WorkerPollingDelay.Next(delay, minimumDelay, dispatched > 0);
+                await activeTasks.WaitForCompletionOrDelayAsync(delay, stoppingToken);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+        finally
         {
+            await activeTasks.DrainAsync();
         }
     }
 
-    private async Task DispatchQueuedRunsAsync(CancellationToken stoppingToken)
+    private async Task<int> DispatchQueuedRunsAsync(CancellationToken stoppingToken)
     {
+        var availableSlots = concurrency.CurrentCount;
+        if (availableSlots <= 0)
+            return 0;
+
         await using var scope = scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var queued = await unitOfWork.ActionRuns.GetQueuedAsync(options.MaxParallelRuns, stoppingToken);
+        var queued = await unitOfWork.ActionRuns.GetQueuedAsync(
+            Math.Min(options.MaxParallelRuns, availableSlots),
+            stoppingToken);
+        var dispatched = 0;
 
         foreach (var run in queued)
         {
             if (!concurrency.Wait(0))
-                return;
+                break;
 
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await ClaimAndExecuteAsync(run.Id, stoppingToken);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    logger.LogError(ex, "Automation run {RunId} failed before execution service completed", run.Id);
-                }
-                finally
-                {
-                    concurrency.Release();
-                }
-            }, stoppingToken);
+            dispatched++;
+            activeTasks.Add(ExecuteTrackedAsync(run.Id, stoppingToken));
+        }
+
+        return dispatched;
+    }
+
+    private async Task ExecuteTrackedAsync(Guid runId, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await ClaimAndExecuteAsync(runId, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Automation run {RunId} failed before execution service completed", runId);
+        }
+        finally
+        {
+            concurrency.Release();
         }
     }
 

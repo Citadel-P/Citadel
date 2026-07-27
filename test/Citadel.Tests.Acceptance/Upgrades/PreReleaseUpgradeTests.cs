@@ -85,6 +85,19 @@ public sealed class PreReleaseUpgradeTests(AcceptancePostgresFixture postgres)
                     'Created after restart');
                 """,
                 cancellationToken));
+        Assert.Equal(
+            2L,
+            await ScalarAsync<long>(
+                connection,
+                """
+                SELECT COUNT(*)
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND indexname IN (
+                    'ix_containerstats_created',
+                    'ix_platformstats_created');
+                """,
+                cancellationToken));
     }
 
     [Fact]

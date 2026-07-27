@@ -5,7 +5,7 @@ import { AuthContext, AuthContextValue } from '@/features/auth/auth-context';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { FakeHubConnection } from '@/test/fakes/signalr';
 import { SignalRProvider } from './signalr-provider';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 
 const authValue: AuthContextValue = {
   accessToken: 'access-token',
@@ -33,14 +33,8 @@ function GroupSubscriber({ name }: { name: string }) {
 function EventSubscriber({ name }: { name: string }) {
   const [message, setMessage] = useState('waiting');
   const handleEvent = useCallback((value: string) => setMessage(value), []);
-  const setupEventListeners = useCallback(
-    (hub: HubConnection) => hub.on('StreamEvent', handleEvent),
-    [handleEvent],
-  );
-  const removeEventListeners = useCallback(
-    (hub: HubConnection) => hub.off('StreamEvent', handleEvent),
-    [handleEvent],
-  );
+  const setupEventListeners = useCallback((hub: HubConnection) => hub.on('StreamEvent', handleEvent), [handleEvent]);
+  const removeEventListeners = useCallback((hub: HubConnection) => hub.off('StreamEvent', handleEvent), [handleEvent]);
   const { isConnected } = useSignalRGroup({
     groupName: name,
     setupEventListeners,
@@ -58,8 +52,9 @@ function EventSubscriber({ name }: { name: string }) {
 function SignalRTestRoot({
   children,
   fake,
-}: PropsWithChildren<{ fake: FakeHubConnection }>) {
-  const [queryClient] = useState(
+  queryClient,
+}: PropsWithChildren<{ fake: FakeHubConnection; queryClient?: QueryClient }>) {
+  const [defaultQueryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
@@ -70,17 +65,26 @@ function SignalRTestRoot({
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient ?? defaultQueryClient}>
       <AuthContext.Provider value={authValue}>
         <SignalRProvider
           connectionFactory={() => fake.asHubConnection()}
-          startConnection={(connection) => connection.start()}
-        >
+          startConnection={(connection) => connection.start()}>
           {children}
         </SignalRProvider>
       </AuthContext.Provider>
     </QueryClientProvider>
   );
+}
+
+function StatsQuerySubscriber({ queryFn }: { queryFn: () => Promise<string> }) {
+  const { data } = useQuery({
+    queryKey: ['getContainerStats', { id: 'container-1', query: { hours: 24 } }],
+    queryFn,
+    staleTime: Infinity,
+  });
+
+  return <span>{data ?? 'loading'}</span>;
 }
 
 describe('SignalRProvider', () => {
@@ -144,11 +148,76 @@ describe('SignalRProvider', () => {
 
     await screen.findByText('connected');
     await waitFor(() => {
+      const joins = fake.invoke.mock.calls.filter(([method, group]) => method === 'JoinGroup' && group === 'Builds:2');
+      expect(joins).toHaveLength(2);
+    });
+  });
+
+  it('retains an active group when one rejoin attempt fails', async () => {
+    const fake = new FakeHubConnection();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <SignalRTestRoot fake={fake}>
+        <GroupSubscriber name="Builds:retry" />
+      </SignalRTestRoot>,
+    );
+
+    await screen.findByText('connected');
+    fake.invoke.mockRejectedValueOnce(new Error('temporary rejoin failure'));
+
+    act(() => {
+      fake.reconnecting();
+      fake.reconnected();
+    });
+
+    await waitFor(() => {
       const joins = fake.invoke.mock.calls.filter(
-        ([method, group]) => method === 'JoinGroup' && group === 'Builds:2',
+        ([method, group]) => method === 'JoinGroup' && group === 'Builds:retry',
       );
       expect(joins).toHaveLength(2);
     });
+
+    act(() => {
+      fake.reconnecting();
+      fake.reconnected();
+    });
+
+    await waitFor(() => {
+      const joins = fake.invoke.mock.calls.filter(
+        ([method, group]) => method === 'JoinGroup' && group === 'Builds:retry',
+      );
+      expect(joins).toHaveLength(3);
+    });
+    consoleError.mockRestore();
+  });
+
+  it('refreshes active streamed statistics once after reconnecting', async () => {
+    const fake = new FakeHubConnection();
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const queryFn = vi.fn().mockResolvedValueOnce('initial').mockResolvedValueOnce('caught-up');
+
+    render(
+      <SignalRTestRoot fake={fake} queryClient={queryClient}>
+        <StatsQuerySubscriber queryFn={queryFn} />
+      </SignalRTestRoot>,
+    );
+
+    expect(await screen.findByText('initial')).toBeInTheDocument();
+    expect(queryFn).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      fake.reconnecting();
+      fake.reconnected();
+    });
+
+    expect(await screen.findByText('caught-up')).toBeInTheDocument();
+    expect(queryFn).toHaveBeenCalledTimes(2);
   });
 
   it('does not report a failed group join as connected', async () => {

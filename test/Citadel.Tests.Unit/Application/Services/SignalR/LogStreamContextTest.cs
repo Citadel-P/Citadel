@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Application.Services.SignalR.Context;
+using System.Buffers;
 
 namespace Tests.Unit.Application.Services.SignalR;
 
@@ -101,5 +102,86 @@ public class LogStreamContextTest
         rb.Clear();
         Assert.Equal(0, rb.Count);
         Assert.Empty(rb.ToArray());
+    }
+
+    [Fact]
+    public async Task Reset_DisposesQueuedPooledBuffers()
+    {
+        using var context = new LogStreamContext();
+        var pooled = new PooledBuffer(ArrayPool<byte>.Shared.Rent(8), 1);
+        await context.LogChannel.Writer.WriteAsync(pooled, TestContext.Current.CancellationToken);
+
+        context.Reset();
+
+        Assert.Throws<ObjectDisposedException>(() => pooled.Buffer);
+    }
+
+    [Fact]
+    public async Task Reset_DoesNotReleaseGenerationResourcesUntilItsStreamStops()
+    {
+        using var context = new LogStreamContext();
+        var streamStarted = new TaskCompletionSource<LogStreamResources>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishStream = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Assert.True(context.TryStartStream(async resources =>
+        {
+            streamStarted.TrySetResult(resources);
+            await finishStream.Task;
+        }));
+
+        var resources = await streamStarted.Task;
+        var pooled = new PooledBuffer(ArrayPool<byte>.Shared.Rent(8), 1);
+        await resources.Channel.Writer.WriteAsync(pooled, TestContext.Current.CancellationToken);
+
+        context.Reset();
+
+        resources.AddToBuffer("still-owned"u8);
+        Assert.NotNull(pooled.Buffer);
+
+        finishStream.TrySetResult();
+        await AssertEventuallyAsync(() =>
+            Assert.Throws<ObjectDisposedException>(() => pooled.Buffer));
+    }
+
+    [Fact]
+    public async Task Pipeline_WhenConsumerFails_CancelsProducerAndDisposesQueuedBuffers()
+    {
+        using var context = new LogStreamContext();
+        var first = new PooledBuffer(ArrayPool<byte>.Shared.Rent(8), 1);
+        var second = new PooledBuffer(ArrayPool<byte>.Shared.Rent(8), 1);
+
+        var pipeline = LogStreamPipeline.RunAsync(
+            context.LogChannel,
+            async token =>
+            {
+                await context.LogChannel.Writer.WriteAsync(first, token);
+                await context.LogChannel.Writer.WriteAsync(second, token);
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            },
+            _ => Task.FromException(new InvalidOperationException("dispatch failed")),
+            TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => pipeline);
+        Assert.Throws<ObjectDisposedException>(() => first.Buffer);
+        Assert.Throws<ObjectDisposedException>(() => second.Buffer);
+    }
+
+    private static async Task AssertEventuallyAsync(Action assertion)
+    {
+        var timeout = DateTime.UtcNow.AddSeconds(2);
+        while (true)
+        {
+            try
+            {
+                assertion();
+                return;
+            }
+            catch when (DateTime.UtcNow < timeout)
+            {
+                await Task.Delay(10);
+            }
+        }
     }
 }

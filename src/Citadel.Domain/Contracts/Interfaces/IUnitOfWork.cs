@@ -805,6 +805,7 @@ public interface IGitReposRepository
     Task<int> UpdateProcessingAsync(Guid id, GitReposStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
     Task<GitRepositoryRef?> GetRefAsync(Guid gitRepositoryId, string branch, CancellationToken cancellationToken);
     Task<IEnumerable<GitRepositoryRef>> GetRefsByRepositoryIdAsync(Guid gitRepositoryId, CancellationToken cancellationToken);
+    Task<IEnumerable<GitRepositoryRef>> GetRefsByRepositoryIdsAsync(IReadOnlyCollection<Guid> gitRepositoryIds, CancellationToken cancellationToken);
     Task<int> UpsertRefAsync(GitRepositoryRef gitRepositoryRef, CancellationToken cancellationToken);
 }
 

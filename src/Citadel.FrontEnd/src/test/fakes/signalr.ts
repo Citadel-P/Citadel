@@ -17,8 +17,8 @@ export class FakeHubConnection {
     this.state = HubConnectionState.Disconnected;
   });
 
-  readonly send = vi.fn(async () => {});
-  readonly invoke = vi.fn(async () => {});
+  readonly send = vi.fn(async (_methodName: string, ..._args: unknown[]) => {});
+  readonly invoke = vi.fn(async (_methodName: string, ..._args: unknown[]) => {});
 
   private readonly reconnectingHandlers: ReconnectingHandler[] = [];
   private readonly reconnectedHandlers: ReconnectedHandler[] = [];

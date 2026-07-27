@@ -6,104 +6,271 @@ namespace Application.Services.SignalR.Context;
 
 internal sealed class LogStreamContext : StreamContext, IDisposable
 {
-    private static BoundedChannelOptions DefaultChannelOptions() => new(1024)
+    private static BoundedChannelOptions DefaultChannelOptions() => new(128)
     {
         FullMode = BoundedChannelFullMode.Wait,
         SingleReader = true,
         SingleWriter = false
     };
 
-    public Channel<PooledBuffer> LogChannel { get; set; } = Channel.CreateBounded<PooledBuffer>(DefaultChannelOptions());
+    public Channel<PooledBuffer> LogChannel { get; private set; } = Channel.CreateBounded<PooledBuffer>(DefaultChannelOptions());
     public CancellationTokenSource Cancellation { get; private set; } = new();
     public CancellationTokenSource WatcherCts { get; private set; } = new();
 
-    private readonly PooledLogBuffer logBuffer = new(1024 * 512);
+    private PooledLogBuffer logBuffer = new(1024 * 512);
+    private bool disposed;
     public Task? EventWatcherTask { get; set; }
 
     public override void RemoveSubscriber(string connectionId)
     {
         base.RemoveSubscriber(connectionId);
+
+        StreamCleanup? streamCleanup = null;
+        WatcherCleanup? watcherCleanup = null;
         using (@lock.EnterScope())
         {
-            if (IsEmpty)
+            if (subscribers.Count == 0 && !disposed)
             {
-                ResetInternal();       // stops producer/consumer
-                StopWatcherInternal(); // stops watcher
+                streamCleanup = ReplaceStreamUnsafe();
+                watcherCleanup = ReplaceWatcherUnsafe();
             }
         }
+
+        if (streamCleanup is { } stream)
+            BeginStreamCleanup(stream);
+        if (watcherCleanup is { } watcher)
+            BeginWatcherCleanup(watcher);
     }
 
     /// <summary>Force a reset when container restarts (keeps subscribers, keeps watcher).</summary>
     public void Reset()
     {
+        StreamCleanup? cleanup = null;
         using (@lock.EnterScope())
         {
-            ResetInternal();
+            if (!disposed)
+                cleanup = ReplaceStreamUnsafe();
         }
+
+        if (cleanup is { } stream)
+            BeginStreamCleanup(stream);
     }
 
-    private void ResetInternal()
+    public bool TryStartStream(Func<LogStreamResources, Task> start)
     {
-        logBuffer.Clear();
-
-        var oldCts = Cancellation;
-        Cancellation = new CancellationTokenSource();
-        try { oldCts.Cancel(); } catch { }
-        try { oldCts.Dispose(); } catch { }
-
-        started = false;
-
-        var oldChannel = LogChannel;
-        oldChannel.Writer.TryComplete();
-        LogChannel = Channel.CreateBounded<PooledBuffer>(DefaultChannelOptions());
-
-        var t = StreamTask;
-        StreamTask = null;
-        if (t != null)
+        using (@lock.EnterScope())
         {
-            _ = t.ContinueWith(tt =>
+            if (disposed || started)
+                return false;
+
+            started = true;
+            try
             {
-                if (tt.IsFaulted) GC.KeepAlive(tt.Exception);
-                tt.Dispose();
-            }, TaskContinuationOptions.ExecuteSynchronously);
+                StreamTask = start(new LogStreamResources(
+                    LogChannel,
+                    Cancellation.Token,
+                    logBuffer));
+                return true;
+            }
+            catch
+            {
+                started = false;
+                StreamTask = null;
+                throw;
+            }
         }
-        // NOTE: we DO NOT touch WatcherCts or EventWatcherTask here
     }
 
-    private void StopWatcherInternal()
+    public void EnsureWatcher(Func<CancellationToken, Task> start)
     {
-        var oldWatcherCts = WatcherCts;
-        WatcherCts = new CancellationTokenSource();
-        try { oldWatcherCts.Cancel(); } catch { }
-        try { oldWatcherCts.Dispose(); } catch { }
-
-        var wt = EventWatcherTask;
-        EventWatcherTask = null;
-        if (wt != null)
+        using (@lock.EnterScope())
         {
-            _ = wt.ContinueWith(tt =>
-            {
-                if (tt.IsFaulted) GC.KeepAlive(tt.Exception);
-                tt.Dispose();
-            }, TaskContinuationOptions.ExecuteSynchronously);
+            if (disposed || EventWatcherTask is not null)
+                return;
+
+            EventWatcherTask = start(WatcherCts.Token);
         }
     }
 
-    public void AddToBuffer(ReadOnlySpan<byte> logBytes) => logBuffer.AddLog(logBytes);
-    public string GetBufferedLogsAsString() => logBuffer.GetRecentLogsString();
-    public byte[] GetBufferedLogsAsBytes() => logBuffer.GetRecentLogsBytes();
+    public void AddToBuffer(ReadOnlySpan<byte> logBytes)
+    {
+        using (@lock.EnterScope())
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            logBuffer.AddLog(logBytes);
+        }
+    }
+
+    public string GetBufferedLogsAsString()
+    {
+        using (@lock.EnterScope())
+            return disposed ? string.Empty : logBuffer.GetRecentLogsString();
+    }
+
+    public byte[] GetBufferedLogsAsBytes()
+    {
+        using (@lock.EnterScope())
+            return disposed ? [] : logBuffer.GetRecentLogsBytes();
+    }
 
     public void Dispose()
     {
-        logBuffer.Dispose();
-        Cancellation.Dispose();
-        WatcherCts.Dispose();
+        StreamCleanup streamCleanup;
+        WatcherCleanup watcherCleanup;
+
+        using (@lock.EnterScope())
+        {
+            if (disposed)
+                return;
+
+            disposed = true;
+            started = false;
+            streamCleanup = new StreamCleanup(StreamTask, Cancellation, LogChannel, logBuffer);
+            watcherCleanup = new WatcherCleanup(EventWatcherTask, WatcherCts);
+            StreamTask = null;
+            EventWatcherTask = null;
+        }
+
+        BeginStreamCleanup(streamCleanup);
+        BeginWatcherCleanup(watcherCleanup);
+    }
+
+    internal static void Drain(ChannelReader<PooledBuffer> reader)
+    {
+        while (reader.TryRead(out var item))
+            item.Dispose();
+    }
+
+    private StreamCleanup ReplaceStreamUnsafe()
+    {
+        var cleanup = new StreamCleanup(StreamTask, Cancellation, LogChannel, logBuffer);
+        Cancellation = new CancellationTokenSource();
+        LogChannel = Channel.CreateBounded<PooledBuffer>(DefaultChannelOptions());
+        logBuffer = new PooledLogBuffer(1024 * 512);
+        StreamTask = null;
+        started = false;
+        return cleanup;
+    }
+
+    private WatcherCleanup ReplaceWatcherUnsafe()
+    {
+        var cleanup = new WatcherCleanup(EventWatcherTask, WatcherCts);
+        WatcherCts = new CancellationTokenSource();
+        EventWatcherTask = null;
+        return cleanup;
+    }
+
+    private static void BeginStreamCleanup(StreamCleanup cleanup)
+    {
+        try { cleanup.Cancellation.Cancel(); } catch { }
+        cleanup.Channel.Writer.TryComplete();
+        _ = CleanupStreamAsync(cleanup);
+    }
+
+    private static async Task CleanupStreamAsync(StreamCleanup cleanup)
+    {
+        try
+        {
+            if (cleanup.StreamTask is not null)
+                await cleanup.StreamTask.ConfigureAwait(false);
+        }
+        catch
+        {
+        }
+        finally
+        {
+            cleanup.Channel.Writer.TryComplete();
+            Drain(cleanup.Channel.Reader);
+            cleanup.Buffer.Dispose();
+            cleanup.Cancellation.Dispose();
+        }
+    }
+
+    private static void BeginWatcherCleanup(WatcherCleanup cleanup)
+    {
+        try { cleanup.Cancellation.Cancel(); } catch { }
+        _ = CleanupWatcherAsync(cleanup);
+    }
+
+    private static async Task CleanupWatcherAsync(WatcherCleanup cleanup)
+    {
+        try
+        {
+            if (cleanup.WatcherTask is not null)
+                await cleanup.WatcherTask.ConfigureAwait(false);
+        }
+        catch
+        {
+        }
+        finally
+        {
+            cleanup.Cancellation.Dispose();
+        }
+    }
+
+    private readonly record struct StreamCleanup(
+        Task? StreamTask,
+        CancellationTokenSource Cancellation,
+        Channel<PooledBuffer> Channel,
+        PooledLogBuffer Buffer);
+
+    private readonly record struct WatcherCleanup(
+        Task? WatcherTask,
+        CancellationTokenSource Cancellation);
+}
+
+internal sealed class LogStreamResources(
+    Channel<PooledBuffer> channel,
+    CancellationToken cancellationToken,
+    PooledLogBuffer buffer)
+{
+    public Channel<PooledBuffer> Channel { get; } = channel;
+    public CancellationToken CancellationToken { get; } = cancellationToken;
+    public void AddToBuffer(ReadOnlySpan<byte> data) => buffer.AddLog(data);
+}
+
+internal static class LogStreamPipeline
+{
+    public static async Task RunAsync(
+        Channel<PooledBuffer> channel,
+        Func<CancellationToken, Task> produce,
+        Func<CancellationToken, Task> consume,
+        CancellationToken cancellationToken)
+    {
+        using var pipelineCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var producerTask = produce(pipelineCancellation.Token);
+        var consumerTask = consume(pipelineCancellation.Token);
+
+        try
+        {
+            var firstCompleted = await Task.WhenAny(producerTask, consumerTask).ConfigureAwait(false);
+            if (firstCompleted == producerTask)
+            {
+                var error = producerTask.IsFaulted
+                    ? producerTask.Exception?.GetBaseException()
+                    : null;
+                channel.Writer.TryComplete(error);
+            }
+            else
+            {
+                pipelineCancellation.Cancel();
+                channel.Writer.TryComplete();
+            }
+
+            await Task.WhenAll(producerTask, consumerTask).ConfigureAwait(false);
+        }
+        finally
+        {
+            try { pipelineCancellation.Cancel(); } catch { }
+            channel.Writer.TryComplete();
+            LogStreamContext.Drain(channel.Reader);
+        }
     }
 }
 
 internal sealed class PooledLogBuffer : IDisposable
 {
-    private byte[] buffer;
+    private byte[]? buffer;
     private int writeIndex;
     private int lengthUsed;
     private readonly int capacity;
@@ -121,18 +288,19 @@ internal sealed class PooledLogBuffer : IDisposable
 
         using (@lock.EnterScope())
         {
+            var target = buffer ?? throw new ObjectDisposedException(nameof(PooledLogBuffer));
             int bytesToWrite = Math.Min(logBytes.Length, capacity);
             ReadOnlySpan<byte> source = logBytes[^bytesToWrite..];
 
             int spaceAtEnd = capacity - writeIndex;
             if (source.Length <= spaceAtEnd)
             {
-                source.CopyTo(buffer.AsSpan(writeIndex));
+                source.CopyTo(target.AsSpan(writeIndex));
             }
             else
             {
-                source[..spaceAtEnd].CopyTo(buffer.AsSpan(writeIndex));
-                source[spaceAtEnd..].CopyTo(buffer.AsSpan(0));
+                source[..spaceAtEnd].CopyTo(target.AsSpan(writeIndex));
+                source[spaceAtEnd..].CopyTo(target.AsSpan(0));
             }
 
             writeIndex = (writeIndex + source.Length) % capacity;
@@ -144,6 +312,7 @@ internal sealed class PooledLogBuffer : IDisposable
     {
         using (@lock.EnterScope())
         {
+            var source = buffer ?? throw new ObjectDisposedException(nameof(PooledLogBuffer));
             if (lengthUsed == 0)
                 return Array.Empty<byte>();
 
@@ -155,14 +324,14 @@ internal sealed class PooledLogBuffer : IDisposable
             if (start + lengthUsed <= capacity)
             {
                 // Contiguous block
-                Buffer.BlockCopy(buffer, start, output, 0, lengthUsed);
+                Buffer.BlockCopy(source, start, output, 0, lengthUsed);
             }
             else
             {
                 // Wrapped
                 int firstPart = capacity - start;
-                Buffer.BlockCopy(buffer, start, output, 0, firstPart);
-                Buffer.BlockCopy(buffer, 0, output, firstPart, lengthUsed - firstPart);
+                Buffer.BlockCopy(source, start, output, 0, firstPart);
+                Buffer.BlockCopy(source, 0, output, firstPart, lengthUsed - firstPart);
             }
 
             return output;
@@ -173,6 +342,7 @@ internal sealed class PooledLogBuffer : IDisposable
     {
         using (@lock.EnterScope())
         {
+            ObjectDisposedException.ThrowIf(buffer is null, this);
             writeIndex = 0;
             lengthUsed = 0;
         }
@@ -186,11 +356,17 @@ internal sealed class PooledLogBuffer : IDisposable
 
     public void Dispose()
     {
-        if (buffer != null)
+        byte[]? rented;
+        using (@lock.EnterScope())
         {
-            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
-            buffer = null!;
+            rented = buffer;
+            buffer = null;
+            writeIndex = 0;
+            lengthUsed = 0;
         }
+
+        if (rented is not null)
+            ArrayPool<byte>.Shared.Return(rented, clearArray: true);
     }
 }
 
@@ -266,7 +442,9 @@ internal sealed class RingBuffer<T>
 
 internal sealed class PooledBuffer(byte[] buffer, int length) : IDisposable
 {
-    public byte[] Buffer { get; } = buffer;
+    private byte[]? buffer = buffer;
+
+    public byte[] Buffer => buffer ?? throw new ObjectDisposedException(nameof(PooledBuffer));
     public int Length { get; } = length;
 
     public ReadOnlySpan<byte> Span => Buffer.AsSpan(0, Length);
@@ -275,6 +453,8 @@ internal sealed class PooledBuffer(byte[] buffer, int length) : IDisposable
 
     public void Dispose()
     {
-        ArrayPool<byte>.Shared.Return(Buffer);
+        var rented = Interlocked.Exchange(ref buffer, null);
+        if (rented is not null)
+            ArrayPool<byte>.Shared.Return(rented);
     }
 }
