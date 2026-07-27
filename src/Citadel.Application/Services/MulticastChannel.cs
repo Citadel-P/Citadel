@@ -7,38 +7,43 @@ internal class MulticastChannel<T>
 {
     private readonly List<Channel<T>> subscribers = [];
     private readonly Lock @lock = new();
+    private Channel<T>[] subscriberSnapshot = [];
+    private bool completed;
 
-    public bool HasSubscribers
-    {
-        get
-        {
-            using (@lock.EnterScope())
-                return subscribers.Count > 0;
-        }
-    }
+    public bool HasSubscribers => Volatile.Read(ref subscriberSnapshot).Length != 0;
 
-    // Add a subscriber
     public ChannelReader<T> AddSubscriber()
     {
-        var channel = Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions(boundedChannelFullMode: BoundedChannelFullMode.DropOldest));
+        var channel = Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions(
+            singleWriter: false,
+            boundedChannelFullMode: BoundedChannelFullMode.DropOldest));
+
         using (@lock.EnterScope())
         {
+            if (completed)
+            {
+                channel.Writer.TryComplete();
+                return channel.Reader;
+            }
+
             subscribers.Add(channel);
+            Volatile.Write(ref subscriberSnapshot, [.. subscribers]);
         }
+
         return channel.Reader;
     }
 
-    // Remove a subscriber by Channel
     public void RemoveSubscriber(Channel<T> channel)
     {
         using (@lock.EnterScope())
         {
-            subscribers.Remove(channel);
+            if (subscribers.Remove(channel))
+                Volatile.Write(ref subscriberSnapshot, [.. subscribers]);
+
             channel.Writer.TryComplete();
         }
     }
 
-    // Remove a subscriber by ChannelReader
     public void RemoveSubscriber(ChannelReader<T> reader)
     {
         using (@lock.EnterScope())
@@ -47,47 +52,32 @@ internal class MulticastChannel<T>
             if (channel != null)
             {
                 subscribers.Remove(channel);
+                Volatile.Write(ref subscriberSnapshot, [.. subscribers]);
                 channel.Writer.TryComplete();
             }
         }
     }
 
-    // Publish an event to all subscribers
-    public async ValueTask PublishAsync(T @event, CancellationToken cancellationToken = default)
+    public ValueTask PublishAsync(T @event, CancellationToken cancellationToken = default)
     {
-        Channel<T>[] snapshot;
+        foreach (var subscriber in Volatile.Read(ref subscriberSnapshot))
+            subscriber.Writer.TryWrite(@event);
 
-        // Take a snapshot under lock to avoid holding the lock during async operations
-        using (@lock.EnterScope())
-        {
-            snapshot = [.. subscribers];
-        }
-
-        // Publish outside the lock
-        foreach (var sub in snapshot)
-        {
-            try
-            {
-                if (!sub.Writer.TryWrite(@event))
-                {
-                    await sub.Writer.WriteAsync(@event, cancellationToken).ConfigureAwait(false);
-                }
-            }
-            catch (ChannelClosedException)
-            {
-                // Already removed -> ignore
-            }
-        }
+        return ValueTask.CompletedTask;
     }
 
-    // CommandCompleted all subscribers
     public void Complete()
     {
         Channel<T>[] snapshot;
         using (@lock.EnterScope())
         {
+            if (completed)
+                return;
+
+            completed = true;
             snapshot = [.. subscribers];
             subscribers.Clear();
+            Volatile.Write(ref subscriberSnapshot, []);
         }
 
         foreach (var sub in snapshot)

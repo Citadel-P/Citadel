@@ -28,21 +28,22 @@ internal sealed class StackInfoStreamManager(
         }
 
         if (context.TryStart())
+            context.StreamTask = RunStreamAsync(stackId, context);
+    }
+
+    private async Task RunStreamAsync(
+        Guid stackId,
+        ChannelStreamContext<IEnumerable<DockerContainer>> context)
+    {
+        try
         {
-            context.StreamTask = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.WhenAll(
-                        PollStackContainers(stackId, context),
-                        BroadcastStats(stackId, context)
-                    );
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error in stack info streaming for {StackId}", stackId);
-                }
-            });
+            await Task.WhenAll(
+                PollStackContainers(stackId, context),
+                BroadcastStats(stackId, context));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error in stack info streaming for {StackId}", stackId);
         }
     }
 

@@ -3,6 +3,7 @@ using Application.Services.Alerts;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Platforms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -89,6 +90,37 @@ public sealed class PlatformHealthMonitorJobTests
         edgeAgents.VerifyAll();
     }
 
+    [Fact]
+    public async Task CheckHealthAsync_ShouldTreatTimeoutAsOffline()
+    {
+        var connector = new Mock<IPlatformConnector>();
+        connector
+            .Setup(x => x.CheckHealthAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string _, CancellationToken cancellationToken) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return new PlatformHealthResult(true);
+            });
+
+        var connectorFactory = new Mock<IConnectorFactory<IPlatformConnector>>();
+        connectorFactory
+            .Setup(x => x.GetConnector(PlatformConnectorType.Agent))
+            .Returns(connector.Object);
+
+        await using var provider = new ServiceCollection().BuildServiceProvider();
+        var job = CreateJob(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            connectorFactory.Object);
+
+        var result = await job.CheckHealthAsync(
+            "https://unresponsive.example",
+            PlatformConnectorType.Agent,
+            TimeSpan.FromMilliseconds(10),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result);
+    }
+
     private static ServiceProvider CreateProvider(IEdgeAgentRepository edgeAgents)
     {
         var unitOfWork = new Mock<IUnitOfWork>(MockBehavior.Strict);
@@ -100,12 +132,14 @@ public sealed class PlatformHealthMonitorJobTests
             .BuildServiceProvider();
     }
 
-    private static PlatformHealthMonitorJob CreateJob(IServiceScopeFactory scopeFactory)
+    private static PlatformHealthMonitorJob CreateJob(
+        IServiceScopeFactory scopeFactory,
+        IConnectorFactory<IPlatformConnector>? connectorFactory = null)
         => new(
             Mock.Of<IAlertService>(),
             scopeFactory,
             Mock.Of<IPlatformHealthBroadCaster>(),
-            Mock.Of<IConnectorFactory<IPlatformConnector>>(),
+            connectorFactory ?? Mock.Of<IConnectorFactory<IPlatformConnector>>(),
             Mock.Of<ILogger<PlatformHealthMonitorJob>>());
 
     private static EdgeAgentBinding CreateBinding(

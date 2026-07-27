@@ -54,6 +54,7 @@ public class BaseStreamManagerTests
             => connectionToGroups.TryGetValue(connectionId, out var set) ? set.Keys.ToList() : Array.Empty<string>();
 
         public string GetEntityIdPublic(string groupId) => new([.. GetNormalizedIdFromGroup(groupId)]);
+        public bool TryUsePublic(string groupId, Action<TestContext> action) => TryUseStream(groupId, action);
     }
 
     [Fact]
@@ -123,5 +124,34 @@ public class BaseStreamManagerTests
 
         var trailingColon = mgr.GetEntityIdPublic("ends-with-colon:");
         Assert.Equal(string.Empty, trailingColon);
+    }
+
+    [Fact]
+    public void TryUseStream_DoesNotCreateAContextWithoutASubscriber()
+    {
+        var mgr = new TestManager();
+        var used = mgr.TryUsePublic("group:42", _ => throw new InvalidOperationException());
+
+        Assert.False(used);
+        Assert.Equal(0, mgr.StreamCount);
+    }
+
+    [Fact]
+    public async Task ConcurrentSubscriptionChanges_LeaveNoOrphanedStreams()
+    {
+        var mgr = new TestManager();
+        var cancellationToken = global::Xunit.TestContext.Current.CancellationToken;
+        var operations = Enumerable.Range(0, 500)
+            .Select(index => Task.Run(() =>
+            {
+                var connectionId = $"connection-{index}";
+                mgr.AddSubscriber("group:42", connectionId);
+                mgr.RemoveSubscriber("group:42", connectionId);
+            }, cancellationToken));
+
+        await Task.WhenAll(operations);
+
+        Assert.Equal(0, mgr.StreamCount);
+        Assert.Empty(mgr.GetConnectionGroups("connection-0"));
     }
 }

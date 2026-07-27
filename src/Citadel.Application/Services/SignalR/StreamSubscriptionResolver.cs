@@ -49,7 +49,8 @@ internal sealed class StreamSubscriptionResolver(IServiceProvider provider) : IS
 
     public IStreamGroupManager Resolve(string groupId)
     {
-        var prefix = groupId.Split(':')[0];
+        var separatorIndex = groupId.IndexOf(':');
+        var prefix = separatorIndex < 0 ? groupId : groupId[..separatorIndex];
         if (!handlers.TryGetValue(prefix, out var handlerType))
         {
             throw new InvalidOperationException($"Unknown stream group: {prefix}");

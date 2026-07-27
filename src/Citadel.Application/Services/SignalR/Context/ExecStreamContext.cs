@@ -2,23 +2,16 @@
 
 namespace Application.Services.SignalR.Context;
 
-internal sealed class ExecStreamContext : StreamContext
+internal sealed class ExecStreamContext : StreamContext, IDisposable
 {
     public IExecSession? Session { get; set; }
-    public CancellationTokenSource Cancellation { get; private set; } = new();
+    public CancellationTokenSource Cancellation { get; } = new();
     public int LatestCols { get; set; }
     public int LatestRows { get; set; }
-    public override void RemoveSubscriber(string connectionId)
+
+    public void Dispose()
     {
-        base.RemoveSubscriber(connectionId);
-
-        if (IsEmpty)
-        {
-            var old = Cancellation;
-            Cancellation = new CancellationTokenSource();
-
-            try { old.Cancel(); } catch { }
-            try { old.Dispose(); } catch { }
-        }
+        try { Cancellation.Cancel(); } catch { }
+        Cancellation.Dispose();
     }
 }

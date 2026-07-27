@@ -2,6 +2,7 @@
 using Application.Services.SignalR.Context;
 using Domain.Contracts.Interfaces;
 using Grpc.Core;
+using Hosting.Common;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services.SignalR;
@@ -20,64 +21,71 @@ internal sealed class ExecSessionManager(
     IPlatformContainerCache platformContainerCache)
     : BaseStreamManager<ExecStreamContext>, IExecSessionManager
 {
-    public async Task StartExecProcess(string containerId, string sessionId, string shell, CancellationToken ct)
+    public Task StartExecProcess(string containerId, string sessionId, string shell, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(containerId))
-            return;
+        if (string.IsNullOrWhiteSpace(containerId) || string.IsNullOrWhiteSpace(sessionId))
+            return Task.CompletedTask;
 
         var normalized = NormalizeDockerId(containerId);
+        if (string.IsNullOrEmpty(normalized))
+            return Task.CompletedTask;
 
-        var ctx = streams.GetOrAdd(sessionId, _ => new ExecStreamContext());
+        var groupId = Constants.WellKnownSignalRGroups.ContainerExecGroup(containerId, sessionId);
+        TryUseStream(groupId, ctx =>
+        {
+            if (ctx.TryStart())
+                ctx.StreamTask = StreamExecAsync(ctx, normalized, containerId, sessionId, shell, ct);
+        });
 
-        if (string.IsNullOrEmpty(normalized) || string.IsNullOrEmpty(sessionId))
-            return;
-
-        if (!ctx.TryStart()) return;
-
-        ctx.StreamTask = Task.Run(
-           () => StreamExecAsync(ctx, normalized, sessionId, shell, ct), ctx.Cancellation.Token);
+        return Task.CompletedTask;
     }
 
     public async Task SendInputAsync(string containerId, string sessionId, byte[] data, CancellationToken ct)
     {
-        if (!streams.TryGetValue(sessionId, out var ctx)) return;
-        if (ctx.Session == null) return;
+        var groupId = Constants.WellKnownSignalRGroups.ContainerExecGroup(containerId, sessionId);
+        IExecSession? session = null;
+        TryUseStream(groupId, ctx => session = ctx.Session);
 
-        await ctx.Session.SendAsync(data, ct);
+        if (session is not null)
+            await session.SendAsync(data, ct);
     }
 
     public async Task ResizeAsync(string containerId, string sessionId, int cols, int rows, CancellationToken ct)
     {
-        if (!streams.TryGetValue(sessionId, out var ctx)) return;
+        var groupId = Constants.WellKnownSignalRGroups.ContainerExecGroup(containerId, sessionId);
+        IExecSession? session = null;
+        TryUseStream(groupId, ctx =>
+        {
+            ctx.LatestCols = cols;
+            ctx.LatestRows = rows;
+            session = ctx.Session;
+        });
 
-        ctx.LatestCols = cols;
-        ctx.LatestRows = rows;
-        if (ctx.Session == null) return;
-
-        await ctx.Session.ResizeAsync(cols, rows, ct);
+        if (session is not null)
+            await session.ResizeAsync(cols, rows, ct);
     }
 
     private async Task StreamExecAsync(
         ExecStreamContext ctx,
-        string containerId,
+        string normalizedContainerId,
+        string groupContainerId,
         string sessionId,
         string shell,
         CancellationToken callerToken)
     {
-        if (!platformContainerCache.TryGetPlatformWithContainer(containerId, out var platform))
-            return;
-
-        using var linkedCts =
-            CancellationTokenSource.CreateLinkedTokenSource(ctx.Cancellation.Token, callerToken);
-
-        var token = linkedCts.Token;
-        var connector = connectorFactory.GetConnector(platform.ConnectorType);
-
         try
         {
+            if (!platformContainerCache.TryGetPlatformWithContainer(normalizedContainerId, out var platform))
+                return;
+
+            using var linkedCts =
+                CancellationTokenSource.CreateLinkedTokenSource(ctx.Cancellation.Token, callerToken);
+
+            var token = linkedCts.Token;
+            var connector = connectorFactory.GetConnector(platform.ConnectorType);
             var shellPath = shell == "sh" ? "/bin/sh" : "/bin/bash";
 
-            var session = await connector.ExecAsync(platform.Address, containerId, shellPath, token);
+            var session = await connector.ExecAsync(platform.Address, normalizedContainerId, shellPath, token);
             ctx.Session = session;
 
             if (ctx.LatestCols > 0 && ctx.LatestRows > 0)
@@ -87,17 +95,17 @@ internal sealed class ExecSessionManager(
 
             await foreach (var chunk in session.Output.WithCancellation(token))
             {
-                await dispatcher.SendExecOutput(containerId, sessionId, chunk.ToArray());
+                await dispatcher.SendExecOutput(groupContainerId, sessionId, chunk.ToArray());
             }
         }
         catch (OperationCanceledException) { }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
         {
-            logger.LogDebug("Exec stream cancelled for {ContainerId}", containerId);
+            logger.LogDebug("Exec stream cancelled for {ContainerId}", normalizedContainerId);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Exec stream failed for {ContainerId}", containerId);
+            logger.LogError(ex, "Exec stream failed for {ContainerId}", normalizedContainerId);
         }
         finally
         {

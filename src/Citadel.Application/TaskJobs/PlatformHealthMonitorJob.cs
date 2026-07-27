@@ -32,70 +32,99 @@ internal sealed class PlatformHealthMonitorJob(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await LoadFromDatabase(stoppingToken);
-
-        var parallelOptions = new ParallelOptions
+        try
         {
-            MaxDegreeOfParallelism = Environment.ProcessorCount,
-            CancellationToken = stoppingToken
-        };
+            await LoadFromDatabase(stoppingToken);
 
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            await Parallel.ForEachAsync(platforms, parallelOptions, async (entry, ct) =>
+            var parallelOptions = new ParallelOptions
             {
-                var address = entry.Key;
-                var state = entry.Value;
+                MaxDegreeOfParallelism = Environment.ProcessorCount,
+                CancellationToken = stoppingToken
+            };
 
-                bool isOnline;
-                try
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Parallel.ForEachAsync(platforms, parallelOptions, async (entry, ct) =>
                 {
-                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    timeoutCts.CancelAfter(healthTimeout);
+                    var address = entry.Key;
+                    var state = entry.Value;
 
-                    var connector = connectorFactory.GetConnector(state.Type);
-                    var result = await connector.CheckHealthAsync(address, timeoutCts.Token);
-                    isOnline = result.Healthy;
-                }
-                catch (OperationCanceledException)
-                {
-                    return; // shutdown or timeout -> skip this cycle
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Health check failed for {Address}", address);
-                    isOnline = false;
-                }
-
-                if (state.TryUpdate(isOnline, FailThreshold, SuccessThreshold, out var shouldEmit))
-                {
-                    if (shouldEmit)
+                    try
                     {
+                        var health = await CheckHealthAsync(address, state.Type, healthTimeout, ct);
+                        if (health is not { } isOnline)
+                            return;
+
+                        state.Update(isOnline, FailThreshold, SuccessThreshold, out var shouldEmit);
+                        if (!shouldEmit)
+                            return;
+
                         var platformName = await GetPlatformName(state.Id, ct);
                         logger.LogInformation(
                             "Platform {PlatformName} status changed to {Status}",
                             platformName,
                             isOnline ? "Online" : "Offline");
 
-                        if (!isOnline)
+                        if (!isOnline &&
+                            await ShouldRaisePlatformUnreachableAlertAsync(state.Id, state.Type, ct))
                         {
-                            if (await ShouldRaisePlatformUnreachableAlertAsync(state.Id, state.Type, ct))
-                            {
-                                await RaisePlatformUnreachableAlert(state.Id, platformName, address, ct);
-                            }
+                            await RaisePlatformUnreachableAlert(state.Id, platformName, address, ct);
                         }
 
                         await broadcaster.PublishAsync(
                             new PlatformHealth(state.Id, address, state.Type, isOnline),
                             ct);
                     }
-                }
-            });
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Failed to process health status for {Address}", address);
+                    }
+                });
 
-            await Task.Delay(checkInterval, stoppingToken);
+                await Task.Delay(checkInterval, stoppingToken);
+            }
         }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            broadcaster.Complete();
+        }
+    }
 
-        broadcaster.Complete();
+    internal async Task<bool?> CheckHealthAsync(
+        string address,
+        PlatformConnectorType connectorType,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(timeout);
+
+            var connector = connectorFactory.GetConnector(connectorType);
+            var result = await connector.CheckHealthAsync(address, timeoutCts.Token);
+            return result.Healthy;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning("Health check timed out for {Address}", address);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Health check failed for {Address}", address);
+            return false;
+        }
     }
 
     private async Task LoadFromDatabase(CancellationToken ct)
@@ -184,7 +213,7 @@ internal sealed class PlatformState(Guid id, PlatformConnectorType type)
     private int failureCount;
     private readonly Lock @lock = new();
 
-    public bool TryUpdate(
+    public void Update(
         bool isOnline,
         int failThreshold,
         int successThreshold,
@@ -217,7 +246,6 @@ internal sealed class PlatformState(Guid id, PlatformConnectorType type)
                 }
             }
 
-            return true;
         }
     }
 }

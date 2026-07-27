@@ -214,15 +214,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     public Task SendAutomationActionInfo(AutomationAction action, string actionName)
     {
         var map = AutomationActionView.Map(action);
-        hubContext.Clients
+        var actionGroup = hubContext.Clients
             .Group(WellKnownSignalRGroups.AutomationActionGroup(action.Id))
             .SendAsync("AutomationActionInfoUpdated", map, actionName);
 
-        hubContext.Clients
+        var actionsGroup = hubContext.Clients
             .Group(WellKnownSignalRGroups.AutomationActionsGroup)
             .SendAsync("AutomationActionInfoUpdated", map, actionName);
 
-        return Task.CompletedTask;
+        return Task.WhenAll(actionGroup, actionsGroup);
     }
     #endregion
 
@@ -252,14 +252,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     public Task SendDeploymentInfo(Deployment deployment, string action)
     {
         var map = DeploymentView.Map(deployment);
-        hubContext.Clients
+        var deploymentGroup = hubContext.Clients
             .Group(WellKnownSignalRGroups.DeploymentGroup(deployment.Id))
             .SendAsync("DeploymentInfoUpdated", map, action);
 
-        hubContext.Clients
+        var deploymentsGroup = hubContext.Clients
             .Group(WellKnownSignalRGroups.DeploymentsGroup)
             .SendAsync("DeploymentInfoUpdated", map, action);
-        return Task.CompletedTask;
+
+        return Task.WhenAll(deploymentGroup, deploymentsGroup);
     }
 
     #endregion
@@ -351,15 +352,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     public Task SendGitRepoInfo(GitRepository repository, string action = "update")
     {
         var map = GitRepositoryView.Map(repository);
-        hubContext.Clients
+        var repositoryGroup = hubContext.Clients
            .Group(WellKnownSignalRGroups.GitRepoGroup(repository.Id))
            .SendAsync("GitRepositoryInfoUpdated", map, action);
 
-        hubContext.Clients
+        var repositoriesGroup = hubContext.Clients
             .Group(WellKnownSignalRGroups.GitRepositoriesGroup)
             .SendAsync("GitRepositoryInfoUpdated", map, action);
 
-        return Task.CompletedTask;
+        return Task.WhenAll(repositoryGroup, repositoriesGroup);
     }
     #endregion
 }

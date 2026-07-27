@@ -19,12 +19,13 @@ internal sealed class UnmanagedContainerAlertJob(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var processingChannel = Channel.CreateUnbounded<UnmanagedContainerAlertRequest>(
-            new UnboundedChannelOptions
+        var processingChannel = Channel.CreateBounded<UnmanagedContainerAlertRequest>(
+            new BoundedChannelOptions(256)
             {
                 SingleReader = true,
                 SingleWriter = true,
-                AllowSynchronousContinuations = false
+                AllowSynchronousContinuations = false,
+                FullMode = BoundedChannelFullMode.Wait
             });
         var processorTask = ProcessAlertsAsync(processingChannel.Reader, stoppingToken);
 
@@ -61,7 +62,7 @@ internal sealed class UnmanagedContainerAlertJob(
                     schedule.Enqueue(scheduled, scheduled.DueAt.UtcTicks);
                 }
 
-                DispatchDueAlerts(schedule, pending, processingWriter);
+                await DispatchDueAlertsAsync(schedule, pending, processingWriter, stoppingToken);
 
                 if (readerCompleted && schedule.Count == 0)
                     break;
@@ -101,10 +102,11 @@ internal sealed class UnmanagedContainerAlertJob(
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
     }
 
-    private void DispatchDueAlerts(
+    private async Task DispatchDueAlertsAsync(
         PriorityQueue<ScheduledUnmanagedContainerAlert, long> schedule,
         Dictionary<UnmanagedContainerAlertKey, ScheduledUnmanagedContainerAlert> pending,
-        ChannelWriter<UnmanagedContainerAlertRequest> processingWriter)
+        ChannelWriter<UnmanagedContainerAlertRequest> processingWriter,
+        CancellationToken cancellationToken)
     {
         var nowTicks = timeProvider.GetUtcNow().UtcTicks;
         while (schedule.TryPeek(out var scheduled, out var dueTicks) && dueTicks <= nowTicks)
@@ -114,8 +116,7 @@ internal sealed class UnmanagedContainerAlertJob(
                 continue;
 
             pending.Remove(scheduled.Key);
-            if (!processingWriter.TryWrite(scheduled.Request))
-                throw new ChannelClosedException();
+            await processingWriter.WriteAsync(scheduled.Request, cancellationToken);
         }
     }
 

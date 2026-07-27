@@ -7,53 +7,95 @@ internal abstract class BaseStreamManager<TContext> where TContext : StreamConte
 {
     protected readonly ConcurrentDictionary<string, TContext> streams = new();
     protected readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> connectionToGroups = new();
+    private readonly Lock subscriptionGate = new();
 
     public void AddSubscriber(string groupId, string connectionId)
     {
-        var context = streams.GetOrAdd(groupId, _ => new TContext());
-        context.AddSubscriber(connectionId);
+        using (subscriptionGate.EnterScope())
+        {
+            var context = streams.GetOrAdd(groupId, _ => new TContext());
+            context.AddSubscriber(connectionId);
 
-        var set = connectionToGroups.GetOrAdd(connectionId, _ => new ConcurrentDictionary<string, byte>());
-        set.TryAdd(groupId, 0);
+            var set = connectionToGroups.GetOrAdd(connectionId, _ => new ConcurrentDictionary<string, byte>());
+            set.TryAdd(groupId, 0);
 
-        OnSubscriberAdded(groupId, connectionId);
+            OnSubscriberAdded(groupId, connectionId);
+        }
     }
 
     public void RemoveSubscriber(string groupId, string connectionId)
     {
-        if (!streams.TryGetValue(groupId, out var context))
+        IDisposable? disposable = null;
+        using (subscriptionGate.EnterScope())
         {
-            if (connectionToGroups.TryGetValue(connectionId, out var s))
-                s.TryRemove(groupId, out _);
-
-            return;
+            disposable = RemoveSubscriberUnsafe(groupId, connectionId, updateConnectionMapping: true);
         }
 
-        context.RemoveSubscriber(connectionId);
-
-        if (context.IsEmpty)
-        {
-            streams.TryRemove(groupId, out var removed);
-            if (removed is IDisposable disposable)
-                disposable.Dispose();
-        }
-
-        if (connectionToGroups.TryGetValue(connectionId, out var set))
-        {
-            set.TryRemove(groupId, out _);
-            if (set.IsEmpty)
-                connectionToGroups.TryRemove(connectionId, out _);
-        }
-
-        OnSubscriberRemoved(groupId, connectionId);
+        disposable?.Dispose();
     }
 
     public void RemoveConnection(string connectionId)
     {
-        if (!connectionToGroups.TryRemove(connectionId, out var groups)) return;
+        List<IDisposable>? disposables = null;
+        using (subscriptionGate.EnterScope())
+        {
+            if (!connectionToGroups.TryRemove(connectionId, out var groups))
+                return;
 
-        foreach (var kv in groups)
-            RemoveSubscriber(kv.Key, connectionId);
+            foreach (var groupId in groups.Keys)
+            {
+                if (RemoveSubscriberUnsafe(groupId, connectionId, updateConnectionMapping: false) is { } disposable)
+                    (disposables ??= []).Add(disposable);
+            }
+        }
+
+        if (disposables is not null)
+        {
+            foreach (var disposable in disposables)
+                disposable.Dispose();
+        }
+    }
+
+    protected bool TryUseStream(string groupId, Action<TContext> action)
+    {
+        using (subscriptionGate.EnterScope())
+        {
+            if (!streams.TryGetValue(groupId, out var context) || context.IsEmpty)
+                return false;
+
+            action(context);
+            return true;
+        }
+    }
+
+    private IDisposable? RemoveSubscriberUnsafe(
+        string groupId,
+        string connectionId,
+        bool updateConnectionMapping)
+    {
+        IDisposable? disposable = null;
+        if (streams.TryGetValue(groupId, out var context))
+        {
+            context.RemoveSubscriber(connectionId);
+
+            if (context.IsEmpty)
+            {
+                streams.TryRemove(groupId, out _);
+                disposable = context as IDisposable;
+            }
+
+            OnSubscriberRemoved(groupId, connectionId);
+        }
+
+        if (updateConnectionMapping &&
+            connectionToGroups.TryGetValue(connectionId, out var groups))
+        {
+            groups.TryRemove(groupId, out _);
+            if (groups.IsEmpty)
+                connectionToGroups.TryRemove(connectionId, out _);
+        }
+
+        return disposable;
     }
 
     protected virtual void OnSubscriberAdded(string groupId, string connectionId) { }

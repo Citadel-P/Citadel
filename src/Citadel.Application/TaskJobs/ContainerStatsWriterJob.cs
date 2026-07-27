@@ -27,73 +27,102 @@ internal sealed class ContainerStatsWriterJob(
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
+        using var flushTimer = new PeriodicTimer(
+            TimeSpan.FromSeconds(Math.Max(1, _config.FlashInterval)));
+
         try
         {
-            await foreach (var batch in reader.ReadAllAsync(cancellationToken))
+            var readTask = reader.WaitToReadAsync(cancellationToken).AsTask();
+            var flushTask = flushTimer.WaitForNextTickAsync(cancellationToken).AsTask();
+
+            while (!cancellationToken.IsCancellationRequested)
             {
-                try
+                var completed = await Task.WhenAny(readTask, flushTask);
+                if (completed == flushTask)
                 {
-                    Accumulate(batch);
-                    await EnqueueNotificationAsync(batch, cancellationToken);
-                    await BroadcastStatsAsync(batch, cancellationToken);
-                }
-                finally
-                {
-                    // The persistence buffer has copied the items, so the source list can be reused.
-                    batch.Release();
+                    if (!await flushTask)
+                        break;
+
+                    if (_bufferedCount > 0)
+                        await FlushAsync(cancellationToken);
+
+                    flushTask = flushTimer.WaitForNextTickAsync(cancellationToken).AsTask();
+                    continue;
                 }
 
-                if (ShouldFlush())
-                    await FlushAsync(cancellationToken);
+                if (!await readTask)
+                    break;
+
+                while (reader.TryRead(out var batch))
+                {
+                    try
+                    {
+                        Accumulate(batch);
+                        await DispatchLiveStatsAsync(batch, cancellationToken);
+                    }
+                    finally
+                    {
+                        batch.Release();
+                    }
+
+                    if (ShouldFlush())
+                        await FlushAsync(cancellationToken);
+                }
+
+                readTask = reader.WaitToReadAsync(cancellationToken).AsTask();
             }
         }
         catch (OperationCanceledException) { }
+        finally
+        {
+            while (reader.TryRead(out var batch))
+                batch.Release();
+        }
 
-        // final flush
-        if (_bufferedCount > 0)
-            await FlushAsync(CancellationToken.None);
+        if (!cancellationToken.IsCancellationRequested && _bufferedCount > 0)
+            await FlushAsync(cancellationToken);
     }
 
-    private ValueTask BroadcastStatsAsync(
+    private async ValueTask DispatchLiveStatsAsync(
         ContainersStatBatch batch,
         CancellationToken cancellationToken)
     {
-        if (!statsBroadcaster.HasSubscribers)
-            return ValueTask.CompletedTask;
-
-        return statsBroadcaster.PublishAsync(
-            new ContainerStatsSnapshot(batch.PlatformId, batch.Stats.ToArray()),
-            cancellationToken);
-    }
-
-    private async Task EnqueueNotificationAsync(ContainersStatBatch batch, CancellationToken cancellationToken)
-    {
-        if (!containersStreamManager.HasStatsSubscribers(batch.PlatformId))
+        var hasStatsSubscribers = statsBroadcaster.HasSubscribers;
+        var hasNotificationSubscribers = containersStreamManager.HasStatsSubscribers(batch.PlatformId);
+        if (!hasStatsSubscribers && !hasNotificationSubscribers)
             return;
 
-        // SignalR must not retain the pooled list after this method returns.
-        var notificationStats = batch.Stats.ToArray();
+        // Both consumers can safely share this immutable snapshot.
+        var snapshot = batch.Stats.ToArray();
 
-        try
+        if (hasNotificationSubscribers)
         {
-            await notificationQueue.EnqueueAsync(
-                new SendContainersNotificationWorkItem(
-                    containersStreamManager,
-                    batch.PlatformId,
-                    notificationStats),
+            try
+            {
+                await notificationQueue.EnqueueAsync(
+                    new SendContainersNotificationWorkItem(
+                        containersStreamManager,
+                        batch.PlatformId,
+                        snapshot),
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Failed to enqueue container stats notification for platform {PlatformId}.",
+                    batch.PlatformId);
+            }
+        }
+
+        if (hasStatsSubscribers)
+            await statsBroadcaster.PublishAsync(
+                new ContainerStatsSnapshot(batch.PlatformId, snapshot),
                 cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(
-                ex,
-                "Failed to enqueue container stats notification for platform {PlatformId}.",
-                batch.PlatformId);
-        }
     }
 
     private void Accumulate(ContainersStatBatch batch)
@@ -116,17 +145,18 @@ internal sealed class ContainerStatsWriterJob(
     {
         if (_bufferedCount == 0) return;
 
-        // SWAP Strategy: Capture current buffer and replace with a fresh one
-        // This ensures the DB worker has its own private copy that won't be modified
         var dataToFlush = _buffer;
-        _buffer = new Dictionary<Guid, List<ContainerStat>>();
-
-        _bufferedCount = 0;
-        _lastFlush = DateTime.UtcNow;
 
         try
         {
             await dbQueue.EnqueueAsync(new ContainerStatsBatchWorkItem(dataToFlush, platformContainerCache, logger), ct);
+            _buffer = [];
+            _bufferedCount = 0;
+            _lastFlush = DateTime.UtcNow;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

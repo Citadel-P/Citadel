@@ -27,21 +27,22 @@ internal sealed class ContainerInfoStreamManager(
             return;
         }
         if (context.TryStart())
+            context.StreamTask = RunStreamAsync(containerId, context);
+    }
+
+    private async Task RunStreamAsync(
+        string containerId,
+        ChannelStreamContext<DockerContainer> context)
+    {
+        try
         {
-            context.StreamTask = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.WhenAll(
-                        PollDockerStats(containerId, context),
-                        BroadcastStats(context)
-                    );
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error in container info streaming for {ContainerId}", containerId);
-                }
-            });
+            await Task.WhenAll(
+                PollDockerStats(containerId, context),
+                BroadcastStats(context));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error in container info streaming for {ContainerId}", containerId);
         }
     }
 

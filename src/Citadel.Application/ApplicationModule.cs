@@ -241,16 +241,16 @@ public static class ApplicationModule
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
-            .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(Helpers.ChannelDefaultOptions()))
+            .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(Helpers.ChannelDefaultOptions(singleWriter: false)))
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
-            .AddSingleton(Channel.CreateBounded<GitRepoSyncRequest>(Helpers.ChannelDefaultOptions()))
+            .AddSingleton(Channel.CreateBounded<GitRepoSyncRequest>(Helpers.ChannelDefaultOptions(singleWriter: false)))
             .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Reader)
-            .AddSingleton(Channel.CreateBounded<UnmanagedContainerAlertRequest>(Helpers.ChannelDefaultOptions()))
+            .AddSingleton(Channel.CreateBounded<UnmanagedContainerAlertRequest>(Helpers.ChannelDefaultOptions(singleWriter: false)))
             .AddSingleton(s => s.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Reader)
-            .AddSingleton(Channel.CreateBounded<(Guid Id, PlatformStatsResult Stats)>(Helpers.ChannelDefaultOptions()))
+            .AddSingleton(Channel.CreateBounded<(Guid Id, PlatformStatsResult Stats)>(Helpers.ChannelDefaultOptions(singleWriter: false)))
             .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
 

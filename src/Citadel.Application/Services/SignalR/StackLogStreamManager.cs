@@ -1,11 +1,11 @@
 using System.Buffers;
-using System.Text;
 using System.Threading.Channels;
 using Application.Services.Abstractions;
 using Application.Services.SignalR.Context;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -25,20 +25,19 @@ internal sealed class StackLogStreamManager(
     IConnectorFactory<IContainerConnector> connectorFactory)
     : BaseStreamManager<LogStreamContext>, IStackLogStreamManager
 {
-    private static readonly UTF8Encoding Utf8NoBom = new(false);
-
     public void StartStackLogs(Guid stackId)
     {
         if (stackId == Guid.Empty)
             return;
 
-        var groupId = $"stack-log:{stackId}";
-        var context = streams.GetOrAdd(groupId, _ => new LogStreamContext());
+        var groupId = Constants.WellKnownSignalRGroups.StackLogGroup(stackId);
+        TryUseStream(groupId, context =>
+        {
+            if (!context.TryStartStream(resources => StreamLogsAsync(resources, stackId)))
+                return;
 
-        if (!context.TryStartStream(resources => StreamLogsAsync(resources, stackId)))
-            return;
-
-        context.EnsureWatcher(token => WatchContainerEvents(context, stackId, token));
+            context.EnsureWatcher(token => WatchContainerEvents(context, stackId, token));
+        });
     }
 
     protected override void OnSubscriberAdded(string groupId, string connectionId)
@@ -104,7 +103,7 @@ internal sealed class StackLogStreamManager(
             .Where(container => !string.IsNullOrWhiteSpace(container.DockerContainerId))
             .Select(container => new StackLogContainer(
                 NormalizeDockerId(container.DockerContainerId),
-                container.Name.TrimStart('/')))
+                System.Text.Encoding.UTF8.GetBytes($"[{container.Name.TrimStart('/')}] ")))
             .ToList();
     }
 
@@ -127,22 +126,19 @@ internal sealed class StackLogStreamManager(
 
             await foreach (var data in connector.StreamLogsAsync(request, token))
             {
-                var transformed = PrefixContainerName(data.Span, container.Name);
-                if (transformed.Length == 0)
+                var transformed = PrefixContainerName(data.Span, container.Prefix);
+                if (transformed is null)
                     continue;
 
-                resources.AddToBuffer(transformed);
-                resources.AddToBuffer("\n"u8);
-
-                var pooled = new PooledBuffer(ArrayPool<byte>.Shared.Rent(transformed.Length), transformed.Length);
                 try
                 {
-                    transformed.CopyTo(pooled.Buffer);
-                    await writer.WriteAsync(pooled, token);
+                    resources.AddToBuffer(transformed.Span);
+                    resources.AddToBuffer("\n"u8);
+                    await writer.WriteAsync(transformed, token);
                 }
                 catch
                 {
-                    pooled.Dispose();
+                    transformed.Dispose();
                     throw;
                 }
             }
@@ -240,50 +236,124 @@ internal sealed class StackLogStreamManager(
         return containers.Select(container => container.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
-    private static byte[] PrefixContainerName(ReadOnlySpan<byte> logBytes, string containerName)
+    internal static PooledBuffer? PrefixContainerName(
+        ReadOnlySpan<byte> logBytes,
+        ReadOnlySpan<byte> prefix)
     {
-        var text = Utf8NoBom.GetString(logBytes).TrimEnd('\r', '\n');
-        if (string.IsNullOrEmpty(text))
-            return [];
+        while (!logBytes.IsEmpty && logBytes[^1] is (byte)'\r' or (byte)'\n')
+            logBytes = logBytes[..^1];
 
-        var prefix = $"[{containerName}] ";
-        var lines = text.Split('\n');
-        for (var i = 0; i < lines.Length; i++)
+        if (logBytes.IsEmpty)
+            return null;
+
+        var outputLength = GetTransformedLength(logBytes, prefix.Length);
+        if (outputLength == 0)
+            return null;
+
+        var output = new PooledBuffer(ArrayPool<byte>.Shared.Rent(outputLength), outputLength);
+        var destination = output.Buffer.AsSpan(0, outputLength);
+        var offset = 0;
+        var wroteLine = false;
+
+        while (!logBytes.IsEmpty)
         {
-            var line = lines[i].TrimEnd('\r');
-            if (IsDockerTimestampOnly(line))
-            {
-                lines[i] = string.Empty;
-                continue;
-            }
+            var newlineIndex = logBytes.IndexOf((byte)'\n');
+            var line = newlineIndex >= 0 ? logBytes[..newlineIndex] : logBytes;
+            logBytes = newlineIndex >= 0 ? logBytes[(newlineIndex + 1)..] : [];
+            if (!line.IsEmpty && line[^1] == (byte)'\r')
+                line = line[..^1];
 
-            var firstSpaceIndex = line.IndexOf(' ');
-            if (firstSpaceIndex > 0 && IsDockerTimestampOnly(line[..firstSpaceIndex]) && string.IsNullOrWhiteSpace(line[(firstSpaceIndex + 1)..]))
-            {
-                lines[i] = string.Empty;
+            var insertionIndex = GetPrefixInsertionIndex(line);
+            if (insertionIndex < 0)
                 continue;
-            }
 
-            lines[i] = firstSpaceIndex > 0
-                ? string.Concat(line.AsSpan(0, firstSpaceIndex + 1), prefix, line.AsSpan(firstSpaceIndex + 1))
-                : prefix + line;
+            if (wroteLine)
+                destination[offset++] = (byte)'\n';
+
+            line[..insertionIndex].CopyTo(destination[offset..]);
+            offset += insertionIndex;
+            prefix.CopyTo(destination[offset..]);
+            offset += prefix.Length;
+            line[insertionIndex..].CopyTo(destination[offset..]);
+            offset += line.Length - insertionIndex;
+            wroteLine = true;
         }
 
-        var prefixed = string.Join('\n', lines.Where(line => !string.IsNullOrEmpty(line)));
-        return string.IsNullOrEmpty(prefixed) ? [] : Utf8NoBom.GetBytes(prefixed);
+        return output;
     }
 
-    private static bool IsDockerTimestampOnly(string value)
+    private static int GetTransformedLength(ReadOnlySpan<byte> logBytes, int prefixLength)
     {
-        var span = value.AsSpan().Trim();
-        return span.Length >= 20 &&
-            span[4] == '-' &&
-            span[7] == '-' &&
-            span[10] == 'T' &&
-            span[13] == ':' &&
-            span[16] == ':' &&
-            span[^1] == 'Z';
+        var length = 0;
+        var lineCount = 0;
+
+        while (!logBytes.IsEmpty)
+        {
+            var newlineIndex = logBytes.IndexOf((byte)'\n');
+            var line = newlineIndex >= 0 ? logBytes[..newlineIndex] : logBytes;
+            logBytes = newlineIndex >= 0 ? logBytes[(newlineIndex + 1)..] : [];
+            if (!line.IsEmpty && line[^1] == (byte)'\r')
+                line = line[..^1];
+
+            if (GetPrefixInsertionIndex(line) < 0)
+                continue;
+
+            length += line.Length + prefixLength;
+            if (lineCount++ > 0)
+                length++;
+        }
+
+        return length;
     }
 
-    private sealed record StackLogContainer(string Id, string Name);
+    private static int GetPrefixInsertionIndex(ReadOnlySpan<byte> line)
+    {
+        if (IsDockerTimestampOnly(line))
+            return -1;
+
+        var firstSpaceIndex = line.IndexOf((byte)' ');
+        if (firstSpaceIndex <= 0 || !IsDockerTimestampOnly(line[..firstSpaceIndex]))
+            return 0;
+
+        if (IsAsciiWhitespace(line[(firstSpaceIndex + 1)..]))
+        {
+            return -1;
+        }
+
+        return firstSpaceIndex + 1;
+    }
+
+    private static bool IsDockerTimestampOnly(ReadOnlySpan<byte> value)
+    {
+        var span = TrimAsciiWhitespace(value);
+        return span.Length >= 20 &&
+            span[4] == (byte)'-' &&
+            span[7] == (byte)'-' &&
+            span[10] == (byte)'T' &&
+            span[13] == (byte)':' &&
+            span[16] == (byte)':' &&
+            span[^1] == (byte)'Z';
+    }
+
+    private static bool IsAsciiWhitespace(ReadOnlySpan<byte> value)
+    {
+        foreach (var character in value)
+        {
+            if (character is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static ReadOnlySpan<byte> TrimAsciiWhitespace(ReadOnlySpan<byte> value)
+    {
+        while (!value.IsEmpty && value[0] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+            value = value[1..];
+        while (!value.IsEmpty && value[^1] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+            value = value[..^1];
+        return value;
+    }
+
+    private sealed record StackLogContainer(string Id, byte[] Prefix);
 }

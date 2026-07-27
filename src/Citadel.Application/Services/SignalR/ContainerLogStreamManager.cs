@@ -2,6 +2,7 @@
 using Application.Services.SignalR.Context;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Hosting.Common;
 using Microsoft.Extensions.Logging;
 using System.Buffers;
 using System.Threading.Channels;
@@ -27,16 +28,14 @@ internal sealed class ContainerLogStreamManager(
             return;
 
         var normalized = NormalizeDockerId(containerId);
-        var groupId = $"container-log:{normalized}";
+        var groupId = Constants.WellKnownSignalRGroups.ContainerLogGroup(containerId);
+        TryUseStream(groupId, context =>
+        {
+            if (!context.TryStartStream(resources => StreamLogsAsync(resources, normalized)))
+                return;
 
-        var context = streams.GetOrAdd(groupId, _ => new LogStreamContext());
-
-        // Start stream orchestration explicitly. Do not treat Start as a subscriber
-        // registration. Start should only start the producer/consumer and watcher.
-        if (!context.TryStartStream(resources => StreamLogsAsync(resources, normalized)))
-            return;
-
-        context.EnsureWatcher(token => WatchContainerEvents(context, normalized, token));
+            context.EnsureWatcher(token => WatchContainerEvents(context, normalized, token));
+        });
     }
 
     protected override void OnSubscriberAdded(string groupId, string connectionId)

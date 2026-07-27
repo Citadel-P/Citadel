@@ -24,22 +24,8 @@ internal sealed class LogStreamContext : StreamContext, IDisposable
     public override void RemoveSubscriber(string connectionId)
     {
         base.RemoveSubscriber(connectionId);
-
-        StreamCleanup? streamCleanup = null;
-        WatcherCleanup? watcherCleanup = null;
-        using (@lock.EnterScope())
-        {
-            if (subscribers.Count == 0 && !disposed)
-            {
-                streamCleanup = ReplaceStreamUnsafe();
-                watcherCleanup = ReplaceWatcherUnsafe();
-            }
-        }
-
-        if (streamCleanup is { } stream)
-            BeginStreamCleanup(stream);
-        if (watcherCleanup is { } watcher)
-            BeginWatcherCleanup(watcher);
+        if (IsEmpty)
+            Dispose();
     }
 
     /// <summary>Force a reset when container restarts (keeps subscribers, keeps watcher).</summary>

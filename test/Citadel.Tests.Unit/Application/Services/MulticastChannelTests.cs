@@ -88,4 +88,32 @@ public class MulticastChannelTests
         // r1 remains completed
         Assert.False(await r1.WaitToReadAsync(TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task Publish_AllowsConcurrentWriters()
+    {
+        var mc = new MulticastChannel<int>();
+        var reader = mc.AddSubscriber();
+
+        await Task.WhenAll(Enumerable.Range(0, 500)
+            .Select(value => mc.PublishAsync(
+                value,
+                TestContext.Current.CancellationToken).AsTask()));
+
+        Assert.True(await reader.WaitToReadAsync(TestContext.Current.CancellationToken));
+        Assert.True(reader.TryRead(out var value));
+        Assert.InRange(value, 0, 499);
+    }
+
+    [Fact]
+    public async Task AddSubscriber_AfterCompletion_ReturnsCompletedReader()
+    {
+        var mc = new MulticastChannel<int>();
+        mc.Complete();
+
+        var reader = mc.AddSubscriber();
+
+        Assert.False(await reader.WaitToReadAsync(TestContext.Current.CancellationToken));
+        Assert.False(mc.HasSubscribers);
+    }
 }

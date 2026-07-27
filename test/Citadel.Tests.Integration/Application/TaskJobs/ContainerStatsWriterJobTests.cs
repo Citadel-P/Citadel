@@ -48,7 +48,11 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         services.AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader);
         services.AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer);
 
-        _configMock.Setup(x => x.Value).Returns(new JobConfiguration() { BatchSize = 2 });
+        _configMock.Setup(x => x.Value).Returns(new JobConfiguration
+        {
+            BatchSize = 2,
+            FlashInterval = 1
+        });
         _containerStreamManagerMock
             .Setup(x => x.HasStatsSubscribers(It.IsAny<Guid>()))
             .Returns(true);
@@ -139,6 +143,41 @@ public class ContainerStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
         Assert.Equal(2, containers.Count());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldFlushPartialBatchWhileInputIsIdle()
+    {
+        _configMock.Setup(c => c.Value).Returns(new JobConfiguration
+        {
+            BatchSize = 100,
+            FlashInterval = 1
+        });
+        var batch = new ContainersStatBatch(
+            _platformId,
+            [
+                new ContainerStat(
+                    _containerId,
+                    100,
+                    200,
+                    5,
+                    300,
+                    100,
+                    200,
+                    DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            ],
+            _ => { });
+
+        await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
+        await Task.Delay(3000, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stats = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync(
+            "container-id-1",
+            TestContext.Current.CancellationToken);
+
+        Assert.Single(stats);
     }
 
     [Fact]

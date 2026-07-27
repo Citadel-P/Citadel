@@ -5,7 +5,7 @@ namespace Tests.Unit.Application.Services.SignalR;
 public class ChannelStreamContextTests
 {
     [Fact]
-    public void RemoveSubscriber_LastSubscriber_CancelsAndCompletesChannelAndResetsState()
+    public void RemoveSubscriber_LastSubscriber_CancelsAndCompletesChannel()
     {
         var ctx = new ChannelStreamContext<string>();
 
@@ -19,19 +19,16 @@ public class ChannelStreamContextTests
         ctx.StreamTask = tcs.Task;
         var oldCts = ctx.Cancellation;
 
-        // remove last subscriber -> should cancel old CTS, complete channel writer and reset state
+        // remove last subscriber -> the manager will discard this context
         ctx.RemoveSubscriber("conn-1");
 
         Assert.True(oldCts.IsCancellationRequested, "Old CancellationTokenSource should have been cancelled.");
-        Assert.NotSame(oldCts, ctx.Cancellation);
+        Assert.Same(oldCts, ctx.Cancellation);
         Assert.Null(ctx.StreamTask);
 
         // writer should be completed; TryWrite must fail after completion
         var wrote = ctx.Channel.Writer.TryWrite("payload");
         Assert.False(wrote, "Channel writer should not accept writes after TryComplete.");
-
-        // after reset, TryStart should be allowed again
-        Assert.True(ctx.TryStart());
     }
 
     [Fact]

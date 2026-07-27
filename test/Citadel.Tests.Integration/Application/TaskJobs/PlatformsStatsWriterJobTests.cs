@@ -47,7 +47,11 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         services.AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
         services.AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer);
 
-        _configMock.Setup(x => x.Value).Returns(new JobConfiguration());
+        _configMock.Setup(x => x.Value).Returns(new JobConfiguration
+        {
+            BatchSize = 2,
+            FlashInterval = 1
+        });
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -105,6 +109,45 @@ public class PlatformsStatsWriterJobTests(PostgresTestFixture fixture) : Integra
         var stats = await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(_platformId, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, stats.Count());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldFlushPartialBatchWhileInputIsIdle()
+    {
+        _configMock.Setup(x => x.Value).Returns(new JobConfiguration
+        {
+            BatchSize = 100,
+            FlashInterval = 1
+        });
+        var stat = new PlatformStatsResult(
+            MemTotal: 123456,
+            ImageCount: 1,
+            VolumeCount: 1,
+            NetworkCount: 1,
+            AgentVersion: "1.0.0",
+            PlatformStat: new DockerPlatformStat(
+                created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                memoryUsage: 10,
+                cpuUsage: 20,
+                rxBytes: 30,
+                txBytes: 40,
+                containerCount: 1,
+                containersPaused: 0,
+                containersStopped: 0,
+                containersRunning: 1));
+
+        await _channel.Writer.WriteAsync(
+            (_platformId, stat),
+            TestContext.Current.CancellationToken);
+        await Task.Delay(3000, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stats = await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(
+            _platformId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Single(stats);
     }
 
     [Fact]

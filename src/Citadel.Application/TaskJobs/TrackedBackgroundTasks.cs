@@ -35,7 +35,13 @@ internal sealed class TrackedBackgroundTasks
             return;
         }
 
-        await Task.WhenAny(Task.WhenAny(snapshot), Task.Delay(delay, cancellationToken));
+        try
+        {
+            await Task.WhenAny(snapshot).WaitAsync(delay, cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+        }
     }
 
     public async Task DrainAsync()

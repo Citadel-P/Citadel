@@ -3,29 +3,33 @@ using Hosting.Common;
 
 namespace Application.Services.SignalR.Context;
 
-internal sealed class ChannelStreamContext<T> : StreamContext where T : class
+internal sealed class ChannelStreamContext<T> : StreamContext, IDisposable where T : class
 {
     public Channel<T> Channel { get; } = System.Threading.Channels.Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions());
-    public CancellationTokenSource Cancellation { get; private set; } = new();
+    public CancellationTokenSource Cancellation { get; } = new();
+    private bool disposed;
 
     public override void RemoveSubscriber(string connectionId)
     {
-        Task? toObserve = null;
+        base.RemoveSubscriber(connectionId);
+        if (IsEmpty)
+            Dispose();
+    }
+
+    public void Dispose()
+    {
         using (@lock.EnterScope())
         {
-            subscribers.Remove(connectionId);
-            if (IsEmpty)
-            {
-                try { Cancellation.Cancel(); } catch { }
-                Channel.Writer.TryComplete();
-                started = false;
-                toObserve = StreamTask;
-                StreamTask = null;
-                try { Cancellation.Dispose(); } catch { }
-                Cancellation = new CancellationTokenSource();
-            }
+            if (disposed)
+                return;
+
+            disposed = true;
+            started = false;
+            StreamTask = null;
         }
-        if (toObserve != null)
-            _ = toObserve.ContinueWith(t => { t.Dispose(); }, TaskContinuationOptions.ExecuteSynchronously);
+
+        try { Cancellation.Cancel(); } catch { }
+        Channel.Writer.TryComplete();
+        Cancellation.Dispose();
     }
 }

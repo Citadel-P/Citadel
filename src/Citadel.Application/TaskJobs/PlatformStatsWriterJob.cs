@@ -9,6 +9,7 @@ using Domain.Entities.Platforms;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Buffers;
 using System.Threading.Channels;
 
 namespace Application.TaskJobs;
@@ -33,16 +34,42 @@ internal sealed class PlatformStatsWriterJob(
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
+        using var flushTimer = new PeriodicTimer(
+            TimeSpan.FromSeconds(Math.Max(1, options.Value.FlashInterval)));
+
         try
         {
-            await foreach (var (platformId, stat) in reader.ReadAllAsync(cancellationToken))
+            var readTask = reader.WaitToReadAsync(cancellationToken).AsTask();
+            var flushTask = flushTimer.WaitForNextTickAsync(cancellationToken).AsTask();
+
+            while (!cancellationToken.IsCancellationRequested)
             {
-                Accumulate(platformId, stat);
+                var completed = await Task.WhenAny(readTask, flushTask);
+                if (completed == flushTask)
+                {
+                    if (!await flushTask)
+                        break;
 
-                await EnqueueNotificationAsync(platformId, stat, cancellationToken);
+                    if (_bufferedCount > 0)
+                        await FlushAsync(cancellationToken);
 
-                if (ShouldFlush())
-                    await FlushAsync(cancellationToken);
+                    flushTask = flushTimer.WaitForNextTickAsync(cancellationToken).AsTask();
+                    continue;
+                }
+
+                if (!await readTask)
+                    break;
+
+                while (reader.TryRead(out var item))
+                {
+                    Accumulate(item.Id, item.Stats);
+                    await EnqueueNotificationAsync(item.Id, item.Stats, cancellationToken);
+
+                    if (ShouldFlush())
+                        await FlushAsync(cancellationToken);
+                }
+
+                readTask = reader.WaitToReadAsync(cancellationToken).AsTask();
             }
         }
         catch (OperationCanceledException) { }
@@ -51,8 +78,8 @@ internal sealed class PlatformStatsWriterJob(
             logger.LogError(ex, "Error in PlatformStatsWriterJob");
         }
 
-        if (_bufferedCount > 0)
-            await FlushAsync(CancellationToken.None);
+        if (!cancellationToken.IsCancellationRequested && _bufferedCount > 0)
+            await FlushAsync(cancellationToken);
     }
 
     private async Task EnqueueNotificationAsync(
@@ -100,27 +127,46 @@ internal sealed class PlatformStatsWriterJob(
         if (_bufferedCount == 0) return;
 
         var dataToFlush = _buffer;
-        _buffer = new Dictionary<Guid, List<PlatformStatsResult>>();
-
-        _bufferedCount = 0;
-        _lastFlush = DateTime.UtcNow;
+        var workItem = new PersistPlatformStatsWorkItem(dataToFlush, logger);
 
         try
         {
-            await dbQueue.EnqueueAsync(new PersistPlatformStatsWorkItem(dataToFlush, alertService, logger), ct);
+            await dbQueue.EnqueueAndWaitAsync(workItem, ct);
+            _buffer = [];
+            _bufferedCount = 0;
+            _lastFlush = DateTime.UtcNow;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to enqueue platform stats persist work item.");
+            return;
         }
+
+        if (workItem.AlertContext is { } alertContext)
+            await ProcessAlertsAsync(alertContext, ct);
+    }
+
+    private async Task ProcessAlertsAsync(
+        AlertEvaluationContext context,
+        CancellationToken cancellationToken)
+    {
+        await alertService.ProcessAsync(AlertType.PlatformCpuHigh, context, cancellationToken);
+        await alertService.ProcessAsync(AlertType.PlatformRamHigh, context, cancellationToken);
+        await alertService.ProcessAsync(AlertType.PlatformDiskHigh, context, cancellationToken);
+        await alertService.ProcessAsync(AlertType.PlatformVersionMismatch, context, cancellationToken);
     }
 }
 
 internal sealed class PersistPlatformStatsWorkItem(
     Dictionary<Guid, List<PlatformStatsResult>> buffer,
-    IAlertService alertService,
     ILogger logger) : IDbWorkItem
 {
+    public AlertEvaluationContext? AlertContext { get; private set; }
+
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
@@ -177,34 +223,13 @@ internal sealed class PersistPlatformStatsWorkItem(
             logger.LogError(ex, "Error bulk inserting PlatformStats");
         }
 
-        // Alert processing
         if (platformSnapshots.Count != 0)
         {
-            var context = new AlertEvaluationContext(
+            AlertContext = new AlertEvaluationContext(
                 UtcNow: now,
                 Platforms: platformSnapshots,
                 Deployments: [],
                 Stacks: []);
-
-            await alertService.ProcessAsync(
-                AlertType.PlatformCpuHigh,
-                context,
-                cancellationToken);
-
-            await alertService.ProcessAsync(
-                AlertType.PlatformRamHigh,
-                context,
-                cancellationToken);
-
-            await alertService.ProcessAsync(
-                AlertType.PlatformDiskHigh,
-                context,
-                cancellationToken);
-
-            await alertService.ProcessAsync(
-                AlertType.PlatformVersionMismatch,
-                context,
-                cancellationToken);
         }
     }
 
@@ -227,27 +252,42 @@ internal sealed class PersistPlatformStatsWorkItem(
         return new PlatformAlertSnapshot(
             platformId,
             platformName,
-            CpuUsage: Median(stats.Select(x => x.PlatformStat.CpuUsage)),
-            RamUsage: Median(stats.Select(x => x.PlatformStat.MemoryUsage)),
+            CpuUsage: Median(stats, static x => x.PlatformStat.CpuUsage),
+            RamUsage: Median(stats, static x => x.PlatformStat.MemoryUsage),
             AgentVersion: last.AgentVersion,
             DiskUsage: hasValidDiskSample ? diskUsage : null,
             DiskUsedBytes: hasValidDiskSample ? diskUsedBytes : null,
             DiskTotalBytes: hasValidDiskSample ? diskTotalBytes : null);
     }
 
-    private static double Median(IEnumerable<double> values)
+    private static double Median(
+        IReadOnlyList<PlatformStatsResult> values,
+        Func<PlatformStatsResult, double> selector)
     {
-        var ordered = values
-            .Where(value => !double.IsNaN(value) && !double.IsInfinity(value))
-            .Order()
-            .ToArray();
-
-        return ordered.Length switch
+        var rented = ArrayPool<double>.Shared.Rent(values.Count);
+        try
         {
-            0 => 0,
-            var count when count % 2 == 1 => ordered[count / 2],
-            var count => (ordered[(count / 2) - 1] + ordered[count / 2]) / 2.0
-        };
+            var count = 0;
+            foreach (var item in values)
+            {
+                var value = selector(item);
+                if (double.IsFinite(value))
+                    rented[count++] = value;
+            }
+
+            if (count == 0)
+                return 0;
+
+            var ordered = rented.AsSpan(0, count);
+            ordered.Sort();
+            return count % 2 == 1
+                ? ordered[count / 2]
+                : (ordered[(count / 2) - 1] + ordered[count / 2]) / 2.0;
+        }
+        finally
+        {
+            ArrayPool<double>.Shared.Return(rented);
+        }
     }
 }
 
