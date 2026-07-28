@@ -16,6 +16,7 @@ using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using System.Runtime.CompilerServices;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Activities;
 
 namespace Application.Features.Backups.Commands;
 
@@ -168,7 +169,7 @@ file static class BackupPolicySourceValidator
         {
             return fs.Location == BackupExecutionLocation.Core
                 ? Result.Success()
-                : Result.Failure(new BadRequestError("Citadel system backups can only use a Core filesystem repository or an S3-compatible repository."));
+                : Result.Failure(new BadRequestError("Citadel backups can only use a Core filesystem repository or an S3-compatible repository."));
         }
 
         if (fs.Location == BackupExecutionLocation.Core)
@@ -286,6 +287,13 @@ internal sealed class CreateBackupPolicyHandler(
         if (affectedRows == 0)
             return Result.Failure<BackupPolicyResult>(new BadRequestError("One or more tags do not exist."));
 
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            BackupPolicyActivity.Create(
+                policy,
+                userContextAccessor.Current.ActorId,
+                ActivityEventType.BackupPolicyCreated,
+                new BackupPolicyCreated(BackupPolicyActivity.ToSnapshot(policy))),
+            cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return Result.Success(new BackupPolicyResult(policy));
@@ -294,6 +302,7 @@ internal sealed class CreateBackupPolicyHandler(
 
 internal sealed class UpdateBackupPolicyHandler(
     IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
     ILicenseEntitlementService licenseEntitlementService)
@@ -304,6 +313,8 @@ internal sealed class UpdateBackupPolicyHandler(
         var policy = await unitOfWork.BackupPolicies.GetAsync(command.PolicyId, cancellationToken);
         if (policy is null)
             return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup policy not found."));
+
+        var oldPolicy = BackupPolicyActivity.ToSnapshot(policy);
 
         if (BackupLicenseConfigurationPolicy.ChangesActivePaidTrigger(
                 policy,
@@ -378,13 +389,22 @@ internal sealed class UpdateBackupPolicyHandler(
         }
 
         await unitOfWork.BackupPolicies.UpdateAsync(policy, cancellationToken);
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            BackupPolicyActivity.Create(
+                policy,
+                userContextAccessor.Current.ActorId,
+                ActivityEventType.BackupPolicyUpdated,
+                new BackupPolicyUpdated(oldPolicy, BackupPolicyActivity.ToSnapshot(policy))),
+            cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return Result.Success(new BackupPolicyResult(policy));
     }
 }
 
-internal sealed class RenameBackupPolicyHandler(IUnitOfWork unitOfWork)
+internal sealed class RenameBackupPolicyHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor)
     : ICommandHandler<RenameBackupPolicy, Result<BackupPolicyResult>>
 {
     public async ValueTask<Result<BackupPolicyResult>> Handle(RenameBackupPolicy command, CancellationToken cancellationToken)
@@ -397,6 +417,7 @@ internal sealed class RenameBackupPolicyHandler(IUnitOfWork unitOfWork)
         if (await unitOfWork.BackupPolicies.ExistsByNormalizedNameExceptAsync(normalizedName, policy.Id, cancellationToken))
             return Result.Failure<BackupPolicyResult>(new ConflictError("Backup policy name already exists."));
 
+        var oldName = policy.Name;
         try
         {
             policy.Rename(command.Name);
@@ -408,13 +429,22 @@ internal sealed class RenameBackupPolicyHandler(IUnitOfWork unitOfWork)
         }
 
         await unitOfWork.BackupPolicies.UpdateAsync(policy, cancellationToken);
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            BackupPolicyActivity.Create(
+                policy,
+                userContextAccessor.Current.ActorId,
+                ActivityEventType.BackupPolicyRenamed,
+                new BackupPolicyRenamed(oldName, policy.Name)),
+            cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return Result.Success(new BackupPolicyResult(policy));
     }
 }
 
-internal sealed class PatchBackupPolicyMetadataHandler(IUnitOfWork unitOfWork)
+internal sealed class PatchBackupPolicyMetadataHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor)
     : ICommandHandler<PatchBackupPolicyMetadata, Result<BackupPolicyResult>>
 {
     public async ValueTask<Result<BackupPolicyResult>> Handle(PatchBackupPolicyMetadata command, CancellationToken cancellationToken)
@@ -423,6 +453,7 @@ internal sealed class PatchBackupPolicyMetadataHandler(IUnitOfWork unitOfWork)
         if (policy is null)
             return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup policy not found."));
 
+        var oldPolicy = BackupPolicyActivity.ToSnapshot(policy);
         try
         {
             policy.UpdateDescription(command.Description);
@@ -434,13 +465,22 @@ internal sealed class PatchBackupPolicyMetadataHandler(IUnitOfWork unitOfWork)
         }
 
         await unitOfWork.BackupPolicies.UpdateAsync(policy, cancellationToken);
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            BackupPolicyActivity.Create(
+                policy,
+                userContextAccessor.Current.ActorId,
+                ActivityEventType.BackupPolicyUpdated,
+                new BackupPolicyUpdated(oldPolicy, BackupPolicyActivity.ToSnapshot(policy))),
+            cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return Result.Success(new BackupPolicyResult(policy));
     }
 }
 
-internal sealed class ArchiveBackupPolicyHandler(IUnitOfWork unitOfWork)
+internal sealed class ArchiveBackupPolicyHandler(
+    IUnitOfWork unitOfWork,
+    IUserContextAccessor userContextAccessor)
     : ICommandHandler<ArchiveBackupPolicy, Result>
 {
     public async ValueTask<Result> Handle(ArchiveBackupPolicy command, CancellationToken cancellationToken)
@@ -462,10 +502,51 @@ internal sealed class ArchiveBackupPolicyHandler(IUnitOfWork unitOfWork)
         }
 
         await unitOfWork.BackupPolicies.UpdateAsync(policy, cancellationToken);
+        await unitOfWork.ActivityEventRepository.AddAsync(
+            BackupPolicyActivity.Create(
+                policy,
+                userContextAccessor.Current.ActorId,
+                ActivityEventType.BackupPolicyArchived,
+                new BackupPolicyArchived(BackupPolicyActivity.ToSnapshot(policy))),
+            cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         return Result.Success();
     }
+}
+
+internal static class BackupPolicyActivity
+{
+    internal static BackupPolicyActivitySnapshot ToSnapshot(BackupPolicy policy)
+        => new(
+            policy.Id,
+            policy.Name,
+            policy.Description,
+            policy.Source.Type.ToString(),
+            policy.Source.StableKey,
+            policy.BackupRepositoryId,
+            policy.Enabled,
+            policy.Cron,
+            policy.TimeZone,
+            policy.WebhookEnabled,
+            policy.KeepLastSuccessful,
+            policy.TimeoutSeconds,
+            policy.AlertOnFailure,
+            policy.RunAsActorId);
+
+    internal static ActivityEvent Create(
+        BackupPolicy policy,
+        Guid actorId,
+        ActivityEventType eventType,
+        ActivityEventInfo info)
+        => new(
+            platformId: null,
+            resourceId: policy.Id,
+            actorId: actorId,
+            resourceName: policy.Name,
+            eventType: eventType,
+            status: ActivityStatus.Success,
+            info: info);
 }
 
 internal sealed class QueueBackupRunHandler(
@@ -703,6 +784,14 @@ file static class BackupRestoreRunQueuer
 
         if (backupRun.SnapshotAvailability != BackupSnapshotAvailability.Available)
             return Result.Failure<BackupRestoreRunResult>(new BadRequestError("Only available backup snapshots can be restored."));
+
+        if (backupRun.SourceSnapshot is CitadelSystemBackupSource)
+            return Result.Failure<BackupRestoreRunResult>(
+                new BadRequestError("Citadel backups must be restored offline. See the control-plane recovery documentation."));
+
+        if (backupRun.SourceSnapshot is not DockerVolumeBackupSource)
+            return Result.Failure<BackupRestoreRunResult>(
+                new BadRequestError("Only Docker volume backup snapshots can be restored through this operation."));
 
         var run = new BackupRestoreRun(
             backupRun.Id,

@@ -60,7 +60,7 @@ public interface IApplicationHubDispatcher
 
     #region Backups
     Task SendBackupRepositoryInfo(BackupRepository repository, string action);
-    Task SendBackupPolicyInfo(BackupPolicy policy, string action);
+    Task SendBackupPolicyInfo(BackupPolicy policy, string action, BackupRun? latestRun = null);
     Task SendBackupRunInfo(BackupRun run, string action);
     Task SendBackupRestoreRunInfo(BackupRestoreRun run, Guid backupPolicyId, string action);
     #endregion

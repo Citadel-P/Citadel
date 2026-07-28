@@ -1,11 +1,13 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain;
+using Domain.Contracts.Resources.Git;
 using Domain.Entities.Git;
 using Hosting.DockerClient.Services;
 using Infrastructure.Repositories.Mappers;
 using LightResults;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
@@ -18,12 +20,17 @@ namespace Infrastructure.Repositories;
 internal class GitCliRepository(ICommandExecutor processService) : IGitCliRepository
 {
     private const string GitExecutable = "git";
+    private const int MaximumLookupOutputBytes = 64 * 1024;
+    private const int MaximumStandardErrorBytes = 16 * 1024;
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     private static readonly FrozenDictionary<string, string> GitEnv = new Dictionary<string, string>
     {
         { "GIT_TERMINAL_PROMPT", "0" },
         { "GIT_ASKPASS", "echo" },
-        { "GIT_SSH_COMMAND", "ssh -o BatchMode=yes" }
+        { "GIT_SSH_COMMAND", "ssh -o BatchMode=yes" },
+        { "GIT_LITERAL_PATHSPECS", "1" },
+        { "LC_ALL", "C" }
     }.ToFrozenDictionary();
 
     private static readonly string CitadelTempDir = Path.Combine(Path.GetTempPath(), "citadel");
@@ -187,6 +194,192 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
         return Result.Success<IReadOnlyList<string>>(paths);
     }
 
+    public async Task<Result<string>> ResolveCommitAsync(
+        string repoPath,
+        string commitSha,
+        CancellationToken ct = default)
+    {
+        var result = await processService.ExecuteBoundedAsync(
+            GitExecutable,
+            ["-C", NormalizeLocalGitPath(repoPath), "rev-parse", "--verify", $"{commitSha}^{{commit}}"],
+            maximumStandardOutputBytes: 256,
+            maximumStandardErrorBytes: MaximumStandardErrorBytes,
+            GitEnv,
+            "",
+            ct);
+
+        if (!result.IsSuccess || result.StandardOutputTruncated)
+            return Result.Failure<string>(GitFailure(result, "Commit could not be resolved."));
+
+        var resolved = Encoding.ASCII.GetString(result.StandardOutput.Span).Trim();
+        return IsFullObjectId(resolved)
+            ? Result.Success(resolved.ToLowerInvariant())
+            : Result.Failure<string>("Git returned an invalid commit identifier.");
+    }
+
+    public async Task<Result<GitTreeListing>> ListTreeAsync(
+        string repoPath,
+        string commitSha,
+        string path,
+        int maximumEntries,
+        int maximumOutputBytes,
+        CancellationToken ct = default)
+    {
+        if (maximumEntries <= 0 || maximumOutputBytes <= 0)
+            return Result.Failure<GitTreeListing>("Git tree limits must be positive.");
+
+        string treeObject;
+        if (path.Length == 0)
+        {
+            var rootResult = await ResolveTreeObjectAsync(repoPath, $"{commitSha}^{{tree}}", ct);
+            if (rootResult.IsFailure(out var rootError, out treeObject))
+                return Result.Failure<GitTreeListing>(rootError);
+        }
+        else
+        {
+            var entryResult = await GetTreeEntryAsync(repoPath, commitSha, path, ct);
+            if (entryResult.IsFailure(out var entryError, out var entry))
+                return Result.Failure<GitTreeListing>(entryError);
+
+            if (entry is null)
+                return Result.Failure<GitTreeListing>("Repository path does not exist.");
+
+            if (entry.Type != GitRepositoryEntryType.Directory)
+                return Result.Failure<GitTreeListing>("Repository path is not a directory.");
+
+            treeObject = entry.ObjectId;
+        }
+
+        var result = await processService.ExecuteBoundedAsync(
+            GitExecutable,
+            ["-C", NormalizeLocalGitPath(repoPath), "ls-tree", "-z", "-l", treeObject],
+            maximumOutputBytes,
+            MaximumStandardErrorBytes,
+            GitEnv,
+            "",
+            ct);
+
+        if (!result.IsSuccess && !result.StandardOutputTruncated)
+            return Result.Failure<GitTreeListing>(GitFailure(result, "Repository directory could not be read."));
+
+        try
+        {
+            var parsed = ParseTreeEntries(result.StandardOutput.Span, path, maximumEntries);
+            return new GitTreeListing(
+                parsed.Entries,
+                result.StandardOutputTruncated || parsed.IsTruncated);
+        }
+        catch (Exception ex) when (ex is FormatException or DecoderFallbackException or OverflowException)
+        {
+            return Result.Failure<GitTreeListing>("Git returned an invalid tree listing.");
+        }
+    }
+
+    public async Task<Result<GitTreeEntry?>> GetTreeEntryAsync(
+        string repoPath,
+        string commitSha,
+        string path,
+        CancellationToken ct = default)
+    {
+        var result = await processService.ExecuteBoundedAsync(
+            GitExecutable,
+            ["-C", NormalizeLocalGitPath(repoPath), "ls-tree", "-z", "-l", commitSha, "--", path],
+            MaximumLookupOutputBytes,
+            MaximumStandardErrorBytes,
+            GitEnv,
+            "",
+            ct);
+
+        if (!result.IsSuccess || result.StandardOutputTruncated)
+            return Result.Failure<GitTreeEntry?>(GitFailure(result, "Repository path could not be resolved."));
+
+        try
+        {
+            var parsed = ParseTreeEntries(result.StandardOutput.Span, parentPath: null, maximumEntries: 2);
+            if (parsed.Entries.Count == 0)
+                return Result.Success<GitTreeEntry?>(null);
+
+            var exact = parsed.Entries.FirstOrDefault(entry =>
+                string.Equals(entry.Path, path, StringComparison.Ordinal));
+            return Result.Success<GitTreeEntry?>(exact);
+        }
+        catch (Exception ex) when (ex is FormatException or DecoderFallbackException or OverflowException)
+        {
+            return Result.Failure<GitTreeEntry?>("Git returned invalid path metadata.");
+        }
+    }
+
+    public async Task<Result<GitBlob>> ReadBlobAsync(
+        string repoPath,
+        string objectId,
+        int maximumBytes,
+        CancellationToken ct = default)
+    {
+        if (maximumBytes <= 0)
+            return Result.Failure<GitBlob>("Git blob limit must be positive.");
+
+        var result = await processService.ExecuteBoundedAsync(
+            GitExecutable,
+            ["-C", NormalizeLocalGitPath(repoPath), "cat-file", "blob", objectId],
+            maximumBytes,
+            MaximumStandardErrorBytes,
+            GitEnv,
+            "",
+            ct);
+
+        if (!result.IsSuccess && !result.StandardOutputTruncated)
+            return Result.Failure<GitBlob>(GitFailure(result, "Repository file could not be read."));
+
+        return new GitBlob(result.StandardOutput, result.StandardOutputTruncated);
+    }
+
+    public async Task<Result<GitChangedPathListing>> CompareCommitsAsync(
+        string repoPath,
+        string baseCommitSha,
+        string headCommitSha,
+        int maximumEntries,
+        int maximumOutputBytes,
+        CancellationToken ct = default)
+    {
+        if (maximumEntries <= 0 || maximumOutputBytes <= 0)
+            return Result.Failure<GitChangedPathListing>("Git comparison limits must be positive.");
+
+        var result = await processService.ExecuteBoundedAsync(
+            GitExecutable,
+            [
+                "-C",
+                NormalizeLocalGitPath(repoPath),
+                "diff",
+                "--name-status",
+                "-z",
+                "--find-renames",
+                "--find-copies",
+                baseCommitSha,
+                headCommitSha,
+                "--"
+            ],
+            maximumOutputBytes,
+            MaximumStandardErrorBytes,
+            GitEnv,
+            "",
+            ct);
+
+        if (!result.IsSuccess && !result.StandardOutputTruncated)
+            return Result.Failure<GitChangedPathListing>(GitFailure(result, "Repository commits could not be compared."));
+
+        try
+        {
+            var parsed = ParseChangedPaths(result.StandardOutput.Span, maximumEntries);
+            return new GitChangedPathListing(
+                parsed.Files,
+                result.StandardOutputTruncated || parsed.IsTruncated);
+        }
+        catch (Exception ex) when (ex is FormatException or DecoderFallbackException)
+        {
+            return Result.Failure<GitChangedPathListing>("Git returned an invalid comparison.");
+        }
+    }
+
     public async Task<Result> MaterializeSnapshotAsync(string repoPath, string commitSha, string targetPath, CancellationToken ct = default)
     {
         if (Directory.Exists(targetPath))
@@ -292,6 +485,198 @@ internal class GitCliRepository(ICommandExecutor processService) : IGitCliReposi
 
         return new GitRemoteBranchRef(branch, parts[0]);
     }
+
+    private async Task<Result<string>> ResolveTreeObjectAsync(
+        string repoPath,
+        string objectSpec,
+        CancellationToken ct)
+    {
+        var result = await processService.ExecuteBoundedAsync(
+            GitExecutable,
+            ["-C", NormalizeLocalGitPath(repoPath), "rev-parse", "--verify", objectSpec],
+            256,
+            MaximumStandardErrorBytes,
+            GitEnv,
+            "",
+            ct);
+
+        if (!result.IsSuccess || result.StandardOutputTruncated)
+            return Result.Failure<string>(GitFailure(result, "Repository tree could not be resolved."));
+
+        var objectId = Encoding.ASCII.GetString(result.StandardOutput.Span).Trim();
+        return IsFullObjectId(objectId)
+            ? Result.Success(objectId.ToLowerInvariant())
+            : Result.Failure<string>("Git returned an invalid tree identifier.");
+    }
+
+    private static (IReadOnlyList<GitTreeEntry> Entries, bool IsTruncated) ParseTreeEntries(
+        ReadOnlySpan<byte> output,
+        string? parentPath,
+        int maximumEntries)
+    {
+        var entries = new List<GitTreeEntry>(Math.Min(maximumEntries, 64));
+        var offset = 0;
+        var isTruncated = false;
+
+        while (offset < output.Length)
+        {
+            var terminator = output[offset..].IndexOf((byte)0);
+            if (terminator < 0)
+            {
+                isTruncated = true;
+                break;
+            }
+
+            var record = output.Slice(offset, terminator);
+            offset += terminator + 1;
+            if (record.Length == 0)
+                continue;
+
+            if (entries.Count >= maximumEntries)
+            {
+                isTruncated = true;
+                break;
+            }
+
+            var separator = record.IndexOf((byte)'\t');
+            if (separator <= 0 || separator == record.Length - 1)
+                throw new FormatException("Invalid ls-tree record.");
+
+            var metadata = Encoding.ASCII.GetString(record[..separator]);
+            var metadataParts = metadata.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (metadataParts.Length != 4)
+                throw new FormatException("Invalid ls-tree metadata.");
+
+            var reportedPath = StrictUtf8.GetString(record[(separator + 1)..]);
+            var path = parentPath is null
+                ? reportedPath
+                : parentPath.Length == 0
+                    ? reportedPath
+                    : $"{parentPath}/{reportedPath}";
+            var name = reportedPath[(reportedPath.LastIndexOf('/') + 1)..];
+            var type = MapEntryType(metadataParts[0]);
+            long? size = metadataParts[3] == "-"
+                ? null
+                : long.Parse(metadataParts[3], NumberStyles.None, CultureInfo.InvariantCulture);
+
+            entries.Add(new GitTreeEntry(
+                name,
+                path,
+                type,
+                size,
+                metadataParts[0],
+                metadataParts[2]));
+        }
+
+        return (entries, isTruncated);
+    }
+
+    private static (IReadOnlyList<GitChangedPath> Files, bool IsTruncated) ParseChangedPaths(
+        ReadOnlySpan<byte> output,
+        int maximumEntries)
+    {
+        var fields = ParseNullDelimitedStrings(output, out var hasIncompleteField);
+        var files = new List<GitChangedPath>(Math.Min(maximumEntries, 64));
+        var offset = 0;
+        var isTruncated = hasIncompleteField;
+
+        while (offset < fields.Count)
+        {
+            if (files.Count >= maximumEntries)
+            {
+                isTruncated = true;
+                break;
+            }
+
+            var statusToken = fields[offset++];
+            if (statusToken.Length == 0)
+                continue;
+
+            var status = statusToken[0];
+            if (status is 'R' or 'C')
+            {
+                if (offset + 1 >= fields.Count)
+                {
+                    isTruncated = true;
+                    break;
+                }
+
+                var previousPath = fields[offset++];
+                var path = fields[offset++];
+                files.Add(new GitChangedPath(
+                    status == 'R' ? GitChangedPathStatus.Renamed : GitChangedPathStatus.Copied,
+                    path,
+                    previousPath));
+                continue;
+            }
+
+            if (offset >= fields.Count)
+            {
+                isTruncated = true;
+                break;
+            }
+
+            var changedPath = fields[offset++];
+            files.Add(new GitChangedPath(
+                status switch
+                {
+                    'A' => GitChangedPathStatus.Added,
+                    'M' => GitChangedPathStatus.Modified,
+                    'D' => GitChangedPathStatus.Deleted,
+                    'T' => GitChangedPathStatus.TypeChanged,
+                    _ => throw new FormatException($"Unsupported Git change status '{status}'.")
+                },
+                changedPath,
+                PreviousPath: null));
+        }
+
+        return (files, isTruncated);
+    }
+
+    private static IReadOnlyList<string> ParseNullDelimitedStrings(ReadOnlySpan<byte> output)
+        => ParseNullDelimitedStrings(output, out _);
+
+    private static IReadOnlyList<string> ParseNullDelimitedStrings(
+        ReadOnlySpan<byte> output,
+        out bool hasIncompleteField)
+    {
+        var fields = new List<string>();
+        var offset = 0;
+        hasIncompleteField = false;
+
+        while (offset < output.Length)
+        {
+            var terminator = output[offset..].IndexOf((byte)0);
+            if (terminator < 0)
+            {
+                hasIncompleteField = true;
+                break;
+            }
+
+            fields.Add(StrictUtf8.GetString(output.Slice(offset, terminator)));
+            offset += terminator + 1;
+        }
+
+        return fields;
+    }
+
+    private static GitRepositoryEntryType MapEntryType(string mode)
+        => mode switch
+        {
+            "040000" => GitRepositoryEntryType.Directory,
+            "100644" or "100755" => GitRepositoryEntryType.File,
+            "120000" => GitRepositoryEntryType.Symlink,
+            "160000" => GitRepositoryEntryType.Submodule,
+            _ => throw new FormatException($"Unsupported Git tree mode '{mode}'.")
+        };
+
+    private static string GitFailure(ProcessBinaryExecutionResult result, string fallback)
+        => string.IsNullOrWhiteSpace(result.StandardError)
+            ? fallback
+            : result.StandardError.Trim();
+
+    private static bool IsFullObjectId(string value)
+        => value.Length is 40 or 64 && value.All(Uri.IsHexDigit);
 
     private static string GetOrWriteSshKey(Guid accountId, string privateKey)
     {

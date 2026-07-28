@@ -2,14 +2,17 @@ namespace Application.Services;
 
 internal static class ApplicationVersion
 {
-    public static string CoreVersion { get; } = GetCoreVersion(
+    public static string CoreInformationalVersion { get; } =
         typeof(ApplicationVersion).Assembly
             .GetCustomAttributes(
                 typeof(System.Reflection.AssemblyInformationalVersionAttribute),
                 inherit: false)
             .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
             .SingleOrDefault()?
-            .InformationalVersion);
+            .InformationalVersion
+        ?? "0.0.0";
+
+    public static string CoreVersion { get; } = GetCoreVersion(CoreInformationalVersion);
 
     internal static string GetCoreVersion(string? informationalVersion)
     {

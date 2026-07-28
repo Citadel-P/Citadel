@@ -225,12 +225,20 @@ public abstract class ApplicationHubAuthorizationTestBase(PostgresTestFixture fi
     protected async Task RunPrivateGroupNameScenarioAsync()
     {
         var resourceId = Guid.CreateVersion7();
+        var backupPolicyId = Guid.CreateVersion7();
         var subject = await CreateAuthorizationSubjectAsync(
-            resourceGrants: [new ResourceGrant(ResourceType.Deployment, resourceId, PermissionLevel.Read)]);
+            resourceGrants:
+            [
+                new ResourceGrant(ResourceType.Deployment, resourceId, PermissionLevel.Read),
+                new ResourceGrant(ResourceType.BackupPolicy, backupPolicyId, PermissionLevel.Read)
+            ]);
 
         await AssertAuthorizationAllowedAsync(
             subject,
             Constants.WellKnownSignalRGroups.ActivityGroup(nameof(ActivityResourceType.Deployment), resourceId));
+        await AssertAuthorizationAllowedAsync(
+            subject,
+            Constants.WellKnownSignalRGroups.ActivityGroup(nameof(ActivityResourceType.BackupPolicy), backupPolicyId));
         await AssertAuthorizationAllowedAsync(subject, Constants.WellKnownSignalRGroups.AlertEventsGroup);
         await AssertAuthorizationDeniedAsync(subject, $"activity:{resourceId}");
         await AssertAuthorizationDeniedAsync(

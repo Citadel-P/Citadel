@@ -3,12 +3,7 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { GitRepoActions } from './actions';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
-import {
-  ActivityStatus,
-  GitRepositoryView,
-  LatestActivityView,
-  ResourceControlState,
-} from '@/api/generated/api.types';
+import { ActivityStatus, GitRepositoryView, LatestActivityView, ResourceControlState } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { useGitRepoGroup } from './hooks/useGitRepoGroup';
 import { ActivityAlertZone } from '@/components/custom/task-sheet';
@@ -17,6 +12,7 @@ import { truncate } from '@/lib/truncate';
 import { GitCommitHorizontalIcon } from 'lucide-react';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
+import { GitRepositoryBrowseAction } from '../browser/browser-dialog';
 
 const title = 'Repository';
 export const GitRepoFormComponents: RequiredFormComponents = {
@@ -39,7 +35,13 @@ export const GitRepoFormComponents: RequiredFormComponents = {
         );
       },
       ActionButtons: ({ resource }) => {
-        return <GenericActionBarButtons resource={resource} actions={Object.values(GitRepoActions)} />;
+        return (
+          <GenericActionBarButtons
+            resource={resource}
+            actions={Object.values(GitRepoActions)}
+            standaloneActions={[GitRepositoryBrowseAction]}
+          />
+        );
       },
       Tags: ({ resource }: { resource: GitRepositoryView }) => (
         <ResourceHeaderTagsEditor

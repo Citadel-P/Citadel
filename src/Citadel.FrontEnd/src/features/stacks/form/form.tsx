@@ -724,10 +724,12 @@ export const StackForm = ({
   mode,
   metadataChanged,
   disabled,
+  onSourceDirtyChange,
 }: {
   mode: 'add' | 'edit';
   metadataChanged?: boolean;
   disabled?: boolean;
+  onSourceDirtyChange?: (dirty: boolean) => void;
 }) => {
   const id = useParams().id;
   const [searchParams] = useSearchParams();
@@ -769,6 +771,22 @@ export const StackForm = ({
   const currentGitRepoId = (update as any)?.spec?.gitRepoId ?? (original.spec as any)?.gitRepoId ?? null;
   const currentGitBranch = (update as any)?.spec?.branch ?? (original.spec as any)?.branch ?? null;
   const currentPinnedCommit = (update as any)?.spec?.commitSha ?? (original.spec as any)?.commitSha ?? null;
+  const sourceDirty = useMemo(() => {
+    if (Object.prototype.hasOwnProperty.call(update, 'stackSource')) return true;
+
+    const specPatch = (update as any)?.spec;
+    if (!specPatch || typeof specPatch !== 'object') return false;
+
+    return [
+      'gitRepoId',
+      'branch',
+      'commitSha',
+      'composePaths',
+      'workingDirectory',
+      'composeEnvFilesFromRepo',
+      'additionalEnvFileFromRepo',
+    ].some((key) => Object.prototype.hasOwnProperty.call(specPatch, key));
+  }, [update]);
   const { data: gitRefsData } = useRead(
     'getGitRepositoryRefs',
     { id: currentGitRepoId ?? '' },
@@ -862,6 +880,10 @@ export const StackForm = ({
     if (!metadataChanged) return;
     refreshData();
   }, [metadataChanged, refreshData]);
+
+  useEffect(() => {
+    onSourceDirtyChange?.(sourceDirty);
+  }, [onSourceDirtyChange, sourceDirty]);
 
   const { save: handleSave, isPending } = useSaveResource<StackInput, any>({
     mode,

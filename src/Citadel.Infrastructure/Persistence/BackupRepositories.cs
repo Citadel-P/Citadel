@@ -2056,6 +2056,46 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
         return runs;
     }
 
+    public async Task<BackupRun?> GetLatestByPolicyAsync(Guid policyId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT *
+            FROM BackupRuns
+            WHERE BackupPolicyId = @PolicyId
+            ORDER BY QueuedAt DESC, Id DESC
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<BackupRunDto>(
+            sql,
+            new { PolicyId = policyId },
+            transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, BackupRun>> GetLatestByPoliciesAsync(
+        IReadOnlyCollection<Guid> policyIds,
+        CancellationToken cancellationToken)
+    {
+        if (policyIds.Count == 0)
+            return new Dictionary<Guid, BackupRun>();
+
+        const string sql = """
+            SELECT DISTINCT ON (BackupPolicyId) *
+            FROM BackupRuns
+            WHERE BackupPolicyId = ANY(@PolicyIds)
+            ORDER BY BackupPolicyId, QueuedAt DESC, Id DESC
+            """;
+
+        var result = await db.QueryAsync<BackupRunDto>(
+            sql,
+            new { PolicyIds = policyIds.ToArray() },
+            transaction: tx());
+        return result
+            .Select(static run => run.ToDomain())
+            .ToDictionary(static run => run.BackupPolicyId);
+    }
+
     public async Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -2164,6 +2204,88 @@ internal sealed class BackupRunRepository(IDbConnection db, Func<IDbTransaction>
             },
             transaction: tx());
         return rows > 0;
+    }
+
+    public Task<int> InterruptInProgressAsync(
+        DateTimeOffset interruptedAt,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH interrupted AS (
+                UPDATE BackupRuns
+                SET Status = @InterruptedStatus,
+                    SnapshotAvailability = CASE
+                        WHEN SnapshotAvailability = @PendingAvailability THEN @NotCreatedAvailability
+                        ELSE SnapshotAvailability
+                    END,
+                    CompletedAt = @InterruptedAt,
+                    ErrorCode = @ErrorCode,
+                    ErrorMessage = @Reason
+                WHERE Status = ANY(@InProgressStatuses)
+                RETURNING Id, BackupPolicyId
+            ),
+            cancelled_items AS (
+                UPDATE BackupRunItems items
+                SET Status = @CancelledItemStatus,
+                    CompletedAt = @InterruptedAt,
+                    ErrorCode = @ErrorCode,
+                    ErrorMessage = @Reason,
+                    UpdatedAt = @InterruptedAt
+                FROM interrupted runs
+                WHERE items.BackupRunId = runs.Id
+                  AND items.Status = ANY(@ActiveItemStatuses)
+            ),
+            released_policies AS (
+                UPDATE BackupPolicies policies
+                SET ControlState = @IdleControlState,
+                    CurrentRunId = NULL,
+                    ControlStartedAt = NULL,
+                    UpdatedAt = @InterruptedAt,
+                    RowVersion = RowVersion + 1
+                FROM interrupted runs
+                WHERE policies.Id = runs.BackupPolicyId
+                  AND policies.CurrentRunId = runs.Id
+            ),
+            released_repository_leases AS (
+                DELETE FROM BackupRepositoryLeases leases
+                USING interrupted runs
+                WHERE leases.OwnerRunId = runs.Id
+            ),
+            released_source_leases AS (
+                DELETE FROM BackupSourceLeases leases
+                USING interrupted runs
+                WHERE leases.OwnerRunId = runs.Id
+            )
+            SELECT COUNT(*)::integer
+            FROM interrupted
+            """;
+
+        return db.ExecuteScalarAsync<int>(
+            sql,
+            new
+            {
+                InterruptedAt = BackupMappers.ToUtcDateTime(interruptedAt),
+                ErrorCode = "backup.interrupted",
+                Reason = reason,
+                InterruptedStatus = EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Interrupted),
+                PendingAvailability = EnumFormatter<BackupSnapshotAvailability>.GetValue(BackupSnapshotAvailability.Pending),
+                NotCreatedAvailability = EnumFormatter<BackupSnapshotAvailability>.GetValue(BackupSnapshotAvailability.NotCreated),
+                InProgressStatuses = new[]
+                {
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Preparing),
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.Running),
+                    EnumFormatter<BackupRunStatus>.GetValue(BackupRunStatus.ApplyingRetention)
+                },
+                CancelledItemStatus = EnumFormatter<BackupRunItemStatus>.GetValue(BackupRunItemStatus.Cancelled),
+                ActiveItemStatuses = new[]
+                {
+                    EnumFormatter<BackupRunItemStatus>.GetValue(BackupRunItemStatus.Pending),
+                    EnumFormatter<BackupRunItemStatus>.GetValue(BackupRunItemStatus.Running)
+                },
+                IdleControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Idle)
+            },
+            transaction: tx());
     }
 
     public async Task<BackupRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken)
@@ -2733,6 +2855,52 @@ internal sealed class BackupRestoreRunRepository(IDbConnection db, Func<IDbTrans
             },
             transaction: tx());
         return [.. result];
+    }
+
+    public Task<int> InterruptInProgressAsync(
+        DateTimeOffset interruptedAt,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH interrupted AS (
+                UPDATE BackupRestoreRuns
+                SET Status = @InterruptedStatus,
+                    CompletedAt = @InterruptedAt,
+                    ErrorCode = @ErrorCode,
+                    ErrorMessage = @Reason
+                WHERE Status = ANY(@InProgressStatuses)
+                RETURNING Id
+            ),
+            released_repository_leases AS (
+                DELETE FROM BackupRepositoryLeases leases
+                USING interrupted runs
+                WHERE leases.OwnerRunId = runs.Id
+            ),
+            released_source_leases AS (
+                DELETE FROM BackupSourceLeases leases
+                USING interrupted runs
+                WHERE leases.OwnerRunId = runs.Id
+            )
+            SELECT COUNT(*)::integer
+            FROM interrupted
+            """;
+
+        return db.ExecuteScalarAsync<int>(
+            sql,
+            new
+            {
+                InterruptedAt = BackupMappers.ToUtcDateTime(interruptedAt),
+                ErrorCode = "backup.restore.interrupted",
+                Reason = reason,
+                InterruptedStatus = EnumFormatter<BackupRestoreStatus>.GetValue(BackupRestoreStatus.Interrupted),
+                InProgressStatuses = new[]
+                {
+                    EnumFormatter<BackupRestoreStatus>.GetValue(BackupRestoreStatus.Preparing),
+                    EnumFormatter<BackupRestoreStatus>.GetValue(BackupRestoreStatus.Running)
+                }
+            },
+            transaction: tx());
     }
 
     public async Task<BackupRestoreRunFinishResult> FinishRunAsync(BackupRestoreRun run, DateTimeOffset completedAt, CancellationToken cancellationToken)

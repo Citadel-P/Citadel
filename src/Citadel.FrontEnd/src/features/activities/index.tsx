@@ -25,6 +25,7 @@ const activityResourceIcons = {
   [ActivityResourceType.Volume]: CitadelIcons.Volume,
   [ActivityResourceType.Build]: CitadelIcons.Build,
   [ActivityResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
+  [ActivityResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
 } satisfies Record<ActivityResourceType, any>;
 
 const activityEventPrefixes = {
@@ -41,10 +42,12 @@ const activityEventPrefixes = {
   [ActivityResourceType.Volume]: 'Volume',
   [ActivityResourceType.Build]: 'Build',
   [ActivityResourceType.BuildAgentPool]: 'BuildAgentPool',
+  [ActivityResourceType.BackupPolicy]: 'BackupPolicy',
 } satisfies Record<ActivityResourceType, string>;
 
 const activityResourceLabels: Partial<Record<ActivityResourceType, string>> = {
   [ActivityResourceType.BuildAgentPool]: 'Build Agent Pool',
+  [ActivityResourceType.BackupPolicy]: 'Backup Policy',
 };
 
 const activityLookupTargets = {
@@ -61,6 +64,7 @@ const activityLookupTargets = {
   [ActivityResourceType.Volume]: LookupResourceType.Platform,
   [ActivityResourceType.Build]: LookupResourceType.Build,
   [ActivityResourceType.BuildAgentPool]: LookupResourceType.BuildAgentPool,
+  [ActivityResourceType.BackupPolicy]: LookupResourceType.BackupPolicy,
 } satisfies Record<ActivityResourceType, LookupResourceType>;
 
 export const ActivityComponents: RequiredComponents = {
@@ -154,7 +158,9 @@ function SearchSection() {
           targetType={activityLookupTargets[query.resourceType]}
           onSelect={handleResourceChange as any}
           selected={query.resourceId}
-          placeholder={query.resourceType === ActivityResourceType.Volume ? 'Select Platform' : 'Select ' + query.resourceType}
+          placeholder={
+            query.resourceType === ActivityResourceType.Volume ? 'Select Platform' : 'Select ' + query.resourceType
+          }
           className={filterFieldClassName}
         />
       )}

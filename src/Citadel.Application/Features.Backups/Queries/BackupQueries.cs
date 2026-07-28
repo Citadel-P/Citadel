@@ -23,7 +23,7 @@ public sealed record GetBackupRepository(Guid RepositoryId) : IQuery<Result<Back
 public sealed record GetBackupPolicies(IReadOnlyCollection<string>? Tags = null) : IQuery<Result<BackupPolicyListResult>>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
-public sealed record GetBackupPolicy(Guid PolicyId) : IQuery<Result<BackupPolicy>>;
+public sealed record GetBackupPolicy(Guid PolicyId) : IQuery<Result<BackupPolicyResult>>;
 
 [RequirePermission(ResourceType.BackupPolicy, PermissionLevel.Read)]
 public sealed record GetBackupRuns(Guid? PolicyId = null, int Limit = 50) : IQuery<Result<BackupRunListResult>>;
@@ -84,10 +84,10 @@ internal sealed class GetBackupPoliciesHandler(
     {
         var tagFilter = await TagFilterResolver.ResolveAsync(unitOfWork, query.Tags, cancellationToken);
         if (tagFilter.NoMatch)
-            return Result.Success(new BackupPolicyListResult([]));
+            return Result.Success(new BackupPolicyListResult([], new Dictionary<Guid, BackupRun>()));
 
         var user = userContextAccessor.Current;
-        var policies = user is not null && !user.IsAdmin
+        var policies = (user is not null && !user.IsAdmin
             ? await unitOfWork.BackupPolicies.GetAuthorizedAsync(
                 user.UserId,
                 ResourceType.BackupPolicy,
@@ -95,9 +95,13 @@ internal sealed class GetBackupPoliciesHandler(
                 SpecificPermission.None,
                 cancellationToken,
                 tagFilter.TagIds)
-            : await unitOfWork.BackupPolicies.GetAllAsync(cancellationToken, tagFilter.TagIds);
+            : await unitOfWork.BackupPolicies.GetAllAsync(cancellationToken, tagFilter.TagIds)).ToArray();
 
-        return Result.Success(new BackupPolicyListResult([.. policies]));
+        var latestRuns = await unitOfWork.BackupRuns.GetLatestByPoliciesAsync(
+            [.. policies.Select(static policy => policy.Id)],
+            cancellationToken);
+
+        return Result.Success(new BackupPolicyListResult(policies, latestRuns));
     }
 }
 
@@ -124,14 +128,16 @@ internal sealed class GetPlatformBackupSummariesHandler(
 }
 
 internal sealed class GetBackupPolicyHandler(IUnitOfWork unitOfWork)
-    : IQueryHandler<GetBackupPolicy, Result<BackupPolicy>>
+    : IQueryHandler<GetBackupPolicy, Result<BackupPolicyResult>>
 {
-    public async ValueTask<Result<BackupPolicy>> Handle(GetBackupPolicy query, CancellationToken cancellationToken)
+    public async ValueTask<Result<BackupPolicyResult>> Handle(GetBackupPolicy query, CancellationToken cancellationToken)
     {
         var policy = await unitOfWork.BackupPolicies.GetAsync(query.PolicyId, cancellationToken);
-        return policy is null
-            ? Result.Failure<BackupPolicy>(new NotFoundError("Backup policy not found."))
-            : Result.Success(policy);
+        if (policy is null)
+            return Result.Failure<BackupPolicyResult>(new NotFoundError("Backup policy not found."));
+
+        var latestRun = await unitOfWork.BackupRuns.GetLatestByPolicyAsync(policy.Id, cancellationToken);
+        return Result.Success(new BackupPolicyResult(policy, latestRun));
     }
 }
 

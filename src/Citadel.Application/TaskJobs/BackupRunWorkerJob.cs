@@ -10,6 +10,8 @@ namespace Application.TaskJobs;
 
 internal sealed class BackupRunWorkerJob(
     IServiceScopeFactory scopeFactory,
+    ICitadelSystemBackupBuilder citadelSystemBackupBuilder,
+    TimeProvider timeProvider,
     IOptions<BackupOptions> backupOptions,
     ILogger<BackupRunWorkerJob> logger) : BackgroundService
 {
@@ -19,6 +21,16 @@ internal sealed class BackupRunWorkerJob(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await InterruptAbandonedRunsAsync(stoppingToken);
+
+        var removedStaleBundles = citadelSystemBackupBuilder.CleanupStaleBundles();
+        if (removedStaleBundles > 0)
+        {
+            logger.LogInformation(
+                "Deleted {Count} stale Citadel recovery bundle staging directories.",
+                removedStaleBundles);
+        }
+
         var minimumDelay = TimeSpan.FromSeconds(Math.Max(1, options.PollIntervalSeconds));
         var delay = minimumDelay;
 
@@ -37,6 +49,35 @@ internal sealed class BackupRunWorkerJob(
         finally
         {
             await activeTasks.DrainAsync();
+        }
+    }
+
+    private async Task InterruptAbandonedRunsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var interrupted = await unitOfWork.BackupRuns.InterruptInProgressAsync(
+                timeProvider.GetUtcNow(),
+                "Backup run was interrupted by an application restart.",
+                cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+
+            if (interrupted > 0)
+            {
+                logger.LogWarning(
+                    "Marked {Count} in-progress backup runs as interrupted after application restart.",
+                    interrupted);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Citadel could not reconcile interrupted backup runs during startup.");
         }
     }
 

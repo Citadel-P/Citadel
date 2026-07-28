@@ -261,25 +261,33 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   targetType,
   selected,
   onSelect,
+  items: providedItems,
+  renderItem,
   disabled,
   align = 'start',
   placeholder,
+  searchPlaceholder,
   className,
   sourceResourceId,
   platformId,
   queryEnabled = true,
+  allowClear = true,
 }: {
   sourceType?: LookupResourceType;
   targetType: LookupResourceType;
   selected?: T | string | undefined;
   onSelect?: (item: T | undefined) => void;
+  items?: T[];
+  renderItem?: (item: T) => ReactNode;
   disabled?: boolean;
   align?: 'start' | 'center' | 'end';
   placeholder?: string;
+  searchPlaceholder?: string;
   className?: string;
   sourceResourceId?: string;
   platformId?: string;
   queryEnabled?: boolean;
+  allowClear?: boolean;
 }) {
   const accessibility = useFormFieldAccessibility();
   const [open, setOpen] = useState(false);
@@ -296,9 +304,9 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
         PlatformId: platformId,
       },
     },
-    { enabled: queryEnabled },
+    { enabled: queryEnabled && providedItems === undefined },
   );
-  const items = useMemo<T[]>(() => {
+  const lookupItems = useMemo<T[]>(() => {
     const lookupData = read.data?.data as unknown;
     if (Array.isArray(lookupData)) {
       return lookupData as T[];
@@ -313,6 +321,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
 
     return [];
   }, [read.data?.data]);
+  const items = providedItems ?? lookupItems;
   const selectedItem =
     typeof selected === 'string'
       ? items.find((i) => i.id === selected || (i as unknown as { dockerImageId?: string }).dockerImageId === selected)
@@ -347,8 +356,10 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
             'flex justify-between gap-2 w-full max-w-100 font-normal data-placeholder:text-muted-foreground text-sm bg-background hover:bg-background shadow-xs border',
             className,
           )}>
-          {defaultDisplay(selectedItem) ?? placeholder}
-          <ChevronDown className="h-4 w-4 opacity-60" />
+          <span className="min-w-0 flex-1 truncate text-left" title={defaultDisplay(selectedItem)}>
+            {defaultDisplay(selectedItem) ?? placeholder}
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
 
@@ -358,7 +369,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
         style={contentWidth ? { width: `${contentWidth}px` } : undefined}>
         <Command shouldFilter={false} defaultValue={selectedItem?.name ?? '__none__'}>
           <CommandInput
-            placeholder={`Search ${getLookupResourceName(sourceType ?? targetType)}`}
+            placeholder={searchPlaceholder ?? `Search ${getLookupResourceName(sourceType ?? targetType)}`}
             value={search}
             onValueChange={setSearch}
           />
@@ -367,7 +378,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
             <CommandEmpty>No results found.</CommandEmpty>
 
             <CommandGroup>
-              {!search && (
+              {allowClear && !search && (
                 <CommandItem
                   value="__none__"
                   onSelect={() => handleSelect(undefined)}
@@ -385,8 +396,8 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
                     key={item.id}
                     value={defaultDisplay(item)}
                     onSelect={() => handleSelect(item)}
-                    className="flex items-center justify-between cursor-pointer my-0.5 px-2 py-2 rounded-sm">
-                    <span>{defaultDisplay(item)}</span>
+                    className="flex items-start justify-between cursor-pointer my-0.5 px-2 py-2 rounded-sm">
+                    <div className="min-w-0 flex-1">{renderItem?.(item) ?? <span>{defaultDisplay(item)}</span>}</div>
                     <Check className={cn('h-4 w-4 transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
                   </CommandItem>
                 );

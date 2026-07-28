@@ -96,6 +96,87 @@ public sealed class BackupRestoreRunExecutionTests(PostgresTestFixture fixture) 
     }
 
     [Fact]
+    public async Task InterruptInProgressAsync_ShouldReleaseRestoreLeasesAfterRestart()
+    {
+        var platformId = await SeedLocalPlatformAsync();
+        var setup = await CreateRepositoryBackupRunAndRestoreRunAsync(
+            "restore-interrupted-at-restart",
+            platformId,
+            sourceVolumeName: "source-volume",
+            targetVolumeName: "target-volume",
+            overwriteExisting: false);
+        var interruptedAt = DateTimeOffset.UtcNow;
+        var targetLeaseKey = $"{platformId}:target-volume";
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var plan = await uow.BackupRestoreRuns.TryClaimExecutionPlanAsync(
+                setup.RestoreRun.Id,
+                interruptedAt.AddMinutes(-1),
+                TestContext.Current.CancellationToken);
+            Assert.NotNull(plan);
+            Assert.Equal(
+                BackupRepositoryLeaseAcquireResult.Acquired,
+                await uow.BackupRepositoryLeases.TryAcquireForExistingRepositoryAsync(
+                    setup.Repository.Id,
+                    "Restore",
+                    setup.RestoreRun.Id,
+                    interruptedAt.AddMinutes(5),
+                    interruptedAt.AddMinutes(-1),
+                    TestContext.Current.CancellationToken));
+            Assert.True(await uow.BackupSourceLeases.TryAcquireAsync(
+                targetLeaseKey,
+                "Restore",
+                setup.RestoreRun.Id,
+                interruptedAt.AddMinutes(5),
+                interruptedAt.AddMinutes(-1),
+                TestContext.Current.CancellationToken));
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            Assert.Equal(
+                1,
+                await uow.BackupRestoreRuns.InterruptInProgressAsync(
+                    interruptedAt,
+                    "Backup restore run was interrupted by an application restart.",
+                    TestContext.Current.CancellationToken));
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var storedRun = await uow.BackupRestoreRuns.GetAsync(
+                setup.RestoreRun.Id,
+                TestContext.Current.CancellationToken);
+
+            Assert.NotNull(storedRun);
+            Assert.Equal(BackupRestoreStatus.Interrupted, storedRun.Status);
+            Assert.Equal("backup.restore.interrupted", storedRun.ErrorCode);
+            Assert.Equal(
+                BackupRepositoryLeaseAcquireResult.Acquired,
+                await uow.BackupRepositoryLeases.TryAcquireForExistingRepositoryAsync(
+                    setup.Repository.Id,
+                    "Test",
+                    Guid.CreateVersion7(),
+                    interruptedAt.AddMinutes(5),
+                    interruptedAt,
+                    TestContext.Current.CancellationToken));
+            Assert.True(await uow.BackupSourceLeases.TryAcquireAsync(
+                targetLeaseKey,
+                "Test",
+                Guid.CreateVersion7(),
+                interruptedAt.AddMinutes(5),
+                interruptedAt,
+                TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
     public async Task ExecuteQueuedAsync_ShouldRestoreVolumeAndPersistLogs()
     {
         var platformId = await SeedLocalPlatformAsync();

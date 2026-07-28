@@ -653,7 +653,8 @@ public enum ActivityResourceType
     License,
     Build,
     BuildAgentPool,
-    Volume
+    Volume,
+    BackupPolicy
 }
 
 public enum ActivityEventType
@@ -789,6 +790,13 @@ public enum ActivityEventType
     BuildAgentPoolRenamed,
     BuildAgentPoolDeleted,
     BuildAgentPoolTested,
+    #endregion
+
+    #region Backup Policy Events
+    BackupPolicyCreated,
+    BackupPolicyUpdated,
+    BackupPolicyRenamed,
+    BackupPolicyArchived,
     #endregion
 }
 

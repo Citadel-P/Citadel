@@ -26,10 +26,15 @@ export type SupportedLanguage =
   | 'dockerfile'
   | 'javascript'
   | 'typescript'
+  | 'plaintext'
+  | 'xml'
+  | 'csharp'
+  | 'powershell'
+  | 'markdown'
   | 'string_list' // Custom language support
   | 'key_value';
 
-type DiffFormat = 'json' | 'yaml';
+type DiffFormat = 'json' | 'yaml' | 'text';
 type DiffLayout = 'side-by-side' | 'inline';
 export type MonacoDiagnostic = {
   lineNumber: number;
@@ -177,6 +182,7 @@ interface MonacoEditorProps {
   completionItemDetail?: string;
   completionMode?: CompletionMode;
   configureMonaco?: (monaco: Monaco) => void;
+  fillHeight?: boolean;
 }
 
 export const MonacoEditor = ({
@@ -196,6 +202,7 @@ export const MonacoEditor = ({
   completionItemDetail,
   completionMode = 'line',
   configureMonaco,
+  fillHeight = false,
 }: MonacoEditorProps) => {
   const [editorInstance, setEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const markersOwner = useId();
@@ -409,12 +416,17 @@ export const MonacoEditor = ({
     }),
     [folding, fontSize, minimap, readOnly],
   );
-  const containerStyle = useMemo(() => ({ height: `${containerHeight}px` }), [containerHeight]);
+  const containerStyle = useMemo(
+    () => (fillHeight ? { height: '100%', minHeight: `${minHeight ?? 240}px` } : { height: `${containerHeight}px` }),
+    [containerHeight, fillHeight, minHeight],
+  );
 
   return (
-    <div className={cn('mx-2 my-1 w-full relative min-w-0', className)} style={containerStyle}>
+    <div
+      className={cn('w-full relative min-w-0', fillHeight ? 'h-full' : 'mx-2 my-1', className)}
+      style={containerStyle}>
       <div className="flex flex-col gap-2 absolute inset-0">
-        <span className="text-sm font-medium text-foreground">{title}</span>
+        {title && <span className="text-sm font-medium text-foreground">{title}</span>}
 
         <Editor
           language={language}
@@ -709,11 +721,13 @@ export function MonacoDiff({
   modified,
   format,
   title,
+  language,
 }: {
   original: unknown;
   modified: unknown;
   format: DiffFormat;
   title?: string;
+  language?: SupportedLanguage;
 }) {
   const [editor, setEditor] = useState<monaco.editor.IStandaloneDiffEditor | null>(null);
   const layoutFrameRef = useRef<number | null>(null);
@@ -721,8 +735,14 @@ export function MonacoDiff({
   const [layout, setLayout] = useLocalStorage<DiffLayout>('monaco-diff-layout', 'side-by-side');
   const { currentTheme, handleBeforeMount } = useThemeEditor();
 
-  const originalText = useMemo(() => serializeData(original, format), [original, format]);
-  const modifiedText = useMemo(() => serializeData(modified, format), [modified, format]);
+  const originalText = useMemo(
+    () => (format === 'text' ? String(original ?? '') : serializeData(original, format)),
+    [original, format],
+  );
+  const modifiedText = useMemo(
+    () => (format === 'text' ? String(modified ?? '') : serializeData(modified, format)),
+    [modified, format],
+  );
 
   const maxLineCount = useMemo(() => {
     const originalLines = countLines(originalText);
@@ -771,7 +791,7 @@ export function MonacoDiff({
       <DiffEditor
         original={originalText}
         modified={modifiedText}
-        language={format}
+        language={language ?? (format === 'text' ? 'plaintext' : format)}
         beforeMount={handleBeforeMount}
         theme={currentTheme}
         options={{

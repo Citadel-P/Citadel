@@ -8,7 +8,8 @@ operations. A complete Citadel control-plane backup contains:
 - the local secret-encryption key;
 - the Core-to-Agent Ed25519 key pair;
 - ASP.NET Core data-protection keys;
-- any equivalent keys supplied through external configuration.
+- a manifest entry for each equivalent key supplied through external
+  configuration.
 
 The database alone is not a usable control-plane backup. Losing the
 secret-encryption key makes stored local secrets and provider credentials
@@ -17,13 +18,14 @@ from trusting Core requests.
 
 ## Current Availability
 
-The offline `citadel-recovery` command and the final packaged Citadel System
-backup flow are not yet shipped. Until they are available, use the manual
-Compose procedure below and test it before relying on it.
+Citadel creates complete control-plane backup bundles from the **Citadel
+backup** source in the backup-policy UI. Each restic snapshot contains a
+PostgreSQL custom-format dump, a recovery manifest, checksums, and every
+required file-backed recovery key.
 
-Do not treat the current Citadel System restic snapshot as a complete
-control-plane backup unless it contains a PostgreSQL dump and the recovery
-assets listed in this document.
+The offline `citadel-recovery` command is not yet shipped. Restore the bundle
+manually into a clean environment using the procedure below. Test this
+procedure before relying on it in production.
 
 ## Required Inputs
 
@@ -56,51 +58,58 @@ the original external systems.
 
 ## Create A Backup
 
-The commands below use the repository's default Compose service names:
-`server` and `pg_db`.
+1. Create or select a Core filesystem or S3-compatible backup repository.
+2. Store its restic password outside Citadel as part of the recovery plan.
+3. Create a backup policy with **Citadel backup** as its source.
+4. Select **Run** and wait for the run to succeed.
+5. Record the backup run ID and snapshot ID shown in the run details.
 
-1. Create a private backup directory and stop Core:
+Citadel runs `pg_dump --format=custom --no-owner --no-privileges` without
+putting the database password in process arguments. It stages the dump and
+recovery assets in a private directory, sends that directory to restic, and
+deletes the plaintext staging directory before completing the run.
 
-```powershell
-$backup = "citadel-recovery-$(Get-Date -Format yyyyMMdd-HHmmss)"
-New-Item -ItemType Directory -Path "$backup\recovery\keys" -Force
-docker compose stop server
+The official Citadel Core image includes the PostgreSQL client. Native
+installations and custom images must install a `pg_dump` version that supports
+the PostgreSQL server and can set `Backups__PostgresDumpPath` to its executable.
+
+The snapshot root contains:
+
+```text
+manifest.json
+checksums.json
+database/citadel.dump
+recovery/jwtsecret
+recovery/secret-encryption-key
+recovery/keys/id_ed25519
+recovery/keys/id_ed25519.pub
+recovery/keys/dataprotection/
 ```
 
-2. Create the logical database dump inside PostgreSQL, then copy it out:
+Assets supplied through external configuration are listed in `manifest.json`
+with origin `ExternalConfiguration` and are not copied into the snapshot.
+
+## Export A Recovery Bundle
+
+Use restic with the same repository configuration and password used by
+Citadel. Locate the snapshot by its backup-run tag, then restore it into a
+private local directory:
 
 ```powershell
-docker compose exec -T pg_db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump --host=127.0.0.1 --username="$POSTGRES_USER" --format=custom --no-owner --no-privileges --file=/tmp/citadel.dump "$POSTGRES_DB"'
-docker compose cp pg_db:/tmp/citadel.dump "$backup\citadel.dump"
-docker compose exec -T pg_db rm -f /tmp/citadel.dump
+$runId = "<backup-run-id>"
+$backup = "citadel-recovery-$runId"
+restic -r "<repository>" snapshots --tag "backup-run:$runId"
+restic -r "<repository>" restore "<snapshot-id>" --target "$backup"
 ```
 
-3. Copy the file-backed recovery assets from the stopped Core container:
+For S3-compatible repositories, configure `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, the restic repository URL, and `RESTIC_PASSWORD`
+before running these commands. Do not store these credentials in shell
+history.
 
-```powershell
-docker compose cp server:/app/data/jwtsecret "$backup\recovery\jwtsecret"
-docker compose cp server:/app/data/secret-encryption-key "$backup\recovery\secret-encryption-key"
-docker compose cp server:/app/data/keys/id_ed25519 "$backup\recovery\keys\id_ed25519"
-docker compose cp server:/app/data/keys/id_ed25519.pub "$backup\recovery\keys\id_ed25519.pub"
-docker compose cp server:/app/data/keys/dataprotection "$backup\recovery\keys\dataprotection"
-```
-
-Skip a file-backed key only when the equivalent value is explicitly supplied
-and backed up through external configuration.
-
-4. Record checksums and restart Core:
-
-```powershell
-Get-ChildItem $backup -Recurse -File |
-  Get-FileHash -Algorithm SHA256 |
-  Format-Table Hash, Path |
-  Out-File "$backup\SHA256SUMS.txt"
-docker compose start server
-```
-
-Store the resulting directory in encrypted storage separate from the Citadel
-host. Restrict access because the recovery assets can decrypt stored secrets
-and authenticate Core to Agents.
+Verify `checksums.json` against every listed file before proceeding. Restrict
+access to the exported directory because it can contain keys that decrypt
+stored secrets and authenticate Core to Agents.
 
 ## Restore Into A Clean Environment
 
@@ -115,13 +124,14 @@ exist. Set `$backup` to the verified backup directory.
 PostgreSQL:
 
 ```powershell
-$backup = "path\to\citadel-recovery-yyyyMMdd-HHmmss"
+$backup = "path\to\citadel-recovery-<backup-run-id>"
 docker compose stop server
 $env:COMPOSE_PROJECT_NAME = "citadel-recovery"
 docker compose up -d pg_db
 ```
 
-2. Verify the recorded checksums before making changes.
+2. Verify `manifest.json`, confirm its Citadel version is compatible with the
+   target image, and verify every entry in `checksums.json`.
 
 3. Recreate the target database. Replace the database name when your Compose
 configuration does not use `POSTGRES_DB`:
@@ -134,7 +144,7 @@ docker compose exec -T pg_db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" createdb --h
 4. Copy and restore the logical dump:
 
 ```powershell
-docker compose cp "$backup\citadel.dump" pg_db:/tmp/citadel.dump
+docker compose cp "$backup\database\citadel.dump" pg_db:/tmp/citadel.dump
 docker compose exec -T pg_db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore --host=127.0.0.1 --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --no-owner --no-privileges --exit-on-error --single-transaction /tmp/citadel.dump'
 docker compose exec -T pg_db rm -f /tmp/citadel.dump
 ```

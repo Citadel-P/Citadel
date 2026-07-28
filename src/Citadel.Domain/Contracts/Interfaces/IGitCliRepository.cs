@@ -1,5 +1,6 @@
 ﻿using Domain.Entities.Git;
 using LightResults;
+using Domain.Contracts.Resources.Git;
 
 namespace Domain.Contracts.Interfaces;
 
@@ -29,6 +30,31 @@ public interface IGitCliRepository
     Task<Result<IReadOnlyList<string>>> GetChangedPathsAsync(string repoPath, string fromCommitSha, string toCommitSha, CancellationToken ct = default);
     Task<Result> MaterializeSnapshotAsync(string repoPath, string commitSha, string targetPath, CancellationToken ct = default);
     Task<Result> ExecuteShellCommandAsync(string workingDir, string command, CancellationToken ct = default);
+    Task<Result<string>> ResolveCommitAsync(string repoPath, string commitSha, CancellationToken ct = default);
+    Task<Result<GitTreeListing>> ListTreeAsync(
+        string repoPath,
+        string commitSha,
+        string path,
+        int maximumEntries,
+        int maximumOutputBytes,
+        CancellationToken ct = default);
+    Task<Result<GitTreeEntry?>> GetTreeEntryAsync(
+        string repoPath,
+        string commitSha,
+        string path,
+        CancellationToken ct = default);
+    Task<Result<GitBlob>> ReadBlobAsync(
+        string repoPath,
+        string objectId,
+        int maximumBytes,
+        CancellationToken ct = default);
+    Task<Result<GitChangedPathListing>> CompareCommitsAsync(
+        string repoPath,
+        string baseCommitSha,
+        string headCommitSha,
+        int maximumEntries,
+        int maximumOutputBytes,
+        CancellationToken ct = default);
 }
 
 public sealed record GitRemoteBranchRef(string Branch, string CommitSha);

@@ -2273,6 +2273,29 @@ public class ApplyStackServiceTests
             return new ProcessExecutionResult(process.ExitCode, stdout, stderr);
         }
 
+        public async Task<ProcessBinaryExecutionResult> ExecuteBoundedAsync(
+            string fileName,
+            IEnumerable<string> arguments,
+            int maximumStandardOutputBytes,
+            int maximumStandardErrorBytes,
+            IDictionary<string, string>? environmentVariables = null,
+            string? workingDirectory = null,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await ExecuteAsync(
+                fileName,
+                arguments,
+                environmentVariables,
+                workingDirectory,
+                cancellationToken);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(result.StandardOutput);
+            return new ProcessBinaryExecutionResult(
+                result.ExitCode,
+                bytes.AsMemory(0, Math.Min(bytes.Length, maximumStandardOutputBytes)),
+                result.StandardError[..Math.Min(result.StandardError.Length, maximumStandardErrorBytes)],
+                bytes.Length > maximumStandardOutputBytes);
+        }
+
         public async IAsyncEnumerable<ProcessOutput> StreamAsync(
             string fileName,
             IEnumerable<string> arguments,

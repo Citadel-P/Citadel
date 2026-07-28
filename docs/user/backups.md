@@ -1,6 +1,6 @@
 # Backups
 
-Citadel backups let you save Citadel system data and Docker named volumes to a restic-compatible repository.
+Citadel backups let you save the Citadel control plane and Docker named volumes to a restic-compatible repository.
 
 ## License Availability
 
@@ -9,7 +9,7 @@ Community can:
 - create and manage backup repositories
 - create backup policy definitions
 - start backups manually
-- restore backups
+- restore Docker volume backups
 - view backup and restore history and logs
 
 Backup schedules and webhook-triggered backup execution require Team's
@@ -33,7 +33,7 @@ For filesystem repositories:
 
 Choose the repository location based on where the backup runs:
 
-- Use **Core filesystem** for Citadel system backups and Docker volume backups from a local platform.
+- Use **Core filesystem** for Citadel backups and Docker volume backups from a local platform.
 - Use **Platform filesystem** for Docker volume, stack, or deployment backups from a regular agent or edge agent when snapshots should stay on that platform host.
 - Use **S3 compatible** when backups should be independent of the Core host and platform host filesystem.
 
@@ -68,7 +68,7 @@ When creating an S3-compatible repository, configure:
 
 The restic password is separate from the S3 credentials. Losing the password secret means existing snapshots in that repository cannot be restored.
 
-For Docker volume, stack, and deployment backups, the S3 endpoint must be reachable from the selected Docker platform's helper container. For Citadel system backups, the S3 endpoint must be reachable from Citadel Core.
+For Docker volume, stack, and deployment backups, the S3 endpoint must be reachable from the selected Docker platform's helper container. For Citadel backups, the S3 endpoint must be reachable from Citadel Core.
 
 Examples:
 
@@ -122,12 +122,28 @@ A backup policy defines what to back up, where to store it, and when it should r
 
 Supported sources:
 
-- **Citadel System**: backs up Citadel's own data folder.
+- **Citadel backup**: creates a PostgreSQL logical dump and packages the file-backed keys required to recover the Citadel control plane.
 - **Docker Volume**: backs up one selected Docker named volume.
 - **Stack**: backs up all resolved Docker named volumes used by a stack.
 - **Deployment**: backs up all resolved Docker named volumes used by a deployment.
 
 Only Docker named volumes are backed up. Bind mounts such as `./data:/app/data` or `/host/path:/data` are host paths, not Docker volumes, and are not included in Docker volume, stack, or deployment backups.
+
+A Citadel backup does not archive all of `/app/data`. Git caches, stack
+workspaces, automation working directories, logs, and backup staging files are
+recreated from database state or external systems and are deliberately
+excluded.
+
+If the JWT or local secret-encryption key is supplied through external
+configuration, its plaintext value is not copied into the snapshot. The
+manifest records that dependency. Preserve the external value separately or
+the recovered installation will not be able to authenticate existing sessions
+or decrypt stored credentials.
+
+The official Citadel Core image includes `pg_dump`. Native installations and
+custom images must provide a PostgreSQL client that supports the configured
+server version. Set `Backups__PostgresDumpPath` when `pg_dump` is not available
+on `PATH`.
 
 ## Docker Platform Backups
 
@@ -141,7 +157,7 @@ For Docker volume, stack, and deployment backups:
 
 - S3-compatible repositories run from the target platform and upload directly to the bucket.
 - Platform filesystem repositories run on the selected platform and write to the configured host path.
-- Core filesystem repositories are only valid for Citadel system backups and local-platform backups.
+- Core filesystem repositories are only valid for Citadel backups and local-platform backups.
 
 This means Citadel mounts Docker named volumes through the platform's Docker daemon, then runs restic in the backup helper container. For regular agent and edge agent platforms, this avoids routing remote volume contents through Citadel Core. For local Docker Desktop platforms, it also avoids relying on Docker's internal `/var/lib/docker/volumes/...` paths being visible to the host.
 
@@ -157,6 +173,10 @@ Successful runs show:
 - Any warnings
 
 If a policy contains multiple volumes, Citadel creates one backup item per volume so each volume has its own status and snapshot metadata.
+
+The policy **Runs** tab contains backup and restore execution history and logs.
+The **Activities** tab records policy creation, configuration changes, renames,
+and archival actions.
 
 ## Scheduled Backups
 
@@ -208,7 +228,7 @@ Repository and platform rules for restore:
 - A Core filesystem repository can restore to the local platform only.
 - A Platform filesystem repository restores on the same platform that owns that repository path.
 - An S3-compatible repository can restore to local, regular agent, or edge agent platforms because the restore runs from the target platform.
-- Citadel system backups are restored offline, not through the web UI.
+- Citadel control-plane snapshots are restored offline while Core is stopped. They are not restored into a Docker volume through the web UI.
 
 For the PostgreSQL dump, security assets, clean-environment restore sequence,
 and recovery drill requirements, see

@@ -73,6 +73,35 @@ Creating a repository queues an initial sync. Editing the repository URL, defaul
 
 Repository webhooks are separate from sync mode. A repository can be manual-only and still accept provider webhooks, or it can use interval polling and webhooks together.
 
+## Browsing Repository Source
+
+Open a repository and select **Browse Repo** from the action bar to inspect
+source already available in Citadel's local cache. The toolbar identifies the
+synchronized default branch and revision. Expand directories lazily and choose
+a supported text file to open a read-only preview.
+
+The browser is commit-aware. The revision displayed in the toolbar remains
+fixed while you browse, even if another synchronization advances the branch.
+Use **Sync Repo** in the repository page action bar before opening the browser
+when you need to retrieve the latest remote revision.
+
+Repository Read permission grants access to committed source, including `.env`
+files. Limit repository access accordingly. Citadel does not redact committed
+files by name.
+
+Browser limitations:
+
+- files are read-only;
+- binary and files above the preview limit show metadata instead of content;
+- symlinks show their target but are never followed;
+- submodules show their pinned commit but cannot be opened;
+- Git LFS pointer files are shown as text and their referenced objects are not fetched;
+- browsing never performs an automatic clone, fetch, pull, or hook;
+- exact provider file links are shown only when Citadel recognizes a safe URL pattern.
+
+An older commit may no longer be present in the cache. Citadel reports that
+state instead of displaying another revision or fetching it automatically.
+
 ## Clone And Pull Hooks
 
 Use **On Clone** and **On Pull** when the repository needs a small preparation step before Git stacks consume it.

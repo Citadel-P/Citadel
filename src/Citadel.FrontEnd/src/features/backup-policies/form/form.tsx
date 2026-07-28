@@ -37,13 +37,14 @@ import {
 import { TimezoneSelectField } from '@/components/custom/timezone-select';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Badge } from '@/components/ui/badge';
+import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import { ResourceTagSelector } from '@/features/tags/components';
+import { byteTransform } from '@/lib/bytes.helper';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { Box, Database, Layers, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { Box, Database, Info, Layers, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
-import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
 type BackupPolicyFormValue = Omit<BackupPolicyInput, 'runAsActorId'> & {
   id?: string;
@@ -57,8 +58,8 @@ const EMPTY_BACKUP_REPOSITORIES: BackupRepositoryView[] = [];
 
 const sourceTypes = {
   CitadelSystem: {
-    label: 'Citadel system',
-    description: 'Back up Citadel database, configuration, keys, and file data.',
+    label: 'Citadel backup',
+    description: "Back up Citadel's PostgreSQL database and required recovery keys.",
   },
   DockerVolume: {
     label: 'Docker volume',
@@ -137,10 +138,7 @@ export function BackupPolicyForm({
     currentSource.$type === BackupSourceType.Deployment
       ? String((currentSource as BackupSourceSpecDeploymentBackupSource).deploymentId ?? '')
       : '';
-  const volumeListArgs = useMemo(
-    () => ({ platformId: currentPlatformId, query: {} }),
-    [currentPlatformId],
-  );
+  const volumeListArgs = useMemo(() => ({ platformId: currentPlatformId, query: {} }), [currentPlatformId]);
   const volumeList = useRead('listVolumes', volumeListArgs, {
     enabled: currentSourceType === BackupSourceType.DockerVolume && Boolean(currentPlatformId),
   });
@@ -148,10 +146,7 @@ export function BackupPolicyForm({
   const stackPreview = useRead('getStackBackupSourcePreview', stackPreviewArgs, {
     enabled: currentSourceType === BackupSourceType.Stack && Boolean(currentStackId),
   });
-  const deploymentPreviewArgs = useMemo(
-    () => ({ deploymentId: currentDeploymentId }),
-    [currentDeploymentId],
-  );
+  const deploymentPreviewArgs = useMemo(() => ({ deploymentId: currentDeploymentId }), [currentDeploymentId]);
   const deploymentPreview = useRead('getDeploymentBackupSourcePreview', deploymentPreviewArgs, {
     enabled: currentSourceType === BackupSourceType.Deployment && Boolean(currentDeploymentId),
   });
@@ -270,23 +265,38 @@ export function BackupPolicyForm({
                 required: true,
                 disabled: isSourceLocked(resource),
                 render: (value, set) => (
-                  <ItemSelector
-                    value={value ?? BackupSourceType.CitadelSystem}
-                    collection={sourceTypes}
-                    disabled={disabled || isSourceLocked(resource)}
-                    onChange={(nextType: BackupSourceType) =>
-                      set({
-                        source:
-                          nextType === BackupSourceType.DockerVolume
-                            ? createDockerVolumeSource()
-                            : nextType === BackupSourceType.Stack
-                              ? createStackSource()
-                              : nextType === BackupSourceType.Deployment
-                                ? createDeploymentSource()
-                                : createCitadelSystemSource(),
-                      })
-                    }
-                  />
+                  <div className="flex max-w-150 flex-col gap-2">
+                    <ItemSelector
+                      value={value ?? BackupSourceType.CitadelSystem}
+                      collection={sourceTypes}
+                      disabled={disabled || isSourceLocked(resource)}
+                      onChange={(nextType: BackupSourceType) =>
+                        set({
+                          source:
+                            nextType === BackupSourceType.DockerVolume
+                              ? createDockerVolumeSource()
+                              : nextType === BackupSourceType.Stack
+                                ? createStackSource()
+                                : nextType === BackupSourceType.Deployment
+                                  ? createDeploymentSource()
+                                  : createCitadelSystemSource(),
+                        })
+                      }
+                    />
+                    {currentSourceType === BackupSourceType.CitadelSystem && (
+                      <div className="flex items-start gap-2 rounded-sm border bg-muted/50 p-3">
+                        <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium">Offline recovery</div>
+                          <p className="text-xs text-muted-foreground">
+                            The backup includes a PostgreSQL logical dump and file-backed recovery keys. Keys supplied
+                            through external configuration are recorded in the manifest and must be preserved
+                            separately. Restore while Citadel Core is stopped.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ),
               }),
               ...(currentSourceType === BackupSourceType.DockerVolume
@@ -700,28 +710,19 @@ function VolumeSelector({
   disabled?: boolean;
   onChange: (volumeName: string) => void;
 }) {
-  const collection = useMemo(() => {
-    const items = Object.fromEntries(
-      volumes.map((volume) => [
-        volume.name,
-        {
-          label: volume.name,
-          description: [
-            volume.driver || 'local',
-            volume.inUse ? 'In use' : 'Not in use',
-            volume.backupCoverage ? 'Protected' : null,
-          ]
-            .filter(Boolean)
-            .join(' - '),
-        },
-      ]),
-    );
+  const options = useMemo(() => {
+    const items: VolumeSelectorItem[] = volumes.map((volume) => ({
+      id: volume.name,
+      name: volume.name,
+      description: formatVolumeDescription(volume),
+    }));
 
-    if (value && !items[value]) {
-      items[value] = {
-        label: value,
+    if (value && !items.some((item) => item.id === value)) {
+      items.push({
+        id: value,
+        name: value,
         description: 'Saved volume name',
-      };
+      });
     }
 
     return items;
@@ -743,7 +744,23 @@ function VolumeSelector({
   return (
     <div className="flex max-w-150 flex-col gap-2">
       {volumes.length > 0 || value ? (
-        <ItemSelector value={value} collection={collection} disabled={disabled} onChange={onChange} />
+        <ResourceSelectorField<VolumeSelectorItem>
+          targetType={LookupResourceType.Volume}
+          selected={value}
+          items={options}
+          queryEnabled={false}
+          allowClear={false}
+          disabled={disabled}
+          searchPlaceholder="Search volumes..."
+          placeholder="Select a volume"
+          onSelect={(volume) => onChange(volume?.name ?? '')}
+          renderItem={(volume) => (
+            <div className="flex min-w-0 flex-col">
+              <span className="break-all font-medium leading-5">{volume.name}</span>
+              <span className="text-xs text-muted-foreground">{volume.description}</span>
+            </div>
+          )}
+        />
       ) : (
         <div className="rounded-sm border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
           No Docker named volumes were found on this platform.
@@ -755,6 +772,28 @@ function VolumeSelector({
       </p>
     </div>
   );
+}
+
+type VolumeSelectorItem = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+function formatVolumeDescription(volume: DockerVolumeResultView) {
+  return [
+    volume.driver || 'local',
+    volume.inUse ? 'In use' : 'Not in use',
+    volume.backupCoverage ? 'Protected' : 'Not protected',
+    formatVolumeSize(volume.usageData?.size),
+  ].join(' · ');
+}
+
+function formatVolumeSize(value: number | string | null | undefined) {
+  if (value == null) return 'Size unavailable';
+
+  const bytes = Number(value);
+  return Number.isFinite(bytes) && bytes >= 0 ? byteTransform(bytes, 2) : 'Size unavailable';
 }
 
 function StackSourcePreview({
@@ -892,7 +931,9 @@ function DeploymentSourcePreview({
             ))}
           </div>
         ) : (
-          <div className="text-xs text-muted-foreground">No named Docker volumes were resolved for this deployment.</div>
+          <div className="text-xs text-muted-foreground">
+            No named Docker volumes were resolved for this deployment.
+          </div>
         )}
 
         {preview.warnings.length > 0 && (
@@ -972,7 +1013,7 @@ function getRepositoryCompatibilityMessage(
   if (sourceType === BackupSourceType.CitadelSystem) {
     return spec.location === BackupExecutionLocation.Core
       ? null
-      : 'Citadel system backups can only use a Core filesystem repository or an S3-compatible repository.';
+      : 'Citadel backups can only use a Core filesystem repository or an S3-compatible repository.';
   }
 
   if (!sourcePlatformId || !sourcePlatform) return null;

@@ -45,6 +45,38 @@ If the repository has already been synced, the stack form shows branch refs from
 
 Use **Discover compose projects** to scan the selected repository branch. For a simple repository, choose the discovered root project to pre-fill compose paths, working directory, repo env files, and watch paths.
 
+## Inspecting Deployed Source
+
+After a Git Stack is saved, its Config tab includes **Source files**. This panel
+shows:
+
+- the linked repository and branch;
+- the exact deployed commit;
+- the latest synchronized commit for that branch;
+- Compose and repository env files used by the deployed release.
+
+Before the first deployment, the panel can browse the latest synchronized
+revision from the saved repository and branch. Deployed source paths and
+comparison become available after the first successful deployment.
+
+Use **Browse deployed source** to inspect the immutable revision that produced
+the current Stack. Use **Browse latest source** to inspect the latest locally
+synchronized revision without applying it. Stack Read permission does not grant
+repository source access; Git Repository Read permission is also required.
+
+When the deployed and latest commits differ, **Compare** lists repository-wide
+path changes and opens supported text files in a read-only diff. Compose and
+repository env paths used by the Stack are highlighted. Added, deleted,
+renamed, and copied files use the appropriate old and new paths.
+
+The source browser remains bound to persisted source settings while the Stack
+form has unsaved repository, branch, commit, Compose path, working directory,
+or env-file changes. Save the Stack before browsing the updated configuration.
+
+Browsing and comparison use the local Git object database. They do not
+synchronize the repository, run hooks, deploy the Stack, or change update
+state. See `docs/user/git-repositories.md` for content and cache limitations.
+
 ## Monorepo
 
 Use this setup when one repository contains multiple compose projects.

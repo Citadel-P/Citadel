@@ -186,6 +186,12 @@ public sealed class ActivityEvent : IAuditedEntity
             or ActivityEventType.BuildAgentPoolTested
                 => ActivityResourceType.BuildAgentPool,
 
+            ActivityEventType.BackupPolicyCreated
+            or ActivityEventType.BackupPolicyUpdated
+            or ActivityEventType.BackupPolicyRenamed
+            or ActivityEventType.BackupPolicyArchived
+                => ActivityResourceType.BackupPolicy,
+
             _ => throw new InvalidOperationException(
                 $"EventType '{eventType}' does not map to a ResourceType.")
         };
@@ -347,6 +353,11 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.BuildAgentPoolRenamed, BuildAgentPoolRenamed) => true,
             (ActivityEventType.BuildAgentPoolDeleted, BuildAgentPoolDeleted) => true,
             (ActivityEventType.BuildAgentPoolTested, BuildAgentPoolTested) => true,
+
+            (ActivityEventType.BackupPolicyCreated, BackupPolicyCreated) => true,
+            (ActivityEventType.BackupPolicyUpdated, BackupPolicyUpdated) => true,
+            (ActivityEventType.BackupPolicyRenamed, BackupPolicyRenamed) => true,
+            (ActivityEventType.BackupPolicyArchived, BackupPolicyArchived) => true,
 
             _ => false
         };

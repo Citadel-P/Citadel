@@ -2,6 +2,7 @@ import { BackupPolicyView, ResourceControlState } from '@/api/generated/api.type
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
+import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { useRead } from '@/lib/hooks';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
@@ -60,6 +61,12 @@ export const BackupPolicyFormComponents: RequiredFormComponents<BackupPolicyForm
       {
         label: 'Runs',
         Content: ({ resource }) => <BackupPolicyRunsTab resource={resource as BackupPolicyView} />,
+      },
+      {
+        label: 'Activities',
+        Content: ({ resource }) => (
+          <ActivitiesTab resourceId={(resource as BackupPolicyView).id} resourceType="BackupPolicy" />
+        ),
       },
     ],
     useData(id: string) {

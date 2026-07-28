@@ -91,6 +91,10 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         await uow.CommitAsync(cancellationToken);
 
         var cancelledRun = await uow.BackupRuns.GetAsync(run.Id, cancellationToken);
+        var latestRun = await uow.BackupRuns.GetLatestByPolicyAsync(policy.Id, cancellationToken);
+        var latestRuns = await uow.BackupRuns.GetLatestByPoliciesAsync(
+            [policy.Id, Guid.CreateVersion7()],
+            cancellationToken);
 
         Assert.True(policyRows > 0);
         Assert.NotNull(storedRepository);
@@ -105,6 +109,9 @@ public sealed class BackupRepositoryTests(PostgresTestFixture fixture) : Integra
         Assert.Equal(run.Id, cancelled.Id);
         Assert.Equal(BackupRunStatus.Cancelled, cancelledRun?.Status);
         Assert.Equal(BackupSnapshotAvailability.NotCreated, cancelledRun?.SnapshotAvailability);
+        Assert.Equal(run.Id, latestRun?.Id);
+        Assert.Equal(BackupRunStatus.Cancelled, latestRun?.Status);
+        Assert.Equal(run.Id, Assert.Single(latestRuns).Value.Id);
     }
 
     [Fact]

@@ -1,5 +1,7 @@
 using Hosting.DockerClient.Services;
 using Infrastructure.Repositories;
+using Domain.Contracts.Resources.Git;
+using System.Diagnostics;
 
 namespace Tests.Unit.Infrastructure.Repositories;
 
@@ -60,6 +62,87 @@ public sealed class GitCliRepositoryTests
         Assert.Single(executor.Calls);
     }
 
+    [Fact]
+    public async Task Browser_Operations_Should_Read_Immutable_Git_Objects()
+    {
+        using var repositoryDirectory = new TemporaryGitRepository();
+        Directory.CreateDirectory(Path.Combine(repositoryDirectory.Path, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(repositoryDirectory.Path, "compose.yaml"),
+            "services:\n  web:\n    image: nginx\n",
+            TestContext.Current.CancellationToken);
+        await File.WriteAllBytesAsync(
+            Path.Combine(repositoryDirectory.Path, "config", "binary.dat"),
+            [(byte)'A', 0, (byte)'B'],
+            TestContext.Current.CancellationToken);
+        var firstCommit = repositoryDirectory.Commit("initial");
+
+        var git = new GitCliRepository(new CommandExecutor());
+        var resolved = await git.ResolveCommitAsync(
+            repositoryDirectory.Path,
+            firstCommit,
+            TestContext.Current.CancellationToken);
+        Assert.True(resolved.IsSuccess(out var resolvedCommit, out var resolveError), resolveError?.Message);
+        Assert.Equal(firstCommit, resolvedCommit);
+
+        var root = await git.ListTreeAsync(
+            repositoryDirectory.Path,
+            firstCommit,
+            "",
+            maximumEntries: 100,
+            maximumOutputBytes: 1024 * 1024,
+            TestContext.Current.CancellationToken);
+        Assert.True(root.IsSuccess(out var rootTree, out var rootError), rootError?.Message);
+        Assert.Contains(rootTree.Entries, entry =>
+            entry.Path == "config" && entry.Type == GitRepositoryEntryType.Directory);
+        Assert.Contains(rootTree.Entries, entry =>
+            entry.Path == "compose.yaml" && entry.Type == GitRepositoryEntryType.File);
+
+        var nested = await git.ListTreeAsync(
+            repositoryDirectory.Path,
+            firstCommit,
+            "config",
+            maximumEntries: 100,
+            maximumOutputBytes: 1024 * 1024,
+            TestContext.Current.CancellationToken);
+        Assert.True(nested.IsSuccess(out var nestedTree, out var nestedError), nestedError?.Message);
+        var binaryEntry = Assert.Single(nestedTree.Entries);
+        Assert.Equal("config/binary.dat", binaryEntry.Path);
+
+        var blob = await git.ReadBlobAsync(
+            repositoryDirectory.Path,
+            binaryEntry.ObjectId,
+            maximumBytes: 1024,
+            TestContext.Current.CancellationToken);
+        Assert.True(blob.IsSuccess(out var binaryBlob, out var blobError), blobError?.Message);
+        Assert.Equal(new byte[] { (byte)'A', 0, (byte)'B' }, binaryBlob.Content.ToArray());
+
+        File.Move(
+            Path.Combine(repositoryDirectory.Path, "compose.yaml"),
+            Path.Combine(repositoryDirectory.Path, "stack.yaml"));
+        await File.WriteAllTextAsync(
+            Path.Combine(repositoryDirectory.Path, "README.md"),
+            "# stack\n",
+            TestContext.Current.CancellationToken);
+        var secondCommit = repositoryDirectory.Commit("rename compose");
+
+        var comparison = await git.CompareCommitsAsync(
+            repositoryDirectory.Path,
+            firstCommit,
+            secondCommit,
+            maximumEntries: 100,
+            maximumOutputBytes: 1024 * 1024,
+            TestContext.Current.CancellationToken);
+        Assert.True(comparison.IsSuccess(out var changes, out var comparisonError), comparisonError?.Message);
+        Assert.Contains(changes.Files, file =>
+            file.Status == GitChangedPathStatus.Renamed
+            && file.PreviousPath == "compose.yaml"
+            && file.Path == "stack.yaml");
+        Assert.Contains(changes.Files, file =>
+            file.Status == GitChangedPathStatus.Added && file.Path == "README.md");
+
+    }
+
     private sealed class CapturingCommandExecutor(Func<IReadOnlyList<string>, ProcessExecutionResult> handler)
         : ICommandExecutor
     {
@@ -77,6 +160,26 @@ public sealed class GitCliRepositoryTests
             return Task.FromResult(handler(args));
         }
 
+        public Task<ProcessBinaryExecutionResult> ExecuteBoundedAsync(
+            string fileName,
+            IEnumerable<string> arguments,
+            int maximumStandardOutputBytes,
+            int maximumStandardErrorBytes,
+            IDictionary<string, string>? environmentVariables = null,
+            string? workingDirectory = null,
+            CancellationToken cancellationToken = default)
+        {
+            var args = arguments.ToArray();
+            Calls.Add(args);
+            var result = handler(args);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(result.StandardOutput);
+            return Task.FromResult(new ProcessBinaryExecutionResult(
+                result.ExitCode,
+                bytes.AsMemory(0, Math.Min(bytes.Length, maximumStandardOutputBytes)),
+                result.StandardError[..Math.Min(result.StandardError.Length, maximumStandardErrorBytes)],
+                bytes.Length > maximumStandardOutputBytes));
+        }
+
         public IAsyncEnumerable<ProcessOutput> StreamAsync(
             string fileName,
             IEnumerable<string> arguments,
@@ -85,5 +188,63 @@ public sealed class GitCliRepositoryTests
             string? dockerConfigDirectory = null,
             CancellationToken cancellationToken = default)
             => AsyncEnumerable.Empty<ProcessOutput>();
+    }
+
+    private sealed class TemporaryGitRepository : IDisposable
+    {
+        public TemporaryGitRepository()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "citadel-git-browser", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path);
+            Run("init");
+            Run("config", "user.email", "citadel-tests@example.invalid");
+            Run("config", "user.name", "Citadel Tests");
+        }
+
+        public string Path { get; }
+
+        public string Commit(string message)
+        {
+            Run("add", "-A");
+            Run("commit", "-m", message);
+            return Run("rev-parse", "HEAD").Trim();
+        }
+
+        public void Dispose()
+        {
+            if (!Directory.Exists(Path))
+                return;
+
+            foreach (var file in Directory.EnumerateFiles(Path, "*", SearchOption.AllDirectories))
+                File.SetAttributes(file, FileAttributes.Normal);
+
+            foreach (var directory in Directory.EnumerateDirectories(Path, "*", SearchOption.AllDirectories))
+                File.SetAttributes(directory, FileAttributes.Normal);
+
+            File.SetAttributes(Path, FileAttributes.Normal);
+            Directory.Delete(Path, recursive: true);
+        }
+
+        private string Run(params string[] arguments)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = Path,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            foreach (var argument in arguments)
+                startInfo.ArgumentList.Add(argument);
+
+            using var process = Process.Start(startInfo)!;
+            var standardOutput = process.StandardOutput.ReadToEnd();
+            var standardError = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            Assert.True(process.ExitCode == 0, standardError);
+            return standardOutput;
+        }
     }
 }

@@ -395,9 +395,14 @@ internal sealed class BackupRestoreRunExecutionService(
         if (string.IsNullOrWhiteSpace(volume.Mountpoint))
             return Result.Failure<BackupRestoreSourcePlan>(new BadRequestError("Backup source volume mountpoint is not available."));
 
-        var path = Path.GetFullPath(volume.Mountpoint);
-        if (!Directory.Exists(path))
-            return Result.Failure<BackupRestoreSourcePlan>(new BadRequestError("Backup source volume mountpoint does not exist on this host."));
+        if (!LocalDockerVolumePathResolver.TryResolve(
+                volume.Mountpoint,
+                out var path))
+        {
+            return Result.Failure<BackupRestoreSourcePlan>(
+                new BadRequestError(
+                    "Backup source volume mountpoint is not accessible to Citadel Core."));
+        }
 
         return Result.Success(new BackupRestoreSourcePlan(path));
     }
@@ -447,9 +452,14 @@ internal sealed class BackupRestoreRunExecutionService(
         if (string.IsNullOrWhiteSpace(created.Mountpoint))
             return Result.Failure<BackupRestoreTargetPlan>(new BadRequestError("Target volume mountpoint is not available."));
 
-        var path = Path.GetFullPath(created.Mountpoint);
-        if (!Directory.Exists(path))
-            return Result.Failure<BackupRestoreTargetPlan>(new BadRequestError("Target volume mountpoint does not exist on this host."));
+        if (!LocalDockerVolumePathResolver.TryResolve(
+                created.Mountpoint,
+                out var path))
+        {
+            return Result.Failure<BackupRestoreTargetPlan>(
+                new BadRequestError(
+                    "Target volume mountpoint is not accessible to Citadel Core."));
+        }
 
         return Result.Success(new BackupRestoreTargetPlan(path, CreatedByCitadel: true));
     }

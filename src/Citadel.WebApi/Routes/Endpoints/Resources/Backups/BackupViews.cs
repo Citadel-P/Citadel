@@ -143,16 +143,20 @@ public sealed record BackupPolicyView(
     DateTimeOffset UpdatedAt,
     DateTimeOffset? ArchivedAt,
     long RowVersion,
+    BackupRunView? LatestRun,
     IReadOnlyList<TagSummaryView> Tags,
     ResourceCapabilities? Capabilities = null)
 {
     internal static BackupPolicyView Map(BackupPolicyResult result)
-        => Map(result.Policy);
+        => Map(result.Policy, result.LatestRun);
 
     internal static async Task<BackupPolicyView> Map(BackupPolicyResult result, IPermissionEvaluator permissionEvaluator)
-        => await Map(result.Policy, permissionEvaluator);
+        => await Map(result.Policy, permissionEvaluator, result.LatestRun);
 
     internal static BackupPolicyView Map(BackupPolicy policy)
+        => Map(policy, latestRun: null);
+
+    internal static BackupPolicyView Map(BackupPolicy policy, BackupRun? latestRun)
         => new(
             policy.Id,
             policy.Name,
@@ -177,12 +181,16 @@ public sealed record BackupPolicyView(
             policy.UpdatedAt,
             policy.ArchivedAt,
             policy.RowVersion,
+            latestRun is null ? null : BackupRunView.Map(latestRun),
             [.. policy.Tags.Select(TagSummaryView.Map)]);
 
-    internal static async Task<BackupPolicyView> Map(BackupPolicy policy, IPermissionEvaluator permissionEvaluator)
+    internal static async Task<BackupPolicyView> Map(
+        BackupPolicy policy,
+        IPermissionEvaluator permissionEvaluator,
+        BackupRun? latestRun = null)
     {
         var permissions = await permissionEvaluator.EvaluateAsync(policy.Id, ResourceType.BackupPolicy);
-        return Map(policy) with
+        return Map(policy, latestRun) with
         {
             Capabilities = CapabilityMapper.ToResourceCapabilities(permissions)
         };
@@ -207,7 +215,7 @@ public sealed record BackupPoliciesView(IReadOnlyList<BackupPolicyView> Policies
         {
             var policy = policies[i];
             perms.TryGetValue(policy.Id, out var meta);
-            views[i] = BackupPolicyView.Map(policy) with
+            views[i] = BackupPolicyView.Map(policy, result.LatestRuns.GetValueOrDefault(policy.Id)) with
             {
                 Capabilities = CapabilityMapper.ToResourceCapabilities(meta == default ? PermissionMetadata.Empty : meta)
             };

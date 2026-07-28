@@ -92,11 +92,15 @@ const columns = (
     sortingFn: (rowA, rowB) => String(rowA.original.cron ?? '').localeCompare(String(rowB.original.cron ?? '')),
   },
   {
-    accessorKey: 'lastScheduledRunAt',
+    accessorKey: 'latestRun',
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
-    cell: ({ row }) => <TimestampCell value={row.original.lastScheduledRunAt} formatDateTime={formatDateTime} />,
+    cell: ({ row }) => (
+      <TimestampCell value={getBackupPolicyLastRunAt(row.original)} formatDateTime={formatDateTime} />
+    ),
     sortingFn: (rowA, rowB) =>
-      String(rowA.original.lastScheduledRunAt ?? '').localeCompare(String(rowB.original.lastScheduledRunAt ?? '')),
+      String(getBackupPolicyLastRunAt(rowA.original) ?? '').localeCompare(
+        String(getBackupPolicyLastRunAt(rowB.original) ?? ''),
+      ),
   },
   {
     accessorKey: 'tags',
@@ -112,6 +116,9 @@ const columns = (
     cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
   },
 ];
+
+export const getBackupPolicyLastRunAt = (policy: Pick<BackupPolicyView, 'latestRun'>) =>
+  policy.latestRun?.completedAt ?? policy.latestRun?.queuedAt;
 
 const PolicyNameRow = ({ policy }: { policy: BackupPolicyView }) => (
   <div className="flex min-w-0 items-center gap-1">
@@ -169,7 +176,7 @@ const SourceCell = ({ source }: { source: BackupSourceSpec }) => {
   return (
     <span className="inline-flex items-center gap-2 text-sm">
       <Database className="size-3.5 text-muted-foreground" />
-      Citadel system
+      Citadel backup
     </span>
   );
 };
@@ -192,6 +199,6 @@ const sourceText = (source: BackupSourceSpec) => {
   if (source.$type === 'DockerVolume') return (source as BackupSourceSpecDockerVolumeBackupSource).volumeName;
   if (source.$type === 'Stack') return (source as BackupSourceSpecStackBackupSource).stackId;
   if (source.$type === 'Deployment') return (source as BackupSourceSpecDeploymentBackupSource).deploymentId;
-  if (source.$type === 'CitadelSystem') return 'Citadel system';
+  if (source.$type === 'CitadelSystem') return 'Citadel backup';
   return '';
 };

@@ -12,9 +12,11 @@ using Domain.Entities.Platforms;
 using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
+using NSec.Cryptography;
 using System.Collections.Immutable;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Tests.Integration.Helpers;
 
@@ -23,6 +25,7 @@ namespace Tests.Integration.Application.Features.Backups;
 public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly FakeResticProcessRunner restic = new();
+    private readonly FakePostgresDumpRunner postgresDump = new();
     private readonly FakeVolumeConnector volumeConnector = new();
     private readonly FakeContainerConnector containerConnector = new();
     private readonly FakeImageConnector imageConnector = new();
@@ -31,6 +34,7 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.ReplaceService<IResticProcessRunner>(restic);
+        services.ReplaceService<IPostgresDumpRunner>(postgresDump);
         services.ReplaceService<IConnectorFactory<IVolumeConnector>>(new FakeConnectorFactory<IVolumeConnector>(volumeConnector));
         services.ReplaceService<IConnectorFactory<IContainerConnector>>(new FakeConnectorFactory<IContainerConnector>(containerConnector));
         services.ReplaceService<IConnectorFactory<IImageConnector>>(new FakeConnectorFactory<IImageConnector>(imageConnector));
@@ -210,9 +214,46 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
 
         Assert.Equal(2, restic.Calls.Count);
         Assert.Contains("backup", restic.Calls[0].Command.Arguments);
-        Assert.Contains(Path.GetFullPath(Path.Combine(testRoot, "data")), restic.Calls[0].Command.Arguments);
-        Assert.Contains("--exclude", restic.Calls[0].Command.Arguments);
-        Assert.Contains(Path.GetFullPath(Path.Combine(testRoot, "data", "backups", "repositories")), restic.Calls[0].Command.Arguments);
+        Assert.Contains(".", restic.Calls[0].Command.Arguments);
+        Assert.Contains("citadel-system", restic.Calls[0].Command.Arguments);
+        Assert.DoesNotContain("--exclude", restic.Calls[0].Command.Arguments);
+        Assert.Single(postgresDump.Calls);
+        Assert.Equal(ConnectionString, postgresDump.Calls[0].ConnectionString);
+        Assert.False(Directory.Exists(restic.Calls[0].Command.WorkingDirectory));
+
+        var bundleFiles = restic.CapturedBackupFiles;
+        Assert.Contains("database/citadel.dump", bundleFiles.Keys);
+        Assert.Contains("manifest.json", bundleFiles.Keys);
+        Assert.Contains("checksums.json", bundleFiles.Keys);
+        Assert.Contains("recovery/jwtsecret", bundleFiles.Keys);
+        Assert.Contains("recovery/keys/id_ed25519", bundleFiles.Keys);
+        Assert.Contains("recovery/keys/id_ed25519.pub", bundleFiles.Keys);
+        Assert.Contains("recovery/keys/dataprotection/key.xml", bundleFiles.Keys);
+        Assert.DoesNotContain("appsettings.json", bundleFiles.Keys);
+        Assert.DoesNotContain("recovery/secret-encryption-key", bundleFiles.Keys);
+
+        using var manifest = JsonDocument.Parse(bundleFiles["manifest.json"]);
+        Assert.Equal(1, manifest.RootElement.GetProperty("formatVersion").GetInt32());
+        Assert.Equal("citadel", manifest.RootElement.GetProperty("product").GetString());
+        Assert.Equal(
+            "PostgreSQL",
+            manifest.RootElement.GetProperty("database").GetProperty("engine").GetString());
+        Assert.Equal(
+            "16.4",
+            manifest.RootElement.GetProperty("database").GetProperty("serverVersion").GetString());
+        Assert.Contains(
+            manifest.RootElement.GetProperty("assets").EnumerateArray(),
+            asset => asset.GetProperty("name").GetString() == "secret-encryption-key"
+                     && asset.GetProperty("origin").GetString() == "ExternalConfiguration");
+        using var checksums = JsonDocument.Parse(bundleFiles["checksums.json"]);
+        foreach (var checksum in checksums.RootElement.EnumerateObject())
+        {
+            var file = Assert.Contains(checksum.Name, bundleFiles);
+            Assert.Equal(
+                Convert.ToHexString(SHA256.HashData(file)).ToLowerInvariant(),
+                checksum.Value.GetString());
+        }
+
         Assert.Equal("forget", restic.Calls[1].Command.Arguments[0]);
         Assert.Contains("--keep-last", restic.Calls[1].Command.Arguments);
         Assert.Contains("2", restic.Calls[1].Command.Arguments);
@@ -282,11 +323,260 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
         Assert.Equal(BackupSnapshotAvailability.NotCreated, storedRun.SnapshotAvailability);
         Assert.Contains("Restic backup exited with code 1", storedRun.ErrorMessage);
         Assert.Contains(logs, log => log.Stream == "stderr" && log.Message == "repository is unavailable");
+        Assert.False(Directory.Exists(restic.Calls[0].Command.WorkingDirectory));
 
         Assert.NotNull(storedPolicy);
         Assert.Equal(ResourceControlState.Idle, storedPolicy.ControlState);
         Assert.Null(storedPolicy.CurrentRunId);
         Assert.Null(storedPolicy.FirstSuccessfulRunAt);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedAsync_ShouldFailAndDeleteStagingWhenPostgresDumpFails()
+    {
+        var setup = await CreateRepositoryPolicyAndRunAsync("backup-dump-failure", keepLastSuccessful: 2);
+        postgresDump.Result = new PostgresDumpResult(1, "16.4", "database dump failed");
+
+        var service = Services.GetRequiredService<IBackupRunExecutionService>();
+        await foreach (var _ in service.ExecuteQueuedAsync(setup.Run.Id, TestContext.Current.CancellationToken))
+        {
+        }
+
+        Assert.Empty(restic.Calls);
+        var dumpCall = Assert.Single(postgresDump.Calls);
+        var stagingPath = Directory.GetParent(dumpCall.OutputPath)!.Parent!.FullName;
+        Assert.False(Directory.Exists(stagingPath));
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var storedRun = await uow.BackupRuns.GetAsync(
+            setup.Run.Id,
+            TestContext.Current.CancellationToken);
+        var storedPolicy = await uow.BackupPolicies.GetAsync(
+            setup.Policy.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(storedRun);
+        Assert.Equal(BackupRunStatus.Failed, storedRun.Status);
+        Assert.Equal("database dump failed", storedRun.ErrorMessage);
+        Assert.Equal(BackupSnapshotAvailability.NotCreated, storedRun.SnapshotAvailability);
+        Assert.NotNull(storedPolicy);
+        Assert.Equal(ResourceControlState.Idle, storedPolicy.ControlState);
+        Assert.Null(storedPolicy.CurrentRunId);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedAsync_ShouldRejectInvalidPostgresDumpBeforeRestic()
+    {
+        var setup = await CreateRepositoryPolicyAndRunAsync(
+            "backup-invalid-dump",
+            keepLastSuccessful: 2);
+        postgresDump.DumpContent = [];
+
+        var service = Services.GetRequiredService<IBackupRunExecutionService>();
+        await foreach (var _ in service.ExecuteQueuedAsync(
+                           setup.Run.Id,
+                           TestContext.Current.CancellationToken))
+        {
+        }
+
+        Assert.Empty(restic.Calls);
+        var dumpCall = Assert.Single(postgresDump.Calls);
+        var stagingPath = Directory.GetParent(dumpCall.OutputPath)!.Parent!.FullName;
+        Assert.False(Directory.Exists(stagingPath));
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var storedRun = await uow.BackupRuns.GetAsync(
+            setup.Run.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(storedRun);
+        Assert.Equal(BackupRunStatus.Failed, storedRun.Status);
+        Assert.Contains("custom-format archive", storedRun.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedAsync_ShouldRejectMismatchedAgentKeysAndDeleteStaging()
+    {
+        var setup = await CreateRepositoryPolicyAndRunAsync(
+            "backup-mismatched-agent-keys",
+            keepLastSuccessful: 2);
+        var publicKeyPath = Path.Combine(testRoot, "data", "keys", "id_ed25519.pub");
+        using (var unrelatedKey = new Key(
+                   SignatureAlgorithm.Ed25519,
+                   new KeyCreationParameters
+                   {
+                       ExportPolicy = KeyExportPolicies.AllowPlaintextExport
+                   }))
+        {
+            await File.WriteAllBytesAsync(
+                publicKeyPath,
+                unrelatedKey.PublicKey.Export(KeyBlobFormat.RawPublicKey),
+                TestContext.Current.CancellationToken);
+        }
+
+        var service = Services.GetRequiredService<IBackupRunExecutionService>();
+        await foreach (var _ in service.ExecuteQueuedAsync(
+                           setup.Run.Id,
+                           TestContext.Current.CancellationToken))
+        {
+        }
+
+        Assert.Empty(restic.Calls);
+        var dumpCall = Assert.Single(postgresDump.Calls);
+        var stagingPath = Directory.GetParent(dumpCall.OutputPath)!.Parent!.FullName;
+        Assert.False(Directory.Exists(stagingPath));
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var storedRun = await uow.BackupRuns.GetAsync(
+            setup.Run.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(storedRun);
+        Assert.Equal(BackupRunStatus.Failed, storedRun.Status);
+        Assert.Contains("key pair changed", storedRun.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(BackupSnapshotAvailability.NotCreated, storedRun.SnapshotAvailability);
+    }
+
+    [Fact]
+    public async Task ExecuteQueuedAsync_ShouldWarnWhenOptionalRecoveryAssetsAreMissing()
+    {
+        var setup = await CreateRepositoryPolicyAndRunAsync(
+            "backup-missing-optional-assets",
+            keepLastSuccessful: 1);
+        Directory.Delete(
+            Path.Combine(testRoot, "data", "keys", "dataprotection"),
+            recursive: true);
+        restic.Enqueue(
+            exitCode: 0,
+            stdout: """
+                {"message_type":"summary","snapshot_id":"snapshot-with-warning","total_files_processed":5,"total_bytes_processed":128,"data_added":64}
+                """);
+        restic.Enqueue(exitCode: 0, stdout: "[]");
+
+        var service = Services.GetRequiredService<IBackupRunExecutionService>();
+        await foreach (var _ in service.ExecuteQueuedAsync(
+                           setup.Run.Id,
+                           TestContext.Current.CancellationToken))
+        {
+        }
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var storedRun = await uow.BackupRuns.GetAsync(
+            setup.Run.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(storedRun);
+        Assert.Equal(BackupRunStatus.SucceededWithWarnings, storedRun.Status);
+        Assert.Contains(
+            storedRun.Warnings,
+            warning => warning.Code == "backup.recovery_asset_missing"
+                       && warning.Message.Contains("keys/dataprotection", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CleanupStaleBundles_ShouldDeleteAbandonedPlaintextStagingDirectories()
+    {
+        var stagingRoot = Path.Combine(
+            testRoot,
+            "data",
+            "backups",
+            "work",
+            "citadel-system");
+        var staleBundle = Path.Combine(stagingRoot, Guid.CreateVersion7().ToString("N"));
+        Directory.CreateDirectory(staleBundle);
+        File.WriteAllText(
+            Path.Combine(staleBundle, "jwtsecret"),
+            "plaintext-secret");
+
+        var removed = Services
+            .GetRequiredService<ICitadelSystemBackupBuilder>()
+            .CleanupStaleBundles();
+
+        Assert.Equal(1, removed);
+        Assert.False(Directory.Exists(staleBundle));
+    }
+
+    [Fact]
+    public async Task InterruptInProgressAsync_ShouldReleasePolicyAndLeasesAfterRestart()
+    {
+        var setup = await CreateRepositoryPolicyAndRunAsync(
+            "backup-interrupted-at-restart",
+            keepLastSuccessful: 1);
+        var interruptedAt = DateTimeOffset.UtcNow;
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var plan = await uow.BackupRuns.TryClaimExecutionPlanAsync(
+                setup.Run.Id,
+                interruptedAt.AddMinutes(-1),
+                TestContext.Current.CancellationToken);
+            Assert.NotNull(plan);
+            Assert.True(await uow.BackupRepositoryLeases.TryAcquireAsync(
+                setup.Repository.Id,
+                "Backup",
+                setup.Run.Id,
+                interruptedAt.AddMinutes(5),
+                interruptedAt.AddMinutes(-1),
+                TestContext.Current.CancellationToken));
+            Assert.True(await uow.BackupSourceLeases.TryAcquireAsync(
+                setup.Policy.Source.StableKey,
+                "Backup",
+                setup.Run.Id,
+                interruptedAt.AddMinutes(5),
+                interruptedAt.AddMinutes(-1),
+                TestContext.Current.CancellationToken));
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            Assert.Equal(
+                1,
+                await uow.BackupRuns.InterruptInProgressAsync(
+                    interruptedAt,
+                    "Backup run was interrupted by an application restart.",
+                    TestContext.Current.CancellationToken));
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var storedRun = await uow.BackupRuns.GetAsync(
+                setup.Run.Id,
+                TestContext.Current.CancellationToken);
+            var storedPolicy = await uow.BackupPolicies.GetAsync(
+                setup.Policy.Id,
+                TestContext.Current.CancellationToken);
+
+            Assert.NotNull(storedRun);
+            Assert.Equal(BackupRunStatus.Interrupted, storedRun.Status);
+            Assert.Equal(BackupSnapshotAvailability.NotCreated, storedRun.SnapshotAvailability);
+            Assert.Equal("backup.interrupted", storedRun.ErrorCode);
+            Assert.NotNull(storedPolicy);
+            Assert.Equal(ResourceControlState.Idle, storedPolicy.ControlState);
+            Assert.Null(storedPolicy.CurrentRunId);
+            Assert.True(await uow.BackupRepositoryLeases.TryAcquireAsync(
+                setup.Repository.Id,
+                "Test",
+                Guid.CreateVersion7(),
+                interruptedAt.AddMinutes(5),
+                interruptedAt,
+                TestContext.Current.CancellationToken));
+            Assert.True(await uow.BackupSourceLeases.TryAcquireAsync(
+                setup.Policy.Source.StableKey,
+                "Test",
+                Guid.CreateVersion7(),
+                interruptedAt.AddMinutes(5),
+                interruptedAt,
+                TestContext.Current.CancellationToken));
+        }
     }
 
     [Fact]
@@ -385,6 +675,7 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
 
     private async Task<BackupRunSetup> CreateRepositoryPolicyAndRunAsync(string name, int keepLastSuccessful)
     {
+        await PrepareRecoveryAssetsAsync();
         var passwordSecretId = await CreateInternalSecretAsync($"{name.Replace('-', '_').ToUpperInvariant()}_PASSWORD", "restic-password");
         var repositoryPath = Path.Combine(testRoot, "data", "backups", "repositories", name);
         var repository = new BackupRepository(
@@ -425,6 +716,36 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
 
         Assert.Equal(BackupRunQueueResultStatus.Queued, queue.Status);
         return new BackupRunSetup(repository, policy, queue.Run!);
+    }
+
+    private async Task PrepareRecoveryAssetsAsync()
+    {
+        var dataPath = Path.Combine(testRoot, "data");
+        var keysPath = Path.Combine(dataPath, "keys");
+        var dataProtectionPath = Path.Combine(keysPath, "dataprotection");
+        Directory.CreateDirectory(dataProtectionPath);
+        await File.WriteAllTextAsync(
+            Path.Combine(dataPath, "jwtsecret"),
+            "test-jwt-key",
+            TestContext.Current.CancellationToken);
+        using var agentKey = new Key(
+            SignatureAlgorithm.Ed25519,
+            new KeyCreationParameters
+            {
+                ExportPolicy = KeyExportPolicies.AllowPlaintextExport
+            });
+        await File.WriteAllBytesAsync(
+            Path.Combine(keysPath, "id_ed25519"),
+            agentKey.Export(KeyBlobFormat.RawPrivateKey),
+            TestContext.Current.CancellationToken);
+        await File.WriteAllBytesAsync(
+            Path.Combine(keysPath, "id_ed25519.pub"),
+            agentKey.PublicKey.Export(KeyBlobFormat.RawPublicKey),
+            TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(
+            Path.Combine(dataProtectionPath, "key.xml"),
+            "<key />",
+            TestContext.Current.CancellationToken);
     }
 
     private async Task<BackupRunSetup> CreateRemoteVolumeRepositoryPolicyAndRunAsync(Guid platformId, int keepLastSuccessful)
@@ -516,6 +837,8 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
         private readonly Queue<ResticResponse> responses = new();
 
         public List<ResticProcessCall> Calls { get; } = [];
+        public IReadOnlyDictionary<string, byte[]> CapturedBackupFiles { get; private set; }
+            = new Dictionary<string, byte[]>();
 
         public void Enqueue(int exitCode, string? stdout = null, string? stderr = null)
             => responses.Enqueue(new ResticResponse(exitCode, stdout, stderr));
@@ -525,6 +848,19 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
             [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             Calls.Add(new ResticProcessCall(command));
+            if (command.Arguments.Contains("backup"))
+            {
+                var source = command.Arguments[^1] == "."
+                    ? command.WorkingDirectory
+                    : command.Arguments[^1];
+                CapturedBackupFiles = Directory
+                    .EnumerateFiles(source, "*", SearchOption.AllDirectories)
+                    .ToDictionary(
+                        path => Path.GetRelativePath(source, path).Replace('\\', '/'),
+                        File.ReadAllBytes,
+                        StringComparer.Ordinal);
+            }
+
             var response = responses.Count > 0 ? responses.Dequeue() : new ResticResponse(0, "[]", null);
             await Task.Yield();
 
@@ -535,6 +871,28 @@ public sealed class BackupRunExecutionTests(PostgresTestFixture fixture) : Integ
                 yield return new ResticProcessEvent(ResticProcessStream.StdErr, response.Stderr);
 
             yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: response.ExitCode);
+        }
+    }
+
+    private sealed class FakePostgresDumpRunner : IPostgresDumpRunner
+    {
+        public List<PostgresDumpCommand> Calls { get; } = [];
+        public PostgresDumpResult Result { get; set; } = new(0, "16.4", null);
+        public byte[] DumpContent { get; set; } = "PGDMP-test"u8.ToArray();
+
+        public async Task<PostgresDumpResult> CreateDumpAsync(
+            PostgresDumpCommand command,
+            CancellationToken cancellationToken)
+        {
+            Calls.Add(command);
+            if (!Result.Succeeded)
+                return Result;
+
+            await File.WriteAllBytesAsync(
+                command.OutputPath,
+                DumpContent,
+                cancellationToken);
+            return Result;
         }
     }
 

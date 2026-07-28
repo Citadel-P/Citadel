@@ -297,6 +297,7 @@ internal static class WebApiModule
             .AddOptions<BackupOptions>()
             .BindConfiguration(BackupOptions.SectionName)
             .Validate(options => !string.IsNullOrWhiteSpace(options.ResticPath), "Backups:ResticPath is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.PostgresDumpPath), "Backups:PostgresDumpPath is required.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.WorkingDirectory), "Backups:WorkingDirectory is required.")
             .Validate(options => options.RepositoryLeaseSeconds >= 30, "Backups:RepositoryLeaseSeconds must be at least 30 seconds.")
             .Validate(options => options.DefaultTimeoutSeconds > 0, "Backups:DefaultTimeoutSeconds must be greater than zero.")

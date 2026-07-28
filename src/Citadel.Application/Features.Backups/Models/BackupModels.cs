@@ -51,9 +51,11 @@ public sealed record UpdateBackupPolicyInputModel(
     bool? AlertOnFailure = null,
     Guid? RunAsActorId = null);
 
-public sealed record BackupPolicyResult(BackupPolicy Policy);
+public sealed record BackupPolicyResult(BackupPolicy Policy, BackupRun? LatestRun = null);
 
-public sealed record BackupPolicyListResult(IReadOnlyList<BackupPolicy> Policies);
+public sealed record BackupPolicyListResult(
+    IReadOnlyList<BackupPolicy> Policies,
+    IReadOnlyDictionary<Guid, BackupRun> LatestRuns);
 
 public sealed record QueueBackupRunInputModel(
     BackupRunTrigger Trigger = BackupRunTrigger.Manual,

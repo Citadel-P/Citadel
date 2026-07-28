@@ -12,6 +12,7 @@
 	<PackageReference Include="Dapper.AOT" />
 	<PackageReference Include="dbup-postgresql" />
 	<PackageReference Include="FluentMigrator" />
+	<PackageReference Include="Npgsql" />
 	<PackageReference Include="Refit" />
 	<PackageReference Include="Refit.HttpClientFactory" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />

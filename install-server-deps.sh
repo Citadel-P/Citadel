@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-apk add --no-cache curl ca-certificates tar gzip deno restic tzdata
+apk add --no-cache curl ca-certificates tar gzip deno restic postgresql-client tzdata
 
 ARCH=$(uname -m)
 case "$ARCH" in
@@ -22,6 +22,7 @@ chmod +x /usr/local/bin/shoutrrr
 
 deno --version
 restic version
+pg_dump --version
 
 apk del curl tar gzip
 rm -rf /var/cache/apk/* /tmp/*

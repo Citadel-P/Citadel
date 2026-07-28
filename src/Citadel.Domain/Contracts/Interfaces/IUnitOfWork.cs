@@ -284,6 +284,10 @@ public interface IBackupRunRepository
     Task<BackupRun?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<BackupRun>> GetByPolicyAsync(Guid policyId, int limit, CancellationToken cancellationToken);
     Task<IEnumerable<BackupRun>> GetPagedAsync(int limit, CancellationToken cancellationToken);
+    Task<BackupRun?> GetLatestByPolicyAsync(Guid policyId, CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<Guid, BackupRun>> GetLatestByPoliciesAsync(
+        IReadOnlyCollection<Guid> policyIds,
+        CancellationToken cancellationToken);
     Task<IEnumerable<BackupRun>> GetQueuedAsync(int limit, CancellationToken cancellationToken);
     Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken);
     Task<BackupRunExecutionPlan?> GetExecutionPlanAsync(Guid id, CancellationToken cancellationToken);
@@ -291,6 +295,7 @@ public interface IBackupRunRepository
     Task<BackupRunFinishOutcome> FinishRunAndMarkPolicyIdleAsync(BackupRun run, Guid policyId, bool successful, DateTimeOffset completedAt, CancellationToken cancellationToken);
     Task<bool> HasActiveRunAsync(Guid policyId, CancellationToken cancellationToken);
     Task<bool> TryMarkPreparingAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
+    Task<int> InterruptInProgressAsync(DateTimeOffset interruptedAt, string reason, CancellationToken cancellationToken);
     Task<BackupRun?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
 }
 
@@ -321,6 +326,7 @@ public interface IBackupRestoreRunRepository
     Task<IReadOnlyList<Guid>> GetQueuedIdsAsync(int limit, CancellationToken cancellationToken);
     Task<BackupRestoreRunExecutionPlan?> GetExecutionPlanAsync(Guid id, CancellationToken cancellationToken);
     Task<BackupRestoreRunExecutionPlan?> TryClaimExecutionPlanAsync(Guid id, DateTimeOffset startedAt, CancellationToken cancellationToken);
+    Task<int> InterruptInProgressAsync(DateTimeOffset interruptedAt, string reason, CancellationToken cancellationToken);
     Task<BackupRestoreRunFinishResult> FinishRunAsync(BackupRestoreRun run, DateTimeOffset completedAt, CancellationToken cancellationToken);
     Task<BackupRestoreRunWithPolicy?> CancelQueuedOrRunningAsync(Guid id, DateTimeOffset cancelledAt, string reason, CancellationToken cancellationToken);
 }
@@ -511,7 +517,8 @@ public sealed record ResticProcessCommand(
     string WorkingDirectory,
     TimeSpan Timeout,
     IReadOnlyCollection<string> RedactionValues,
-    int MaxLineBytes);
+    int MaxLineBytes,
+    string OperationName = "Restic operation");
 
 public sealed record ResticProcessEvent(
     ResticProcessStream Stream,

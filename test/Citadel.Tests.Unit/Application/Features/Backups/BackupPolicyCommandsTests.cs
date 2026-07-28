@@ -8,10 +8,12 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Backups;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Activities;
 using Domain.Entities.Backups;
 using Hosting.Common.Abstraction;
 using LightResults;
 using Moq;
+using System.Text.Json;
 using Tests.Common;
 
 namespace Tests.Unit.Application.Features.Backups;
@@ -140,6 +142,64 @@ public sealed class BackupPolicyCommandsTests
 
         coordinator.Verify(x => x.Cancel(run.Id), Times.Once);
         streamManager.Verify(x => x.SendBackupRunInfo(run, "update"), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateBackupPolicy_ShouldPersistActivityWithoutWebhookSecret()
+    {
+        const string webhookSecret = "do-not-store-in-activity";
+        var repository = CreateRepository(new FileSystemBackupRepositorySpec(
+            BackupExecutionLocation.Core,
+            PlatformId: null,
+            Path: "core-data"));
+        var backupPolicies = CreateBackupPolicyRepository();
+        backupPolicies
+            .Setup(x => x.AddAsync(
+                It.IsAny<BackupPolicy>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<IReadOnlyCollection<Guid>?>(),
+                It.IsAny<Guid?>()))
+            .ReturnsAsync(1);
+        ActivityEvent? activity = null;
+        var activities = new Mock<IActivityEventRepository>();
+        activities
+            .Setup(x => x.AddAsync(It.IsAny<ActivityEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<ActivityEvent, CancellationToken>((value, _) => activity = value)
+            .ReturnsAsync(1);
+        var unitOfWork = CreateUnitOfWork(
+            repository,
+            backupPolicies.Object,
+            Mock.Of<IPlatformRepository>());
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(activities.Object);
+        var handler = CreateCreateHandler(unitOfWork.Object);
+        var command = new CreateBackupPolicy(new BackupPolicyInputModel(
+            Name: "core-data",
+            Description: "Core data files",
+            Source: new CitadelSystemBackupSource(),
+            BackupRepositoryId: repository.Id,
+            Enabled: true,
+            Cron: null,
+            TimeZone: null,
+            Webhook: new BackupWebhookConfig(Enabled: true, Secret: webhookSecret),
+            KeepLastSuccessful: BackupPolicy.DefaultKeepLastSuccessful,
+            TimeoutSeconds: BackupPolicy.DefaultTimeoutSeconds,
+            AlertOnFailure: true,
+            RunAsActorId: null,
+            TagIds: []));
+
+        var result = await handler.Handle(command, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess());
+        Assert.NotNull(activity);
+        Assert.Equal(ActivityResourceType.BackupPolicy, activity.ResourceType);
+        Assert.Equal(ActivityEventType.BackupPolicyCreated, activity.EventType);
+        var info = Assert.IsType<BackupPolicyCreated>(activity.Info);
+        Assert.True(info.Policy.WebhookEnabled);
+        var json = JsonSerializer.Serialize(activity.Info, EventInfoJsonContext.Default.ActivityEventInfo);
+        Assert.DoesNotContain(webhookSecret, json, StringComparison.Ordinal);
+        Assert.IsType<BackupPolicyCreated>(
+            JsonSerializer.Deserialize(json, EventInfoJsonContext.Default.ActivityEventInfo));
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -330,6 +390,78 @@ public sealed class BackupPolicyCommandsTests
     }
 
     [Fact]
+    public async Task RunBackupRestoreVolume_ShouldRejectCitadelBackupBeforeQueuingRestore()
+    {
+        var backupRun = CreateSuccessfulCitadelBackupRun();
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.GetAsync(backupRun.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(backupRun);
+        var restoreRuns = new Mock<IBackupRestoreRunRepository>();
+        var unitOfWork = CreateUnitOfWork(backupRuns.Object, restoreRuns.Object);
+        var executionService = new Mock<IBackupRestoreRunExecutionService>();
+        var notificationQueue = CreateNotificationQueue([]);
+        var handler = new RunBackupRestoreVolumeHandler(
+            unitOfWork.Object,
+            executionService.Object,
+            CreateUserContextAccessor(),
+            Mock.Of<IBackupRestoreRunStreamManager>(),
+            notificationQueue.Object);
+
+        var items = await ToListAsync(handler.Handle(
+            new RunBackupRestoreVolume(
+                backupRun.Id,
+                new RestoreVolumeInputModel(Guid.CreateVersion7(), "restored-data", OverwriteExisting: false)),
+            TestContext.Current.CancellationToken));
+
+        var item = Assert.Single(items);
+        Assert.Equal(BackupRestoreStatus.Rejected, item.Status);
+        Assert.Equal(
+            "Citadel backups must be restored offline. See the control-plane recovery documentation.",
+            item.Message);
+        restoreRuns.Verify(x => x.AddAsync(It.IsAny<BackupRestoreRun>(), It.IsAny<CancellationToken>()), Times.Never);
+        unitOfWork.Verify(x => x.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+        notificationQueue.Verify(x => x.EnqueueAsync(It.IsAny<INotificationWorkItem>(), It.IsAny<CancellationToken>()), Times.Never);
+        executionService.Verify(
+            x => x.ExecuteQueuedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RunBackupRestoreVolume_ShouldRejectAggregateBackupWithGenericMessage()
+    {
+        var backupRun = CreateSuccessfulBackupRun(
+            new StackBackupSource(Guid.CreateVersion7()));
+        var backupRuns = new Mock<IBackupRunRepository>();
+        backupRuns
+            .Setup(x => x.GetAsync(backupRun.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(backupRun);
+        var restoreRuns = new Mock<IBackupRestoreRunRepository>();
+        var unitOfWork = CreateUnitOfWork(backupRuns.Object, restoreRuns.Object);
+        var handler = new RunBackupRestoreVolumeHandler(
+            unitOfWork.Object,
+            Mock.Of<IBackupRestoreRunExecutionService>(),
+            CreateUserContextAccessor(),
+            Mock.Of<IBackupRestoreRunStreamManager>(),
+            CreateNotificationQueue([]).Object);
+
+        var items = await ToListAsync(handler.Handle(
+            new RunBackupRestoreVolume(
+                backupRun.Id,
+                new RestoreVolumeInputModel(Guid.CreateVersion7(), "restored-data", OverwriteExisting: false)),
+            TestContext.Current.CancellationToken));
+
+        var item = Assert.Single(items);
+        Assert.Equal(BackupRestoreStatus.Rejected, item.Status);
+        Assert.Equal(
+            "Only Docker volume backup snapshots can be restored through this operation.",
+            item.Message);
+        restoreRuns.Verify(
+            x => x.AddAsync(It.IsAny<BackupRestoreRun>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task RunBackupRestoreVolume_ShouldQueueRestoreRunAndStreamExecution()
     {
         var backupRun = CreateSuccessfulBackupRun();
@@ -418,6 +550,7 @@ public sealed class BackupPolicyCommandsTests
     private static UpdateBackupPolicyHandler CreateUpdateHandler(IUnitOfWork unitOfWork)
         => new(
             unitOfWork,
+            CreateUserContextAccessor(),
             Mock.Of<IStackBackupVolumeResolver>(),
             Mock.Of<IDeploymentBackupVolumeResolver>(),
             new PermissiveLicenseEntitlementService());
@@ -456,6 +589,7 @@ public sealed class BackupPolicyCommandsTests
         unitOfWork.Setup(x => x.Platforms).Returns(platforms);
         unitOfWork.Setup(x => x.Stacks).Returns(Mock.Of<IStackRepository>());
         unitOfWork.Setup(x => x.Deployments).Returns(Mock.Of<IDeploymentRepository>());
+        unitOfWork.Setup(x => x.ActivityEventRepository).Returns(Mock.Of<IActivityEventRepository>());
         unitOfWork.Setup(x => x.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         return unitOfWork;
     }
@@ -514,12 +648,27 @@ public sealed class BackupPolicyCommandsTests
             runAsActorId: Guid.CreateVersion7(),
             createdByActorId: Guid.CreateVersion7());
 
-    private static BackupRun CreateSuccessfulBackupRun()
+    private static BackupRun CreateSuccessfulBackupRun(BackupSourceSpec? source = null)
         => new(
             backupPolicyId: Guid.CreateVersion7(),
             backupRepositoryId: Guid.CreateVersion7(),
             policyNameSnapshot: "policy",
-            sourceSnapshot: new DockerVolumeBackupSource(Guid.CreateVersion7(), "app-data"),
+            sourceSnapshot: source ?? new DockerVolumeBackupSource(Guid.CreateVersion7(), "app-data"),
+            repositoryTypeSnapshot: BackupRepositoryType.FileSystem,
+            trigger: BackupRunTrigger.Manual,
+            triggerSourceId: null,
+            triggeredByActorId: Guid.CreateVersion7(),
+            status: BackupRunStatus.Succeeded,
+            resticSnapshotId: "snapshot-01",
+            snapshotAvailability: BackupSnapshotAvailability.Available,
+            completedAt: DateTimeOffset.UtcNow);
+
+    private static BackupRun CreateSuccessfulCitadelBackupRun()
+        => new(
+            backupPolicyId: Guid.CreateVersion7(),
+            backupRepositoryId: Guid.CreateVersion7(),
+            policyNameSnapshot: "citadel-backup",
+            sourceSnapshot: new CitadelSystemBackupSource(),
             repositoryTypeSnapshot: BackupRepositoryType.FileSystem,
             trigger: BackupRunTrigger.Manual,
             triggerSourceId: null,

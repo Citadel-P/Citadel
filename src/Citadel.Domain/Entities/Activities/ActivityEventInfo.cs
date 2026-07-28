@@ -112,6 +112,10 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(BuildAgentPoolRenamed), nameof(ActivityEventType.BuildAgentPoolRenamed))]
 [JsonDerivedType(typeof(BuildAgentPoolDeleted), nameof(ActivityEventType.BuildAgentPoolDeleted))]
 [JsonDerivedType(typeof(BuildAgentPoolTested), nameof(ActivityEventType.BuildAgentPoolTested))]
+[JsonDerivedType(typeof(BackupPolicyCreated), nameof(ActivityEventType.BackupPolicyCreated))]
+[JsonDerivedType(typeof(BackupPolicyUpdated), nameof(ActivityEventType.BackupPolicyUpdated))]
+[JsonDerivedType(typeof(BackupPolicyRenamed), nameof(ActivityEventType.BackupPolicyRenamed))]
+[JsonDerivedType(typeof(BackupPolicyArchived), nameof(ActivityEventType.BackupPolicyArchived))]
 
 public abstract record ActivityEventInfo;
 
@@ -345,6 +349,29 @@ public sealed record BuildAgentPoolUpdated(BuildAgentPoolSnapshot OldPool, Build
 public sealed record BuildAgentPoolRenamed(string OldName, string NewName) : ActivityEventInfo;
 public sealed record BuildAgentPoolDeleted(BuildAgentPoolSnapshot Pool) : ActivityEventInfo;
 public sealed record BuildAgentPoolTested(BuildAgentPoolSnapshot Pool, BuildAgentPoolValidationStatus Status, string? Message) : ActivityEventInfo;
+
+public sealed record BackupPolicyActivitySnapshot(
+    Guid Id,
+    string Name,
+    string? Description,
+    string SourceType,
+    string SourceKey,
+    Guid BackupRepositoryId,
+    bool Enabled,
+    string? Cron,
+    string? TimeZone,
+    bool WebhookEnabled,
+    int KeepLastSuccessful,
+    int TimeoutSeconds,
+    bool AlertOnFailure,
+    Guid RunAsActorId);
+
+public sealed record BackupPolicyCreated(BackupPolicyActivitySnapshot Policy) : ActivityEventInfo;
+public sealed record BackupPolicyUpdated(
+    BackupPolicyActivitySnapshot OldPolicy,
+    BackupPolicyActivitySnapshot NewPolicy) : ActivityEventInfo;
+public sealed record BackupPolicyRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record BackupPolicyArchived(BackupPolicyActivitySnapshot Policy) : ActivityEventInfo;
 
 public sealed record UserProfileUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;
 public sealed record UserPreferencesUpdated(IReadOnlyCollection<ActivityChangedField> Changes) : ActivityEventInfo;

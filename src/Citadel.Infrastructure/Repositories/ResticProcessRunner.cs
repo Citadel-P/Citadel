@@ -105,7 +105,9 @@ internal sealed partial class ResticProcessRunner : IResticProcessRunner
 
         if (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            yield return new ResticProcessEvent(ResticProcessStream.StdErr, "Restic operation timed out.");
+            yield return new ResticProcessEvent(
+                ResticProcessStream.StdErr,
+                $"{command.OperationName} timed out.");
             yield return new ResticProcessEvent(ResticProcessStream.Exit, ExitCode: -2);
         }
     }

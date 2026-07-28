@@ -11121,6 +11121,405 @@
         ]
       }
     },
+    "/api/v1/gitRepositories/{id}/files": {
+      "get": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "List a directory at a Git repository commit",
+        "operationId": "listGitRepositoryDirectory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git repository id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "commitSha",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryDirectoryListingView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/gitRepositories/{id}/files/content": {
+      "get": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Read a text file at a Git repository commit",
+        "operationId": "getGitRepositoryFileContent",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git repository id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "commitSha",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryFileContentView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/gitRepositories/{id}/compare": {
+      "get": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Compare two Git repository commits",
+        "operationId": "compareGitRepositoryCommits",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git repository id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "baseCommitSha",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "headCommitSha",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitCommitComparisonView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/gitRepositories/{id}/branches": {
       "get": {
         "tags": [
@@ -30694,6 +31093,18 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoBuildAgentPoolTested"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBackupPolicyCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBackupPolicyUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBackupPolicyRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoBackupPolicyArchived"
           }
         ],
         "discriminator": {
@@ -30795,7 +31206,11 @@
             "BuildAgentPoolUpdated": "#/components/schemas/ActivityEventInfoBuildAgentPoolUpdated",
             "BuildAgentPoolRenamed": "#/components/schemas/ActivityEventInfoBuildAgentPoolRenamed",
             "BuildAgentPoolDeleted": "#/components/schemas/ActivityEventInfoBuildAgentPoolDeleted",
-            "BuildAgentPoolTested": "#/components/schemas/ActivityEventInfoBuildAgentPoolTested"
+            "BuildAgentPoolTested": "#/components/schemas/ActivityEventInfoBuildAgentPoolTested",
+            "BackupPolicyCreated": "#/components/schemas/ActivityEventInfoBackupPolicyCreated",
+            "BackupPolicyUpdated": "#/components/schemas/ActivityEventInfoBackupPolicyUpdated",
+            "BackupPolicyRenamed": "#/components/schemas/ActivityEventInfoBackupPolicyRenamed",
+            "BackupPolicyArchived": "#/components/schemas/ActivityEventInfoBackupPolicyArchived"
           }
         }
       },
@@ -31155,6 +31570,78 @@
           },
           "newAction": {
             "$ref": "#/components/schemas/AutomationActionSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBackupPolicyArchived": {
+        "required": [
+          "policy"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BackupPolicyArchived"
+            ],
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/BackupPolicyActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBackupPolicyCreated": {
+        "required": [
+          "policy"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BackupPolicyCreated"
+            ],
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/BackupPolicyActivitySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoBackupPolicyRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BackupPolicyRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoBackupPolicyUpdated": {
+        "required": [
+          "oldPolicy",
+          "newPolicy"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "BackupPolicyUpdated"
+            ],
+            "type": "string"
+          },
+          "oldPolicy": {
+            "$ref": "#/components/schemas/BackupPolicyActivitySnapshot"
+          },
+          "newPolicy": {
+            "$ref": "#/components/schemas/BackupPolicyActivitySnapshot"
           }
         }
       },
@@ -33093,7 +33580,11 @@
           "BuildAgentPoolUpdated",
           "BuildAgentPoolRenamed",
           "BuildAgentPoolDeleted",
-          "BuildAgentPoolTested"
+          "BuildAgentPoolTested",
+          "BackupPolicyCreated",
+          "BackupPolicyUpdated",
+          "BackupPolicyRenamed",
+          "BackupPolicyArchived"
         ]
       },
       "ActivityResourceType": {
@@ -33110,7 +33601,8 @@
           "License",
           "Build",
           "BuildAgentPool",
-          "Volume"
+          "Volume",
+          "BackupPolicy"
         ]
       },
       "ActivitySourceResource": {
@@ -36223,6 +36715,91 @@
           }
         }
       },
+      "BackupPolicyActivitySnapshot": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "sourceType",
+          "sourceKey",
+          "backupRepositoryId",
+          "enabled",
+          "cron",
+          "timeZone",
+          "webhookEnabled",
+          "keepLastSuccessful",
+          "timeoutSeconds",
+          "alertOnFailure",
+          "runAsActorId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "sourceKey": {
+            "type": "string"
+          },
+          "backupRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "cron": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "webhookEnabled": {
+            "type": "boolean"
+          },
+          "keepLastSuccessful": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "timeoutSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "alertOnFailure": {
+            "type": "boolean"
+          },
+          "runAsActorId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "BackupPolicyInput": {
         "required": [
           "name",
@@ -36340,6 +36917,7 @@
           "updatedAt",
           "archivedAt",
           "rowVersion",
+          "latestRun",
           "tags"
         ],
         "type": "object",
@@ -36465,6 +37043,16 @@
               "string"
             ],
             "format": "int64"
+          },
+          "latestRun": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupRunView"
+              }
+            ]
           },
           "tags": {
             "type": "array",
@@ -43151,6 +43739,69 @@
           "SshKey"
         ]
       },
+      "GitChangedPathStatus": {
+        "enum": [
+          "Added",
+          "Modified",
+          "Deleted",
+          "Renamed",
+          "Copied",
+          "TypeChanged"
+        ]
+      },
+      "GitChangedPathView": {
+        "required": [
+          "status",
+          "path",
+          "previousPath"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/GitChangedPathStatus"
+          },
+          "path": {
+            "type": "string"
+          },
+          "previousPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "GitCommitComparisonView": {
+        "required": [
+          "repositoryId",
+          "baseCommitSha",
+          "headCommitSha",
+          "files",
+          "isTruncated"
+        ],
+        "type": "object",
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "baseCommitSha": {
+            "type": "string"
+          },
+          "headCommitSha": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitChangedPathView"
+            }
+          },
+          "isTruncated": {
+            "type": "boolean"
+          }
+        }
+      },
       "GitComposeProjectCandidate": {
         "required": [
           "workingDirectory",
@@ -43446,6 +44097,154 @@
               {
                 "$ref": "#/components/schemas/RepoCommand"
               }
+            ]
+          }
+        }
+      },
+      "GitRepositoryDirectoryListingView": {
+        "required": [
+          "repositoryId",
+          "commitSha",
+          "path",
+          "entries",
+          "isTruncated",
+          "providerRepositoryUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "commitSha": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitRepositoryEntryView"
+            }
+          },
+          "isTruncated": {
+            "type": "boolean"
+          },
+          "providerRepositoryUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "GitRepositoryEntryType": {
+        "enum": [
+          "Directory",
+          "File",
+          "Symlink",
+          "Submodule"
+        ]
+      },
+      "GitRepositoryEntryView": {
+        "required": [
+          "name",
+          "path",
+          "type",
+          "size",
+          "mode",
+          "targetCommitSha"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/GitRepositoryEntryType"
+          },
+          "size": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "targetCommitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "GitRepositoryFileContentView": {
+        "required": [
+          "repositoryId",
+          "commitSha",
+          "path",
+          "type",
+          "size",
+          "isBinary",
+          "isTruncated",
+          "content",
+          "previewUnavailableReason",
+          "providerUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "commitSha": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/GitRepositoryEntryType"
+          },
+          "size": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "isBinary": {
+            "type": "boolean"
+          },
+          "isTruncated": {
+            "type": "boolean"
+          },
+          "content": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "previewUnavailableReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "providerUrl": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }

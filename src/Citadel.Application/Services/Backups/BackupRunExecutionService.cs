@@ -82,6 +82,7 @@ internal sealed class BackupRunExecutionService(
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory,
     IStackBackupVolumeResolver stackBackupVolumeResolver,
     IDeploymentBackupVolumeResolver deploymentBackupVolumeResolver,
+    ICitadelSystemBackupBuilder citadelSystemBackupBuilder,
     IBackupRunCoordinator runCoordinator,
     IBackupPolicyStreamManager backupPolicyStreamManager,
     IBackupRunStreamManager backupRunStreamManager,
@@ -235,6 +236,7 @@ internal sealed class BackupRunExecutionService(
             }
 
             var sourceLease = false;
+            BackupSourcePlan? activeSource = null;
             try
             {
                 sourceLease = await AcquireSourceLeaseAsync(run, linkedCancel.Token);
@@ -246,14 +248,34 @@ internal sealed class BackupRunExecutionService(
                     return;
                 }
 
-                var sourcePlan = await ResolveSourceAsync(run.SourceSnapshot, repository, linkedCancel.Token);
+                if (run.SourceSnapshot is CitadelSystemBackupSource)
+                {
+                    await WriteAsync(
+                        writer,
+                        Info(run.Id, BackupRunStatus.Preparing, "Creating the PostgreSQL dump and recovery bundle."),
+                        cancellationToken);
+                }
+
+                var sourcePlan = await ResolveSourceAsync(
+                    run.Id,
+                    run.SourceSnapshot,
+                    repository,
+                    policy.TimeoutSeconds,
+                    linkedCancel.Token);
                 if (!sourcePlan.IsSuccess(out var source, out var sourceError))
                 {
                     var message = sourceError?.Message ?? "Backup source could not be resolved.";
-                    await FailRunAsync(run, policy, BackupRunStatus.Rejected, null, "backup.source_unavailable", message, cancellationToken);
-                    await WriteAsync(writer, Error(run.Id, BackupRunStatus.Rejected, message), cancellationToken);
+                    var status = run.SourceSnapshot is CitadelSystemBackupSource
+                        ? BackupRunStatus.Failed
+                        : BackupRunStatus.Rejected;
+                    var errorCode = run.SourceSnapshot is CitadelSystemBackupSource
+                        ? "backup.recovery_bundle_failed"
+                        : "backup.source_unavailable";
+                    await FailRunAsync(run, policy, status, null, errorCode, message, cancellationToken);
+                    await WriteAsync(writer, Error(run.Id, status, message), cancellationToken);
                     return;
                 }
+                activeSource = source;
 
                 var environmentResult = await BuildEnvironmentAsync(repository, source.Context, linkedCancel.Token);
                 if (!environmentResult.IsSuccess(out var environment, out var environmentError))
@@ -332,6 +354,9 @@ internal sealed class BackupRunExecutionService(
                         backupResults.Add(backup.Result);
                     }
 
+                    await source.DisposeAsync();
+                    activeSource = null;
+
                     var warnings = new List<BackupRunWarning>(source.Warnings);
                     if (backupResults.All(static result => string.IsNullOrWhiteSpace(result.SnapshotId)))
                     {
@@ -402,10 +427,30 @@ internal sealed class BackupRunExecutionService(
             }
             finally
             {
-                if (sourceLease)
-                    await ReleaseSourceLeaseAsync(run, CancellationToken.None);
+                try
+                {
+                    if (activeSource is not null)
+                    {
+                        try
+                        {
+                            await activeSource.DisposeAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(
+                                ex,
+                                "Citadel could not delete backup staging data for run {RunId}.",
+                                run.Id);
+                        }
+                    }
+                }
+                finally
+                {
+                    if (sourceLease)
+                        await ReleaseSourceLeaseAsync(run, CancellationToken.None);
 
-                await ReleaseRepositoryLeaseAsync(run, CancellationToken.None);
+                    await ReleaseRepositoryLeaseAsync(run, CancellationToken.None);
+                }
             }
         }
         finally
@@ -427,7 +472,10 @@ internal sealed class BackupRunExecutionService(
             if (plan.Policy is not null)
             {
                 await notificationQueue.EnqueueAsync(
-                    new BackupPolicyNotificationWorkItem(backupPolicyStreamManager, plan.Policy),
+                    new BackupPolicyNotificationWorkItem(
+                        backupPolicyStreamManager,
+                        plan.Policy,
+                        latestRun: plan.Run),
                     cancellationToken);
             }
 
@@ -455,20 +503,28 @@ internal sealed class BackupRunExecutionService(
     }
 
     private async Task<Result<BackupSourcePlan>> ResolveSourceAsync(
+        Guid runId,
         BackupSourceSpec source,
         BackupRepository repository,
+        int timeoutSeconds,
         CancellationToken cancellationToken)
     {
         if (source is CitadelSystemBackupSource)
         {
-            var path = Path.GetFullPath(options.CoreDataPath);
-            Directory.CreateDirectory(path);
+            var bundleResult = await citadelSystemBackupBuilder.BuildAsync(
+                runId,
+                TimeSpan.FromSeconds(Math.Max(60, timeoutSeconds)),
+                cancellationToken);
+            if (!bundleResult.IsSuccess(out var bundle, out var bundleError))
+                return Result.Failure<BackupSourcePlan>(bundleError!);
+
             return Result.Success(new BackupSourcePlan(
-                [new BackupSourceItem("Citadel system data", path)],
-                "Citadel system data",
+                [new BackupSourceItem("Citadel recovery bundle", ".", WorkingDirectory: bundle.RootPath)],
+                "Citadel recovery bundle",
                 new BackupExecutionContext(BackupExecutionLocation.Core, null),
-                BuildSystemExcludes(path),
-                []));
+                [],
+                bundle.Warnings,
+                bundle));
         }
 
         if (source is DockerVolumeBackupSource volume)
@@ -564,9 +620,14 @@ internal sealed class BackupRunExecutionService(
                 if (string.IsNullOrWhiteSpace(dockerVolume.Mountpoint))
                     return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {volume.VolumeName} mountpoint is not available."));
 
-                path = Path.GetFullPath(dockerVolume.Mountpoint);
-                if (!Directory.Exists(path))
-                    return Result.Failure<BackupSourcePlan>(new BadRequestError($"Docker volume {volume.VolumeName} mountpoint does not exist on this host."));
+                if (!LocalDockerVolumePathResolver.TryResolve(
+                        dockerVolume.Mountpoint,
+                        out path))
+                {
+                    return Result.Failure<BackupSourcePlan>(
+                        new BadRequestError(
+                            $"Docker volume {volume.VolumeName} mountpoint is not accessible to Citadel Core."));
+                }
 
                 platformAddress = string.Empty;
                 connectorType = default;
@@ -616,30 +677,6 @@ internal sealed class BackupRunExecutionService(
         return Result.Failure<BackupExecutionContext>(new BadRequestError("Unsupported backup repository type."));
     }
 
-    private IReadOnlyList<string> BuildSystemExcludes(string sourcePath)
-    {
-        var excludes = new List<string>();
-        AddExcludeIfInside(sourcePath, options.WorkingDirectory, excludes);
-
-        foreach (var path in options.AllowedCorePaths.Where(static path => !string.IsNullOrWhiteSpace(path)))
-            AddExcludeIfInside(sourcePath, path, excludes);
-
-        return excludes;
-    }
-
-    private static void AddExcludeIfInside(string sourcePath, string candidatePath, ICollection<string> excludes)
-    {
-        var source = EnsureTrailingSeparator(Path.GetFullPath(sourcePath));
-        var candidate = Path.GetFullPath(candidatePath);
-        var normalized = EnsureTrailingSeparator(candidate);
-
-        if (normalized.StartsWith(source, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
-            || string.Equals(source.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), candidate, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-        {
-            excludes.Add(candidate);
-        }
-    }
-
     private BackupResticRun RunBackupAsync(
         BackupRun run,
         BackupPolicy policy,
@@ -667,6 +704,11 @@ internal sealed class BackupRunExecutionService(
             args.Add($"backup-item:{runItem.Id}");
             args.Add("--tag");
             args.Add($"volume:{runItem.VolumeName}");
+        }
+        else if (run.SourceSnapshot is CitadelSystemBackupSource)
+        {
+            args.Add("--tag");
+            args.Add("citadel-system");
         }
 
         foreach (var exclude in source.ExcludePaths)
@@ -775,7 +817,7 @@ internal sealed class BackupRunExecutionService(
                     options.ResticPath,
                     arguments,
                     environment.Environment,
-                    environment.WorkingDirectory,
+                    sourceItem?.WorkingDirectory ?? environment.WorkingDirectory,
                     TimeSpan.FromSeconds(timeoutSeconds),
                     environment.RedactionValues,
                     Math.Max(1024, options.MaxLogLineBytes)),
@@ -934,7 +976,10 @@ internal sealed class BackupRunExecutionService(
         if (updatedPolicy is not null)
         {
             await notificationQueue.EnqueueAsync(
-                new BackupPolicyNotificationWorkItem(backupPolicyStreamManager, updatedPolicy),
+                new BackupPolicyNotificationWorkItem(
+                    backupPolicyStreamManager,
+                    updatedPolicy,
+                    latestRun: run),
                 cancellationToken);
         }
 
@@ -1177,8 +1222,6 @@ internal sealed class BackupRunExecutionService(
     private static BackupRunStreamItem Error(Guid runId, BackupRunStatus status, string message, int? exitCode = null)
         => new(runId, status, message, "stderr", exitCode);
 
-    private static string EnsureTrailingSeparator(string path)
-        => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 }
 
 internal sealed record BackupSourcePlan(
@@ -1186,7 +1229,12 @@ internal sealed record BackupSourcePlan(
     string DisplayName,
     BackupExecutionContext Context,
     IReadOnlyList<string> ExcludePaths,
-    IReadOnlyList<BackupRunWarning> Warnings);
+    IReadOnlyList<BackupRunWarning> Warnings,
+    IAsyncDisposable? Lifetime = null) : IAsyncDisposable
+{
+    public ValueTask DisposeAsync()
+        => Lifetime?.DisposeAsync() ?? ValueTask.CompletedTask;
+}
 
 internal sealed record BackupSourceItem(
     string DisplayName,
@@ -1194,7 +1242,8 @@ internal sealed record BackupSourceItem(
     Guid? PlatformId = null,
     string? VolumeName = null,
     string? PlatformAddress = null,
-    PlatformConnectorType? ConnectorType = null);
+    PlatformConnectorType? ConnectorType = null,
+    string? WorkingDirectory = null);
 
 internal sealed record BackupResticRun(IAsyncEnumerable<BackupRunStreamItem> Stream, ResticBackupResult Result);
 

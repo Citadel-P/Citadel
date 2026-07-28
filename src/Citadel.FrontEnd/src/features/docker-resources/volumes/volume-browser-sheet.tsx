@@ -1,37 +1,18 @@
 import { useApiClientContext } from '@/api/api-client-context';
-import {
-  DockerVolumeResultView,
-  PlatformStatus,
-  ProblemDetails,
-  VolumeFileEntryType,
-  VolumeFileEntryView,
-} from '@/api/generated/api.types';
+import { DockerVolumeResultView, PlatformStatus, ProblemDetails, VolumeFileEntryType } from '@/api/generated/api.types';
 import { ActionButton } from '@/components/custom/action-with-dialog';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
+import { BrowserEntry, FileTree } from '@/components/custom/file-browser';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { byteTransform } from '@/lib/bytes.helper';
 import { useAppContext } from '@/lib/context/app-context';
-import { useRead } from '@/lib/hooks';
 import { hasCapability, hasCapabilities } from '@/lib/resource-capabilities';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { cn } from '@/lib/utils';
 import { ButtonGroupComponent, DropdownActionComponent, ButtonActionComponent } from '@/pages/types';
-import {
-  Archive,
-  ChevronDown,
-  ChevronRight,
-  Download,
-  File,
-  Folder,
-  FolderOpen,
-  HardDrive,
-  Link2,
-  Loader2,
-  RefreshCw,
-} from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { Archive, Download, FolderOpen, HardDrive, RefreshCw } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
 const ROOT_PATH = '/';
@@ -164,6 +145,7 @@ export const VolumeBrowseInfoAction: ButtonActionComponent<DockerVolumeResultVie
 
 function VolumeTree({ platformId, volumeName, enabled }: { platformId: string; volumeName: string; enabled: boolean }) {
   const { apiClient } = useApiClientContext();
+  const formatDateTime = useProfileDateTimeFormatter();
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
 
   const downloadPath = useCallback(
@@ -204,180 +186,48 @@ function VolumeTree({ platformId, volumeName, enabled }: { platformId: string; v
     [apiClient, platformId, volumeName],
   );
 
-  return (
-    <div className="py-3">
-      <FolderNode
-        platformId={platformId}
-        volumeName={volumeName}
-        path={ROOT_PATH}
-        name="/"
-        depth={0}
-        enabled={enabled}
-        initiallyExpanded
+  const loadDirectory = useCallback(
+    async (path: string, signal: AbortSignal) => {
+      const response = await apiClient.api.listVolumeDirectory(platformId, volumeName, { path }, { signal });
+      return {
+        entries: response.data.entries.map(
+          (entry): BrowserEntry => ({
+            name: entry.name,
+            path: entry.path,
+            type: mapVolumeEntryType(entry.type),
+            size: entry.size,
+            secondaryText: entry.linkTarget,
+            metadataText: entry.modifiedAt ? formatDateTime(entry.modifiedAt) : null,
+          }),
+        ),
+        isTruncated: response.data.isTruncated,
+      };
+    },
+    [apiClient, formatDateTime, platformId, volumeName],
+  );
+
+  const renderEntryActions = useCallback(
+    (entry: BrowserEntry) => (
+      <NodeDownloadButton
+        path={entry.path}
+        type={mapBrowserEntryType(entry.type)}
         downloadingPath={downloadingPath}
         onDownload={downloadPath}
       />
-    </div>
+    ),
+    [downloadPath, downloadingPath],
   );
-}
-
-function FolderNode({
-  platformId,
-  volumeName,
-  path,
-  name,
-  depth,
-  enabled,
-  initiallyExpanded = false,
-  downloadingPath,
-  onDownload,
-}: {
-  platformId: string;
-  volumeName: string;
-  path: string;
-  name: string;
-  depth: number;
-  enabled: boolean;
-  initiallyExpanded?: boolean;
-  downloadingPath: string | null;
-  onDownload: (path: string, entryType: VolumeFileEntryType) => Promise<void>;
-}) {
-  const [expanded, setExpanded] = useState(initiallyExpanded);
-  const args = useMemo(() => ({ platformId, name: volumeName, query: { path } }), [platformId, volumeName, path]);
-  const query = useRead('listVolumeDirectory', args, {
-    enabled: enabled && expanded,
-    meta: { suppressErrorToast: true } as any,
-  });
-  const problem = getProblemDetails(query.error);
-  const entries = useMemo(() => sortEntries(query.data?.data.entries ?? []), [query.data?.data.entries]);
-  const isRoot = path === ROOT_PATH;
-  const isLoading = query.isLoading || (query.isFetching && !query.data);
 
   return (
-    <div>
-      <div
-        className={cn(
-          'group flex min-h-8 items-center gap-1 rounded-sm px-1 text-sm hover:bg-muted/60',
-          isRoot && 'font-medium',
-        )}
-        style={{ paddingLeft: depth * 14 }}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="size-6"
-          disabled={isLoading}
-          onClick={() => setExpanded((value) => !value)}>
-          {isLoading ? (
-            <Loader2 className="size-3 animate-spin" />
-          ) : expanded ? (
-            <ChevronDown className="size-3.5" />
-          ) : (
-            <ChevronRight className="size-3.5" />
-          )}
-        </Button>
-        {expanded ? (
-          <FolderOpen className="size-4 shrink-0 text-blue-500" />
-        ) : (
-          <Folder className="size-4 shrink-0 text-blue-500" />
-        )}
-        <span className="min-w-0 flex-1 truncate" title={path}>
-          {name}
-        </span>
-        {!isRoot && (
-          <NodeDownloadButton
-            path={path}
-            type={VolumeFileEntryType.Directory}
-            downloadingPath={downloadingPath}
-            onDownload={onDownload}
-          />
-        )}
-      </div>
-
-      {expanded && (
-        <div>
-          {problem ? (
-            <TreeProblem problem={problem} depth={depth + 1} />
-          ) : isLoading ? (
-            <TreeStatus depth={depth + 1} icon={<Loader2 className="size-3 animate-spin" />} text="Loading" />
-          ) : entries.length === 0 ? (
-            <TreeStatus depth={depth + 1} text="Empty" />
-          ) : (
-            entries.map((entry) =>
-              entry.type === VolumeFileEntryType.Directory ? (
-                <FolderNode
-                  key={entry.path}
-                  platformId={platformId}
-                  volumeName={volumeName}
-                  path={entry.path}
-                  name={entry.name}
-                  depth={depth + 1}
-                  enabled={enabled}
-                  downloadingPath={downloadingPath}
-                  onDownload={onDownload}
-                />
-              ) : (
-                <FileNode
-                  key={entry.path}
-                  entry={entry}
-                  depth={depth + 1}
-                  downloadingPath={downloadingPath}
-                  onDownload={onDownload}
-                />
-              ),
-            )
-          )}
-
-          {query.data?.data.isTruncated && <TreeStatus depth={depth + 1} text="Directory listing was truncated." />}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FileNode({
-  entry,
-  depth,
-  downloadingPath,
-  onDownload,
-}: {
-  entry: VolumeFileEntryView;
-  depth: number;
-  downloadingPath: string | null;
-  onDownload: (path: string, entryType: VolumeFileEntryType) => Promise<void>;
-}) {
-  const formatDateTime = useProfileDateTimeFormatter();
-  const title =
-    entry.type === VolumeFileEntryType.Symlink && entry.linkTarget
-      ? `${entry.name} -> ${entry.linkTarget}`
-      : entry.name;
-
-  return (
-    <div
-      className="group flex min-h-8 items-center gap-2 rounded-sm px-1 text-sm hover:bg-muted/60"
-      style={{ paddingLeft: depth * 14 + 30 }}>
-      {renderEntryIcon(entry.type)}
-      <span className="min-w-0 flex-1 truncate" title={title}>
-        {entry.name}
-      </span>
-      {entry.type === VolumeFileEntryType.Symlink && entry.linkTarget && (
-        <span className="hidden max-w-40 truncate text-xs text-muted-foreground md:inline">
-          {'->'} {entry.linkTarget}
-        </span>
-      )}
-      <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{formatEntrySize(entry)}</span>
-      {entry.modifiedAt && (
-        <span className="hidden shrink-0 text-xs text-muted-foreground lg:inline">
-          {formatDateTime(entry.modifiedAt)}
-        </span>
-      )}
-      <NodeDownloadButton
-        path={entry.path}
-        type={entry.type}
-        downloadingPath={downloadingPath}
-        onDownload={onDownload}
-      />
-    </div>
+    <FileTree
+      queryKey={['volume-browser', platformId, volumeName]}
+      rootPath={ROOT_PATH}
+      rootName="/"
+      loadDirectory={loadDirectory}
+      enabled={enabled}
+      renderEntryActions={renderEntryActions}
+      getErrorTitle={getVolumeBrowseErrorTitle}
+    />
   );
 }
 
@@ -413,61 +263,36 @@ function NodeDownloadButton({
   );
 }
 
-function TreeProblem({ problem, depth }: { problem: ProblemDetails; depth: number }) {
-  return (
-    <div className="py-1 pr-2" style={{ paddingLeft: depth * 14 + 30 }}>
-      <AlertMessage type={problem.status === 403 ? 'warning' : 'error'} title={getErrorTitle(problem)}>
-        {problem.detail ?? problem.title ?? 'Citadel could not list this path.'}
-      </AlertMessage>
-    </div>
-  );
-}
-
-function TreeStatus({ depth, text, icon }: { depth: number; text: string; icon?: React.ReactNode }) {
-  return (
-    <div
-      className="flex min-h-8 items-center gap-2 rounded-sm px-1 text-xs text-muted-foreground"
-      style={{ paddingLeft: depth * 14 + 30 }}>
-      {icon}
-      <span>{text}</span>
-    </div>
-  );
-}
-
 function normalizeBrowserPath(path: string | null | undefined) {
   if (!path || path.trim() === '') return ROOT_PATH;
   const normalized = path.startsWith('/') ? path : `/${path}`;
   return normalized.replace(/\/+/g, '/').replace(/\/$/g, '') || ROOT_PATH;
 }
 
-function sortEntries(entries: VolumeFileEntryView[]) {
-  return [...entries].sort(sortEntry);
-}
-
-function sortEntry(left: VolumeFileEntryView, right: VolumeFileEntryView) {
-  const leftBucket = left.type === VolumeFileEntryType.Directory ? 0 : 1;
-  const rightBucket = right.type === VolumeFileEntryType.Directory ? 0 : 1;
-  if (leftBucket !== rightBucket) return leftBucket - rightBucket;
-  return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
-}
-
 function canDownloadEntry(type: VolumeFileEntryType) {
   return type === VolumeFileEntryType.File || type === VolumeFileEntryType.Directory;
 }
 
-function renderEntryIcon(type: VolumeFileEntryType) {
+function mapVolumeEntryType(type: VolumeFileEntryType): BrowserEntry['type'] {
   switch (type) {
+    case VolumeFileEntryType.Directory:
+      return 'directory';
     case VolumeFileEntryType.Symlink:
-      return <Link2 className="size-4 shrink-0 text-muted-foreground" />;
+      return 'symlink';
     default:
-      return <File className="size-4 shrink-0 text-muted-foreground" />;
+      return 'file';
   }
 }
 
-function formatEntrySize(entry: VolumeFileEntryView) {
-  if (entry.type === VolumeFileEntryType.Directory) return '';
-  const size = typeof entry.size === 'string' ? Number(entry.size) : entry.size;
-  return size == null || Number.isNaN(size) ? '-' : byteTransform(size, 2);
+function mapBrowserEntryType(type: BrowserEntry['type']): VolumeFileEntryType {
+  switch (type) {
+    case 'directory':
+      return VolumeFileEntryType.Directory;
+    case 'symlink':
+      return VolumeFileEntryType.Symlink;
+    default:
+      return VolumeFileEntryType.File;
+  }
 }
 
 function getDownloadFallbackName(path: string, entryType: VolumeFileEntryType) {
@@ -529,14 +354,14 @@ function getProblemDetails(error: unknown): ProblemDetails | undefined {
   return (error as any)?.error as ProblemDetails | undefined;
 }
 
-function getErrorTitle(problem: ProblemDetails) {
+function getVolumeBrowseErrorTitle(error: unknown) {
+  const problem = getProblemDetails(error);
+  if (!problem) return 'Volume browsing failed';
   if (problem.status === 403) return 'Permission denied';
   if (problem.status === 404) return 'Path not found';
 
   const message = `${problem.title ?? ''} ${problem.detail ?? ''}`.toLowerCase();
-  if (message.includes('not supported') || message.includes('unsupported')) {
-    return 'Volume browsing unavailable';
-  }
+  if (message.includes('not supported') || message.includes('unsupported')) return 'Volume browsing unavailable';
 
   return problem.title ?? 'Volume browsing failed';
 }

@@ -66,8 +66,10 @@ internal static class ControlPlaneRecoveryArchive
             assetEntries.Add(new RecoveryAssetManifestEntry(
                 asset.RelativePath,
                 archiveEntry,
+                RecoveryAssetOrigin.File,
                 asset.Required,
-                Sha256(content)));
+                Sha256(content),
+                content.LongLength));
         }
 
         var assembly = typeof(WebApi.Routes.PublicEndpoints).Assembly;
@@ -177,6 +179,26 @@ internal static class ControlPlaneRecoveryArchive
             {
                 throw new InvalidDataException(
                     $"Recovery asset '{asset.Name}' has an invalid archive path.");
+            }
+
+            if (asset.Origin == RecoveryAssetOrigin.ExternalConfiguration)
+                continue;
+
+            if (asset.Origin == RecoveryAssetOrigin.Missing)
+            {
+                if (asset.Required)
+                {
+                    throw new InvalidDataException(
+                        $"Required recovery asset '{asset.Name}' is missing.");
+                }
+
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(asset.Sha256))
+            {
+                throw new InvalidDataException(
+                    $"Recovery asset '{asset.Name}' has no checksum.");
             }
 
             assetContents.Add(
@@ -466,8 +488,19 @@ internal sealed record DatabaseManifest(
 internal sealed record RecoveryAssetManifestEntry(
     string Name,
     string ArchivePath,
+    RecoveryAssetOrigin Origin,
     bool Required,
-    string Sha256);
+    string? Sha256,
+    long? SizeBytes);
 
+internal enum RecoveryAssetOrigin
+{
+    File,
+    ExternalConfiguration,
+    Missing
+}
+
+[JsonSourceGenerationOptions(
+    Converters = [typeof(JsonStringEnumConverter<RecoveryAssetOrigin>)])]
 [JsonSerializable(typeof(ControlPlaneRecoveryManifest))]
 internal partial class RecoveryJsonContext : JsonSerializerContext;

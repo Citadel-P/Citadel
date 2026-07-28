@@ -308,6 +308,7 @@ internal sealed class SignalRGroupAuthorizationService(
             ActivityResourceType.Build => Permission(ResourceType.Build, resourceId),
             ActivityResourceType.BuildAgentPool => Permission(ResourceType.BuildAgentPool, resourceId),
             ActivityResourceType.Volume => Permission(ResourceType.Volume, resourceId),
+            ActivityResourceType.BackupPolicy => Permission(ResourceType.BackupPolicy, resourceId),
             _ => default
         };
 

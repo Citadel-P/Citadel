@@ -353,12 +353,28 @@ export enum GitRepositorySyncMode {
   PullInterval = "PullInterval",
 }
 
+export enum GitRepositoryEntryType {
+  Directory = "Directory",
+  File = "File",
+  Symlink = "Symlink",
+  Submodule = "Submodule",
+}
+
 export enum GitReposStatus {
   Unknown = "Unknown",
   Pending = "Pending",
   Created = "Created",
   Healthy = "Healthy",
   Degraded = "Degraded",
+}
+
+export enum GitChangedPathStatus {
+  Added = "Added",
+  Modified = "Modified",
+  Deleted = "Deleted",
+  Renamed = "Renamed",
+  Copied = "Copied",
+  TypeChanged = "TypeChanged",
 }
 
 export enum GitAuthType {
@@ -675,6 +691,7 @@ export enum ActivityResourceType {
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
   Volume = "Volume",
+  BackupPolicy = "BackupPolicy",
 }
 
 export enum ActivityEventType {
@@ -775,6 +792,10 @@ export enum ActivityEventType {
   BuildAgentPoolRenamed = "BuildAgentPoolRenamed",
   BuildAgentPoolDeleted = "BuildAgentPoolDeleted",
   BuildAgentPoolTested = "BuildAgentPoolTested",
+  BackupPolicyCreated = "BackupPolicyCreated",
+  BackupPolicyUpdated = "BackupPolicyUpdated",
+  BackupPolicyRenamed = "BackupPolicyRenamed",
+  BackupPolicyArchived = "BackupPolicyArchived",
 }
 
 export enum ActionRunTrigger {
@@ -1477,6 +1498,22 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "BuildAgentPoolTested",
         ActivityEventInfoBuildAgentPoolTested
       >
+    | BaseActivityEventInfoTypeMapping<
+        "BackupPolicyCreated",
+        ActivityEventInfoBackupPolicyCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BackupPolicyUpdated",
+        ActivityEventInfoBackupPolicyUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BackupPolicyRenamed",
+        ActivityEventInfoBackupPolicyRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "BackupPolicyArchived",
+        ActivityEventInfoBackupPolicyArchived
+      >
   );
 
 export interface AcknowledgeAlertEventsInput {
@@ -1612,6 +1649,28 @@ export interface ActivityEventInfoAutomationActionUpdated {
   $type?: "ActionUpdated";
   oldAction: AutomationActionSnapshot;
   newAction: AutomationActionSnapshot;
+}
+
+export interface ActivityEventInfoBackupPolicyArchived {
+  $type?: "BackupPolicyArchived";
+  policy: BackupPolicyActivitySnapshot;
+}
+
+export interface ActivityEventInfoBackupPolicyCreated {
+  $type?: "BackupPolicyCreated";
+  policy: BackupPolicyActivitySnapshot;
+}
+
+export interface ActivityEventInfoBackupPolicyRenamed {
+  $type?: "BackupPolicyRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoBackupPolicyUpdated {
+  $type?: "BackupPolicyUpdated";
+  oldPolicy: BackupPolicyActivitySnapshot;
+  newPolicy: BackupPolicyActivitySnapshot;
 }
 
 export interface ActivityEventInfoBuildAgentPoolCreated {
@@ -2974,6 +3033,34 @@ export interface BackupPoliciesView {
   capabilities: ResourceCapabilities;
 }
 
+export interface BackupPolicyActivitySnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  sourceType: string;
+  sourceKey: string;
+  /** @format uuid */
+  backupRepositoryId: string;
+  enabled: boolean;
+  cron: null | string;
+  timeZone: null | string;
+  webhookEnabled: boolean;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  keepLastSuccessful: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeoutSeconds: number | string;
+  alertOnFailure: boolean;
+  /** @format uuid */
+  runAsActorId: string;
+}
+
 export interface BackupPolicyInput {
   name: string;
   description: null | string;
@@ -3048,6 +3135,7 @@ export interface BackupPolicyView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   rowVersion: number | string;
+  latestRun: null | BackupRunView;
   tags: TagSummaryView[];
   capabilities?: null | ResourceCapabilities;
 }
@@ -4792,6 +4880,21 @@ export interface GitAuthConfigurationTokenAuth {
   token: string;
 }
 
+export interface GitChangedPathView {
+  status: GitChangedPathStatus;
+  path: string;
+  previousPath: null | string;
+}
+
+export interface GitCommitComparisonView {
+  /** @format uuid */
+  repositoryId: string;
+  baseCommitSha: string;
+  headCommitSha: string;
+  files: GitChangedPathView[];
+  isTruncated: boolean;
+}
+
 export interface GitComposeProjectCandidate {
   workingDirectory: string;
   composePaths: string[];
@@ -4862,6 +4965,47 @@ export interface GitRepositoryConfigView {
   webhook: null | RepoWebhookConfig;
   onClone: null | RepoCommand;
   onPull: null | RepoCommand;
+}
+
+export interface GitRepositoryDirectoryListingView {
+  /** @format uuid */
+  repositoryId: string;
+  commitSha: string;
+  path: string;
+  entries: GitRepositoryEntryView[];
+  isTruncated: boolean;
+  providerRepositoryUrl: null | string;
+}
+
+export interface GitRepositoryEntryView {
+  name: string;
+  path: string;
+  type: GitRepositoryEntryType;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  size: null | number | string;
+  mode: string;
+  targetCommitSha: null | string;
+}
+
+export interface GitRepositoryFileContentView {
+  /** @format uuid */
+  repositoryId: string;
+  commitSha: string;
+  path: string;
+  type: GitRepositoryEntryType;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  size: number | string;
+  isBinary: boolean;
+  isTruncated: boolean;
+  content: null | string;
+  previewUnavailableReason: null | string;
+  providerUrl: null | string;
 }
 
 export interface GitRepositoryRefView {
@@ -11092,6 +11236,111 @@ export class Api<
       >({
         path: `/api/v1/gitRepositories/${id}/refs`,
         method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name ListGitRepositoryDirectory
+     * @summary List a directory at a Git repository commit
+     * @request GET:/api/v1/gitRepositories/{id}/files
+     * @secure
+     * @response `200` `GitRepositoryDirectoryListingView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     */
+    listGitRepositoryDirectory: (
+      id: string,
+      query?: {
+        commitSha?: string;
+        path?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<GitRepositoryDirectoryListingView, ProblemDetails>({
+        path: `/api/v1/gitRepositories/${id}/files`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name GetGitRepositoryFileContent
+     * @summary Read a text file at a Git repository commit
+     * @request GET:/api/v1/gitRepositories/{id}/files/content
+     * @secure
+     * @response `200` `GitRepositoryFileContentView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     */
+    getGitRepositoryFileContent: (
+      id: string,
+      query: {
+        commitSha?: string;
+        path: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<GitRepositoryFileContentView, ProblemDetails>({
+        path: `/api/v1/gitRepositories/${id}/files/content`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name CompareGitRepositoryCommits
+     * @summary Compare two Git repository commits
+     * @request GET:/api/v1/gitRepositories/{id}/compare
+     * @secure
+     * @response `200` `GitCommitComparisonView` OK
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     */
+    compareGitRepositoryCommits: (
+      id: string,
+      query: {
+        baseCommitSha: string;
+        headCommitSha: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<GitCommitComparisonView, ProblemDetails>({
+        path: `/api/v1/gitRepositories/${id}/compare`,
+        method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,

@@ -52,6 +52,51 @@ public static class GitRepositories
         return EndpointHandlers.HandleResult(result, GitRepositoryRefsView.Map);
     }
 
+    public static async Task<Results<Ok<GitRepositoryDirectoryListingView>, ProblemHttpResult>> ListFiles(
+        IMediator mediator,
+        HttpContext httpContext,
+        [Description("Git repository id")] Guid id,
+        [FromQuery] string? commitSha,
+        [FromQuery] string? path,
+        CancellationToken cancellationToken)
+    {
+        SetPrivateNoStore(httpContext);
+        var result = await mediator.Send(
+            new ListGitRepositoryDirectory(id, commitSha, path),
+            cancellationToken);
+        return EndpointHandlers.HandleResult(result, GitRepositoryDirectoryListingView.Map);
+    }
+
+    public static async Task<Results<Ok<GitRepositoryFileContentView>, ProblemHttpResult>> GetFileContent(
+        IMediator mediator,
+        HttpContext httpContext,
+        [Description("Git repository id")] Guid id,
+        [FromQuery] string? commitSha,
+        [FromQuery] string path,
+        CancellationToken cancellationToken)
+    {
+        SetPrivateNoStore(httpContext);
+        var result = await mediator.Send(
+            new ReadGitRepositoryFile(id, commitSha, path),
+            cancellationToken);
+        return EndpointHandlers.HandleResult(result, GitRepositoryFileContentView.Map);
+    }
+
+    public static async Task<Results<Ok<GitCommitComparisonView>, ProblemHttpResult>> CompareCommits(
+        IMediator mediator,
+        HttpContext httpContext,
+        [Description("Git repository id")] Guid id,
+        [FromQuery] string baseCommitSha,
+        [FromQuery] string headCommitSha,
+        CancellationToken cancellationToken)
+    {
+        SetPrivateNoStore(httpContext);
+        var result = await mediator.Send(
+            new CompareGitRepositoryCommits(id, baseCommitSha, headCommitSha),
+            cancellationToken);
+        return EndpointHandlers.HandleResult(result, GitCommitComparisonView.Map);
+    }
+
     public static async Task<Results<Ok<GitRepositoryBranchesView>, ProblemHttpResult>> DiscoverBranches(
         IMediator mediator,
         [Description("Git repository id")] Guid id,
@@ -116,5 +161,11 @@ public static class GitRepositories
     {
         var result = await mediator.Send(new SyncGitRepository(id, branch), cancellationToken);
         return EndpointHandlers.HandleResult(result, GitRepositoryView.Map);
+    }
+
+    private static void SetPrivateNoStore(HttpContext httpContext)
+    {
+        httpContext.Response.Headers.CacheControl = "private, no-store";
+        httpContext.Response.Headers.Pragma = "no-cache";
     }
 }

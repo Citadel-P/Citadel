@@ -74,6 +74,7 @@ import { hasActionableStackDrift } from '../actions';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { useNavigate } from 'react-router';
+import { StackSourceFilesPanel } from './source-browser';
 
 export const StackFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -120,9 +121,7 @@ export const StackFormComponents: RequiredFormComponents = {
       {
         label: 'Config',
         Content: ({ resource, metadataChanged }: { resource: StackView; metadataChanged?: boolean }) => {
-          return (
-            <StackForm mode="edit" metadataChanged={metadataChanged} disabled={!hasCapability(resource, 'canWrite')} />
-          );
+          return <StackConfigTab stack={resource} metadataChanged={metadataChanged} />;
         },
       },
       {
@@ -164,6 +163,22 @@ export const StackFormComponents: RequiredFormComponents = {
       return { item: stack, isLoading };
     },
   },
+};
+
+const StackConfigTab = ({ stack, metadataChanged }: { stack: StackView; metadataChanged?: boolean }) => {
+  const [sourceDirty, setSourceDirty] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <StackForm
+        mode="edit"
+        metadataChanged={metadataChanged}
+        disabled={!hasCapability(stack, 'canWrite')}
+        onSourceDirtyChange={setSourceDirty}
+      />
+      <StackSourceFilesPanel stack={stack} sourceDirty={sourceDirty} />
+    </div>
+  );
 };
 
 const DuplicateStackConfigButton = ({ stack }: { stack: StackView }) => {

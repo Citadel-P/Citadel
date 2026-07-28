@@ -55,7 +55,10 @@ export const useBackupPoliciesGroup = () => {
       if (index === -1) return [...prev, policy];
 
       const updated = [...prev];
-      updated[index] = policy;
+      updated[index] = {
+        ...policy,
+        latestRun: policy.latestRun ?? updated[index].latestRun,
+      };
       return updated;
     });
   }, [matchesActiveFilters]);

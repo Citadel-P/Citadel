@@ -95,6 +95,7 @@ public static class InfrastructureModule
             .AddSingleton<IAutomationProcessRunner, AutomationProcessRunner>()
             .AddSingleton<IBuildProcessRunner, BuildProcessRunner>()
             .AddSingleton<IResticProcessRunner, ResticProcessRunner>()
+            .AddSingleton<IPostgresDumpRunner, PostgresDumpRunner>()
             .AddSingleton<IGitHubCrRepository, GitHubCrRepository>()
             .AddSingleton<IExternalSecretProviderClient, ExternalSecretProviderClient>()
             .AddSingleton<IShoutrrrCliRepository, ShoutrrrCliRepository>()

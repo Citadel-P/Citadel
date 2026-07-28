@@ -124,9 +124,12 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
                 .SendAsync("BackupRepositoryInfoUpdated", map, action));
     }
 
-    public Task SendBackupPolicyInfo(BackupPolicy policy, string action)
+    public Task SendBackupPolicyInfo(
+        BackupPolicy policy,
+        string action,
+        BackupRun? latestRun = null)
     {
-        var map = BackupPolicyView.Map(policy);
+        var map = BackupPolicyView.Map(policy, latestRun);
         return Task.WhenAll(
             hubContext.Clients
                 .Group(WellKnownSignalRGroups.BackupPolicyGroup(policy.Id))

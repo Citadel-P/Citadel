@@ -6,6 +6,7 @@ public sealed class BackupOptions
 
     public bool Enabled { get; set; } = true;
     public string ResticPath { get; set; } = "restic";
+    public string PostgresDumpPath { get; set; } = "pg_dump";
     public string WorkingDirectory { get; set; } = "./data/backups/work";
     public string CoreDataPath { get; set; } = "./data";
     public string[] AllowedCorePaths { get; set; } = ["./data/backups/repositories"];

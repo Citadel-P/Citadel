@@ -267,6 +267,11 @@ public partial class ConfigurationJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(BuildAgentPoolRenamed))]
 [JsonSerializable(typeof(BuildAgentPoolDeleted))]
 [JsonSerializable(typeof(BuildAgentPoolTested))]
+[JsonSerializable(typeof(BackupPolicyActivitySnapshot))]
+[JsonSerializable(typeof(BackupPolicyCreated))]
+[JsonSerializable(typeof(BackupPolicyUpdated))]
+[JsonSerializable(typeof(BackupPolicyRenamed))]
+[JsonSerializable(typeof(BackupPolicyArchived))]
 
 public partial class EventInfoJsonContext : JsonSerializerContext
 {

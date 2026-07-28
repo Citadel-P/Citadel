@@ -16,10 +16,11 @@ internal sealed class BackupRepositoryNotificationWorkItem(
 internal sealed class BackupPolicyNotificationWorkItem(
     IBackupPolicyStreamManager streamManager,
     BackupPolicy policy,
-    string action = "update") : INotificationWorkItem
+    string action = "update",
+    BackupRun? latestRun = null) : INotificationWorkItem
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
-        => streamManager.SendBackupPolicyInfo(policy, action);
+        => streamManager.SendBackupPolicyInfo(policy, action, latestRun);
 }
 
 internal sealed class BackupRunNotificationWorkItem(

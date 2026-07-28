@@ -136,6 +136,11 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<BuildAgentPoolRenamed>]
 [GenerateShapeFor<BuildAgentPoolDeleted>]
 [GenerateShapeFor<BuildAgentPoolTested>]
+[GenerateShapeFor<BackupPolicyActivitySnapshot>]
+[GenerateShapeFor<BackupPolicyCreated>]
+[GenerateShapeFor<BackupPolicyUpdated>]
+[GenerateShapeFor<BackupPolicyRenamed>]
+[GenerateShapeFor<BackupPolicyArchived>]
 [GenerateShapeFor<IReadOnlyList<string>>]
 [GenerateShapeFor<IReadOnlyDictionary<string, string>>]
 [GenerateShapeFor<AutomationActionView>]
@@ -345,6 +350,10 @@ internal static class DerivedTypesMapping
         [nameof(ActivityEventType.BuildAgentPoolRenamed)] = typeof(BuildAgentPoolRenamed),
         [nameof(ActivityEventType.BuildAgentPoolDeleted)] = typeof(BuildAgentPoolDeleted),
         [nameof(ActivityEventType.BuildAgentPoolTested)] = typeof(BuildAgentPoolTested),
+        [nameof(ActivityEventType.BackupPolicyCreated)] = typeof(BackupPolicyCreated),
+        [nameof(ActivityEventType.BackupPolicyUpdated)] = typeof(BackupPolicyUpdated),
+        [nameof(ActivityEventType.BackupPolicyRenamed)] = typeof(BackupPolicyRenamed),
+        [nameof(ActivityEventType.BackupPolicyArchived)] = typeof(BackupPolicyArchived),
         [nameof(ActivityEventType.UserProfileUpdated)] = typeof(UserProfileUpdated),
         [nameof(ActivityEventType.UserPreferencesUpdated)] = typeof(UserPreferencesUpdated),
         [nameof(ActivityEventType.UserPasswordChanged)] = typeof(UserPasswordChanged),

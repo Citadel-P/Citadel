@@ -12,7 +12,10 @@ public interface IBackupRepositoryStreamManager : IStreamGroupManager
 
 public interface IBackupPolicyStreamManager : IStreamGroupManager
 {
-    Task SendBackupPolicyInfo(BackupPolicy policy, string action = "update");
+    Task SendBackupPolicyInfo(
+        BackupPolicy policy,
+        string action = "update",
+        BackupRun? latestRun = null);
 }
 
 public interface IBackupRunStreamManager : IStreamGroupManager
@@ -42,14 +45,17 @@ internal sealed class BackupRepositoryStreamManager(IApplicationHubDispatcher di
 internal sealed class BackupPolicyStreamManager(IApplicationHubDispatcher dispatcher)
     : BaseStreamManager<StreamContext>, IBackupPolicyStreamManager
 {
-    public Task SendBackupPolicyInfo(BackupPolicy policy, string action = "update")
+    public Task SendBackupPolicyInfo(
+        BackupPolicy policy,
+        string action = "update",
+        BackupRun? latestRun = null)
     {
         if (streams.IsEmpty)
         {
             return Task.CompletedTask;
         }
 
-        return dispatcher.SendBackupPolicyInfo(policy, action);
+        return dispatcher.SendBackupPolicyInfo(policy, action, latestRun);
     }
 }
 

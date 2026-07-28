@@ -638,6 +638,39 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getGitRepositoryRefs");
 
+        gitRepositories.MapGet("{id}/files", GitRepositories.ListFiles)
+            .WithSummary("List a directory at a Git repository commit")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listGitRepositoryDirectory");
+
+        gitRepositories.MapGet("{id}/files/content", GitRepositories.GetFileContent)
+            .WithSummary("Read a text file at a Git repository commit")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getGitRepositoryFileContent");
+
+        gitRepositories.MapGet("{id}/compare", GitRepositories.CompareCommits)
+            .WithSummary("Compare two Git repository commits")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("compareGitRepositoryCommits");
+
         gitRepositories.MapGet("{id}/branches", GitRepositories.DiscoverBranches)
             .WithSummary("Discover remote Git repository branches")
             .ProducesValidationProblem()
